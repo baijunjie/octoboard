@@ -1,0 +1,3 @@
+# Resident guarded branches for the revert gate; the main branch goes first.
+# `sh .githooks/install.sh` without arguments reads this file.
+main
