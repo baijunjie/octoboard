@@ -30,8 +30,8 @@ plan only breaks the work into milestones and tracks progress.
   their reply text; fields a program must act on travel as tool arguments.
 - **Project sessions go to the user directly (raised hand) for permissions and questions, not through the hub.**
 - **Launch agents from a snapshot of the user's login + interactive shell environment**: works around macOS applications
-  launched from Finder not inheriting PATH and environment variables. A login-only shell proved insufficient during
-  milestone 00 — the snapshot is taken per launch, filtered of the daemon's own agent variables, and the agent binary is
+  launched from Finder not inheriting PATH and environment variables. A login-only shell proved insufficient — the
+  snapshot is taken per launch, filtered of the daemon's own agent variables, and the agent binary is
   then spawned directly rather than inside a shell.
 - **Every project and session carries a `host_id`**: the MVP has only a single local host record, but this avoids a data
   migration when going remote.
@@ -43,7 +43,7 @@ and other agents are all out of scope for this round (the report page's rewind a
 
 ## Milestones
 
-- [x] [00 Technical validation](00-technical-validation.md) — wrapped up; kept for the debt it hands to later milestones (see its "Landing status")
+- 00 wrapped up
 - 01 wrapped up
 - [ ] [02 Orchestration](02-orchestration.md)
 - [ ] [03 Report panel](03-report-panel.md)

@@ -369,7 +369,8 @@ three adapters: Claude Code, Codex, and Grok Build.
   `--rules`, which the adapter injects anyway. The alternative, making each console working directory a git root, buys
   nothing else and is not worth it.
 - The injection, messaging and resume mechanisms in the table were exercised against Claude Code 2.1.274, Codex 0.160.0
-  and Grok Build 1.0.46; every cell has a verification record; the conclusions and the way each was verified are in the milestone 00 validation document. The three
+  and Grok Build 1.0.46; every cell has a verification record. The per-agent hook events and payloads behind them are in
+  `docs/agent-cli-reference.md`. The three
   injection mechanisms turned out to be quite different in shape, and each carries a condition the adapter must satisfy:
   - **Claude Code** injects cleanly through flags. Two flags must *never* be passed: `--setting-sources` (it silently drops
     the project's own permission rules and hooks) and `--strict-mcp-config` (it silently drops the project's and the user's

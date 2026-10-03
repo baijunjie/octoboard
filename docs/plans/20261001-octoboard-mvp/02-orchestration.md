@@ -83,9 +83,9 @@ needs on top of them. Each item marked `TODO(milestone 02)` in the code is one o
   session — delivered when the hub is idle *or* mid-turn, held only while a modal dialog is up in it or its state is
   unknown
 - [ ] Report synthesis: when a hub-dispatched session stops without having called `report` this turn, take the `Stop`
-  hook's `last_assistant_message` as the report with status `needs_decision`. **Nothing is blocked** — milestone 00
-  established that gating the stop through the Stop hook works but is user-visible as an error and makes the model refuse
-  often enough to matter. Mind the conditions in `docs/mvp.md` 5.3 — among them: filter Grok's teardown
+  hook's `last_assistant_message` as the report with status `needs_decision`. **Nothing is blocked** — gating the stop
+  through the Stop hook was measured to work, but it is user-visible as an error and makes the model refuse often enough
+  to matter. Mind the conditions in `docs/mvp.md` 5.3 — among them: filter Grok's teardown
   `Stop`; treat a Claude Code `Stop` with non-empty `background_tasks` as paused rather than finished; register
   `StopFailure`, which is mutually exclusive with `Stop`, or an API error leaves the session looking busy forever; and
   remember Grok's `idle_prompt` backstop carries no turn id, so it can only be attributed by session and clock

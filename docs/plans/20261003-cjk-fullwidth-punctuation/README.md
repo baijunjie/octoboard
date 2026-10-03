@@ -11,7 +11,7 @@ in the meantime by pressing the key twice or by switching the input method to En
 
 ## Problem
 
-Found during milestone 00's technical validation, in the prototype's `xterm.js` terminal inside WKWebView.
+Found during technical validation, in a throwaway `xterm.js` terminal inside WKWebView.
 
 With a Chinese input method active, a full-width punctuation mark such as `？` — which the input method emits directly,
 with no candidate window — **needs the key pressed twice**. The first press is swallowed. Composed CJK text, which goes

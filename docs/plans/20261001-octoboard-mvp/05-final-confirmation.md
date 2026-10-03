@@ -6,12 +6,12 @@
 > fails is either fixed or written back into the plan as a deliberate limitation.
 
 This milestone exists because a few confirmations are impossible until the real product exists or until an external
-credential is available. They do not block 01 to 04 — each was checked for that — so they are gathered here rather than
+credential is available. They block nothing earlier — each was checked for that — so they are gathered here rather than
 holding earlier work up. Keep it last.
 
-## Carried from milestone 00
+## Carried over
 
-Only what genuinely cannot be settled yet. Everything else milestone 00 raised was closed there.
+Only what genuinely cannot be settled yet; everything else raised along the way was closed where it was raised.
 
 - [ ] **Grok's `StopFailure`.** The only hook event of the three agents that was never captured from a live session; its
       payload shape is taken from Grok's own documentation. Provoking it means pointing Grok's chat endpoint at a server
@@ -19,8 +19,6 @@ Only what genuinely cannot be settled yet. Everything else milestone 00 raised w
       authorisation. Note Grok's "turn finished" mapping names this event, so that branch is unexercised.
 - [ ] **The end-to-end terminal latency the user actually perceives.** The daemon-to-WebSocket path measures well under a
       millisecond, but the rendering step on top of it can only be instrumented once the real application exists.
-
-## Carried from the shell
 
 - [ ] **Mouse reporting past column 95.** The application forwards `xterm.js`'s `onBinary` events precisely so that a
       mouse report whose coordinate byte exceeds 127 still reaches the agent, and the forwarding was read line by line,

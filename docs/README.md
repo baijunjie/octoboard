@@ -19,6 +19,12 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Application lifecycle](product/application-lifecycle.md) — startup and the single-instance rule, losing the daemon
   connection, the quit confirmation, crash behaviour, and the files Octoboard keeps under `~/.octoboard`.
 
+## Reference
+
+- [Agent CLI reference](agent-cli-reference.md) — what the three agent CLIs themselves do, against the versions the
+  facts were established on: each one's hook events, the payload fields and the keys a turn can be correlated on, what
+  a failing hook costs, and how a project's own configuration layers around an injected one.
+
 ## Code
 
 - [Project map](project-map.md) — navigation from the code tree to each module's own doc.

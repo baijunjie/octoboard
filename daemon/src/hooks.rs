@@ -20,6 +20,9 @@
 //! working until the next `UserPromptSubmit`; and Grok's bash mode (`!`) bypasses hooks entirely.
 //! None is recoverable by matching terminal text, which would need a VT emulator in the daemon and
 //! differs between an agent's own renderers.
+//!
+//! For the payload fields behind these decisions — what each event carries, what it can be
+//! correlated on, and what never fires — see `docs/agent-cli-reference.md`.
 
 use serde_json::Value;
 
