@@ -20,7 +20,9 @@
 - [ ] `list_projects`
 - [ ] `add_project`
 - [ ] `start_session(project, brief, agent?)`, returns a session id
-- [ ] `send_message(session, text)`: delivered immediately when idle, queued when busy or waiting for the user
+- [ ] `send_message(session, text)`: delivered immediately when the session is idle *or* mid-turn (every agent queues it
+  itself and consumes it at turn end); held by the daemon only while a modal dialog is up or the session's state is
+  unknown
 - [ ] `get_session(session)`: status and a summary of recent output
 - [ ] `archive_session(session)`
 - [ ] `list_archived(project)` / `reopen_session(session, text?)`
@@ -38,28 +40,40 @@
 
 ## Implementation
 
-- [ ] The hub working directory `~/.octoboard/consoles/<id>/`, with generated hub-specific instruction files (`CLAUDE.md` or
-  `AGENTS.md` depending on the hub's agent) stating that the hub only decomposes / dispatches / follows up / summarizes and
-  does not modify project code itself
+- [ ] The hub working directory `~/.octoboard/consoles/<id>/`, with generated hub-specific instruction files for a Claude
+  Code hub (`CLAUDE.md`) or a Codex hub (`AGENTS.md`) — a Grok hub takes the same content through `--rules` instead, see
+  below — stating that the hub only decomposes / dispatches / follows up / summarizes and does not modify project code
+  itself
 - [ ] Manual sessions do not report to the hub by default, but "include in hub" can be checked
-- [ ] Report delivery: written into the hub session as a user message; queued while the hub is busy and delivered once it
-  stops
-- [ ] Forced reporting: when a hub-dispatched session stops without having called `report` this turn and without waiting for
-  the user, block the stop through the Stop hook and prompt it to call `report` (at most once per turn); if it still does
-  not, take its last reply as a fallback report with status `needs_decision`; agents that cannot block a stop go straight to
-  the fallback
+- [ ] Report delivery: written into the hub session as a user message, on the same terms as any other write into a running
+  session — delivered when the hub is idle *or* mid-turn, held only while a modal dialog is up in it or its state is
+  unknown
+- [ ] Report synthesis: when a hub-dispatched session stops without having called `report` this turn, take the `Stop`
+  hook's `last_assistant_message` as the report with status `needs_decision`. **Nothing is blocked** — milestone 00
+  established that gating the stop through the Stop hook works but is user-visible as an error and makes the model refuse
+  often enough to matter. Mind the conditions in `docs/mvp.md` 5.3 — among them: filter Grok's teardown
+  `Stop`; treat a Claude Code `Stop` with non-empty `background_tasks` as paused rather than finished; register
+  `StopFailure`, which is mutually exclusive with `Stop`, or an API error leaves the session looking busy forever; and
+  remember Grok's `idle_prompt` backstop carries no turn id, so it can only be attributed by session and clock
 - [ ] Automatic archiving: with `status = done` and an empty `open_items`, end the process and archive once the report has
   been delivered; otherwise keep the session "awaiting instructions" until the hub sends a `send_message` or archives it
   explicitly
+- [ ] A Grok hub takes its role description from `--rules`, not from a generated instruction file: Grok locates a project
+  by walking up for a `.git` directory, and a console's working directory is not a repository, so an instruction file
+  written there is never read
 - [ ] Raised hand: at a permission prompt or when asking the user something, the session state becomes `waiting_user`, the
   menu shows a raised-hand icon bubbled up to the project and console nodes, and a system notification and Dock count fire;
-  the user answers right in the terminal and the hooks automatically return the state to working
+  the user answers right in the terminal and the state returns to working. Coverage is not uniform — see "Waiting for the
+  user (raised hand)" in `docs/mvp.md`: a permission prompt is detectable on all three agents, a question asked through the
+  agent's own tool is not detectable on Codex, a question asked in prose is detectable on none of them, and no agent
+  signals "the user answered", so clearing the hand is inferred from the next event for the same turn
 - [ ] The hub neither nags nor re-dispatches a session that is "waiting for the user", and messages bound for it queue until
   the user is done
 - [ ] Keep "needs a hub decision" (the agent actively calling `report(needs_decision)`) apart from "needs a user decision" (a
   permission prompt or asking a person directly, which goes through the raised hand)
-- [ ] Writing messages into a running session is implemented per the conclusions from 00; write only in the "awaiting
-  instructions" state and queue otherwise
+- [ ] Writing messages into a running session follows the four rules settled in 00 and written into the "Writing into a
+  running session" bullet of `docs/mvp.md` section 6 — in particular the gate is modal versus non-modal, not busy versus
+  idle, and it comes from hook-reported state rather than from terminal text
 
 ## Notes for developers
 

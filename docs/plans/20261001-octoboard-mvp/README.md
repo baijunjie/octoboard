@@ -29,8 +29,10 @@ plan only breaks the work into milestones and tracks progress.
 - **Communication is structured in tool arguments and natural language in content**: agents are not asked to emit JSON in
   their reply text; fields a program must act on travel as tool arguments.
 - **Project sessions go to the user directly (raised hand) for permissions and questions, not through the hub.**
-- **Launch agents through the login shell**: works around macOS applications launched from Finder not inheriting PATH and
-  environment variables.
+- **Launch agents from a snapshot of the user's login + interactive shell environment**: works around macOS applications
+  launched from Finder not inheriting PATH and environment variables. A login-only shell proved insufficient during
+  milestone 00 — the snapshot is taken per launch, filtered of the daemon's own agent variables, and the agent binary is
+  then spawned directly rather than inside a shell.
 - **Every project and session carries a `host_id`**: the MVP has only a single local host record, but this avoids a data
   migration when going remote.
 
@@ -41,12 +43,14 @@ and other agents are all out of scope for this round (the report page's rewind a
 
 ## Milestones
 
-- [ ] [00 Technical validation](00-technical-validation.md)
+- [x] [00 Technical validation](00-technical-validation.md) — wrapped up; kept for the debt it hands to 01 (see its "Landing status")
 - [ ] [01 Shell](01-shell.md)
 - [ ] [02 Orchestration](02-orchestration.md)
 - [ ] [03 Report panel](03-report-panel.md)
 - [ ] [04 Polish](04-polish.md)
+- [ ] [05 Final confirmation](05-final-confirmation.md) — the checks that need a real build or an external credential, gathered so nothing is left outstanding at the end
 
 Dependency order: the conclusions from 00 determine the implementation details of 01–03, and any item found infeasible must
 be written back into the corresponding section of `docs/mvp.md` before the next milestone starts; 01 → 02 → 03 → 04 proceed
-in sequence.
+in sequence. 05 is last by construction — it holds only the confirmations that cannot be made until a real build exists or
+until an external credential is available, each checked against the earlier milestones to be sure it blocks none of them.

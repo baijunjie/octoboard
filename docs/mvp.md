@@ -73,7 +73,7 @@ session.
   serves MCP for local sessions, lists directories, and clones repositories. It talks to concrete agents through agent
   adapters.
 - **Coordinator role** (only on the user's own machine): stores console / project / session / report-page data, executes the
-  hub's orchestration requests and routes them to the right host, and handles report queueing and delivery.
+  hub's orchestration requests and routes them to the right host, and handles report delivery and synthesis.
 
 The desktop application is just a client of the daemon: it renders terminals, displays status, and forwards user input.
 
@@ -106,16 +106,54 @@ going remote breaks.
 
 ### 4.4 Known pitfalls of the Tauri / Rust approach
 
-All of these have established solutions and none of them is a blocker:
+Each of these has an established solution, except where a bullet says otherwise:
 
 - **PATH and environment variables**: a macOS application launched from Finder does not inherit the user's shell PATH, so
   `claude` / `codex` (commonly installed under `~/.local/bin` or an nvm directory) cannot be found, and API keys and other
-  environment variables are missing too. The daemon therefore always launches agents through the user's login shell
-  (`$SHELL -l -c …`).
+  environment variables are missing too. A **login** shell is not enough: on a zsh machine `~/.zshrc` is what puts
+  `~/.local/bin` and a node-version manager's shims on `PATH`, and a login-only non-interactive zsh never reads it. The
+  daemon therefore snapshots the environment from a **login + interactive** shell (`$SHELL -l -i -c 'env -0'`) and spawns
+  each agent binary directly with that environment, rather than running the agent inside a shell. The snapshot is taken per
+  launch, because a node-version manager's `PATH` entry can point at a per-shell-instance directory.
+- **The snapshot must be filtered, not just taken.** The shell that produces it inherits the daemon's own environment and
+  passes it straight through, so a daemon that was itself started from inside an agent session leaks that session's
+  variables into every agent it spawns. With Claude Code this is not cosmetic: inheriting `CLAUDE_CODE_CHILD_SESSION` and
+  `CLAUDE_CODE_SESSION_ID` silently turns transcript saving off and makes `--permission-mode` not apply, with no error
+  anywhere; the `CLAUDE_CODE_BRIDGE_*` credential bridge belongs in the same strip list, though the observed effects are
+  the other two's. Stripping them does **not** disturb authentication — with only the markers removed, `claude auth
+  status` still reports a logged-in account, because the credentials live in the macOS Keychain rather than in the
+  environment. Worth stating, because a login failure is the obvious thing to blame the filter for, and re-adding the
+  variables to fix it would reintroduce the original bug. The daemon must strip those markers from the snapshot —
+  regardless of which agent it is launching, since a daemon running inside one agent's session can spawn another.
+  **Enumerate them; do not match on a name prefix.** The markers and the user's own settings share the same prefixes and
+  cannot be told apart by name: `GROK_CODE_XAI_API_KEY`, `GROK_HOME`, `CODEX_HOME` and `CLAUDE_CODE_USE_BEDROCK` are all
+  user settings, and dropping the first of them stops a key-authenticated session from starting at all, with a failure
+  that looks like a login problem — while a Claude Code session also exports `CLAUDE_PID` and `CLAUDE_EFFORT`, which no
+  obvious prefix catches. Build the list by dumping `env` inside a live session of each agent and stripping what is there
+  and only there.
 - **Terminal data does not go through Tauri IPC**: high-frequency terminal output would pay serialization overhead over IPC
   and would violate the constraint in 4.2. The frontend connects to the daemon over WebSocket directly.
 - **Sidecar signing**: when the daemon binary is bundled with the application it must be signed and notarized along with it,
-  or Gatekeeper will block it.
+  or Gatekeeper will block it. **Partly unverified** — no Developer ID was available, so Gatekeeper
+  admission on another machine is untested. Credential access is not a concern: an agent launched from the built bundle
+  reached the user's Keychain login normally, because a Keychain ACL is evaluated against the agent binary's own
+  signature rather than its parent's.
+- **Rust toolchain floor**: the dependency graph, not Tauri itself, sets the floor. `reqwest` cannot be used below Rust
+  1.88 (its `idna`/ICU chain requires it) — for loopback-only traffic a small hand-rolled HTTP client avoids the problem
+  entirely — and Tauri 2 builds on older toolchains only with exact version pins on a chain of transitive crates whose own
+  declared `rust-version` is higher. Either carry those pins deliberately or raise the toolchain; drifting into it by
+  accident costs a day.
+- **Full-width punctuation from a CJK input method needs two key presses**: a mark such as `？`, which an input method
+  emits directly without a candidate window, is swallowed on the first press in `xterm.js` 5.5.0 inside WKWebView, where a
+  native application takes it on the first. Composed CJK *text*, which goes through candidate conversion, is unaffected.
+  The decision is to keep the framework's default composition handling rather than write one, so the fix has to come from
+  the terminal library; until then the key is pressed twice, or the input method switched.
+- **A packaged application needs file-access permission per volume**: the bundled `.app` raised a macOS prompt the moment
+  a session's project directory lived on an external volume, which `tauri dev` never does. Projects will be scattered
+  across volumes, so associating one has to cope with the user declining, or with the prompt not having been answered yet.
+- **`Ctrl+C` does not reach the terminal on its own**: inside WKWebView it is swallowed above `xterm.js`, while other
+  modifier combinations pass through. Since it is the most-used key in a terminal, the UI must intercept it explicitly and
+  forward `0x03` itself.
 - **WebView differences**: Tauri uses the system WebView (WKWebView on macOS). This has no impact on a macOS-only MVP; when
   Linux support is added later, WebKitGTK's support for xterm.js WebGL rendering needs to be verified, falling back to canvas
   rendering if necessary.
@@ -123,7 +161,8 @@ All of these have established solutions and none of them is a blocker:
 ## 5. Orchestration
 
 Key premise: every session starts with the project directory as its cwd, so the project's own agent configuration
-(`CLAUDE.md` / `AGENTS.md`, skills, hooks, permission settings, and so on) takes effect exactly as it normally would.
+(its instruction file, skills, hooks, permission settings, and so on) takes effect exactly as it normally would — note
+each agent reads a different instruction filename, see section 6.
 Octoboard's capabilities are **injected additionally** through launch arguments only; project files are never modified. The
 injection mechanism differs per agent and is the adapter's responsibility (section 6).
 
@@ -149,7 +188,7 @@ Tokens are issued per session, and different tools are exposed depending on the 
 | `list_projects` | List this console's projects (name, host, path, description, active sessions). |
 | `add_project` | Associate a directory, or clone a GitHub repository and associate it. |
 | `start_session(project, brief, agent?)` | Start a session in a project and hand it a task (the `brief` structure is described in 5.3). `agent` overrides the agent for this one session; when omitted, the project's default agent is used. Returns a session id. |
-| `send_message(session, text)` | Append an instruction to a session (delivered immediately when idle, queued when busy or waiting for the user). |
+| `send_message(session, text)` | Append an instruction to a session. Delivered immediately when the session is idle *or* mid-turn — every agent queues it itself and consumes it when the turn ends — and held by the daemon only while a modal dialog is up or the session's state is unknown. |
 | `get_session(session)` | Query the status and a summary of recent output. |
 | `archive_session(session)` | End the session process and archive it (for the hub to wrap things up explicitly). |
 | `list_archived(project)` / `reopen_session(session, text?)` | Query archived sessions; reopen an old session to continue work. |
@@ -186,11 +225,37 @@ missing field.
 **Reporting (project → hub)** is simply the arguments of `report`: `summary` is natural language, while `status` and
 `open_items` are structured.
 
-**Forced reporting**: when a hub-dispatched session comes to a stop without having called `report` this turn and without
-being in the waiting-for-user state, the daemon blocks the stop through the Stop hook and prompts the session to call
-`report` (at most once per turn, to prevent loops). If it still does not call it, the daemon falls back to the session's last
-reply as the report and treats the status as `needs_decision`, leaving the judgement to the hub. Agents that cannot block a
-stop go straight to the fallback.
+**Reporting is not forced.** Blocking the stop through the Stop hook does work — it was verified end to end on both Claude
+Code and Codex, and both "already reported this turn" and "waiting for the user" can be determined reliably enough — but the
+cost is unacceptable for a product meant to feel calm: every gated turn shows the user an error-styled `Stop hook error`
+line that `suppressOutput` does not suppress, and the model sometimes reads the injected demand as a prompt-injection
+attempt and refuses outright.
+
+So the `report` tool stays and the role description encourages calling it, but nothing is blocked. When a hub-dispatched
+session comes to a stop without having called `report` this turn, the daemon synthesises the report from the `Stop` hook's
+`last_assistant_message` and treats the status as `needs_decision`, leaving the judgement to the hub. What is given up is
+that the structured fields (`status`, `open_items`) degrade to prose on turns where the session did not call the tool
+itself.
+
+Several conditions qualify that synthesis, all found during validation:
+
+- **Grok fires `Stop` twice per session** — once per turn with `reason: "end_turn"` and again at teardown with
+  `reason: "shutdown"`. Filter on the reason, or every Grok session ends with a phantom report. `SIGTERM` is what produces
+  that graceful teardown, so it is how a Grok session should be stopped.
+- **Grok's bash mode (`!`) bypasses hooks and permissions entirely** — no tool events, and a deny rule does not stop it.
+  Anything the daemon infers from tool hooks is blind to it.
+- **`Stop` and `StopFailure` are mutually exclusive on Claude Code.** A turn that ends in an API error fires only
+  `StopFailure`, so a daemon keying "finished" on `Stop` alone leaves that session looking busy forever. Register both.
+  `StopFailure` does not mean the session died — in the interactive TUI it stays alive at the prompt.
+- **A tool call rejected by Claude Code's own pre-execution guard fires only `PostToolBatch`**, skipping `PreToolUse`,
+  `PostToolUse` and `PostToolUseFailure`, so a daemon pairing pre with post misses those calls entirely.
+- **A Claude Code `Stop` carrying a non-empty `background_tasks` means paused, not finished.** Synthesising there would
+  report an unfinished turn as a result.
+- **On Grok some turns produce no stop event at all** (bash mode, builtin slash commands, cancel-and-send, rewinds). The
+  backstop is `Notification` with `idle_prompt`, and it was confirmed: a turn cancelled before its first token emitted no
+  stop event of any kind, and `idle_prompt` was the session's only turn-end signal. It fires about 60 s after the turn
+  ends and carries **no turn id**, so the daemon can only attribute it by session and clock, and it needs at least one
+  turn to have ended — a session that only ran a slash command never emits it.
 
 ### 5.4 Reporting and automatic archiving
 
@@ -199,7 +264,9 @@ stop go straight to the fallback.
   hub, the daemon ends the session process and archives it.
 - Any other case (unfinished items, failure, a decision needed) → the session stays in the "awaiting instructions" state,
   waiting for the hub to `send_message` and continue, or to be archived explicitly by the hub or the user.
-- Reports are written into the hub session as a user message. If the hub is busy they queue and are delivered once it stops.
+- Reports are written into the hub session as a user message, on the same terms as any other write into a running
+  session: delivered when the hub is idle *or* mid-turn, and held only while a modal dialog is up in it or its state is
+  unknown.
 
 ### 5.5 Waiting for the user (raised hand)
 
@@ -216,10 +283,38 @@ through the hub** — relaying questions through the hub only creates confusion 
   `report(status: needs_decision)` and belongs to the hub; the latter is a permission prompt or the agent asking a person
   directly, and goes through the raised hand.
 
+**How much of this the hooks can actually see**, established per agent during validation:
+
+- **A pending permission prompt is detectable on all three** — Claude Code's `PermissionRequest`, Grok's `Notification`
+  with `permission_prompt`, Codex's `PermissionRequest`. Codex's was observed firing *before* the dialog reached the user; for
+  the other two the event was captured but its ordering against the dialog was not established.
+- **A question asked through the agent's own ask-the-user tool is detectable on Claude Code and Grok** but **not on
+  Codex**, which has no question or notification event at all.
+- **A question asked as plain prose is detectable on none of them.** The turn simply ends, and no payload field
+  distinguishes it from a finished turn. Those sessions show as idle rather than raising a hand; that is a known gap, not
+  something to work around with terminal-text matching.
+- **Clearing the raised hand is inferred, not signalled.** No agent has an event for "the user answered"; the daemon
+  opens the state on the permission or question event and closes it on the next tool-resolution or stop event for the same
+  turn.
+- **A user cancellation is observable only on Codex.** Its `Interrupt` fires on Esc or Ctrl-C during an in-flight turn,
+  carries the cancelled turn's own `turn_id`, and is mutually exclusive with `Stop`. Claude Code emits **nothing at all**
+  when the user interrupts — not in the thinking phase and not mid-tool. No timeout is needed to recover, though: the
+  session's **next `UserPromptSubmit`** is a reliable signal that the previous turn is over, and is what should close the
+  dangling `PreToolUse`. Only the interrupted turn is silent — the following turn reports normally and tool events pair
+  as usual, so the session does not become unreliable. The cost is that until the user types again that session reads as
+  working in the menu, which is stale rather than wrong, and the interrupted tool's own child process is already gone —
+  Claude Code kills it, it just says nothing. Note also that on Codex a *declined*
+  approval aborts the turn and fires `Interrupt` too, so cancel and decline are told apart by whether a
+  `PermissionRequest` went unresolved just before it.
+- **The user's own agent configuration can remove the prompt entirely.** Codex's `approvals_reviewer` defaults are
+  per-user, and with `auto_review` an approval request is resolved by Codex itself: the hook fires, no modal is ever
+  shown, and the tool proceeds. Octoboard would raise a hand nobody needs to answer. The adapter should read that setting
+  and not promise a raised hand the agent will never surface.
+
 ### 5.6 The hub session
 
 - Working directory: `~/.octoboard/consoles/<id>/` on the coordinator's host. Octoboard generates hub-specific instruction
-  files there (role, orchestration principles, report format), as `CLAUDE.md` or `AGENTS.md` depending on the agent the hub
+  files there (role, orchestration principles, report format), named for the agent the hub
   uses.
 - The hub is only responsible for decomposing, dispatching, following up, and summarizing — it does not modify project code
   itself. That constraint is written into its instructions.
@@ -245,22 +340,83 @@ three adapters: Claude Code, Codex, and Grok Build.
 | Capability | Claude Code | Codex | Grok Build |
 |---|---|---|---|
 | Launch with an initial task | `claude "<task>"` | `codex "<task>"` | `grok "<task>"` |
-| Pre-allocate a session id | `--session-id <uuid>` | To be verified; if unsupported, take it from the startup hook payload | `--session-id <uuid>` |
-| Inject hooks | `--settings <json>`, merged with the project settings | Hooks are supported (`features.hooks` is already stable), injected via `-c`; the exact events and format are to be verified | Hooks are supported, but no command-line injection flag was found; the injection mechanism is to be verified |
-| Inject MCP | `--mcp-config <json>` | `-c mcp_servers.octoboard.…` | MCP is supported; the injection mechanism is to be verified |
-| Inject a role description | `--append-system-prompt` | To be verified (candidate: overriding the instruction-related config via `-c`) | Only `--system-prompt-override` exists (a full replacement, so unusable); an append mechanism is to be verified, with the fallback being to write it into the initial task |
-| Send a message to a running session | PTY input (bracketed paste + Enter) | `codex queue --thread <id> --message <text>`; fall back to PTY input if it does not meet the need | PTY input |
+| Pre-allocate a session id | `--session-id <uuid>` | **Not possible.** Take it from the `SessionStart` hook payload; in the interactive TUI the thread is created lazily on the first prompt submission, so a session opened without a task has no id until the user types | `--session-id <uuid>` (new sessions only) |
+| Inject hooks | `--settings <json-string-or-path>`, verified to merge with the project settings | `-c 'hooks.<Event>=[{hooks=[{type="command",command=…,timeout=3,async=true}]}]'`, one per event, plus the hook-trust step | A per-session `GROK_HOME` whose `hooks/` directory is Octoboard's and whose other entries symlink to the real `~/.grok` |
+| Inject MCP | `--mcp-config <json>` (never with `--strict-mcp-config`) | `-c 'mcp_servers.octoboard.command=…'` + `-c 'mcp_servers.octoboard.args=[…]'` + `-c 'mcp_servers.octoboard.default_tools_approval_mode="auto"'` | An `[mcp_servers.octoboard]` block appended to the `config.toml` copy inside that `GROK_HOME` |
+| Inject a role description | `--append-system-prompt` (recorded once per conversation and replayed on resume, so it cannot be changed later) | `-c 'developer_instructions="…"'` — adds a developer message, leaving the rest of the prompt byte-identical. Not `-c instructions=`, which replaces the system prompt | `--rules "…"` — appends to the system prompt and persists into the session record |
+| Send a message to a running session | PTY input: `ESC[200~` + text + `ESC[201~` + `CR` (one logical write, but see "Writing into a running session" below — it must be a non-blocking retry loop) | `codex queue --thread <session id>`, or the same PTY input | PTY input, same sequence |
 | Resume a session | `claude --resume <id>` | `codex resume <id>` | `grok --resume <id>` |
+| Identity seen by the injected MCP server | `CLAUDE_CODE_SESSION_ID` is set automatically | argv or an explicit `env` table — no `CODEX_*` variables reach the child | `GROK_SESSION_ID` is set automatically; `{{session_id}}` templating does *not* work |
 
 - Adding a new agent only requires implementing one adapter; an agent without hook support degrades to an ordinary terminal
   session with no status display and no automatic reporting.
-- The "to be verified" entries above are tracked in the investigation checklist in section 13. Every command-line flag listed
-  has been confirmed to exist in the local `--help` output (Claude Code, Codex 0.159.2, Grok Build 1.0.46), but none has been
-  exercised end to end yet.
+- **Each agent reads a different instruction filename, and matches it by exact spelling.** Measured on a case-sensitive
+  volume: Claude Code reads `CLAUDE.md` and `CLAUDE.local.md` and — contrary to what the plan originally assumed — **does
+  not read `AGENTS.md` at all**, and cannot be made to: the plugin that would support it is not registered in this build,
+  so neither a per-launch setting nor a persistent one turns it on. Where an agent must be shown a project's existing
+  `AGENTS.md`, the verified route is `--append-system-prompt-file`, which lands it in the system prompt rather than the
+  instruction-file block, leaving discovery and precedence to us. Codex reads `AGENTS.md`; Grok reads all of `AGENTS.md`, `Agents.md`,
+  `CLAUDE.md`, `Claude.md` and `CLAUDE.local.md`. **No agent accepts an all-lowercase name.** So the file the hub writes
+  into a console's working directory has to be named for the agent that console uses, and on a case-sensitive volume Grok
+  will load *every* matching spelling present in a directory rather than just the first.
+  **Grok additionally needs a git root**: it locates a project by walking up for a `.git` directory, and in a directory
+  without one it reads no project instructions *and* no project hooks at all. A console's working directory is not a
+  repository, so **a Grok hub's role description cannot be delivered as an instruction file there** — it has to come from
+  `--rules`, which the adapter injects anyway. The alternative, making each console working directory a git root, buys
+  nothing else and is not worth it.
+- The injection, messaging and resume mechanisms in the table were exercised against Claude Code 2.1.274, Codex 0.160.0
+  and Grok Build 1.0.46; every cell has a verification record; the conclusions and the way each was verified are in the milestone 00 validation document. The three
+  injection mechanisms turned out to be quite different in shape, and each carries a condition the adapter must satisfy:
+  - **Claude Code** injects cleanly through flags. Two flags must *never* be passed: `--setting-sources` (it silently drops
+    the project's own permission rules and hooks) and `--strict-mcp-config` (it silently drops the project's and the user's
+    MCP servers). The injected MCP server's key must not collide with one the project defines, or the project's definition
+    is silently never spawned.
+  - **Grok Build** has no flag for hooks or MCP, and its `GROK_CONFIG` / `GROK_CONFIG_PATH` overlay accepts only allowlisted
+    keys, so both silently drop. The working mechanism is a per-session `GROK_HOME` pointed at an Octoboard-owned directory
+    where every entry is a symlink back to the real `~/.grok` except a copied `config.toml` carrying the MCP block and an
+    Octoboard `hooks/` directory. `auth.json` and `sessions/` stay symlinks so login state is shared and sessions stay
+    resumable from the user's own `grok`.
+  - **Workspace trust gates the *project's* own configuration on two of the three**, which is the exact failure the
+    "project configuration must not be overridden" rule exists to prevent — and it fails silently. On Grok, an untrusted
+    folder makes the project's `AGENTS.md`, its hooks and its MCP servers simply not load; trust lives inside
+    `GROK_HOME`, so `trusted_folders.toml` must be symlinked in or every project looks untrusted, and there is an
+    undocumented `--trust` flag. Grok additionally needs a recognised **git** workspace root — project hooks did not load
+    in a trusted non-git directory. On Claude Code, an untrusted workspace makes the project's `allow` rules be ignored
+    (with an explanatory line on stderr) while its `deny` rules still apply, so the session is only ever more restrictive;
+    trust lives in `~/.claude.json`, which Octoboard must not write, so the adapter should detect that stderr line and
+    surface it to the user.
+  - **Codex** injects through repeated `-c` overrides, with two extras: the project must be marked trusted in the same way
+    (`-c 'projects={"<canonical cwd>"={trust_level="trusted"}}'`), and hooks are gated behind a persisted trust hash —
+    without it an interactive session raises a blocking review modal and a headless one **hangs indefinitely**. The flag
+    `--dangerously-bypass-hook-trust` clears that at the cost of two warning lines per launch; seeding `hooks.state` with
+    captured hashes is the warning-free alternative.
+- **Resume re-injects everything.** For all three agents the hooks and the MCP server are resolved from the launch
+  arguments every time and are lost on a resume that omits them — silently, leaving an unobserved session. The role
+  description is the exception and behaves differently per agent: Grok persists `--rules` into the session record, while
+  Claude Code records its appended system prompt on the conversation's first request and replays it verbatim, so a
+  *changed* role text is ignored on resume. Treat a session's role as immutable for its lifetime.
+- **Hook scripts must fail silently and fast on all three.** Every agent surfaces a failing hook to the user, and a hook
+  with no timeout blocks the turn for its full duration. Octoboard owns the hook scripts: exit 0 unconditionally, write
+  nothing to stderr, set a short explicit timeout (Codex clamps some events to 3 s), mark them asynchronous where the agent
+  supports it, and give the daemon call a hard deadline. Note Grok's HTTP hooks cannot reach the daemon at all — its SSRF
+  protection rejects both plain HTTP and private addresses — so hooks must be `command` type and talk to the daemon
+  themselves.
 - Injection must not modify project files, nor the user's global configuration. If an agent can only be configured through a
   config file, prefer an environment variable or flag of the "use this config directory" kind.
-- Writing to the PTY of Claude Code / Grok is the most fragile part of the MVP; multi-line text and the behaviour while a
-  session sits at a permission prompt both need hands-on testing.
+- **Writing into a running session** was the most fragile part of the design and is now settled for all three agents. The
+  sequence is `ESC[200~`, the text with LF separators, `ESC[201~`, then `CR`; multi-line text arrives as a single message,
+  with no delay needed between the paste and the Enter. Four rules come with it, each of which fails silently or
+  destructively if ignored:
+  - **A message starting with `/` is executed as a slash command**, even inside a bracketed paste — prefix a single space.
+  - **A macOS PTY master accepts only about 1022 bytes before `EAGAIN`** when the child is not draining, so the write must
+    be a non-blocking partial-write-and-retry loop in slices, never a blocking `write_all` on the daemon's event loop.
+  - **Nothing may be written while a modal dialog is up.** The paste itself is discarded, but the trailing `CR` confirms
+    whatever option is highlighted — at Claude Code's trust dialog that exits the session, and at Grok's approval modal it
+    would select "always-approve". Codex is the exception: a paste at its modal changes nothing. Never send bare keys
+    either; Grok and Codex treat digits as confirm hotkeys.
+  - **The gate must come from hook-reported state, not from the terminal.** None of the agents signal their modal state
+    through terminal modes, and matching rendered footer text needs a VT emulator in the daemon and differs between an
+    agent's own renderers. If the hook state is missing or stale, do not write.
 
 ### 6.1 Which agent gets used
 
@@ -335,7 +491,7 @@ Page      { id, console_id, html, anchor_message_id, created_at }
 3. Creating, editing, and deleting consoles; associating projects (local directory, parent directory, GitHub clone).
 4. The three-level menu, session states (including raised hand and interrupted), system notifications; opening and typing
    into session terminals; archiving and reopening.
-5. The full set of hub MCP tools (5.2); `report` for project sessions; queued report delivery; conditional automatic
+5. The full set of hub MCP tools (5.2); `report` for project sessions; report delivery and synthesis; conditional automatic
    archiving.
 6. The report panel: pushing, paging through history, form submission, read-only history.
 7. Exit confirmation, with interrupted sessions preserved and resumable.
@@ -353,56 +509,41 @@ Page      { id, console_id, html, anchor_message_id, created_at }
 
 | Stage | Deliverable | Verification |
 |---|---|---|
-| M0 Technical validation | The daemon runs all three agents over a PTY; hooks deliver status; messages reach a running session; MCP tools get called; the frontend renders a terminal over WebSocket | Every item in the section 13 checklist has a conclusion |
+| M0 Technical validation | The daemon runs all three agents over a PTY; hooks deliver status; messages reach a running session; MCP tools get called; the frontend renders a terminal over WebSocket | Every validation item has a conclusion |
 | M1 Shell | The console / project / session three-level menu, manual sessions, interruption recovery, archiving and reopening | Project configuration (skills, permissions) takes effect inside sessions |
-| M2 Orchestration | Hub MCP tools, queued reporting, automatic archiving, raised hand | The hub completes one full "dispatch → execute → report → archive → summarize" loop; several projects raise their hand at once; the hub and projects use different agents; the hub overrides the agent for one session |
+| M2 Orchestration | Hub MCP tools, report delivery and synthesis, automatic archiving, raised hand | The hub completes one full "dispatch → execute → report → archive → summarize" loop; several projects raise their hand at once; the hub and projects use different agents; the hub overrides the agent for one session |
 | M3 Report panel | `show_page`, history, form round-trip | After a form submission the hub continues correctly |
 | M4 Polish | Status details, exit flow, packaging and signing | — |
+| M5 Final confirmation | The checks that need a real build or an external credential | Each has a recorded outcome; nothing is left outstanding |
 
-## 13. M0 investigation checklist
+## 13. Validation status
 
-The goal of M0 is to settle, one by one, the premises the plan depends on that have not been tested yet — before any product
-code is written. Each item needs a conclusion (feasible / not feasible / feasible with conditions) and the way it was
-verified. For items that turn out not to be feasible, the plan is adjusted along the listed fallback and written back into
-the corresponding section.
+Every premise this plan rested on has been settled against Claude Code 2.1.274, Codex 0.160.0 and Grok Build 1.0.46. A
+throwaway prototype ran the full chain **on Claude Code** — PTY launch, hooks reporting status, a message written into a
+running session, an injected MCP tool being called, and the terminal rendered over WebSocket inside a Tauri window — and
+launched all three agents over a PTY. Grok's and Codex's hook and MCP injection was settled by direct probes against those
+CLIs rather than through the prototype, which runs them in the degraded no-injection mode.
 
-### 13.1 Common to all agents
+The conclusions are folded into the sections they affect rather than kept as a separate list — the launch mechanism in 4.4,
+the reporting mechanism in 5.3, and the per-agent injection mechanisms, their conditions and their traps in section 6.
 
-| # | Question to settle | Impact | Fallback if not feasible |
-|---|---|---|---|
-| G1 | When started with the project directory as cwd, do the project's own configuration (instruction files, skills, hooks, permissions) and the injected content both take effect without overriding each other | Premise of section 5 | Change the injection mechanism; project configuration must not be overridden |
-| G2 | When launching through the login shell, are PATH, API keys, and each agent's login state fully available (including when the application is launched from Finder) | 4.4 | Read the user's shell environment and pass it in explicitly |
-| G3 | Can status events cover: work started, stopped, permission requested, question asked of the user (e.g. `AskUserQuestion`), resumed after the user answered | 5.5, 5.7 | Missing states degrade to not being displayed, or are inferred from terminal output patterns |
-| G4 | When a hook fails or the daemon is unreachable, does the agent hang or raise errors that disturb the user | Stability | Hook scripts must fail fast and exit silently |
-| G5 | Can the injected MCP server distinguish identities per session (token passed via URL / header), and do the hub and workers see only their own tools | 5.2 | Use different ports or paths per role |
-| G6 | When resuming an interrupted session (`--resume`), do the injected arguments need to be passed again, and do they take effect | Section 8 | The adapter reassembles all injected arguments on resume |
-| G7 | Is using the Stop hook to block a stop and demand a `report` call feasible; how can "already reported this turn" and "currently waiting for the user" be determined | 5.3 | Do not block; go straight to the fallback report |
+Nothing left open can change a design decision. Two things could not be settled during validation, and both are carried
+by the plan's final milestone rather than left loose:
 
-### 13.2 Sending messages to a running session
+- **Grok's `StopFailure`.** The only hook event of the three agents never captured from a live session; its payload shape
+  comes from Grok's own documentation. Provoking it means pointing Grok's chat endpoint at a server that returns an
+  error, which redirects an authenticated client's traffic and so needs the user's explicit authorisation.
+- **The end-to-end terminal latency the user actually perceives.** The daemon-to-WebSocket path measures well under a
+  millisecond, but the rendering step on top of it can only be instrumented once the real application exists.
 
-| # | Question to settle | Impact | Fallback if not feasible |
-|---|---|---|---|
-| M1 | Claude Code / Grok: is multi-line text written over the PTY as bracketed paste + Enter submitted as one complete message | 5.4 report delivery, `send_message` | Switch to single-line escaped text, or look for an official message-injection interface |
-| M2 | What happens when writing while the session sits at a permission prompt, a multiple-choice question, or mid-execution (being misread as a keypress selection is the biggest risk) | Same as above | The daemon only writes in the "awaiting instructions" state and queues in every other state |
-| M3 | Codex `codex queue`: when is the message consumed (at the end of the current turn?), does it work while the session runs in the TUI, and does it conflict with PTY input | Section 6 | Fall back to PTY input |
+Separately, **Developer ID signing and notarization** were never exercised, for want of a Developer ID — that is milestone
+04's own completion criterion rather than a loose end, and it leaves open only whether Gatekeeper admits the bundle on
+another machine. Credential access is not at stake: an agent launched from the built bundle reached the user's Keychain
+login normally.
 
-### 13.3 Per-agent specifics
-
-| # | Agent | Question to settle | Fallback if not feasible |
-|---|---|---|---|
-| A1 | Claude Code | Are hooks injected via `--settings` merged with, or do they override, the hooks in the project's `.claude/settings*.json` | They must merge; otherwise use a different injection mechanism |
-| A2 | Codex | Can a session id be pre-allocated; if not, where can the session id be obtained reliably after launch (hook payload / session file) | Match the session directory by cwd and start time |
-| A3 | Codex | Which hook events are supported and in what payload format, and can they be injected via `-c` without modifying `~/.codex/config.toml` | Use an environment variable to point at a separate config directory |
-| A4 | Codex | How to append a role description without replacing the default system prompt | Write it into the initial task prompt |
-| A5 | Codex | Does an MCP server injected via `-c mcp_servers.…` take effect in the interactive TUI | Same as A3 |
-| A6 | Grok Build | How to inject hooks and MCP (no relevant command-line flags found), and whether it is possible without modifying project or user-global configuration | A separate config directory; failing that, Grok degrades to an ordinary terminal session |
-| A7 | Grok Build | How to append a role description (`--system-prompt-override` replaces everything, so it is unusable) | Write it into the initial task prompt |
-
-### 13.4 Terminal and architecture
-
-| # | Question to settle | Impact | Fallback if not feasible |
-|---|---|---|---|
-| T1 | Do all three agents' TUIs render and behave correctly in `xterm.js` inside WKWebView: full-screen mode, mouse, keyboard shortcuts, CJK input methods, window resizing | Section 3 | Targeted configuration (e.g. Grok's non-full-screen mode); adjust xterm.js options if necessary |
-| T2 | The latency of daemon → WebSocket → `xterm.js` and the throughput under heavy output | 4.2 | Batch frames together, use binary frames |
-| T3 | After the frontend disconnects and reconnects, can the terminal contents be restored from the daemon's cached output | Prerequisite for background operation in section 8 | Record raw PTY output in a ring buffer and replay it |
-| T4 | Packaging, signing, and the lifecycle of the daemon as a Tauri sidecar (reliably terminated when the application exits, no orphan processes after a crash) | 4.4, section 8 | The daemon watches its parent process and exits once the parent is gone |
+One measurement did change a design decision and is recorded here because it constrains the implementation: under heavy
+output the daemon's PTY reader must take backpressure from the broadcast channel rather than running ahead of it. A reader
+that always runs ahead fills any bounded channel within a fraction of a second and the client gets dropped — that
+particular failure is not addressed by framing or batching — and neither is anything else. Sweeping the daemon's own read
+buffer, which sets the size of every frame it sends, from 4 KiB to 256 KiB made no measurable difference to throughput at
+either of two very different source rates, so output frame size is not a lever worth tuning.

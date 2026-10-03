@@ -1,0 +1,20 @@
+{
+  "name": "obd-proto-ui",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Throwaway UI for octoboard milestone 00 technical validation. Deleted in milestone 01.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}

@@ -19,6 +19,20 @@
 - [ ] A single agent adapter interface: launch, pre-allocate / obtain a session id, inject, report status, resume. Implement
   three adapters — Claude Code, Codex, Grok Build — choosing injection mechanisms per the conclusions from 00; an agent
   without hook support degrades to an ordinary terminal session with no status display
+- [ ] The adapter tolerates `agent_session_id` being unknown: Codex cannot pre-allocate one, and in its interactive TUI the
+  thread is created lazily on the first prompt submission, so a session the user opens without a task has no id until they
+  type (Claude Code and Grok both accept `--session-id`)
+- [ ] The PTY reader takes backpressure from whatever it feeds. In the prototype it always ran ahead, which filled a bounded
+  channel within a fraction of a second under heavy output and dropped the client. Output *frame size* is not the lever —
+  sweeping it from 4 KiB to 256 KiB changed nothing measurable
+- [ ] Terminating an agent **must not signal a process group by pid**. Milestone 00's prototype did, and once a session's
+  pid had been recycled by the OS the signal landed on an unrelated group: it killed the spawn helper of the editor the
+  daemon had been launched from, which left that process unable to start any child at all — its own terminal included —
+  until it was restarted. Signal the process itself, and keep a handle rather than a pid; if a group kill is genuinely
+  needed, it must be gated on the process being known-alive, not merely registered
+- [ ] Session teardown lets the agent exit cleanly where it can. Repeatedly killing Claude Code mid-startup during
+  milestone 00 tripped its own `fullscreenAutoDisabled` counter and left it rendering in its degraded renderer on that
+  machine; agents keep this kind of state about themselves
 
 **Data model**
 
@@ -36,15 +50,30 @@
 - [ ] The three-level menu (console → project → session), sessions labelled with their agent, an "Archive" group under each
   project
 - [ ] The center terminal (`xterm.js`) connects to the daemon directly over WebSocket, not through Tauri IPC
+- [ ] The terminal pane is owned by a single object holding the active session, the socket's lifecycle, the connection
+  status and terminal focus together, with one transition that sets all four. Milestone 00's prototype split them across
+  separate variables and produced two defects from it: clicking anything moved focus off the terminal so input stopped
+  reaching the agent while output kept flowing, and a superseded socket's `close` event stamped its status over the new
+  connection's `open`
+- [ ] The UI intercepts `Ctrl+C` itself and forwards `0x03`: WKWebView swallows it, while other modifier combinations
+  pass through
+- [ ] The UI forwards `xterm.js`'s `onBinary` events as well as `onData`. Mouse reports are not UTF-8: past column 95 a
+  coordinate byte exceeds 127 and never reaches `onData` at all, so without this the TUI's mouse handling silently stops
+  working on any reasonably wide window
 - [ ] Session state icons: working / awaiting instructions / interrupted / archived (the raised hand lands in 02)
 - [ ] Creating, editing, and deleting consoles; associating projects: a single directory, a parent directory (git
   repositories beneath it discovered automatically), a GitHub URL (cloned, then associated)
+- [ ] Associating a project on a volume the application has no file access to must degrade gracefully: a packaged
+  application raises a macOS per-volume prompt the development build never shows, and the user may decline it or leave it
+  unanswered. Projects will be scattered across volumes, so this is a normal path, not an edge case
 - [ ] The daemon starts and stops with the application as a sidecar
 
 ## Implementation
 
-- Launch: the daemon starts agents through the login shell with the project directory as cwd; injected arguments are
-  assembled by the adapter
+- Launch: the daemon spawns each agent binary directly with the project directory as cwd, using an environment snapshotted
+  per launch from `$SHELL -l -i -c 'env -0'` and filtered of the daemon's own agent variables; injected arguments are
+  assembled by the adapter. See "Known pitfalls of the Tauri / Rust approach" in `docs/mvp.md` for why a login-only shell is
+  not enough and what the filter is for
 - Exit: if any session is in progress when the application exits, show a confirmation; once confirmed, terminate all session
   processes and the daemon. Terminated sessions are not archived but marked "interrupted"; a crash behaves the same way
 - Resume: clicking an "interrupted" session makes the adapter use `--resume` (`codex resume` for Codex) and reassemble all

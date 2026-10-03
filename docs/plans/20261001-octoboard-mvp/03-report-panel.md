@@ -18,9 +18,9 @@
   the hub session
 - [ ] History paging (◀ ▶); forms and `submit` are disabled on history pages
 - [ ] The data passed to `submit` is sent to the hub session as a user message, annotated with its source page; while the hub
-  is busy, the queued delivery from 02 applies
+  is mid-turn or idle it is delivered straight away, and held only while a modal is up in it — 02's delivery rule
 
 ## Notes for developers
 
-- **Reusable from earlier**: the queued message delivery and the `show_page` tool channel from 02.
+- **Reusable from earlier**: the message delivery path and the `show_page` tool channel from 02.
 - **Reference**: `docs/mvp.md` section 7.
