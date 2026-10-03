@@ -9,10 +9,13 @@
 # writes the working tree first and only moves the ref at the end, so reading the working tree would let
 # the branch being merged decide how the gate judges it. Resident guarded branches (usually the main
 # branch) come first, so that an old or modified script on some stale branch cannot become the rule for
-# every branch.
+# every branch. Repositories with no resident guarded branch (ones that only have the PR flow installed)
+# anchor on the target branch recorded by the branch being pushed: take its local branch first, falling
+# back to its remote-tracking branch if absent — either way, the published version.
 # reference-transaction is called at every stage of every ref transaction — rebase, fetch and each commit
 # all trigger it — so the shell filters down to "a guarded branch moved" before starting Python. Guarded
-# branches = every branch.*.worktreeTarget value plus every revert-gate.branch value.
+# branches = every branch.*.targetBranch value plus every revert-gate.branch value; pre-push additionally
+# filters for "the branch being pushed itself records a branch.*.targetBranch".
 # If python3 or the script cannot be found, let the update through: a failing hook would fail every ref
 # update.
 
@@ -35,23 +38,47 @@ esac
 
 nl='
 '
-config=$(git config --get-regexp '^(branch\..*\.worktreetarget|revert-gate\.branch)$') || exit 0
-fixed= hit=
+config=$(git config --get-regexp '^(branch\..*\.targetbranch|revert-gate\.branch)$') || exit 0
+fixed= hit= pr=
 while IFS=' ' read -r key name; do
   [ -n "${name}" ] || continue
-  [ "${key}" = revert-gate.branch ] && fixed="${fixed} ${name}"
+  [ "${key}" != revert-gate.branch ] || fixed="${fixed} ${name}"
+  # A development branch that records a target branch (the segment in the key) takes the PR path
+  # when it is pushed. Each pre-push line is
+  # "<source refspec as written> <local sha> <remote ref> <remote sha>": the first field is matched
+  # at line start, but `git push origin HEAD` writes HEAD there, so it is also matched against the
+  # third field (remote ref). This only filters it in and leaves the target branch as a candidate for
+  # fetching the script; which branch is actually queried is decided by the gate script itself.
+  if [ "${mode}" = pre-push ] && [ "${key}" != revert-gate.branch ]; then
+    branch=${key#branch.}
+    branch=${branch%.targetbranch}
+    case "${nl}${input}" in
+      *"${nl}refs/heads/${branch} "*|*" refs/heads/${branch} "*) pr="${pr} ${name}" ;;
+    esac
+  fi
+  # The value is a target branch, and it is itself guarded: if this transaction moved it, it must be
+  # checked.
   case "${input}${nl}" in
     *" refs/heads/${name}${nl}"*|*" refs/heads/${name} "*) hit="${hit} ${name}" ;;
   esac
 done <<EOF_CONFIG
 ${config}
 EOF_CONFIG
-[ -n "${hit}" ] || exit 0
+[ -n "${hit}${pr}" ] || exit 0
 
 command -v python3 >/dev/null 2>&1 || exit 0
 script=
-for name in ${fixed} ${hit}; do
-  script=$(git cat-file blob "refs/heads/${name}:.githooks/revert-gate.py" 2>/dev/null) && break
+for name in ${fixed} ${hit} ${pr}; do
+  # When the branch does not exist locally (e.g. a fresh clone, or a repo with only the PR flow
+  # installed), fall back to its remote-tracking branch — likewise the published version.
+  # Only the remote it has configured, plus origin, are trusted: picking "the one same-named branch"
+  # by alphabetical order would let someone else's fork decide the gate script.
+  remote=$(git config "branch.${name}.remote" 2>/dev/null)
+  [ -n "${remote}" ] || remote=origin
+  for ref in "refs/heads/${name}" "refs/remotes/${remote}/${name}" "refs/remotes/origin/${name}"; do
+    script=$(git cat-file blob "${ref}:.githooks/revert-gate.py" 2>/dev/null) && break
+  done
+  [ -z "${script}" ] || break
 done
 [ -n "${script}" ] || exit 0
 # -I: keep the current directory out of sys.path and ignore PYTHON* environment variables, so a

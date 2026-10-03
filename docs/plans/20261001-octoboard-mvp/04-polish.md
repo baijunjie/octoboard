@@ -5,7 +5,7 @@
 > Done when: the signed and notarized application bundle installs and works on a clean macOS machine (with the bundled
 > daemon sidecar); the exit, crash, and interruption-recovery paths each pass a manual test.
 
-## Handover
+## Handoff
 
 Two items from the shell, both marked `TODO(milestone 04)` in the code.
 

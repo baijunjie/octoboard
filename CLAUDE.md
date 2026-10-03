@@ -13,20 +13,18 @@ template, gets translated to English before it is committed. Conversation with t
 
 ## Dispatching subagents
 
-There are two reasons to dispatch a subagent — **to get a clean perspective** (reviewing code you just wrote,
-or writing docs, where the context you are holding carries bias), or **to move mechanical work out of the
-main context** (bulk search, locating code, bulk replacement).
+**The test: a task that will eat a lot of context and does not end with this one edit — exploring, debugging,
+researching, bulk search-and-replace, repeated trial — should go to a subagent wherever you can; you take only
+the conclusion.** Make small edits yourself: briefing a subagent costs more than making the change. Dispatch one
+when you need a clean perspective too: reviewing code you just wrote, or writing docs, where the context you are
+holding carries bias.
 
-**How to brief it:**
+**How to brief it**: one task per dispatch, with the completion criteria spelled out; give the full background
+(it knows none of the premises you did not write down); ask it for conclusions, not a replay of its process;
+never let several subagents change the same place at once.
 
-- One task per dispatch, with the completion criteria spelled out.
-- Give the full background: it knows none of the premises you did not write down, so do not expect it to fill them in.
-- Ask it for conclusions, not a replay of its process.
-- Never let several subagents modify the same task scope at once.
-
-**Who to pick: if a dedicated subagent owns the job, give it to them**; otherwise **pick by task difficulty,
-do not reach for the strongest every time** — mechanical work such as bulk search and locating code goes to
-the cheapest tier, and only architecture design and technology choices go to the strongest.
+**Who to pick**: if a dedicated subagent owns the job, give it to them; otherwise pick by task difficulty, and do
+not reach for the strongest every time.
 
 | agent | Use for |
 |---|---|
@@ -50,11 +48,8 @@ the cheapest tier, and only architecture design and technology choices go to the
 
 ## Development workflow: Git worktree
 
-- The target branch is whichever branch the current working copy has checked out when the worktree is created (the parent branch when nesting); "main working copy" below means the working copy that has the target branch checked out.
-- Any task that produces code changes is done in a dedicated git worktree on a dedicated branch, with editing, building, testing and quality checks all happening inside it; the main working copy stays clean so it can be compared against the target branch at any time. Read-only investigation, answering questions and anything else that produces no changes are exempt. To inject code temporarily just to verify something, you may open a separate throwaway worktree with no branch (`git worktree add --detach`); changes in it are never committed and it is removed as soon as the check is done.
-- The target branch is not necessarily the main branch; the development branch is cut from its latest commit and merged back into it in the end. When creating a branch you must record its target branch and branch point; miss that and a later session cannot find out where it should be merged back, nor check whether the merge reverted changes already on the target branch.
-- Creating a worktree, aligning with the remote target branch, squashing commits, rebasing, merging back into the target branch, pushing the target branch, and reverting a commit or change already on the target branch all follow the steps in the `git-worktree` skill. Do not add `--no-verify`, set skip environment variables, or change the hook configuration to get around the repository's checks.
-- When the project moves to merging through PRs, the PR process takes precedence: do not merge locally, and use the branch's recorded `worktreeTarget` as the PR's target branch.
+- Any task that produces code changes is done in a dedicated git worktree on a dedicated branch; **read the `git-worktree` skill before creating the worktree** and follow its steps. Read-only investigation, answering questions and anything else that produces no changes are exempt.
+- **When you are getting ready to merge the branch back into its target branch, read the `git-worktree` skill first** as well, and follow its steps. Do not add `--no-verify`, set skip environment variables, or change the hook configuration to get around the repository's checks.
 
 <!-- setup-git:worktree:end -->
 
@@ -67,7 +62,10 @@ skip a step; how each step is done is up to the corresponding skill.
 
 ### Before starting work
 
-Start by picking up the project context via the `agent-docs` skill.
+- Make sure the branch is up to date first: after `git fetch`, check whether the current branch is behind the
+  branch it merges back into, and align it before doing anything else. Investigation, plans and changes made on
+  stale code may already not hold.
+- Pick up the project context via the `agent-docs` skill.
 
 ### Before delivery
 

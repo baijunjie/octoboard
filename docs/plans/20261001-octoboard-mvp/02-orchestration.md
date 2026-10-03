@@ -6,7 +6,7 @@
 > at once do not interfere with each other and bubble up correctly; the hub and projects use different agents; the hub can
 > override the agent for one session.
 
-## Handover
+## Handoff
 
 The shell runs real agent sessions already; what it leaves for this milestone is everything the hub's orchestration
 needs on top of them. Each item marked `TODO(milestone 02)` in the code is one of these.

@@ -5,10 +5,11 @@ The typical cause is a squash that changed the base without merging the content 
 `git reset --soft <target branch>`), so old code gets squashed in as if it were new.
 `git merge --ff-only` only checks the ancestry relation and fast-forwards all the same, so guarded branches
 are checked by content whenever they move. The guarded ones are the target branches recorded by each
-worktree branch (`git config branch.<branch>.worktreeTarget`), plus the resident guarded branches recorded
-in `git config revert-gate.branch` (multi-valued, usually the main branch). Only the records are consulted,
-not which branch the main working copy currently has checked out, so that rebasing or amending on your own
-feature branch is not blocked either; a target branch with no record is therefore not guarded. Rules:
+development branch (`git config branch.<branch>.targetBranch`, a key shared by the worktree flow and the PR
+flow), plus the resident guarded branches recorded in `git config revert-gate.branch` (multi-valued, usually
+the main branch). Only the records are consulted, not which branch the main working copy currently has
+checked out, so that rebasing or amending on your own feature branch is not blocked either; a target branch
+with no record is therefore not guarded. Rules:
 
 1. A non-fast-forward can only be allowed when none of the dropped commits were ever published
    (`pull --rebase`, `git rebase <branch>@{u}` replaying local unpushed commits on top of the latest remote
@@ -30,12 +31,12 @@ feature branch is not blocked either; a target branch with no record is therefor
    above; they are a deliberate bypass, the gate cannot tell them apart, and they are allowed.
 2. Reject when any of the most recent non-merge commits on the branch before the move is undone by this
    move; the criteria are in find_reverts. How far back: at least the most recent WINDOW commits; when the
-   move can be attributed to a feature branch that recorded its branch point
-   (`git config branch.<branch>.worktreeBase`), extend to every commit after that branch point.
-   The branch point cannot be found from git history alone — a squash that changed the base is exactly one
+   move can be attributed to a feature branch that recorded its fork point
+   (`git config branch.<branch>.forkPoint`), extend to every commit after that fork point.
+   The fork point cannot be found from git history alone — a squash that changed the base is exactly one
    that rewrote the parent to the latest target branch, so it has to be recorded when the branch is created.
-   When the target branch was rebased while aligning with the remote, the branch point is no longer its
-   ancestor, so counting starts from the merge base of the branch point and the target branch instead.
+   When the target branch was rebased while aligning with the remote, the fork point is no longer its
+   ancestor, so counting starts from the merge base of the fork point and the target branch instead.
    When a local move lands above some remote-tracking branch tip and that tip is not below the position
    before the move (`git rebase <branch>@{u}`), commits on the tip (the published ones) are checked against
    the tip instead, and the position before the move is used only for commits not on the tip (the local
@@ -48,12 +49,30 @@ feature branch is not blocked either; a target branch with no record is therefor
      they are exactly what a conflict resolution keeping only the local side undoes, they cannot be found
      by checking against the position before the move alone, and would only be caught at push time, when
      redoing the work is already inconvenient.
-   Deleting an add-only commit wholesale does not count as a revert, so undoing a purely additive commit is
-   not caught, and neither is a dropped unpushed commit that only adds content — this keeps normal cleanups
-   such as "delete a finished plan doc" or "drop temporary code" from being blocked.
+   The content criteria look at "does this resemble being restored", so a change that only adds lines and
+   never deletes any is invisible when the whole thing is wiped out in one go (this covers undoing a purely
+   additive commit, and also deleting a file that was only ever appended to). This shape is instead caught by
+   find_reverts' third criterion — the structural check for a changed base: if this move changed some file
+   that the branch itself never touched since its fork point, that is exactly what a changed base drags in,
+   whether the change was an add, a delete, or a content edit. It requires a recorded fork point; branches
+   with no record (ones not created through either skill) are not protected against this kind of accidental
+   deletion.
 3. When a commit message added by this move carries `Reverts: <sha>`, or git revert's default
    `This reverts commit <sha>.`, the corresponding commit is allowed — a deliberate revert must leave a
    record.
+
+The PR flow's merge happens on the remote, and the target branch never moves locally, so none of the
+checks above ever fire; there is a separate path instead: on pre-push, a branch being pushed that records a
+target branch is checked by rules 2 and 3 above against the content of that target branch's remote-tracking
+tip. This only runs when the pushed tip is a descendant of that tip (i.e. it has been rebased onto the
+latest target branch); a branch not yet rebased is pushed every day, and checking it regardless would be
+nothing but false positives. Rule 1 does not apply — force-pushing a PR branch you alone own, after a
+squash, is expected behavior.
+The checked range is likewise extended by the fork point (`git config branch.<branch>.forkPoint`); the PR
+flow has to record it before squashing, since it can no longer be computed once the rebase has happened.
+Known gap: a branch with no recorded targetBranch, and a push not yet rebased onto the latest target branch,
+are both left unchecked; the target branch's remote state is as of the last fetch (pre-push only gets the
+live remote value of the ref being pushed).
 
 Usage:
   revert-gate.py reference-transaction <state>   called by hook.sh, stdin is the list of ref updates
@@ -67,6 +86,13 @@ Usage:
                                                  same-named branch means no check, several of them means
                                                  exit code 1 asking for an upstream to be set first. Based
                                                  on the last fetch, never goes online
+  revert-gate.py check-pr <target-branch-ref> <branch>  manual precheck before a PR push; the target branch
+                                                 ref must be written as a remote-tracking ref (e.g.
+                                                 origin/main); exit code 1 with a hint to rebase first when
+                                                 branch is not its descendant, exit code 1 on a hit, exit
+                                                 code 2 when the check itself fails. Does not check the
+                                                 target branch's relation to its upstream (what is given is
+                                                 already the remote state); based on the last fetch
 
 In pre-push mode, a guarded branch's remote commit (the live value git gets from the remote when pushing)
 that is missing locally is rejected outright: the content cannot be judged, and `push --force` is not
@@ -75,8 +101,9 @@ rejected by the remote, so letting it through would overwrite commits someone el
 In hook modes the exit code for a rejection is 3, and the hook entry points that call it treat only 3 as a
 rejection; once installed into a clone those entry points are not updated with the repository, so this
 convention must not change.
-When the gate itself fails (including the script not running at all) the update is allowed: better to miss
-one check than to let it wedge every ref update.
+In hook modes, when the gate itself fails (including the script not running at all) the update is allowed:
+better to miss one check than to let it wedge every ref update; the two precheck modes (check / check-pr)
+instead exit with code 2, so a human can see that the check did not run.
 Set the environment variable REVERT_GATE_SKIP=1 to skip it temporarily, only for cases a human confirmed.
 reference-transaction mode requires git 2.28+ (the hook only exists from 2.28 on); pre-push and check mode
 do not.
@@ -90,7 +117,7 @@ from collections import Counter
 
 # How many commits to look back. A revert usually comes from a branch developed in parallel in the same
 # period, so its base is not far behind; too large a value reads many more blobs on every merge. When a
-# branch point is recorded, every commit after it is checked as well, but no more than MAX_DEPTH, so that a
+# fork point is recorded, every commit after it is checked as well, but no more than MAX_DEPTH, so that a
 # branch left unmerged for a long time cannot slow the check down enough to stall the merge.
 WINDOW = 50
 MAX_DEPTH = 1000
@@ -114,6 +141,10 @@ OVERRIDE = re.compile(
 )
 
 REJECTED = 3
+
+# The two manual precheck modes: on an error they exit with code 2 rather than "error means let it
+# through" — a human needs to see that the check did not run.
+CHECK_MODES = ("check", "check-pr")
 
 # When blocked at the local layer, each command has already completed a different amount of work:
 # merge / pull write the work tree and the index first and update the ref last; reset changes the index
@@ -147,8 +178,15 @@ def text(data):
 
 def guarded_branches():
     """The set of guarded branch names; see the module docstring."""
-    out = git("config", "--get-regexp", r"^(branch\..*\.worktreetarget|revert-gate\.branch)$", check=False).stdout
+    out = git("config", "--get-regexp", r"^(branch\..*\.targetbranch|revert-gate\.branch)$", check=False).stdout
     return {line.split(" ", 1)[1] for line in text(out).split("\n") if " " in line}
+
+
+def target_of(branch):
+    """The target branch recorded by a branch (branch.<branch>.targetBranch); None when not recorded.
+    Recording it does not itself make the branch guarded: squashing, rebasing, and force-pushing a
+    development branch are routine, and blocking them would only get in the way of normal work."""
+    return text(git("config", "--get", f"branch.{branch}.targetBranch", check=False).stdout).strip() or None
 
 
 def is_null(oid):
@@ -230,9 +268,22 @@ def tree_diff(a, b):
     return result
 
 
+def rename_sources(a, b):
+    """Paths that git identifies as rename sources in a → b: the content moved elsewhere, it was not
+    deleted."""
+    out = git("diff-tree", "-r", "-z", "--find-renames", "--diff-filter=R", a, b, check=False).stdout
+    fields = out.split(b"\0")
+    sources, i = set(), 0
+    while i + 1 < len(fields) and fields[i].startswith(b":"):
+        # A rename record carries an extra path field: :<mode>... R<similarity>\0<source>\0<destination>
+        sources.add(text(fields[i + 1]))
+        i += 3
+    return sources
+
+
 def recent_commits(old, forks):
     """The commits to check: the most recent WINDOW on old, united with everything between old and the merge
-    base of old and each branch point (at most MAX_DEPTH), non-merge commits only.
+    base of old and each fork point (at most MAX_DEPTH), non-merge commits only.
     Returns [(sha, subject, [(id before, id after, path)])]."""
     ranges = [[f"--max-count={WINDOW}", old]]
     for fork in forks:
@@ -276,11 +327,11 @@ def ratio(part, whole):
 
 
 def recorded_forks(branches):
-    """The commit ids that the branch points recorded by these branches (branch.<branch>.worktreeBase)
+    """The commit ids that the fork points recorded by these branches (branch.<branch>.forkPoint)
     resolve to; branches with no record, or a record that will not resolve, are skipped."""
     forks = []
     for name in branches:
-        fork = text(git("config", "--get", f"branch.{name}.worktreeBase", check=False).stdout).strip()
+        fork = text(git("config", "--get", f"branch.{name}.forkPoint", check=False).stdout).strip()
         if fork:
             oid = text(git("rev-parse", "--verify", "-q", f"{fork}^{{commit}}", check=False).stdout).strip()
             if oid:
@@ -290,20 +341,82 @@ def recorded_forks(branches):
 
 def branches_at(commit):
     """Local branch names pointing at commit. On a fast-forward merge new is the feature branch tip, which
-    is how its recorded branch point is found."""
+    is how its recorded fork point is found."""
     out = git("for-each-ref", "--format=%(refname)", f"--points-at={commit}", "refs/heads/").stdout
     return [ref[len("refs/heads/"):] for ref in text(out).split()]
 
 
-def find_reverts(old, new, forks=()):
+def base_artifacts(old, new, touched, allowed, bases):
+    """Traces left by a changed base where the content was never merged: this move changed some file
+    relative to old that the branch itself (fork point → new) never touched at all — that difference was
+    not written by the author, it was dragged in by the base changing. Returns
+    [(sha, subject, [(file, reason)])].
+
+    This criterion does not look at whether the content resembles being restored, so it catches a change on
+    the target-branch side regardless of whether it was an add, a delete, or an edit to existing content,
+    including the shape line-level criteria cannot see — a file that only ever gained lines being deleted
+    wholesale. When the author themselves deleted a file that already existed at the fork point, it shows up
+    in the branch's own diff and is not caught here; only content that first appeared after the fork point
+    being deleted counts — a deliberate deletion should still leave a `Reverts:`.
+    Cannot check without a recorded fork point (branch.<branch>.forkPoint): a squash that changed the base is
+    exactly one that rewrote the parent to the target branch's tip, so merge-base is no longer the fork
+    point. Rename sources do not count; that content just moved elsewhere.
+    """
+    # A fork point equal to new does not count: that branch contributed no commit at all (most likely it
+    # was just created and happens to point here); using it to compute authored would give an empty set,
+    # making every file this move touched a suspect.
+    bases = [b for b in bases if b != new]
+    if not bases or not touched:
+        return []
+    authored = set()
+    for base in bases:
+        # Rename-aware: when the branch renamed a file, only the new path counts as authored by it; the
+        # old path remains a suspect — if the target branch rewrote the old path's content after the fork
+        # point, that is exactly how such a rewrite gets lost.
+        # diff-tree rather than diff, so this is not affected by each clone's diff.renames setting.
+        out = git("diff-tree", "-r", "--find-renames", "--name-only", "-z", base, new,
+                  check=False).stdout
+        authored |= {text(f) for f in out.split(b"\0") if f}
+    suspects = [p for p in touched if p not in authored]
+    if not suspects:
+        return []
+    renamed = rename_sources(old, new)
+    found = {}
+    for path in sorted(p for p in suspects if p not in renamed):
+        at_old, at_new = touched[path]
+        # Attribute it to the commit that last changed this file on the target branch: a deliberate
+        # revert should carry a `Reverts:` naming it.
+        out = text(git("log", "-1", "--no-merges", "--format=%H %s", old, "--", path,
+                       check=False).stdout).strip()
+        if not out:
+            continue
+        sha, _, subject = out.partition(" ")
+        if any(sha.startswith(a) for a in allowed):
+            continue
+        if at_new is None:
+            why = "this file was deleted wholesale, and this branch itself never touched it"
+        elif at_old is None:
+            # Cannot stand alone: when the resurrected content is close to the deleted version, the
+            # content criteria will always hit first.
+            why = "this file was resurrected, and this branch itself never touched it"
+        else:
+            why = "this file was changed back to its version at the fork point, and this branch itself never touched it"
+        found.setdefault(sha, (sha, subject, []))[2].append((path, why))
+    return list(found.values())
+
+
+def find_reverts(old, new, forks=(), bases=()):
     """Return the commits old → new undid: [(sha, subject, [(file, reason)])], newest first.
 
-    A commit C counts as undone in two cases:
+    A commit C counts as undone in three cases; the first two compare content, the third compares "who
+    wrote it":
     - Wholesale: every file C touched and whose C changes were still live at old was restored by this move,
-      and the lines C deleted were brought back. Deleting an add-only commit wholesale is normal cleanup
-      and does not count.
+      and the lines C deleted were brought back.
     - Partial: some existing file C modified or deleted was restored and the lines C deleted came back in
       bulk — resolving every conflict to your own side during a rebase has exactly this shape.
+    - Changed base (see base_artifacts): this move changed some file that the branch itself never touched
+      since its fork point. Checking this requires a recorded fork point; once it can be checked, add,
+      delete, and edit to existing content are all treated the same.
     The line comparison only looks at the multiset of lines, not at positions, so it still works when the
     file was changed again by other commits after C.
     """
@@ -315,7 +428,7 @@ def find_reverts(old, new, forks=()):
                   if any(path in touched for _, _, path in c[2])
                   and not any(c[0].startswith(a) for a in allowed)]
     if not candidates:
-        return []
+        return base_artifacts(old, new, touched, allowed, bases)
     # A file this move did not touch is the same in old and new, so the one in old is enough to tell
     # whether C's changes are still live.
     untouched = tree_entries(old, [p for c in candidates for _, _, p in c[2] if p not in touched])
@@ -371,6 +484,15 @@ def find_reverts(old, new, forks=()):
                                             for p in reverted]))
         elif partial:
             findings.append((sha, subject, partial))
+    for sha, subject, hits in base_artifacts(old, new, touched, allowed, bases):
+        for found_sha, _, listed in findings:
+            if found_sha == sha:  # The same commit matched both categories: merge the file lists, and
+                                   # don't report the same file twice
+                shown = {p for p, _ in listed}
+                listed.extend((p, why) for p, why in hits if p not in shown)
+                break
+        else:
+            findings.append((sha, subject, hits))
     return findings
 
 
@@ -414,6 +536,75 @@ If the revert really is deliberate, confirm it and use `git revert` instead, or 
 """, file=sys.stderr)
     if mode == "reference-transaction":
         print(RESTORE_HINT, file=sys.stderr)
+
+
+def check_pr(branch, shown, tip, new, mode, bases=None):
+    """Content check for the PR path: whether the pushed new (branch tip) undoes changes made by existing
+    commits, relative to tip (the target branch's remote state). Returns True when it is allowed. shown is
+    how the target branch is written in hints. Skipped when tip is not an ancestor of new (not yet
+    rebased); the precheck mode instead prints a hint to rebase first — see the PR flow paragraph in the
+    module docstring."""
+    if is_null(tip) or is_null(new) or tip == new:
+        return True
+    if not is_ancestor(tip, new):
+        if mode == "check-pr":
+            print(f"\n[revert-gate] {branch} has not been rebased onto the latest {shown}; "
+                  f"`git rebase {shown}` first.\n",
+                  file=sys.stderr)
+            return False
+        return True
+    forks = recorded_forks([branch]) if bases is None else bases
+    findings = find_reverts(tip, new, forks, bases=forks)
+    if not findings:
+        return True
+    head = f"Refusing to push {branch}: it" if mode == "pre-push" else f"{branch}"
+    print(f"\n[revert-gate] {head} undoes changes made by existing commits, relative to {shown}.\n",
+          file=sys.stderr)
+    print(f"Against {shown} ({tip[:10]}):", file=sys.stderr)
+    print_findings(findings)
+    print(f"""
+The cause is resolving every rebase conflict to only your own side, or a squash that changed the base
+(e.g. committing after `git reset --soft {shown}`). Go back to before the squash, squash with
+`git reset --soft $(git merge-base HEAD {shown})` instead, then `git rebase {shown}` and resolve the
+conflicts faithfully, combining the changes from both sides; do not bypass this with `--no-verify`.
+If the revert really is deliberate, confirm it and use `git revert` instead, or add one
+`Reverts: <sha>` line per undone commit to the message of the commit that undoes it.
+""", file=sys.stderr)
+    return False
+
+
+def pr_prepush(branch, new):
+    """When the branch being pushed records a target branch, check it along the PR path; let it through
+    when there is no record.
+
+    Also lets it through when the target branch's remote state cannot be obtained (it does not exist
+    locally, there is not exactly one same-named remote-tracking branch, or the upstream points at a local
+    branch), but prints a "not checked" line: exit code 0 must not be mistaken for the check having run.
+    """
+    target = target_of(branch)
+    if not target:
+        return True
+    ref, _ = upstream_of(target)
+    # The PR flow is based on the remote tip; when the upstream points at a local branch
+    # (branch.<target>.remote = .), that counts as unobtainable.
+    tip = ""
+    if ref and ref.startswith("refs/remotes/"):
+        tip = text(git("rev-parse", "--verify", "-q", f"{ref}^{{commit}}", check=False).stdout).strip()
+    if not tip:
+        if not remote_refs(target):
+            # The target branch has no remote-tracking branch at all: it is simply not a target published
+            # to a remote (e.g. a target branch that only ever lives locally), not a case of "cannot be
+            # checked". Hinting about it on every push would just spam the output.
+            return True
+        print(f"\n[revert-gate] {branch} was not checked: {target}'s remote state could not be pinned down "
+              f"— it has several same-named remote-tracking branches with no upstream set, or its upstream "
+              f"is not a remote branch. Set an upstream with `git branch -u <remote>/{target} {target}` "
+              f"and push again.\n",
+              file=sys.stderr)
+        return True
+    # The PR flow always rebases onto <remote>/<target-branch>, so hints are written that way too, not as
+    # <branch>@{u}.
+    return check_pr(branch, ref[len("refs/remotes/"):], tip, new, "pre-push")
 
 
 def busy_branches():
@@ -499,12 +690,13 @@ def tips_below(branch, old, new):
             if tip != old and not is_ancestor(tip, old) and is_ancestor(tip, new)]
 
 
-def reverted_on_tips(new, tips, forks):
+def reverted_on_tips(new, tips, forks, bases=()):
     """Commits on each tip that new undid, checked against that tip (all of them published).
-    forks decides how far back the checked range extends."""
+    forks decides how far back the checked range extends; bases is the branch's actual fork point — the
+    forks parameter here is mixed with old and parent commits, so it cannot be used as a fork point."""
     found = {}
     for tip in tips:
-        for finding in find_reverts(tip, new, forks):
+        for finding in find_reverts(tip, new, forks, bases=bases):
             found.setdefault(finding[0], finding)
     return list(found.values())
 
@@ -543,31 +735,33 @@ def check_move(branch, old, new, mode, forks=(), source=None):
             print(f"\n[revert-gate] Refusing to rewrite remote {branch} from {old[:10]} to {new[:10]}: "
                   f"not a fast-forward, it would drop commits the remote already has. Do not force-push; "
                   f"`git fetch` first, then `git rebase {shown}` in the working copy that holds {branch}"
-                  f" to replay the local unpushed commits on top of the remote, verify, then push.\n",
-                  file=sys.stderr)
+                  f" to replay the local unpushed commits on top of the remote, verify, then push.\n", file=sys.stderr)
             return False
         if published:
             print(f"\n[revert-gate] Refusing to move {branch} from {old[:10]} to {new[:10]}: "
                   f"not a fast-forward, it would drop published commits, and {branch} must not rewrite "
                   f"published history.\n"
                   f"To align with the remote, `git fetch` first, then `git rebase {shown}` in the working "
-                  f"copy that holds {branch} to replay the local unpushed commits on top of the remote.\n",
-                  file=sys.stderr)
+                  f"copy that holds {branch} to replay the local unpushed commits on top of the remote.\n", file=sys.stderr)
             print(RESTORE_HINT, file=sys.stderr)
             return False
     # find_reverts does not require old to be an ancestor of new: a non-fast-forward is checked against old
     # just the same, and the dropped local commits are checked as well.
-    findings = find_reverts(old, new, forks)
+    # bases only ever gets the actual fork points: the forks used by reverted_on_tips are mixed with other
+    # reference points and cannot be used as fork points.
+    findings = find_reverts(old, new, forks, bases=forks)
     remote_findings, tips = [], []
     if local:
         tips = tips_below(branch, old, new)
         if tips:
             # Commits on the tip are checked against the tip instead; see rule 2 in the module docstring.
-            # The parents of published commits already hit against old are passed in as branch points too:
-            # when the tip is many commits ahead of old they may fall outside the WINDOW counted from the tip.
+            # The parents of published commits already hit against old are passed in as fork points too:
+            # when the tip is many commits ahead of old they may fall outside the WINDOW counted from the
+            # tip.
             published = [f[0] for f in findings if any(is_ancestor(f[0], tip) for tip in tips)]
             findings = [f for f in findings if f[0] not in published]
-            remote_findings = reverted_on_tips(new, tips, [old, *forks, *(f"{sha}^" for sha in published)])
+            remote_findings = reverted_on_tips(new, tips, [old, *forks, *(f"{sha}^" for sha in published)],
+                                               bases=forks)
     if findings or remote_findings:
         report(branch, old, new, findings, mode, remote_findings, aligning=bool(tips))
         return False
@@ -608,7 +802,17 @@ def pre_push():
             continue
         branch = parts[2][len("refs/heads/"):]
         local, remote = parts[1], parts[3]
-        if branch not in guarded or is_null(remote) or is_null(local):
+        if is_null(local):
+            continue
+        # Both checks run, not either-or: a branch can both record its own target branch and be guarded
+        # because another branch records it. The PR path is checked against the target branch's remote
+        # tip; the guarded path is checked against the branch's own remote tip; neither can stand in for
+        # the other. A branch with no recorded target branch lets itself through inside pr_prepush.
+        # targetBranch is recorded on the local branch, so the branch is identified by the local ref:
+        # `push <local>:<remote>` can give the two sides different names.
+        source = parts[0][len("refs/heads/"):] if parts[0].startswith("refs/heads/") else branch
+        ok = pr_prepush(source, local) and ok
+        if branch not in guarded or is_null(remote):
             continue
         if not has_commit(remote):
             # No network: remote is the live remote value git got when pushing, so not having it locally
@@ -618,7 +822,10 @@ def pre_push():
                   f"copy that holds {branch}, verify, then push.\n", file=sys.stderr)
             ok = False
             continue
-        ok = check_move(branch, remote, local, "pre-push") and ok
+        # Same approach as reference-transaction: after a fast-forward merge, local still points at that
+        # feature branch, which is how its fork point is obtained.
+        ok = check_move(branch, remote, local, "pre-push",
+                        forks=recorded_forks(b for b in branches_at(local) if b != branch)) and ok
     return 0 if ok else REJECTED
 
 
@@ -638,12 +845,26 @@ def main(argv):
             if not upstream_ok(argv[2]):
                 return 1
             return 0 if check_move(argv[2], old, new, "check", forks=forks, source=argv[3]) else 1
+        if mode == "check-pr" and len(argv) == 4:
+            # The first argument must be a remote-tracking ref: giving a local branch would use local
+            # state as the remote baseline, and checking against that would not really be a check.
+            full = text(git("rev-parse", "--symbolic-full-name", argv[2]).stdout).strip()
+            if not full.startswith("refs/remotes/"):
+                print(f"[revert-gate] {argv[2]} is not a remote-tracking branch; check-pr's target branch "
+                      f"must be written as <remote>/<target-branch> (e.g. origin/main).", file=sys.stderr)
+                return 2
+            tip = text(git("rev-parse", "--verify", f"{argv[2]}^{{commit}}").stdout).strip()
+            new = text(git("rev-parse", "--verify", f"{argv[3]}^{{commit}}").stdout).strip()
+            # When the branch argument is written as HEAD, the fork point is taken from the branch it
+            # points at — the same convention as check mode.
+            return 0 if check_pr(argv[3], argv[2], tip, new, "check-pr",
+                                 bases=recorded_forks({argv[3], *branches_at(new)})) else 1
     except Exception as e:  # noqa: BLE001 — any surprise follows the failure policy in the module docstring
-        print(f"[revert-gate] Check failed{'' if mode == 'check' else ', allowed anyway'}: {e!r}",
+        print(f"[revert-gate] Check failed{'' if mode in CHECK_MODES else ', allowed anyway'}: {e!r}",
               file=sys.stderr)
-        return 2 if mode == "check" else 0
+        return 2 if mode in CHECK_MODES else 0
     print(f"[revert-gate] Bad usage: {' '.join(argv[1:]) or '(no arguments)'}", file=sys.stderr)
-    return 2 if mode == "check" else 0
+    return 2 if mode in CHECK_MODES else 0
 
 
 if __name__ == "__main__":
