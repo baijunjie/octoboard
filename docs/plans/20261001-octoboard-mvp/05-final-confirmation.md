@@ -20,6 +20,14 @@ Only what genuinely cannot be settled yet. Everything else milestone 00 raised w
 - [ ] **The end-to-end terminal latency the user actually perceives.** The daemon-to-WebSocket path measures well under a
       millisecond, but the rendering step on top of it can only be instrumented once the real application exists.
 
+## Carried from the shell
+
+- [ ] **Mouse reporting past column 95.** The application forwards `xterm.js`'s `onBinary` events precisely so that a
+      mouse report whose coordinate byte exceeds 127 still reaches the agent, and the forwarding was read line by line,
+      but nothing available during development reacts to a click in a way that proves the report arrived — Claude Code's
+      composer does not position its cursor by click. Confirm by using an agent TUI that does respond to the mouse, in a
+      window wide enough to click past column 95, and check that the click lands where it was aimed.
+
 ## Notes for developers
 
 - **Development notes**: neither of these is automatable. `StopFailure` needs the user to authorise pointing Grok's chat

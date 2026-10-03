@@ -89,9 +89,18 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
 
   useEffect(() => {
     if (!runningInTauri) return;
-    let unlistenClose: (() => void) | undefined;
-    let unlistenExit: (() => void) | undefined;
-    let unlistenDaemonExited: (() => void) | undefined;
+    // Every listener is registered after an `await`, so the effect can be torn down before any of
+    // them exists. Collecting them through `track` — which unsubscribes immediately once the effect
+    // is gone — is what keeps a teardown during that window from leaking one: a leaked listener
+    // fires for the rest of the window's life, which shows up as a duplicated quit prompt and a
+    // duplicated toast for every daemon event.
+    let cancelled = false;
+    const unlisteners: Array<() => void> = [];
+    const track = (unlisten: () => void) => {
+      if (cancelled) unlisten();
+      else unlisteners.push(unlisten);
+    };
+
     (async () => {
       const { invoke } = await import("@tauri-apps/api/core");
       // Tells the Rust side a confirmation flow actually exists now, so it starts asking before
@@ -103,21 +112,26 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       const { listen } = await import("@tauri-apps/api/event");
       const win = getCurrentWindow();
-      unlistenClose = await win.onCloseRequested((event) => {
-        event.preventDefault();
-        void requestQuit();
-      });
-      unlistenExit = await listen("exit-requested", () => void requestQuit());
-      unlistenDaemonExited = await listen<string>("daemon-exited", (event) => {
-        optionsRef.current.toastError?.(
-          `The daemon process exited unexpectedly (${event.payload}). Restart Octoboard to continue.`,
-        );
-      });
+      track(
+        await win.onCloseRequested((event) => {
+          event.preventDefault();
+          void requestQuit();
+        }),
+      );
+      track(await listen("exit-requested", () => void requestQuit()));
+      track(
+        await listen<string>("daemon-exited", (event) => {
+          optionsRef.current.toastError?.(
+            `The daemon process exited unexpectedly (${event.payload}). Restart Octoboard to continue.`,
+          );
+        }),
+      );
     })();
+
     return () => {
-      unlistenClose?.();
-      unlistenExit?.();
-      unlistenDaemonExited?.();
+      cancelled = true;
+      for (const unlisten of unlisteners) unlisten();
+      unlisteners.length = 0;
     };
     // Registration happens once; `requestQuit`/`doQuit` read live state through `optionsRef`.
   }, []);

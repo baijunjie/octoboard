@@ -6,6 +6,40 @@
 > at once do not interfere with each other and bubble up correctly; the hub and projects use different agents; the hub can
 > override the agent for one session.
 
+## Handover
+
+The shell runs real agent sessions already; what it leaves for this milestone is everything the hub's orchestration
+needs on top of them. Each item marked `TODO(milestone 02)` in the code is one of these.
+
+- **The adapters inject the status hooks only.** The MCP server and the role description are not injected yet — the
+  mechanisms are in the "Agent adapters" table of `docs/mvp.md`, and `adapter/mod.rs`, `claude.rs`, `codex.rs` and
+  `grok.rs` each carry a `TODO` at the place it goes (for Grok, the `[mcp_servers.octoboard]` block is appended to the
+  `config.toml` copy inside the per-session `GROK_HOME`). One consequence has to be planned around rather than
+  discovered: Claude Code records an appended system prompt on a conversation's first request and replays it verbatim
+  afterwards, so **a session that already exists can never be given a role** — give roles to sessions this milestone
+  starts, rather than resuming older ones.
+- **The hub's instruction file is not generated.** A console's working directory exists and the hub session runs in it,
+  but nothing writes the instruction file named for that console's hub agent (`TODO` in `coordinator.rs`). A Grok hub
+  cannot take one at all, which the milestone's own notes already cover.
+- **The raised hand has no presentation.** The daemon derives `waiting_user` from hooks on all three agents and the
+  session row renders it as a plain state; the bubbling up to project and console rows, and the system notification, are
+  not built (`TODO` in `StatusIcon.tsx` and `Sidebar.tsx`).
+- **An archived hub session is unreachable in the tree.** A hub belongs to no project, so no Archive group can show it,
+  and the Hub row filters archived sessions out. Nothing archives a hub today; automatic archiving could (`TODO` in
+  `Sidebar.tsx`).
+- **Claude Code's untrusted-workspace warning is not surfaced.** In a workspace the user has not trusted, Claude Code
+  ignores the project's own `allow` rules and says so on stderr — which on a PTY is the rendered output, so there is no
+  separate channel to read it from. The session is only ever more restrictive, so nothing breaks silently, but the user
+  has no way to learn why their project's permissions are not applying (`TODO` in `claude.rs`).
+- **Codex's `approvals_reviewer` / `auto_review` setting is not read**, so Octoboard can raise a hand for an approval
+  Codex resolves itself and never shows anyone (`TODO` in `codex.rs`).
+- **`send_message` has no caller.** The daemon implements it and `daemon/PROTOCOL.md` specifies it, including that it is
+  refused while a session is `waiting_user`; the hub's own `send_message` tool is its first user.
+- **No model turn has ever run**, so the turn-level half of the status mapping is unexercised: `working` during a turn,
+  `waiting_user` at a permission prompt, Grok's two `Stop` fires and Codex's `Interrupt` are all implemented from
+  captured payloads but never seen live. Codex's hooks in particular fire nothing at all until the first prompt
+  submission. Dispatching real work through the hub exercises every one of them — treat the first loop as the check.
+
 ## Technical design
 
 **Injected capabilities** (injected by the adapter when each session starts, pointing at the daemon on the session's host)

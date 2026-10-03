@@ -5,6 +5,18 @@
 > Done when: the signed and notarized application bundle installs and works on a clean macOS machine (with the bundled
 > daemon sidecar); the exit, crash, and interruption-recovery paths each pass a manual test.
 
+## Handover
+
+Two items from the shell, both marked `TODO(milestone 04)` in the code.
+
+- **The Dock's Quit bypasses the exit confirmation.** Cmd+Q and the application menu go through the application's own
+  menu item and do reach it, but the Dock sends `terminate:` straight to the process, and nothing in the Tauri stack
+  turns that into an event the window can answer. Catching it needs an `applicationShouldTerminate:` override on the
+  application delegate (`TODO` in `app/src-tauri/src/lib.rs`, where the menu is built).
+- **Codex's hooks run under `--dangerously-bypass-hook-trust`**, which costs two warning lines in the session's own
+  output on every launch. The warning-free alternative is seeding `hooks.state` with the trust hashes, which have to be
+  captured once per Codex version and shipped with the adapter (`TODO` in `adapter/codex.rs`).
+
 ## Implementation
 
 - [ ] Status details: the edge cases of each state's icon, bubbling, notifications, and Dock count

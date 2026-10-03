@@ -57,9 +57,9 @@ pub struct LiveSession {
     master: Mutex<Box<dyn MasterPty + Send>>,
     /// Held, and deliberately never reaped until the exit watcher observes the exit: an unreaped
     /// child keeps its pid and process group reserved, which is what makes signalling by number
-    /// safe here. Milestone 00's prototype signalled a process group by a pid it no longer owned
-    /// and killed the spawn helper of the editor the daemon ran under, leaving that process unable
-    /// to start any child until it was restarted.
+    /// safe here. Signalling a process group by a pid that had already been recycled is not a
+    /// theoretical hazard: it once killed the spawn helper of the editor the daemon ran under,
+    /// leaving that process unable to start any child at all until it was restarted.
     child: Mutex<Box<dyn Child + Send + Sync>>,
     reaped: AtomicBool,
     fan: Mutex<Fan>,
@@ -113,9 +113,9 @@ impl LiveSession {
 
     /// Called from the PTY reader thread for every chunk read. Blocks while a slow client catches
     /// up, which is how backpressure reaches the agent: with nobody reading the PTY, its own writes
-    /// block. Milestone 00 measured the alternative — a reader that always runs ahead fills any
-    /// bounded channel within a fraction of a second under heavy output and the client is dropped,
-    /// at every frame size tested.
+    /// block. The alternative was measured: a reader that always runs ahead fills any bounded
+    /// channel within a fraction of a second under heavy output and the client is dropped, at every
+    /// frame size tested.
     pub fn on_output(&self, data: &[u8]) {
         let chunk = Bytes::copy_from_slice(data);
         let targets: Vec<(u64, mpsc::Sender<Bytes>)> = {

@@ -10,11 +10,11 @@ export interface TerminalControllerHandlers {
 /**
  * Owns the terminal pane end to end: the one `xterm.js` instance, the active session's socket,
  * the connection status, and keyboard focus — all four change together inside `attach()`, which
- * is the only place any of them is written. This exists because milestone 00's prototype split
- * them across independent variables and that produced two concrete defects: clicking anything in
- * the UI moved DOM focus off xterm's hidden textarea so keystrokes stopped reaching the agent while
- * output kept flowing, and a superseded socket's `close` event — arriving asynchronously after a
- * session switch — stamped "closed" over the new connection's "open". Routing every state change
+ * is the only place any of them is written. Splitting them across independent variables was tried
+ * and produced two concrete defects: clicking anything in the UI moved DOM focus off xterm's hidden
+ * textarea so keystrokes stopped reaching the agent while output kept flowing, and a superseded
+ * socket's `close` event — arriving asynchronously after a session switch — stamped "closed" over
+ * the new connection's "open". Routing every state change
  * through one method with a `generation` guard (below) closes off both: nothing reads or writes
  * `status`/`socket`/`sessionId` outside `attach()` and the listeners it installs, and a stale
  * socket's events are discarded by comparing against the generation they were opened for.
