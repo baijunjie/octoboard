@@ -154,6 +154,10 @@ Each of these has an established solution, except where a bullet says otherwise:
 - **`Ctrl+C` does not reach the terminal on its own**: inside WKWebView it is swallowed above `xterm.js`, while other
   modifier combinations pass through. Since it is the most-used key in a terminal, the UI must intercept it explicitly and
   forward `0x03` itself.
+- **macOS Quit does not raise Tauri's `ExitRequested`**: Cmd+Q, the application menu's Quit and the Dock's Quit all
+  send `terminate:`, and nothing in the Tauri/`tao` stack implements `applicationShouldTerminate:`, so an exit
+  confirmation hung on `RunEvent::ExitRequested` is simply skipped on all three. The application has to own its Quit
+  menu item; the Dock's Quit can only be caught by overriding the application delegate.
 - **WebView differences**: Tauri uses the system WebView (WKWebView on macOS). This has no impact on a macOS-only MVP; when
   Linux support is added later, WebKitGTK's support for xterm.js WebGL rendering needs to be verified, falling back to canvas
   rendering if necessary.

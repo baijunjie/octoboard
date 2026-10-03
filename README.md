@@ -2,8 +2,9 @@
 
 A desktop control board for orchestrating coding agents across multiple projects.
 
-> **Status: pre-implementation.** The design is written up, but its technical premises have not been validated yet and
-> no product code exists. Nothing here is usable or installable.
+> **Status: early development.** The shell works — consoles, projects, sessions in real terminals, archiving and
+> resuming — on macOS, built from source. The orchestration it exists for (a hub agent dispatching work across
+> projects and reporting back) is not built yet, and there is no installable build.
 
 ## This is an AI-native project
 

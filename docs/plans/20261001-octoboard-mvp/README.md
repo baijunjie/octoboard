@@ -44,7 +44,7 @@ and other agents are all out of scope for this round (the report page's rewind a
 ## Milestones
 
 - [x] [00 Technical validation](00-technical-validation.md) — wrapped up; kept for the debt it hands to 01 (see its "Landing status")
-- [ ] [01 Shell](01-shell.md)
+- [x] [01 Shell](01-shell.md) — wrapped up; kept for the debt it hands to 02 and 04 (see its "Landing status")
 - [ ] [02 Orchestration](02-orchestration.md)
 - [ ] [03 Report panel](03-report-panel.md)
 - [ ] [04 Polish](04-polish.md)

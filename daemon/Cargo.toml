@@ -1,0 +1,30 @@
+[package]
+name = "octoboardd"
+version = "0.1.0"
+description = "Octoboard daemon: host role (PTYs, agent processes, repositories) and coordinator role (console / project / session data)."
+authors = ["Junjie Bai"]
+license = "MIT"
+repository = "https://github.com/baijunjie/octoboard"
+edition = "2021"
+rust-version = "1.86"
+publish = false
+
+[[bin]]
+name = "octoboardd"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.7", features = ["ws"] }
+portable-pty = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "=1.26.1", features = ["v4", "serde"] }
+bytes = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+libc = "0.2"
+futures-util = { version = "0.3", default-features = false }
+rusqlite = { version = "0.32", features = ["bundled"] }

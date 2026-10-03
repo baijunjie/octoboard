@@ -1,5 +1,23 @@
 # Verifying behaviour in the desktop app
 
+## Launch the real window for any change on the startup or mount path
+
+A webview that throws while mounting is a blank window — no message anywhere, and neither `tsc` nor a reviewer reading
+the diff can see it; three review rounds here passed on code whose window never rendered once. So whenever a change
+touches startup, the daemon-sidecar handover or the terminal's mount, run the app and capture the window, then confirm
+the whole chain positively: the window paints, the sidecar starts, the webview connects, the menu fills, a selected
+session's terminal renders. Capturing the window needs no Accessibility permission of its own, so this check is
+always available and costs about a minute.
+
+## Get a diagnosis out of a blank window by rendering it into the DOM
+
+The window's own pixels are the only readable output channel: devtools can only be opened by the keystroke injection
+that needs Accessibility permission, and the native window title is set by the Rust shell and does not follow
+`document.title`. So install a `window.onerror` / `unhandledrejection` handler that writes the error and its stack
+straight into the document body, and read it off a screenshot. The React error boundary does not remove the need for
+this — it catches render-time throws only, while a throw from a library's own scheduled work, or from module-level
+code running before React mounts, still leaves a silent blank window.
+
 ## Bisect every terminal symptom against the daemon before blaming the agent
 
 When the app shows a terminal symptom — a keystroke doing nothing, input dying after a session switch, a pane looking
