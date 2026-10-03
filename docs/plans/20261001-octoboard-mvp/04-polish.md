@@ -2,7 +2,7 @@
 
 > Goal: finish off the status details and the exit flow, and complete packaging, signing, and notarization so the
 > application is distributable.
-> Done when: the signed and notarized application bundle installs and works on a clean macOS machine (with the bundled
+> Completion criteria: the signed and notarized application bundle installs and works on a clean macOS machine (with the bundled
 > daemon sidecar); the exit, crash, and interruption-recovery paths each pass a manual test.
 
 ## Handoff

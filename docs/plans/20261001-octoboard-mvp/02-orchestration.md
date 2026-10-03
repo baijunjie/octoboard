@@ -2,7 +2,7 @@
 
 > Goal: the hub session can orchestrate project sessions through MCP tools, reports are delivered and archived
 > automatically, and project sessions raise their hand to the user.
-> Done when: one full "dispatch → execute → report → archive → summarize" loop completes; several projects raising their hand
+> Completion criteria: one full "dispatch → execute → report → archive → summarize" loop completes; several projects raising their hand
 > at once do not interfere with each other and bubble up correctly; the hub and projects use different agents; the hub can
 > override the agent for one session.
 

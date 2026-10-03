@@ -2,7 +2,7 @@
 
 > Goal: the report panel appears to the right of the hub session, able to receive pushed HTML pages, page through history,
 > and submit forms back to the hub.
-> Done when: the panel refreshes to the newest page after the hub calls `show_page`; history pages can be paged back and
+> Completion criteria: the panel refreshes to the newest page after the hub calls `show_page`; history pages can be paged back and
 > forth and are read-only; the hub continues correctly after a form submission.
 
 ## Technical design
