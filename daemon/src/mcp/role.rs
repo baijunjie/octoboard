@@ -108,6 +108,9 @@ pub fn hub_instructions(agent: Agent) -> String {
          - `{archive_session}` — end and archive a session you are done with.\n\
          - `{list_archived}` / `{reopen_session}` — pick an earlier session back up instead of \
            starting over.\n\
+         - `{show_page}` — push an HTML page to the report panel beside you, for anything better \
+           shown than typed: a table, a comparison, choices to click. Include a form and the \
+           user's answer comes back to you as a message.\n\
          \n\
          ## Working with sessions\n\
          \n\
@@ -135,6 +138,7 @@ pub fn hub_instructions(agent: Agent) -> String {
         archive_session = tool("archive_session"),
         list_archived = tool("list_archived"),
         reopen_session = tool("reopen_session"),
+        show_page = tool("show_page"),
     )
 }
 

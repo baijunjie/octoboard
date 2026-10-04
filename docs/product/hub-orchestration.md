@@ -3,7 +3,8 @@
 A console's **hub session** is the one the user brings a request to. It does not change project code
 itself: it works out which project a request belongs to, starts sessions there, follows them up, and
 summarizes what they came back with. The sessions it starts are ordinary project sessions, described
-in `docs/product/sessions.md`.
+in `docs/product/sessions.md`. Besides its terminal the hub has one surface of its own for showing
+the user something — the report panel, described in `docs/product/report-panel.md`.
 
 The hub drives Octoboard through tools Octoboard injects into the session; a project session gets one
 tool back the other way. **Which tools a session sees follows from its role alone**, so a project
@@ -30,6 +31,7 @@ hubs" group rather than in any project's Archive.
 | `archive_session` | `session` | Ends the session's process and archives it. |
 | `list_archived` | `project` | The archived sessions of one project. |
 | `reopen_session` | `session`, `text?` | Relaunches an archived or interrupted session, continuing its conversation, and optionally hands it an instruction, delivered once the relaunched session can take one. |
+| `show_page` | `html` | Pushes an HTML page to the console's report panel, beside the hub's own terminal. Answers with the new page's id. See `docs/product/report-panel.md`. |
 
 A project is named either by its id or by its name where that name is unambiguous within the
 console; an ambiguous name is refused and asks for the id.
@@ -124,6 +126,12 @@ A hub session itself never reports anywhere.
 
 A session that is working or awaiting instructions takes a message straight away; every agent queues
 one written mid-turn and consumes it when the turn ends.
+
+**A message is not written verbatim.** Every control character except newline and tab is removed from
+its text, and a message that would otherwise begin with `/` is written with a single leading space, so
+it reaches the model as text instead of being run as one of the agent's own slash commands. This holds
+for everything Octoboard writes into a running session — an instruction, a report, a report panel form
+submission — because all three can be model-authored and none is reviewed first.
 
 An instruction or a report for a session that **cannot** take one right now — it is waiting for the
 user at a permission prompt or a question — is queued rather than dropped, and delivered as soon as

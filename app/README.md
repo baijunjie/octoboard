@@ -44,12 +44,14 @@ any IPC call for it.
 | Path | Role |
 |---|---|
 | `src-tauri/` | Rust shell: sidecar lifecycle for `octoboardd`, window creation, the exit-confirmation flow and native menu, the two IPC commands above, and the capabilities file allowlisting those plus the notification and Dock-badge commands. Nothing else. |
+| `index.html` | The window's only Content Security Policy, delivered as a `<meta>` tag rather than through `app.security.csp` in `src-tauri/tauri.conf.json` — the file's own comment has the reasoning |
 | `src/daemon.ts` | Locates the daemon's port (`?port=` query param from the Tauri shell, or `VITE_DAEMON_PORT` for `vite dev` against a hand-started daemon) |
 | `src/daemon-client.ts` | WebSocket client for `GET /ws/control`: request/reply correlation, reconnect, event dispatch |
 | `src/protocol.ts` | Hand-written TypeScript mirror of `daemon/src/protocol.rs` / `PROTOCOL.md` |
-| `src/store.tsx` | React context holding the daemon connection and the console/project/session state derived from its events |
-| `src/App.tsx` | Top-level layout: sidebar, terminal pane, dialogs |
+| `src/store.tsx` | React context holding the daemon connection and the console/project/session state derived from its events, including each console's report panel pages |
+| `src/App.tsx` | Top-level layout: sidebar, terminal pane, the report panel (hub sessions only), dialogs |
 | `src/components/` | Menu, dialogs (console/project/session create-edit, confirm, directory picker) and small UI primitives |
+| `src/components/ReportPanel.tsx` | The report panel: lists a console's pushed pages, pages back through them, and renders the current one in a sandboxed iframe with a `postMessage` bridge for form submissions |
 | `src/terminal/` | `TerminalController` (owns `xterm.js`, the session's `GET /ws/term/:session` socket, connection status and focus as one unit) and the `TerminalPane` component wrapping it |
 | `src/lifecycle/useAppExit.ts` | Drives the exit-confirmation flow from the frontend side, calling the two Tauri commands above |
 | `src/lifecycle/useWaitingNotifications.ts` | Fires the system notification and sets the Dock badge count when a session raises its hand |

@@ -18,6 +18,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Hub orchestration](product/hub-orchestration.md) — what the hub can do: its tools and a project session's `report`,
   the brief a task is handed over as, the reporting loop and what happens when a session stops without reporting,
   automatic archiving, and which sessions the hub drives.
+- [Report panel](product/report-panel.md) — the hub's third pane: pushing a page with `show_page` and what the page id is
+  for, paging back through the kept history, why a history page is read-only and where that is enforced, what a page may
+  contain and which outbound channels it has none of, the `octoboard.submit(data)` bridge and how a submission reaches the
+  hub session, and the window's minimum size.
 - [Launching agents](product/launching-agents.md) — the guarantee that project files and the user's agent configuration
   are never modified, the three things injected per launch and the hub's generated instruction file, the launch
   environment, and the per-agent specifics.
@@ -44,5 +48,6 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   leaves — in the user's configuration and in their live `~/.octoboard` data.
 - [Verifying the desktop UI](memory/verifying-the-desktop-ui.md) — how to verify terminal and UI behaviour in the real
   app: why a UI change has to be launched rather than only reviewed, how to get an error out of a blank window,
-  bisecting a symptom against the daemon, what a scripted GUI probe can and cannot prove, and which checks need a
-  person.
+  ruling out a locked screen before trusting a capture, bisecting a symptom against the daemon, what a scripted GUI
+  probe can and cannot prove, where to watch for a report page's blocked navigation, where a network probe's positive
+  control has to come from, and which checks need a person.

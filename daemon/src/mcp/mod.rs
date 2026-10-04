@@ -222,6 +222,34 @@ const HUB_TOOLS: &[ToolDef] = &[
             )
         },
     },
+    ToolDef {
+        name: "show_page",
+        description: "Push a page to the report panel the user sees beside this session. Every \
+                      page pushed is kept, and the user can page back through earlier ones. `html` \
+                      is a self-contained HTML document — inline any styles and scripts, and stick \
+                      to generic font families rather than a custom typeface, since the page cannot \
+                      load anything external (no subresources, fetch/XHR, external scripts or \
+                      stylesheets, or fonts); an image has to be a `data:` URL for the same reason. \
+                      Use it for anything better shown than typed into the terminal: a table, a \
+                      comparison, a set of choices. \
+                      A page may include a form; calling `octoboard.submit(data)` from it sends \
+                      the user's answer back to this session as a message — only wire that call to \
+                      a user action (a button, a submit), never to page load, or the page will post \
+                      into this session on its own. The call's result carries the pushed page's id; \
+                      keep it, since it is the only way to tell a later submission came from this \
+                      page rather than one pushed after it.",
+        schema: || {
+            object_schema(
+                json!({
+                    "html": {
+                        "type": "string",
+                        "description": "The page's full HTML document.",
+                    },
+                }),
+                &["html"],
+            )
+        },
+    },
 ];
 
 const WORKER_TOOLS: &[ToolDef] = &[ToolDef {
@@ -274,7 +302,13 @@ mod tests {
         assert!(tool_by_name(Role::Worker, "start_session").is_none());
         assert!(tool_by_name(Role::Worker, "report").is_some());
         assert!(tool_by_name(Role::Hub, "report").is_none());
-        for tool in ["list_projects", "start_session", "send_message", "report"] {
+        for tool in [
+            "list_projects",
+            "start_session",
+            "send_message",
+            "show_page",
+            "report",
+        ] {
             // Every tool belongs to exactly one role, so a tool added to both lists by mistake is
             // caught here rather than by a hub reporting to itself.
             let roles = [Role::Hub, Role::Worker]

@@ -205,12 +205,34 @@ pub const FRAGMENT_HAZARD: &str = "the session's input line may be holding part 
 /// always-approve. Writing mid-turn is safe and is the better path: every agent queues the message
 /// itself and consumes it when the turn ends.
 pub fn send_message(session: &LiveSession, text: &str) -> Result<(), crate::ptyio::PartialWrite> {
+    session.write_input(&frame_message(text))
+}
+
+/// Shapes a message into the bracketed-paste buffer `send_message` writes: strip controls, guard
+/// a leading slash, then frame. Pulled out as a pure function so the ordering between the two
+/// steps — strip before guard, not after — is something a test can pin directly, rather than
+/// re-deriving it from a copy of this logic; `send_message` itself needs a `LiveSession` and a PTY,
+/// which is why it is not tested directly.
+fn frame_message(text: &str) -> Vec<u8> {
+    // `text` can be model-authored (a report panel submission, a worker's report summary) and is
+    // never reviewed before it is written here. Without this, a value containing the paste-end
+    // marker (`ESC[201~`) would close the bracketed paste early, and everything the attacker put
+    // after it would be delivered to the agent's TUI as raw input — control sequences and `\r`
+    // included, i.e. arbitrary keystrokes. Stripping every Cc control character removes ESC along
+    // with it, so no embedded escape sequence can survive into the framed buffer.
+    //
+    // This has to run before the slash-command check below: a control character prepended to
+    // `/clear` makes the raw text not start with `/`, but stripping it bare would still leave
+    // `/clear` for the agent to execute as a command. Checking the stripped text instead closes
+    // that gap.
+    let text = strip_control_chars(text);
+
     // A message starting with `/` is executed as a slash command even inside a bracketed paste, so
     // it never reaches the model; a single leading space makes it arrive as ordinary text.
     let text = if text.starts_with('/') {
         format!(" {text}")
     } else {
-        text.to_string()
+        text
     };
 
     let mut buf =
@@ -219,5 +241,66 @@ pub fn send_message(session: &LiveSession, text: &str) -> Result<(), crate::ptyi
     buf.extend_from_slice(text.as_bytes());
     buf.extend_from_slice(PASTE_END);
     buf.extend_from_slice(SUBMIT);
-    session.write_input(&buf)
+    buf
+}
+
+/// Removes every Unicode `Cc` control character — C0, DEL and C1 — except `\n` and `\t`, which
+/// prose legitimately uses. See the comment at `frame_message`'s call site for why this exists.
+fn strip_control_chars(text: &str) -> String {
+    text.chars()
+        .filter(|&c| !c.is_control() || c == '\n' || c == '\t')
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An embedded paste-end marker must not survive into the framed buffer at all — not just be
+    /// absent from the stripped text — since the buffer written into the PTY is what an attacker
+    /// would actually need to end the paste early. `frame_message` adds its own closing
+    /// `PASTE_END`, so this counts occurrences in the whole buffer rather than just checking the
+    /// marker's absence from the input.
+    #[test]
+    fn an_embedded_paste_end_marker_does_not_survive() {
+        let text = "before\x1b[201~\rafter";
+        let framed = frame_message(text);
+        let occurrences = framed
+            .windows(PASTE_END.len())
+            .filter(|window| *window == PASTE_END)
+            .count();
+        assert_eq!(
+            occurrences, 1,
+            "exactly the trailing PASTE_END, none embedded"
+        );
+    }
+
+    #[test]
+    fn ordinary_multiline_text_with_tabs_survives_framing() {
+        let text = "line one\n\tindented line two\nline three";
+        let framed = frame_message(text);
+        let mut expected = Vec::new();
+        expected.extend_from_slice(PASTE_START);
+        expected.extend_from_slice(text.as_bytes());
+        expected.extend_from_slice(PASTE_END);
+        expected.extend_from_slice(SUBMIT);
+        assert_eq!(framed, expected);
+    }
+
+    /// A control character prepended to a slash command must not let it slip past the
+    /// leading-space guard: `frame_message` strips controls before checking for `/`, so the
+    /// stripped text still gets space-prefixed and reaches the model as text, not as a command.
+    /// Asserting on the framed buffer, rather than re-deriving the strip-then-guard order in the
+    /// test body, is what would actually catch that order being swapped back in `frame_message`.
+    #[test]
+    fn a_control_character_before_a_slash_command_still_gets_guarded() {
+        let text = "\u{1}/clear";
+        let framed = frame_message(text);
+        let mut expected = Vec::new();
+        expected.extend_from_slice(PASTE_START);
+        expected.extend_from_slice(b" /clear");
+        expected.extend_from_slice(PASTE_END);
+        expected.extend_from_slice(SUBMIT);
+        assert_eq!(framed, expected);
+    }
 }

@@ -33,6 +33,8 @@ the request id as if it were a record id.
 | `archive_session` | `session` | Ends the process and archives the session |
 | `send_message` | `session`, `text` | Writes a message into a running session. Refused while the session is `waiting_user`: the message would be discarded and its trailing Enter would answer whatever dialog is up. The hub's own `send_message` tool holds such a message instead of refusing it — the user can be told to answer the prompt first, the hub cannot |
 | `rename_session` | `session`, `title` | — |
+| `list_pages` | `console` | The console's report panel pages, oldest first. Answered with `page_list` on the asking socket |
+| `submit_page` | `page`, `data` | A report panel form submission. Written into the console's hub session as a user message naming the page it came from; held rather than refused while the hub is `waiting_user`, since the hub is not the one who has to answer that prompt. Refused when `page` is not the console's newest page — history pages are read-only |
 | `shutdown` | — | Terminates every session process (leaving them `interrupted`) and exits the daemon |
 
 ### Daemon to client
@@ -45,6 +47,8 @@ the request id as if it were a record id.
 | `session_notice` | `session`, `message` — something about a session the user has to be told that no status field carries: an injected capability that will not apply, a setting of theirs Octoboard had to work around, a message Octoboard accepted and could not deliver. Broadcast when it is found, which may be at launch or at any point in the session's life; nothing stores it, so a client that connects later does not see it |
 | `session_opened` | `id`, `session` — the reply to `open_session`, naming the session it started |
 | `dir_listing` | `id`, `path`, `entries`: `[{name, path, is_git_repo}]` — only directories are listed |
+| `page_list` | `id`, `console_id`, `pages` — oldest first. Pages are not in `snapshot`: one carries a whole HTML document, and only the console whose hub is on screen needs them, so the panel asks. Asking again after every `snapshot` is what keeps it correct across a `page_created` a lagging client never received: such a client is sent a fresh snapshot in place of the events it missed, on the socket it already has |
+| `page_created` | `page` — the whole record. The hub pushed a page with `show_page` |
 | `ack` | `id` |
 | `error` | `message`, `id?`, `code?` — a code is present only for failures a client has to act on rather than just show. Today the one code is `session_already_running`. A client's own double click produces it and is not worth showing; a refused second hub session produces it too, and that one has to be shown, so a client branches on what it asked for rather than on the code alone |
 
@@ -58,9 +62,11 @@ Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
           role: "hub"|"worker", origin: "hub"|"user", title,
           status: "working"|"waiting_user"|"idle"|"interrupted"|"archived",
           has_conversation, include_in_hub, started_at, ended_at? }
+Page    { id, console_id, html, anchor_message_id?, created_at }
 ```
 
-`agent` is one of `claude`, `codex`, `grok`. Timestamps are epoch milliseconds (the UI formats them).
+`agent` is one of `claude`, `codex`, `grok`. `Page.anchor_message_id` is stored and never read: the
+rewind linkage that uses it is after the MVP. Timestamps are epoch milliseconds (the UI formats them).
 
 ## `GET /ws/term/:session` — terminal stream
 

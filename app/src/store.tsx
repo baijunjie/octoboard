@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from "react";
 
 import { DaemonClient, type ConnectionState } from "./daemon-client";
-import type { Console, Event, Host, Project, RequestBody, Session } from "./protocol";
+import type { Console, Event, Host, Page, Project, RequestBody, Session } from "./protocol";
 
 /**
  * One entry in the dismissible toast stack: a daemon `error` or `session_notice`, or a message with
@@ -26,6 +26,16 @@ interface State {
   consoles: Map<string, Console>;
   projects: Map<string, Project>;
   sessions: Map<string, Session>;
+  /** Keyed by console id, oldest first, as `page_list` delivers them. Absent for a console the
+   * report panel has not (re-)listed yet — distinct from an empty array, which means it has and
+   * there genuinely are none. Pages are deliberately left out of `snapshot` (see `protocol.ts`),
+   * so this map starts empty and is filled only by the panel's own `list_pages` requests. */
+  pages: Map<string, Page[]>;
+  /** Bumped on every `snapshot`. A snapshot arrives on the same socket for a lag recovery, not
+   * just a fresh connection (see the `page_list` row under "Daemon to client" in
+   * `daemon/PROTOCOL.md`), so `connectionState` alone does not change — a consumer that needs to
+   * re-list after either case depends on this counter instead. */
+  snapshotEpoch: number;
   toasts: Toast[];
 }
 
@@ -42,6 +52,8 @@ const initialState: State = {
   consoles: new Map(),
   projects: new Map(),
   sessions: new Map(),
+  pages: new Map(),
+  snapshotEpoch: 0,
   toasts: [],
 };
 
@@ -63,6 +75,13 @@ function reducer(state: State, action: Action): State {
             consoles: new Map(event.consoles.map((c) => [c.id, c])),
             projects: new Map(event.projects.map((p) => [p.id, p])),
             sessions: new Map(event.sessions.map((s) => [s.id, s])),
+            // A snapshot means either first connect or a lag recovery, and carries no pages either
+            // way (see `Page` in protocol.ts). Cleared rather than kept, because a console that
+            // was deleted while this client was behind would otherwise go on holding that
+            // console's pages forever — nothing else ever removes an entry for a console the
+            // snapshot no longer lists.
+            pages: new Map(),
+            snapshotEpoch: state.snapshotEpoch + 1,
           };
         case "console_upserted": {
           const consoles = new Map(state.consoles);
@@ -81,7 +100,9 @@ function reducer(state: State, action: Action): State {
           const sessions = new Map(
             Array.from(state.sessions).filter(([, s]) => s.console_id !== event.console),
           );
-          return { ...state, consoles, projects, sessions };
+          const pages = new Map(state.pages);
+          pages.delete(event.console);
+          return { ...state, consoles, projects, sessions, pages };
         }
         case "session_opened": {
           // The reply to our own `open_session`. The broadcast carries the same record, but
@@ -108,6 +129,31 @@ function reducer(state: State, action: Action): State {
           const sessions = new Map(state.sessions);
           sessions.set(event.session.id, event.session);
           return { ...state, sessions };
+        }
+        case "page_list": {
+          // The reply to a `list_pages` request, but requests and broadcasts are not ordered
+          // against each other (see "Client to daemon" and "Daemon to client" in
+          // `daemon/PROTOCOL.md`), so a `page_created` for a page `show_page` inserted after this
+          // reply was computed can have already landed here. Replacing wholesale would drop that
+          // page; instead keep the reply's order first, then append whatever locally held page
+          // the reply is missing.
+          // Pages are append-only and a `page_created` is always the newest, so appending after
+          // keeps the merged order correct.
+          const existing = state.pages.get(event.console_id) ?? [];
+          const seen = new Set(event.pages.map((p) => p.id));
+          const pages = new Map(state.pages);
+          pages.set(event.console_id, [...event.pages, ...existing.filter((p) => !seen.has(p.id))]);
+          return { ...state, pages };
+        }
+        case "page_created": {
+          // Appended even with no baseline yet: that window is exactly the first `list_pages`
+          // being in flight, and dropping the event here would mean waiting for a second push to
+          // ever see it. The transient "1 / 1" this produces is corrected once that reply's merge
+          // (above) lands.
+          const existing = state.pages.get(event.page.console_id) ?? [];
+          const pages = new Map(state.pages);
+          pages.set(event.page.console_id, [...existing, event.page]);
+          return { ...state, pages };
         }
         case "session_notice": {
           const notice: Toast = {

@@ -287,6 +287,11 @@ fn open_main_window(app: &tauri::AppHandle, startup: Result<u16, String>) -> tau
     WebviewWindowBuilder::new(app, "main", WebviewUrl::App(url.into()))
         .title("Octoboard")
         .inner_size(1200.0, 760.0)
+        // 280 (sidebar) + 520 (the terminal pane's own floor) + 300 (the report panel's own
+        // floor) = 1100: at this minimum, both panes already sit on their floors with nothing
+        // left to give up, so neither can be squeezed past usability by a narrower window. Height
+        // 600 gives the terminal about 30 rows, which is comfortably usable.
+        .min_inner_size(1100.0, 600.0)
         .build()?;
     Ok(())
 }

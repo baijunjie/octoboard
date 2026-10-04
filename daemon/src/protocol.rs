@@ -113,6 +113,19 @@ pub struct Session {
     pub ended_at: Option<i64>,
 }
 
+/// One page the hub pushed to its console's report panel. Every page is kept, so the panel can be
+/// paged back through; `anchor_message_id` records the conversation position the page was pushed at
+/// and is stored only — the rewind linkage that reads it is after the MVP (see "Report panel" in
+/// `docs/mvp.md`), and no agent exposes a message id to put in it yet.
+#[derive(Debug, Clone, Serialize)]
+pub struct Page {
+    pub id: String,
+    pub console_id: String,
+    pub html: String,
+    pub anchor_message_id: Option<String>,
+    pub created_at: i64,
+}
+
 /// One entry of a directory listing. Only directories are ever listed — a project is a directory —
 /// so there is no "is this a directory" field to carry.
 #[derive(Debug, Clone, Serialize)]
@@ -204,6 +217,16 @@ pub enum RequestBody {
         session: String,
         title: String,
     },
+    ListPages {
+        console: String,
+    },
+    /// What a report panel form was submitted with. The page it came from is named rather than the
+    /// hub session, because that is what the panel knows and it is also what decides whether the
+    /// submission is allowed at all: only the console's newest page is live.
+    SubmitPage {
+        page: String,
+        data: serde_json::Value,
+    },
     Shutdown,
 }
 
@@ -250,6 +273,21 @@ pub enum Event {
         id: Option<String>,
         path: String,
         entries: Vec<DirEntry>,
+    },
+    /// The reply to `list_pages`, oldest first. Pages are not in `snapshot`: a page carries a whole
+    /// HTML document, and only a console whose hub the user is looking at needs its pages, so the
+    /// panel asks for them instead — and asks again after every `snapshot`, which is what keeps it
+    /// correct across a `page_created` the client was too far behind to receive. A lagging client is
+    /// sent a fresh snapshot in place of the events it missed, on the socket it already has, so
+    /// nothing else tells it that its list is now short.
+    PageList {
+        id: Option<String>,
+        console_id: String,
+        pages: Vec<Page>,
+    },
+    /// A page the hub just pushed. The panel showing that console's hub refreshes to it.
+    PageCreated {
+        page: Page,
     },
     Ack {
         id: Option<String>,
@@ -362,6 +400,20 @@ mod tests {
                 r#"{"type":"archive_session","id":"request-1","session":"session-7"}"#,
                 |body| match body {
                     RequestBody::ArchiveSession { session } => Some(session),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"submit_page","id":"request-1","page":"page-7","data":{}}"#,
+                |body| match body {
+                    RequestBody::SubmitPage { page, .. } => Some(page),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"list_pages","id":"request-1","console":"console-7"}"#,
+                |body| match body {
+                    RequestBody::ListPages { console } => Some(console),
                     _ => None,
                 },
             ),

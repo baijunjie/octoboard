@@ -4,7 +4,8 @@ A headless Rust binary that plays two roles in one process:
 
 - **Host role**: owns PTYs and agent processes, receives hook callbacks, lists directories, finds the git repositories
   under a parent directory, and clones a repository.
-- **Coordinator role**: stores consoles, projects and sessions in SQLite, and routes requests to the host role.
+- **Coordinator role**: stores consoles, projects, sessions and report panel pages in SQLite, and routes requests to
+  the host role.
 
 The desktop application (`app/`) is purely a client of this process. It never shares state or an IPC channel with it —
 everything it can do goes through the external interface below.
@@ -29,10 +30,10 @@ everything it can do goes through the external interface below.
 | `src/main.rs` | CLI entry point: parses the three modes above, opens the store, binds the port, prints the handshake line the application waits for, runs the server until shutdown |
 | `src/server.rs` | The HTTP/WebSocket router described in `PROTOCOL.md`, including `POST /mcp/:token` |
 | `src/protocol.rs` | Rust types for the wire protocol; kept in sync with `PROTOCOL.md` and with `app/src/protocol.ts` by hand |
-| `src/coordinator.rs` | Coordinator role: what each control-socket request does to the stored consoles/projects/sessions, and which host-role work it triggers |
-| `src/reporting.rs` | The channel between a console's hub and its project sessions: the brief a task is handed over as, writing a message into a running session, a report reaching the hub, the report synthesised when a session stops without sending one, and automatic archiving |
+| `src/coordinator.rs` | Coordinator role: what each control-socket request does to the stored consoles/projects/sessions/pages, and which host-role work it triggers |
+| `src/reporting.rs` | The channel between a console's hub and its project sessions: the brief a task is handed over as, writing a message into a running session, a report reaching the hub, the report synthesised when a session stops without sending one, automatic archiving, and rendering a report panel form submission into the hub's message |
 | `src/outbox.rs` | The per-session queue every message Octoboard writes into an agent passes through: order-preserving, one drainer per session, and what happens to a message the session only partly accepted |
-| `src/store.rs` | Coordinator's SQLite storage for consoles, projects, sessions and the host table |
+| `src/store.rs` | Coordinator's SQLite storage for consoles, projects, sessions, pages and the host table |
 | `src/state.rs` | Shared daemon state and the session status transitions |
 | `src/session.rs` | One running agent process: its PTY, its output fan-out, how it is stopped |
 | `src/term.rs` | Launching an agent in a PTY, and writing messages into a running one |

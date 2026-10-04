@@ -63,7 +63,7 @@ Everything Octoboard writes for itself lives under `~/.octoboard`:
 
 | Path | Contents |
 |---|---|
-| `~/.octoboard/octoboard.db` | Consoles, projects and session records. |
+| `~/.octoboard/octoboard.db` | Consoles, projects, session records, and the report panel pages of every console. |
 | `~/.octoboard/consoles/<console id>/` | A console's working directory, where its hub session runs, including the hub instruction file Octoboard generates there (see "The hub's instruction file" in `docs/product/launching-agents.md`). Removed when the console is deleted. |
 | `~/.octoboard/run/<session id>/` | Per-session scratch space for what a launch injects. Removed when the session's process is gone, and cleared wholesale on daemon start. |
 | `~/.octoboard/daemon.lock` | Enforces one daemon per data directory. |

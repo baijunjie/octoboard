@@ -4,8 +4,8 @@
 //! serde (`enum_to_text` / `enum_from_text`) rather than a second hand-written mapping, so a
 //! renamed variant cannot mean one thing in the database and another on the socket.
 //!
-//! `Report` and `Page` (see the data model in `docs/mvp.md` section 10) have no tables yet; the
-//! features that write them are milestone 02's and 03's.
+//! `Report` is not among these tables: it is an in-flight struct passed between the worker's
+//! `report` tool and the hub's session, never stored of its own accord (see `reporting.rs`).
 
 use std::path::Path;
 use std::sync::Mutex;
@@ -16,7 +16,8 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::protocol::{
-    Agent, Console, Host, HostKind, Origin, Project, ProjectSource, Role, Session, SessionStatus,
+    Agent, Console, Host, HostKind, Origin, Page, Project, ProjectSource, Role, Session,
+    SessionStatus,
 };
 
 /// The single local host record every project and session points at. The MVP has no other host,
@@ -77,6 +78,13 @@ impl Store {
                 include_in_hub   INTEGER NOT NULL DEFAULT 0,
                 started_at       INTEGER NOT NULL,
                 ended_at         INTEGER
+            );
+            CREATE TABLE IF NOT EXISTS pages (
+                id                TEXT PRIMARY KEY,
+                console_id        TEXT NOT NULL REFERENCES consoles(id) ON DELETE CASCADE,
+                html              TEXT NOT NULL,
+                anchor_message_id TEXT,
+                created_at        INTEGER NOT NULL
             );
             "#,
         )?;
@@ -271,6 +279,65 @@ impl Store {
         Ok(rows)
     }
 
+    // -- pages ---------------------------------------------------------------
+
+    pub fn get_page(&self, id: &str) -> Result<Option<Page>> {
+        let conn = self.lock();
+        let page = conn
+            .query_row(
+                "SELECT id, console_id, html, anchor_message_id, created_at
+                 FROM pages WHERE id = ?1",
+                params![id],
+                read_page,
+            )
+            .optional()?;
+        Ok(page)
+    }
+
+    pub fn insert_page(&self, page: &Page) -> Result<()> {
+        self.lock().execute(
+            "INSERT INTO pages (id, console_id, html, anchor_message_id, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                page.id,
+                page.console_id,
+                page.html,
+                page.anchor_message_id,
+                page.created_at,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Oldest first: `created_at` alone can tie at millisecond resolution, so `id` breaks the tie
+    /// deterministically rather than leaving the order to SQLite's whim.
+    pub fn list_pages(&self, console_id: &str) -> Result<Vec<Page>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, console_id, html, anchor_message_id, created_at
+             FROM pages WHERE console_id = ?1 ORDER BY created_at, id",
+        )?;
+        let rows = stmt
+            .query_map(params![console_id], read_page)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    /// The id of the console's newest page, or `None` if it has none yet. The ordering is the exact
+    /// reverse of [`Self::list_pages`]'s, so the two never disagree about which page is newest when
+    /// `created_at` ties.
+    pub fn newest_page_id(&self, console_id: &str) -> Result<Option<String>> {
+        let id = self
+            .lock()
+            .query_row(
+                "SELECT id FROM pages WHERE console_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 1",
+                params![console_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(id)
+    }
+
     // -- sessions ------------------------------------------------------------
 
     pub fn insert_session(&self, session: &Session) -> Result<()> {
@@ -391,6 +458,16 @@ fn read_project(row: &Row<'_>) -> rusqlite::Result<Project> {
         default_agent: enum_from_row_opt::<Agent>(row, 5)?,
         source: enum_from_row::<ProjectSource>(row, 6)?,
         remote_url: row.get(7)?,
+    })
+}
+
+fn read_page(row: &Row<'_>) -> rusqlite::Result<Page> {
+    Ok(Page {
+        id: row.get(0)?,
+        console_id: row.get(1)?,
+        html: row.get(2)?,
+        anchor_message_id: row.get(3)?,
+        created_at: row.get(4)?,
     })
 }
 

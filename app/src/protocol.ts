@@ -72,6 +72,16 @@ export interface Session {
   ended_at?: number | null;
 }
 
+/** One page the hub pushed to its console's report panel. `anchor_message_id` is stored only — the
+ * rewind linkage that reads it is after the MVP. */
+export interface Page {
+  id: string;
+  console_id: string;
+  html: string;
+  anchor_message_id?: string | null;
+  created_at: number;
+}
+
 /** Only directories are ever listed — a project is a directory — so there is no "is this a
  * directory" field. */
 export interface DirEntry {
@@ -129,6 +139,10 @@ export type RequestBody =
   | { type: "archive_session"; session: string }
   | { type: "send_message"; session: string; text: string }
   | { type: "rename_session"; session: string; title: string }
+  | { type: "list_pages"; console: string }
+  /** What a report panel form was submitted with. The page is named rather than the hub session:
+   * it is what the panel knows, and only a console's newest page may be submitted from. */
+  | { type: "submit_page"; page: string; data: unknown }
   | { type: "shutdown" };
 
 /** A client request as sent on the wire: the body's fields plus an optional correlation id. */
@@ -151,6 +165,13 @@ export type Event =
    * only way the caller can tell which session in the tree is the one it just opened. */
   | { type: "session_opened"; id?: string; session: Session }
   | { type: "dir_listing"; id?: string; path: string; entries: DirEntry[] }
+  /** The reply to `list_pages`, oldest first. Pages are not in `snapshot` — a page carries a whole
+   * HTML document — so the panel asks for them, and asks again after every `snapshot`: a client
+   * that falls too far behind the daemon's broadcasts is sent a fresh snapshot in place of the
+   * events it missed, on the same socket, so re-listing is the only way back to a correct list. */
+  | { type: "page_list"; id?: string; console_id: string; pages: Page[] }
+  /** A page the hub just pushed. The panel showing that console's hub refreshes to it. */
+  | { type: "page_created"; page: Page }
   | { type: "ack"; id?: string }
   /** `code` is present only for failures a client has to branch on rather than just show — today
    * the one code is `"session_already_running"`. */

@@ -4,6 +4,7 @@ import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ConsoleDialog } from "./components/ConsoleDialog";
 import { ProjectDialog } from "./components/ProjectDialog";
 import { RenameSessionDialog } from "./components/RenameSessionDialog";
+import { ReportPanel } from "./components/ReportPanel";
 import { SessionDialog } from "./components/SessionDialog";
 import { Sidebar } from "./components/Sidebar";
 import { Toasts } from "./components/Toasts";
@@ -142,6 +143,14 @@ export function App({ port }: { port: number }): React.ReactElement {
         />
         <main className="main-pane">
           <TerminalPane port={port} session={selectedSession} onResume={resumeSession} />
+          {/* Only the hub session's console has a report panel — it is that console's panel, not
+              the session's. Keyed on the console id so switching hubs mounts a fresh instance:
+              the panel's position is an anchor page id looked up fresh in the new console's page
+              list, and a carried-over anchor simply misses and falls back to the newest page, so
+              the key is defence in depth rather than a fix for a live defect. */}
+          {selectedSession?.role === "hub" && (
+            <ReportPanel key={selectedSession.console_id} consoleId={selectedSession.console_id} />
+          )}
         </main>
       </div>
 

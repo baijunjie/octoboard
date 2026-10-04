@@ -46,7 +46,7 @@ and other agents are all out of scope for this round (the report page's rewind a
 - 00 wrapped up
 - 01 wrapped up
 - 02 wrapped up
-- [ ] [03 Report panel](03-report-panel.md)
+- 03 wrapped up
 - [ ] [04 Polish](04-polish.md)
 - [ ] [05 Final confirmation](05-final-confirmation.md) — the checks that need a real build or an external credential, gathered so nothing is left outstanding at the end
 

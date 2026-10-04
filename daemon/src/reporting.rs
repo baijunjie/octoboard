@@ -262,7 +262,7 @@ pub fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::T
 
 /// The console's hub session, preferring one with a process behind it. A console has at most one
 /// hub that is not archived, but an older archived one may still be on record.
-fn hub_session(state: &Arc<AppState>, console_id: &str) -> Result<Option<Session>> {
+pub(crate) fn hub_session(state: &Arc<AppState>, console_id: &str) -> Result<Option<Session>> {
     let mut hubs: Vec<Session> = state
         .store
         .list_sessions()?
@@ -301,6 +301,37 @@ fn render_report(worker: &Session, project: Option<&str>, report: &Report<'_>) -
     message.push_str("\n\n");
     message.push_str(report.summary.trim());
     message
+}
+
+/// What a report panel form submission is written into the hub's session as. Plain prose, like
+/// [`render_report`]: a header line naming the page, then the submitted data.
+///
+/// `data` is arbitrary JSON from the form, so it is rendered readably only in the shape a form
+/// normally takes — an object of scalar values, one `key: value` line each — and falls back to
+/// pretty-printed JSON for anything else, rather than guessing at a layout for nested data.
+pub(crate) fn render_page_submission(page_id: &str, data: &serde_json::Value) -> String {
+    let mut message = format!("Report panel form submission — page {page_id}\n\n");
+    match data.as_object().filter(|fields| {
+        !fields.is_empty()
+            && fields
+                .values()
+                .all(|value| !value.is_object() && !value.is_array())
+    }) {
+        Some(fields) => {
+            for (key, value) in fields {
+                let shown = match value {
+                    serde_json::Value::String(text) => text.clone(),
+                    other => other.to_string(),
+                };
+                message.push_str(&format!("{key}: {shown}\n"));
+            }
+        }
+        None => {
+            message
+                .push_str(&serde_json::to_string_pretty(data).unwrap_or_else(|_| data.to_string()));
+        }
+    }
+    message.trim_end().to_string()
 }
 
 /// The session title a dispatched brief earns, taken from its goal. Several sessions dispatched
@@ -432,6 +463,52 @@ mod tests {
             },
         );
         assert!(!own.contains("stopped without reporting"));
+    }
+
+    /// The normal case: a form submits an object of scalar fields, rendered as readable
+    /// `key: value` lines.
+    #[test]
+    fn a_submission_of_scalar_fields_renders_as_key_value_lines() {
+        let rendered = render_page_submission(
+            "page-7",
+            &serde_json::json!({ "name": "Ada", "age": 30, "subscribe": true }),
+        );
+        assert!(rendered.contains("page page-7"));
+        assert!(rendered.contains("name: Ada"));
+        assert!(rendered.contains("age: 30"));
+        assert!(rendered.contains("subscribe: true"));
+    }
+
+    /// A form's field order is the author's reading order, not alphabetical — `serde_json` is
+    /// built with `preserve_order` for exactly this, so a submission's fields must come out in the
+    /// order they were sent, not in whatever order a `BTreeMap` would impose.
+    #[test]
+    fn a_submission_keeps_the_fields_in_their_sent_order() {
+        let rendered = render_page_submission(
+            "page-1",
+            &serde_json::json!({ "who": "Ada", "page": "page-1" }),
+        );
+        let who_at = rendered
+            .find("who: Ada")
+            .expect("the who field is rendered");
+        let page_at = rendered
+            .find("page: page-1")
+            .expect("the page field is rendered");
+        assert!(
+            who_at < page_at,
+            "`who` was sent before `page` and must render before it: {rendered}"
+        );
+    }
+
+    /// Anything that is not an object of scalars — nested data, an array, a bare value — falls back
+    /// to pretty-printed JSON rather than a guessed layout.
+    #[test]
+    fn a_submission_of_nested_data_falls_back_to_pretty_json() {
+        let rendered =
+            render_page_submission("page-7", &serde_json::json!({ "answers": ["a", "b"] }));
+        assert!(rendered.contains('{'));
+        assert!(rendered.contains("\"answers\""));
+        assert!(rendered.contains("\"a\""));
     }
 
     #[test]

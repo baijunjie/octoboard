@@ -220,6 +220,27 @@ pub async fn handle(
             Ok(None)
         }
 
+        RequestBody::ListPages { console } => {
+            state
+                .store
+                .get_console(&console)?
+                .ok_or_else(|| anyhow!("unknown console {console}"))?;
+            let pages = state.store.list_pages(&console)?;
+            Ok(Some(Event::PageList {
+                id: request_id,
+                console_id: console,
+                pages,
+            }))
+        }
+
+        RequestBody::SubmitPage {
+            page: page_id,
+            data,
+        } => {
+            submit_page(state, &page_id, data).await?;
+            Ok(None)
+        }
+
         RequestBody::Shutdown => {
             state.request_shutdown();
             Ok(None)
@@ -578,6 +599,38 @@ pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<()> {
 /// them: they are the one who has to answer the prompt that is blocking it, and they can be told so.
 fn send_message(state: &Arc<AppState>, id: &str, text: &str) -> Result<()> {
     reporting::write_message(state, id, text, reporting::WhenBlocked::Refuse)?;
+    Ok(())
+}
+
+/// A report panel form submission. Refused unless `page_id` names that console's newest page —
+/// history pages are read-only, and this is where that is actually enforced; a panel that disables
+/// its own submit button on a history page is only reflecting the rule, not the source of it.
+async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Value) -> Result<()> {
+    let page = state
+        .store
+        .get_page(page_id)?
+        .ok_or_else(|| anyhow!("unknown page {page_id}"))?;
+    let newest = state.store.newest_page_id(&page.console_id)?;
+    if newest.as_deref() != Some(page.id.as_str()) {
+        bail!("this page is no longer current; its form can no longer be submitted");
+    }
+    let hub = reporting::hub_session(state, &page.console_id)?.ok_or_else(|| {
+        anyhow!("this console has no hub session, so there is nobody to submit to")
+    })?;
+
+    let message = reporting::render_page_submission(&page.id, &data);
+    let owned_state = state.clone();
+    // The write blocks on the PTY. Queued rather than refused: the user is the one submitting, so
+    // there is nobody to tell to answer a prompt first, and the submission must not be dropped.
+    tokio::task::spawn_blocking(move || {
+        reporting::write_message(
+            &owned_state,
+            &hub.id,
+            &message,
+            reporting::WhenBlocked::Queue,
+        )
+    })
+    .await??;
     Ok(())
 }
 

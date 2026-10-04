@@ -9,6 +9,15 @@ the whole chain positively: the window paints, the sidecar starts, the webview c
 session's terminal renders. Capturing the window needs no Accessibility permission of its own, so this check is
 always available and costs about a minute.
 
+## Rule out a locked screen before reading anything off a window capture
+
+A locked screen and a sleeping display look identical from the outside: under either one every application reports
+zero accessibility windows and `screencapture` returns bare wallpaper, so the app reads as having rendered nothing at
+all and a whole verification pass can be spent chasing that. `caffeinate -d` prevents the display sleeping but neither
+prevents nor reverses a lock, and `caffeinate -u` does not bring the session back. Tell the two apart with
+`ioreg -n Root -d1 -r | grep CGSSessionScreenIsLocked` before concluding anything from a capture; unlocking needs the
+user, so ask.
+
 ## Get a diagnosis out of a blank window by rendering it into the DOM
 
 The window's own pixels are the only readable output channel: devtools can only be opened by the keystroke injection
@@ -27,12 +36,27 @@ screen a UI defect and ordinary agent behaviour are indistinguishable: "Ctrl+C i
 state" all look exactly alike, and only the side-by-side comparison tells them apart. Do this before filing a symptom
 against an agent or against `xterm.js`.
 
+## Watch for a report page's blocked navigation on the window, not inside the frame
+
+What stops a page in the panel from navigating its frame somewhere external is the *embedder's* `frame-src`, so WebKit
+reports the refusal to the embedder: the `securitypolicyviolation` event fires on the window's own document and the
+frame's document never sees it. Instrument the window — a listener there is both the only way to observe a page
+attempting to leave and a standing health signal for the window's own policy.
+
+## A network-level probe of this window needs its positive control from outside the app
+
+While the window ships a restrictive CSP (`default-src 'none'`), every channel a probe would normally use as its
+positive control — a `fetch`, an `<img>`, an `<iframe>`, a WebSocket — is refused before any name is resolved, so a
+capture that comes back empty says nothing about whether the app can reach the network. Generate the control outside
+the app: Safari's lookups leave through the same WebKit networking path.
+
 ## A scripted GUI probe can only confirm a positive, never a negative
 
 A key combination that fails to arrive may be the probe's fault rather than the app's: through `osascript` / System
 Events, `keystroke "<letter>" using control down` can be dropped silently where the same combination sent as
-`key code <n> using control down` arrives. Prefer `key code`, and never conclude "the app swallows this key" from a
-scripted probe without confirming by hand.
+`key code <n> using control down` arrives. `cliclick`'s key presses (`kp:`) do not reach this app's window at all,
+where the same key sent as `key code` moves it immediately; its clicks (`c:`) are fine. Prefer `osascript` with
+`key code`, and never conclude "the app swallows this key" from a scripted probe without confirming by hand.
 
 Two further limits on macOS: driving the real app this way requires Accessibility permission granted to the host
 application of whatever runs the script, and native `<select>` popups cannot be driven through the accessibility tree
@@ -42,3 +66,7 @@ at all — to make a control scriptable, build it from something other than a na
 
 Injected keystrokes bypass macOS input methods entirely, so a scripted CJK composition test passes without ever
 exercising the IME and proves nothing. Ask the user to type it and report what they saw.
+
+It cuts the other way too: scripted typing can instead be fed *through* whatever input source is active —
+`cliclick t:` composes through a pinyin IME rather than typing the literal text — so any probe that types has to
+switch the input source to a non-IME one (ABC) first and put it back afterwards.

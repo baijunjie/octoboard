@@ -21,6 +21,9 @@ orchestration tools and dispatches work to sessions in the console's projects �
 `docs/product/hub-orchestration.md`. Because it belongs to no project, archived hubs are listed in
 the console's own "Archived hubs" group rather than under any project.
 
+Selecting a hub session also shows its console's **report panel** beside the terminal, described in
+`docs/product/report-panel.md`; a project session's terminal has the pane to itself.
+
 ## The console → project → session menu
 
 The left-hand tree has three levels: console → project → session. Console and project rows expand and collapse;
@@ -34,6 +37,10 @@ Build).
 
 Selecting a session shows its terminal. Clicking a row deliberately does not move keyboard focus away from the
 terminal; a row reached with Tab can be activated with Enter or Space.
+
+A session is selected automatically only when this application is the one that opened it — through the Hub row or the
+new-session dialog. A session that appears any other way, such as one the hub started or one another client of the
+daemon opened, is added to the tree unselected and is put on screen by the user selecting it.
 
 ## Opening a session
 
@@ -167,7 +174,9 @@ reporting works, so an agent's own mouse-driven TUI is usable. `Ctrl+C` reaches 
   terminal itself keeps 10,000 lines of scrollback.
 - A reattach always redraws from the replay rather than appending to what is on screen, so scrollback older than the
   replay window is lost on every reconnect.
-- Resizing the window resizes the agent's terminal.
+- Resizing the window resizes the agent's terminal. The window has a minimum size, sized so that a
+  terminal and a report panel stay usable side by side — see "Where the panel sits in the window" in
+  `docs/product/report-panel.md`.
 - A client that stops draining output for more than a few seconds is dropped by the daemon rather than letting output
   buffer without bound. The application then reconnects by itself, with a backoff, up to five times; while a running
   session's terminal is disconnected a "Reconnect" button is available as well. A reconnect in the background never

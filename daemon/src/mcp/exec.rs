@@ -13,9 +13,12 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
+use uuid::Uuid;
 
 use crate::coordinator::{self, OpenRequest};
-use crate::protocol::{Agent, Origin, Project, ProjectSource, Role, Session, SessionStatus};
+use crate::protocol::{
+    now_millis, Agent, Event, Origin, Page, Project, ProjectSource, Role, Session, SessionStatus,
+};
 use crate::reporting::{self, Delivery, Report, ReportStatus, WhenBlocked};
 use crate::state::AppState;
 
@@ -45,6 +48,7 @@ pub async fn call(
         "archive_session" => archive_session(state, &session, arguments),
         "list_archived" => list_archived(state, &session, arguments),
         "reopen_session" => reopen_session(state, &session, arguments).await,
+        "show_page" => show_page(state, &session, arguments),
         "report" => report(state, &session, arguments).await,
         // Unreachable while the catalogue and this dispatch agree; a tool added to one and not the
         // other should say so rather than look like a refusal.
@@ -263,6 +267,26 @@ async fn reopen_session(
     )
     .await?;
     Ok(json!({ "session": target.id }))
+}
+
+fn show_page(
+    state: &Arc<AppState>,
+    hub: &Session,
+    arguments: &Map<String, Value>,
+) -> Result<Value> {
+    let html = required_str(arguments, "html")?.to_string();
+    let page = Page {
+        id: Uuid::new_v4().to_string(),
+        console_id: hub.console_id.clone(),
+        html,
+        // No agent exposes a message id to put here yet; the rewind linkage that would read it is
+        // not built.
+        anchor_message_id: None,
+        created_at: now_millis(),
+    };
+    state.store.insert_page(&page)?;
+    state.broadcast(Event::PageCreated { page: page.clone() });
+    Ok(json!({ "page": page.id }))
 }
 
 // -- project session tools ---------------------------------------------------

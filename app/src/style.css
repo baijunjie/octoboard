@@ -286,12 +286,20 @@ body {
 
 .main-pane {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   min-width: 0;
+  min-height: 0;
 }
 
+/* A real basis (not the `flex: 1 1 0%` a bare `flex: 1` resolves to) and a floor, so the terminal
+   actually holds width instead of giving every free pixel to growth while the report panel's
+   shrink factor never gets consulted: with a 0 basis, free space stays positive (and flexbox stays
+   in the grow phase) at any window wider than the panel's own basis. 520px is 55 columns at the
+   ~9.2px/column measured off a real agent CLI (the container's 4px padding eats the rest), which
+   is comfortably usable. */
 .terminal-pane {
-  flex: 1;
+  flex: 1 1 520px;
+  min-width: 520px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -327,6 +335,7 @@ body {
 .terminal-container {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
   padding: 4px;
 }
 
@@ -338,6 +347,68 @@ body {
   align-items: center;
   justify-content: center;
   color: var(--text-dim);
+}
+
+/* --- report panel ------------------------------------------------------------------------- */
+
+/* 420px preferred, 0 grow: a page is a document meant to be read at a stable width, not stretched
+   to fill whatever the terminal doesn't use. Shrink factor `1` with a 300px floor — below that a
+   page stops being usable anyway — so once the window gets tight this panel gives up width too,
+   rather than holding 420px firm and forcing the terminal's own floor to absorb the entire squeeze.
+   The window's own minimum width is sized so this floor and the terminal's are both always
+   reachable at once: 280 (the sidebar) + 520 (the terminal's floor) + 300 (this one) = 1100. */
+.report-panel {
+  flex: 0 1 420px;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+}
+
+.report-panel-empty {
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.report-panel-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+
+.report-panel-position {
+  white-space: nowrap;
+}
+
+/* The timestamp is the one element here whose width is not ours to predict — it is whatever the
+   user's locale makes of a date and a time — so it is the element that gives way, rather than
+   pushing the read-only badge off the panel's edge at the narrow end of the panel's range. */
+.report-panel-time {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-panel-history-badge {
+  flex: none;
+  color: var(--interrupted);
+  white-space: nowrap;
+}
+
+.report-page-frame {
+  flex: 1;
+  min-height: 0;
+  border: none;
+  background: white;
 }
 
 /* --- dropdown / action menu (native `<select>` and popups are not reachable through the
