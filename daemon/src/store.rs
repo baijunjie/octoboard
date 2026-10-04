@@ -74,11 +74,24 @@ impl Store {
                 title            TEXT NOT NULL,
                 status           TEXT NOT NULL,
                 has_conversation INTEGER NOT NULL DEFAULT 0,
+                include_in_hub   INTEGER NOT NULL DEFAULT 0,
                 started_at       INTEGER NOT NULL,
                 ended_at         INTEGER
             );
             "#,
         )?;
+        // Databases written before orchestration existed have no `include_in_hub`. `CREATE TABLE
+        // IF NOT EXISTS` leaves those alone, so the column is added separately and the duplicate
+        // error ignored — there is no other way to ask SQLite for "add it if it is missing".
+        if let Err(err) = conn.execute(
+            "ALTER TABLE sessions ADD COLUMN include_in_hub INTEGER NOT NULL DEFAULT 0",
+            [],
+        ) {
+            let duplicate = err.to_string().contains("duplicate column name");
+            if !duplicate {
+                return Err(err).context("adding the sessions.include_in_hub column");
+            }
+        }
         let store = Self {
             conn: Mutex::new(conn),
         };
@@ -263,9 +276,9 @@ impl Store {
     pub fn insert_session(&self, session: &Session) -> Result<()> {
         self.lock().execute(
             "INSERT INTO sessions (id, agent, agent_session_id, console_id, project_id, host_id,
-                                   role, origin, title, status, has_conversation, started_at,
-                                   ended_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                                   role, origin, title, status, has_conversation, include_in_hub,
+                                   started_at, ended_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             params![
                 session.id,
                 enum_to_text(&session.agent),
@@ -278,6 +291,7 @@ impl Store {
                 session.title,
                 enum_to_text(&session.status),
                 session.has_conversation,
+                session.include_in_hub,
                 session.started_at,
                 session.ended_at,
             ],
@@ -286,7 +300,8 @@ impl Store {
     }
 
     /// Writes back the fields that change over a session's life. Identity and placement
-    /// (`console_id`, `project_id`, `role`, `origin`) never change, so they are not touched.
+    /// (`console_id`, `project_id`, `role`, `origin`, `include_in_hub`) never change, so they are not
+    /// touched.
     pub fn update_session(&self, session: &Session) -> Result<()> {
         self.lock().execute(
             "UPDATE sessions SET agent = ?2, agent_session_id = ?3, title = ?4, status = ?5,
@@ -352,7 +367,8 @@ impl Store {
 }
 
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
-                               role, origin, title, status, has_conversation, started_at, ended_at";
+                               role, origin, title, status, has_conversation, include_in_hub,
+                               started_at, ended_at";
 
 fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
     Ok(Console {
@@ -391,8 +407,9 @@ fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         title: row.get(8)?,
         status: enum_from_row::<SessionStatus>(row, 9)?,
         has_conversation: row.get(10)?,
-        started_at: row.get(11)?,
-        ended_at: row.get(12)?,
+        include_in_hub: row.get(11)?,
+        started_at: row.get(12)?,
+        ended_at: row.get(13)?,
     })
 }
 

@@ -1,6 +1,6 @@
 // Wire types for `daemon/PROTOCOL.md`. Kept as a hand-written mirror of the daemon's
-// `protocol.rs` rather than generated, because the daemon's protocol is frozen for this
-// milestone. Field names and enum spellings must match `protocol.rs` exactly — in particular, no
+// `protocol.rs` rather than generated, to keep the frontend build free of a codegen step. Field
+// names and enum spellings must match `protocol.rs` exactly — in particular, no
 // request field is named `id`: what a request acts on is named for its kind (`console`, `project`,
 // `session`), because the envelope's own `id` and the request's fields share one flat object.
 
@@ -65,6 +65,9 @@ export interface Session {
   title: string;
   status: SessionStatus;
   has_conversation: boolean;
+  /** Whether this session's reports go to its console's hub. Always true for a hub-started session;
+   * for one the user opened by hand, only when they asked for it. */
+  include_in_hub: boolean;
   started_at: number;
   ended_at?: number | null;
 }
@@ -118,6 +121,9 @@ export type RequestBody =
       agent?: Agent;
       task?: string;
       title?: string;
+      /** Defaults to false: a session opened by hand stays outside the hub's orchestration and
+       * sends it no reports unless this is set. */
+      include_in_hub?: boolean;
     }
   | { type: "resume_session"; session: string }
   | { type: "archive_session"; session: string }
@@ -135,6 +141,11 @@ export type Event =
   | { type: "project_upserted"; project: Project }
   | { type: "project_deleted"; project: string }
   | { type: "session_upserted"; session: Session }
+  /** Something about a session the user has to be told that no status field carries — an injected
+   * capability that will not apply, or a setting of theirs Octoboard had to work around. Broadcast
+   * once, when the session starts; nothing stores it, so a client that connects later never sees
+   * it. */
+  | { type: "session_notice"; session: string; message: string }
   /** The reply to `open_session`: the session that was started. The same record is also
    * broadcast as `session_upserted`, but that broadcast carries no request id, so this is the
    * only way the caller can tell which session in the tree is the one it just opened. */

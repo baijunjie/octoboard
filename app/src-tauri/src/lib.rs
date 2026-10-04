@@ -70,6 +70,9 @@ fn describe_termination(code: Option<i32>) -> String {
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        // Carries no daemon traffic either: the frontend asks for a notification, the plugin
+        // shows it.
+        .plugin(tauri_plugin_notification::init())
         .manage(ExitState::default())
         .invoke_handler(tauri::generate_handler![
             frontend_handles_exit,

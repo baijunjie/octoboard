@@ -6,6 +6,10 @@
 //! entire global setup (`~/.codex/AGENTS.md`, model choice, approval policy, skills, plugins), not
 //! just add to it, which is the same objection as modifying their configuration.
 //!
+//! The role description goes in `developer_instructions`, which adds a developer message and
+//! leaves the rest of the prompt byte-identical. Not `instructions`, which *replaces* the system
+//! prompt.
+//!
 //! Two conditions are launch prerequisites rather than polish:
 //!
 //! - **Project trust.** Without it the folder-trust modal appears. The table must be passed whole
@@ -22,6 +26,12 @@
 //!   and shipped with the adapter; the hash preimage could not be derived, so they have to be read
 //!   out of a trusted session.
 //!
+//! One of the user's own settings changes what Octoboard may promise: with `approvals_reviewer`
+//! set to auto review, Codex resolves an approval request itself — the `PermissionRequest` hook
+//! fires, no modal is ever shown, and the tool proceeds. A raised hand there asks the user to
+//! answer something they will never be shown, so the adapter reads the setting and says so in its
+//! plan.
+//!
 //! Codex cannot pre-allocate a session id, and in the interactive TUI the thread is created lazily
 //! on the first prompt submission — so a session the user opens without a task has no
 //! `agent_session_id` until they type something. The id then arrives on the `SessionStart` hook
@@ -30,6 +40,8 @@
 use serde_json::json;
 
 use super::{AgentAdapter, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS};
+use crate::mcp;
+use crate::protocol::Agent;
 
 /// The events Octoboard's session states are derived from. `Interrupt` is included because it is
 /// mutually exclusive with `Stop` and is the only signal of a cancelled turn any of the three
@@ -45,10 +57,6 @@ const HOOK_EVENTS: &[&str] = &[
     "Stop",
 ];
 
-// TODO(milestone 02): read the user's `approvals_reviewer` setting before promising a raised hand.
-// With `auto_review` on, Codex resolves an approval request itself: the `PermissionRequest` hook
-// fires, no modal is ever shown, and the tool proceeds — so Octoboard would raise a hand nobody
-// needs to answer. Belongs with the raised hand itself, which is milestone 02's.
 pub struct CodexAdapter;
 
 impl AgentAdapter for CodexAdapter {
@@ -90,6 +98,36 @@ impl AgentAdapter for CodexAdapter {
         }
         args.push("--dangerously-bypass-hook-trust".to_string());
 
+        let (mcp_command, mcp_args) = super::mcp_server_command(spec);
+        let key = mcp::SERVER_KEY;
+        args.push("-c".to_string());
+        args.push(format!(
+            "mcp_servers.{key}.command={}",
+            toml_string(&mcp_command)
+        ));
+        args.push("-c".to_string());
+        args.push(format!(
+            "mcp_servers.{key}.args=[{}]",
+            mcp_args
+                .iter()
+                .map(|arg| toml_string(arg))
+                .collect::<Vec<_>>()
+                .join(",")
+        ));
+        // Octoboard's own tools are not a decision to put to the user: every one of them is
+        // something the hub was told to do, and a modal for each would make orchestration
+        // unusable.
+        args.push("-c".to_string());
+        args.push(format!(
+            "mcp_servers.{key}.default_tools_approval_mode=\"auto\""
+        ));
+
+        args.push("-c".to_string());
+        args.push(format!(
+            "developer_instructions={}",
+            toml_string(&mcp::role::role_description(spec.role, Agent::Codex))
+        ));
+
         if spec.resume_agent_session_id.is_none() {
             if let Some(task) = spec.task {
                 args.push(task.to_string());
@@ -98,8 +136,58 @@ impl AgentAdapter for CodexAdapter {
 
         Ok(LaunchPlan {
             args,
-            env: Vec::new(),
+            resolves_approvals_itself: resolves_approvals_itself(spec),
+            ..LaunchPlan::default()
         })
+    }
+}
+
+/// Whether this user's Codex resolves approval requests without ever showing a dialog.
+///
+/// Read from the user's own `config.toml` — never written to it. The setting's shape is not pinned
+/// down (it has been seen as a plain value and as a table), so the whole value is searched for the
+/// auto-review marker rather than one key path being assumed. Unreadable or absent means "the user
+/// will be asked", which is the safe way to be wrong: a hand raised needlessly is visible, while
+/// one never raised leaves a session looking busy while it waits.
+fn resolves_approvals_itself(spec: &LaunchSpec<'_>) -> bool {
+    const AUTO_REVIEW: &str = "auto_review";
+    let config = codex_home(spec).join("config.toml");
+    let Ok(text) = std::fs::read_to_string(&config) else {
+        return false;
+    };
+    // A `Table`, not a `Value`: in `toml` 1.x parsing into `Value` expects a bare value rather
+    // than a whole document, and silently fails on the first key.
+    let Ok(parsed) = text.parse::<toml::Table>() else {
+        return false;
+    };
+    parsed
+        .get("approvals_reviewer")
+        .is_some_and(|value| mentions(value, AUTO_REVIEW))
+}
+
+/// Whether `wanted` appears as a string anywhere inside this value.
+fn mentions(value: &toml::Value, wanted: &str) -> bool {
+    match value {
+        toml::Value::String(text) => text == wanted,
+        toml::Value::Array(items) => items.iter().any(|item| mentions(item, wanted)),
+        toml::Value::Table(table) => table.values().any(|item| mentions(item, wanted)),
+        _ => false,
+    }
+}
+
+/// The user's own Codex home, read from the launch environment rather than the daemon's: the
+/// daemon's own `CODEX_HOME` may belong to an agent session it was started from.
+fn codex_home(spec: &LaunchSpec<'_>) -> std::path::PathBuf {
+    if let Some(home) = spec
+        .shell_env
+        .get("CODEX_HOME")
+        .filter(|home| !home.is_empty())
+    {
+        return std::path::PathBuf::from(home);
+    }
+    match spec.shell_env.get("HOME").filter(|home| !home.is_empty()) {
+        Some(home) => std::path::PathBuf::from(home).join(".codex"),
+        None => crate::paths::home_dir().join(".codex"),
     }
 }
 
@@ -175,8 +263,103 @@ mod tests {
         assert_eq!(plan.args[0], "resume");
         assert_eq!(plan.args[1], "thread-id");
         // Every `-c` override is per-invocation and persisted nowhere, so a resume that omits them
-        // loses the hooks.
-        assert!(!overrides(&plan.args).is_empty());
+        // loses the hooks and the MCP server.
+        let overrides = overrides(&plan.args);
+        assert!(overrides.iter().any(|o| o.starts_with("hooks.")));
+        assert!(overrides
+            .iter()
+            .any(|o| o.starts_with("mcp_servers.octoboard.command=")));
+        assert!(overrides
+            .iter()
+            .any(|o| o.starts_with("developer_instructions=")));
+    }
+
+    #[test]
+    fn registers_the_mcp_server_as_a_command_with_its_tools_pre_approved() {
+        let fixture = spec_fixture();
+        let plan = CodexAdapter.plan(&fixture.spec()).expect("plan");
+        let overrides = overrides(&plan.args);
+        assert!(overrides.contains(&format!(
+            "mcp_servers.octoboard.command={:?}",
+            fixture.self_exe
+        )));
+        let args = overrides
+            .iter()
+            .find(|o| o.starts_with("mcp_servers.octoboard.args="))
+            .expect("the server's arguments");
+        assert!(args.contains(&fixture.session_id));
+        assert!(args.contains(&fixture.mcp_token));
+        assert!(overrides
+            .contains(&"mcp_servers.octoboard.default_tools_approval_mode=\"auto\"".to_string()));
+    }
+
+    /// `instructions` would replace the system prompt outright; `developer_instructions` adds a
+    /// developer message and leaves the rest byte-identical.
+    #[test]
+    fn the_role_text_is_added_as_a_developer_message_not_a_replaced_system_prompt() {
+        let fixture = spec_fixture();
+        let plan = CodexAdapter.plan(&fixture.spec()).expect("plan");
+        let overrides = overrides(&plan.args);
+        assert!(overrides.iter().any(|o| o.starts_with(&format!(
+            "developer_instructions={}",
+            toml_string(&mcp::role::role_description(fixture.role, Agent::Codex))
+        ))));
+        assert!(!overrides.iter().any(|o| o.starts_with("instructions=")));
+    }
+
+    /// A hand raised for an approval the user is never shown can never be cleared by them, so the
+    /// setting has to be read before the promise is made.
+    #[test]
+    fn auto_review_in_the_users_own_config_is_noticed() {
+        let mut fixture = spec_fixture();
+        let home = fixture.scratch.join("codex-home");
+        std::fs::create_dir_all(&home).expect("codex home");
+        fixture.shell_env.insert(
+            "CODEX_HOME".to_string(),
+            home.to_string_lossy().into_owned(),
+        );
+
+        // No configuration at all: the user gets asked, which is the safe way to be wrong.
+        assert!(
+            !CodexAdapter
+                .plan(&fixture.spec())
+                .expect("plan")
+                .resolves_approvals_itself
+        );
+
+        std::fs::write(
+            home.join("config.toml"),
+            "approvals_reviewer = \"auto_review\"\n",
+        )
+        .expect("config");
+        assert!(
+            CodexAdapter
+                .plan(&fixture.spec())
+                .expect("plan")
+                .resolves_approvals_itself
+        );
+
+        // The setting has been seen as a table as well as a plain value, so neither shape may be
+        // assumed.
+        std::fs::write(
+            home.join("config.toml"),
+            "[approvals_reviewer]\nmode = \"auto_review\"\n",
+        )
+        .expect("config");
+        assert!(
+            CodexAdapter
+                .plan(&fixture.spec())
+                .expect("plan")
+                .resolves_approvals_itself
+        );
+
+        std::fs::write(home.join("config.toml"), "approvals_reviewer = \"ask\"\n").expect("config");
+        assert!(
+            !CodexAdapter
+                .plan(&fixture.spec())
+                .expect("plan")
+                .resolves_approvals_itself
+        );
     }
 
     #[test]

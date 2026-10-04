@@ -21,6 +21,7 @@ tauri-build = { version = "=2.6.3", features = [] }
 [dependencies]
 tauri = { version = "=2.11.6", features = [] }
 tauri-plugin-shell = "=2.0.2"
+tauri-plugin-notification = "=2.4.0"
 anyhow = "1"
 # Pinned explicitly, not just transitively through `tauri`/`tauri-build`/`tauri-plugin-shell`
 # above: left unpinned, cargo resolves each of these to its newest 2.x/3.x release regardless
@@ -50,3 +51,6 @@ time = "=0.3.45"
 # Pulled in transitively at a version requiring rustc 1.89 even though none of the pins above name
 # it; same MSRV-drift story as the rest of this list.
 uuid = "=1.26.1"
+# Reached only through `tauri-plugin-notification`, and only used on Linux and Windows — but cargo
+# resolves it on macOS all the same, and its current release requires rustc 1.89.
+notify-rust = "=4.11.7"

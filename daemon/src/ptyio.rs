@@ -60,10 +60,27 @@ pub fn read_chunk(fd: RawFd, buf: &mut [u8]) -> io::Result<usize> {
     }
 }
 
+/// A write that did not finish, and how far it got. The count matters to a caller deciding whether
+/// to retry: the bytes already accepted are in the child's input buffer, so writing the whole
+/// message again would deliver that prefix twice.
+#[derive(Debug)]
+pub struct PartialWrite {
+    pub written: usize,
+    pub error: io::Error,
+}
+
+impl std::fmt::Display for PartialWrite {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{} ({} bytes written)", self.error, self.written)
+    }
+}
+
+impl std::error::Error for PartialWrite {}
+
 /// Writes every byte of `data`, in slices, never blocking: a full descriptor is waited on with
 /// `poll()` and the partial write resumed. Fails with `TimedOut` if the child has not accepted
 /// anything for `WRITE_DEADLINE`.
-pub fn write_all(fd: RawFd, data: &[u8]) -> io::Result<()> {
+pub fn write_all(fd: RawFd, data: &[u8]) -> Result<(), PartialWrite> {
     let mut offset = 0;
     let mut deadline = Instant::now() + WRITE_DEADLINE;
     while offset < data.len() {
@@ -87,19 +104,32 @@ pub fn write_all(fd: RawFd, data: &[u8]) -> io::Result<()> {
             Some(libc::EAGAIN) | Some(libc::EINTR) => {
                 let remaining = deadline.saturating_duration_since(Instant::now());
                 if remaining.is_zero() {
-                    return Err(io::Error::new(
-                        io::ErrorKind::TimedOut,
-                        "the session did not accept input within the write deadline",
-                    ));
+                    return Err(PartialWrite {
+                        written: offset,
+                        error: io::Error::new(
+                            io::ErrorKind::TimedOut,
+                            "the session did not accept input within the write deadline",
+                        ),
+                    });
                 }
                 let timeout_ms = remaining.as_millis().min(i32::MAX as u128) as i32;
                 match poll_once(fd, libc::POLLOUT, timeout_ms) {
                     Ok(_) => {}
                     Err(err) if err.kind() == io::ErrorKind::Interrupted => {}
-                    Err(err) => return Err(err),
+                    Err(err) => {
+                        return Err(PartialWrite {
+                            written: offset,
+                            error: err,
+                        })
+                    }
                 }
             }
-            _ => return Err(err),
+            _ => {
+                return Err(PartialWrite {
+                    written: offset,
+                    error: err,
+                })
+            }
         }
     }
     Ok(())

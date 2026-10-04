@@ -40,10 +40,47 @@ impl RingBuffer {
     /// internal slices directly rather than byte by byte, since this runs under the lock that
     /// gates the PTY reader thread.
     pub fn snapshot(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(self.buf.len());
+        self.tail(self.buf.len())
+    }
+
+    /// The last `max_bytes` of what is buffered. Separate from `snapshot` because a caller that
+    /// wants a few kilobytes should not pay for a copy of the whole buffer: this runs under the
+    /// lock that gates the PTY reader thread, so the copy is charged to the session's own output.
+    pub fn tail(&self, max_bytes: usize) -> Vec<u8> {
+        let wanted = max_bytes.min(self.buf.len());
+        let from = self.buf.len() - wanted;
+        let mut out = Vec::with_capacity(wanted);
         let (front, back) = self.buf.as_slices();
-        out.extend_from_slice(front);
-        out.extend_from_slice(back);
+        // The wanted range can start inside either slice, so each contributes whatever part of it
+        // falls after `from`.
+        if from < front.len() {
+            out.extend_from_slice(&front[from..]);
+            out.extend_from_slice(back);
+        } else {
+            out.extend_from_slice(&back[from - front.len()..]);
+        }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RingBuffer;
+
+    /// The wanted range can begin inside either of the deque's two slices, and a buffer that has
+    /// wrapped is the normal case rather than the exception.
+    #[test]
+    fn the_tail_is_the_last_bytes_however_the_buffer_has_wrapped() {
+        let mut ring = RingBuffer::new(8);
+        ring.push(b"abcdef");
+        assert_eq!(ring.tail(3), b"def".to_vec());
+        assert_eq!(ring.tail(99), b"abcdef".to_vec());
+
+        // Wraps: the oldest bytes are dropped and the contents span both slices.
+        ring.push(b"ghij");
+        assert_eq!(ring.snapshot(), b"cdefghij".to_vec());
+        assert_eq!(ring.tail(5), b"fghij".to_vec());
+        assert_eq!(ring.tail(1), b"j".to_vec());
+        assert!(ring.tail(0).is_empty());
     }
 }

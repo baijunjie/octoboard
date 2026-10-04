@@ -32,6 +32,7 @@ export function SessionDialog({
   const [agent, setAgent] = useState<Agent>(project.default_agent ?? parentConsole.default_agent);
   const [title, setTitle] = useState("");
   const [task, setTask] = useState("");
+  const [includeInHub, setIncludeInHub] = useState(false);
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
 
@@ -46,6 +47,7 @@ export function SessionDialog({
         agent,
         task: task || undefined,
         title: title || undefined,
+        include_in_hub: includeInHub || undefined,
       });
       if (reply.type === "session_opened") onOpened(reply.session.id);
       onClose();
@@ -80,6 +82,15 @@ export function SessionDialog({
       <label className="field">
         <span>Initial task (optional)</span>
         <textarea value={task} onChange={(e) => setTask(e.target.value)} rows={4} />
+      </label>
+      <label className="field field-checkbox">
+        <input type="checkbox" checked={includeInHub} onChange={(e) => setIncludeInHub(e.target.checked)} />
+        <span className="field-checkbox-text">
+          <span>Include in hub</span>
+          <span className="field-help">
+            Reports this session's results to the console's hub, instead of staying outside the orchestration.
+          </span>
+        </span>
       </label>
       {error && <p className="error-text">{error}</p>}
     </Modal>

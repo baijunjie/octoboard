@@ -2,20 +2,22 @@
 //! capabilities are injected *additionally*, without modifying project files or the user's own
 //! configuration. Everything else in the daemon is agent-agnostic.
 //!
-//! What is injected in this milestone is the status hooks. The injected MCP server and the role
-//! description belong to the orchestration the hub performs, and the tools they would announce do
-//! not exist yet.
-//! TODO(milestone 02): add the MCP server and the role description to each adapter — the verified
-//! per-agent mechanisms are in the "Agent adapters" table of `docs/mvp.md` section 6. Note that
-//! Claude Code records an appended system prompt on a conversation's first request and replays it
-//! verbatim afterwards, so a session started in this milestone can never be given a role later; 02
-//! has to start a new session rather than resume one for that.
+//! Three things are injected: the status hooks, the Octoboard MCP server, and a role description
+//! (`docs/mvp.md` section 5.1). The mechanism for each differs per agent and is the adapter's own
+//! business; the conditions all three share are below.
 //!
-//! Three rules hold for every adapter, each of which fails silently if broken:
+//! Four rules hold for every adapter, each of which fails silently if broken:
 //!
-//! - **Resume re-injects everything.** For all three agents, hooks are resolved from the launch
-//!   arguments every time and are lost on a resume that omits them, leaving a session nobody
-//!   observes. Adapters therefore assemble the full injection on every launch, resume included.
+//! - **Resume re-injects everything.** For all three agents, hooks and the MCP server are resolved
+//!   from the launch arguments every time and are lost on a resume that omits them, leaving a
+//!   session nobody observes. Adapters therefore assemble the full injection on every launch,
+//!   resume included.
+//! - **A role cannot be changed after the first turn.** Claude Code records an appended system
+//!   prompt on the conversation's first request and replays it verbatim afterwards, so different
+//!   text passed on a later launch is silently ignored; Grok persists `--rules` into the session
+//!   record. The role text is therefore a function of the session's role and agent alone, and a
+//!   session's role is immutable for its lifetime. It is still passed on every launch, because
+//!   Claude Code re-renders its snapshot from whatever *that* launch passed after a compaction.
 //! - **Hooks must fail fast and silently.** Every agent surfaces a failing hook to the user, and a
 //!   hook with no timeout blocks the turn for its full duration. Octoboard owns the hook script
 //!   (`hook_script` below, generated per session), which exits 0 unconditionally and writes
@@ -34,10 +36,16 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::protocol::Agent;
+use crate::protocol::{Agent, Role};
 
 /// Everything an adapter needs to assemble one launch.
 pub struct LaunchSpec<'a> {
+    /// Octoboard's own session id. Not the agent's — it identifies the session to the daemon, and
+    /// is what the injected MCP server is launched with.
+    pub session_id: &'a str,
+    /// Which side of the orchestration this session is on, which decides both the role text and
+    /// the tools its MCP server announces.
+    pub role: Role,
     /// The id to give an agent that can pre-allocate one for a *new* conversation. Freshly
     /// generated per launch: both Claude Code and Grok refuse an id that already has a stored
     /// conversation, so reusing one would make relaunching a session that was opened and never
@@ -57,12 +65,52 @@ pub struct LaunchSpec<'a> {
     /// the user's own settings from here rather than from the daemon's own environment, which may
     /// be that of an agent session the daemon happens to have been started from.
     pub shell_env: &'a HashMap<String, String>,
+    /// The daemon binary, which is also the MCP server and the hook forwarder.
+    pub self_exe: &'a str,
+    /// Where the daemon is listening, for the MCP server this launch registers.
+    pub daemon_port: u16,
+    /// The token that session's MCP server authenticates to the daemon with.
+    pub mcp_token: &'a str,
 }
 
+/// The command and arguments every adapter registers as this session's MCP server. The session's
+/// identity travels in argv: Claude Code and Grok do export a session id to an MCP child, but
+/// Codex exports nothing and Grok's `{{session_id}}` templating does not work, so argv is the one
+/// route all three agree on.
+pub fn mcp_server_command(spec: &LaunchSpec<'_>) -> (String, Vec<String>) {
+    let role = match spec.role {
+        Role::Hub => "hub",
+        Role::Worker => "worker",
+    };
+    (
+        spec.self_exe.to_string(),
+        vec![
+            "mcp".to_string(),
+            "--session".to_string(),
+            spec.session_id.to_string(),
+            "--role".to_string(),
+            role.to_string(),
+            "--port".to_string(),
+            spec.daemon_port.to_string(),
+            "--token".to_string(),
+            spec.mcp_token.to_string(),
+        ],
+    )
+}
+
+#[derive(Default)]
 pub struct LaunchPlan {
     pub args: Vec<String>,
     /// Environment entries layered on top of the shell snapshot.
     pub env: Vec<(String, String)>,
+    /// The agent resolves approval requests itself for this session, so its permission hook fires
+    /// without any dialog ever reaching the user. Octoboard must not raise a hand for one: nobody
+    /// would have anything to answer, and the tool proceeds regardless. Only Codex can be in this
+    /// state, and only because of the user's own configuration.
+    pub resolves_approvals_itself: bool,
+    /// Something about this launch the user has to be told, because the agent will not tell them
+    /// in a way they can act on. Surfaced once, when the session starts.
+    pub notice: Option<String>,
 }
 
 pub trait AgentAdapter {
@@ -140,16 +188,22 @@ pub mod tests {
     /// A launch to plan against, with a real temporary directory standing in for the session's
     /// scratch space — the Grok adapter writes into it, so it cannot be a fiction.
     pub struct SpecFixture {
+        pub session_id: String,
+        pub role: crate::protocol::Role,
         pub new_agent_session_id: String,
         pub cwd: PathBuf,
         pub scratch: PathBuf,
         pub hook_script: PathBuf,
         pub shell_env: HashMap<String, String>,
+        pub self_exe: String,
+        pub mcp_token: String,
     }
 
     impl SpecFixture {
         pub fn spec(&self) -> LaunchSpec<'_> {
             LaunchSpec {
+                session_id: &self.session_id,
+                role: self.role,
                 new_agent_session_id: &self.new_agent_session_id,
                 resume_agent_session_id: None,
                 cwd: &self.cwd,
@@ -157,6 +211,9 @@ pub mod tests {
                 scratch: &self.scratch,
                 hook_script: &self.hook_script,
                 shell_env: &self.shell_env,
+                self_exe: &self.self_exe,
+                daemon_port: 4321,
+                mcp_token: &self.mcp_token,
             }
         }
     }
@@ -181,11 +238,15 @@ pub mod tests {
         std::fs::write(&hook_script, "#!/bin/sh\nexit 0\n").expect("hook script");
 
         SpecFixture {
+            session_id: "session-1".to_string(),
+            role: crate::protocol::Role::Worker,
             new_agent_session_id: format!("agent-{}", std::process::id()),
             cwd,
             scratch: root,
             hook_script,
             shell_env: HashMap::new(),
+            self_exe: "/opt/octoboard/octoboardd".to_string(),
+            mcp_token: "token-1".to_string(),
         }
     }
 }

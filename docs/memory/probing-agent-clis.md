@@ -1,6 +1,7 @@
 # Probing the agent CLIs
 
-Rules for settling how Claude Code, Codex and Grok Build actually behave by running them.
+Rules for settling how Claude Code, Codex and Grok Build actually behave by running them, and for probing a live
+Octoboard session that launches them.
 
 ## Strip the parent session's agent markers before every probe — enumerated, never by prefix
 
@@ -50,6 +51,20 @@ paths that are otherwise unreachable.
 explicit authorisation every time.** Ask first and leave the probe undone if the answer is no; being cheap is not a
 reason to set it up quietly.
 
+## Prove an injection, and an MCP tool, out of band rather than through the model
+
+Whether a launch's hooks and MCP injection took is settled by looking at processes, not by asking an agent to use them.
+All three CLIs connect their MCP servers as the process starts, before any turn, so a session opened with no task at all
+is enough: find that session's own `octoboardd mcp` child and the injection landed. Look for it with
+`ps -axo pid,command | grep <session id>`, because macOS `pgrep -af` prints pids with no command line — a grep of its
+output for a session id never matches, and working injection reads as broken injection.
+
+The tools need no agent in the loop either. The MCP child carries the daemon's port and the session's token in its argv,
+and the daemon accepts a tool call as plain JSON on `POST /mcp/:token`, so `curl` exercises every tool, the refusal of
+one the session's role does not have, and report delivery, against a live daemon and without a single model turn. What
+that leaves untested is the stdio child itself — the schemas it announces and the tool name the model ends up
+seeing — so keep one real session for those.
+
 ## A probe whose expected answer is "no" needs a positive control in the same run
 
 When the question is "does the agent read file X" and the result comes back negative, that negative is evidence only
@@ -69,5 +84,22 @@ so probing directly in `/tmp` marks all of `/tmp` trusted and every later probe 
 quietly invalidating any test of untrusted-workspace behaviour. Probes also leave session records behind in the user's
 agent directories.
 
+A fresh scratch directory is by definition untrusted, and Claude Code stops there on its folder-trust dialog and
+does nothing else — a probe that looks like it produced no output at all is usually sitting on that dialog. Unless
+untrusted behaviour is the thing being measured, answer the dialog once in that directory before any measurement.
+
 When several probes run concurrently, each needs its own distinct scratch directory, and expect to see the other
 probes' trust entries and session records — that residue is not evidence of a defect.
+
+## A probe that goes through the daemon runs against the user's live Octoboard data
+
+There is no isolating it. The daemon derives its directory and its database from `$HOME`, and the agents it launches
+need the real `$HOME` to find their credentials and trust state, so the probe cannot be handed a sandbox home. Expect
+it to create consoles and sessions in the user's real board and to run any pending schema migration against the user's
+live database — copy that database aside first whenever the change being probed touches the schema, and plan the
+cleanup as part of the probe rather than after the fact.
+
+Clean up in the order the daemon enforces, and leave time between the steps: archiving a session returns as soon as its
+record is written, while the agent process is still only being asked to exit, so deleting the console straight
+afterwards is refused for "running sessions" even though every session was archived. Wait for those processes to be
+gone, then delete — the refusal is the daemon working, not a defect.

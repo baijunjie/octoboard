@@ -27,7 +27,12 @@
 //! Two conditions come from Grok itself rather than from the mechanism: it locates a project by
 //! walking up for a `.git` directory and reads no project instructions *and* no project hooks
 //! without one; and its hooks must be `command` type, because HTTP hooks cannot reach the daemon at
-//! all — Grok's SSRF protection rejects both plain HTTP and private addresses.
+//! all — Grok's SSRF protection rejects both plain HTTP and private addresses. That same SSRF
+//! protection is why the injected MCP server is a child process here too.
+//!
+//! The first of those conditions also decides where the role description comes from: a console's
+//! working directory is not a repository, so a Grok hub reads no instruction file written there and
+//! its whole role has to travel in `--rules`, which Grok persists into the session record.
 
 use std::path::{Path, PathBuf};
 
@@ -35,6 +40,8 @@ use anyhow::{Context, Result};
 use serde_json::json;
 
 use super::{AgentAdapter, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS};
+use crate::mcp;
+use crate::protocol::Agent;
 
 /// The events Octoboard's session states are derived from. All three stop events are registered
 /// because they are mutually exclusive, and `Notification` is the backstop: some turns (bash mode,
@@ -88,6 +95,12 @@ impl AgentAdapter for GrokAdapter {
             }
         }
 
+        // `--rules` appends to the system prompt and persists into the session record. It is
+        // passed on every launch anyway, so a session whose record predates the current text is
+        // not left without a role.
+        args.push("--rules".to_string());
+        args.push(mcp::role::role_description(spec.role, Agent::Grok));
+
         if spec.resume_agent_session_id.is_none() {
             if let Some(task) = spec.task {
                 args.push(task.to_string());
@@ -100,6 +113,7 @@ impl AgentAdapter for GrokAdapter {
                 "GROK_HOME".to_string(),
                 grok_home.to_string_lossy().into_owned(),
             )],
+            ..LaunchPlan::default()
         })
     }
 }
@@ -131,8 +145,9 @@ fn build_grok_home(spec: &LaunchSpec<'_>) -> Result<PathBuf> {
         }
     }
 
-    copy_if_present(&real_home.join("config.toml"), &farm.join("config.toml"))?;
-    // TODO(milestone 02): append the `[mcp_servers.octoboard]` block to this copy.
+    let config = farm.join("config.toml");
+    copy_if_present(&real_home.join("config.toml"), &config)?;
+    append_mcp_server(&config, spec)?;
 
     write_trusted_folders(&real_home, &farm, spec.cwd)?;
     write_hooks(&farm, spec.hook_script)?;
@@ -156,6 +171,29 @@ fn real_grok_home(spec: &LaunchSpec<'_>) -> PathBuf {
         Some(home) => PathBuf::from(home).join(".grok"),
         None => crate::paths::home_dir().join(".grok"),
     }
+}
+
+/// Appends Octoboard's MCP server to the farm's own `config.toml`. Appended rather than written
+/// fresh, because this copy carries the user's whole Grok configuration and replacing it would be
+/// the "do not override the user's configuration" failure in another form.
+fn append_mcp_server(config: &Path, spec: &LaunchSpec<'_>) -> Result<()> {
+    let (command, args) = super::mcp_server_command(spec);
+    let mut content = std::fs::read_to_string(config).unwrap_or_default();
+    if !content.is_empty() && !content.ends_with('\n') {
+        content.push('\n');
+    }
+    content.push_str(&format!(
+        "\n[mcp_servers.{key}]\ncommand = {command}\nargs = [{args}]\n",
+        key = mcp::SERVER_KEY,
+        command = json!(command),
+        args = args
+            .iter()
+            .map(|arg| json!(arg).to_string())
+            .collect::<Vec<_>>()
+            .join(", "),
+    ));
+    std::fs::write(config, content).with_context(|| format!("writing {}", config.display()))?;
+    Ok(())
 }
 
 fn copy_if_present(from: &Path, to: &Path) -> Result<()> {
@@ -248,10 +286,11 @@ mod tests {
         // Grok persists session settings into `config.toml`, so against a symlink that write would
         // reach the user's own file.
         assert!(!farm.join("config.toml").is_symlink());
-        assert_eq!(
-            std::fs::read_to_string(farm.join("config.toml")).expect("the copy"),
-            std::fs::read_to_string(home.join("config.toml")).expect("the original")
-        );
+        assert!(std::fs::read_to_string(farm.join("config.toml"))
+            .expect("the copy")
+            .starts_with(
+                &std::fs::read_to_string(home.join("config.toml")).expect("the original")
+            ));
         // The deployment sync deletes these at runtime, so the farm must not carry them.
         assert!(!farm.join("managed_config.toml").exists());
         assert!(!farm.join("requirements.toml").exists());
@@ -284,6 +323,40 @@ mod tests {
         let original =
             std::fs::read_to_string(home.join("trusted_folders.toml")).expect("the original");
         assert!(!original.contains(canonical.to_string_lossy().as_ref()));
+    }
+
+    #[test]
+    fn the_mcp_server_is_appended_to_the_farms_config_without_losing_the_users_own() {
+        let mut fixture = spec_fixture();
+        with_real_home(&mut fixture);
+        let plan = GrokAdapter.plan(&fixture.spec()).expect("plan");
+        let farm = PathBuf::from(&plan.env[0].1);
+        let config = std::fs::read_to_string(farm.join("config.toml")).expect("the copy");
+        assert!(
+            config.contains("default_model = \"x\""),
+            "the user's own configuration survives"
+        );
+        assert!(config.contains("[mcp_servers.octoboard]"));
+        assert!(config.contains(&fixture.self_exe));
+        assert!(config.contains(&fixture.mcp_token));
+    }
+
+    /// Grok reads no project instruction file without a git root, so a hub's role can only come
+    /// from `--rules` — and the flag is passed for every session, not just a hub's.
+    #[test]
+    fn the_role_text_travels_in_rules() {
+        let mut fixture = spec_fixture();
+        with_real_home(&mut fixture);
+        let plan = GrokAdapter.plan(&fixture.spec()).expect("plan");
+        let at = plan
+            .args
+            .iter()
+            .position(|arg| arg == "--rules")
+            .expect("--rules is passed");
+        assert_eq!(
+            plan.args[at + 1],
+            mcp::role::role_description(fixture.role, Agent::Grok)
+        );
     }
 
     #[test]

@@ -1,5 +1,10 @@
-//! The coordinator role: what each control-socket request does to the stored consoles, projects
-//! and sessions, and which host-role work it triggers.
+//! The coordinator role: what each control-socket request does to the stored consoles, projects and
+//! sessions, and which host-role work it triggers — including the launch flow every way of starting
+//! a session goes through.
+//!
+//! Writing into a running session and everything built on it (the hub's reports, synthesis,
+//! automatic archiving) is `crate::reporting`'s, because the hub's tools and the hook callback reach
+//! it without going through a control-socket request at all.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -8,11 +13,13 @@ use anyhow::{anyhow, bail, Result};
 use uuid::Uuid;
 
 use crate::hostfs;
+use crate::mcp;
 use crate::paths;
 use crate::protocol::{
     error_code, now_millis, Agent, CodedError, Console, Event, Origin, Project, ProjectSource,
     RequestBody, Role, Session, SessionStatus,
 };
+use crate::reporting;
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
 use crate::term;
@@ -33,11 +40,6 @@ pub async fn handle(
             let id = Uuid::new_v4().to_string();
             let workdir = paths::console_workdir(&id);
             std::fs::create_dir_all(&workdir)?;
-            // TODO(milestone 02): generate the hub's instruction file in this directory, named for
-            // the console's hub agent — `CLAUDE.md` for Claude Code, `AGENTS.md` for Codex, either
-            // for Grok, all matched by exact spelling. A Grok hub cannot be given one at all,
-            // because Grok locates a project by walking up for a `.git` directory and reads no
-            // instructions without one, so its role has to come from `--rules`.
             let console = Console {
                 id,
                 name,
@@ -46,6 +48,7 @@ pub async fn handle(
                 default_agent,
                 created_at: now_millis(),
             };
+            mcp::role::write_hub_instructions(&console)?;
             state.store.insert_console(&console)?;
             state.broadcast(Event::ConsoleUpserted { console });
             Ok(None)
@@ -70,6 +73,9 @@ pub async fn handle(
             if let Some(default_agent) = default_agent {
                 console.default_agent = default_agent;
             }
+            // Rewritten rather than left alone: the file is named for the hub's agent, so a
+            // console that changed agents would otherwise keep reading the old one's.
+            mcp::role::write_hub_instructions(&console)?;
             state.store.update_console(&console)?;
             state.broadcast(Event::ConsoleUpserted { console });
             Ok(None)
@@ -171,8 +177,21 @@ pub async fn handle(
             agent,
             task,
             title,
+            include_in_hub,
         } => {
-            let session = open_session(state, console_id, project_id, agent, task, title).await?;
+            let session = open_session(
+                state,
+                OpenRequest {
+                    console_id,
+                    project_id,
+                    agent,
+                    task,
+                    title,
+                    origin: Origin::User,
+                    include_in_hub,
+                },
+            )
+            .await?;
             Ok(Some(Event::SessionOpened {
                 id: request_id,
                 session,
@@ -180,7 +199,7 @@ pub async fn handle(
         }
 
         RequestBody::ResumeSession { session } => {
-            resume_session(state, &session).await?;
+            resume_session(state, &session, None).await?;
             Ok(None)
         }
 
@@ -208,7 +227,7 @@ pub async fn handle(
     }
 }
 
-async fn add_project(
+pub async fn add_project(
     state: &Arc<AppState>,
     console_id: String,
     source: ProjectSource,
@@ -216,7 +235,7 @@ async fn add_project(
     remote_url: Option<String>,
     name: Option<String>,
     default_agent: Option<Agent>,
-) -> Result<()> {
+) -> Result<Vec<Project>> {
     state
         .store
         .get_console(&console_id)?
@@ -256,7 +275,7 @@ async fn add_project(
     // directory yields many, and each takes its own directory's name.
     let explicit_name = if directories.len() == 1 { name } else { None };
 
-    let mut added = 0;
+    let mut added = Vec::new();
     for directory in directories {
         let path_text = directory.to_string_lossy().into_owned();
         if state.store.project_exists_at(&console_id, &path_text)? {
@@ -279,28 +298,48 @@ async fn add_project(
             remote_url: remote_url.clone(),
         };
         state.store.insert_project(&project)?;
-        state.broadcast(Event::ProjectUpserted { project });
-        added += 1;
+        state.broadcast(Event::ProjectUpserted {
+            project: project.clone(),
+        });
+        added.push(project);
     }
-    if added == 0 {
+    if added.is_empty() {
         bail!("every directory found is already associated with this console");
     }
-    Ok(())
+    Ok(added)
 }
 
-async fn open_session(
-    state: &Arc<AppState>,
-    console_id: String,
-    project_id: Option<String>,
-    agent: Option<Agent>,
-    task: Option<String>,
-    title: Option<String>,
-) -> Result<Session> {
+/// One session to open. A struct rather than a parameter list because the two callers differ in
+/// more than one field — the user opening a session by hand, and the hub dispatching one — and the
+/// fields that differ are all optional strings that would otherwise be positional.
+pub struct OpenRequest {
+    pub console_id: String,
+    pub project_id: Option<String>,
+    pub agent: Option<Agent>,
+    pub task: Option<String>,
+    pub title: Option<String>,
+    pub origin: Origin,
+    pub include_in_hub: bool,
+}
+
+pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result<Session> {
+    let OpenRequest {
+        console_id,
+        project_id,
+        agent,
+        task,
+        title,
+        origin,
+        include_in_hub,
+    } = request;
     let console = state
         .store
         .get_console(&console_id)?
         .ok_or_else(|| anyhow!("unknown console {console_id}"))?;
 
+    // Held for the rest of this function where a hub is involved, so the one-live-hub check and the
+    // insert that follows it cannot interleave with another open.
+    let _hub_claim;
     let (role, cwd, project, default_title) = match &project_id {
         Some(project_id) => {
             let project = state
@@ -309,11 +348,31 @@ async fn open_session(
                 .ok_or_else(|| anyhow!("unknown project {project_id}"))?;
             let cwd = PathBuf::from(&project.path);
             let title = project.name.clone();
+            _hub_claim = None;
             (Role::Worker, cwd, Some(project), title)
         }
         None => {
+            // One live hub per console. Reports route to the console's hub by lookup, and the menu
+            // has one Hub row, so a second live hub would be both unreachable and able to swallow
+            // reports meant for the first. The UI guards against it too, but the rule belongs here:
+            // the application is only a client. The claim is what makes the check mean anything —
+            // every request runs in its own task, so reading the store and then inserting would
+            // otherwise let two concurrent opens both through.
+            _hub_claim = Some(state.claim_hub(&console_id)?);
+            if let Some(existing) = state.store.list_sessions()?.into_iter().find(|session| {
+                session.console_id == console_id
+                    && session.role == Role::Hub
+                    && !session.status.is_dormant()
+            }) {
+                return Err(CodedError::raised(
+                    error_code::SESSION_ALREADY_RUNNING,
+                    format!("this console already has a hub session ({})", existing.id),
+                ));
+            }
             let workdir = PathBuf::from(&console.workdir);
-            std::fs::create_dir_all(&workdir)?;
+            // Refreshed right before the hub launches, so the file it reads is the one for the
+            // agent this console currently uses whatever happened to it since.
+            mcp::role::write_hub_instructions(&console)?;
             (Role::Hub, workdir, None, "Hub".to_string())
         }
     };
@@ -334,9 +393,7 @@ async fn open_session(
         project_id,
         host_id: LOCAL_HOST_ID.to_string(),
         role,
-        // Everything this milestone opens is the user's own doing; the hub opening sessions is
-        // milestone 02's.
-        origin: Origin::User,
+        origin,
         title: title.unwrap_or(default_title),
         // A session opened without a task is sitting at its prompt, not working. This also
         // matters for Codex specifically: its `SessionStart` hook does not fire until the first
@@ -347,6 +404,8 @@ async fn open_session(
             SessionStatus::Idle
         },
         has_conversation: false,
+        // A hub session is the recipient of reports, never a sender of them.
+        include_in_hub: role == Role::Worker && (origin == Origin::Hub || include_in_hub),
         started_at: now_millis(),
         ended_at: None,
     };
@@ -366,12 +425,20 @@ async fn open_session(
             // Nothing ran, so there is nothing to resume: drop the record rather than leave a
             // session in the tree that never existed.
             state.store.delete_session(&session.id)?;
+            state.revoke_mcp_tokens(&session.id);
             Err(err)
         }
     }
 }
 
-async fn resume_session(state: &Arc<AppState>, id: &str) -> Result<()> {
+/// Relaunches a dormant session. `instruction` is written into it once it is running — queued here
+/// rather than by the caller, because whichever hook releases it can fire the moment the agent
+/// starts, so it has to be in the queue before the launch and out again if the launch never happens.
+pub async fn resume_session(
+    state: &Arc<AppState>,
+    id: &str,
+    instruction: Option<&str>,
+) -> Result<()> {
     let mut session = state.session_record(id)?;
     // Claimed before anything else, so two overlapping relaunches cannot both get through.
     let claim = state.begin_launch(id)?;
@@ -383,6 +450,29 @@ async fn resume_session(state: &Arc<AppState>, id: &str) -> Result<()> {
             "this session is not interrupted or archived",
         ));
     }
+
+    // Same claim as `open_session`: reading the store and then relaunching is two steps.
+    let _hub_claim = if session.role == Role::Hub {
+        let claim = state.claim_hub(&session.console_id)?;
+        if let Some(existing) = state.store.list_sessions()?.into_iter().find(|other| {
+            other.console_id == session.console_id
+                && other.role == Role::Hub
+                && other.id != session.id
+                && !other.status.is_dormant()
+        }) {
+            return Err(CodedError::raised(
+                error_code::SESSION_ALREADY_RUNNING,
+                format!(
+                    "this console already has a hub session ({}); archive it before reopening this \
+                     one",
+                    existing.id
+                ),
+            ));
+        }
+        Some(claim)
+    } else {
+        None
+    };
 
     let previous_status = session.status;
     let cwd = session_cwd(state, &session)?;
@@ -401,9 +491,16 @@ async fn resume_session(state: &Arc<AppState>, id: &str) -> Result<()> {
     session.ended_at = None;
     state.store.update_session(&session)?;
 
+    // Queued with every refusal above already past, so a call that never launched leaves nothing
+    // behind for a later launch to deliver.
+    if let Some(instruction) = instruction {
+        state.queue_message(&session.id, instruction);
+    }
+
     match start_process(state, claim, &session, &cwd, None, resume_id.as_deref()).await {
         Ok(()) => {
             state.publish_session(&state.session_record(&session.id)?);
+            reporting::release_after_relaunch(state, &session);
             Ok(())
         }
         Err(err) => {
@@ -412,6 +509,10 @@ async fn resume_session(state: &Arc<AppState>, id: &str) -> Result<()> {
             session.status = previous_status;
             session.ended_at = Some(now_millis());
             state.save_session(&session)?;
+            state.revoke_mcp_tokens(&session.id);
+            // Nothing will ever release what was queued for this relaunch, and leaving it would
+            // deliver a stale instruction to whatever launch comes next.
+            state.discard_outbox(&session.id);
             Err(err)
         }
     }
@@ -426,28 +527,23 @@ async fn start_process(
     task: Option<&str>,
     resume_agent_session_id: Option<&str>,
 ) -> Result<()> {
-    let session_id = session.id.clone();
-    let agent = session.agent;
-    let cwd = cwd.to_path_buf();
-    let task = task.map(str::to_string);
-    let resume = resume_agent_session_id.map(str::to_string);
-    let port = state.port;
-    let self_exe = state.self_exe.clone();
+    let request = term::LaunchRequest {
+        session_id: session.id.clone(),
+        agent: session.agent,
+        role: session.role,
+        cwd: cwd.to_path_buf(),
+        task: task.map(str::to_string),
+        resume_agent_session_id: resume_agent_session_id.map(str::to_string),
+        daemon_port: state.port,
+        self_exe: state.self_exe.clone(),
+        // Issued per launch: the previous process is gone, and a token outliving it would let a
+        // stale child act on this session.
+        mcp_token: state.issue_mcp_token(&session.id),
+    };
 
     // Launching snapshots the user's shell environment and forks a process, so it goes off the
     // runtime rather than holding up the socket it was asked on.
-    let launch = tokio::task::spawn_blocking(move || {
-        term::launch(
-            &session_id,
-            agent,
-            &cwd,
-            task.as_deref(),
-            resume.as_deref(),
-            port,
-            &self_exe,
-        )
-    })
-    .await??;
+    let launch = tokio::task::spawn_blocking(move || term::launch(request)).await??;
 
     // Registering the session consumes the claim: from here on the live map is what says it is
     // running.
@@ -457,10 +553,16 @@ async fn start_process(
     if let Some(agent_session_id) = launch.agent_session_id {
         state.set_agent_session_id(&session.id, &agent_session_id)?;
     }
+    if let Some(message) = launch.notice {
+        state.broadcast(Event::SessionNotice {
+            session: session.id.clone(),
+            message,
+        });
+    }
     Ok(())
 }
 
-fn archive_session(state: &Arc<AppState>, id: &str) -> Result<()> {
+pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<()> {
     let mut session = state.session_record(id)?;
     session.status = SessionStatus::Archived;
     session.ended_at = Some(now_millis());
@@ -472,25 +574,11 @@ fn archive_session(state: &Arc<AppState>, id: &str) -> Result<()> {
     Ok(())
 }
 
+/// The user's own write into a session. Refused rather than queued while the session is waiting for
+/// them: they are the one who has to answer the prompt that is blocking it, and they can be told so.
 fn send_message(state: &Arc<AppState>, id: &str, text: &str) -> Result<()> {
-    let session = state.session_record(id)?;
-    let live = state
-        .live_session(id)
-        .ok_or_else(|| anyhow!("this session is not running"))?;
-
-    // The gate is the session's hook-reported state, never the terminal: no agent signals its
-    // modal state through terminal modes, and a write while a modal dialog is up has the trailing
-    // Enter confirm whatever option is highlighted. Working and idle are both safe — every agent
-    // queues a message written mid-turn and consumes it when the turn ends.
-    match session.status {
-        SessionStatus::Working | SessionStatus::Idle => term::send_message(&live, text),
-        SessionStatus::WaitingUser => {
-            bail!("this session is waiting for you — answer it in the terminal first")
-        }
-        SessionStatus::Interrupted | SessionStatus::Archived => {
-            bail!("this session is not running")
-        }
-    }
+    reporting::write_message(state, id, text, reporting::WhenBlocked::Refuse)?;
+    Ok(())
 }
 
 fn session_cwd(state: &Arc<AppState>, session: &Session) -> Result<PathBuf> {
@@ -509,5 +597,56 @@ fn session_cwd(state: &Arc<AppState>, session: &Session) -> Result<PathBuf> {
                 .ok_or_else(|| anyhow!("unknown console {}", session.console_id))?;
             Ok(PathBuf::from(console.workdir))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::Console;
+
+    fn console(hub_agent: Agent, workdir: &Path) -> Console {
+        Console {
+            id: "console-1".to_string(),
+            name: "Console".to_string(),
+            workdir: workdir.to_string_lossy().into_owned(),
+            hub_agent,
+            default_agent: Agent::Claude,
+            created_at: 0,
+        }
+    }
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "octoboardd-coordinator-{name}-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&dir).expect("temporary directory");
+        dir
+    }
+
+    /// Every agent matches its instruction filename by exact spelling, and Grok reads several of
+    /// them — so a file left behind by a console that changed agents would be loaded alongside the
+    /// right one.
+    #[test]
+    fn the_hub_instruction_file_is_the_only_one_left_in_the_working_directory() {
+        let workdir = temp_dir("hub-instructions");
+
+        mcp::role::write_hub_instructions(&console(Agent::Claude, &workdir)).expect("written");
+        assert!(workdir.join("CLAUDE.md").is_file());
+        assert!(!workdir.join("AGENTS.md").exists());
+
+        mcp::role::write_hub_instructions(&console(Agent::Codex, &workdir)).expect("written");
+        assert!(workdir.join("AGENTS.md").is_file());
+        assert!(!workdir.join("CLAUDE.md").exists());
+
+        // Grok reads no project instructions without a git root, and a console's working directory
+        // is not a repository — so it gets none, and the previous agent's file goes.
+        mcp::role::write_hub_instructions(&console(Agent::Grok, &workdir)).expect("written");
+        assert!(!workdir.join("AGENTS.md").exists());
+        assert!(!workdir.join("CLAUDE.md").exists());
+
+        std::fs::remove_dir_all(&workdir).ok();
     }
 }

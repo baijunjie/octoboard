@@ -13,9 +13,14 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Consoles and projects](product/consoles-and-projects.md) — consoles, their working directory and agent defaults; the
   three ways a project is associated, what is editable afterwards, and what deleting either one does.
 - [Sessions](product/sessions.md) — hub and project sessions, the three-level menu, agent selection, the five session
-  statuses and their transitions, archiving, interruption and resuming, and the terminal.
+  statuses and their transitions, the raised hand and its notification, archiving, interruption and resuming, and the
+  terminal.
+- [Hub orchestration](product/hub-orchestration.md) — what the hub can do: its tools and a project session's `report`,
+  the brief a task is handed over as, the reporting loop and what happens when a session stops without reporting,
+  automatic archiving, and which sessions the hub drives.
 - [Launching agents](product/launching-agents.md) — the guarantee that project files and the user's agent configuration
-  are never modified, what is injected per launch, the launch environment, and the per-agent specifics.
+  are never modified, the three things injected per launch and the hub's generated instruction file, the launch
+  environment, and the per-agent specifics.
 - [Application lifecycle](product/application-lifecycle.md) — startup and the single-instance rule, losing the daemon
   connection, the quit confirmation, crash behaviour, and the files Octoboard keeps under `~/.octoboard`.
 
@@ -31,10 +36,12 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 
 ## Development memory
 
-- [Probing agent CLIs](memory/probing-agent-clis.md) — how to establish what the three agent CLIs actually do: which
-  session markers to strip and why enumerating them beats matching a prefix, why neither `--help` nor the binary's own
-  strings can be trusted, how to settle a question without spending a model turn and where that stops being yours to
-  decide, why a probe expecting "no" needs a positive control, and the residue a probe leaves in the user's configuration.
+- [Probing agent CLIs](memory/probing-agent-clis.md) — how to establish what the three agent CLIs actually do, and how to
+  probe a live Octoboard session that launches them: which session markers to strip and why enumerating them beats
+  matching a prefix, why neither `--help` nor the binary's own strings can be trusted, how to settle a question without
+  spending a model turn and where that stops being yours to decide, how to prove a per-launch injection and an MCP tool
+  out of band rather than through the model, why a probe expecting "no" needs a positive control, and the residue a probe
+  leaves — in the user's configuration and in their live `~/.octoboard` data.
 - [Verifying the desktop UI](memory/verifying-the-desktop-ui.md) — how to verify terminal and UI behaviour in the real
   app: why a UI change has to be launched rather than only reviewed, how to get an error out of a blank window,
   bisecting a symptom against the daemon, what a scripted GUI probe can and cannot prove, and which checks need a

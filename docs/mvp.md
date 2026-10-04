@@ -44,7 +44,8 @@ session.
 - Session states in the left-hand tree are listed in 5.7. The raised-hand state bubbles up to the project and console nodes
   so it stays visible when they are collapsed; it also fires a system notification and shows a count on the Dock icon.
 - Each session is labelled with the agent it uses (Claude / Codex / Grok icon).
-- Each project has an "Archive" group listing its archived sessions; clicking one reopens it.
+- Each project has an "Archive" group listing its archived sessions, and the console has one of its own for archived hub
+  sessions — a hub belongs to no project, so no project's group could hold it; clicking one reopens it.
 - Center: the terminal of the selected session. The user can type into it directly, exactly as if operating the agent CLI in
   a system terminal.
 - Right: the report panel, shown only in the hub session (section 7).
@@ -97,7 +98,7 @@ going remote breaks.
 |---|---|---|
 | daemon | Rust + `tokio` | A single binary that can be deployed straight to a remote Linux host. |
 | PTY | `portable-pty` | From the WezTerm project, cross-platform. |
-| MCP server | `rmcp` (official Rust SDK) | Streamable HTTP, bound to localhost only. |
+| MCP server | `rmcp` (official Rust SDK) | A stdio child process per session, bridging to the daemon over loopback HTTP — not an endpoint the agent connects to. See 5.1. |
 | Desktop application | Tauri 2 | The daemon ships as a sidecar with the application; native macOS APIs can be called directly from the Rust side when needed. |
 | Frontend | React + TypeScript | — |
 | Terminal | `xterm.js` | macOS does not allow embedding a Terminal.app / iTerm window into another application. PTY + xterm.js is the standard approach (VS Code and others do it), and terminal compatibility is xterm.js's job. |
@@ -138,7 +139,9 @@ Each of these has an established solution, except where a bullet says otherwise:
   admission on another machine is untested. Credential access is not a concern: an agent launched from the built bundle
   reached the user's Keychain login normally, because a Keychain ACL is evaluated against the agent binary's own
   signature rather than its parent's.
-- **Rust toolchain floor**: the dependency graph, not Tauri itself, sets the floor. `reqwest` cannot be used below Rust
+- **Rust toolchain floor**: the dependency graph, not Tauri itself, sets the floor. A crate's declared `rust-version`
+  does not settle whether it builds — it is advisory and routinely wrong in both directions — so the usable version of a
+  new dependency is found by compiling candidates downward, not by reading manifests. `reqwest` cannot be used below Rust
   1.88 (its `idna`/ICU chain requires it) — for loopback-only traffic a small hand-rolled HTTP client avoids the problem
   entirely — and Tauri 2 builds on older toolchains only with exact version pins on a chain of transitive crates whose own
   declared `rust-version` is higher. Either carry those pins deliberately or raise the toolchain; drifting into it by
@@ -181,6 +184,16 @@ When a session starts, the adapter injects three things:
 Both hooks and MCP point at the daemon on the **host the session runs on** (localhost), so remote sessions never need to
 connect back to the user's own machine.
 
+**The MCP server is a child process, not an endpoint the agent dials.** The daemon binary doubles as it
+(`octoboardd mcp --session … --role … --port … --token …`), speaking MCP on its stdin/stdout and forwarding each call to
+the daemon over loopback HTTP. Pointing the agents at a Streamable HTTP endpoint in the daemon instead was ruled out by
+two of the three: Codex's verified MCP injection takes a `command` and `args` (section 6), and Grok's SSRF protection
+rejects plain HTTP and private addresses alike — already the reason its *hooks* cannot be HTTP. One mechanism for all
+three beats a bridge for some of them. The session's identity travels in argv rather than the environment, because
+Codex exports nothing to an MCP child and Grok's `{{session_id}}` templating does not work. A token is issued per
+launch and dropped when that process goes away, so the tools are not reachable by any local process that guesses the
+port, and the daemon resolves the calling session from the token rather than from an argument.
+
 ### 5.2 Octoboard MCP tools
 
 Tokens are issued per session, and different tools are exposed depending on the role.
@@ -189,7 +202,7 @@ Tokens are issued per session, and different tools are exposed depending on the 
 
 | Tool | Purpose |
 |---|---|
-| `list_projects` | List this console's projects (name, host, path, description, active sessions). |
+| `list_projects` | List this console's projects (name, host, path, default agent, active sessions). |
 | `add_project` | Associate a directory, or clone a GitHub repository and associate it. |
 | `start_session(project, brief, agent?)` | Start a session in a project and hand it a task (the `brief` structure is described in 5.3). `agent` overrides the agent for this one session; when omitted, the project's default agent is used. Returns a session id. |
 | `send_message(session, text)` | Append an instruction to a session. Delivered immediately when the session is idle *or* mid-turn — every agent queues it itself and consumes it when the turn ends — and held by the daemon only while a modal dialog is up or the session's state is unknown. |
@@ -237,7 +250,9 @@ attempt and refuses outright.
 
 So the `report` tool stays and the role description encourages calling it, but nothing is blocked. When a hub-dispatched
 session comes to a stop without having called `report` this turn, the daemon synthesises the report from the `Stop` hook's
-`last_assistant_message` and treats the status as `needs_decision`, leaving the judgement to the hub. What is given up is
+`last_assistant_message` and treats the status as `needs_decision`, leaving the judgement to the hub — except for a turn
+that ended in an error, where the status is `failed`, because on `StopFailure` that field carries the user-facing error
+text rather than model output. What is given up is
 that the structured fields (`status`, `open_items`) degrade to prose on turns where the session did not call the tool
 itself.
 
@@ -264,8 +279,10 @@ Several conditions qualify that synthesis, all found during validation:
 ### 5.4 Reporting and automatic archiving
 
 - A project session calls `report` after finishing a round of work (see 5.3 for what happens when it does not).
-- **Automatic archiving condition**: `status = done` with an empty `open_items` → once the report has been delivered to the
-  hub, the daemon ends the session process and archives it.
+- **Automatic archiving condition**: `status = done` with an empty `open_items` → once the report has been *accepted* for
+  the hub, the daemon ends the session process and archives it. Accepted rather than read: a hub that is merely busy has
+  the report queued for it, and leaving a finished session alive until the hub gets round to it would strand it. A hub
+  that is not running at all is different — the report fails and the session stays as it is.
 - Any other case (unfinished items, failure, a decision needed) → the session stays in the "awaiting instructions" state,
   waiting for the hub to `send_message` and continue, or to be archived explicitly by the hub or the user.
 - Reports are written into the hub session as a user message, on the same terms as any other write into a running
@@ -279,8 +296,8 @@ through the hub** — relaying questions through the hub only creates confusion 
 
 - The session shows a raised-hand icon in the menu, bubbled up to its project and console nodes, and fires a system
   notification.
-- The user opens the session and answers or grants permission right in the terminal; after the answer the hooks
-  automatically return the state to working.
+- The user opens the session and answers or grants permission right in the terminal; the state then leaves "waiting for
+  the user" on the session's next event, which may be working or awaiting instructions rather than always working.
 - Through `get_session` the hub can see "waiting for the user"; meanwhile it must not nag or re-dispatch, and messages bound
   for that session queue until the user is done.
 - "Needs a hub decision" and "needs a user decision" are kept apart: the former is the agent actively calling
@@ -319,7 +336,8 @@ through the hub** — relaying questions through the hub only creates confusion 
 
 - Working directory: `~/.octoboard/consoles/<id>/` on the coordinator's host. Octoboard generates hub-specific instruction
   files there (role, orchestration principles, report format), named for the agent the hub
-  uses.
+  uses — except a Grok hub, which reads none there and takes its whole role from `--rules` instead, for the reason in
+  section 6.
 - The hub is only responsible for decomposing, dispatching, following up, and summarizing — it does not modify project code
   itself. That constraint is written into its instructions.
 - The hub and each project session may use different agents, e.g. Claude for the hub and Codex for one project.
@@ -388,8 +406,10 @@ three adapters: Claude Code, Codex, and Grok Build.
     undocumented `--trust` flag. Grok additionally needs a recognised **git** workspace root — project hooks did not load
     in a trusted non-git directory. On Claude Code, an untrusted workspace makes the project's `allow` rules be ignored
     (with an explanatory line on stderr) while its `deny` rules still apply, so the session is only ever more restrictive;
-    trust lives in `~/.claude.json`, which Octoboard must not write, so the adapter should detect that stderr line and
-    surface it to the user.
+    trust lives in `~/.claude.json`, which Octoboard must not write. The adapter *reads* that file at launch and tells the
+    user, rather than matching the stderr line: on a PTY stderr is the same stream as the rendered UI, so there is no
+    separate descriptor to read and matching rendered text would need a VT emulator in the daemon. It warns only on an
+    explicit negative, so a renamed key leaves the user alone instead of warning them on every launch.
   - **Codex** injects through repeated `-c` overrides, with two extras: the project must be marked trusted in the same way
     (`-c 'projects={"<canonical cwd>"={trust_level="trusted"}}'`), and hooks are gated behind a persisted trust hash —
     without it an interactive session raises a blocking review modal and a headless one **hangs indefinitely**. The flag
@@ -475,7 +495,7 @@ Host      { id, name, kind: local|ssh, ssh_config? }
 Project   { id, console_id, host_id, name, path, default_agent?,
             source: local|parent|github, remote_url? }
 Session   { id, agent, agent_session_id, console_id, project_id?, host_id,
-            role: hub|worker, origin: hub|user, title,
+            role: hub|worker, origin: hub|user, title, include_in_hub,
             status: working|waiting_user|idle|interrupted|archived,
             started_at, ended_at }
 Report    { id, session_id, summary, status, open_items, created_at }
@@ -484,6 +504,9 @@ Page      { id, console_id, html, anchor_message_id, created_at }
 
 - `Session.id` is generated by Octoboard and `agent_session_id` is the agent's own session id. They are kept separate to
   accommodate agents that cannot pre-allocate an id.
+- `Session.include_in_hub` says whether that session reports to its console's hub. Always set for a session the hub
+  started; a session the user opened by hand is outside the orchestration unless they asked for it to be included, and it
+  is fixed for the session's lifetime.
 - In the MVP `Host` holds a single local record, but every project and session still carries a `host_id` so no data migration
   is needed when going remote.
 

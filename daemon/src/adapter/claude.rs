@@ -4,11 +4,22 @@
 //! Two flags must never be passed, both of which silently drop the *project's* own configuration —
 //! the exact failure Octoboard's "project configuration must not be overridden" rule exists to
 //! prevent: `--setting-sources` (drops the project's permission rules and its hooks) and
-//! `--strict-mcp-config` (drops the project's and the user's MCP servers).
+//! `--strict-mcp-config` (drops the project's and the user's MCP servers). The injected MCP
+//! server's key must not collide with one the project defines either, or the project's own
+//! definition is silently never spawned.
+//!
+//! In a workspace the user has not trusted, Claude Code ignores the project's own `allow` rules
+//! while still applying its `deny` rules, so the session is only ever more restrictive and nothing
+//! breaks — but the user has no way to learn why their project's permissions are not applying. It
+//! says so on stderr, which on a PTY is the same stream as the rendered UI, so the trust state is
+//! read out of `~/.claude.json` instead of matched in terminal text. Read, never written: a trust
+//! decision is the user's to make in Claude Code itself.
 
 use serde_json::json;
 
 use super::{AgentAdapter, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS};
+use crate::mcp;
+use crate::protocol::Agent;
 
 /// The events that carry the session states Octoboard shows. `StopFailure` is registered next to
 /// `Stop` because the two are mutually exclusive — a turn ending in an API error fires only
@@ -28,13 +39,6 @@ const HOOK_EVENTS: &[&str] = &[
     "StopFailure",
 ];
 
-// TODO(milestone 02): surface the untrusted-workspace warning. In a workspace the user has not
-// trusted, Claude Code ignores the project's own `allow` rules and says so on stderr — the session
-// is only ever more restrictive, so nothing breaks silently, but the user has no way to know why
-// their project's permissions are not applying. Trust lives in `~/.claude.json`, which Octoboard
-// must not write, so the only route is to surface the line. It needs a channel that does not exist
-// yet: the agent runs on a PTY, where stderr is the same stream as the rendered UI, so the daemon
-// would have to match it in the terminal output rather than read a separate descriptor.
 pub struct ClaudeAdapter;
 
 impl ClaudeAdapter {
@@ -58,6 +62,22 @@ impl ClaudeAdapter {
         }
         json!({ "hooks": hooks }).to_string()
     }
+
+    /// The `--mcp-config` JSON. Merged with the project's and the user's servers, which is why
+    /// `--strict-mcp-config` must never be passed alongside it.
+    fn mcp_config_json(spec: &LaunchSpec<'_>) -> String {
+        let (command, args) = super::mcp_server_command(spec);
+        json!({
+            "mcpServers": {
+                mcp::SERVER_KEY: {
+                    "type": "stdio",
+                    "command": command,
+                    "args": args,
+                }
+            }
+        })
+        .to_string()
+    }
 }
 
 impl AgentAdapter for ClaudeAdapter {
@@ -71,6 +91,15 @@ impl AgentAdapter for ClaudeAdapter {
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> anyhow::Result<LaunchPlan> {
         let mut args = Vec::new();
+
+        // The task goes first, ahead of every flag. `--mcp-config` takes a *list* of values, so
+        // anything non-flag after it is read as another config path — `claude --mcp-config <json>
+        // mcp list` fails with "MCP config file not found: …/mcp" — and a task left at the end
+        // would be swallowed the same way by it or by any other list-valued flag.
+        if let Some(task) = spec.task {
+            args.push(task.to_string());
+        }
+
         match spec.resume_agent_session_id {
             Some(id) => {
                 args.push("--resume".to_string());
@@ -83,15 +112,47 @@ impl AgentAdapter for ClaudeAdapter {
         }
         args.push("--settings".to_string());
         args.push(Self::settings_json(spec));
-
-        if let Some(task) = spec.task {
-            args.push(task.to_string());
-        }
+        args.push("--mcp-config".to_string());
+        args.push(Self::mcp_config_json(spec));
+        args.push("--append-system-prompt".to_string());
+        args.push(mcp::role::role_description(spec.role, Agent::Claude));
 
         Ok(LaunchPlan {
             args,
-            env: Vec::new(),
+            notice: untrusted_workspace_notice(spec),
+            ..LaunchPlan::default()
         })
+    }
+}
+
+/// What to tell the user when Claude Code will ignore this project's own `allow` rules.
+///
+/// Deliberately silent unless the trust state is explicitly negative: the field is only read, so
+/// an absent project entry or a renamed key must leave the user alone rather than warn them on
+/// every launch about something that may not be true.
+fn untrusted_workspace_notice(spec: &LaunchSpec<'_>) -> Option<String> {
+    let home = spec
+        .shell_env
+        .get("HOME")
+        .filter(|home| !home.is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(crate::paths::home_dir);
+    let config: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(home.join(".claude.json")).ok()?).ok()?;
+
+    let canonical = std::fs::canonicalize(spec.cwd).unwrap_or_else(|_| spec.cwd.to_path_buf());
+    let project = config
+        .get("projects")?
+        .get(canonical.to_string_lossy().as_ref())?;
+    match project.get("hasTrustDialogAccepted") {
+        Some(serde_json::Value::Bool(false)) => Some(
+            "Claude Code has not been trusted with this directory, so this project's own `allow` \
+             permission rules are ignored for this session — its `deny` rules still apply, so the \
+             session is only more restrictive, never less. Accept the trust prompt in Claude Code \
+             itself to change that; Octoboard does not write that decision for you."
+                .to_string(),
+        ),
+        _ => None,
     }
 }
 
@@ -110,6 +171,53 @@ mod tests {
                 "{forbidden} must never be passed"
             );
         }
+    }
+
+    /// Reading the trust state wrong must not nag: only an explicit `false` warns, so an absent
+    /// project entry or a key that was renamed upstream leaves the user alone.
+    #[test]
+    fn only_an_explicitly_untrusted_workspace_produces_a_notice() {
+        let mut fixture = spec_fixture();
+        let home = fixture.scratch.join("home");
+        std::fs::create_dir_all(&home).expect("home");
+        fixture
+            .shell_env
+            .insert("HOME".to_string(), home.to_string_lossy().into_owned());
+        let canonical = std::fs::canonicalize(&fixture.cwd).expect("canonical path");
+        let config = home.join(".claude.json");
+
+        assert!(ClaudeAdapter
+            .plan(&fixture.spec())
+            .expect("plan")
+            .notice
+            .is_none());
+
+        std::fs::write(&config, r#"{"projects":{}}"#).expect("config");
+        assert!(ClaudeAdapter
+            .plan(&fixture.spec())
+            .expect("plan")
+            .notice
+            .is_none());
+
+        let untrusted = serde_json::json!({
+            "projects": { canonical.to_string_lossy(): { "hasTrustDialogAccepted": false } }
+        });
+        std::fs::write(&config, untrusted.to_string()).expect("config");
+        assert!(ClaudeAdapter
+            .plan(&fixture.spec())
+            .expect("plan")
+            .notice
+            .is_some());
+
+        let trusted = serde_json::json!({
+            "projects": { canonical.to_string_lossy(): { "hasTrustDialogAccepted": true } }
+        });
+        std::fs::write(&config, trusted.to_string()).expect("config");
+        assert!(ClaudeAdapter
+            .plan(&fixture.spec())
+            .expect("plan")
+            .notice
+            .is_none());
     }
 
     #[test]
@@ -137,6 +245,18 @@ mod tests {
         }
     }
 
+    /// `--mcp-config` takes a list of values, so a task left after the flags is read as another
+    /// config path and never reaches the model.
+    #[test]
+    fn the_task_comes_before_every_flag() {
+        let fixture = spec_fixture();
+        let mut spec = fixture.spec();
+        spec.task = Some("do the thing");
+        let plan = ClaudeAdapter.plan(&spec).expect("plan");
+        assert_eq!(plan.args[0], "do the thing");
+        assert!(plan.args[1].starts_with("--"));
+    }
+
     #[test]
     fn a_new_session_takes_octoboards_id_and_a_resume_takes_the_agents() {
         let fixture = spec_fixture();
@@ -152,5 +272,47 @@ mod tests {
         // The injection is reassembled on a resume too: without it the resumed session fires no
         // hooks and nobody observes it.
         assert!(resumed.args.iter().any(|arg| arg == "--settings"));
+        assert!(resumed.args.iter().any(|arg| arg == "--mcp-config"));
+        // Passed on every launch even though the first one is what Claude Code records: after a
+        // compaction the snapshot is re-rendered from whatever that launch passed.
+        assert!(resumed
+            .args
+            .iter()
+            .any(|arg| arg == "--append-system-prompt"));
+    }
+
+    #[test]
+    fn registers_the_mcp_server_as_a_stdio_child_under_octoboards_own_key() {
+        let fixture = spec_fixture();
+        let plan = ClaudeAdapter.plan(&fixture.spec()).expect("plan");
+        let at = plan
+            .args
+            .iter()
+            .position(|arg| arg == "--mcp-config")
+            .expect("--mcp-config is passed");
+        let config: serde_json::Value =
+            serde_json::from_str(&plan.args[at + 1]).expect("the MCP config is JSON");
+        let server = &config["mcpServers"][mcp::SERVER_KEY];
+        assert_eq!(server["type"], "stdio");
+        assert_eq!(server["command"], fixture.self_exe);
+        let args: Vec<String> = serde_json::from_value(server["args"].clone()).expect("args");
+        assert_eq!(args[0], "mcp");
+        assert!(args.contains(&fixture.session_id));
+        assert!(args.contains(&fixture.mcp_token));
+    }
+
+    #[test]
+    fn the_role_text_is_the_one_for_this_sessions_role() {
+        let fixture = spec_fixture();
+        let plan = ClaudeAdapter.plan(&fixture.spec()).expect("plan");
+        let at = plan
+            .args
+            .iter()
+            .position(|arg| arg == "--append-system-prompt")
+            .expect("--append-system-prompt is passed");
+        assert_eq!(
+            plan.args[at + 1],
+            mcp::role::role_description(fixture.role, Agent::Claude)
+        );
     }
 }

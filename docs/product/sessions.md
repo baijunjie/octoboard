@@ -12,11 +12,14 @@ own binary and shows it as it is. What it adds to each launch, and what it guara
 | Hub session | the console's working directory | the console's "Hub" row |
 | Project session | the project's directory | under that project |
 
-A console has at most one hub session visible at a time. Clicking the Hub row starts one if there is none, and selects
-the existing one otherwise.
+**A console has at most one live hub session**, enforced by the daemon: opening a second one, or
+reopening an archived one while a live one exists, is refused and names the hub already running.
+Clicking the Hub row starts a hub if there is none and selects the existing one otherwise.
 
-A hub session carries no project. It is an ordinary agent session in the console's working
-directory — it is given no orchestration tools and no role description, and nothing dispatches work to it.
+A hub session carries no project; it runs in the console's working directory. It is given Octoboard's
+orchestration tools and dispatches work to sessions in the console's projects — see
+`docs/product/hub-orchestration.md`. Because it belongs to no project, archived hubs are listed in
+the console's own "Archived hubs" group rather than under any project.
 
 ## The console → project → session menu
 
@@ -24,8 +27,10 @@ The left-hand tree has three levels: console → project → session. Console an
 collapse state is per window and is not stored.
 
 Under each project, sessions whose process is running and sessions that were interrupted are listed directly;
-archived sessions are grouped under an "Archive (n)" row that expands on its own. Each session row shows its status,
-its title, and a badge naming its agent (Claude Code, Codex, Grok Build).
+archived sessions are grouped under an "Archive (n)" row that expands on its own. The console itself
+carries an "Archived hubs (n)" group below its Hub row, for the hub sessions that have been archived.
+Each session row shows its status, its title, and a badge naming its agent (Claude Code, Codex, Grok
+Build).
 
 Selecting a session shows its terminal. Clicking a row deliberately does not move keyboard focus away from the
 terminal; a row reached with Tab can be activated with Enter or Space.
@@ -37,6 +42,10 @@ A session is opened under a project with:
 - **Agent** — defaulted as below, overridable for this session only.
 - **Title** (optional) — defaults to the project's name. A hub session's title defaults to "Hub".
 - **Initial task** (optional) — handed to the agent as its initial prompt.
+- **Include in hub** (a checkbox, off by default) — makes this session report its results to the
+  console's hub instead of staying outside the orchestration. The choice is fixed for the session's
+  lifetime. A session the hub itself starts always reports to it; see "Which sessions the hub drives"
+  in `docs/product/hub-orchestration.md`.
 
 A session opened **with** a task starts in *working*. A session opened **without** one starts in *awaiting
 instructions*: it is sitting at the agent's prompt.
@@ -95,16 +104,42 @@ limitations of what the agents expose rather than of this one:
 - When the user cancels an in-flight turn in Claude Code, nothing is reported at all; the session keeps reading as
   *working* until the next prompt is submitted.
 - Grok Build's bash mode (`!`) produces no events, so work done through it is invisible to the status.
+- A question the agent asks through **its own ask-the-user tool** is reported by Claude Code and Grok
+  Build but not by Codex, which has no such event; a Codex session asking that way reads as *working*.
 
-The *waiting for the user* status is shown on the session's own row only. It is not bubbled up to the project or
-console rows, and it raises no system notification or Dock badge.
+### The raised hand
+
+*Waiting for the user* is the raised hand, and it is made findable rather than left on the session's
+own row:
+
+- The session's row shows a raised-hand icon, and so do its project row and its console row, so a
+  waiting session can be found with the tree collapsed.
+- A system notification fires once as a session enters that state, naming the session by its title
+  and the project it runs in — or the console whose hub it is. A session that is answered and later
+  waits again notifies again. macOS asks for notification permission the first time; if it is
+  declined, the tree's own marker is the only signal and nothing is reported as having failed.
+- The Dock badge carries how many sessions are waiting, counted across every console, and clears
+  when none is.
+
+**The user answers in the session's terminal**, and the status leaves *waiting for the user* on the
+agent's next event. Nobody can answer for them: the hub is told to leave such a session alone, and a
+message addressed to it is held until the user is done — see "Messages held until a session can take
+them" in `docs/product/hub-orchestration.md`.
+
+Where the user's own Codex configuration **resolves approval requests by itself**, Octoboard raises
+no hand at all: the permission event still fires, but Codex resolves the request, no dialog ever
+reaches the user and the tool proceeds — a hand there would ask them to answer something they never
+see. Those sessions keep reading as *working*.
 
 ## Archiving, interruption and resuming
 
-**Archiving** is the user's explicit way to end a session. It ends the agent's process and keeps the session and its
-record. The agent is asked to exit first and is killed only if it does not; a kill takes the agent's tool
-subprocesses with it. Archiving is available for any session that is not already archived, including an interrupted
-one.
+**Archiving** ends the agent's process and keeps the session and its record. The agent is asked to
+exit first and is killed only if it does not; a kill takes the agent's tool subprocesses with it.
+Archiving is available for any session that is not already archived, including an interrupted one.
+
+Besides the user, two things archive a session: the hub, explicitly, and a project session's own
+report saying the work is finished with nothing left open (see "Automatic archiving" in
+`docs/product/hub-orchestration.md`).
 
 **Resuming** happens by selecting an interrupted or archived session, or through its "Resume" action. It relaunches
 the same agent in the same directory and reassembles everything Octoboard injects.

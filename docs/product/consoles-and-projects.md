@@ -1,8 +1,9 @@
 # Consoles and projects
 
 A **console** groups a set of projects and owns a working directory of its own. A **project** is a directory on a
-host, associated with one console. Both are created and managed by the user; sessions that run inside them are
-described in `docs/product/sessions.md`.
+host, associated with one console. A console is created and managed by the user; a project is associated either by the
+user or by that console's hub session. Sessions that run inside them are described in
+`docs/product/sessions.md`.
 
 ## Consoles
 
@@ -51,6 +52,9 @@ There are three sources:
 
 A path may be entered by hand or picked with the directory browser. A leading `~` is expanded to the home directory
 of the host the daemon runs on.
+
+The console's hub session can associate a project itself, from the same three sources and under all the
+rules in this section (see "The hub's tools" in `docs/product/hub-orchestration.md`).
 
 For a GitHub association:
 

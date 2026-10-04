@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 
+import { STATUS_LABEL } from "../sessionLabel";
 import { isDormant, type Console, type Project, type Session } from "../protocol";
 import { ActionMenu } from "./ActionMenu";
-import { AgentBadge, StatusIcon } from "./StatusIcon";
+import { AgentBadge, BubbledWaitingHand, StatusIcon } from "./StatusIcon";
 
 /** The callbacks the tree triggers. Kept as one object, passed down by reference rather than
  * spread, so a child's prop list says exactly what data it narrows instead of inheriting whatever
@@ -114,15 +115,18 @@ function ConsoleNode({
   toggle: (id: string) => void;
 }): React.ReactElement {
   const isCollapsed = collapsed.has(thisConsole.id);
-  // Archived hub sessions are ignored here so the row always resolves to a session the user can
-  // still resume into — otherwise an old, archived hub would keep showing up forever instead of
-  // the fresh one `onOpenHub` starts once the Hub row has nothing live to find.
-  // TODO(milestone 02): nothing can archive a hub session today, so this filter has no visible
-  // effect yet — but 02's automatic archiving (a hub-dispatched session finishing cleanly) could
-  // reach a hub session once hubs can be dispatched to, and an archived hub would then need its own
-  // way back into view (today it would simply become unreachable: filtered from this row, and a hub
-  // belongs to no project's Archive group either).
-  const hub = sessions.find((s) => s.role === "hub" && s.status !== "archived");
+  // The daemon refuses to create or resume a second live hub, so there should only ever be one —
+  // but the tree stays total regardless: sorting by `started_at` and keeping only the newest in the
+  // Hub row means a second one (were it ever to exist) still gets a row, as an ordinary session,
+  // rather than disappearing from the tree entirely.
+  const liveHubs = sessions
+    .filter((s) => s.role === "hub" && s.status !== "archived")
+    .sort((a, b) => b.started_at - a.started_at);
+  const hub = liveHubs[0];
+  const extraHubs = liveHubs.slice(1);
+  const archivedHubs = sessions.filter((s) => s.role === "hub" && s.status === "archived");
+  const archiveKey = `${thisConsole.id}:archive`;
+  const anyWaiting = sessions.some((s) => s.status === "waiting_user");
 
   return (
     <div className="tree-console">
@@ -130,13 +134,14 @@ function ConsoleNode({
         className="tree-row tree-row-console"
         role="button"
         tabIndex={0}
-        aria-label={`${thisConsole.name} console`}
+        aria-label={`${thisConsole.name} console${anyWaiting ? ", a session is waiting for you" : ""}`}
         onMouseDown={keepFocus}
         onClick={() => toggle(thisConsole.id)}
         onKeyDown={rowKeyHandler(() => toggle(thisConsole.id))}
       >
         <span className={`tree-disclosure${isCollapsed ? " tree-disclosure-collapsed" : ""}`} />
         <span className="tree-label">{thisConsole.name}</span>
+        {anyWaiting && <BubbledWaitingHand />}
         <ActionMenu
           items={[
             { label: "Add project", onClick: () => handlers.onNewProject(thisConsole) },
@@ -151,7 +156,7 @@ function ConsoleNode({
             className={`tree-row tree-row-hub${hub && hub.id === selectedSessionId ? " tree-row-selected" : ""}`}
             role="button"
             tabIndex={0}
-            aria-label={hub ? `Hub session, ${hub.status}` : "Start hub session"}
+            aria-label={hub ? `Hub session, ${STATUS_LABEL[hub.status]}` : "Start hub session"}
             onMouseDown={keepFocus}
             onClick={() => (hub ? handlers.onSelectSession(hub) : handlers.onOpenHub(thisConsole))}
             onKeyDown={rowKeyHandler(() => (hub ? handlers.onSelectSession(hub) : handlers.onOpenHub(thisConsole)))}
@@ -160,6 +165,23 @@ function ConsoleNode({
             <span className="tree-label">Hub</span>
             {hub && <AgentBadge agent={hub.agent} />}
           </div>
+          {extraHubs.map((session) => (
+            <SessionRow key={session.id} handlers={handlers} session={session} selectedSessionId={selectedSessionId} />
+          ))}
+          {archivedHubs.length > 0 && (
+            // A hub belongs to no project, so this is the only Archive group that can ever show
+            // one — without it, an archived hub would be unreachable once a fresh one takes its
+            // place in the Hub row above.
+            <ArchiveGroup
+              label="Archived hubs"
+              className="tree-row-archive-console"
+              sessions={archivedHubs}
+              handlers={handlers}
+              selectedSessionId={selectedSessionId}
+              isCollapsed={collapsed.has(archiveKey)}
+              onToggle={() => toggle(archiveKey)}
+            />
+          )}
           {projects.map((project) => (
             <ProjectNode
               key={project.id}
@@ -173,6 +195,52 @@ function ConsoleNode({
             />
           ))}
           {projects.length === 0 && <p className="sidebar-empty">No projects yet.</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A collapsible group of archived sessions. Both a project's own archive and the console's archive
+ * for archived hubs render through this one component — the caller supplies the label, the indent
+ * class, and the collapsed/toggle state for whichever key is theirs, so neither grows a dependency
+ * on the other's. */
+function ArchiveGroup({
+  label,
+  className,
+  sessions,
+  handlers,
+  selectedSessionId,
+  isCollapsed,
+  onToggle,
+}: {
+  label: string;
+  className?: string;
+  sessions: Session[];
+  handlers: SidebarHandlers;
+  selectedSessionId?: string;
+  isCollapsed: boolean;
+  onToggle: () => void;
+}): React.ReactElement {
+  return (
+    <div className="tree-archive">
+      <div
+        className={`tree-row tree-row-archive${className ? ` ${className}` : ""}`}
+        role="button"
+        tabIndex={0}
+        aria-label={`${label}, ${sessions.length} ${sessions.length === 1 ? "session" : "sessions"}`}
+        onMouseDown={keepFocus}
+        onClick={onToggle}
+        onKeyDown={rowKeyHandler(onToggle)}
+      >
+        <span className={`tree-disclosure${isCollapsed ? " tree-disclosure-collapsed" : ""}`} />
+        <span className="tree-label">{label} ({sessions.length})</span>
+      </div>
+      {!isCollapsed && (
+        <div className="tree-children">
+          {sessions.map((session) => (
+            <SessionRow key={session.id} handlers={handlers} session={session} selectedSessionId={selectedSessionId} />
+          ))}
         </div>
       )}
     </div>
@@ -200,7 +268,7 @@ function ProjectNode({
   const live = sessions.filter((s) => s.status !== "archived");
   const archived = sessions.filter((s) => s.status === "archived");
   const archiveKey = `${project.id}:archive`;
-  const archiveCollapsed = collapsed.has(archiveKey);
+  const anyWaiting = sessions.some((s) => s.status === "waiting_user");
 
   return (
     <div className="tree-project">
@@ -208,13 +276,14 @@ function ProjectNode({
         className="tree-row tree-row-project"
         role="button"
         tabIndex={0}
-        aria-label={`${project.name} project`}
+        aria-label={`${project.name} project${anyWaiting ? ", a session is waiting for you" : ""}`}
         onMouseDown={keepFocus}
         onClick={() => toggle(project.id)}
         onKeyDown={rowKeyHandler(() => toggle(project.id))}
       >
         <span className={`tree-disclosure${isCollapsed ? " tree-disclosure-collapsed" : ""}`} />
         <span className="tree-label">{project.name}</span>
+        {anyWaiting && <BubbledWaitingHand />}
         <ActionMenu
           items={[
             { label: "Open session", onClick: () => handlers.onNewSession(parentConsole, project) },
@@ -230,27 +299,14 @@ function ProjectNode({
           ))}
           {live.length === 0 && <p className="sidebar-empty">No sessions.</p>}
           {archived.length > 0 && (
-            <div className="tree-archive">
-              <div
-                className="tree-row tree-row-archive"
-                role="button"
-                tabIndex={0}
-                aria-label={`Archive, ${archived.length} sessions`}
-                onMouseDown={keepFocus}
-                onClick={() => toggle(archiveKey)}
-                onKeyDown={rowKeyHandler(() => toggle(archiveKey))}
-              >
-                <span className={`tree-disclosure${archiveCollapsed ? " tree-disclosure-collapsed" : ""}`} />
-                <span className="tree-label">Archive ({archived.length})</span>
-              </div>
-              {!archiveCollapsed && (
-                <div className="tree-children">
-                  {archived.map((session) => (
-                    <SessionRow key={session.id} handlers={handlers} session={session} selectedSessionId={selectedSessionId} />
-                  ))}
-                </div>
-              )}
-            </div>
+            <ArchiveGroup
+              label="Archive"
+              sessions={archived}
+              handlers={handlers}
+              selectedSessionId={selectedSessionId}
+              isCollapsed={collapsed.has(archiveKey)}
+              onToggle={() => toggle(archiveKey)}
+            />
           )}
         </div>
       )}
@@ -273,7 +329,7 @@ function SessionRow({
       className={`tree-row tree-row-session${session.id === selectedSessionId ? " tree-row-selected" : ""}`}
       role="button"
       tabIndex={0}
-      aria-label={`${session.title} session, ${session.status}`}
+      aria-label={`${session.title} session, ${STATUS_LABEL[session.status]}`}
       onMouseDown={keepFocus}
       onClick={() => handlers.onSelectSession(session)}
       onKeyDown={rowKeyHandler(() => handlers.onSelectSession(session))}

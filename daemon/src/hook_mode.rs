@@ -6,13 +6,8 @@
 //! Grok, a history cell on Codex), so this exits 0 unconditionally and writes nothing to stdout or
 //! stderr. Stdout silence also matters for correctness, not just cosmetics: a `PreToolUse` hook on
 //! Grok that emits JSON can deny a tool call, and on Claude Code stdout can steer the turn.
-//!
-//! The HTTP request is hand-rolled rather than done with a client crate: it only ever goes to
-//! `127.0.0.1`, so a TLS stack and URL normalisation would be weight with no purpose, and the IDNA
-//! chain a general client pulls in raises the Rust toolchain floor past this project's.
 
-use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::io::Read;
 use std::time::Duration;
 
 /// Hard deadline for the whole round trip. Comfortably inside the hook timeouts the adapters set,
@@ -26,30 +21,6 @@ pub fn run(session: &str, port: u16) {
     if std::io::stdin().read_to_end(&mut payload).is_err() {
         return;
     }
-    let _ = post(session, port, &payload);
-}
-
-fn post(session: &str, port: u16, payload: &[u8]) -> std::io::Result<()> {
-    let authority = format!("127.0.0.1:{port}");
-    let address = authority.parse().map_err(|_| {
-        std::io::Error::new(std::io::ErrorKind::InvalidInput, "unusable daemon address")
-    })?;
-    let mut stream = TcpStream::connect_timeout(&address, TIMEOUT)?;
-    stream.set_write_timeout(Some(TIMEOUT))?;
-    stream.set_read_timeout(Some(TIMEOUT))?;
-
-    let request = format!(
-        "POST /hook/{session} HTTP/1.1\r\nHost: {authority}\r\nContent-Type: application/json\r\n\
-         Content-Length: {}\r\nConnection: close\r\n\r\n",
-        payload.len()
-    );
-    stream.write_all(request.as_bytes())?;
-    stream.write_all(payload)?;
-    stream.flush()?;
-
-    // The response is read but not inspected: the daemon never steers the agent through it, and
-    // reading it keeps the connection from being closed before the request was consumed.
-    let mut response = [0u8; 64];
-    let _ = stream.read(&mut response);
-    Ok(())
+    // The response is discarded: the daemon never steers the agent through it.
+    let _ = crate::loopback::post(port, &format!("/hook/{session}"), &payload, TIMEOUT);
 }

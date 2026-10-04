@@ -2,13 +2,14 @@ import React, { useRef, useState } from "react";
 
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ConsoleDialog } from "./components/ConsoleDialog";
-import { ErrorToasts } from "./components/ErrorToasts";
 import { ProjectDialog } from "./components/ProjectDialog";
 import { RenameSessionDialog } from "./components/RenameSessionDialog";
 import { SessionDialog } from "./components/SessionDialog";
 import { Sidebar } from "./components/Sidebar";
+import { Toasts } from "./components/Toasts";
 import { DaemonRequestError } from "./daemon-client";
 import { useAppExit } from "./lifecycle/useAppExit";
+import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
 import { isDormant, type Console, type Project, type Session } from "./protocol";
 import { useDaemon } from "./store";
 import { TerminalPane } from "./terminal/TerminalPane";
@@ -25,10 +26,11 @@ type Dialog =
   | { kind: "archive-session"; session: Session };
 
 /** The code the daemon's `error` carries for a launch asked for while one was already running or
- * starting for that session (see "Daemon to client" in `daemon/PROTOCOL.md`). The in-flight guard below already stops this
- * client from causing one, but another path to the same session — the sidebar row and its own
- * "Resume" action-menu item, for instance — can still race it; these are not failures worth
- * showing. */
+ * starting for that session, or for resuming an archived hub while a live one already exists (see
+ * "Daemon to client" in `daemon/PROTOCOL.md`). The in-flight guard below already stops this client
+ * from causing the double-click kind, but another path to the same session — the sidebar row and
+ * its own "Resume" action-menu item, for instance — can still race it; `runOnce` decides per call
+ * whether that race is worth showing. */
 const SESSION_ALREADY_RUNNING = "session_already_running";
 
 export function App({ port }: { port: number }): React.ReactElement {
@@ -40,19 +42,22 @@ export function App({ port }: { port: number }): React.ReactElement {
   const sessionList = Array.from(sessions.values());
   const selectedSession = selectedSessionId ? sessions.get(selectedSessionId) : undefined;
 
+  useWaitingNotifications(sessionList, consoles, projects, hosts !== undefined);
+
   // Every click that could resume or create a session is guarded against its own double-click: two
   // fast clicks on the Hub row otherwise create two hub sessions (only one of which the tree can
   // ever show again, since hub sessions belong to no project node), and two fast clicks on a
   // dormant session fire two `resume_session` calls.
   const inFlightRef = useRef<Set<string>>(new Set());
 
-  const runOnce = async (key: string, action: () => Promise<void>) => {
+  const runOnce = async (key: string, action: () => Promise<void>, suppressAlreadyRunning = true) => {
     if (inFlightRef.current.has(key)) return;
     inFlightRef.current.add(key);
     try {
       await action();
     } catch (err) {
-      if (!(err instanceof DaemonRequestError) || err.code !== SESSION_ALREADY_RUNNING) {
+      const isAlreadyRunning = err instanceof DaemonRequestError && err.code === SESSION_ALREADY_RUNNING;
+      if (!isAlreadyRunning || !suppressAlreadyRunning) {
         toastError((err as Error).message);
       }
     } finally {
@@ -60,8 +65,18 @@ export function App({ port }: { port: number }): React.ReactElement {
     }
   };
 
-  const resumeSession = (sessionId: string) =>
-    void runOnce(`resume:${sessionId}`, () => request({ type: "resume_session", session: sessionId }).then(() => {}));
+  const resumeSession = (sessionId: string) => {
+    // The daemon also answers `session_already_running` for resuming an archived hub while a live
+    // one already exists (it refuses a second live hub outright) — unlike the plain double-click
+    // this guard exists for, suppressing that one would make the click look like it did nothing, so
+    // a hub resume lets the error through instead.
+    const suppressAlreadyRunning = sessions.get(sessionId)?.role !== "hub";
+    void runOnce(
+      `resume:${sessionId}`,
+      () => request({ type: "resume_session", session: sessionId }).then(() => {}),
+      suppressAlreadyRunning,
+    );
+  };
 
   const openHub = (console_: Console) =>
     void runOnce(`hub:${console_.id}`, async () => {
@@ -90,7 +105,7 @@ export function App({ port }: { port: number }): React.ReactElement {
     // it is connecting forever with nothing the user can do about it.
     return (
       <div className="app-shell">
-        <ErrorToasts />
+        <Toasts />
         {connectionState === "closed" && <ConnectionBanner state={connectionState} onRetry={reconnect} />}
         <div className="message-screen">
           {connectionState === "closed"
@@ -103,7 +118,7 @@ export function App({ port }: { port: number }): React.ReactElement {
 
   return (
     <div className="app-shell">
-      <ErrorToasts />
+      <Toasts />
       {(connectionState === "reconnecting" || connectionState === "closed") && (
         <ConnectionBanner state={connectionState} onRetry={reconnect} />
       )}

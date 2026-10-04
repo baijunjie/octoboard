@@ -10,9 +10,13 @@ mod hook_mode;
 mod hooks;
 mod hostfs;
 mod instance_lock;
+mod loopback;
+mod mcp;
+mod outbox;
 mod paths;
 mod protocol;
 mod ptyio;
+mod reporting;
 mod ringbuf;
 mod server;
 mod session;
@@ -50,6 +54,35 @@ enum Command {
         #[arg(long)]
         port: u16,
     },
+    /// Serve the Octoboard MCP tools for one session over stdio. This is what the adapters
+    /// register as the session's MCP server; it is not meant to be run by hand.
+    Mcp {
+        #[arg(long)]
+        session: String,
+        #[arg(long)]
+        role: McpRole,
+        #[arg(long)]
+        port: u16,
+        #[arg(long)]
+        token: String,
+    },
+}
+
+/// The `--role` values the MCP mode accepts. A separate type from `protocol::Role` because clap
+/// has to derive a value parser for it, and the protocol types are the wire's, not the CLI's.
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum McpRole {
+    Hub,
+    Worker,
+}
+
+impl From<McpRole> for protocol::Role {
+    fn from(role: McpRole) -> Self {
+        match role {
+            McpRole::Hub => protocol::Role::Hub,
+            McpRole::Worker => protocol::Role::Worker,
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -60,6 +93,17 @@ fn main() -> Result<()> {
     if let Some(Command::Hook { session, port }) = &cli.command {
         hook_mode::run(session, *port);
         return Ok(());
+    }
+
+    // The MCP child owns its stdout for the protocol, so it installs no log subscriber either.
+    if let Some(Command::Mcp {
+        session,
+        role,
+        port,
+        token,
+    }) = cli.command
+    {
+        return mcp::stdio::run(session, role.into(), port, token);
     }
 
     // stdout carries the port handshake line the application reads, so logs always go to stderr.

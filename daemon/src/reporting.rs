@@ -1,0 +1,471 @@
+//! The channel between a console's hub and its project sessions: the brief a task is handed over as,
+//! the message writing that carries both directions, the report that comes back, and the report
+//! Octoboard synthesises when a session stops without having sent one.
+//!
+//! That is the one concern the hub's tools, the worker's `report` tool and the hook callback all
+//! share, which is why it sits apart from the control-socket handling in `coordinator`.
+//!
+//! **Reporting is never forced.** Gating the stop through the `Stop` hook was measured to work, but
+//! every gated turn shows the user an error-styled line the agent will not suppress, and the model
+//! reads the injected demand as prompt injection often enough to matter. So the `report` tool is
+//! encouraged and nothing is blocked; a session that stops without it has the turn's last assistant
+//! message read as its report instead, with the structured fields marked as Octoboard's guess. The
+//! conditions that qualify that synthesis are in `docs/mvp.md` section 5.3 and encoded in
+//! `crate::hooks`.
+
+use std::sync::Arc;
+
+use anyhow::{anyhow, bail, Result};
+
+use crate::outbox::Drain;
+use crate::protocol::{Agent, Role, Session, SessionStatus};
+use crate::state::AppState;
+use crate::{coordinator, hooks, term};
+
+/// What a session is handed as its opening prompt, rendered from the hub's `brief`.
+///
+/// A fixed template rather than something the hub composes, so what a session is handed does not
+/// vary with the hub's mood; a field the hub left out is omitted entirely rather than sent as an
+/// empty heading, which would tell the session there was something to say and then say nothing.
+pub fn render_brief(
+    goal: &str,
+    context: Option<&str>,
+    acceptance: Option<&str>,
+    constraints: Option<&str>,
+) -> String {
+    let mut prompt = format!("## Goal\n\n{}\n", goal.trim());
+    for (heading, body) in [
+        ("Context", context),
+        ("Acceptance", acceptance),
+        ("Constraints", constraints),
+    ] {
+        if let Some(body) = body.map(str::trim).filter(|body| !body.is_empty()) {
+            prompt.push_str(&format!("\n## {heading}\n\n{body}\n"));
+        }
+    }
+    prompt
+}
+
+/// What became of a message handed to [`write_message`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Delivery {
+    Written,
+    /// Accepted and queued. It goes in as soon as the session can take one, so the sender must not
+    /// send it again.
+    Queued,
+}
+
+/// What a sender is told when a drain it triggered ran into a message the agent only partly took.
+///
+/// It does not say whose message was the one that failed, because the drain writes whatever is queued
+/// and that may have been someone else's — only that something queued for this session was dropped,
+/// and that the session wants looking at before anything else is sent. "Do not resend" would be
+/// wrong half the time, and so would "resend".
+fn lost_message() -> String {
+    format!(
+        "A message queued for this session could not be written in full, so it and everything \
+         queued behind it were dropped: {}",
+        term::FRAGMENT_HAZARD
+    )
+}
+
+/// What to do when the session cannot be written to right now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WhenBlocked {
+    /// Refuse, so the sender can be told why. The right answer for the user: they are the one who
+    /// has to answer the prompt that is blocking it.
+    Refuse,
+    /// Queue it. The right answer for the hub and for a report, neither of which has anyone to tell
+    /// and neither of which may be dropped.
+    Queue,
+}
+
+/// Writes a message into a running session, or queues it until the session can take one.
+///
+/// **The gate is the session's hook-reported state, never the terminal.** No agent signals its modal
+/// state through terminal modes, and a write while a modal dialog is up has its trailing Enter
+/// confirm whatever option is highlighted — at Claude Code's trust dialog that exits the session, at
+/// Grok's approval modal it selects always-approve. Working and idle are both safe: every agent
+/// queues a message written mid-turn and consumes it when the turn ends.
+///
+/// **Blocks** on the PTY write; callers on the runtime are responsible for keeping it off a worker.
+pub fn write_message(
+    state: &Arc<AppState>,
+    id: &str,
+    text: &str,
+    when_blocked: WhenBlocked,
+) -> Result<Delivery> {
+    let session = state.session_record(id)?;
+    // Nothing to write to and nothing to wait for: a resume starts the agent at its prompt rather
+    // than replaying a queue, so queuing here would lose the message silently.
+    if session.status.is_dormant() || state.live_session(id).is_none() {
+        bail!("this session is not running");
+    }
+    let writable = matches!(session.status, SessionStatus::Working | SessionStatus::Idle);
+    if !writable && when_blocked == WhenBlocked::Refuse {
+        bail!("this session is waiting for you — answer it in the terminal first");
+    }
+
+    // Queued even when the session looks ready, so messages cannot overtake one another.
+    state.queue_message(id, text);
+    match state.flush_outbox(id, session.status) {
+        Drain::Clear => Ok(Delivery::Written),
+        Drain::Pending => Ok(Delivery::Queued),
+        Drain::Lost => bail!(lost_message()),
+    }
+}
+
+/// Releases whatever is queued for a session that has just been relaunched, where the agent will not
+/// release it itself. Called on every relaunch, so most calls find an empty queue.
+///
+/// The instruction is queued rather than written because the session's status after a relaunch is
+/// Octoboard's own doing, not something a hook reported — and the agent may be sitting on its own
+/// trust or approval dialog, where the paste's trailing Enter confirms whatever option is
+/// highlighted: at Claude Code's trust dialog that exits the session, at Grok's approval modal it
+/// selects always-approve. Those two each report a status as they start, which releases it.
+///
+/// Codex does not: its `SessionStart` does not fire until the first prompt submission, because the
+/// thread is created lazily then, so nothing it reports would release the queue before the user
+/// typed. Writing to it unprompted is safe where it would not be for the other two — a paste at a
+/// Codex modal changes nothing.
+pub fn release_after_relaunch(state: &Arc<AppState>, session: &Session) {
+    if session.agent == Agent::Codex {
+        state.spawn_flush_outbox(&session.id, SessionStatus::Idle);
+    }
+}
+
+/// A report from a project session, as the hub reads it.
+pub struct Report<'a> {
+    pub summary: &'a str,
+    pub status: ReportStatus,
+    pub open_items: &'a [String],
+    /// True when Octoboard built this report from the turn's last assistant message rather than the
+    /// session sending one, which the hub has to know: the structured fields are then a guess and
+    /// only the prose is the session's own.
+    pub synthesised: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReportStatus {
+    Done,
+    Failed,
+    NeedsDecision,
+}
+
+impl ReportStatus {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "done" => Some(Self::Done),
+            "failed" => Some(Self::Failed),
+            "needs_decision" => Some(Self::NeedsDecision),
+            _ => None,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Done => "done",
+            Self::Failed => "failed",
+            Self::NeedsDecision => "needs_decision",
+        }
+    }
+}
+
+/// Delivers one project session's report to its console's hub, and wraps the session up when the
+/// report says there is nothing left.
+///
+/// Archiving happens once the report has been *accepted* for the hub rather than once the hub has
+/// read it: a hub that is merely busy still has the report queued for it, and leaving a finished
+/// session alive until the hub gets round to it would strand it. A hub that is not running at all is
+/// a different matter — the report fails, and the session stays as it is for the user to deal with.
+pub fn deliver_report(
+    state: &Arc<AppState>,
+    worker_id: &str,
+    report: Report<'_>,
+) -> Result<String> {
+    let worker = state.session_record(worker_id)?;
+    if !worker.include_in_hub {
+        bail!(
+            "this session is not part of the hub's orchestration, so there is nobody to report to"
+        );
+    }
+    // A session that reported `done` is archived by the time a second report could arrive, and its
+    // process is on its way out. Refusing is what keeps that race from delivering the same round of
+    // work to the hub twice.
+    if worker.status.is_dormant() {
+        bail!("this session has already been wrapped up; there is nothing further to report");
+    }
+
+    let hub = hub_session(state, &worker.console_id)?.ok_or_else(|| {
+        anyhow!("this console has no hub session, so there is nobody to report to")
+    })?;
+
+    let project = match &worker.project_id {
+        Some(id) => state.store.get_project(id)?.map(|project| project.name),
+        None => None,
+    };
+    let message = render_report(&worker, project.as_deref(), &report);
+    // A lost message propagates rather than being treated as delivered: the worker must not be
+    // archived on the strength of a report the hub never got.
+    let delivery = write_message(state, &hub.id, &message, WhenBlocked::Queue)?;
+
+    let finished = report.status == ReportStatus::Done && report.open_items.is_empty();
+    if finished {
+        coordinator::archive_session(state, worker_id)?;
+    }
+
+    Ok(match (delivery, finished) {
+        (Delivery::Written, true) => "Reported to the hub. This session is now archived.".into(),
+        (Delivery::Written, false) => "Reported to the hub.".into(),
+        (Delivery::Queued, true) => {
+            "Report accepted; the hub will see it as soon as it can take a message. This session \
+             is now archived."
+                .into()
+        }
+        (Delivery::Queued, false) => {
+            "Report accepted; the hub will see it as soon as it can take a message.".into()
+        }
+    })
+}
+
+/// Reports for the hub on a session that stopped without reporting for itself. The caller has
+/// already closed the turn and established that a report is owed.
+///
+/// **Blocks** on writing into the hub's session.
+pub fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::TurnEnd) {
+    match state.store.get_session(session_id) {
+        Ok(Some(session)) if session.include_in_hub => {}
+        // A session outside the orchestration has nobody to report to, and a record that is gone is
+        // nothing to report about.
+        _ => return,
+    }
+
+    let summary = turn.last_assistant_message.unwrap_or_else(|| {
+        "This session's turn ended and it said nothing. Check it with `get_session`.".to_string()
+    });
+    let report = Report {
+        summary: &summary,
+        // A turn that ended in an error failed; a turn that merely ended without a report is the
+        // hub's to judge, which is what `needs_decision` asks it to do.
+        status: if turn.failed {
+            ReportStatus::Failed
+        } else {
+            ReportStatus::NeedsDecision
+        },
+        open_items: &[],
+        synthesised: true,
+    };
+    if let Err(err) = deliver_report(state, session_id, report) {
+        tracing::debug!(session = %session_id, %err, "delivering a synthesised report failed");
+    }
+}
+
+/// The console's hub session, preferring one with a process behind it. A console has at most one
+/// hub that is not archived, but an older archived one may still be on record.
+fn hub_session(state: &Arc<AppState>, console_id: &str) -> Result<Option<Session>> {
+    let mut hubs: Vec<Session> = state
+        .store
+        .list_sessions()?
+        .into_iter()
+        .filter(|session| session.console_id == console_id && session.role == Role::Hub)
+        .collect();
+    hubs.sort_by_key(|session| (session.status.is_dormant(), -session.started_at));
+    Ok(hubs.into_iter().next())
+}
+
+/// The report as it is written into the hub's session. Plain prose with the structured fields
+/// spelled out: the hub reads this as a user message, so it has to be readable rather than a
+/// payload, and the session id has to be in it or the hub cannot follow up.
+fn render_report(worker: &Session, project: Option<&str>, report: &Report<'_>) -> String {
+    let origin = match project.filter(|project| *project != worker.title) {
+        Some(project) => format!("{} ({})", worker.title, project),
+        None => worker.title.clone(),
+    };
+    let mut message = format!(
+        "Report from session {} — {origin}\nStatus: {}",
+        worker.id,
+        report.status.label()
+    );
+    if report.synthesised {
+        message.push_str(
+            "\nThis session stopped without reporting, so the text below is its last message and \
+             the status is Octoboard's guess, not its own.",
+        );
+    }
+    if !report.open_items.is_empty() {
+        message.push_str("\nOpen items:");
+        for item in report.open_items {
+            message.push_str(&format!("\n- {item}"));
+        }
+    }
+    message.push_str("\n\n");
+    message.push_str(report.summary.trim());
+    message
+}
+
+/// The session title a dispatched brief earns, taken from its goal. Several sessions dispatched
+/// into one project are otherwise all named for the project and indistinguishable in the menu.
+pub fn title_from_goal(goal: &str) -> String {
+    const MAX: usize = 48;
+    let first_line = goal
+        .lines()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or("")
+        .trim();
+    if first_line.chars().count() <= MAX {
+        return first_line.to_string();
+    }
+    // Cut on a character boundary, and on a word where there is one close enough to the limit.
+    let truncated: String = first_line.chars().take(MAX).collect();
+    match truncated.rfind(' ') {
+        Some(at) if at >= MAX / 2 => format!("{}…", &truncated[..at]),
+        _ => format!("{truncated}…"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::{Origin, SessionStatus};
+
+    fn worker(title: &str) -> Session {
+        Session {
+            id: "session-7".to_string(),
+            agent: Agent::Claude,
+            agent_session_id: None,
+            console_id: "console-1".to_string(),
+            project_id: None,
+            host_id: "local".to_string(),
+            role: Role::Worker,
+            origin: Origin::Hub,
+            title: title.to_string(),
+            status: SessionStatus::Idle,
+            has_conversation: true,
+            include_in_hub: true,
+            started_at: 0,
+            ended_at: None,
+        }
+    }
+
+    /// A field the hub left out is omitted entirely: an empty heading tells the session there was
+    /// something to say and then says nothing.
+    #[test]
+    fn a_brief_omits_the_sections_it_was_given_nothing_for() {
+        let full = render_brief(
+            "ship it",
+            Some("background"),
+            Some("tests pass"),
+            Some("do not push"),
+        );
+        for heading in ["## Goal", "## Context", "## Acceptance", "## Constraints"] {
+            assert!(full.contains(heading), "{heading} missing from {full}");
+        }
+
+        let bare = render_brief("ship it", None, Some("   "), None);
+        assert!(bare.contains("## Goal"));
+        assert!(!bare.contains("## Context"));
+        // Whitespace is nothing to say either.
+        assert!(!bare.contains("## Acceptance"));
+    }
+
+    /// The hub follows a session up by id, so the id has to be in the message it reads.
+    #[test]
+    fn a_report_names_the_session_its_status_and_what_is_open() {
+        let rendered = render_report(
+            &worker("api"),
+            Some("backend"),
+            &Report {
+                summary: "done the easy half",
+                status: ReportStatus::NeedsDecision,
+                open_items: &["pick a cache".to_string()],
+                synthesised: false,
+            },
+        );
+        assert!(rendered.contains("session-7"));
+        assert!(rendered.contains("api (backend)"));
+        assert!(rendered.contains("needs_decision"));
+        assert!(rendered.contains("- pick a cache"));
+        assert!(rendered.contains("done the easy half"));
+    }
+
+    /// A manually opened session is named for its project, so naming both would read `api (api)`.
+    #[test]
+    fn a_report_does_not_name_the_project_twice() {
+        let rendered = render_report(
+            &worker("api"),
+            Some("api"),
+            &Report {
+                summary: "done",
+                status: ReportStatus::Done,
+                open_items: &[],
+                synthesised: false,
+            },
+        );
+        assert!(rendered.contains("— api\n"));
+        assert!(!rendered.contains("api (api)"));
+    }
+
+    /// The hub has to be able to tell the session's own report from Octoboard's guess, or it will
+    /// treat a status nobody chose as the session's word.
+    #[test]
+    fn a_synthesised_report_says_so() {
+        let synthesised = render_report(
+            &worker("api"),
+            None,
+            &Report {
+                summary: "last thing it said",
+                status: ReportStatus::NeedsDecision,
+                open_items: &[],
+                synthesised: true,
+            },
+        );
+        assert!(synthesised.contains("stopped without reporting"));
+
+        let own = render_report(
+            &worker("api"),
+            None,
+            &Report {
+                summary: "last thing it said",
+                status: ReportStatus::NeedsDecision,
+                open_items: &[],
+                synthesised: false,
+            },
+        );
+        assert!(!own.contains("stopped without reporting"));
+    }
+
+    #[test]
+    fn only_the_three_report_statuses_parse() {
+        assert_eq!(ReportStatus::parse("done"), Some(ReportStatus::Done));
+        assert_eq!(ReportStatus::parse("failed"), Some(ReportStatus::Failed));
+        assert_eq!(
+            ReportStatus::parse("needs_decision"),
+            Some(ReportStatus::NeedsDecision)
+        );
+        assert_eq!(ReportStatus::parse("Done"), None);
+        assert_eq!(ReportStatus::parse("finished"), None);
+    }
+
+    /// Several sessions in one project have to be told apart in the menu, and the goal is the only
+    /// thing that distinguishes them.
+    #[test]
+    fn a_title_from_a_goal_stays_short_and_readable() {
+        assert_eq!(
+            title_from_goal("Fix the login retry"),
+            "Fix the login retry"
+        );
+        assert_eq!(title_from_goal("\n\n  Fix login  \nmore"), "Fix login");
+
+        let long = title_from_goal(
+            "Replace the hand-rolled retry logic in the authentication client with something sane",
+        );
+        assert!(long.ends_with('…'));
+        assert!(long.chars().count() <= 49);
+        // Cut on a word, not mid-word.
+        assert!(!long.contains("som…"));
+
+        // A single long word still has to be cut, and on a character boundary.
+        let unbroken = title_from_goal(&"日".repeat(80));
+        assert_eq!(unbroken.chars().count(), 49);
+    }
+}

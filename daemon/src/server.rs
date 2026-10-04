@@ -12,8 +12,9 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{broadcast, mpsc};
 
 use crate::hooks;
-use crate::protocol::{Event, Request, TermControl};
-use crate::state::AppState;
+use crate::protocol::{Event, Request, SessionStatus, TermControl};
+use crate::reporting;
+use crate::state::{AppState, TurnClose};
 
 /// Events queued for one control client before its writer is considered the bottleneck. Small:
 /// these are state records, not terminal output, and a client this far behind is better served by
@@ -25,6 +26,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/ws/control", get(control_ws))
         .route("/ws/term/:session", get(term_ws))
         .route("/hook/:session", post(hook_callback))
+        .route("/mcp/:token", post(mcp_call))
         .with_state(state)
 }
 
@@ -267,11 +269,20 @@ async fn hook_callback(
                 if let Err(err) = state.mark_conversation_started(&session_id) {
                     tracing::debug!(session = %session_id, %err, "recording the session's first turn failed");
                 }
+                state.turn_started(&session_id);
             }
             if let Some(agent) = agent {
-                if let Some(status) = hooks::status_from_event(agent, &event, &payload) {
-                    if let Err(err) = state.apply_hook_status(&session_id, status) {
-                        tracing::debug!(session = %session_id, %event, %err, "applying the hook status failed");
+                let believable = read_turn_boundary(&state, &session_id, agent, &event, &payload);
+                if believable {
+                    if let Some(status) = hooks::status_from_event(agent, &event, &payload) {
+                        let status = suppress_unanswerable_hand(&state, &session_id, status);
+                        if let Err(err) = state.apply_hook_status(&session_id, status) {
+                            tracing::debug!(session = %session_id, %event, %err, "applying the hook status failed");
+                        }
+                        // Releasing a message queued while the session could not take one writes
+                        // into its PTY, which blocks; it must not sit on this response, where the
+                        // adapters' few-second hook timeout would surface as agent-visible noise.
+                        state.spawn_flush_outbox(&session_id, status);
                     }
                 }
             } else {
@@ -282,4 +293,131 @@ async fn hook_callback(
     }
 
     axum::http::StatusCode::OK
+}
+
+/// Acts on what this event says about the session's current turn, and says whether anything else it
+/// claims about the session may be believed.
+///
+/// A turn boundary is read before the status is: Grok's one id-less turn-end signal also fires after
+/// a turn that already ended, and taking its "idle" at face value would put a session that is
+/// working back to idle.
+fn read_turn_boundary(
+    state: &Arc<AppState>,
+    session_id: &str,
+    agent: crate::protocol::Agent,
+    event: &str,
+    payload: &serde_json::Value,
+) -> bool {
+    if hooks::turn_cancelled(agent, event) {
+        // No report is owed — the user did it and knows — but the turn still has to be closed, or a
+        // later clock-attributed end would find it open and invent one.
+        state.abandon_turn(session_id);
+        return true;
+    }
+    match hooks::turn_end(agent, event, payload) {
+        // A session with its hand up has not finished its turn — it is waiting for a person. Grok's
+        // clock-attributed end would otherwise lower the hand and report "it said nothing" for any
+        // prompt left unanswered longer than the backstop delay.
+        Some(turn)
+            if turn.backstop
+                && state
+                    .store
+                    .get_session(session_id)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|session| session.status == SessionStatus::WaitingUser) =>
+        {
+            false
+        }
+        Some(turn) => match state.close_turn(session_id, turn.backstop) {
+            // Talking about a turn that is already over, so nothing it says about the session holds.
+            TurnClose::NotThisTurn => false,
+            TurnClose::NoTurn | TurnClose::Reported => true,
+            TurnClose::OwesReport => {
+                let state = state.clone();
+                let session_id = session_id.to_string();
+                // Delivery writes into the hub's PTY, which blocks, so it goes off this response.
+                tokio::task::spawn_blocking(move || {
+                    reporting::synthesise_report(&state, &session_id, turn)
+                });
+                true
+            }
+        },
+        None => {
+            // Anything that is not a turn boundary is the session still working on its turn, which
+            // is what keeps a backstop from being attributed to it.
+            state.touch_turn(session_id);
+            true
+        }
+    }
+}
+
+/// Turns a raised hand nobody can answer back into plain work.
+///
+/// With Codex's `approvals_reviewer` set to auto review, the permission hook fires, Codex resolves
+/// the request itself, no modal is ever shown and the tool proceeds. Raising a hand there would
+/// ask the user to answer something they never see, and nothing would ever clear it.
+fn suppress_unanswerable_hand(
+    state: &Arc<AppState>,
+    session_id: &str,
+    status: crate::protocol::SessionStatus,
+) -> crate::protocol::SessionStatus {
+    use crate::protocol::SessionStatus;
+    if status != SessionStatus::WaitingUser {
+        return status;
+    }
+    match state.live_session(session_id) {
+        Some(live) if live.resolves_approvals_itself => SessionStatus::Working,
+        _ => status,
+    }
+}
+
+// -- /mcp/:token -------------------------------------------------------------
+
+/// One MCP tool call, forwarded here by the session's own MCP server. The token is what says which
+/// session is calling: the child never names its own session, so one that rewrote its arguments
+/// still cannot act on another.
+async fn mcp_call(
+    Path(token): Path<String>,
+    State(state): State<Arc<AppState>>,
+    body: Bytes,
+) -> impl IntoResponse {
+    let Some(session_id) = state.session_for_mcp_token(&token) else {
+        // No token, no session — and no detail either: an unrecognised token is either a stale
+        // child or something that has no business here.
+        return axum::Json(serde_json::json!({
+            "ok": false,
+            "error": "this session's Octoboard connection is no longer valid",
+        }));
+    };
+
+    let request: McpCall = match serde_json::from_slice(&body) {
+        Ok(request) => request,
+        Err(err) => {
+            return axum::Json(serde_json::json!({
+                "ok": false,
+                "error": format!("unreadable tool call: {err}"),
+            }))
+        }
+    };
+
+    let arguments = match request.arguments {
+        serde_json::Value::Object(arguments) => arguments,
+        _ => serde_json::Map::new(),
+    };
+    axum::Json(
+        match crate::mcp::exec::call(&state, &session_id, &request.tool, &arguments).await {
+            Ok(result) => serde_json::json!({ "ok": true, "result": result }),
+            // The whole context chain, because this text is the only account the model gets of
+            // why its call did not work.
+            Err(err) => serde_json::json!({ "ok": false, "error": format!("{err:#}") }),
+        },
+    )
+}
+
+#[derive(serde::Deserialize)]
+struct McpCall {
+    tool: String,
+    #[serde(default)]
+    arguments: serde_json::Value,
 }

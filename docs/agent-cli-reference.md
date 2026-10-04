@@ -53,6 +53,11 @@ field blocks the turn for its full duration; the implicit default is over 30 s.
 Precedence among permission rules is by rule *kind* rather than by source — `deny` > `ask` > `allow` — so an injected
 `allow` can never re-open something the project denies.
 
+**`--mcp-config` takes a list of values, not one.** Every non-flag argument after it is read as a
+further config path, resolved against the cwd: `claude --mcp-config '<json>' mcp list` fails with
+`MCP config file not found: <cwd>/mcp`. Anything positional — the task prompt in particular — has
+to come before it rather than after.
+
 **An appended system prompt is recorded once per conversation** and replayed verbatim on every resume, because
 `--system-prompt-snapshot` defaults to `on`; different text passed on a later launch is silently ignored. It must still
 be passed on every launch, because after a compaction the snapshot is re-rendered from whatever *that* launch passed.
@@ -135,6 +140,10 @@ byte-identical handlers are deduplicated across them.
 
 **Injected MCP tool names** differ in shape, which matters wherever a role description has to name a tool: a server
 registered under the key `k` exposes its tool `t` as `mcp__k__t` on Claude Code and Codex, and as `k__t` on Grok.
+
+**All three connect their MCP servers when the process starts**, before any turn — a `command`-type server's child is
+already running by the time the TUI is drawn. So whether an injected server was accepted is observable without a prompt
+ever being submitted.
 
 **Subagent events**, none of which Octoboard registers, carry join traps that make them unusable as if they were the
 session's own:

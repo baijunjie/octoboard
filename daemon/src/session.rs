@@ -66,32 +66,42 @@ pub struct LiveSession {
     /// Per-session scratch directory (Grok's `GROK_HOME` symlink farm), removed when the session's
     /// process is gone.
     scratch_dir: Mutex<Option<std::path::PathBuf>>,
+    /// The agent resolves approval requests itself for this session, so its permission hook fires
+    /// with no dialog ever shown. A raised hand here would ask the user to answer something they
+    /// never see.
+    pub resolves_approvals_itself: bool,
+}
+
+/// Everything one running session is built from. A struct rather than a parameter list: these are
+/// all values the launch produced, and half of them are indistinguishable by type.
+pub struct NewSession {
+    pub id: String,
+    pub agent: Agent,
+    pub pid: u32,
+    pub fd: RawFd,
+    pub master: Box<dyn MasterPty + Send>,
+    pub child: Box<dyn Child + Send + Sync>,
+    pub scratch_dir: Option<std::path::PathBuf>,
+    pub resolves_approvals_itself: bool,
 }
 
 impl LiveSession {
-    pub fn new(
-        id: String,
-        agent: Agent,
-        pid: u32,
-        fd: RawFd,
-        master: Box<dyn MasterPty + Send>,
-        child: Box<dyn Child + Send + Sync>,
-        scratch_dir: Option<std::path::PathBuf>,
-    ) -> Self {
+    pub fn new(session: NewSession) -> Self {
         Self {
-            id,
-            agent,
-            pid,
-            fd,
-            master: Mutex::new(master),
-            child: Mutex::new(child),
+            id: session.id,
+            agent: session.agent,
+            pid: session.pid,
+            fd: session.fd,
+            master: Mutex::new(session.master),
+            child: Mutex::new(session.child),
             reaped: AtomicBool::new(false),
             fan: Mutex::new(Fan {
                 ring: RingBuffer::new(RING_CAPACITY),
                 subscribers: Vec::new(),
                 next_id: 0,
             }),
-            scratch_dir: Mutex::new(scratch_dir),
+            scratch_dir: Mutex::new(session.scratch_dir),
+            resolves_approvals_itself: session.resolves_approvals_itself,
         }
     }
 
@@ -109,6 +119,17 @@ impl LiveSession {
         let snapshot = fan.ring.snapshot();
         fan.subscribers.push(Subscriber { id, tx });
         (snapshot, rx)
+    }
+
+    /// The tail of what this session has printed, at most `max_bytes` of it. Taken from the same
+    /// ring buffer a terminal client replays, so it is exactly what the user would see — raw PTY
+    /// bytes, escape sequences included, which the caller is responsible for making readable.
+    pub fn recent_output(&self, max_bytes: usize) -> Vec<u8> {
+        self.fan
+            .lock()
+            .expect("fan mutex poisoned")
+            .ring
+            .tail(max_bytes)
     }
 
     /// Called from the PTY reader thread for every chunk read. Blocks while a slow client catches
@@ -139,7 +160,9 @@ impl LiveSession {
         }
     }
 
-    pub fn write_input(&self, data: &[u8]) -> io::Result<()> {
+    /// Writes raw input. The error says how many bytes went in, because a caller deciding whether
+    /// to retry has to know: whatever was accepted is already in the child's input buffer.
+    pub fn write_input(&self, data: &[u8]) -> Result<(), ptyio::PartialWrite> {
         ptyio::write_all(self.fd, data)
     }
 

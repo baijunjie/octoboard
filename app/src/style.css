@@ -187,6 +187,12 @@ body {
   font-size: 12px;
 }
 
+/* The console's own Archive group (archived hubs) sits directly under the Hub row rather than
+   inside a project, so it takes the Hub row's own indent instead of a session's. */
+.tree-row-archive-console {
+  padding-left: 20px;
+}
+
 .tree-children {
   display: flex;
   flex-direction: column;
@@ -247,6 +253,17 @@ body {
 }
 
 .status-icon-waiting-user {
+  color: var(--waiting-user);
+}
+
+/* The bubbled marker a project/console row shows when a session beneath it is waiting — smaller
+ * than the row's own `.status-icon` so it reads as secondary, not as that row's own status. */
+.status-icon-bubbled-hand {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  fill: currentColor;
+  stroke: currentColor;
   color: var(--waiting-user);
 }
 
@@ -527,6 +544,22 @@ body {
   flex: 1;
 }
 
+.field-checkbox {
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.field-checkbox-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.field-help {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
 .error-text {
   color: var(--danger);
   font-size: 12px;
@@ -596,9 +629,9 @@ body {
   color: var(--text-dim);
 }
 
-/* --- error toasts -------------------------------------------------------------------------- */
+/* --- toasts ------------------------------------------------------------------------------- */
 
-.error-toasts {
+.toasts {
   position: fixed;
   top: 12px;
   right: 12px;
@@ -609,7 +642,7 @@ body {
   max-width: 360px;
 }
 
-.error-toast {
+.toast {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -620,13 +653,17 @@ body {
   font-size: 13px;
 }
 
-.error-toast button {
+.toast button {
   background: transparent;
   border: none;
   color: white;
   cursor: pointer;
   font-size: 15px;
   line-height: 1;
+}
+
+.toast-notice {
+  background: var(--accent);
 }
 
 button {

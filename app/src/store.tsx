@@ -3,9 +3,20 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { DaemonClient, type ConnectionState } from "./daemon-client";
 import type { Console, Event, Host, Project, RequestBody, Session } from "./protocol";
 
-export interface DaemonError {
+/**
+ * One entry in the dismissible toast stack: a daemon `error` or `session_notice`, or a message with
+ * nowhere inline to show it (see `toastError` below). `kind` is the only thing that tells an error
+ * from a notice apart — they are otherwise the same shape and share one stack, which is what keeps
+ * them in arrival order instead of a notice permanently parking itself ahead of (or behind) every
+ * error around it.
+ */
+export interface Toast {
   id: string;
+  kind: "error" | "notice";
   message: string;
+  /** The session a `notice` is about, so it can be rendered alongside the message — absent for an
+   * `error`, which is never about one particular session. */
+  session?: string;
 }
 
 interface State {
@@ -15,7 +26,7 @@ interface State {
   consoles: Map<string, Console>;
   projects: Map<string, Project>;
   sessions: Map<string, Session>;
-  errors: DaemonError[];
+  toasts: Toast[];
 }
 
 type Action =
@@ -24,14 +35,14 @@ type Action =
   /** A message with nowhere inline to show it (no open dialog). Distinct from `"event"` so it
    * never counts as proof the control socket is up — see the "event" case below. */
   | { kind: "toast"; message: string }
-  | { kind: "dismiss_error"; id: string };
+  | { kind: "dismiss_toast"; id: string };
 
 const initialState: State = {
   connectionState: "connecting",
   consoles: new Map(),
   projects: new Map(),
   sessions: new Map(),
-  errors: [],
+  toasts: [],
 };
 
 function reducer(state: State, action: Action): State {
@@ -39,9 +50,9 @@ function reducer(state: State, action: Action): State {
     case "connection":
       return { ...state, connectionState: action.state };
     case "toast":
-      return { ...state, errors: [...state.errors, { id: crypto.randomUUID(), message: action.message }] };
-    case "dismiss_error":
-      return { ...state, errors: state.errors.filter((e) => e.id !== action.id) };
+      return { ...state, toasts: [...state.toasts, { id: crypto.randomUUID(), kind: "error", message: action.message }] };
+    case "dismiss_toast":
+      return { ...state, toasts: state.toasts.filter((t) => t.id !== action.id) };
     case "event": {
       const event = action.event;
       switch (event.type) {
@@ -98,12 +109,22 @@ function reducer(state: State, action: Action): State {
           sessions.set(event.session.id, event.session);
           return { ...state, sessions };
         }
+        case "session_notice": {
+          const notice: Toast = {
+            id: crypto.randomUUID(),
+            kind: "notice",
+            session: event.session,
+            message: event.message,
+          };
+          return { ...state, toasts: [...state.toasts, notice] };
+        }
         case "error": {
           // A request's own `error` reply carries its request id and is delivered to its caller as
           // a rejected promise instead (handled where the caller awaits it) — only a genuine
           // daemon broadcast (no id) lands here.
           if (event.id) return state;
-          return { ...state, errors: [...state.errors, { id: crypto.randomUUID(), message: event.message }] };
+          const toast: Toast = { id: crypto.randomUUID(), kind: "error", message: event.message };
+          return { ...state, toasts: [...state.toasts, toast] };
         }
         default:
           return state;
@@ -121,7 +142,7 @@ interface DaemonContextValue extends State {
    * error (no open dialog) calls `toastError` itself. */
   request: (body: RequestBody) => Promise<Event>;
   toastError: (message: string) => void;
-  dismissError: (id: string) => void;
+  dismissToast: (id: string) => void;
   /** Retries the control connection right away after the automatic reconnect budget was spent. */
   reconnect: () => void;
 }
@@ -153,13 +174,13 @@ export function DaemonProvider({ url, children }: { url: string; children: React
 
   const toastError = useCallback((message: string) => dispatch({ kind: "toast", message }), []);
 
-  const dismissError = useCallback((id: string) => dispatch({ kind: "dismiss_error", id }), []);
+  const dismissToast = useCallback((id: string) => dispatch({ kind: "dismiss_toast", id }), []);
 
   const reconnect = useCallback(() => clientRef.current?.reconnect(), []);
 
   const value = useMemo<DaemonContextValue>(
-    () => ({ ...state, request, toastError, dismissError, reconnect }),
-    [state, request, toastError, dismissError, reconnect],
+    () => ({ ...state, request, toastError, dismissToast, reconnect }),
+    [state, request, toastError, dismissToast, reconnect],
   );
 
   return <DaemonContext.Provider value={value}>{children}</DaemonContext.Provider>;

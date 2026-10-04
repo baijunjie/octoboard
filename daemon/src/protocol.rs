@@ -105,6 +105,10 @@ pub struct Session {
     /// found", and a session the user opened and never typed into is the common case of that. A
     /// resume therefore starts a fresh conversation rather than failing.
     pub has_conversation: bool,
+    /// Whether this session's reports go to its console's hub. Always true for a session the hub
+    /// started; a session the user opened by hand is outside the orchestration unless they asked
+    /// for it to be included.
+    pub include_in_hub: bool,
     pub started_at: i64,
     pub ended_at: Option<i64>,
 }
@@ -181,6 +185,10 @@ pub enum RequestBody {
         agent: Option<Agent>,
         task: Option<String>,
         title: Option<String>,
+        /// Whether the session reports to the hub. Absent is false: a session the user opens by
+        /// hand stays outside the orchestration unless they check "include in hub".
+        #[serde(default)]
+        include_in_hub: bool,
     },
     ResumeSession {
         session: String,
@@ -222,6 +230,13 @@ pub enum Event {
     },
     SessionUpserted {
         session: Session,
+    },
+    /// Something about a session the user has to be told, which no status field carries: an
+    /// injected capability that will not apply, a setting of theirs Octoboard had to work around.
+    /// Broadcast once, when it is found; nothing stores it.
+    SessionNotice {
+        session: String,
+        message: String,
     },
     /// The reply to `open_session`: the session that was started. The same record is broadcast as
     /// `session_upserted` as well, but a broadcast carries no request id, so this is the only way

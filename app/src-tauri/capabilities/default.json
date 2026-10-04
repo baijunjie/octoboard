@@ -1,7 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "enables the default permissions plus the exit-flow commands",
+  "description": "enables the default permissions plus the exit-flow commands, the Dock badge and system notifications",
   "windows": ["main"],
-  "permissions": ["core:default", "allow-exit-lifecycle"]
+  "permissions": [
+    "core:default",
+    "allow-exit-lifecycle",
+    "core:window:allow-set-badge-count",
+    "notification:default"
+  ]
 }
