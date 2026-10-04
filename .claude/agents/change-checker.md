@@ -1,6 +1,6 @@
 ---
 name: change-checker
-description: Check the changes just made when wrapping up — check for missing functionality and logic errors against the requirement, check conventions, duplication, redundancy, single responsibility and excessive complexity, and propose a restructuring when the organization or naming is a poor fit. Comments only, no file edits. Dispatch it when wrapping up development; do not let whoever wrote the code review it.
+description: Dispatch it when wrapping up development to review this round's changes — needs a clean perspective that wasn't part of writing it, to check against the requirement and the project's conventions for defects, redundancy, and structure that should be reorganized; the person who wrote it shouldn't review their own work. Also dispatch it when the user says "review this round of changes" or "check the changes I just made".
 model: opus
 effort: high
 ---
@@ -17,7 +17,7 @@ You were dispatched to check the change that was just completed, not to change i
 
 ## Checklist
 
-Every item that comes out "yes" goes into the report: where the problem is, why it is a problem, how to fix it.
+Every item that comes out "yes" goes into the report.
 
 **Basic code quality**
 
@@ -44,9 +44,7 @@ problems found in them go into the report all the same.
 
 Files must stay readable after a change. When the organization is already a poor fit, or a file's name no longer
 matches what is substantially in it, **propose a restructuring in the report instead of suggesting more be piled on
-top of what is there**.
-
-Criteria for restructuring:
+top of what is there**. Criteria:
 
 - One file already holds several independent things, and adding more to it will make it harder to read
 - A file name, directory name, or export name no longer says what is actually being done inside
@@ -60,3 +58,4 @@ The plan must state: why the current organization is a poor fit, what to split i
 - Do not hand the whole task off to another subagent.
 - The report states: which files were checked, which checklist items failed, and for each one the location of the
   problem / the reasoning / the suggested fix. Say so explicitly when everything passes.
+- When unsure whether something counts as a problem, write it into the report anyway and note the uncertainty.

@@ -1,146 +1,50 @@
 ---
 name: agent-plan-exec
-description: Carry out development from a development plan doc — when no doc is named, pick the milestone that is currently the best one to start on, implement in number order and tick the checkboxes as you go; once a milestone is done, settle the debt first (finish what can be finished now, hand off what cannot to a later milestone or the user), then consolidate what should be kept into the product docs and delete the milestone doc, leaving nothing behind. Use when the user says "follow the plan", "continue with this plan", "start the next milestone".
+description: Carry milestones forward from a development plan doc — from starting work, through a mid-task handoff, to wrap-up closure; call to mind when the project has a development plan (default `docs/plans/`) and a milestone in it needs starting or continuing. Use when the user says "follow the plan", "continue with this plan", "start the next milestone", "this milestone is done, wrap it up".
 ---
 
 # Carry out development from a development plan doc
 
-"Report back" means stop, write out what has to be decided (and the options), what information is missing, or what needs the user's help to finish, report it together with what you have already established, and let the side receiving the report (the user, or the dispatcher passing it on to the user) decide before you continue; do not decide on your own. "Notify" means tell the user once it is done, without waiting for a reply.
+"Report back" means: stop, write out what needs deciding (what the options are), what information is missing, or what needs the user's help, together with what has already been found out, and let the party receiving the report (the user, or the dispatcher passing it on to the user) decide before continuing.
 
-**By default, one session handles one milestone**: once it is done and wrapped up, stop — do not go on to the next one; when the user explicitly asks for several in a row, follow that, but do not start the next one until the previous one is wrapped up. Terms used below:
+What follows only sets the principles and the boundaries that must not be crossed; judge the rest of the details yourself — **when unsure, report back**.
 
-- **Started**: the milestone has at least one checkbox already ticked, or carries an "Interim handoff" section; otherwise it is "not started"
-- **Wrapped up**: all three steps under "Wrapping up a milestone" (settle the debt, consolidate, delete) are done; "final confirmation milestone" names the one doc that collects items needing the user's sign-off (see "Adjusting milestones")
-- **"Goal / Completion criteria" block**: the quoted passage at the top of a milestone doc stating its goal and completion criteria
-- **Hand off**: write what cannot be done into somewhere else, for that place to pick up
+## Structure of the plan doc
 
-## Choosing a milestone
+- The development plan doc directory defaults to `docs/plans/`; if the project already has its own convention, follow the project's. If the project has its own documentation conventions, read them first — any extra rules there take precedence
+- One directory per topic, `YYYYMMDD-{short-description}/`. `README.md` is the overview: problem description, plan outline, key design decisions; when split into multiple milestones, it also has a milestone list
+- A milestone doc is named `[number]-[short-description].md`, the number being the development order (`02` < `02a` < `03`). A topic with only `README.md` has just one milestone, its content folded into that one doc; when a new milestone is added, first split the milestone content out into `01-…`, leaving `README.md` with just the overview plus the list
+- A milestone's **scope** is whatever is covered by its opening "Goal / Completion criteria" block, its checkboxes, and its "Handoff" section
+- A ticked checkbox means implemented and verified; tick each item as it is done
+- "Handoff" section: whatever an earlier milestone handed over to this one (a transitional layer, an interface to pick up, a convention still to be unified, etc.) is this milestone's task. An item marked "Blocked: reason" is a **blocker**: the whole milestone does not start until the condition is met
+- "Mid-task handoff" section: the context left behind when the previous attempt did not finish. Whoever picks it up reads it first; fold whatever is still useful after resuming into the main body, and delete the rest
+- Wrapping up means three steps — settle the debt, consolidate, delete — and once done the milestone is **closed**
 
-First check whether the project has its own documentation conventions (see "How to learn the project context") and read them first if it does; its convention for the plan directory then takes precedence.
+## Principles
 
-The development plan doc directory defaults to `docs/plans/`; if the project already has its own convention, follow the project.
+1. **One milestone at a time.** Do the one the user named; if none was named, pick the one currently best to do yourself — do not judge priority by the directory name's date — and report back if you cannot pick one. If the user asks to do several in a row, do not start the next until the previous one is closed; if it cannot be closed, stop and report back.
 
-If the user named which doc to work on, work on that one; if they only named a topic, take the first milestone in that topic not yet wrapped up. If not named, pick the milestone in the development plan doc directory that is currently the best one to start on yourself. Directory missing or empty: just say there is no development plan to work on.
+2. **Closing means leaving nothing behind.** When wrapping up, verify against the completion criteria first, then give every remaining item somewhere to go:
 
-Selection criteria:
+   | What's left | Where it goes |
+   |---|---|
+   | Within this milestone's scope, not yet done | Finish it now; if it cannot be finished, do not close — go to a mid-task handoff instead |
+   | Belongs to a later milestone in this topic (including removing a transitional layer) | Write it into that milestone's "Handoff" section; create or insert one if there isn't a suitable one |
+   | Implementation is complete, only verification is missing, and it cannot be verified now (this counts even within scope — handing it over this way is not scope-shrinking) | If a later milestone depends on its result, write it as a blocker into the first milestone that depends on it; if nothing depends on it, fold it into the final-confirmation milestone (create one, placed last, if there isn't one) |
 
-- Prefer carrying on with a topic already started — one with a milestone partly ticked (including one carrying an "Interim handoff" section), or whose preceding milestones are wrapped up
-- Within a topic, take the first milestone not yet wrapped up in number order (`02` < `02a` < `03`); a milestone whose predecessors are not wrapped up cannot be skipped over
-- When several topics could be started, take the one with the fewest dependencies; dependencies between topics are stated in each topic's `README.md` overview — when that is not stated, or there is no clear choice among the candidates (comparable priority, dependent on each other), report back, list the candidates and let the user sign off, do not force a pick
+3. **The plan directory holds only what is not yet done.** When closing, consolidate into the project docs (product docs, project map, etc. — if the project has documentation conventions, follow its division of labor, e.g. dispatching the corresponding writer subagent) whatever cannot be recovered by reading the code but a future reader still needs to know, then delete the milestone doc. Once every milestone in a topic is closed, consolidate whatever in the overview still has long-term value too, then delete the whole topic directory.
 
-Once chosen, say which milestone you are working on first, then check it against the list below before you start. Whether you picked it yourself or the user named it, do not start under any of these conditions:
+4. **When a milestone has been started but is not closed and control must be handed back, leave a mid-task handoff first.** This covers both ending the current session and an answer that will not arrive within it; when an answer can be waited for on the spot, or work has not yet started, just report back instead. The mid-task handoff states clearly how far it got, where it is stuck, what condition is needed to continue, what has already been found out and the design trade-offs made, and what is unverified — enough for the next person to pick it up and continue; whatever in the completed part cannot be recovered by reading the code still goes into the project docs, and items already ticked in the milestone doc stay ticked.
 
-- The preceding milestone is not wrapped up (when the user named a later one)
-- It is the final confirmation milestone (`NN-final-confirmation.md`) and the user is not present
-- Its "Handoff" section has an item tagged "needs user help, do not start until this is done" and the user has not yet helped with it
-- It carries an "Interim handoff" section and the condition it was stuck on last time has not been lifted
+5. **Changing the goal, the completion criteria, or a key design decision gets reported back, whether it is the plan or the code that needs changing.** Adding a missed item to achieve the existing goal, correcting a non-key design point in the plan to match the code's actual state, or handing something over per the table above, can be done directly.
 
-Whether the user is present, whether the help has been given, whether the condition has been lifted — ask the user or check it yourself; when you cannot check, treat it as not present, not done, not lifted.
-If you picked the milestone yourself, switch to another topic first and only report back once none works; if the user named it, report back directly. When a "needs user help" tag's condition is already met, remove the tag and start — the item itself is still this milestone's task and gets settled as usual.
+## Boundaries
 
-## How to read a development plan doc
-
-- **Topic directory**: `YYYYMMDD-{short-description}/` under the development plan doc directory, one directory per development topic
-- **Overview doc**: the `README.md` in the topic directory — problem description, plan outline, key design decisions;
-  when split into several milestones, the milestone list is here too. Each entry is one line: a milestone not yet wrapped up is written `NN short-description`, and once wrapped up it changes to `NN wrapped up`, with the corresponding doc already deleted
-- **Milestone docs**: the files in number order (`02a` sorts after `02` and before `03`), one per milestone that can be tested and merged on its own,
-  opening with a "Goal / Completion criteria" block. The number is the dependency order, work them in order
-- **A directory with only `README.md`**: this topic has a single milestone, with the overview and the milestone content both in that one doc;
-  just develop from it, do not create a numbered doc
-- **"Handoff" section**: sits right after "Goal / Completion criteria", and is the debt earlier work hands this milestone — transitional layers (with a matching `TODO` in the code),
-  interfaces to wire up, conventions still to be unified, items that need the user's help to continue (tagged "needs user help, do not start until this is done").
-  These are all tasks of this milestone, **read it before starting, settle every item once done, and run whatever cannot be settled back through the debt-settling triage**;
-  transitional layers are all marked with a `TODO`, do not take them for oversights and delete them in passing, each one states which milestone deletes it
-- **"Interim handoff" section**: same position, and sorts before "Handoff" when both are present (for a topic with only `README.md`, it goes after the milestone part's "Goal / Completion criteria"); it is the context left behind when work could not continue last time (see "Interim handoff when you cannot continue" below). Whoever takes over reads it first; once development resumes, fold whatever context is still useful into the body (design trade-offs go into the matching design section, work not yet done becomes a checkbox), and delete the rest
-- **Checkbox entries**: a tick means implemented and verified; tick one the moment it is done, never save them up for a batch at the end
-
-## How to learn the project context
-
-- If the project has its own documentation conventions, read them first (before choosing a milestone); the doc directories and this project's extra rules come from there
-- Otherwise (after choosing a milestone, before starting work) start from the documentation index (`docs/README.md` by default), use the project map to locate the module you need to touch,
-  then read the matching product docs to confirm the existing behavior
-
-## When the plan does not match reality, or you cannot proceed
-
-- Fill in an entry that was missed, or correct a design that no longer matches the code, directly in the plan doc; changing the completion criteria, a key design decision, or shrinking scope needs a report back first, then act on the decision
-- When one item in a milestone is blocked (missing an external condition, needs the user's help), carry on with the items that do not depend on it as usual; only stop when the whole milestone cannot proceed: if this session has to end or the code has to be merged, write it up under "Interim handoff when you cannot continue" first, then report back
-
-## Adjusting milestones
-
-Creating a new milestone, inserting one, and tidying numbers during execution are all decided here. The number is the development order; it does not fill gaps, and existing docs are never renumbered (except under "Inserting at the very front" below).
-
-- **A newly created milestone**: same format as other milestone docs — opening with its goal and completion criteria, content items written as checkboxes, named `[number]-[short-description].md`;
-  write only the work to do and what is being handed to it, add no design without a basis, and write neither implementation code nor where the code goes; update the `README.md` milestone list to match (when a single doc turns into several, create the list and write both `01` and the new milestone into it)
-- **Position**: it must sort after the milestones it depends on; if a later milestone depends on it, it goes before the earliest such dependent; with no constraint on either side, put it near the end, but always before the final confirmation milestone.
-  When the earliest dependent has already started, inserting before it would change a started milestone's premise, and inserting after it would invert the dependency — report back and let the user decide; also report back when the constraints on both sides leave no room for it
-- **Numbering**: when it goes at the very end and there is no final confirmation milestone, it continues from the largest integer number that has appeared in the list and the directory;
-  otherwise (inserted in the middle, or a final confirmation milestone already exists) take the integer part of the number right before the insertion point and add a letter suffix that sorts between the two neighbors (inserting between `02` and `03` gives `02a`; inserting after an existing `02a` gives `02b`, with the order `02` < `02a` < `02b` < `03`); report back if there is no room for it
-- **Inserting at the very front**: this only comes up when no milestone has started at all (none wrapped up, none with a tick or an "Interim handoff" section, and no `TODO` in the code pointing at a number) —
-  it amounts to changing the plan before work starts, so renumber every milestone in the plan and update the `README.md` list to match; once any milestone has started, a new milestone always sorts after them with a suffix, with its dependency on them written into the new milestone's doc
-- **A topic with only `README.md` gaining a milestone**: move the milestone content (the "Goal / Completion criteria" block, technical design, implementation plan, checkboxes, handoff, notes for the developer) into the `01-…` numbered doc,
-  number the new milestone from 02, and let `README.md` keep only the problem description, plan outline, key design decisions, and the milestone list
-- **Final confirmation milestone**: only create one when an item turns up that cannot be done or confirmed now but does not block later development; name it `NN-final-confirmation.md`, place it at the end of the whole topic, and append to it if one already exists;
-  each entry states how to confirm it and what result is expected. It is the end of the line, with nowhere further to hand things off to: a confirmation item only counts as done once the user has confirmed it in person, and it may not be deferred any further;
-  if confirming it turns up a defect, fix it within this same milestone and reconfirm, do not create a new milestone
-
-## Wrapping up a milestone
-
-**A milestone is only wrapped up once it is genuinely done, leaving nothing behind**: everything not yet settled has to be handed off into a later, not-yet-developed milestone doc, or dealt with by the user.
-
-### 1. Settle the debt
-
-Before wrapping up, verify against the completion criteria in the "Goal / Completion criteria" block one by one, then triage every unticked entry, unverified item, and deliberately left transitional layer. **Do what can be done**:
-anything that can be implemented and verified now without going beyond this milestone's scope must be finished now — "later" is not a valid destination. For what genuinely cannot be done now, there are only the destinations below.
-An unimplemented item that cannot be done means the milestone cannot be wrapped up — follow "Interim handoff when you cannot continue" instead; only verification- or confirmation-type items can be handed off and the milestone still wrapped up, per the table below:
-
-
-| Situation | What to do |
-|---|---|
-| Squarely within the scope of a later, not-yet-developed milestone (doing it now would go beyond this one), and needs no user help or external condition | Write it into that milestone doc's "Handoff" section |
-| No milestone fits, and it needs no user help or external condition | Create or insert a milestone per "Adjusting milestones", then write it into that milestone's "Handoff" section |
-| Needs the user's help or an external condition to do or verify, and **blocks later development** (a later milestone depends on its result) | Write it into the "Handoff" section of the first milestone that depends on it, tagged "needs user help, do not start until this is done"; write it first, then wrap up this milestone, then notify the user — the session ends here (even when the user explicitly asked for several in a row, stop here and wait for their help) |
-| Needs the user's help or an external condition to do or verify, but **does not block later development** | Fold it into the "final confirmation milestone" (see "Adjusting milestones") |
-| To be dropped, not done | A scope change — report back and let the user decide, do not drop it on your own; once the user agrees, delete the entry and update the scope description in `README.md` to match |
-
-- Whether something blocks later development is your call first; report back when you are not sure
-- When the final confirmation milestone itself is ending, there is nowhere left to hand off to, so none of the first four destinations above apply: only finishing it, a scope change (report back), or an interim handoff
-- A "Handoff" section writes only the context whoever takes over needs: what it is (transitional layer / interface / convention / blocking item) and what to do, not where it came from;
-  a transitional layer keeps its `TODO` in the code stating which later milestone deletes it, with a matching entry in the receiving milestone's "Handoff" section; if a transitional layer's current state is described in the product docs, note that in the entry too, and update it when the transitional layer is deleted
-- Whatever is handed off is written down on the receiving end only — the milestone doc that hands it off keeps no record of the destination; a wrapped-up milestone leaves only one line in the `README.md` list, and is not mentioned anywhere else (handoff sections, product docs, code comments)
-
-### 2. Consolidate
-
-Once the debt is fully settled, take the parts of what this milestone built that have long-term value and work them into the product docs and the project map.
-
-- The criterion is **what cannot be got from reading the code itself but has to be known when taking over**; purely internal implementation details, and changes that swap the implementation without changing external behavior, are not written
-- If the project has its own documentation conventions, follow what they say
-- Without them, organize it yourself; before writing anything, read the few docs you are changing end to end; when the project has no product docs or project map to write into, report back and let the user decide where it goes
-- When wrapping up the last milestone in the topic (the final confirmation milestone, if there is one; if settling the debt leaves other milestones afterward, this is not the last one), also work the `README.md` overview's long-term-value content (problem description, plan outline, key design decisions) in by this same criterion, since the overview is about to be deleted too
-- **Deliberately left transitional layers do not go into the product docs**, unless they cause a behavior difference the user can see — then state the current situation honestly and mark it as transitional,
-  but write no plan and no milestone number
-
-### 3. Delete
-
-Deletion comes only once every completion criterion that can be verified now has been verified, everything that could not be verified has been triaged under "Settle the debt", consolidation is done, and the review the project requires (if any, as the project's documentation conventions specify) has also passed; if the review does not pass, fix it and go back through "Settle the debt" again before rechecking.
-
-Delete this milestone doc, and change its entry in the `README.md` overview's milestone list to a single line `NN wrapped up` (`NN` being its number; if it is the last one in the topic, handle it as below directly instead of editing the list).
-That line stays so that milestones added later do not reuse the number.
-Once every milestone doc in the topic directory is deleted, the `README.md` overview goes with them, then the topic directory; once the whole topic is deleted, nothing remains in the plan directory for it.
-
-A topic with only `README.md`: when there is nothing to hand off, delete `README.md` and the topic directory outright once consolidated; when settling the debt leaves something to hand off, first turn it into several docs per "Adjusting milestones", then wrap up `01` as above.
-
-Delete the development plan doc directory too if it is now empty.
-
-### Interim handoff when you cannot continue
-
-**The one exception**: when this milestone is not yet done, and development genuinely cannot continue right now (for example an external condition is missing, or a decision needs the user and they will be away for a long time),
-and the task has to end or the code has to be merged anyway, it is allowed to stop without wrapping up (this is the situation once a report back ends with the session having to end or the code having to be merged). In that case, do not delete the doc — add an "Interim handoff" section right after "Goal / Completion criteria" so whoever takes over next can pick it up from reading it:
-
-- How far it got, which items are ticked, which are not done
-- Where it is stuck, and what condition is needed to continue
-- What has been established, and the design trade-offs already made
-- What has not been verified
-- Any other context whoever takes over needs
-
-Whatever is already done and merged in with the code still gets its externally visible behavior worked into the product docs by the "Consolidate" criterion; a transitional layer already merged in still keeps its `TODO`, and is written into the interim handoff too.
-When you can keep going, an interim handoff may not be used in place of wrapping up.
+- Do not skip ahead to a later milestone while an earlier one is not closed; the same applies even when the user names it — report back instead
+- A final-confirmation milestone (`NN-final-confirmation.md`) collects only things that cannot be verified now and do not block what follows, placed last in the topic as the end point: its items must all be finished, nothing is left beyond it; if confirmation turns up a defect, fix it right there
+- A closed milestone's line in the `README.md` list becomes plain text `NN short-description (closed)`; this line stays until the topic directory is deleted. A new milestone never reuses a number that has appeared before — one inserted in the middle gets a letter suffix
+- A closed milestone leaves a trace only in that one list line — it is not mentioned in any "Handoff" section, project doc, or code comment
+- Hand things over only within this topic; a finding that belongs to another topic, or to no topic at all, gets reported back
+- Never shrink the scope on your own, never drop an item on your own
+- A deliberately left transitional layer is marked `TODO` in the code, stating which topic's which milestone removes it, updated when handed over to a different milestone; do not casually delete one that does not belong to this milestone
+- A transitional layer does not go into the project docs; if it causes a user-visible difference in behavior, describe the current state as it truly is and mark it as transitional — do not write it as a plan, and give it no number

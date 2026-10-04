@@ -863,8 +863,11 @@ def main(argv):
         print(f"[revert-gate] Check failed{'' if mode in CHECK_MODES else ', allowed anyway'}: {e!r}",
               file=sys.stderr)
         return 2 if mode in CHECK_MODES else 0
+    # Only an unknown subcommand, no arguments, or a precheck call with the wrong argument count reaches
+    # here (the two hook modes already returned above): always non-zero. Callers rely on this to tell
+    # "did not run" apart from "passed" when an old script does not recognize a newly added subcommand.
     print(f"[revert-gate] Bad usage: {' '.join(argv[1:]) or '(no arguments)'}", file=sys.stderr)
-    return 2 if mode in CHECK_MODES else 0
+    return 2
 
 
 if __name__ == "__main__":

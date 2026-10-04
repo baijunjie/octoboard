@@ -13,18 +13,17 @@ template, gets translated to English before it is committed. Conversation with t
 
 ## Dispatching subagents
 
-**The test: a task that will eat a lot of context and does not end with this one edit — exploring, debugging,
-researching, bulk search-and-replace, repeated trial — should go to a subagent wherever you can; you take only
-the conclusion.** Make small edits yourself: briefing a subagent costs more than making the change. Dispatch one
-when you need a clean perspective too: reviewing code you just wrote, or writing docs, where the context you are
-holding carries bias.
+**The test: a task that will eat a lot of context — exploring, debugging, researching, bulk search-and-replace,
+repeated trial — should go to a subagent wherever you can; you take only the conclusion.**
 
-**How to brief it**: one task per dispatch, with the completion criteria spelled out; give the full background
-(it knows none of the premises you did not write down); ask it for conclusions, not a replay of its process;
-never let several subagents change the same place at once.
-
-**Who to pick**: if a dedicated subagent owns the job, give it to them; otherwise pick by task difficulty, and do
-not reach for the strongest every time.
+- Make small edits yourself: briefing a subagent costs more than making the change.
+- Dispatch one when you need a clean perspective too: reviewing code you just wrote, or writing docs, where the
+  context you are holding carries bias.
+- One task per dispatch, with the completion criteria spelled out; give the full background (it knows none of the
+  premises you did not write down); ask it for conclusions, not a replay of its process.
+- Never let several subagents change the same place at once.
+- If a dedicated subagent owns the job, give it to them; otherwise pick by task difficulty from the table below,
+  and do not reach for the strongest every time.
 
 | agent | Use for |
 |---|---|
@@ -48,8 +47,9 @@ not reach for the strongest every time.
 
 ## Development workflow: Git worktree
 
-- Any task that produces code changes is done in a dedicated git worktree on a dedicated branch; **read the `git-worktree` skill before creating the worktree** and follow its steps. Read-only investigation, answering questions and anything else that produces no changes are exempt.
-- **When you are getting ready to merge the branch back into its target branch, read the `git-worktree` skill first** as well, and follow its steps. Do not add `--no-verify`, set skip environment variables, or change the hook configuration to get around the repository's checks.
+- Any task that produces code changes is done in a dedicated git worktree on a dedicated branch; read-only investigation, answering questions, and anything else that produces no changes are exempt.
+- **Before creating the worktree, and before getting ready to merge the branch back into its target branch, read the `git-worktree` skill first**, and follow its steps.
+- Do not add `--no-verify`, set skip environment variables, or change the hook configuration to get around the repository's checks.
 
 <!-- setup-git:worktree:end -->
 
@@ -58,30 +58,24 @@ not reach for the strongest every time.
 ## Workflow
 
 This section only sets what gets invoked before starting work and before delivery, in what order, and when to
-skip a step; how each step is done is up to the corresponding skill.
+skip a step; how each step is done is up to the corresponding skill, and when unsure, report back.
 
 ### Before starting work
 
 - Make sure the branch is up to date first: after `git fetch`, check whether the current branch is behind the
-  branch it merges back into, and align it before doing anything else. Investigation, plans and changes made on
-  stale code may already not hold.
+  branch it merges back into, and align it before doing anything else.
 - Pick up the project context via the `agent-docs` skill.
 
 ### Before delivery
 
-The self-check targets one **complete delivery**, not every single edit. Once all of this round's changes are
-written:
+The self-check targets one **complete delivery** covering all of this round's changes, not every single edit —
+an intermediate commit does not count either; a user request to push, open a PR or merge counts as delivery too.
+At delivery:
 
 - If anything needs the user (a decision awaiting sign-off, a question to ask, a change the user said they
   wanted to see first, a significant call you made yourself), report back and wait for their feedback, then
   re-judge once you have acted on it.
-- If nothing does, go straight to the self-check and wrap up. Do the same when the user asks you to push,
-  open a PR or merge.
-
-An intermediate commit is not a delivery. Do as asked when the user explicitly says "review it now" or
-"update the docs first" ahead of delivery.
-
-At delivery, self-check in this order:
+- Otherwise, self-check item by item in the following order:
 
 1. **Static checks**: run the project's agreed quality-check commands (formatting, type checking, lint and so
    on) and confirm they report nothing. Skip this if the project has no such commands.
