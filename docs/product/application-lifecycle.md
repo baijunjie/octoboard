@@ -3,6 +3,14 @@
 Octoboard is a macOS desktop application. The agent processes are owned by a background daemon that starts and stops
 with it; nothing keeps running once the application is gone.
 
+## System requirements and distribution
+
+- **macOS 11 or later**, on **Apple Silicon only** — the release build is a single-architecture `arm64` bundle, and
+  there is no Intel or universal build.
+- Octoboard is distributed as a `.dmg` disk image. The release build is signed with a Developer ID and notarized, so
+  Gatekeeper admits it on a machine other than the one it was built on, including a copy that arrived as a download;
+  opening it asks the user for no override.
+
 ## Starting up
 
 The daemon is started as part of the application and listens on `127.0.0.1` only, on a port the operating system
@@ -35,7 +43,9 @@ whose hub it is. A failure raised by a dialog's own action is shown in that dial
 
 ## Quitting
 
-Quitting through the window's close button, `Cmd+Q` or the application menu's Quit all behave the same:
+Every way of ending the application behaves the same: the window's close button, `Cmd+Q`, the application menu's
+Quit, the Dock icon's own Quit, and a system-initiated termination — logging out, restarting or shutting down the
+machine.
 
 - **While any session has a running process, quitting asks for confirmation.** The message says that quitting
   interrupts those sessions and that each stays resumable next time.
@@ -44,6 +54,26 @@ Quitting through the window's close button, `Cmd+Q` or the application menu's Qu
   `docs/product/sessions.md`).
 - With no session running, quitting is immediate and asks nothing.
 - Quitting does not depend on the daemon answering: if it does not, the application exits anyway after a short wait.
+- Until the window has loaded far enough to be able to ask, a quit is never held back — a window that never gets as
+  far as showing the confirmation can still be closed.
+
+Because a logout, restart or shutdown is answered exactly like any other quit, **Octoboard can hold up a logout,
+restart or shutdown until the user answers the confirmation dialog.** That is deliberate, not an oversight.
+
+### Quitting when the window has stopped responding
+
+A confirmation dialog that can no longer be shown or answered — the window's process died, or its page hung — would
+otherwise leave no way out short of a force quit. So: **when a quit gesture has been deferred to the confirmation
+dialog and a second quit gesture arrives within 2 seconds, that second gesture quits immediately and asks nothing.**
+The sessions are left exactly as a crash leaves them (see "Crashes and forced termination" below).
+
+A window that is still answering resets that 2-second window every time it handles a quit gesture, so pressing
+`Cmd+Q` twice in quick succession on a working Octoboard does **not** skip the confirmation. The escape hatch opens
+only when nothing answered the first gesture.
+
+The window's close button is the one exception: the window itself answers it, so a window that has stopped responding
+ignores that button entirely. `Cmd+Q`, the application menu's Quit or the Dock icon's Quit — twice — is the way out
+of that state.
 
 ## Crashes and forced termination
 

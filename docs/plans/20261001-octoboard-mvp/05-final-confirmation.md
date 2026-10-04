@@ -86,13 +86,41 @@ Only what genuinely cannot be settled yet; everything else raised along the way 
 - [ ] **The hub and its projects on different agents.** Confirm a console whose hub is one agent and whose projects
       default to another orchestrates normally, and that the hub's `start_session` `agent` argument overrides a
       project's default for that one session.
+- [ ] **The release bundle on a clean machine.** The signed and notarized `.dmg` was verified here as far as a single
+      machine allows: `spctl` admits both the `.app` and the `.dmg` as `Notarized Developer ID`, including from a copy
+      carrying the quarantine attribute, and `codesign --verify --deep --strict` validates the nested `octoboardd`
+      sidecar with it. What that cannot show is the application actually installing and running somewhere it has never
+      been built — a machine with none of the toolchain, none of the agent CLIs, and no prior trust. Install from the
+      `.dmg` on a clean macOS machine (or at minimum a fresh user account, with a copy that was genuinely downloaded)
+      and confirm it launches, starts its bundled daemon and opens a session.
+- [ ] **The exit flow by hand.** Each gesture, with at least one live session: the window's close button, Cmd+Q, the
+      application menu's Quit, the Dock icon's own Quit, and a system-initiated logout — the first three were exercised
+      before this round, the last two are new and reach the confirmation through an `applicationShouldTerminate:`
+      override that no automated check here can trigger. Confirm each asks, that answering it terminates the sessions
+      and the daemon with no orphan processes left, and that cancelling leaves everything running. Then the escape
+      hatch in both directions: a quick second quit gesture on a *healthy* window must still ask (the frontend's
+      heartbeat resets the window), while with a deliberately wedged webview the second gesture within two seconds must
+      quit without asking — that is the only thing standing between a dead webview and a process only a force-quit can
+      end.
+- [ ] **Crash and interruption recovery.** Force-quit the application and confirm the daemon notices through its
+      `--parent-pid` watchdog and takes its sessions down with it; kill the daemon directly and confirm the application
+      reports the lost connection; then start again and confirm every session that was running comes back marked
+      interrupted and resumes. The paths are all implemented and unit-covered, but nothing has exercised them against a
+      real packaged application.
+- [ ] **The launch environment from a Finder-started application.** The per-launch login-shell snapshot is what gives an
+      agent the user's real `PATH` and keys when Octoboard is started from Finder rather than a terminal, and it is now
+      bounded by a ten-second deadline that refuses the launch rather than hanging. Double-click the installed
+      application and start a session on each of the three agents: confirm the agent binary resolves, the user's keys
+      are present, and no launch is refused by the new bound on a normal shell configuration. Worth doing in the same
+      sitting as the clean-machine check above, since both want a double-clicked bundle.
 
 ## Notes for developers
 
 - **Development notes**: none of these is automatable. `StopFailure` needs the user to authorise pointing Grok's chat
   endpoint somewhere it will fail; the latency figure needs the real application's render loop instrumented; the
   orchestration items need real model turns, a running application and, for the raised hand, a person to answer a
-  permission dialog. Gatekeeper admission is **not** here — it is 04's own completion criterion.
+  permission dialog. Gatekeeper admission itself is settled — `spctl` was run against a quarantined copy — and what is
+  left of it here is only what one machine cannot show.
   Launching a session without a task costs no model turn and still proves the per-launch injection took: each agent
   connects its MCP servers at startup, so the `octoboardd mcp` child appearing for that session is the proof. That is
   how the injection half was settled; only the turn-level half is left.

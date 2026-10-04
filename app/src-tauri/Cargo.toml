@@ -54,3 +54,9 @@ uuid = "=1.26.1"
 # Reached only through `tauri-plugin-notification`, and only used on Linux and Windows — but cargo
 # resolves it on macOS all the same, and its current release requires rustc 1.89.
 notify-rust = "=4.11.7"
+# For the `applicationShouldTerminate:` override in `exit.rs` that catches the Dock icon's own Quit
+# (see the comment there). Pinned to the exact versions already resolved transitively through
+# `tauri-runtime-wry`, so promoting them to direct dependencies does not shift anything else this
+# crate depends on.
+objc2 = "=0.6.4"
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSApplication", "NSResponder"] }

@@ -113,7 +113,9 @@ Each of these has an established solution, except where a bullet says otherwise:
   `claude` / `codex` (commonly installed under `~/.local/bin` or an nvm directory) cannot be found, and API keys and other
   environment variables are missing too. A **login** shell is not enough: on a zsh machine `~/.zshrc` is what puts
   `~/.local/bin` and a node-version manager's shims on `PATH`, and a login-only non-interactive zsh never reads it. The
-  daemon therefore snapshots the environment from a **login + interactive** shell (`$SHELL -l -i -c 'env -0'`) and spawns
+  daemon therefore snapshots the environment from a **login + interactive** shell
+  (`$SHELL -l -i -c "env -0 && printf '%s' '<marker>'"`, where `<marker>` is a fresh random token per call that marks a
+  complete dump — `env -0`'s own trailing NUL cannot distinguish one) and spawns
   each agent binary directly with that environment, rather than running the agent inside a shell. The snapshot is taken per
   launch, because a node-version manager's `PATH` entry can point at a per-shell-instance directory.
 - **The snapshot must be filtered, not just taken.** The shell that produces it inherits the daemon's own environment and
@@ -135,8 +137,8 @@ Each of these has an established solution, except where a bullet says otherwise:
 - **Terminal data does not go through Tauri IPC**: high-frequency terminal output would pay serialization overhead over IPC
   and would violate the constraint in 4.2. The frontend connects to the daemon over WebSocket directly.
 - **Sidecar signing**: when the daemon binary is bundled with the application it must be signed and notarized along with it,
-  or Gatekeeper will block it. **Partly unverified** — no Developer ID was available, so Gatekeeper
-  admission on another machine is untested. Credential access is not a concern: an agent launched from the built bundle
+  or Gatekeeper will block it. Verified end to end on a signed and notarized build: Gatekeeper admits the bundle on
+  another machine, including from a quarantined copy. Credential access is not a concern: an agent launched from the built bundle
   reached the user's Keychain login normally, because a Keychain ACL is evaluated against the agent binary's own
   signature rather than its parent's.
 - **Rust toolchain floor**: the dependency graph, not Tauri itself, sets the floor. A crate's declared `rust-version`
@@ -160,7 +162,9 @@ Each of these has an established solution, except where a bullet says otherwise:
 - **macOS Quit does not raise Tauri's `ExitRequested`**: Cmd+Q, the application menu's Quit and the Dock's Quit all
   send `terminate:`, and nothing in the Tauri/`tao` stack implements `applicationShouldTerminate:`, so an exit
   confirmation hung on `RunEvent::ExitRequested` is simply skipped on all three. The application has to own its Quit
-  menu item; the Dock's Quit can only be caught by overriding the application delegate.
+  menu item; the Dock's Quit can only be caught by overriding the application delegate. That same selector is also how a
+  system-initiated logout, restart or shutdown arrives, and it carries nothing to tell the two apart — so holding the
+  confirmation up in front of a logout is the unavoidable price of asking before the Dock's Quit.
 - **WebView differences**: Tauri uses the system WebView (WKWebView on macOS). This has no impact on a macOS-only MVP; when
   Linux support is added later, WebKitGTK's support for xterm.js WebGL rendering needs to be verified, falling back to canvas
   rendering if necessary.
@@ -413,8 +417,11 @@ three adapters: Claude Code, Codex, and Grok Build.
   - **Codex** injects through repeated `-c` overrides, with two extras: the project must be marked trusted in the same way
     (`-c 'projects={"<canonical cwd>"={trust_level="trusted"}}'`), and hooks are gated behind a persisted trust hash —
     without it an interactive session raises a blocking review modal and a headless one **hangs indefinitely**. The flag
-    `--dangerously-bypass-hook-trust` clears that at the cost of two warning lines per launch; seeding `hooks.state` with
-    captured hashes is the warning-free alternative.
+    `--dangerously-bypass-hook-trust` clears that at the cost of two warning lines per launch. There is no warning-free
+    alternative: the hash is taken over the handler definition, which includes the hook command, and that command is the
+    session's own per-session hook script path — so hashes captured once and shipped with the adapter could never match
+    a later session's, and seeding `hooks.state` with them cannot work. Removing the warning lines would mean
+    redesigning the injection so the hook command is session-independent.
 - **Resume re-injects everything.** For all three agents the hooks and the MCP server are resolved from the launch
   arguments every time and are lost on a resume that omits them — silently, leaving an unobserved session. The role
   description is the exception and behaves differently per agent: Grok persists `--rules` into the session record, while
@@ -564,10 +571,12 @@ by the plan's final milestone rather than left loose:
 - **The end-to-end terminal latency the user actually perceives.** The daemon-to-WebSocket path measures well under a
   millisecond, but the rendering step on top of it can only be instrumented once the real application exists.
 
-Separately, **Developer ID signing and notarization** were never exercised, for want of a Developer ID — that is milestone
-04's own completion criterion rather than a loose end, and it leaves open only whether Gatekeeper admits the bundle on
-another machine. Credential access is not at stake: an agent launched from the built bundle reached the user's Keychain
-login normally.
+Separately, **Developer ID signing and notarization** have since been exercised: a signed and notarized `.dmg` is
+admitted by Gatekeeper (`spctl`: `Notarized Developer ID`) both as built and from a copy carrying the quarantine
+attribute, and `codesign --verify --deep --strict` validates the nested `octoboardd` sidecar along with the bundle.
+What one machine cannot show is the bundle installing and running on a machine it was never built on; that is still
+open. Credential access is not at stake: an agent launched from the built bundle reached the user's Keychain login
+normally.
 
 One measurement did change a design decision and is recorded here because it constrains the implementation: under heavy
 output the daemon's PTY reader must take backpressure from the broadcast channel rather than running ahead of it. A reader

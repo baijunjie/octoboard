@@ -2314,6 +2314,8 @@ dependencies = [
  "icu_properties_data",
  "icu_provider",
  "notify-rust",
+ "objc2",
+ "objc2-app-kit",
  "plist",
  "serde_with",
  "tauri",

@@ -20,11 +20,12 @@
 //!   an interactive session raises a blocking review modal and no hook runs, and a headless one
 //!   hangs indefinitely with no output at all. `--dangerously-bypass-hook-trust` is the verified
 //!   way through; despite the name it weakens neither the sandbox nor the approval policy, it only
-//!   skips the review of hooks Octoboard generated itself.
-//!   TODO(milestone 04): its cost is two warning lines per launch. The warning-free alternative is
-//!   seeding `hooks.state` with the trust hashes, which needs them captured once per Codex version
-//!   and shipped with the adapter; the hash preimage could not be derived, so they have to be read
-//!   out of a trusted session.
+//!   skips the review of hooks Octoboard generated itself. The cost — two warning lines on every
+//!   launch — is permanent short of redesigning the injection so the hook command is
+//!   session-independent: the hash is taken over the handler definition, which includes the hook
+//!   command, and that command is the session's own hook script path, so seeding `hooks.state`
+//!   with hashes shipped with the adapter cannot work — no hash captured once could ever match a
+//!   different session's.
 //!
 //! One of the user's own settings changes what Octoboard may promise: with `approvals_reviewer`
 //! set to auto review, Codex resolves an approval request itself — the `PermissionRequest` hook

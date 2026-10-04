@@ -6,7 +6,7 @@
 //! (`docs/mvp.md` section 5.1). The mechanism for each differs per agent and is the adapter's own
 //! business; the conditions all three share are below.
 //!
-//! Four rules hold for every adapter, each of which fails silently if broken:
+//! Three rules hold for every adapter, each of which fails silently if broken:
 //!
 //! - **Resume re-injects everything.** For all three agents, hooks and the MCP server are resolved
 //!   from the launch arguments every time and are lost on a resume that omits them, leaving a
@@ -22,10 +22,10 @@
 //!   hook with no timeout blocks the turn for its full duration. Octoboard owns the hook script
 //!   (`hook_script` below, generated per session), which exits 0 unconditionally and writes
 //!   nothing.
-//! - **The hook script takes no arguments**, and derives the event from the payload on stdin. Codex
-//!   gates hooks behind a trust hash over the handler definition, so a per-event command string
-//!   would make those hashes per-event as well; keeping one constant command leaves the door open
-//!   to seeding them later instead of passing `--dangerously-bypass-hook-trust`.
+//!
+//! The hook script itself takes no arguments: it derives the event from the payload on stdin, so
+//! one constant command serves every event, and adding or removing an event never changes what an
+//! adapter has to generate beyond the event name itself.
 
 pub mod claude;
 pub mod codex;

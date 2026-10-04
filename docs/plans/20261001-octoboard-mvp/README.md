@@ -47,7 +47,7 @@ and other agents are all out of scope for this round (the report page's rewind a
 - 01 wrapped up
 - 02 wrapped up
 - 03 wrapped up
-- [ ] [04 Polish](04-polish.md)
+- 04 Polish (closed)
 - [ ] [05 Final confirmation](05-final-confirmation.md) — the checks that need a real build or an external credential, gathered so nothing is left outstanding at the end
 
 Dependency order: the conclusions from 00 determine the implementation details of 01–03, and any item found infeasible must

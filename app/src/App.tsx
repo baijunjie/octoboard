@@ -91,9 +91,9 @@ export function App({ port }: { port: number }): React.ReactElement {
     if (isDormant(session.status)) resumeSession(session.id);
   };
 
-  // `useAppExit` wires `requestQuit` into the window-close/Cmd+Q/app-menu listeners on its own; the
-  // main app has no separate manual "Quit" control, so only the confirmation dialog below is needed
-  // from what it returns.
+  // `useAppExit` wires `requestQuit` into the window-close/Cmd+Q/app-menu/Dock-Quit/system-terminate
+  // listeners on its own; the main app has no separate manual "Quit" control, so only the
+  // confirmation dialog below is needed from what it returns.
   const { exitConfirmOpen, closeExitConfirm, confirmExit } = useAppExit({
     getSessions: () => sessionList,
     requestShutdown: () => request({ type: "shutdown" }),

@@ -30,6 +30,7 @@ interface UseAppExitOptions {
 interface UseAppExitResult {
   /** Whether the "sessions are still running" confirmation is open. */
   exitConfirmOpen: boolean;
+  /** Call when the user cancels the dialog above. */
   closeExitConfirm: () => void;
   /** Call when the user confirms the dialog above. */
   confirmExit: () => Promise<void>;
@@ -39,12 +40,15 @@ interface UseAppExitResult {
 }
 
 /**
- * Owns the whole quit sequence: registering this webview as the one handling the exit flow,
+ * Owns the whole quit sequence: registering this webview as the one handling the exit flow (and
+ * re-pinging that same registration on every gesture handled thereafter, which is what keeps the
+ * Rust side's force-quit debounce from arming against a webview that is actually still alive),
  * listening for the window's close button and for an `exit-requested` event (fired for every other
- * way to quit — Cmd+Q, the app menu — that the Rust side cannot itself ask the user about), asking
- * for confirmation when a session is still live, and the `shutdown`-then-`confirm_quit` sequence
- * that actually ends the process. With `getSessions` and `requestShutdown` omitted it quits
- * straight away, which is what a screen with no daemon behind it needs.
+ * way to quit — Cmd+Q, the app menu, the Dock icon's own Quit, and a system-initiated
+ * logout/restart/shutdown — that the Rust side cannot itself ask the user about), asking for
+ * confirmation when a session is still live, and the `shutdown`-then-`confirm_quit` sequence that
+ * actually ends the process. With `getSessions` and `requestShutdown` omitted it quits straight
+ * away, which is what a screen with no daemon behind it needs.
  */
 export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
@@ -74,6 +78,16 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
   };
 
   const requestQuit = async (): Promise<void> => {
+    if (runningInTauri) {
+      // Re-invoking `frontend_exit_heartbeat` here, on every quit gesture this webview actually
+      // receives (not only when the user cancels the dialog), is what clears the Rust side's
+      // `FORCE_QUIT_WINDOW` debounce: it is itself proof this webview is alive and answering, so
+      // the next gesture should wait for it rather than treat this one as a wedge. A wedged webview
+      // never reaches this line at all, so the debounce stays armed and the escape hatch in
+      // `should_let_quit_through` (`src-tauri/src/exit.rs`) still fires for it.
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("frontend_exit_heartbeat").catch(() => {});
+    }
     const liveSessions = (optionsRef.current.getSessions?.() ?? []).filter((s) => isLive(s.status));
     if (liveSessions.length > 0) {
       setExitConfirmOpen(true);
@@ -106,8 +120,10 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
       // Tells the Rust side a confirmation flow actually exists now, so it starts asking before
       // letting an exit through instead of defaulting to letting every exit straight through —
       // called from every screen that mounts this hook, including the daemon-failed-to-start one,
-      // so a window stuck there is always still quittable.
-      await invoke("frontend_handles_exit");
+      // so a window stuck there is always still quittable. `requestQuit` below re-invokes the same
+      // command on every quit gesture handled thereafter, which is what clears the Rust side's
+      // force-quit debounce (see `frontend_exit_heartbeat` in `src-tauri/src/exit.rs`).
+      await invoke("frontend_exit_heartbeat");
 
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       const { listen } = await import("@tauri-apps/api/event");
@@ -136,9 +152,16 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
     // Registration happens once; `requestQuit`/`doQuit` read live state through `optionsRef`.
   }, []);
 
+  const closeExitConfirm = (): void => {
+    // Nothing to tell the Rust side here: `requestQuit` above already pinged the debounce-clearing
+    // heartbeat on the way into this dialog, and that is what matters for the next gesture — a
+    // cancel does not need a signal of its own.
+    setExitConfirmOpen(false);
+  };
+
   return {
     exitConfirmOpen,
-    closeExitConfirm: () => setExitConfirmOpen(false),
+    closeExitConfirm,
     confirmExit,
     requestQuit,
   };

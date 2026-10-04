@@ -62,7 +62,9 @@ For a GitHub association:
   `https://host/owner/repo(.git)` and `git@host:owner/repo(.git)` are understood.
 - If that directory already exists, the request is refused rather than cloning into or over it.
 - The clone runs with the user's own shell environment, so it uses the `git` on the user's `PATH` and their git
-  configuration and credentials.
+  configuration and credentials. Capturing that environment is bounded the same way a session launch's is, and a
+  capture that does not complete refuses the clone (see "The launch environment" in
+  `docs/product/launching-agents.md`).
 - A clone can take minutes; other state updates keep flowing while it runs.
 
 A directory that is already associated with the same console is skipped rather than associated twice. Associating a

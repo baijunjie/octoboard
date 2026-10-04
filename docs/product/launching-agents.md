@@ -72,6 +72,19 @@ interactive** shell at the moment of the launch. That is what makes agents insta
 is taken per launch, so a change to the user's shell configuration takes effect on the next session rather than
 requiring a restart.
 
+**Capturing it is bounded at ten seconds, and a capture that does not complete refuses the launch.** Octoboard
+refuses rather than starting an agent with a half-built environment, because a session missing the user's `PATH` or
+their keys fails later in ways that do not point back here. Three outcomes are refused, and the message names which
+one it was:
+
+- the capture ran out of time — a shell startup file is blocked on something, or a background process it started is
+  still holding the shell's output open;
+- the shell exited with an error, in which case its own diagnostic output is included;
+- the shell exited cleanly without having produced a complete environment dump.
+
+The same capture is what gives a GitHub clone the user's `git` and git credentials, so a clone is refused the same
+way (see "Associating a project" in `docs/product/consoles-and-projects.md`).
+
 Two groups of variables are removed from that snapshot:
 
 - the snapshot shell's own terminal variables, which would otherwise make the agent downgrade its renderer, colours
@@ -99,8 +112,11 @@ conditions are visible:
 
 - the project's directory is marked trusted for that one invocation, so no folder-trust dialog appears; nothing is
   persisted to the user's configuration by it;
-- the review Codex would otherwise raise for Octoboard's own hooks is bypassed, which prints two warning lines at the
-  top of every session. The bypass covers hook review only; it does not weaken the sandbox or the approval policy.
+- the review Codex would otherwise raise for Octoboard's own hooks is bypassed, which costs two warning lines in the
+  session's own output on **every** launch, a resume included. The bypass covers hook review only; it does not weaken
+  the sandbox or the approval policy. These two lines are a standing cost, not a defect waiting to be fixed: Codex
+  gates a hook behind a trust hash taken over the hook's own command, and that command is the session's own
+  per-session script, so no pre-captured hash could ever match it.
 - Octoboard's own tools are pre-approved for the session, so a hub's orchestration calls raise no
   approval dialog. This covers Octoboard's tools alone; every other tool, the sandbox and the
   approval policy are untouched.

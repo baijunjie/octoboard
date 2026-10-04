@@ -5,5 +5,5 @@
 
 [[permission]]
 identifier = "allow-exit-lifecycle"
-description = "Allows the frontend to register as the exit-flow handler and to confirm an already-approved quit."
-commands.allow = ["frontend_handles_exit", "confirm_quit"]
+description = "Allows the frontend to register as the exit-flow handler (and ping its liveness thereafter) and to confirm an already-approved quit."
+commands.allow = ["frontend_exit_heartbeat", "confirm_quit"]

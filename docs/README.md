@@ -25,8 +25,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Launching agents](product/launching-agents.md) — the guarantee that project files and the user's agent configuration
   are never modified, the three things injected per launch and the hub's generated instruction file, the launch
   environment, and the per-agent specifics.
-- [Application lifecycle](product/application-lifecycle.md) — startup and the single-instance rule, losing the daemon
-  connection, the quit confirmation, crash behaviour, and the files Octoboard keeps under `~/.octoboard`.
+- [Application lifecycle](product/application-lifecycle.md) — what Octoboard runs on and how it is distributed, startup
+  and the single-instance rule, losing the daemon connection, the quit confirmation and which gestures it covers, how to
+  quit a window that has stopped responding, crash behaviour, and the files Octoboard keeps under `~/.octoboard`.
 
 ## Reference
 
@@ -51,3 +52,5 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   ruling out a locked screen before trusting a capture, bisecting a symptom against the daemon, what a scripted GUI
   probe can and cannot prove, where to watch for a report page's blocked navigation, where a network probe's positive
   control has to come from, and which checks need a person.
+- [Writing automated tests](memory/writing-automated-tests.md) — the fixture conventions this project's tests need on
+  macOS, starting with why an executable written fresh per test flakes only under a parallel run.

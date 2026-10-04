@@ -57,8 +57,9 @@ A session is opened under a project with:
 A session opened **with** a task starts in *working*. A session opened **without** one starts in *awaiting
 instructions*: it is sitting at the agent's prompt.
 
-If the launch itself fails — the directory cannot be reached, the agent binary is not on the user's `PATH` — no
-session appears in the tree and the failure is reported.
+If the launch itself fails — the directory cannot be reached, the agent binary is not on the user's `PATH`, the
+user's shell environment could not be captured (see "The launch environment" in
+`docs/product/launching-agents.md`) — no session appears in the tree and the failure is reported.
 
 ### Which agent a session uses
 
