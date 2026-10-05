@@ -4,9 +4,10 @@ Per-agent facts about the three agent CLIs Octoboard launches: the hook events, 
 payloads can and cannot be correlated on, what a failing hook costs, how a project's own configuration layers around an
 injected one, and the mechanism and conditions for injecting Octoboard into each.
 
-Established against **Claude Code 2.1.274**, **Codex 0.160.0** and **Grok Build 1.0.46**. All three rewrite their hook
-surface, their payload fields and their configuration layering on upgrade, so check a detail here against the installed
-version before relying on it.
+Established against **Claude Code 2.1.274**, **Codex 0.160.0** and **Grok Build 1.0.46**; what the Claude Code section
+says about a declined prompt was measured on **2.1.286** as well, and held identically on both. All three rewrite their
+hook surface, their payload fields and their configuration layering on upgrade, so check a detail here against the
+installed version before relying on it.
 
 How Octoboard's status mapping handles these traps is encoded in `daemon/src/hooks.rs`; the product behavior built on
 them is in the product docs.
@@ -38,20 +39,53 @@ hold state against.
 - `PostToolBatch` — when the call it covers was rejected by Claude Code's own pre-execution guard, the rejection is
   inside `tool_calls[0].tool_response`; that is the only place it is reported. Such a call fires only `PostToolBatch`,
   skipping `PreToolUse`, `PostToolUse` and `PostToolUseFailure`, so a mapping that pairs pre with post misses it.
-- Nothing announces that the user answered a prompt or a question. What is observable is the resolution of the pending
-  call, as the `PostToolUse` or `PostToolUseFailure` for it, so per-call state has to be keyed on
-  `(session_id, prompt_id, tool_use_id)`.
+- Nothing announces that the user answered a prompt or a question. An **approved** call's resolution is observable as
+  the `PostToolUse` or `PostToolUseFailure` for it, so per-call state has to be keyed on
+  `(session_id, prompt_id, tool_use_id)`. A **declined** one is not observable at all — see "A declined prompt" below.
+- `Notification` carries its state in `notification_type`. Two were seen firing: `permission_prompt`, a fixed 6.0 s
+  after the `PermissionRequest` it belongs to, and `idle_prompt`, exactly 60.0 s after a `Stop`. The idle timer is
+  **armed by `Stop`**, so a turn that never fires one never produces an `idle_prompt` either, and `idle_prompt` is no
+  use as a general backstop.
 
 **A pending permission prompt** is `PermissionRequest`; a question put through the agent's own ask-the-user tool is also
 reported. A question asked as plain prose is not: the turn simply ends, and no payload field tells it from a finished
 one.
+
+**A declined prompt emits no hook event whatsoever** — not for a permission prompt answered **No**, and not for the
+agent's own `AskUserQuestion` cancelled with Esc. Measured on both 2.1.274 and 2.1.286, each run carrying a positive
+control: no `Stop`, `StopFailure`, `PostToolUse`, `PostToolUseFailure`, `PostToolBatch`, `Notification` of any type, or
+`SessionEnd`, through 211.7 s / 139.5 s (permission) and 93 s / 37 s (question) of waiting. Answering **No** from the
+menu and pressing **Esc** are indistinguishable; the TUI prints `Interrupted · What should Claude do instead?` and sits
+at an empty prompt. The only thing that ever breaks the silence is the user's next `UserPromptSubmit`.
+
+A decline is recorded as a **user interrupt** rather than as its own kind of event, so its only machine-readable trace is
+the pair of transcript records described under "A user interrupt emits no hook event" below — which is what makes the
+transcript the only way to observe one.
+
+Two traps around this, both measured:
+
+- `PermissionDenied` **exists** in the executable's strings (alongside `emitPermissionDenied`,
+  `executePermissionDeniedHooks`, and user-facing text about the hook permitting a retry) and **never fires** — not on a
+  declined prompt, and not when a `PreToolUse` hook itself returns a `deny` decision.
+- `--settings` **does not validate hook names at all**: registering `PermissionDenied`, or a wholly invented name,
+  starts without a word of complaint, while the same file's *permission rules* are checked loudly. So a hook name being
+  accepted is no evidence the event exists, let alone that it fires.
+
+**`AskUserQuestion` has no plain decline option.** Its list offers the answers, then `Type something.` and
+`Chat about this`; Esc cancels. Esc writes the same two records as a declined permission prompt, field for field.
+`Chat about this` does not: its `tool_result` opens with the same "The user doesn't want to proceed with this tool use"
+sentence but continues into the user's feedback, there is **no** `[Request interrupted by user for tool use]` record, and
+the turn carries on — `PostToolBatch` and `Stop` both fire. So the two exits are told apart by the second record, not by
+the first.
 
 **A user interrupt emits no hook event**, in the thinking phase or mid-tool. Only the interrupted turn is silent; the
 next turn reports normally. The session's next `UserPromptSubmit` is the reliable sign that the previous turn is over
 and should close the dangling `PreToolUse`; until then the session reads as working, which is stale rather than wrong.
 The interrupted tool's own child process is already gone. The only machine-readable trace is in the transcript at
 `transcript_path`: a `tool_result` with `is_error: true` beginning "The user doesn't want to proceed with this tool
-use", followed by a user block `[Request interrupted by user for tool use]`.
+use", followed by a user block `[Request interrupted by user for tool use]`. Both are entries whose `message.content` is
+an **array** of blocks, and the pair also carries `"toolDenialKind": "user-rejected"`. A declined prompt and a declined
+`AskUserQuestion` write this same pair, which is why one mechanism recovers all three cases.
 
 **A failing hook**: a non-zero exit renders an error block in the TUI carrying the hook's stderr, while hook stdout is
 never shown. `exit 2` *blocks*, event-specifically, and feeds stderr to the model. A hook entry with no `timeout`

@@ -41,6 +41,13 @@ pub struct AppState {
     /// inserting is two steps, and every request runs in its own task, so without a claim two
     /// concurrent opens both pass the one-live-hub check.
     hub_claims: Mutex<HashSet<String>>,
+    /// The generation each session's transcript watch (`crate::transcript`) is currently on.
+    /// Starting a watch records a fresh value here; the watch keeps polling only while its own
+    /// value is still the one recorded, which is what lets a newer watch for the same session
+    /// retire an older one rather than race it. The counter it is drawn from is global, not
+    /// per-session, because uniqueness is all that is asked of it.
+    transcript_watch_generations: Mutex<HashMap<String, u64>>,
+    next_transcript_watch_generation: std::sync::atomic::AtomicU64,
     /// The per-session write queues. Every message Octoboard sends into a running agent goes
     /// through them; see `crate::outbox`.
     outbox: Outbox,
@@ -96,6 +103,8 @@ impl AppState {
             mcp_tokens: RwLock::new(HashMap::new()),
             turns: Mutex::new(HashMap::new()),
             hub_claims: Mutex::new(HashSet::new()),
+            transcript_watch_generations: Mutex::new(HashMap::new()),
+            next_transcript_watch_generation: std::sync::atomic::AtomicU64::new(0),
             outbox: Outbox::default(),
             events,
             shutdown: tokio::sync::Notify::new(),
@@ -243,6 +252,33 @@ impl AppState {
         }
         session.status = status;
         self.save_session(&session)
+    }
+
+    /// Applies a status on behalf of a reporter whose conclusion only holds while the session is
+    /// still `expected`, and says whether it moved. The check and the write are one step, so a
+    /// conclusion that has gone stale cannot overwrite what moved the session on.
+    ///
+    /// A hook event needs none of this and cannot use it: it reports an event that happened, which
+    /// is true whatever the session's status is, so it has no status to expect.
+    pub fn apply_reported_status_if(
+        &self,
+        id: &str,
+        expected: SessionStatus,
+        status: SessionStatus,
+    ) -> Result<bool> {
+        // `expected` is never dormant — the statuses a reporter waits on all mean a process is
+        // running — which is what lets the conditional write stand in for the dormancy guard
+        // [`Self::apply_hook_status`] needs. `status` must not be dormant either: a session becomes
+        // dormant together with its `ended_at`, and this writes the status column alone.
+        debug_assert!(!expected.is_dormant());
+        debug_assert!(!status.is_dormant());
+        match self.store.update_session_status_if(id, expected, status)? {
+            Some(session) => {
+                self.publish_session(&session);
+                Ok(true)
+            }
+            None => Ok(false),
+        }
     }
 
     // -- MCP tokens ----------------------------------------------------------
@@ -480,6 +516,37 @@ impl AppState {
     fn forget_session_bookkeeping(&self, id: &str) {
         self.revoke_mcp_tokens(id);
         self.turns.lock().expect("turn lock poisoned").remove(id);
+        self.transcript_watch_generations
+            .lock()
+            .expect("transcript watch lock poisoned")
+            .remove(id);
+    }
+
+    // -- transcript watch bookkeeping -----------------------------------------
+
+    /// Starts a new transcript watch for this session and returns the generation it owns.
+    /// Recording it here retires whatever watch was running for the session before: its generation
+    /// is no longer the one found under this id, so it stops at its next poll instead of racing the
+    /// new one. See `crate::transcript::watch_for_rejection`.
+    pub fn begin_transcript_watch(&self, id: &str) -> u64 {
+        let generation = self
+            .next_transcript_watch_generation
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.transcript_watch_generations
+            .lock()
+            .expect("transcript watch lock poisoned")
+            .insert(id.to_string(), generation);
+        generation
+    }
+
+    /// Whether `generation` is still this session's current transcript watch — false once a newer
+    /// watch has taken over, or the session's bookkeeping has been dropped entirely.
+    pub fn transcript_watch_current(&self, id: &str, generation: u64) -> bool {
+        self.transcript_watch_generations
+            .lock()
+            .expect("transcript watch lock poisoned")
+            .get(id)
+            == Some(&generation)
     }
 
     /// Records that the session has had a turn, so a later resume reopens the stored conversation

@@ -43,6 +43,7 @@ everything it can do goes through the external interface below.
 | `src/hostfs.rs` | Host role's filesystem work: browsing directories, finding git repositories under a parent directory, cloning one, lexical path normalisation |
 | `src/env_shell.rs` | Captures the user's real shell environment (`$SHELL -l -i -c 'env -0 && printf <marker>'`) that every agent is launched with |
 | `src/hooks.rs` | Turns one agent's hook event payload into a session status; each agent's events and payload shape differ |
+| `src/transcript.rs` | Watches a Claude Code session's own transcript JSONL for the one status change its hooks never report — a declined permission prompt or `AskUserQuestion` — and lowers the raised hand when found; the only place a session's status comes from something other than a hook event |
 | `src/hook_mode.rs` | The `octoboardd hook` CLI mode itself |
 | `src/loopback.rs` | A minimal HTTP client for the daemon's own loopback address, shared by `hook_mode.rs` and `mcp/stdio.rs` — the two CLI modes that call the running daemon from a separate process |
 | `src/mcp/` | The Octoboard MCP server — see below |

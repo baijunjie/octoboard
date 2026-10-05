@@ -5,9 +5,11 @@
 //!
 //! - **Claude Code**: `Stop` and `StopFailure` are mutually exclusive, so both mean "turn over"; a
 //!   `Stop` carrying a non-empty `background_tasks` means paused on background work, not finished;
-//!   and `Notification` carries the state in `notification_type`, of which only `idle_prompt` was
-//!   ever seen firing (its `permission_prompt` never fired at all, so a pending prompt comes from
-//!   `PermissionRequest`).
+//!   and `Notification` carries the state in `notification_type`, of which `idle_prompt` is the only
+//!   one worth mapping: its `permission_prompt` does fire, but a fixed six seconds after the
+//!   `PermissionRequest` that already raised the hand, so it says nothing new. `idle_prompt` is no
+//!   use as a general backstop either, being armed by `Stop` — a turn that fires no `Stop` never
+//!   produces one.
 //! - **Grok**: `Stop` fires twice per session — once per turn with `reason: "end_turn"` and again
 //!   at teardown with `reason: "shutdown"` — so an unfiltered mapping ends every session with a
 //!   phantom finished turn. Payload keys exist in both camelCase and snake_case.
@@ -21,6 +23,11 @@
 //! no tool or turn events (only its `idle_prompt` backstop follows). None is recoverable by matching
 //! terminal text, which would need a VT emulator in the daemon and differs between an agent's own
 //! renderers.
+//!
+//! The one case not left as a gap is a Claude Code session that is *waiting on the user* when such an
+//! interrupt lands — declining a permission prompt or its `AskUserQuestion` is silent in exactly the
+//! same way, and leaving it would strand the session's raised hand with nothing to lower it. That one
+//! is recovered outside this mapping, from the agent's own transcript; see `crate::transcript`.
 //!
 //! For the payload fields behind these decisions — what each event carries, what it can be
 //! correlated on, and what never fires — see `docs/agent-cli-reference.md`.

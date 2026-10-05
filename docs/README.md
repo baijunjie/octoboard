@@ -8,8 +8,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   per-agent config directories; the three ways a project is associated, what is editable afterwards, and what deleting
   either one does.
 - [Sessions](product/sessions.md) — hub and project sessions, the three-level menu, agent selection, the five session
-  statuses and their transitions, the raised hand and its notification, archiving, interruption and resuming, and the
-  terminal.
+  statuses and their transitions, the raised hand and its notification, how a declined Claude Code prompt lowers the
+  hand from the agent's own transcript and what that costs to keep working, archiving, interruption and resuming, and
+  the terminal.
 - [Hub orchestration](product/hub-orchestration.md) — what the hub can do: its tools and a project session's `report`,
   the brief a task is handed over as, the reporting loop and what happens when a session stops without reporting,
   automatic archiving, and which sessions the hub drives.
@@ -43,14 +44,20 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 
 - [Probing agent CLIs](memory/probing-agent-clis.md) — how to establish what the three agent CLIs actually do, and how to
   probe a live Octoboard session that launches them: which session markers to strip and why enumerating them beats
-  matching a prefix, why neither `--help` nor the binary's own strings can be trusted, how to settle a question without
-  spending a model turn and where that stops being yours to decide, how to prove a per-launch injection and an MCP tool
-  out of band rather than through the model, why a probe expecting "no" needs a positive control, and the residue a probe
-  leaves — in the user's configuration and in their live `~/.octoboard` data.
+  matching a prefix, why neither `--help`, the binary's own strings, nor a config file's silent acceptance of a
+  capability's name can be trusted, how to settle a question without spending a model turn and where that stops being
+  yours to decide, how to prove a per-launch injection and an MCP tool out of band rather than through the model, why a
+  probe expecting "no" needs a positive control and why a measured silence also has to be bounded by what would have
+  ended it, why a permission probe has to be set up against the user's own settings with the mode in effect confirmed
+  from the session itself, and the residue a probe leaves — in the user's configuration and in their live
+  `~/.octoboard` data.
 - [Verifying the desktop UI](memory/verifying-the-desktop-ui.md) — how to verify terminal and UI behaviour in the real
-  app: why a UI change has to be launched rather than only reviewed, how to get an error out of a blank window,
-  ruling out a locked screen before trusting a capture, bisecting a symptom against the daemon, what a scripted GUI
-  probe can and cannot prove, where to watch for a report page's blocked navigation, where a network probe's positive
-  control has to come from, and which checks need a person.
+  app: why a UI change has to be launched rather than only reviewed, why a daemon-side change needs the daemon built
+  and the running sidecar's binary confirmed before anything read off the window means anything, how to get an error
+  out of a blank window, ruling out a locked screen before trusting a capture, bisecting a symptom against the daemon,
+  what a scripted GUI probe can and cannot prove and why its setup should go through the daemon's protocol instead,
+  where to watch for a report page's blocked navigation, where a network probe's positive control has to come from,
+  and which checks need a person.
 - [Writing automated tests](memory/writing-automated-tests.md) — the fixture conventions this project's tests need on
-  macOS, starting with why an executable written fresh per test flakes only under a parallel run.
+  macOS: why an executable written fresh per test flakes only under a parallel run, and how to verify behaviour the
+  daemon derives from an agent's own output by replaying a committed capture rather than staging a live session.

@@ -37,6 +37,11 @@ executable's own strings — down to a hint text describing the option that swit
 server-side flag, leaving the option accepted and completely inert. Measure the behaviour first and read strings to
 explain the measurement, never to conclude that a capability is available.
 
+A configuration file's silence says no more than the strings do. The hook-event names in an injected settings file are
+accepted whatever is written in them, invented ones included, while the same file's permission rules are validated
+loudly — so "it was registered and the session started without complaint" is not evidence the event exists, and the
+loud validation next door is exactly what makes it feel like evidence.
+
 ## Settle it without spending a model turn, and ask before redirecting traffic
 
 Before running a real session to find out what an agent does, try the free routes. The CLIs' own inspection
@@ -83,6 +88,28 @@ you may not have thought to control for — Grok locates a project by walking up
 project instructions without one, and folder trust and server-side feature flags gate other agents' discovery the same
 way — and each of them turns a whole matrix negative in a way indistinguishable from the thing being measured.
 
+A negative that is a *silence* — "no event fires on this path" — needs one thing more than the control: knowing what
+would have ended it. That becomes a finding only once you can say why waiting longer could never have produced the
+event, because the event you were waiting for is armed by a step the path under test never reaches, for instance.
+Establish that mechanism, not a duration; without it the probe has measured its own patience and "wait longer" stays an
+objection you cannot answer.
+
+## A permission probe runs under the user's own settings, and they void the obvious probe command
+
+Permission-prompt behaviour cannot be probed before reading the settings file of the config directory the CLI resolves
+(`settings.json` for Claude Code): a default-mode setting there can put every session into a mode that never asks, and
+the allow list can pre-approve the very call the probe meant to be denied on. Both produce the same lone observation —
+no prompt appeared — and it reads as "this build does not prompt here".
+
+So pick a call that neither the allow list nor any pattern in it covers, and ask for the mode explicitly on the command
+line. A reproduction command copied from a bug ticket is among the likeliest things to be allowlisted, exactly because
+it is something the user runs often. The command line overrides the default-mode setting; nothing overrides the allow
+list.
+
+Then confirm from the running session itself — its status line names the permission mode in effect — that the mode you
+asked for is the mode you got, before reading anything into a prompt that did not appear. Asking for a mode is not
+getting it.
+
 ## A probe is not read-only: give it its own scratch directory
 
 Running these CLIs writes into the user's real configuration. The product's rule against touching the user's global
@@ -95,9 +122,11 @@ probing is done tell the user what it left in their configuration.
 
 Use a dedicated scratch directory as cwd, never a shared one such as `/tmp`: each CLI records a per-directory trust
 decision in the user's own config (Claude Code in the `.claude.json` of the config directory in effect, under
-`projects[<path>].hasTrustDialogAccepted`), so probing directly in `/tmp` marks all of `/tmp` trusted and every later
-probe there silently starts out trusted, quietly invalidating any test of untrusted-workspace behaviour. Probes also
-leave session records behind in the user's agent directories.
+`projects[<path>].hasTrustDialogAccepted`), so probing directly in `/tmp` marks `/tmp` itself trusted and every later
+probe run with `/tmp` as its own cwd silently starts out trusted, quietly invalidating any test of untrusted-workspace
+behaviour. That decision is keyed on the exact path and reaches nothing below it: a parent directory carrying an
+accepted trust flag leaves a fresh subdirectory of it untrusted, so never carry "that directory is already trusted"
+over to a path beneath it. Probes also leave session records behind in the user's agent directories.
 
 A fresh scratch directory is by definition untrusted, and Claude Code stops there on its folder-trust dialog and
 does nothing else — a probe that looks like it produced no output at all is usually sitting on that dialog. Grepping

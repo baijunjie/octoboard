@@ -474,6 +474,37 @@ impl Store {
         Ok(())
     }
 
+    /// Moves a session to `status`, but only while it is still `expected`, and returns the record
+    /// as it now stands when it moved. Both statements run under one lock, so a caller whose write
+    /// is only valid while the session has not moved on cannot be overtaken between deciding and
+    /// writing — which an [`Self::update_session`] after a separate [`Self::get_session`] can be.
+    /// `None` means the session was something other than `expected`, or is gone. Asking for the
+    /// status it already has counts as a move, so a caller that would gain nothing from that should
+    /// not ask.
+    pub fn update_session_status_if(
+        &self,
+        id: &str,
+        expected: SessionStatus,
+        status: SessionStatus,
+    ) -> Result<Option<Session>> {
+        let conn = self.lock();
+        let moved = conn.execute(
+            "UPDATE sessions SET status = ?3 WHERE id = ?1 AND status = ?2",
+            params![id, enum_to_text(&expected), enum_to_text(&status)],
+        )?;
+        if moved == 0 {
+            return Ok(None);
+        }
+        let session = conn
+            .query_row(
+                &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1"),
+                params![id],
+                read_session,
+            )
+            .optional()?;
+        Ok(session)
+    }
+
     pub fn delete_session(&self, id: &str) -> Result<()> {
         self.lock()
             .execute("DELETE FROM sessions WHERE id = ?1", params![id])?;
@@ -698,6 +729,54 @@ mod tests {
             started_at: 0,
             ended_at: None,
         }
+    }
+
+    /// A reporter whose conclusion only holds while the session has not moved on writes through
+    /// this, so the check and the write must be one step: it moves the session only from the status
+    /// it expected, and says which happened.
+    #[test]
+    fn a_conditional_status_write_moves_the_session_only_from_the_status_it_expected() {
+        let store = Store::open(&temp_db("conditional-status")).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        let mut waiting = session(None);
+        waiting.status = SessionStatus::WaitingUser;
+        store.insert_session(&waiting).expect("insert");
+
+        // From the expected status it moves, and hands back the record as it now stands.
+        let moved = store
+            .update_session_status_if("session-1", SessionStatus::WaitingUser, SessionStatus::Idle)
+            .expect("conditional update");
+        assert_eq!(moved.map(|s| s.status), Some(SessionStatus::Idle));
+
+        // The same write a second time finds the session already moved on and leaves it alone —
+        // this is the stale reporter whose conclusion no longer holds.
+        let again = store
+            .update_session_status_if("session-1", SessionStatus::WaitingUser, SessionStatus::Idle)
+            .expect("conditional update");
+        assert!(again.is_none());
+
+        // And a status the session is not in cannot be overwritten by one that expects it.
+        store
+            .update_session_status_if("session-1", SessionStatus::Idle, SessionStatus::Working)
+            .expect("conditional update")
+            .expect("the session was idle, so this one moves it");
+        let stale = store
+            .update_session_status_if("session-1", SessionStatus::WaitingUser, SessionStatus::Idle)
+            .expect("conditional update");
+        assert!(stale.is_none());
+        assert_eq!(
+            store.get_session("session-1").unwrap().unwrap().status,
+            SessionStatus::Working,
+            "a write whose expected status did not hold must not have landed"
+        );
+
+        // An id that is not there is simply no move, not an error.
+        assert!(store
+            .update_session_status_if("nobody", SessionStatus::WaitingUser, SessionStatus::Idle)
+            .expect("conditional update")
+            .is_none());
     }
 
     const OLD_SESSIONS: &str = r#"

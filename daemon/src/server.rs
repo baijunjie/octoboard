@@ -12,9 +12,10 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{broadcast, mpsc};
 
 use crate::hooks;
-use crate::protocol::{Event, Request, SessionStatus, TermControl};
+use crate::protocol::{Agent, Event, Request, SessionStatus, TermControl};
 use crate::reporting;
 use crate::state::{AppState, TurnClose};
+use crate::transcript;
 
 /// Events queued for one control client before its writer is considered the bottleneck. Small:
 /// these are state records, not terminal output, and a client this far behind is better served by
@@ -309,6 +310,19 @@ async fn hook_callback(
                         let status = suppress_unanswerable_hand(&state, &session_id, status);
                         if let Err(err) = state.apply_hook_status(&session_id, status) {
                             tracing::debug!(session = %session_id, %event, %err, "applying the hook status failed");
+                        }
+                        // Claude Code emits no hook event at all for a rejected permission prompt
+                        // or a declined `AskUserQuestion` — the transcript is the only trace either
+                        // leaves. Spawned, not awaited: the watch is expected to far outlive this
+                        // response, which the adapters' few-second hook timeout would not allow.
+                        if agent == Agent::Claude && status == SessionStatus::WaitingUser {
+                            transcript::watch_for_rejection(
+                                &state,
+                                &session_id,
+                                payload
+                                    .get("transcript_path")
+                                    .and_then(serde_json::Value::as_str),
+                            );
                         }
                         // Releasing a message queued while the session could not take one writes
                         // into its PTY, which blocks; it must not sit on this response, where the

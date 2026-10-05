@@ -9,6 +9,18 @@ the whole chain positively: the window paints, the sidecar starts, the webview c
 session's terminal renders. Capturing the window needs no Accessibility permission of its own, so this check is
 always available and costs about a minute.
 
+## Build the daemon and confirm what the running sidecar executes before trusting any verification of it
+
+Launching the app in dev mode does not build the daemon: the dev command starts the frontend dev server only (for the
+build step itself and when to rerun it, see the "Development" section of `app/README.md`). In a worktree that has never
+been built, the missing sidecar fails loudly at compile time; in one that has been built before, the launch silently
+uses the binary already sitting there, and a verification of a daemon-side change then measures the *old* behaviour and
+reports a pass or a failure that has nothing to do with the change. So build the daemon first, then confirm positively
+that the running sidecar is executing it: take the content hash of the executable the live sidecar process has open and
+compare it against the fresh build output. The sidecar directory the build script copies into is not that executable —
+the process runs from a further copy under the Tauri crate's own target directory — so an up-to-date sidecar directory
+on its own proves nothing about what is running.
+
 ## Rule out a locked screen before reading anything off a window capture
 
 A locked screen and a sleeping display look identical from the outside: under either one every application reports
@@ -61,6 +73,9 @@ where the same key sent as `key code` moves it immediately; its clicks (`c:`) ar
 Two further limits on macOS: driving the real app this way requires Accessibility permission granted to the host
 application of whatever runs the script, and native `<select>` popups cannot be driven through the accessibility tree
 at all — to make a control scriptable, build it from something other than a native `<select>`, or drive it by hand.
+
+So keep the GUI out of the setup: create the consoles, projects and sessions a verification needs by sending the
+daemon's own protocol requests, and drive only the behaviour under test through the window.
 
 ## Input-method checks have to be done by a person
 

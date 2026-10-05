@@ -132,16 +132,21 @@ Transitions:
 
 ### What the statuses are derived from
 
-Status comes exclusively from hook events Octoboard injects into each agent per launch, never from reading the
-terminal's rendered output. A session's end is not taken from a hook either: the process is observed directly.
+Status comes from hook events Octoboard injects into each agent per launch, never from reading the terminal's rendered
+output. There is one exception, and only one: while a **Claude Code** session is *waiting for the user*, Octoboard also
+reads that session's own transcript file — the machine-readable record the agent keeps of the conversation, still not
+its rendered output — because a declined prompt is reported by no hook event at all; see "Declining a Claude Code
+prompt or question" below. A session's end is not taken from a hook either: the process is observed directly.
 
 Where an agent reports nothing, the status simply stays at its last reported value. The known cases, which are
 limitations of what the agents expose rather than of this one:
 
 - A turn that ends with the agent asking a question **as plain prose** is indistinguishable from a finished turn on
   all three agents, so such a session reads as *awaiting instructions* rather than waiting for the user.
-- When the user cancels an in-flight turn in Claude Code, nothing is reported at all; the session keeps reading as
-  *working* until the next prompt is submitted.
+- When the user cancels an in-flight turn in Claude Code, nothing is reported at all; a session that was *working*
+  keeps reading as working until the next prompt is submitted. A session that was *waiting for the user* falls into
+  the same silence, but there the hand would be left up with nothing to lower it, so that one case is recovered
+  from the transcript instead — see "Declining a Claude Code prompt or question" below.
 - Claude Code reports nothing while it is on its workspace-trust prompt, so a session sitting there keeps the status its
   launch gave it — *working* or *awaiting instructions* — and raises no hand, although it is waiting for a person.
 - Grok Build's bash mode (`!`) fires no tool or turn events, so work done through it never shows in the status; Grok's
@@ -173,14 +178,56 @@ own row:
   when none is.
 
 **The user answers in the session's terminal**, and the status leaves *waiting for the user* on the
-agent's next event. Nobody can answer for them: the hub is told to leave such a session alone, and a
-message addressed to it is held until the user is done — see "Messages held until a session can take
-them" in `docs/product/hub-orchestration.md`.
+agent's next event — or, where the answer was a decline and no event follows, on the decline showing
+up in the agent's own record of the conversation, which only Claude Code sessions are read for (see
+"Declining a Claude Code prompt or question" below). Nobody can answer for them: the hub is told to
+leave such a session alone, and a message addressed to it is held until the user is done — see
+"Messages held until a session can take them" in `docs/product/hub-orchestration.md`.
 
 Where the user's own Codex configuration **resolves approval requests by itself**, Octoboard raises
 no hand at all: the permission event still fires, but Codex resolves the request, no dialog ever
 reaches the user and the tool proceeds — a hand there would ask them to answer something they never
 see. Those sessions keep reading as *working*.
+
+### Declining a Claude Code prompt or question
+
+A Claude Code session with its hand up that is then **declined** — the permission prompt answered No
+or dismissed with Esc, or the agent's own ask-the-user question cancelled — reports nothing at all:
+no hook event of any kind follows, while the agent is already back at an empty prompt. So for this
+one case Octoboard reads the session's own transcript file, the record Claude Code keeps of the
+conversation, and moves the session to *awaiting instructions* once the decline appears there,
+normally within about a second of the user answering. Both ways a Claude Code session raises its hand
+are covered: a permission prompt and its own ask-the-user question.
+
+What follows from that move is nothing special to this path: the raised hand comes down on the
+session row, its project row and its console row, the Dock badge count drops, and a message queued
+for the session while its hand was up is released (see "Messages held until a session can take them"
+in `docs/product/hub-orchestration.md`). A later prompt or question in the same session raises the
+hand and notifies afresh, as any other does.
+
+- The agent prints that the turn was interrupted, but its process is still running, so the session is
+  *awaiting instructions* and not *interrupted*.
+- No turn end was reported, so no report is synthesised for the hub for that turn either (see "When a
+  session does not report" in `docs/product/hub-orchestration.md`).
+- **Claude Code sessions only.** Codex and Grok Build report a decline through their own hook events,
+  and the transcript read here is Claude Code's own format; neither is watched this way.
+- Only a hand that is currently up is recovered. A cancelled in-flight turn in a session that reads
+  as *working* is still reported by nothing — see the limitation list in "What the statuses are
+  derived from" above.
+- Where an ask-the-user question is left not by declining it but by asking to chat about it instead,
+  the turn in fact carries on; Octoboard reads that as a decline too, so the session reads as
+  *awaiting instructions* for a moment until the agent's next event puts it back to *working*.
+- If the record cannot be read — the pending-decision event named no transcript file, or the file is
+  unreadable — nothing lowers the hand, and the session keeps it up until something else moves its
+  status.
+
+**What this costs to keep working.** The transcript is a file format Claude Code owns and rewrites on
+upgrade, and a decline is recognised by two fixed marker strings inside it; the behaviour was
+measured against Claude Code 2.1.274 and 2.1.286, and the hand was seen coming down in the running
+application against 2.1.289. A release that renames those markers breaks this
+silently and completely — there is no error, nothing is reported as having failed, and the only
+symptom is a declined prompt leaving the raised hand up with nothing to lower it. Nothing Octoboard
+can observe by itself tells that apart from a user who simply has not answered yet.
 
 ## Archiving, interruption and resuming
 

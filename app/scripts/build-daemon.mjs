@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 // Builds `octoboardd` in release mode and copies it into `src-tauri/binaries/` under the
-// target-triple-suffixed name Tauri's `externalBin` requires, so `npm run tauri build` (or
-// `tauri dev`, via `beforeDevCommand`/`beforeBuildCommand` in tauri.conf.json) works from a clean
-// checkout without a manual copy step.
+// target-triple-suffixed name Tauri's `externalBin` requires, so `npm run tauri build` works from a
+// clean checkout without a manual copy step: `beforeBuildCommand` in tauri.conf.json runs it.
+//
+// `tauri dev` does NOT run it — `beforeDevCommand` starts the frontend dev server and nothing else.
+// So a dev run after a change to `daemon/` serves whatever binary is already in `binaries/`: a
+// never-built checkout fails loudly on sidecar resolution, but a previously built one silently runs
+// the stale daemon. Run this by hand before verifying any daemon-side change through the app.
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
