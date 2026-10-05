@@ -32,6 +32,16 @@ explanation, and never leaves a window that cannot be closed.
 If the daemon starts but dies later, the application says so and asks the user to restart Octoboard; it does not
 silently keep showing a stale session list.
 
+## Who can reach the daemon
+
+The daemon has no login or token. **Any program running on this machine can connect to it and do everything the
+application can**: create consoles and sessions, start agents, type into their terminals.
+
+**A web page open in a browser cannot.** When a browser makes a request on behalf of a page, the daemon answers `403`
+unless that page is the application's own window or is served over `http` or `https` from this machine's loopback
+address, on any port. A site that makes its own name resolve to `127.0.0.1` is refused as well. Programs that are not
+browsers, such as scripts, are not subject to this check, and neither is the application's own window.
+
 ## Losing the daemon connection
 
 A dropped connection is retried automatically a couple of times with a short backoff. While that is happening a

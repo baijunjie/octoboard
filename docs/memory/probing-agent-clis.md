@@ -139,13 +139,20 @@ its own — a pasted line's trailing CR included — ends the session instead.
 When several probes run concurrently, each needs its own distinct scratch directory, and expect to see the other
 probes' trust entries and session records — that residue is not evidence of a defect.
 
-## A probe that goes through the daemon runs against the user's live Octoboard data
+## A probe that goes through the daemon runs against the user's live Octoboard data unless it needs no logged-in agent
 
-There is no isolating it. The daemon derives its directory and its database from `$HOME`, and the agents it launches
-need the real `$HOME` to find their credentials and trust state, so the probe cannot be handed a sandbox home. Expect
-it to create consoles and sessions in the user's real board and to run any pending schema migration against the user's
-live database — copy that database aside first whenever the change being probed touches the schema, and plan the
-cleanup as part of the probe rather than after the fact.
+The daemon derives its data directory, its database and its single-instance lock from `$HOME`, and writes its port file
+to `$TMPDIR`. So a probe that does not need a logged-in agent — the protocol, the terminal socket, the window's
+connection — runs the daemon, or a copy of the app, with a throwaway `HOME` and `TMPDIR`: the user's board is untouched
+and it runs alongside their own Octoboard. For a session that draws real output there without a model turn, open a
+Codex session: with no login under that `HOME` it stops at its sign-in screen. Make sure `CODEX_HOME` is not set in
+the environment it is launched from, or Codex reads the user's own configuration and login after all. Do not count on
+a changed `HOME` hiding Claude Code's login, which lives in the macOS keychain.
+
+A probe that does need a logged-in agent cannot be isolated this way, because the agents need the real `$HOME` to find
+their credentials and trust state. Expect it to create consoles and sessions in the user's real board and to run any
+pending schema migration against the user's live database — copy that database aside first whenever the change being
+probed touches the schema, and plan the cleanup as part of the probe rather than after the fact.
 
 Clean up in the order the daemon enforces, and leave time between the steps: archiving a session returns as soon as its
 record is written, while the agent process is still only being asked to exit, so deleting the console straight

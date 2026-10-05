@@ -711,10 +711,10 @@ pub fn install_panic_hook() {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
-    fn app_state(name: &str) -> AppState {
+    pub(crate) fn app_state(name: &str) -> AppState {
         let dir = std::env::temp_dir().join(format!(
             "octoboardd-state-{name}-{}-{:?}",
             std::process::id(),

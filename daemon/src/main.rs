@@ -3,6 +3,7 @@
 //! projects and sessions). The desktop application is purely a client of it, over the protocol in
 //! `daemon/PROTOCOL.md`.
 
+mod access;
 mod adapter;
 mod coordinator;
 mod env_shell;

@@ -6,6 +6,28 @@ between them (see "Why the daemon is split out" in `docs/architecture.md`), so e
 The daemon binds to `127.0.0.1` on an ephemeral port and prints `octoboardd listening on 127.0.0.1:<port>` on stdout as
 its first line; it also writes the port to `$TMPDIR/octoboardd.port`. The application reads the stdout line.
 
+## Who may connect
+
+The daemon has no authentication: it trusts local processes and does not trust web pages, which can reach a loopback
+port and, on a WebSocket handshake, are not subject to CORS. Every request on every route, the 404 fallback included, is
+checked before any handler or WebSocket upgrade runs, and a request that fails the check gets `403`.
+
+- **`Host`** must be a loopback name: `localhost`, `127.0.0.1` or `[::1]`, with any port, compared case-insensitively
+  and exactly (`127.1` and the like are refused). A missing, repeated or malformed `Host` is refused. This is what stops
+  DNS rebinding.
+- **No `Origin` header** is allowed. Non-browser clients send none: scripts, the hook callback (`octoboardd hook`), the
+  MCP child process (`octoboardd mcp`), native applications.
+- **An `Origin` header** (a browser always sends one on a WebSocket handshake and on a cross-origin `POST`) is allowed
+  only from:
+  - the packaged application's webview: `tauri://localhost`, or `http://tauri.localhost` / `https://tauri.localhost`;
+  - an `http` or `https` page on a loopback host, any port — the dev servers;
+  - the same origin as the `Host`.
+
+  Anything else, including `null` and a malformed value, is refused.
+
+A new client therefore either sends no `Origin`, or is served from one of the origins above. A client reaching the daemon
+under any other host name is refused until the rule is widened (`host_allowed` in `daemon/src/access.rs`).
+
 ## `GET /ws/control` — management and status
 
 Text frames, JSON, one object per frame. Every client request may carry an `"id"` string; the daemon answers that

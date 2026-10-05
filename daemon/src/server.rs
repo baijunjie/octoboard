@@ -23,6 +23,12 @@ use crate::transcript;
 const OUTBOX_CAPACITY: usize = 256;
 
 pub fn router(state: Arc<AppState>) -> Router {
+    // The guard wraps the finished router, fallback included, so a route added to `routes` later
+    // cannot end up outside it. A refused request never reaches a handler or a WebSocket upgrade.
+    routes(state).layer(axum::middleware::from_fn(crate::access::guard))
+}
+
+fn routes(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/ws/control", get(control_ws))
         .route("/ws/term/:session", get(term_ws))
@@ -465,4 +471,126 @@ struct McpCall {
     tool: String,
     #[serde(default)]
     arguments: serde_json::Value,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::{BufRead, BufReader, Write};
+    use std::net::TcpStream;
+
+    use super::*;
+    use crate::state::tests::app_state;
+
+    /// Serves the real router on an ephemeral loopback port and returns the port.
+    async fn serve(name: &str) -> u16 {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("a loopback port");
+        let port = listener.local_addr().expect("a bound address").port();
+        let state = Arc::new(app_state(name));
+        tokio::spawn(async move { axum::serve(listener, router(state)).await });
+        port
+    }
+
+    /// Sends one request with exactly the headers given (plus a body length) and returns the
+    /// response's status code, read from the status line alone so an upgraded connection does not
+    /// have to close first.
+    fn status_of(port: u16, request_line: &str, headers: &[&str]) -> u16 {
+        let mut request = format!("{request_line} HTTP/1.1\r\n");
+        for header in headers {
+            request.push_str(header);
+            request.push_str("\r\n");
+        }
+        request.push_str("Content-Length: 2\r\n\r\n{}");
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
+        stream.write_all(request.as_bytes()).expect("write");
+        let mut status_line = String::new();
+        BufReader::new(stream)
+            .read_line(&mut status_line)
+            .expect("read");
+        status_line
+            .split_whitespace()
+            .nth(1)
+            .and_then(|status| status.parse().ok())
+            .expect("a status line")
+    }
+
+    /// A refused request must not reach a handler, and an accepted one must: `/mcp/:token`
+    /// answers 200 to a token it does not know, which no other layer would, while the upgrade
+    /// routes answer 400 to a handshake that is not one — still not the 403 of the guard.
+    #[tokio::test]
+    async fn every_route_is_behind_the_origin_guard() {
+        let port = serve("guard").await;
+        let host = format!("Host: 127.0.0.1:{port}");
+        let tests = tokio::task::spawn_blocking(move || {
+            let routes = [
+                "GET /ws/control",
+                "GET /ws/term/s",
+                "POST /hook/s",
+                "POST /mcp/x",
+            ];
+            for route in routes {
+                let forbidden = |headers: &[&str]| status_of(port, route, headers) == 403;
+                assert!(
+                    forbidden(&[&host, "Origin: https://evil.example"]),
+                    "{route}"
+                );
+                assert!(forbidden(&[&host, "Origin: null"]), "{route}");
+                assert!(
+                    forbidden(&["Host: evil.example", "Origin: http://evil.example"]),
+                    "{route}"
+                );
+                assert!(forbidden(&["Host: evil.example"]), "{route}");
+                assert!(forbidden(&[]), "{route}");
+                assert!(!forbidden(&[&host]), "{route}");
+                assert!(
+                    !forbidden(&[&host, "Origin: http://localhost:5174"]),
+                    "{route}"
+                );
+                assert!(!forbidden(&[&host, "Origin: tauri://localhost"]), "{route}");
+            }
+            assert_eq!(status_of(port, "POST /mcp/x", &[&host]), 200);
+        });
+        tests.await.expect("the checks ran");
+    }
+
+    /// The handshake a browser sends: a refusal must come before the upgrade, and an allowed
+    /// origin, or none, must get through it.
+    #[tokio::test]
+    async fn a_websocket_handshake_is_refused_or_upgraded_by_origin() {
+        let port = serve("handshake").await;
+        let host = format!("Host: 127.0.0.1:{port}");
+        tokio::task::spawn_blocking(move || {
+            let handshake = |origin: Option<&str>| {
+                let mut headers = vec![
+                    host.as_str(),
+                    "Connection: Upgrade",
+                    "Upgrade: websocket",
+                    "Sec-WebSocket-Version: 13",
+                    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+                ];
+                headers.extend(origin);
+                status_of(port, "GET /ws/control", &headers)
+            };
+            assert_eq!(handshake(Some("Origin: https://evil.example")), 403);
+            assert_eq!(handshake(Some("Origin: tauri://localhost")), 101);
+            assert_eq!(handshake(None), 101);
+        })
+        .await
+        .expect("the checks ran");
+    }
+
+    /// A path no route serves is still behind the guard: hostile callers learn nothing from it.
+    #[tokio::test]
+    async fn the_fallback_is_behind_the_origin_guard() {
+        let port = serve("fallback").await;
+        let host = format!("Host: 127.0.0.1:{port}");
+        tokio::task::spawn_blocking(move || {
+            let hostile = status_of(port, "GET /nope", &[&host, "Origin: https://evil.example"]);
+            assert_eq!(hostile, 403);
+            assert_eq!(status_of(port, "GET /nope", &[&host]), 404);
+        })
+        .await
+        .expect("the checks ran");
+    }
 }

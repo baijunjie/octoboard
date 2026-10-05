@@ -22,8 +22,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   are never modified, the three things injected per launch and the hub's generated instruction file, the launch
   environment, Claude Code's workspace-trust prompt, how Octoboard answers it and trusted folders, and the per-agent specifics.
 - [Application lifecycle](product/application-lifecycle.md) — what Octoboard runs on and how it is distributed, startup
-  and the single-instance rule, losing the daemon connection, the quit confirmation and which gestures it covers, how to
-  quit a window that has stopped responding, crash behaviour, and the files Octoboard keeps under `~/.octoboard`.
+  and the single-instance rule, who can reach the daemon (any local program, but no web page in a browser), losing the
+  daemon connection, the quit confirmation and which gestures it covers, how to quit a window that has stopped
+  responding, crash behaviour, and the files Octoboard keeps under `~/.octoboard`.
 
 ## Reference
 
@@ -52,11 +53,13 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   probe expecting "no" needs a positive control and why a measured silence also has to be bounded by what would have
   ended it, why a permission probe has to be set up against the user's own settings with the mode in effect confirmed
   from the session itself, and the residue a probe leaves — in the user's configuration and in their live
-  `~/.octoboard` data.
+  `~/.octoboard` data — and how a probe that needs no logged-in agent avoids the latter with a throwaway
+  `HOME`/`TMPDIR`, using Codex's sign-in screen as session output.
 - [Verifying the desktop UI](memory/verifying-the-desktop-ui.md) — how to verify terminal and UI behaviour in the real
   app: why a UI change has to be launched rather than only reviewed, why a daemon-side change needs the daemon built
   and the running sidecar's binary confirmed before anything read off the window means anything, how to get an error
-  out of a blank window, ruling out a locked screen before trusting a capture, bisecting a symptom against the daemon,
+  out of a blank window, reading what the packaged webview sends to the daemon through a wrapped sidecar (dev mode
+  sends a different origin), ruling out a locked screen before trusting a capture, bisecting a symptom against the daemon,
   what a scripted GUI probe can and cannot prove and why its setup should go through the daemon's protocol instead,
   where to watch for a report page's blocked navigation, where a network probe's positive control has to come from,
   and which checks need a person.

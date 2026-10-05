@@ -39,6 +39,19 @@ straight into the document body, and read it off a screenshot. The React error b
 this — it catches render-time throws only, while a throw from a library's own scheduled work, or from module-level
 code running before React mounts, still leaves a silent blank window.
 
+## Read what the shipped webview sends to the daemon off a packaged build, through a wrapped sidecar
+
+A dev-mode window does not answer what the shipped app puts on the wire: it loads from the dev server (`devUrl` in
+`apps/desktop/src-tauri/tauri.conf.json`), so the `Origin` it sends differs from the packaged webview's. So anything
+that depends on those requests — a check the daemon applies to them, a header the webview is expected to send — is
+verified against a packaged build. A release build has no devtools, so observe the traffic between the webview and the
+daemon instead, without touching the source: in a copy of the built `.app`, rename `Contents/MacOS/octoboardd` to
+`octoboardd.real` and put an executable in its place that starts a logging TCP proxy in front of it. The proxy has to
+print the daemon's `octoboardd listening on 127.0.0.1:<port>` line again with its own port, because the shell connects
+to whatever port that line on the sidecar's stdout names. This relies on the build being unsigned, as the swap breaks
+a signed bundle's signature. Launch the copy with a throwaway `HOME` and `TMPDIR` so the user's own data is not
+involved.
+
 ## Bisect every terminal symptom against the daemon before blaming the agent
 
 When the app shows a terminal symptom — a keystroke doing nothing, input dying after a session switch, a pane looking
