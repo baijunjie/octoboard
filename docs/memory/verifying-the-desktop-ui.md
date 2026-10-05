@@ -88,7 +88,18 @@ application of whatever runs the script, and native `<select>` popups cannot be 
 at all — to make a control scriptable, build it from something other than a native `<select>`, or drive it by hand.
 
 So keep the GUI out of the setup: create the consoles, projects and sessions a verification needs by sending the
-daemon's own protocol requests, and drive only the behaviour under test through the window.
+daemon's own protocol requests, and drive only the behaviour under test through the window. A session's status can be
+set up the same way, without an agent prompt or a model turn: POST `{"hook_event_name":"PermissionRequest"}` to the
+daemon's `/hook/<session>` to raise its hand, and a later `UserPromptSubmit` lowers it again.
+
+## Other worktrees' dev servers and daemons share the machine: confirm which one answers, stop yours by PID
+
+Several worktrees are often running at once, each with its own `packages/ui` dev server and `octoboardd`. The dev
+server's port is fixed (5174, `strictPort`), so a second one started in the background fails to bind. The URL then
+keeps answering with the other worktree's build, and the verification passes or fails against code it never ran.
+Confirm that the process listening on the port is the one you started, or start yours with `--port` on a free port.
+When cleaning up, stop only processes you started, by PID. A pattern kill such as `pkill -f target/debug/octoboardd`
+also matches every other worktree's daemon.
 
 ## Input-method checks have to be done by a person
 

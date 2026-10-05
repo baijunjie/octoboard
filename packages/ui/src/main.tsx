@@ -2,7 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 
 import { App } from "./App";
-import { resolveDaemonOrigin, resolveStartupError, daemonWsUrl } from "./daemon";
+import { resolveDaemonOrigin, resolveStartupError } from "./daemon";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { selectPlatform } from "./platform";
 import { PlatformProvider } from "./platform/react";
@@ -18,8 +18,7 @@ const startupError = resolveStartupError();
 const daemonOrigin = resolveDaemonOrigin(platform);
 // Created here rather than by a component: the connection lives as long as the window, and a
 // component that owned it would drop it, for good, on its first unmount (StrictMode's included).
-const daemon =
-  !startupError && daemonOrigin ? createDaemon(daemonWsUrl(daemonOrigin, "/ws/control")) : undefined;
+const daemon = !startupError && daemonOrigin ? createDaemon(daemonOrigin) : undefined;
 
 function screen(): React.ReactElement {
   if (startupError) {

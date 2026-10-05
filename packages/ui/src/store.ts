@@ -3,6 +3,7 @@ import { createStore, type StoreApi } from "zustand";
 import { useStore } from "zustand/react";
 
 import { DaemonClient, type ConnectionState } from "./daemon-client";
+import { daemonWsUrl, type DaemonOrigin } from "./daemon";
 import { isLive, type Console, type Event, type Host, type Page, type Project, type RequestBody, type Session } from "./protocol";
 
 /**
@@ -272,13 +273,16 @@ export interface Daemon {
   dismissTrustPrompt: (session: string) => void;
   /** Retries the control connection right away after the automatic reconnect budget was spent. */
   reconnect: () => void;
+  /** The URL of a session's terminal stream (`GET /ws/term/:session`), on the same daemon the
+   * control connection goes to. */
+  terminalUrl: (session: string) => string;
 }
 
-export function createDaemon(url: string): Daemon {
+export function createDaemon(origin: DaemonOrigin): Daemon {
   const store = createStore<State>(() => initialState);
   const dispatch = (action: Action) => store.setState((state) => reducer(state, action));
 
-  const client = new DaemonClient(url);
+  const client = new DaemonClient(daemonWsUrl(origin, "/ws/control"));
   client.onEvent((event) => dispatch({ kind: "event", event }));
   client.onConnectionChange((state) => dispatch({ kind: "connection", state }));
 
@@ -289,6 +293,7 @@ export function createDaemon(url: string): Daemon {
     dismissToast: (id) => dispatch({ kind: "dismiss_toast", id }),
     dismissTrustPrompt: (session) => dispatch({ kind: "dismiss_trust_prompt", session }),
     reconnect: () => client.reconnect(),
+    terminalUrl: (session) => daemonWsUrl(origin, `/ws/term/${session}`),
   };
 }
 

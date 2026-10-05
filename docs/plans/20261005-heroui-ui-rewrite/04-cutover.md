@@ -24,6 +24,9 @@
   - the daemon-exited toast;
   - the raised-hand system notification and the Dock badge;
   - the `?port=` and `?error=` hand-over from the shell.
+- The sidebar, its action menus and the terminal pane have only been run in Chrome. In the shell's WebKit view,
+  verify that keyboard focus stays in the terminal when a sidebar row, a "⋯" menu opened with the mouse, the trusted
+  folders' × or a toast's Dismiss is clicked, and that a menu opened from the keyboard returns focus to its trigger.
 
 ## Notes for the developer
 

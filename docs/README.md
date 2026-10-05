@@ -60,9 +60,13 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   and the running sidecar's binary confirmed before anything read off the window means anything, how to get an error
   out of a blank window, reading what the packaged webview sends to the daemon through a wrapped sidecar (dev mode
   sends a different origin), ruling out a locked screen before trusting a capture, bisecting a symptom against the daemon,
-  what a scripted GUI probe can and cannot prove and why its setup should go through the daemon's protocol instead,
-  where to watch for a report page's blocked navigation, where a network probe's positive control has to come from,
-  and which checks need a person.
+  what a scripted GUI probe can and cannot prove and why its setup should go through the daemon's protocol instead
+  (including raising a session's hand with a forged hook event), where to watch for a report page's blocked
+  navigation, where a network probe's positive control has to come from, why another worktree's dev server or daemon
+  may be the one answering and why yours are stopped by PID, and which checks need a person.
+- [Writing UI components](memory/writing-ui-components.md) — conventions for `packages/ui` components: why a HeroUI
+  control pressed with the mouse takes keyboard focus off the terminal, when `preventFocusOnPress` is needed, and why
+  "⋯" menus are built on `ActionMenu`.
 - [Writing automated tests](memory/writing-automated-tests.md) — the fixture conventions this project's tests need on
   macOS: why an executable written fresh per test flakes only under a parallel run, and how to verify behaviour the
   daemon derives from an agent's own output by replaying a committed capture rather than staging a live session.

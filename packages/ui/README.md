@@ -2,8 +2,8 @@
 
 `@octoboard/ui`: a HeroUI 3 + React 19 + Tailwind 4 + Vite application, the rebuild of the UI in
 [`../../apps/desktop/`](../../apps/desktop/README.md). It is not yet loaded by the desktop shell: `apps/desktop/` still
-ships its own UI and remains the shipped application. This package runs in a plain browser today, and its screen is a
-placeholder that shows the daemon connection and the session state arriving.
+ships its own UI and remains the shipped application. This package runs in a plain browser today. It has the sidebar
+tree and the terminal pane; it has no dialogs and no report panel yet.
 
 It talks to `octoboardd` (see [`../../daemon/`](../../daemon/README.md)) only over the WebSocket protocol in
 [`../../daemon/PROTOCOL.md`](../../daemon/PROTOCOL.md), and reaches anything native (quit flow, system notifications,
@@ -43,8 +43,12 @@ port file under the temp directory, so the defaults would touch the real data an
 | `src/daemon.ts` | The rules for locating the daemon (`?port=`, `VITE_DAEMON_PORT`, or the page's own origin), and the `?error=` startup message |
 | `src/daemon-client.ts` | WebSocket client for `GET /ws/control`: request/reply correlation, reconnect, event dispatch |
 | `src/protocol.ts` | Hand-written TypeScript mirror of `daemon/src/protocol.rs` / `PROTOCOL.md` |
-| `src/store.ts` | The Zustand store holding the connection and the console/project/session state derived from daemon events; `createDaemon` builds it, `useDaemon` / `useDaemonStore` read it |
+| `src/store.ts` | The Zustand store holding the connection and the console/project/session state derived from daemon events; `createDaemon(origin)` builds it and exposes the request function and `terminalUrl(session)`, `useDaemon` / `useDaemonStore` read it |
 | `src/lifecycle/` | `useAppExit` (the exit flow, through the platform's `exit` capability) and `useWaitingNotifications` (system notification and badge when a session raises its hand) |
+| `src/agents.ts` | Display labels for the three agents |
 | `src/sessionLabel.ts` | Where to tell the user a session is, and the status labels |
 | `src/StartupScreen.tsx`, `src/ErrorBoundary.tsx` | The screens shown when there is no daemon connection, or the UI itself crashed |
-| `src/App.tsx` | Currently a placeholder screen |
+| `src/App.tsx` | The screen: sidebar and terminal pane, session selection and resume, plus plain stand-ins for the connection banner and toasts |
+| `src/components/` | The sidebar tree (`Sidebar`), its action menu (`ActionMenu`), `StatusIcon` and `AgentBadge`, and the trusted-folders list (`TrustedFolders`) |
+| `src/terminal/` | `TerminalController` (the xterm.js instance, a session's socket, status and focus) and `TerminalPane` (its React boundary, reconnect backoff, the Resume affordance) |
+| `src/dialogRequest.ts` | Transitional: the dialogs the sidebar's menus ask for, which `App` records but does not render yet |

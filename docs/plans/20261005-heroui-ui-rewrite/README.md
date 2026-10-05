@@ -39,7 +39,7 @@ and are the parity specification: the new UI is done when it does what they say.
 ## Milestones
 
 - 01 Foundation (closed)
-- [02 Core screens](02-core-screens.md) — sidebar, sessions, terminal
+- 02 Core screens (closed)
 - [03 Remaining screens](03-remaining-screens.md) — dialogs, report panel, notifications and the rest
 - [04 Cutover](04-cutover.md) — the desktop shell loads the new UI, the old UI is removed
 

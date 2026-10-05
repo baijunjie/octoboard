@@ -35,5 +35,6 @@ package. Per-package commands are in that package's doc.
 ## Shared packages
 
 - [`packages/ui/`](../packages/ui/README.md) — `@octoboard/ui`, the HeroUI + React 19 rebuild of the desktop UI: the
-  daemon client, store and platform adapter, running in a plain browser. A workspace package; not yet loaded by the
-  desktop shell, so `apps/desktop/` still ships its own UI.
+  daemon client, store and platform adapter, plus the console → project → session sidebar and the xterm.js terminal
+  pane; no dialogs or report panel yet. Runs in a plain browser. A workspace package; not yet loaded by the desktop
+  shell, so `apps/desktop/` still ships its own UI.
