@@ -1,13 +1,13 @@
 # 01 Foundation
 
-> Goal: a Vue UI package that starts in a plain browser, connects to a running daemon and holds its state, with native
-> capabilities behind the adapter.
+> Goal: a HeroUI-based UI package that starts in a plain browser, connects to a running daemon and holds its state, with
+> native capabilities behind the adapter.
 > Completion criteria: the package type-checks and builds; opened in a browser against a daemon started by hand it
 > connects, receives the snapshot and reflects live state changes; the adapter has both implementations.
 
 ## Technical design
 
-- [ ] The package scaffold, with a build that a browser can load and a shell can embed.
+- [ ] The package scaffold with HeroUI set up, with a build that a browser can load and a shell can embed.
 - [ ] The platform adapter's interface and its two implementations.
 - [ ] The daemon connection and request layer, with the reconnect and queued-request behavior the current one has.
 - [ ] The application state fed by the daemon's snapshot and events.
@@ -16,7 +16,7 @@
 ## Implementation plan
 
 - [ ] Inventory every direct use of a Tauri API in the current UI; each becomes an adapter member.
-- [ ] Port the connection layer and the state, keeping their observable behavior.
+- [ ] Carry over the connection layer and the state, keeping their observable behavior.
 
 ## Notes for the developer
 

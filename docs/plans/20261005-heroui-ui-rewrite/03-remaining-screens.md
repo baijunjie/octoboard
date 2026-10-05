@@ -1,7 +1,7 @@
 # 03 Remaining screens
 
-> Goal: everything else the React UI does is in the Vue UI.
-> Completion criteria: every flow in the product docs works in the Vue UI in a browser, except what needs the native
+> Goal: everything else the current UI does is in the new UI.
+> Completion criteria: every flow in the product docs works in the new UI in a browser, except what needs the native
 > shell, which works through the adapter when run in it.
 
 ## Technical design
@@ -13,7 +13,7 @@
 
 ## Implementation plan
 
-- [ ] Port in the order of how often each is used; finish with a parity pass over the product docs.
+- [ ] Build in the order of how often each is used; finish with a parity pass over the product docs.
 
 ## Notes for the developer
 
