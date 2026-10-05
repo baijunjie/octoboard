@@ -367,7 +367,7 @@ three adapters: Claude Code, Codex, and Grok Build.
 |---|---|---|---|
 | Launch with an initial task | `claude "<task>"` | `codex "<task>"` | `grok "<task>"` |
 | Pre-allocate a session id | `--session-id <uuid>` | **Not possible.** Take it from the `SessionStart` hook payload; in the interactive TUI the thread is created lazily on the first prompt submission, so a session opened without a task has no id until the user types | `--session-id <uuid>` (new sessions only) |
-| Inject hooks | `--settings <json-string-or-path>`, verified to merge with the project settings | `-c 'hooks.<Event>=[{hooks=[{type="command",command=…,timeout=3,async=true}]}]'`, one per event, plus the hook-trust step | A per-session `GROK_HOME` whose `hooks/` directory is Octoboard's and whose other entries symlink to the real `~/.grok` |
+| Inject hooks | `--settings <json-string-or-path>`, verified to merge with the project settings | `-c 'hooks.<Event>=[{hooks=[{type="command",command=…,timeout=3,async=true}]}]'`, one per event, plus the hook-trust step | A per-session `GROK_HOME` whose `hooks/` directory is Octoboard's and whose other entries symlink to the source home (the console's Grok directory, else the shell's `GROK_HOME`, else `~/.grok`) |
 | Inject MCP | `--mcp-config <json>` (never with `--strict-mcp-config`) | `-c 'mcp_servers.octoboard.command=…'` + `-c 'mcp_servers.octoboard.args=[…]'` + `-c 'mcp_servers.octoboard.default_tools_approval_mode="auto"'` | An `[mcp_servers.octoboard]` block appended to the `config.toml` copy inside that `GROK_HOME` |
 | Inject a role description | `--append-system-prompt` (recorded once per conversation and replayed on resume, so it cannot be changed later) | `-c 'developer_instructions="…"'` — adds a developer message, leaving the rest of the prompt byte-identical. Not `-c instructions=`, which replaces the system prompt | `--rules "…"` — appends to the system prompt and persists into the session record |
 | Send a message to a running session | PTY input: `ESC[200~` + text + `ESC[201~` + `CR` (one logical write, but see "Writing into a running session" below — it must be a non-blocking retry loop) | `codex queue --thread <session id>`, or the same PTY input | PTY input, same sequence |
@@ -400,17 +400,20 @@ three adapters: Claude Code, Codex, and Grok Build.
     is silently never spawned.
   - **Grok Build** has no flag for hooks or MCP, and its `GROK_CONFIG` / `GROK_CONFIG_PATH` overlay accepts only allowlisted
     keys, so both silently drop. The working mechanism is a per-session `GROK_HOME` pointed at an Octoboard-owned directory
-    where every entry is a symlink back to the real `~/.grok` except a copied `config.toml` carrying the MCP block and an
-    Octoboard `hooks/` directory. `auth.json` and `sessions/` stay symlinks so login state is shared and sessions stay
-    resumable from the user's own `grok`.
+    where every entry is a symlink back to the source home (the console's Grok directory, else the shell's `GROK_HOME`, else
+    `~/.grok`) except a copied `config.toml` carrying the MCP block, a copied `trusted_folders.toml` with the project added, and an
+    Octoboard `hooks/` directory. `auth.json` and
+    `sessions/` stay symlinks so login state is shared and sessions stay resumable from the user's own `grok` (run with
+    `GROK_HOME=<that directory>` when the source home is a console's own).
   - **Workspace trust gates the *project's* own configuration on two of the three**, which is the exact failure the
     "project configuration must not be overridden" rule exists to prevent — and it fails silently. On Grok, an untrusted
     folder makes the project's `AGENTS.md`, its hooks and its MCP servers simply not load; trust lives inside
-    `GROK_HOME`, so `trusted_folders.toml` must be symlinked in or every project looks untrusted, and there is an
+    `GROK_HOME`, so that store must be present there (copied in, with the project added) or every project looks untrusted, and there is an
     undocumented `--trust` flag. Grok additionally needs a recognised **git** workspace root — project hooks did not load
     in a trusted non-git directory. On Claude Code, an untrusted workspace makes the project's `allow` rules be ignored
     (with an explanatory line on stderr) while its `deny` rules still apply, so the session is only ever more restrictive;
-    trust lives in `~/.claude.json`, which Octoboard must not write. The adapter *reads* that file at launch and tells the
+    trust lives in Claude Code's global config file (`~/.claude.json`, or `.claude.json` inside the config directory when
+    one is in effect), which Octoboard must not write. The adapter *reads* that file at launch and tells the
     user, rather than matching the stderr line: on a PTY stderr is the same stream as the rendered UI, so there is no
     separate descriptor to read and matching rendered text would need a VT emulator in the daemon. It warns only on an
     explicit negative, so a renamed key leaves the user alone instead of warning them on every launch.
@@ -434,7 +437,8 @@ three adapters: Claude Code, Codex, and Grok Build.
   protection rejects both plain HTTP and private addresses — so hooks must be `command` type and talk to the daemon
   themselves.
 - Injection must not modify project files, nor the user's global configuration. If an agent can only be configured through a
-  config file, prefer an environment variable or flag of the "use this config directory" kind.
+  config file, prefer an environment variable or flag of the "use this config directory" kind. (`CODEX_HOME` is set only
+  when the user chooses a Codex directory for a console, never to inject anything.)
 - **Writing into a running session** was the most fragile part of the design and is now settled for all three agents. The
   sequence is `ESC[200~`, the text with LF separators, `ESC[201~`, then `CR`; multi-line text arrives as a single message,
   with no delay needed between the paste and the Enter. Four rules come with it, each of which fails silently or
@@ -497,12 +501,14 @@ resumed across agents.
 ## 10. Data model
 
 ```
-Console   { id, name, workdir, hub_agent, default_agent, created_at }
+Console   { id, name, workdir, hub_agent, default_agent, claude_config_dir?, codex_config_dir?,
+            grok_config_dir?, created_at }
 Host      { id, name, kind: local|ssh, ssh_config? }
 Project   { id, console_id, host_id, name, path, default_agent?,
             source: local|parent|github, remote_url? }
 Session   { id, agent, agent_session_id, console_id, project_id?, host_id,
             role: hub|worker, origin: hub|user, title, include_in_hub,
+            config_dir?,
             status: working|waiting_user|idle|interrupted|archived,
             started_at, ended_at }
 Report    { id, session_id, summary, status, open_items, created_at }
@@ -514,6 +520,10 @@ Page      { id, console_id, html, anchor_message_id, created_at }
 - `Session.include_in_hub` says whether that session reports to its console's hub. Always set for a session the hub
   started; a session the user opened by hand is outside the orchestration unless they asked for it to be included, and it
   is fixed for the session's lifetime.
+- A console holds an optional config directory per agent. `Session.config_dir` is the one of the session's own agent:
+  `CLAUDE_CONFIG_DIR` for Claude Code, `CODEX_HOME` for Codex, the source home of the private `GROK_HOME` for Grok. The
+  console's value is copied onto a session when it is opened and never changes afterwards, because the agent keeps its
+  transcripts there and a resume must find them.
 - In the MVP `Host` holds a single local record, but every project and session still carries a `host_id` so no data migration
   is needed when going remote.
 

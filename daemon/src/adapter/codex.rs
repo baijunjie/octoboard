@@ -2,9 +2,11 @@
 //! per-invocation and persisted nowhere — so the complete set has to be re-passed on every
 //! `codex resume` too.
 //!
-//! `CODEX_HOME` must not be used as a config-directory override: it makes Codex ignore the user's
-//! entire global setup (`~/.codex/AGENTS.md`, model choice, approval policy, skills, plugins), not
-//! just add to it, which is the same objection as modifying their configuration.
+//! `CODEX_HOME` must not be used to *inject* anything: it makes Codex ignore the user's entire
+//! global setup (`~/.codex/AGENTS.md`, model choice, approval policy, skills, plugins), not just add
+//! to it, which is the same objection as modifying their configuration. The one time it is set is
+//! when the user has pointed a console at a Codex home of their own: that directory then *is* their
+//! global setup, login and transcripts included, and a resume has to find it in the same place.
 //!
 //! The role description goes in `developer_instructions`, which adds a developer message and
 //! leaves the rest of the prompt byte-identical. Not `instructions`, which *replaces* the system
@@ -38,6 +40,8 @@
 //! `agent_session_id` until they type something. The id then arrives on the `SessionStart` hook
 //! payload, and thread id and session id are the same value.
 
+use std::path::{Path, PathBuf};
+
 use serde_json::json;
 
 use super::{AgentAdapter, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS};
@@ -70,6 +74,7 @@ impl AgentAdapter for CodexAdapter {
     }
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> anyhow::Result<LaunchPlan> {
+        let pinned = super::pinned_config_dir(spec, Agent::Codex)?;
         let mut args = Vec::new();
 
         // `resume` is a subcommand, so it comes before the overrides.
@@ -135,9 +140,15 @@ impl AgentAdapter for CodexAdapter {
             }
         }
 
+        // Set only for a pinned directory; otherwise the shell snapshot's own value, if any, stands.
+        let env = pinned
+            .map(|dir| vec![("CODEX_HOME".to_string(), dir.to_string_lossy().into_owned())])
+            .unwrap_or_default();
+
         Ok(LaunchPlan {
             args,
-            resolves_approvals_itself: resolves_approvals_itself(spec),
+            env,
+            resolves_approvals_itself: resolves_approvals_itself(spec, pinned),
             ..LaunchPlan::default()
         })
     }
@@ -150,9 +161,9 @@ impl AgentAdapter for CodexAdapter {
 /// auto-review marker rather than one key path being assumed. Unreadable or absent means "the user
 /// will be asked", which is the safe way to be wrong: a hand raised needlessly is visible, while
 /// one never raised leaves a session looking busy while it waits.
-fn resolves_approvals_itself(spec: &LaunchSpec<'_>) -> bool {
+fn resolves_approvals_itself(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> bool {
     const AUTO_REVIEW: &str = "auto_review";
-    let config = codex_home(spec).join("config.toml");
+    let config = codex_home(spec, pinned).join("config.toml");
     let Ok(text) = std::fs::read_to_string(&config) else {
         return false;
     };
@@ -176,18 +187,22 @@ fn mentions(value: &toml::Value, wanted: &str) -> bool {
     }
 }
 
-/// The user's own Codex home, read from the launch environment rather than the daemon's: the
-/// daemon's own `CODEX_HOME` may belong to an agent session it was started from.
-fn codex_home(spec: &LaunchSpec<'_>) -> std::path::PathBuf {
+/// The Codex home this launch will read: the session's pinned directory, else the user's own, read
+/// from the launch environment rather than the daemon's — the daemon's own `CODEX_HOME` may belong
+/// to an agent session it was started from.
+fn codex_home(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> PathBuf {
+    if let Some(dir) = pinned {
+        return dir.to_path_buf();
+    }
     if let Some(home) = spec
         .shell_env
         .get("CODEX_HOME")
         .filter(|home| !home.is_empty())
     {
-        return std::path::PathBuf::from(home);
+        return PathBuf::from(home);
     }
     match spec.shell_env.get("HOME").filter(|home| !home.is_empty()) {
-        Some(home) => std::path::PathBuf::from(home).join(".codex"),
+        Some(home) => PathBuf::from(home).join(".codex"),
         None => crate::paths::home_dir().join(".codex"),
     }
 }
@@ -361,6 +376,74 @@ mod tests {
                 .expect("plan")
                 .resolves_approvals_itself
         );
+    }
+
+    /// The approval setting is read from the Codex home in effect, which is the pinned directory
+    /// when there is one — not the shell's or the default one.
+    #[test]
+    fn the_approval_setting_is_read_from_the_pinned_codex_home() {
+        let mut fixture = spec_fixture();
+        let shell_home = fixture.scratch.join("shell-codex-home");
+        let pinned = fixture.scratch.join("pinned-codex-home");
+        for dir in [&shell_home, &pinned] {
+            std::fs::create_dir_all(dir).expect("codex home");
+        }
+        fixture.shell_env.insert(
+            "CODEX_HOME".to_string(),
+            shell_home.to_string_lossy().into_owned(),
+        );
+        std::fs::write(
+            shell_home.join("config.toml"),
+            "approvals_reviewer = \"auto_review\"\n",
+        )
+        .expect("config");
+        let resolves = |fixture: &crate::adapter::tests::SpecFixture| {
+            CodexAdapter
+                .plan(&fixture.spec())
+                .expect("plan")
+                .resolves_approvals_itself
+        };
+        assert!(resolves(&fixture));
+
+        // The pinned directory replaces the shell's: its own (empty) configuration decides.
+        fixture.config_dir = Some(pinned.clone());
+        assert!(!resolves(&fixture));
+        std::fs::write(
+            pinned.join("config.toml"),
+            "approvals_reviewer = \"auto_review\"\n",
+        )
+        .expect("config");
+        assert!(resolves(&fixture));
+    }
+
+    #[test]
+    fn a_pinned_codex_home_is_exported_and_an_unpinned_launch_adds_nothing() {
+        let mut fixture = spec_fixture();
+        assert!(CodexAdapter
+            .plan(&fixture.spec())
+            .expect("plan")
+            .env
+            .is_empty());
+
+        let dir = fixture.scratch.join("codex-alt");
+        std::fs::create_dir_all(&dir).expect("config dir");
+        fixture.config_dir = Some(dir.clone());
+        let plan = CodexAdapter.plan(&fixture.spec()).expect("plan");
+        assert_eq!(
+            plan.env,
+            vec![("CODEX_HOME".to_string(), dir.to_string_lossy().into_owned())]
+        );
+    }
+
+    #[test]
+    fn a_pinned_codex_home_that_has_gone_refuses_the_launch() {
+        let mut fixture = spec_fixture();
+        fixture.config_dir = Some(fixture.scratch.join("missing"));
+        let err = CodexAdapter.plan(&fixture.spec()).err().expect("refused");
+        let message = err.to_string();
+        assert!(message.contains("Codex"), "{message}");
+        assert!(message.contains("missing"), "{message}");
+        assert!(!message.contains("  "), "stray spaces in: {message}");
     }
 
     #[test]

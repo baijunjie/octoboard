@@ -21,8 +21,8 @@ the request id as if it were a record id.
 
 | `type` | Fields | Meaning |
 |---|---|---|
-| `create_console` | `name`, `hub_agent`, `default_agent` | The daemon creates the console's working directory under `~/.octoboard/consoles/<id>/` |
-| `update_console` | `console`, `name?`, `hub_agent?`, `default_agent?` | — |
+| `create_console` | `name`, `hub_agent`, `default_agent`, `claude_config_dir?`, `codex_config_dir?`, `grok_config_dir?` | The daemon creates the console's working directory under `~/.octoboard/consoles/<id>/`. Each config directory is validated first, by the same rules: it is trimmed, a leading `~` is expanded, the result is normalised lexically and must be an absolute path to an existing directory, and a blank value means unset; a failure is answered with `error` naming the agent, and nothing is created |
+| `update_console` | `console`, `name?`, `hub_agent?`, `default_agent?`, `claude_config_dir?`, `codex_config_dir?`, `grok_config_dir?` | For each config directory independently: absent leaves it alone; an explicit `null` or a blank string clears it. A value is validated as in `create_console`. Only sessions opened afterwards take a changed value (see `Session.config_dir`) |
 | `delete_console` | `console` | Takes its projects and all their session records with it. Refused while any of them is still running |
 | `add_project` | `console_id`, `source` (`local`\|`parent`\|`github`), `path?`, `remote_url?`, `name?`, `default_agent?` | `local` associates one directory; `parent` associates every git repository directly beneath `path`; `github` clones `remote_url` into `path` (used as the parent directory) and associates the clone |
 | `update_project` | `project`, `name?`, `default_agent?` | An absent `default_agent` leaves it alone; an explicit `null` clears it, so the project inherits the console's default again |
@@ -56,17 +56,30 @@ the request id as if it were a record id.
 
 ```
 Host    { id, name, kind: "local"|"ssh", ssh_config? }
-Console { id, name, workdir, hub_agent, default_agent, created_at }
+Console { id, name, workdir, hub_agent, default_agent, claude_config_dir?, codex_config_dir?,
+          grok_config_dir?, created_at }
 Project { id, console_id, host_id, name, path, default_agent?, source, remote_url? }
 Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
           role: "hub"|"worker", origin: "hub"|"user", title,
           status: "working"|"waiting_user"|"idle"|"interrupted"|"archived",
-          has_conversation, include_in_hub, started_at, ended_at? }
+          has_conversation, include_in_hub, config_dir?, started_at, ended_at? }
 Page    { id, console_id, html, anchor_message_id?, created_at }
 ```
 
-`agent` is one of `claude`, `codex`, `grok`. `Page.anchor_message_id` is stored and never read: the
-rewind linkage that uses it is after the MVP. Timestamps are epoch milliseconds (the UI formats them).
+`agent` is one of `claude`, `codex`, `grok`. Each `Console.*_config_dir` is an absolute path to that agent's own
+configuration directory, and a session reads only its own agent's. Claude Code is launched with `CLAUDE_CONFIG_DIR` set to
+it and Codex with `CODEX_HOME`, each over any value in the user's shell environment. For Grok it replaces `~/.grok` (or
+the shell's `GROK_HOME`) as the directory the session's private home is built from, so the user's config, login, trust
+store and session records come from it; Grok itself still runs against that private home. Unset leaves the environment as
+it is (for Grok, the source falls back to the shell's `GROK_HOME`). For Claude Code, pointing it at `~/.claude` is not the same as leaving it unset, because Claude Code reads its
+global config from `<dir>/.claude.json` whenever the variable is set and from `~/.claude.json` otherwise.
+`Session.config_dir` is the directory of that session's own agent that it was started with, copied from its console
+when the session is opened and never changed afterwards: each agent keeps a conversation's transcript inside it, so
+`resume_session` relaunches with this value and not the console's current one. It is unset for sessions started with no
+directory pinned, which resume under whatever the shell exports at that moment. A launch whose pinned directory no
+longer exists is refused, for every agent, with an error naming it.
+`Page.anchor_message_id` is stored and never read: the rewind linkage that uses it is after the MVP. Timestamps are
+epoch milliseconds (the UI formats them).
 
 ## `GET /ws/term/:session` — terminal stream
 

@@ -36,7 +36,16 @@ pub async fn handle(
             name,
             hub_agent,
             default_agent,
+            claude_config_dir,
+            codex_config_dir,
+            grok_config_dir,
         } => {
+            // Validated before anything is created, so a refused request leaves no working
+            // directory behind.
+            let claude_config_dir =
+                normalize_config_dir(Agent::Claude, claude_config_dir.as_deref())?;
+            let codex_config_dir = normalize_config_dir(Agent::Codex, codex_config_dir.as_deref())?;
+            let grok_config_dir = normalize_config_dir(Agent::Grok, grok_config_dir.as_deref())?;
             let id = Uuid::new_v4().to_string();
             let workdir = paths::console_workdir(&id);
             std::fs::create_dir_all(&workdir)?;
@@ -46,6 +55,9 @@ pub async fn handle(
                 workdir: workdir.to_string_lossy().into_owned(),
                 hub_agent,
                 default_agent,
+                claude_config_dir,
+                codex_config_dir,
+                grok_config_dir,
                 created_at: now_millis(),
             };
             mcp::role::write_hub_instructions(&console)?;
@@ -59,6 +71,9 @@ pub async fn handle(
             name,
             hub_agent,
             default_agent,
+            claude_config_dir,
+            codex_config_dir,
+            grok_config_dir,
         } => {
             let mut console = state
                 .store
@@ -72,6 +87,17 @@ pub async fn handle(
             }
             if let Some(default_agent) = default_agent {
                 console.default_agent = default_agent;
+            }
+            // Only sessions opened afterwards take a new value; each existing one keeps the
+            // directory it was started with (see `Session::config_dir`).
+            if let Some(dir) = claude_config_dir {
+                console.claude_config_dir = normalize_config_dir(Agent::Claude, dir.as_deref())?;
+            }
+            if let Some(dir) = codex_config_dir {
+                console.codex_config_dir = normalize_config_dir(Agent::Codex, dir.as_deref())?;
+            }
+            if let Some(dir) = grok_config_dir {
+                console.grok_config_dir = normalize_config_dir(Agent::Grok, dir.as_deref())?;
             }
             // Rewritten rather than left alone: the file is named for the hub's agent, so a
             // console that changed agents would otherwise keep reading the old one's.
@@ -425,6 +451,9 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
             SessionStatus::Idle
         },
         has_conversation: false,
+        // Taken from the console now and kept: a resume must find the transcript where the first
+        // launch put it, whatever the console's setting says by then.
+        config_dir: session_config_dir(agent, &console),
         // A hub session is the recipient of reports, never a sender of them.
         include_in_hub: role == Role::Worker && (origin == Origin::Hub || include_in_hub),
         started_at: now_millis(),
@@ -555,6 +584,7 @@ async fn start_process(
         cwd: cwd.to_path_buf(),
         task: task.map(str::to_string),
         resume_agent_session_id: resume_agent_session_id.map(str::to_string),
+        config_dir: session.config_dir.as_ref().map(PathBuf::from),
         daemon_port: state.port,
         self_exe: state.self_exe.clone(),
         // Issued per launch: the previous process is gone, and a token outliving it would let a
@@ -634,6 +664,52 @@ async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Val
     Ok(())
 }
 
+/// The directory a new session is pinned to: the console's setting for the session's own agent.
+fn session_config_dir(agent: Agent, console: &Console) -> Option<String> {
+    match agent {
+        Agent::Claude => console.claude_config_dir.clone(),
+        Agent::Codex => console.codex_config_dir.clone(),
+        Agent::Grok => console.grok_config_dir.clone(),
+    }
+}
+
+/// What the user typed for one agent's config directory on a console, as the absolute path that is
+/// stored. Blank means unset. The directory has to exist: the agent would create a missing one
+/// and start logged out in it, so a mistyped path is better refused here, where the dialog can
+/// show why, than discovered as a session that has lost its login.
+fn normalize_config_dir(agent: Agent, text: Option<&str>) -> Result<Option<String>> {
+    let Some(text) = text.map(str::trim).filter(|text| !text.is_empty()) else {
+        return Ok(None);
+    };
+    let dir = hostfs::expand(text);
+    if !dir.is_absolute() {
+        bail!(
+            "the {} config directory must be an absolute path or start with `~/`",
+            agent.label()
+        );
+    }
+    // Lexical only: a symlink stays as typed, so the stored path is what the user chose. Drops a
+    // trailing `/` and `.` components and folds `..` into the component before it.
+    let mut normalized = PathBuf::new();
+    for component in dir.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            other => normalized.push(other),
+        }
+    }
+    let dir = normalized;
+    if !dir.is_dir() {
+        bail!(
+            "the {} config directory `{}` is not a directory",
+            agent.label(),
+            dir.display()
+        );
+    }
+    Ok(Some(dir.to_string_lossy().into_owned()))
+}
+
 fn session_cwd(state: &Arc<AppState>, session: &Session) -> Result<PathBuf> {
     match &session.project_id {
         Some(project_id) => {
@@ -665,6 +741,9 @@ mod tests {
             workdir: workdir.to_string_lossy().into_owned(),
             hub_agent,
             default_agent: Agent::Claude,
+            claude_config_dir: None,
+            codex_config_dir: None,
+            grok_config_dir: None,
             created_at: 0,
         }
     }
@@ -701,5 +780,69 @@ mod tests {
         assert!(!workdir.join("CLAUDE.md").exists());
 
         std::fs::remove_dir_all(&workdir).ok();
+    }
+
+    #[test]
+    fn a_config_dir_is_stored_absolute_or_not_at_all() {
+        let dir = temp_dir("config-dir");
+        let text = dir.to_string_lossy().into_owned();
+        let normalize = |text: Option<&str>| normalize_config_dir(Agent::Codex, text);
+
+        assert_eq!(normalize(None).unwrap(), None);
+        assert_eq!(normalize(Some("  ")).unwrap(), None);
+        assert_eq!(
+            normalize(Some(&format!("  {text} "))).unwrap(),
+            Some(text.clone())
+        );
+
+        assert_eq!(
+            normalize(Some(&format!("{text}/"))).unwrap(),
+            Some(text.clone())
+        );
+        assert_eq!(
+            normalize(Some(&format!("{text}/./sub/.."))).unwrap(),
+            Some(text.clone())
+        );
+
+        // The refusal names the agent whose field it was.
+        let relative = normalize(Some(".codex-alt")).unwrap_err();
+        assert!(relative.to_string().contains("absolute"), "{relative}");
+        assert!(relative.to_string().contains("Codex"), "{relative}");
+        let missing = normalize(Some(&format!("{text}/missing"))).unwrap_err();
+        assert!(missing.to_string().contains("not a directory"), "{missing}");
+        assert!(missing.to_string().contains("Codex"), "{missing}");
+        let file = dir.join("file");
+        std::fs::write(&file, "").expect("file");
+        assert!(normalize(Some(&file.to_string_lossy())).is_err());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// `~` is the home directory of the host the daemon runs on, like every other path it takes.
+    #[test]
+    fn a_leading_tilde_in_a_config_dir_is_expanded() {
+        // `$HOME` always exists as a directory, so this needs no fixture and no environment edit.
+        let home = paths::home_dir();
+        assert_eq!(
+            normalize_config_dir(Agent::Grok, Some("~")).unwrap(),
+            Some(home.to_string_lossy().into_owned())
+        );
+    }
+
+    #[test]
+    fn a_session_is_pinned_to_its_own_agents_config_dir() {
+        let mut console = console(Agent::Claude, Path::new("/tmp/unused"));
+        console.claude_config_dir = Some("/home/u/.claude-alt".to_string());
+        console.codex_config_dir = Some("/home/u/.codex-alt".to_string());
+        assert_eq!(
+            session_config_dir(Agent::Claude, &console).as_deref(),
+            Some("/home/u/.claude-alt")
+        );
+        assert_eq!(
+            session_config_dir(Agent::Codex, &console).as_deref(),
+            Some("/home/u/.codex-alt")
+        );
+        // Nothing is set for Grok, and another agent's directory is never borrowed for it.
+        assert_eq!(session_config_dir(Agent::Grok, &console), None);
     }
 }

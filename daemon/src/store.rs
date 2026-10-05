@@ -51,6 +51,9 @@ impl Store {
                 workdir       TEXT NOT NULL,
                 hub_agent     TEXT NOT NULL,
                 default_agent TEXT NOT NULL,
+                claude_config_dir TEXT,
+                codex_config_dir  TEXT,
+                grok_config_dir   TEXT,
                 created_at    INTEGER NOT NULL
             );
             CREATE TABLE IF NOT EXISTS projects (
@@ -76,6 +79,7 @@ impl Store {
                 status           TEXT NOT NULL,
                 has_conversation INTEGER NOT NULL DEFAULT 0,
                 include_in_hub   INTEGER NOT NULL DEFAULT 0,
+                config_dir       TEXT,
                 started_at       INTEGER NOT NULL,
                 ended_at         INTEGER
             );
@@ -88,18 +92,29 @@ impl Store {
             );
             "#,
         )?;
-        // Databases written before orchestration existed have no `include_in_hub`. `CREATE TABLE
-        // IF NOT EXISTS` leaves those alone, so the column is added separately and the duplicate
-        // error ignored — there is no other way to ask SQLite for "add it if it is missing".
-        if let Err(err) = conn.execute(
-            "ALTER TABLE sessions ADD COLUMN include_in_hub INTEGER NOT NULL DEFAULT 0",
-            [],
-        ) {
-            let duplicate = err.to_string().contains("duplicate column name");
-            if !duplicate {
-                return Err(err).context("adding the sessions.include_in_hub column");
-            }
+        // `CREATE TABLE IF NOT EXISTS` leaves a database written by an older version alone, so a
+        // column added since is added here separately. Existing rows read back as `NULL`, which
+        // for the config directory columns is the right history: no directory was pinned for those
+        // sessions.
+        add_column_if_missing(
+            &conn,
+            "sessions",
+            "include_in_hub",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
+        add_column_if_missing(&conn, "consoles", "claude_config_dir", "TEXT")?;
+        add_column_if_missing(&conn, "consoles", "codex_config_dir", "TEXT")?;
+        add_column_if_missing(&conn, "consoles", "grok_config_dir", "TEXT")?;
+        // The session's pinned directory began as a Claude-only column. Renamed rather than copied,
+        // so a session that already pinned one keeps it: every such session is a Claude Code one.
+        if column_exists(&conn, "sessions", "claude_config_dir")? {
+            conn.execute(
+                "ALTER TABLE sessions RENAME COLUMN claude_config_dir TO config_dir",
+                [],
+            )
+            .context("renaming sessions.claude_config_dir")?;
         }
+        add_column_if_missing(&conn, "sessions", "config_dir", "TEXT")?;
         let store = Self {
             conn: Mutex::new(conn),
         };
@@ -145,14 +160,18 @@ impl Store {
 
     pub fn insert_console(&self, console: &Console) -> Result<()> {
         self.lock().execute(
-            "INSERT INTO consoles (id, name, workdir, hub_agent, default_agent, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO consoles (id, name, workdir, hub_agent, default_agent, claude_config_dir,
+                                   codex_config_dir, grok_config_dir, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 console.id,
                 console.name,
                 console.workdir,
                 enum_to_text(&console.hub_agent),
                 enum_to_text(&console.default_agent),
+                console.claude_config_dir,
+                console.codex_config_dir,
+                console.grok_config_dir,
                 console.created_at,
             ],
         )?;
@@ -161,12 +180,18 @@ impl Store {
 
     pub fn update_console(&self, console: &Console) -> Result<()> {
         self.lock().execute(
-            "UPDATE consoles SET name = ?2, hub_agent = ?3, default_agent = ?4 WHERE id = ?1",
+            "UPDATE consoles SET name = ?2, hub_agent = ?3, default_agent = ?4,
+                                 claude_config_dir = ?5, codex_config_dir = ?6,
+                                 grok_config_dir = ?7
+             WHERE id = ?1",
             params![
                 console.id,
                 console.name,
                 enum_to_text(&console.hub_agent),
                 enum_to_text(&console.default_agent),
+                console.claude_config_dir,
+                console.codex_config_dir,
+                console.grok_config_dir,
             ],
         )?;
         Ok(())
@@ -182,7 +207,8 @@ impl Store {
         let conn = self.lock();
         let console = conn
             .query_row(
-                "SELECT id, name, workdir, hub_agent, default_agent, created_at
+                "SELECT id, name, workdir, hub_agent, default_agent, claude_config_dir,
+                        codex_config_dir, grok_config_dir, created_at
                  FROM consoles WHERE id = ?1",
                 params![id],
                 read_console,
@@ -194,7 +220,8 @@ impl Store {
     pub fn list_consoles(&self) -> Result<Vec<Console>> {
         let conn = self.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, name, workdir, hub_agent, default_agent, created_at
+            "SELECT id, name, workdir, hub_agent, default_agent, claude_config_dir,
+                    codex_config_dir, grok_config_dir, created_at
              FROM consoles ORDER BY created_at",
         )?;
         let rows = stmt
@@ -344,8 +371,8 @@ impl Store {
         self.lock().execute(
             "INSERT INTO sessions (id, agent, agent_session_id, console_id, project_id, host_id,
                                    role, origin, title, status, has_conversation, include_in_hub,
-                                   started_at, ended_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+                                   config_dir, started_at, ended_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             params![
                 session.id,
                 enum_to_text(&session.agent),
@@ -359,6 +386,7 @@ impl Store {
                 enum_to_text(&session.status),
                 session.has_conversation,
                 session.include_in_hub,
+                session.config_dir,
                 session.started_at,
                 session.ended_at,
             ],
@@ -367,8 +395,8 @@ impl Store {
     }
 
     /// Writes back the fields that change over a session's life. Identity and placement
-    /// (`console_id`, `project_id`, `role`, `origin`, `include_in_hub`) never change, so they are not
-    /// touched.
+    /// (`console_id`, `project_id`, `role`, `origin`, `include_in_hub`) never change, and neither does
+    /// `config_dir`, so they are not touched.
     pub fn update_session(&self, session: &Session) -> Result<()> {
         self.lock().execute(
             "UPDATE sessions SET agent = ?2, agent_session_id = ?3, title = ?4, status = ?5,
@@ -433,9 +461,39 @@ impl Store {
     }
 }
 
+/// Whether a table has a column of this name.
+fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
+    let found: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = ?2",
+        params![table, column],
+        |row| row.get(0),
+    )?;
+    Ok(found > 0)
+}
+
+/// Adds a column to a table that may predate it. SQLite has no "add it if it is missing", so the
+/// duplicate-column error is the signal that it is already there.
+fn add_column_if_missing(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<()> {
+    if let Err(err) = conn.execute(
+        &format!("ALTER TABLE {table} ADD COLUMN {column} {definition}"),
+        [],
+    ) {
+        let duplicate = err.to_string().contains("duplicate column name");
+        if !duplicate {
+            return Err(err).with_context(|| format!("adding the {table}.{column} column"));
+        }
+    }
+    Ok(())
+}
+
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
                                role, origin, title, status, has_conversation, include_in_hub,
-                               started_at, ended_at";
+                               config_dir, started_at, ended_at";
 
 fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
     Ok(Console {
@@ -444,7 +502,10 @@ fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
         workdir: row.get(2)?,
         hub_agent: enum_from_row(row, 3)?,
         default_agent: enum_from_row(row, 4)?,
-        created_at: row.get(5)?,
+        claude_config_dir: row.get(5)?,
+        codex_config_dir: row.get(6)?,
+        grok_config_dir: row.get(7)?,
+        created_at: row.get(8)?,
     })
 }
 
@@ -485,8 +546,9 @@ fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         status: enum_from_row::<SessionStatus>(row, 9)?,
         has_conversation: row.get(10)?,
         include_in_hub: row.get(11)?,
-        started_at: row.get(12)?,
-        ended_at: row.get(13)?,
+        config_dir: row.get(12)?,
+        started_at: row.get(13)?,
+        ended_at: row.get(14)?,
     })
 }
 
@@ -525,4 +587,222 @@ fn enum_from_row_opt<T: DeserializeOwned>(
 
 fn enum_from_text<T: DeserializeOwned>(text: &str) -> Result<T, serde_json::Error> {
     serde_json::from_value(serde_json::Value::String(text.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_db(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "octoboardd-store-{name}-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).expect("temporary directory");
+        dir.join("octoboard.db")
+    }
+
+    fn console(claude: Option<&str>, codex: Option<&str>, grok: Option<&str>) -> Console {
+        Console {
+            id: "console-1".to_string(),
+            name: "Console".to_string(),
+            workdir: "/tmp/console-1".to_string(),
+            hub_agent: Agent::Claude,
+            default_agent: Agent::Claude,
+            claude_config_dir: claude.map(str::to_string),
+            codex_config_dir: codex.map(str::to_string),
+            grok_config_dir: grok.map(str::to_string),
+            created_at: 0,
+        }
+    }
+
+    fn session(config_dir: Option<&str>) -> Session {
+        Session {
+            id: "session-1".to_string(),
+            agent: Agent::Claude,
+            agent_session_id: None,
+            console_id: "console-1".to_string(),
+            project_id: None,
+            host_id: LOCAL_HOST_ID.to_string(),
+            role: Role::Hub,
+            origin: Origin::User,
+            title: "Hub".to_string(),
+            status: SessionStatus::Idle,
+            has_conversation: false,
+            include_in_hub: false,
+            config_dir: config_dir.map(str::to_string),
+            started_at: 0,
+            ended_at: None,
+        }
+    }
+
+    const OLD_SESSIONS: &str = r#"
+        CREATE TABLE sessions (
+            id TEXT PRIMARY KEY, agent TEXT NOT NULL, agent_session_id TEXT,
+            console_id TEXT NOT NULL, project_id TEXT, host_id TEXT NOT NULL,
+            role TEXT NOT NULL, origin TEXT NOT NULL, title TEXT NOT NULL,
+            status TEXT NOT NULL, has_conversation INTEGER NOT NULL DEFAULT 0,
+            include_in_hub INTEGER NOT NULL DEFAULT 0, %COLUMN%started_at INTEGER NOT NULL,
+            ended_at INTEGER
+        );
+    "#;
+
+    /// A database written before the config directories existed is opened in place: its consoles
+    /// and sessions read back with the setting unset — which is what they were started with — and
+    /// opening it again is a no-op.
+    #[test]
+    fn a_database_from_before_the_config_dirs_is_migrated_in_place() {
+        let path = temp_db("migration");
+        {
+            let conn = Connection::open(&path).expect("old database");
+            conn.execute_batch(
+                r#"
+                CREATE TABLE consoles (
+                    id TEXT PRIMARY KEY, name TEXT NOT NULL, workdir TEXT NOT NULL,
+                    hub_agent TEXT NOT NULL, default_agent TEXT NOT NULL, created_at INTEGER NOT NULL
+                );
+                INSERT INTO consoles VALUES ('console-1', 'Old', '/tmp/old', 'claude', 'claude', 5);
+                "#,
+            )
+            .expect("old schema");
+            conn.execute_batch(&OLD_SESSIONS.replace("%COLUMN%", ""))
+                .expect("old sessions");
+            conn.execute_batch(
+                "INSERT INTO sessions VALUES ('session-1', 'claude', 'agent-1', 'console-1', NULL,
+                    'local', 'hub', 'user', 'Hub', 'archived', 1, 0, 6, 7);",
+            )
+            .expect("old session");
+        }
+
+        let store = Store::open(&path).expect("migrates");
+        let consoles = store.list_consoles().expect("consoles");
+        assert_eq!(consoles.len(), 1);
+        assert_eq!(consoles[0].claude_config_dir, None);
+        assert_eq!(consoles[0].codex_config_dir, None);
+        assert_eq!(consoles[0].grok_config_dir, None);
+        let migrated = store.get_session("session-1").expect("read").expect("kept");
+        assert_eq!(migrated.config_dir, None);
+        drop(store);
+
+        Store::open(&path).expect("opens again");
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    /// The previous schema had the Claude-only columns. A session that pinned a directory keeps it
+    /// under the generic name, and the console's Claude setting is kept as it was.
+    #[test]
+    fn a_database_with_the_claude_only_columns_keeps_what_they_held() {
+        let path = temp_db("claude-only-migration");
+        {
+            let conn = Connection::open(&path).expect("old database");
+            conn.execute_batch(
+                r#"
+                CREATE TABLE consoles (
+                    id TEXT PRIMARY KEY, name TEXT NOT NULL, workdir TEXT NOT NULL,
+                    hub_agent TEXT NOT NULL, default_agent TEXT NOT NULL,
+                    claude_config_dir TEXT, created_at INTEGER NOT NULL
+                );
+                INSERT INTO consoles VALUES ('console-1', 'Old', '/tmp/old', 'claude', 'claude',
+                    '/home/u/.claude-alt', 5);
+                "#,
+            )
+            .expect("old schema");
+            conn.execute_batch(&OLD_SESSIONS.replace("%COLUMN%", "claude_config_dir TEXT, "))
+                .expect("old sessions");
+            conn.execute_batch(
+                "INSERT INTO sessions VALUES ('session-1', 'claude', 'agent-1', 'console-1', NULL,
+                    'local', 'hub', 'user', 'Hub', 'archived', 1, 0, '/home/u/.claude-alt', 6, 7);",
+            )
+            .expect("old session");
+        }
+
+        let store = Store::open(&path).expect("migrates");
+        let console = store.get_console("console-1").unwrap().unwrap();
+        assert_eq!(
+            console.claude_config_dir.as_deref(),
+            Some("/home/u/.claude-alt")
+        );
+        assert_eq!(console.codex_config_dir, None);
+        let migrated = store.get_session("session-1").unwrap().unwrap();
+        assert_eq!(migrated.config_dir.as_deref(), Some("/home/u/.claude-alt"));
+        drop(store);
+
+        Store::open(&path).expect("opens again");
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn the_config_dirs_round_trip_and_a_session_keeps_its_own() {
+        let path = temp_db("round-trip");
+        let store = Store::open(&path).expect("store");
+
+        store
+            .insert_console(&console(
+                Some("/home/u/.claude-alt"),
+                Some("/home/u/.codex-alt"),
+                Some("/home/u/.grok-alt"),
+            ))
+            .expect("insert");
+        let stored = store.get_console("console-1").unwrap().unwrap();
+        assert_eq!(
+            stored.claude_config_dir.as_deref(),
+            Some("/home/u/.claude-alt")
+        );
+        assert_eq!(
+            stored.codex_config_dir.as_deref(),
+            Some("/home/u/.codex-alt")
+        );
+        assert_eq!(stored.grok_config_dir.as_deref(), Some("/home/u/.grok-alt"));
+
+        store
+            .insert_session(&session(Some("/home/u/.claude-alt")))
+            .expect("insert");
+
+        // Updating the session's mutable fields leaves the directory it was started with alone.
+        let mut live = store.get_session("session-1").unwrap().unwrap();
+        live.config_dir = Some("/elsewhere".to_string());
+        live.title = "Renamed".to_string();
+        store.update_session(&live).expect("update");
+        let after = store.get_session("session-1").unwrap().unwrap();
+        assert_eq!(after.title, "Renamed");
+        assert_eq!(after.config_dir.as_deref(), Some("/home/u/.claude-alt"));
+
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn updating_a_console_persists_each_agents_config_dir() {
+        let path = temp_db("update-console");
+        let store = Store::open(&path).expect("store");
+        let mut stored = console(None, None, None);
+        store.insert_console(&stored).expect("insert");
+        let read = |store: &Store| {
+            let console = store.get_console("console-1").unwrap().unwrap();
+            (
+                console.claude_config_dir,
+                console.codex_config_dir,
+                console.grok_config_dir,
+            )
+        };
+        assert_eq!(read(&store), (None, None, None));
+
+        for next in [Some("/home/u/.alt"), Some("/home/u/other"), None] {
+            stored.claude_config_dir = next.map(str::to_string);
+            stored.codex_config_dir = next.map(|dir| format!("{dir}-codex"));
+            stored.grok_config_dir = next.map(|dir| format!("{dir}-grok"));
+            store.update_console(&stored).expect("update");
+            assert_eq!(
+                read(&store),
+                (
+                    next.map(str::to_string),
+                    next.map(|dir| format!("{dir}-codex")),
+                    next.map(|dir| format!("{dir}-grok")),
+                )
+            );
+        }
+
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
 }

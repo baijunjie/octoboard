@@ -65,6 +65,13 @@ pub struct LaunchSpec<'a> {
     /// the user's own settings from here rather than from the daemon's own environment, which may
     /// be that of an agent session the daemon happens to have been started from.
     pub shell_env: &'a HashMap<String, String>,
+    /// The configuration directory of this session's own agent that it is pinned to, when it has
+    /// one. Each adapter exposes it through its agent's own mechanism (`CLAUDE_CONFIG_DIR`,
+    /// `CODEX_HOME`, or the directory Grok's per-session home is built from), layered over whatever
+    /// the shell snapshot carries; absent leaves that snapshot untouched. An adapter reads it only
+    /// through [`pinned_config_dir`], which refuses a directory that has vanished, and passes the
+    /// result on to whatever else needs it.
+    pub config_dir: Option<&'a Path>,
     /// The daemon binary, which is also the MCP server and the hook forwarder.
     pub self_exe: &'a str,
     /// Where the daemon is listening, for the MCP server this launch registers.
@@ -96,6 +103,22 @@ pub fn mcp_server_command(spec: &LaunchSpec<'_>) -> (String, Vec<String>) {
             spec.mcp_token.to_string(),
         ],
     )
+}
+
+/// The session's pinned configuration directory, refused when it has gone. Checked here rather than
+/// left to the agent, which would quietly create the missing directory and start the session
+/// logged out, without the conversation it is meant to resume.
+pub fn pinned_config_dir<'a>(spec: &LaunchSpec<'a>, agent: Agent) -> Result<Option<&'a Path>> {
+    match spec.config_dir {
+        Some(dir) if !dir.is_dir() => anyhow::bail!(
+            "the {} config directory `{}` is not a directory the daemon can reach; \
+             recreate it, or clear it in the console's settings so new sessions \
+             start without it",
+            agent.label(),
+            dir.display()
+        ),
+        dir => Ok(dir),
+    }
 }
 
 #[derive(Default)]
@@ -195,6 +218,7 @@ pub mod tests {
         pub scratch: PathBuf,
         pub hook_script: PathBuf,
         pub shell_env: HashMap<String, String>,
+        pub config_dir: Option<PathBuf>,
         pub self_exe: String,
         pub mcp_token: String,
     }
@@ -211,6 +235,7 @@ pub mod tests {
                 scratch: &self.scratch,
                 hook_script: &self.hook_script,
                 shell_env: &self.shell_env,
+                config_dir: self.config_dir.as_deref(),
                 self_exe: &self.self_exe,
                 daemon_port: 4321,
                 mcp_token: &self.mcp_token,
@@ -245,6 +270,7 @@ pub mod tests {
             scratch: root,
             hook_script,
             shell_env: HashMap::new(),
+            config_dir: None,
             self_exe: "/opt/octoboard/octoboardd".to_string(),
             mcp_token: "token-1".to_string(),
         }

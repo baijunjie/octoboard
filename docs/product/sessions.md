@@ -59,7 +59,9 @@ instructions*: it is sitting at the agent's prompt.
 
 If the launch itself fails — the directory cannot be reached, the agent binary is not on the user's `PATH`, the
 user's shell environment could not be captured (see "The launch environment" in
-`docs/product/launching-agents.md`) — no session appears in the tree and the failure is reported.
+`docs/product/launching-agents.md`), the config directory the session would hold for its agent no longer exists (see
+"Agent config directories" in `docs/product/consoles-and-projects.md`) — no session appears in the tree and the
+failure is reported.
 
 ### Which agent a session uses
 
@@ -156,6 +158,9 @@ the same agent in the same directory and reassembles everything Octoboard inject
 - A session that **nobody ever typed into** has no stored conversation on the agent's side; resuming it opens a fresh
   conversation in its place, in the same project and under the same session.
 - A resume carries no initial task, so the session comes up at the agent's prompt.
+- A session relaunches with the config directory it was opened with for its agent, not the console's current setting,
+  and is refused if that directory no longer exists (see "Agent config directories" in
+  `docs/product/consoles-and-projects.md`).
 - Resuming a session whose process is already running is refused. The refusal a double-click produces is not surfaced
   to the user.
 

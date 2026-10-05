@@ -56,6 +56,9 @@ pub struct LaunchRequest {
     pub task: Option<String>,
     /// Set when this relaunches an existing agent conversation rather than starting a new one.
     pub resume_agent_session_id: Option<String>,
+    /// The configuration directory of the session's own agent that it is pinned to; see
+    /// `protocol::Session::config_dir`.
+    pub config_dir: Option<PathBuf>,
     pub daemon_port: u16,
     pub self_exe: String,
     pub mcp_token: String,
@@ -72,6 +75,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         cwd,
         task,
         resume_agent_session_id,
+        config_dir,
         daemon_port,
         self_exe,
         mcp_token,
@@ -111,6 +115,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         scratch: &scratch,
         hook_script: &hook_script,
         shell_env: &shell_env,
+        config_dir: config_dir.as_deref(),
         self_exe: &self_exe,
         daemon_port,
         mcp_token: &mcp_token,

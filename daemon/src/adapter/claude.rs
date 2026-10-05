@@ -12,8 +12,15 @@
 //! while still applying its `deny` rules, so the session is only ever more restrictive and nothing
 //! breaks — but the user has no way to learn why their project's permissions are not applying. It
 //! says so on stderr, which on a PTY is the same stream as the rendered UI, so the trust state is
-//! read out of `~/.claude.json` instead of matched in terminal text. Read, never written: a trust
-//! decision is the user's to make in Claude Code itself.
+//! read out of Claude Code's global config file instead of matched in terminal text. Read, never
+//! written: a trust decision is the user's to make in Claude Code itself.
+//!
+//! A console can pin its sessions to another Claude Code configuration directory
+//! (`CLAUDE_CONFIG_DIR`). That directory holds the conversation transcripts as well as the global
+//! config file, so everything here that reads or relaunches follows it: the variable is set for the
+//! launch, and the trust state is read from the file inside it.
+
+use std::path::{Path, PathBuf};
 
 use serde_json::json;
 
@@ -90,6 +97,7 @@ impl AgentAdapter for ClaudeAdapter {
     }
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> anyhow::Result<LaunchPlan> {
+        let pinned = super::pinned_config_dir(spec, Agent::Claude)?;
         let mut args = Vec::new();
 
         // The task goes first, ahead of every flag. `--mcp-config` takes a *list* of values, so
@@ -117,11 +125,42 @@ impl AgentAdapter for ClaudeAdapter {
         args.push("--append-system-prompt".to_string());
         args.push(mcp::role::role_description(spec.role, Agent::Claude));
 
+        let mut env = Vec::new();
+        if let Some(dir) = pinned {
+            env.push((
+                "CLAUDE_CONFIG_DIR".to_string(),
+                dir.to_string_lossy().into_owned(),
+            ));
+        }
+
         Ok(LaunchPlan {
             args,
-            notice: untrusted_workspace_notice(spec),
+            env,
+            notice: untrusted_workspace_notice(spec, pinned),
             ..LaunchPlan::default()
         })
+    }
+}
+
+/// The global config file this launch's Claude Code will read: inside the configuration directory
+/// when one is in effect — the session's, else one the user's own shell exports — and
+/// `~/.claude.json` otherwise.
+fn global_config_file(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> PathBuf {
+    let dir = pinned.map(PathBuf::from).or_else(|| {
+        spec.shell_env
+            .get("CLAUDE_CONFIG_DIR")
+            .filter(|dir| !dir.is_empty())
+            .map(PathBuf::from)
+    });
+    match dir {
+        Some(dir) => dir.join(".claude.json"),
+        None => spec
+            .shell_env
+            .get("HOME")
+            .filter(|home| !home.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(crate::paths::home_dir)
+            .join(".claude.json"),
     }
 }
 
@@ -130,15 +169,10 @@ impl AgentAdapter for ClaudeAdapter {
 /// Deliberately silent unless the trust state is explicitly negative: the field is only read, so
 /// an absent project entry or a renamed key must leave the user alone rather than warn them on
 /// every launch about something that may not be true.
-fn untrusted_workspace_notice(spec: &LaunchSpec<'_>) -> Option<String> {
-    let home = spec
-        .shell_env
-        .get("HOME")
-        .filter(|home| !home.is_empty())
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(crate::paths::home_dir);
+fn untrusted_workspace_notice(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Option<String> {
     let config: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(home.join(".claude.json")).ok()?).ok()?;
+        serde_json::from_str(&std::fs::read_to_string(global_config_file(spec, pinned)).ok()?)
+            .ok()?;
 
     let canonical = std::fs::canonicalize(spec.cwd).unwrap_or_else(|_| spec.cwd.to_path_buf());
     let project = config
@@ -218,6 +252,100 @@ mod tests {
             .expect("plan")
             .notice
             .is_none());
+    }
+
+    /// A console's setting reaches Claude Code only as an environment entry in the plan; with none
+    /// set the plan adds nothing, so the shell snapshot's own value stays in force. Layering the
+    /// entry over the snapshot is `term::launch`'s job, not the adapter's.
+    #[test]
+    fn a_pinned_config_dir_is_exported_and_an_unpinned_launch_adds_nothing() {
+        let mut fixture = spec_fixture();
+        assert!(ClaudeAdapter
+            .plan(&fixture.spec())
+            .expect("plan")
+            .env
+            .is_empty());
+
+        let dir = fixture.scratch.join("claude-alt");
+        std::fs::create_dir_all(&dir).expect("config dir");
+        fixture.config_dir = Some(dir.clone());
+        let plan = ClaudeAdapter.plan(&fixture.spec()).expect("plan");
+        assert_eq!(
+            plan.env,
+            vec![(
+                "CLAUDE_CONFIG_DIR".to_string(),
+                dir.to_string_lossy().into_owned()
+            )]
+        );
+    }
+
+    #[test]
+    fn a_pinned_config_dir_that_has_gone_refuses_the_launch() {
+        let mut fixture = spec_fixture();
+        fixture.config_dir = Some(fixture.scratch.join("missing"));
+        let err = ClaudeAdapter.plan(&fixture.spec()).err().expect("refused");
+        let message = err.to_string();
+        assert!(message.contains("Claude"), "{message}");
+        assert!(message.contains("missing"), "{message}");
+        assert!(!message.contains("  "), "stray spaces in: {message}");
+    }
+
+    /// The trust state lives in the config file Claude Code will actually read, which moves into the
+    /// configuration directory when there is one: the session's, or failing that the shell's.
+    #[test]
+    fn the_trust_state_is_read_from_the_file_inside_the_config_dir() {
+        let mut fixture = spec_fixture();
+        let home = fixture.scratch.join("home");
+        let pinned = fixture.scratch.join("pinned");
+        let from_shell = fixture.scratch.join("from-shell");
+        for dir in [&home, &pinned, &from_shell] {
+            std::fs::create_dir_all(dir).expect("directory");
+        }
+        fixture
+            .shell_env
+            .insert("HOME".to_string(), home.to_string_lossy().into_owned());
+        let canonical = std::fs::canonicalize(&fixture.cwd).expect("canonical path");
+        let write = |dir: &std::path::Path, trusted: bool| {
+            let config = serde_json::json!({
+                "projects": { canonical.to_string_lossy(): { "hasTrustDialogAccepted": trusted } }
+            });
+            std::fs::write(dir.join(".claude.json"), config.to_string()).expect("config");
+        };
+        let warns = |fixture: &crate::adapter::tests::SpecFixture| {
+            ClaudeAdapter
+                .plan(&fixture.spec())
+                .expect("plan")
+                .notice
+                .is_some()
+        };
+
+        // Trusted in the default file, untrusted in the pinned directory's: only the latter counts.
+        write(&home, true);
+        write(&pinned, false);
+        assert!(!warns(&fixture));
+        fixture.config_dir = Some(pinned.clone());
+        assert!(warns(&fixture));
+
+        // The pinned directory has no config file yet: silent, and the default file is not a
+        // fallback because Claude Code would not read it either.
+        std::fs::remove_file(pinned.join(".claude.json")).expect("removed");
+        write(&home, false);
+        assert!(!warns(&fixture));
+
+        // A directory the user's own shell exports is followed when the console pins nothing, and
+        // the console's wins when it does.
+        fixture.config_dir = None;
+        fixture.shell_env.insert(
+            "CLAUDE_CONFIG_DIR".to_string(),
+            from_shell.to_string_lossy().into_owned(),
+        );
+        write(&from_shell, false);
+        assert!(warns(&fixture));
+        write(&from_shell, true);
+        assert!(!warns(&fixture));
+        write(&pinned, false);
+        fixture.config_dir = Some(pinned);
+        assert!(warns(&fixture));
     }
 
     #[test]

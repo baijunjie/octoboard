@@ -39,8 +39,19 @@ export interface Console {
   workdir: string;
   hub_agent: Agent;
   default_agent: Agent;
+  /** Absolute path of each agent's own config directory, one setting per agent. A session opened in
+   * this console reads only its agent's: Claude Code is launched with it as `CLAUDE_CONFIG_DIR`,
+   * Codex as `CODEX_HOME`, and for Grok it replaces `~/.grok` as the directory its per-session home
+   * is built from — over any value in the user's shell environment. Unset leaves that environment
+   * as it is. */
+  claude_config_dir?: string | null;
+  codex_config_dir?: string | null;
+  grok_config_dir?: string | null;
   created_at: number;
 }
+
+/** The three per-agent config directory fields of a console, as named on the wire. */
+export type ConfigDirField = "claude_config_dir" | "codex_config_dir" | "grok_config_dir";
 
 export interface Project {
   id: string;
@@ -68,6 +79,9 @@ export interface Session {
   /** Whether this session's reports go to its console's hub. Always true for a hub-started session;
    * for one the user opened by hand, only when they asked for it. */
   include_in_hub: boolean;
+  /** The config directory of this session's own agent that it was started with, fixed at creation
+   * so a resume finds its transcript even after the console's setting changes. */
+  config_dir?: string | null;
   started_at: number;
   ended_at?: number | null;
 }
@@ -95,13 +109,26 @@ export interface DirEntry {
  * in `protocol.rs`, tagged the same way (`type`, snake_case).
  */
 export type RequestBody =
-  | { type: "create_console"; name: string; hub_agent: Agent; default_agent: Agent }
+  | {
+      type: "create_console";
+      name: string;
+      hub_agent: Agent;
+      default_agent: Agent;
+      claude_config_dir?: string;
+      codex_config_dir?: string;
+      grok_config_dir?: string;
+    }
   | {
       type: "update_console";
       console: string;
       name?: string;
       hub_agent?: Agent;
       default_agent?: Agent;
+      /** Each config directory: absent leaves it alone; an explicit `null` clears it, so the user's
+       * shell environment applies again. */
+      claude_config_dir?: string | null;
+      codex_config_dir?: string | null;
+      grok_config_dir?: string | null;
     }
   | { type: "delete_console"; console: string }
   | {

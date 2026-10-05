@@ -373,6 +373,7 @@ mod tests {
             status: SessionStatus::Idle,
             has_conversation: true,
             include_in_hub: true,
+            config_dir: None,
             started_at: 0,
             ended_at: None,
         }

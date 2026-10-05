@@ -10,8 +10,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 
 ## Product
 
-- [Consoles and projects](product/consoles-and-projects.md) — consoles, their working directory and agent defaults; the
-  three ways a project is associated, what is editable afterwards, and what deleting either one does.
+- [Consoles and projects](product/consoles-and-projects.md) — consoles, their working directory, agent defaults and
+  per-agent config directories; the three ways a project is associated, what is editable afterwards, and what deleting
+  either one does.
 - [Sessions](product/sessions.md) — hub and project sessions, the three-level menu, agent selection, the five session
   statuses and their transitions, the raised hand and its notification, archiving, interruption and resuming, and the
   terminal.

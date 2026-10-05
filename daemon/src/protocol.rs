@@ -11,6 +11,17 @@ pub enum Agent {
     Grok,
 }
 
+impl Agent {
+    /// How the agent is named in a message shown to the user.
+    pub fn label(self) -> &'static str {
+        match self {
+            Agent::Claude => "Claude Code",
+            Agent::Codex => "Codex",
+            Agent::Grok => "Grok Build",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
@@ -73,6 +84,16 @@ pub struct Console {
     pub workdir: String,
     pub hub_agent: Agent,
     pub default_agent: Agent,
+    /// Where each agent's sessions opened in this console keep their configuration, login and
+    /// transcripts, as an absolute path; one setting per agent, and a session reads only its own
+    /// agent's. Claude Code gets it as `CLAUDE_CONFIG_DIR`, Codex as `CODEX_HOME`, and for Grok it
+    /// is the directory its per-session home is built from instead of `~/.grok`. Set over whatever
+    /// the user's shell environment exports; unset leaves that as it is.
+    pub claude_config_dir: Option<String>,
+    /// Codex's own directory; see `claude_config_dir`.
+    pub codex_config_dir: Option<String>,
+    /// Grok's own directory; see `claude_config_dir`.
+    pub grok_config_dir: Option<String>,
     pub created_at: i64,
 }
 
@@ -109,6 +130,13 @@ pub struct Session {
     /// started; a session the user opened by hand is outside the orchestration unless they asked
     /// for it to be included.
     pub include_in_hub: bool,
+    /// The configuration directory of this session's own agent that it was started with, fixed at
+    /// creation: the console's setting for that agent at the time. An agent keeps a conversation's
+    /// transcript under that directory, so a resume finds it only when relaunched with the same one
+    /// — which is why this is the session's own copy and a later edit of the console's setting never
+    /// reaches a session that already exists. Unset for a session started with no directory
+    /// pinned; such a session resumes under whatever the shell exports at that moment.
+    pub config_dir: Option<String>,
     pub started_at: i64,
     pub ended_at: Option<i64>,
 }
@@ -158,12 +186,26 @@ pub enum RequestBody {
         name: String,
         hub_agent: Agent,
         default_agent: Agent,
+        #[serde(default)]
+        claude_config_dir: Option<String>,
+        #[serde(default)]
+        codex_config_dir: Option<String>,
+        #[serde(default)]
+        grok_config_dir: Option<String>,
     },
     UpdateConsole {
         console: String,
         name: Option<String>,
         hub_agent: Option<Agent>,
         default_agent: Option<Agent>,
+        /// Each config directory: absent leaves the setting alone; an explicit `null` (or a blank
+        /// string) clears it, so the user's shell environment applies again.
+        #[serde(default, deserialize_with = "present_option")]
+        claude_config_dir: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        codex_config_dir: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        grok_config_dir: Option<Option<String>>,
     },
     DeleteConsole {
         console: String,
@@ -451,6 +493,56 @@ mod tests {
                 assert_eq!(cleared, Some(None));
             }
             _ => panic!("both parse as update_project"),
+        }
+    }
+
+    /// Absent versus null is the only way a console's config directory can be cleared as well as
+    /// set, and each agent's is independent of the others.
+    #[test]
+    fn clearing_a_consoles_config_dir_is_distinguishable_from_leaving_it() {
+        let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::UpdateConsole {
+                claude_config_dir,
+                codex_config_dir,
+                grok_config_dir,
+                ..
+            } => (claude_config_dir, codex_config_dir, grok_config_dir),
+            _ => panic!("parses as update_console"),
+        };
+        assert_eq!(
+            parse(r#"{"type":"update_console","console":"c"}"#),
+            (None, None, None)
+        );
+        assert_eq!(
+            parse(
+                r#"{"type":"update_console","console":"c","claude_config_dir":null,
+                    "codex_config_dir":"~/.codex-alt"}"#
+            ),
+            (Some(None), Some(Some("~/.codex-alt".to_string())), None)
+        );
+        assert_eq!(
+            parse(r#"{"type":"update_console","console":"c","grok_config_dir":"~/.grok-alt"}"#),
+            (None, None, Some(Some("~/.grok-alt".to_string())))
+        );
+    }
+
+    #[test]
+    fn creating_a_console_needs_no_config_dir() {
+        let request: Request = serde_json::from_str(
+            r#"{"type":"create_console","name":"n","hub_agent":"claude","default_agent":"codex"}"#,
+        )
+        .unwrap();
+        match request.body {
+            RequestBody::CreateConsole {
+                claude_config_dir,
+                codex_config_dir,
+                grok_config_dir,
+                ..
+            } => assert_eq!(
+                (claude_config_dir, codex_config_dir, grok_config_dir),
+                (None, None, None)
+            ),
+            _ => panic!("parses as create_console"),
         }
     }
 }

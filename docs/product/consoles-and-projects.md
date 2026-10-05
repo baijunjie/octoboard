@@ -14,6 +14,7 @@ A console carries:
 | Name | the user, required | Free text. |
 | Hub agent | the user | The agent the console's own hub session runs. |
 | Default agent | the user | The fallback agent for sessions opened under this console's projects. |
+| Agent config directories | the user, optional | One per agent: where that agent's sessions in this console keep their configuration; see "Agent config directories" below. |
 | Working directory | Octoboard | `~/.octoboard/consoles/<console id>/`, created when the console is created. Not settable and not changeable. |
 
 Both agent fields take one of the three supported agents (Claude Code, Codex, Grok Build) and default to Claude Code
@@ -21,10 +22,73 @@ in the creation form.
 
 Multiple consoles can exist side by side and are independent of each other.
 
+### Agent config directories
+
+A console can hold up to three optional directories, one per agent. Each is the directory that agent keeps its own
+configuration, login state and conversation history in — for a user who keeps a second setup of an agent beside the
+default one, such as `~/.claude-alt`:
+
+| Agent | What the directory is | The agent's usual default |
+|---|---|---|
+| Claude Code | what Claude Code itself takes from `CLAUDE_CONFIG_DIR` | `~/.claude` |
+| Codex | what Codex itself takes from `CODEX_HOME` | `~/.codex` |
+| Grok Build | the Grok home, what Grok itself takes from `GROK_HOME` | `~/.grok` |
+
+How each agent is pointed at its directory is in "The launch environment" and "Per-agent specifics a user will notice"
+in `docs/product/launching-agents.md`.
+
+The console dialog shows one input for each agent currently selected as the console's hub agent or default agent —
+one row or two, in the order Claude Code, Codex, Grok Build — labelled with that agent's name and marked optional, with
+the agent's usual default as its placeholder. A directory can therefore be entered only for an agent selected in one
+of those two fields. A directory already stored for an agent that is not currently selected is kept as it is: it is
+neither shown nor saved by the dialog, and it still applies to that agent's sessions, such as those of a project whose
+own default agent it is. To see or clear it, select that agent as the hub or default agent again.
+
+- **Left blank**, it is unset: that agent's sessions use whatever the user's login shell exports for the agent's
+  variable, and the agent's own default when it exports none.
+- **When set**, it applies to every session of that agent opened in the console afterwards — the hub and project
+  sessions alike, including a session whose agent was chosen for that session alone — and takes precedence over the
+  value in the user's shell environment (see "The launch environment" in `docs/product/launching-agents.md`). A session
+  reads only its own agent's directory; sessions of the other agents are unaffected.
+
+For Claude Code, entering `~/.claude` is not the same as leaving the field blank: whenever a directory is set, Claude
+Code reads its global config file from `.claude.json` inside that directory instead of from `~/.claude.json`.
+
+For Grok Build, the directory must already be a Grok home that Grok has been run against; Octoboard does not check
+this. Why, and what happens otherwise, is under "Grok Build" in "Per-agent specifics a user will notice" in
+`docs/product/launching-agents.md`.
+
+Each value is checked when the console is saved, by the same rules for all three agents, and a failure is shown in the
+dialog, naming the agent, with nothing saved:
+
+- surrounding whitespace is trimmed, and a blank value means unset;
+- a leading `~` or `~/` is expanded to the home directory of the host the daemon runs on;
+- the result must be an absolute path;
+- it is normalized lexically — a trailing `/`, `.` components and `..` components are resolved; a symlink is kept as
+  typed;
+- it must exist and be a directory. Octoboard never creates it.
+
+What is stored, and shown when the console is edited, is the expanded absolute path.
+
+**A session keeps the directory it was opened with.** A session takes the console's value for its own agent when it is
+opened and keeps it for its lifetime; resuming or reopening it relaunches with that same directory, because the agent
+keeps the conversation inside it. A session opened while its agent's setting was unset holds no directory and resumes
+under whatever the user's shell exports at that moment.
+
+If a session's directory no longer exists when it is launched or resumed, the launch is refused rather than started —
+the agent would otherwise come up logged out, without the conversation a resume is meant to continue. This holds for
+all three agents, and the message names the agent and the directory and says to recreate it or to clear it in the
+console's settings. For sessions opened afterwards, correcting or clearing the console's setting resolves it; an
+existing session can be resumed again only once the directory exists at that path again.
+
 ### Editing a console
 
-Only the name, the hub agent and the default agent can be changed. Changing an agent affects sessions opened
-afterwards; a session that already exists keeps the agent it was started with.
+The name, the hub agent, the default agent and the config directories the dialog shows can be changed, and a config
+directory can be cleared. Changing an agent or a config directory affects sessions opened afterwards; a session that
+already exists keeps the agent and the config directory it was started with.
+
+A config directory is checked only when it is changed: saving a console with that field untouched succeeds even if the
+stored directory has since disappeared.
 
 ### Deleting a console
 

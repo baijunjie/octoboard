@@ -5,10 +5,12 @@
 //! `$GROK_HOME/managed_config.toml` and `requirements.toml` load but are deleted by the deployment
 //! sync at runtime; `grok mcp add` only writes persistently to user or project scope.
 //!
-//! What works is a per-session `GROK_HOME` built as a symlink farm over the user's real `~/.grok`:
-//! every entry is a symlink back to theirs except the ones Octoboard has to own. `auth.json` and
-//! `sessions/` stay symlinks, so login state is shared and a session Octoboard started stays
-//! resumable from the user's own plain `grok`.
+//! What works is a per-session `GROK_HOME` built as a symlink farm over the source home: the
+//! console's pinned directory when set, else the shell's `GROK_HOME`, else `~/.grok`. Every entry is
+//! a symlink back to the source's except the ones Octoboard has to own. `auth.json` and `sessions/`
+//! stay symlinks, so login state is shared and a session Octoboard started stays resumable from the
+//! user's own `grok` — plain for the default home, with `GROK_HOME=<that directory>` for a pinned
+//! one.
 //!
 //! Two files in the farm are copies rather than symlinks, and both must stay that way:
 //!
@@ -19,6 +21,14 @@
 //!   or Grok silently loads none of the project's own `AGENTS.md`, hooks or MCP servers, and the
 //!   trust store it consults is the one inside `GROK_HOME`. Octoboard adds the entry to its copy
 //!   instead of making Grok write a trust decision into the user's store on their behalf.
+//!
+//! A session pins its source home at creation, because the session records a resume looks for
+//! live in that home's `sessions/`; the farm is still what Grok runs against, so nothing changes
+//! except which directory the links and copies come from.
+//!
+//! A pinned directory must already be a real Grok home, one Grok has been run against: the farm only
+//! links entries that exist in the source, so for an empty directory Grok would create `sessions/`
+//! and `auth.json` inside the throw-away farm and lose them.
 //!
 //! The copies are a snapshot: an edit the user makes while a session runs is not seen, and anything
 //! the session persists lands in Octoboard's copy and is lost to them. Both are mitigated by
@@ -79,7 +89,8 @@ impl AgentAdapter for GrokAdapter {
     }
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan> {
-        let grok_home = build_grok_home(spec)?;
+        let pinned = super::pinned_config_dir(spec, Agent::Grok)?;
+        let grok_home = build_grok_home(spec, pinned)?;
 
         let mut args = Vec::new();
         match spec.resume_agent_session_id {
@@ -119,17 +130,19 @@ impl AgentAdapter for GrokAdapter {
 }
 
 /// Builds the session's `GROK_HOME` and returns its path.
-fn build_grok_home(spec: &LaunchSpec<'_>) -> Result<PathBuf> {
-    let real_home = real_grok_home(spec);
+fn build_grok_home(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Result<PathBuf> {
+    let source_home = pinned
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| default_grok_home(spec));
     let farm = spec.scratch.join("grok-home");
     if farm.exists() {
         std::fs::remove_dir_all(&farm).ok();
     }
     std::fs::create_dir_all(&farm).with_context(|| format!("creating {}", farm.display()))?;
 
-    if real_home.is_dir() {
-        for entry in std::fs::read_dir(&real_home)
-            .with_context(|| format!("reading {}", real_home.display()))?
+    if source_home.is_dir() {
+        for entry in std::fs::read_dir(&source_home)
+            .with_context(|| format!("reading {}", source_home.display()))?
         {
             let entry = entry?;
             let name = entry.file_name();
@@ -146,19 +159,19 @@ fn build_grok_home(spec: &LaunchSpec<'_>) -> Result<PathBuf> {
     }
 
     let config = farm.join("config.toml");
-    copy_if_present(&real_home.join("config.toml"), &config)?;
+    copy_if_present(&source_home.join("config.toml"), &config)?;
     append_mcp_server(&config, spec)?;
 
-    write_trusted_folders(&real_home, &farm, spec.cwd)?;
+    write_trusted_folders(&source_home, &farm, spec.cwd)?;
     write_hooks(&farm, spec.hook_script)?;
 
     Ok(farm)
 }
 
-/// The user's own Grok home, read from the launch environment rather than the daemon's: `GROK_HOME`
-/// is a user setting, and the daemon's own copy of it may belong to another Octoboard session's
-/// farm when the daemon was started from inside one.
-fn real_grok_home(spec: &LaunchSpec<'_>) -> PathBuf {
+/// The user's own Grok home when the session pins none, read from the launch environment rather
+/// than the daemon's: `GROK_HOME` is a user setting, and the daemon's own copy of it may belong to
+/// another Octoboard session's farm when the daemon was started from inside one.
+fn default_grok_home(spec: &LaunchSpec<'_>) -> PathBuf {
     if let Some(home) = spec
         .shell_env
         .get("GROK_HOME")
@@ -205,8 +218,8 @@ fn copy_if_present(from: &Path, to: &Path) -> Result<()> {
 
 /// Copies the user's trust store and adds this project's directory to the copy, so the project's
 /// own configuration loads without Grok ever writing a trust decision into the user's own file.
-fn write_trusted_folders(real_home: &Path, farm: &Path, cwd: &Path) -> Result<()> {
-    let source = real_home.join("trusted_folders.toml");
+fn write_trusted_folders(source_home: &Path, farm: &Path, cwd: &Path) -> Result<()> {
+    let source = source_home.join("trusted_folders.toml");
     let mut content = std::fs::read_to_string(&source).unwrap_or_default();
     let canonical = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
     let path_text = canonical.to_string_lossy();
@@ -259,7 +272,7 @@ mod tests {
     use crate::adapter::tests::{spec_fixture, SpecFixture};
 
     /// Stands a fake `~/.grok` up inside the fixture and points the launch environment at it.
-    fn with_real_home(fixture: &mut SpecFixture) -> PathBuf {
+    fn with_default_home(fixture: &mut SpecFixture) -> PathBuf {
         let home = fixture.scratch.join("user-grok-home");
         std::fs::create_dir_all(home.join("sessions")).expect("sessions directory");
         std::fs::write(home.join("config.toml"), "default_model = \"x\"\n").expect("config");
@@ -272,9 +285,65 @@ mod tests {
     }
 
     #[test]
+    fn a_pinned_grok_home_replaces_the_users_as_the_source_of_the_farm() {
+        let mut fixture = spec_fixture();
+        let shell_home = with_default_home(&mut fixture);
+        std::fs::write(
+            shell_home.join("trusted_folders.toml"),
+            "[folders.\"/from/shell\"]\ntrusted = true\n",
+        )
+        .expect("trust store");
+        let pinned = fixture.scratch.join("grok-alt");
+        std::fs::create_dir_all(pinned.join("sessions")).expect("sessions directory");
+        std::fs::write(pinned.join("config.toml"), "default_model = \"pinned\"\n").expect("config");
+        std::fs::write(pinned.join("auth.json"), "{\"pinned\":true}").expect("auth");
+        std::fs::write(
+            pinned.join("trusted_folders.toml"),
+            "[folders.\"/from/pinned\"]\ntrusted = true\n",
+        )
+        .expect("trust store");
+        fixture.config_dir = Some(pinned.clone());
+
+        let plan = GrokAdapter.plan(&fixture.spec()).expect("plan");
+        let farm = PathBuf::from(&plan.env[0].1);
+        // Still Octoboard's own farm that Grok runs against, never the chosen directory itself.
+        assert_eq!(plan.env.len(), 1);
+        assert!(farm.starts_with(&fixture.scratch), "{}", farm.display());
+        // Grok persists into `config.toml`, so it stays a copy and never a link into the source.
+        assert!(farm.join("config.toml").is_file());
+        assert!(!farm.join("config.toml").is_symlink());
+        let config = std::fs::read_to_string(farm.join("config.toml")).expect("the copy");
+        assert!(config.contains("default_model = \"pinned\""), "{config}");
+        assert!(!config.contains("default_model = \"x\""), "{config}");
+        let trust = std::fs::read_to_string(farm.join("trusted_folders.toml")).expect("the copy");
+        assert!(trust.contains("/from/pinned"), "{trust}");
+        assert!(!trust.contains("/from/shell"), "{trust}");
+        // Login and session records are the chosen directory's, so a resume finds its transcript.
+        assert_eq!(
+            std::fs::read_link(farm.join("auth.json")).expect("a link"),
+            pinned.join("auth.json")
+        );
+        assert_eq!(
+            std::fs::read_link(farm.join("sessions")).expect("a link"),
+            pinned.join("sessions")
+        );
+    }
+
+    #[test]
+    fn a_pinned_grok_home_that_has_gone_refuses_the_launch() {
+        let mut fixture = spec_fixture();
+        fixture.config_dir = Some(fixture.scratch.join("missing"));
+        let err = GrokAdapter.plan(&fixture.spec()).err().expect("refused");
+        let message = err.to_string();
+        assert!(message.contains("Grok"), "{message}");
+        assert!(message.contains("missing"), "{message}");
+        assert!(!message.contains("  "), "stray spaces in: {message}");
+    }
+
+    #[test]
     fn the_farm_links_the_users_home_but_owns_the_files_grok_writes_back_to() {
         let mut fixture = spec_fixture();
-        let home = with_real_home(&mut fixture);
+        let home = with_default_home(&mut fixture);
         let plan = GrokAdapter.plan(&fixture.spec()).expect("plan");
 
         let farm = PathBuf::from(&plan.env[0].1);
@@ -299,7 +368,7 @@ mod tests {
     #[test]
     fn the_farms_trust_store_covers_the_project_without_touching_the_users() {
         let mut fixture = spec_fixture();
-        let home = with_real_home(&mut fixture);
+        let home = with_default_home(&mut fixture);
         std::fs::write(
             home.join("trusted_folders.toml"),
             "[folders.\"/somewhere/else\"]\ntrusted = true\n",
@@ -328,7 +397,7 @@ mod tests {
     #[test]
     fn the_mcp_server_is_appended_to_the_farms_config_without_losing_the_users_own() {
         let mut fixture = spec_fixture();
-        with_real_home(&mut fixture);
+        with_default_home(&mut fixture);
         let plan = GrokAdapter.plan(&fixture.spec()).expect("plan");
         let farm = PathBuf::from(&plan.env[0].1);
         let config = std::fs::read_to_string(farm.join("config.toml")).expect("the copy");
@@ -346,7 +415,7 @@ mod tests {
     #[test]
     fn the_role_text_travels_in_rules() {
         let mut fixture = spec_fixture();
-        with_real_home(&mut fixture);
+        with_default_home(&mut fixture);
         let plan = GrokAdapter.plan(&fixture.spec()).expect("plan");
         let at = plan
             .args
@@ -362,7 +431,7 @@ mod tests {
     #[test]
     fn the_hooks_are_command_type_with_an_explicit_timeout() {
         let mut fixture = spec_fixture();
-        with_real_home(&mut fixture);
+        with_default_home(&mut fixture);
         let plan = GrokAdapter.plan(&fixture.spec()).expect("plan");
         let farm = PathBuf::from(&plan.env[0].1);
         let document: serde_json::Value = serde_json::from_str(
