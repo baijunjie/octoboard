@@ -2,9 +2,10 @@
 
 A desktop control board for orchestrating coding agents across multiple projects.
 
-> **Status: early development.** The shell works — consoles, projects, sessions in real terminals, archiving and
-> resuming — on macOS, built from source. The orchestration it exists for (a hub agent dispatching work across
-> projects and reporting back) is not built yet, and there is no installable build.
+> **Status: early development.** The MVP's features are built — consoles, projects, sessions in real terminals, a hub
+> agent dispatching work across projects and reporting back, and the report panel — on macOS (Apple Silicon). A final
+> round of checks on a real build is still outstanding, and no release is published yet, so for now Octoboard is built
+> from source.
 
 ## This is an AI-native project
 
