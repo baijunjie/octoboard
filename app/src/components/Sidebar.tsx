@@ -164,6 +164,16 @@ function ConsoleNode({
             {hub ? <StatusIcon status={hub.status} /> : <span className="status-icon status-icon-placeholder" />}
             <span className="tree-label">Hub</span>
             {hub && <AgentBadge agent={hub.agent} />}
+            {hub && (
+              // The only way to archive the hub: it cannot archive itself, and while it sits in this
+              // row (running or interrupted), archiving it is what lets the row open a fresh one.
+              <ActionMenu
+                items={[
+                  ...(isDormant(hub.status) ? [{ label: "Resume", onClick: () => handlers.onSelectSession(hub) }] : []),
+                  { label: "Archive", onClick: () => handlers.onArchiveSession(hub), destructive: true },
+                ]}
+              />
+            )}
           </div>
           {extraHubs.map((session) => (
             <SessionRow key={session.id} handlers={handlers} session={session} selectedSessionId={selectedSessionId} />

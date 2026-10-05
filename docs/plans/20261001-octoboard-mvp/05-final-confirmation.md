@@ -239,7 +239,7 @@ Only what genuinely cannot be settled yet; everything else raised along the way 
         itself — that is not Codex's `approval_policy` / `--ask-for-approval`, which Octoboard never looks at, but
         the key `approvals_reviewer` in `$CODEX_HOME/config.toml`, read for a value containing the string
         `auto_review` (`daemon/src/adapter/codex.rs:153-167`); where it does, Octoboard raises no hand at all for
-        that session (`docs/product/sessions.md:137-140`; the plain-prose case at `:110-111` is a separate gap with
+        that session (`docs/product/sessions.md:156-159`; the plain-prose case at `:129-130` is a separate gap with
         the same symptom) — otherwise a Codex session that never raises its hand reads as this check having failed
         when it is only Codex's own configuration doing what it was told.
       - **Steps**:
@@ -374,7 +374,7 @@ Only what genuinely cannot be settled yet; everything else raised along the way 
            would side with `docs/mvp.md:277-279`, which lists bash mode among the turns that "produce no stop event
            at all" and names `idle_prompt` as their backstop; no such payload at all, with the file's liveness
            already confirmed by ending 1's and ending 2's positive controls, would side with
-           `docs/product/sessions.md:114`, which says bash mode "produces no events" outright. Do not pick a side —
+           `docs/product/sessions.md:133`, which says bash mode "produces no events" outright. Do not pick a side —
            just record which one happened.
       - **Pass criterion**: this run only counts at all if the capture from Setup shows a payload for ending 1's
         `idle_prompt` arriving during the 180 s window opened by step 2 (step 3) — that arrival is what makes
@@ -402,7 +402,7 @@ Only what genuinely cannot be settled yet; everything else raised along the way 
         time ending 2's own backstop landed in the capture file (the second positive control), confirmation the
         file then went quiet for a full backstop interval before the bash-mode escape was tried, and whether a new
         payload appeared afterward — and state plainly whether it supports `docs/mvp.md:277-279` or
-        `docs/product/sessions.md:114`, so whoever resumes can fix the losing one.
+        `docs/product/sessions.md:133`, so whoever resumes can fix the losing one.
 
 - [ ] **A message the agent only half accepts.** When a PTY write is accepted in part and then times
       out, Octoboard drops that message and everything queued behind it, tells the sender, and shows

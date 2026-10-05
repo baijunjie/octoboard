@@ -12,12 +12,9 @@ session cannot start or archive sessions, and the hub cannot report to itself.
 
 ## One live hub per console
 
-A console has at most one hub session that is not archived. Opening a second one is refused, and so
-is reopening an archived hub while a live one exists; the refusal names the existing hub's session
-id. Archiving the live hub is what frees the slot.
-
-A hub session belongs to no project, so archived hubs are listed in the console's own "Archived
-hubs" group rather than in any project's Archive.
+A console runs at most one hub session at a time. The rule, how a hub is archived to make room for a
+fresh one, and where archived hubs are listed are in "Hub sessions and project sessions" in
+`docs/product/sessions.md`.
 
 ## The hub's tools
 

@@ -12,9 +12,28 @@ own binary and shows it as it is. What it adds to each launch, and what it guara
 | Hub session | the console's working directory | the console's "Hub" row |
 | Project session | the project's directory | under that project |
 
-**A console has at most one live hub session**, enforced by the daemon: opening a second one, or
-reopening an archived one while a live one exists, is refused and names the hub already running.
-Clicking the Hub row starts a hub if there is none and selects the existing one otherwise.
+**A console has at most one hub session whose process is running**, enforced by the daemon: opening
+a hub, or reopening an interrupted or archived one, while another hub of the console is running is
+refused, and the refusal names the running hub's session id.
+
+**The Hub row** holds the console's newest hub session that is not archived, whether running or
+interrupted. Clicking it starts a new hub when the row is empty and selects the hub in it otherwise,
+which resumes an interrupted hub as selecting any interrupted session does. While the row holds a hub
+it has an action menu:
+
+- **Archive** — always offered. It asks for confirmation, then archives the hub as described in
+  "Archiving, interruption and resuming" below.
+- **Resume** — offered only while the hub is interrupted.
+
+There is no Rename on the Hub row; its label is always "Hub". The hub cannot archive itself (see
+"The hub's tools" in `docs/product/hub-orchestration.md`), so the user archives it from this menu.
+Archiving the hub moves it to the console's "Archived hubs" group and leaves the Hub row empty, so the
+next click on the row starts a fresh hub. That fresh hub is opened with the console's current hub
+agent and agent config directory, whereas resuming or reopening a hub keeps the ones it was opened
+with (see "Agent config directories" in `docs/product/consoles-and-projects.md`).
+
+Should a console ever have more than one hub that is not archived, the ones not in the Hub row are
+listed directly below it as ordinary session rows.
 
 A hub session carries no project; it runs in the console's working directory. It is given Octoboard's
 orchestration tools and dispatches work to sessions in the console's projects — see
@@ -83,8 +102,8 @@ session records belong to a specific agent and cannot be moved across agents.
 | Working | `working` | The agent is executing a turn. |
 | Waiting for the user | `waiting_user` | The agent is waiting on a permission decision or has asked the user a question through its own ask-the-user tool. |
 | Awaiting instructions | `idle` | The process is running and sitting at its prompt. |
-| Interrupted | `interrupted` | No process is running, and it did not end by being archived. The session stays in its project's list and can be resumed. |
-| Archived | `archived` | Ended on the user's request. Listed in the project's Archive group and can be reopened. |
+| Interrupted | `interrupted` | No process is running, and it did not end by being archived. The session stays in its project's list (a hub, in its console's Hub row) and can be resumed. |
+| Archived | `archived` | Ended by being archived (see "Archiving, interruption and resuming"). Listed in the project's Archive group (a hub, in its console's "Archived hubs" group) and can be reopened. |
 
 The first three mean a process is running; the last two mean none is, and both can be resumed.
 
@@ -145,7 +164,9 @@ see. Those sessions keep reading as *working*.
 
 **Archiving** ends the agent's process and keeps the session and its record. The agent is asked to
 exit first and is killed only if it does not; a kill takes the agent's tool subprocesses with it.
-Archiving is available for any session that is not already archived, including an interrupted one.
+Archiving is available for any session that is not already archived, including an interrupted one;
+for the hub it is on the Hub row's menu (see "Hub sessions and project sessions" above). The user
+archives a session from its row's menu, and is asked to confirm first.
 
 Besides the user, two things archive a session: the hub, explicitly, and a project session's own
 report saying the work is finished with nothing left open (see "Automatic archiving" in
