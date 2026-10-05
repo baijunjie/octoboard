@@ -13,5 +13,18 @@ surroundings, unless its handler puts focus back on the terminal itself. A menu 
 top of that react-aria moves focus back to the trigger when the menu closes. Build every "⋯"-style menu on
 `packages/ui/src/components/ActionMenu.tsx`, which handles both, rather than on a bare `Dropdown`.
 
-Porting a control from `apps/desktop/` does not carry this rule over. That UI's plain `<button>`s never take focus on
-click in WKWebView, so its markup shows no sign of it, and the defect only appears in the running page.
+Nothing in the markup gives this away — a plain `<button>` never takes focus on click in WKWebView — so the defect
+only appears in the running page.
+
+## Inside a dialog, a focused control that unmounts takes Escape and Tab with it
+
+When the focused element is removed, WebKit and Chrome fire no `focusout` and focus falls to `<body>`. A dialog's
+Escape handling and Tab containment hang off focus being inside it, so both stop working. Whenever a dialog replaces
+content that can hold focus — a listing swapped for the next one, a queue moving on to its next item — put focus back
+with `useRefocusIfLost` from `packages/ui/src/dialogs/Dialog.tsx`, or pass the shared `Dialog` a `resetKey` naming the
+current item, which does it for you.
+
+Do not switch a dialog to its next subject by re-keying it (`key={item.id}`): the remounted modal records the
+outgoing one's soon-detached element as its focus-restore target, so focus is lost again when it closes. Keep it
+mounted and reset the per-item state from `resetKey` instead (`useDialogAction(resetKey)` does that for the error and
+busy state).

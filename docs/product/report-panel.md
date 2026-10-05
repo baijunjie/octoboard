@@ -54,17 +54,24 @@ the console's newest, whatever that page's own markup does.
 A page is a **self-contained** HTML document. Inline `<style>` and inline `<script>` run, and an
 image has to be a `data:` URL. **A page cannot load anything external**: no subresources of any kind,
 no external scripts, stylesheets or fonts — so a page has to stick to generic font families — and no
-`fetch` or `XMLHttpRequest`. Native form submission does not navigate anywhere, and a page cannot
-navigate its own frame to an external URL either, so a page has no channel of its own for sending out
-what it computed or what the user typed into it. The one way data leaves a page is `octoboard.submit`.
+`fetch`, `XMLHttpRequest`, WebSocket or `sendBeacon`. Native form submission does not navigate
+anywhere, and a page cannot navigate its own frame to an external URL either. The one way Octoboard
+provides for data to leave a page is `octoboard.submit`.
 
-One thing is not established: the content security policy has no directive that WebKit enforces over WebRTC or over
-link-based DNS prefetching, so whether a page can leak through those was not settled. A probe in Safari produced no
-lookups to compare against, so the panel itself was not tested.
+**Known gap: a page can still reach the network through two routes** that no content security policy
+directive covers in WebKit. Both were measured in the macOS application:
 
-That closes the outbound channel; it is not a claim that a page can do nothing. A page is
-model-authored HTML and its script runs, inside Octoboard's own window, over whatever the user puts
-into it.
+- **WebRTC.** `RTCPeerConnection` is available inside the page, and a page that uses it makes the
+  application send STUN Binding and TURN Allocate requests over UDP to an address the page chose.
+- **`<link rel="preconnect">`.** It opens a TCP connection to a host and port the page chose.
+
+The destination is the page's to pick, so either route lets a page carry out what it computed or what
+the user typed into it, encoded in the address it contacts. Whether link-based DNS prefetching issues
+lookups as well was not observed.
+
+Apart from those routes the outbound channel is closed; that is not a claim that a page can do
+nothing. A page is model-authored HTML and its script runs, inside Octoboard's own window, over
+whatever the user puts into it.
 
 Each page is rendered in a sandboxed frame of its own, with no access to the application around it or
 to any other page.

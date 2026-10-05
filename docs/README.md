@@ -16,7 +16,7 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   automatic archiving, and which sessions the hub drives.
 - [Report panel](product/report-panel.md) — the hub's third pane: pushing a page with `show_page` and what the page id is
   for, paging back through the kept history, why a history page is read-only and where that is enforced, what a page may
-  contain and which outbound channels it has none of, the `octoboard.submit(data)` bridge and how a submission reaches the
+  contain, which outbound channels it has none of and the WebRTC and preconnect routes it still has, the `octoboard.submit(data)` bridge and how a submission reaches the
   hub session, and the window's minimum size.
 - [Launching agents](product/launching-agents.md) — the guarantee that project files and the user's agent configuration
   are never modified, the three things injected per launch and the hub's generated instruction file, the launch
@@ -54,19 +54,23 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   ended it, why a permission probe has to be set up against the user's own settings with the mode in effect confirmed
   from the session itself, and the residue a probe leaves — in the user's configuration and in their live
   `~/.octoboard` data — and how a probe that needs no logged-in agent avoids the latter with a throwaway
-  `HOME`/`TMPDIR`, using Codex's sign-in screen as session output.
+  `HOME`/`TMPDIR`, using Codex's sign-in screen as session output, and how to put a fake agent CLI on `PATH` for an
+  isolated daemon so the real one does not launch instead.
 - [Verifying the desktop UI](memory/verifying-the-desktop-ui.md) — how to verify terminal and UI behaviour in the real
-  app: why a UI change has to be launched rather than only reviewed, why a daemon-side change needs the daemon built
+  app: why a UI change has to be launched rather than only reviewed, why a built app is launched on a throwaway `HOME`
+  and `TMPDIR`, why a daemon-side change needs the daemon built
   and the running sidecar's binary confirmed before anything read off the window means anything, how to get an error
   out of a blank window, reading what the packaged webview sends to the daemon through a wrapped sidecar (dev mode
   sends a different origin), ruling out a locked screen before trusting a capture, bisecting a symptom against the daemon,
   what a scripted GUI probe can and cannot prove and why its setup should go through the daemon's protocol instead
-  (including raising a session's hand with a forged hook event), where to watch for a report page's blocked
+  (including raising a session's hand with a forged hook event) and why Octoboard must be confirmed frontmost before
+  every scripted keystroke, how to find the app's own WebContent process to freeze it, where to watch for a report page's blocked
   navigation, where a network probe's positive control has to come from, why another worktree's dev server or daemon
   may be the one answering and why yours are stopped by PID, and which checks need a person.
 - [Writing UI components](memory/writing-ui-components.md) — conventions for `packages/ui` components: why a HeroUI
   control pressed with the mouse takes keyboard focus off the terminal, when `preventFocusOnPress` is needed, and why
-  "⋯" menus are built on `ActionMenu`.
+  "⋯" menus are built on `ActionMenu`, and why a dialog must not lose focus to `<body>` when a focused control
+  unmounts, so its subject is switched with a reset key rather than by re-keying it.
 - [Writing automated tests](memory/writing-automated-tests.md) — the fixture conventions this project's tests need on
   macOS: why an executable written fresh per test flakes only under a parallel run, and how to verify behaviour the
   daemon derives from an agent's own output by replaying a committed capture rather than staging a live session.

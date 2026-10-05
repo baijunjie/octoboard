@@ -1,6 +1,8 @@
 import { Button, Disclosure } from "@heroui/react";
 import React from "react";
 
+import { TitledControl } from "./TitledControl";
+
 /** The folders under which Octoboard answers Claude Code's trust prompt for every project, with a
  * way to stop each. Hidden while there are none: there is then nothing to stop. Stopping leaves
  * each project's own consent and every running session as it is. Collapsed until opened. */
@@ -15,15 +17,18 @@ export function TrustedFolders({
   return (
     <Disclosure className="shrink-0 border-t border-separator px-2 py-1">
       <Disclosure.Heading>
-        <Disclosure.Trigger
-          preventFocusOnPress
-          className="flex w-full items-center justify-between rounded px-1 py-1 text-xs text-muted"
+        <TitledControl
+          block
+          title="Octoboard answers Claude Code's trust prompt for every project under these folders."
         >
-          <span title="Octoboard answers Claude Code's trust prompt for every project under these folders.">
-            Trusted folders ({directories.length})
-          </span>
-          <Disclosure.Indicator />
-        </Disclosure.Trigger>
+          <Disclosure.Trigger
+            preventFocusOnPress
+            className="flex w-full items-center justify-between rounded px-1 py-1 text-xs text-muted"
+          >
+            <span>Trusted folders ({directories.length})</span>
+            <Disclosure.Indicator />
+          </Disclosure.Trigger>
+        </TitledControl>
       </Disclosure.Heading>
       <Disclosure.Content>
         <Disclosure.Body>
@@ -34,16 +39,18 @@ export function TrustedFolders({
                 <span className="min-w-0 flex-1 truncate text-left" style={{ direction: "rtl" }} title={path}>
                   <bdi>{path}</bdi>
                 </span>
-                <Button
-                  isIconOnly
-                  size="sm"
-                  variant="ghost"
-                  preventFocusOnPress
-                  aria-label={`Stop trusting ${path}`}
-                  onPress={() => onRemove(path)}
-                >
-                  ×
-                </Button>
+                <TitledControl title="Stop trusting this folder. Projects' own consents and running sessions are kept.">
+                  <Button
+                    isIconOnly
+                    size="sm"
+                    variant="ghost"
+                    preventFocusOnPress
+                    aria-label={`Stop trusting ${path}`}
+                    onPress={() => onRemove(path)}
+                  >
+                    ×
+                  </Button>
+                </TitledControl>
               </li>
             ))}
           </ul>

@@ -49,8 +49,15 @@ daemon instead, without touching the source: in a copy of the built `.app`, rena
 `octoboardd.real` and put an executable in its place that starts a logging TCP proxy in front of it. The proxy has to
 print the daemon's `octoboardd listening on 127.0.0.1:<port>` line again with its own port, because the shell connects
 to whatever port that line on the sidecar's stdout names. This relies on the build being unsigned, as the swap breaks
-a signed bundle's signature. Launch the copy with a throwaway `HOME` and `TMPDIR` so the user's own data is not
-involved.
+a signed bundle's signature.
+
+## Launch a built app for verification on a throwaway `HOME` and `TMPDIR`
+
+Run a built `.app` by executing its `Contents/MacOS/octoboard` directly, with `HOME` and `TMPDIR` pointed at fresh
+directories. The daemon it starts keeps its database and instance lock under `$HOME/.octoboard` and its port file
+under the temp directory (see the "Pointing it at a daemon" section of `packages/ui/README.md`), so on the real `HOME`
+it either works on the user's own data or, while the user's own Octoboard is running, loses the lock and the window
+opens on the `?error=` startup screen instead of the app.
 
 ## Bisect every terminal symptom against the daemon before blaming the agent
 
@@ -92,6 +99,10 @@ daemon's own protocol requests, and drive only the behaviour under test through 
 set up the same way, without an agent prompt or a model turn: POST `{"hook_event_name":"PermissionRequest"}` to the
 daemon's `/hook/<session>` to raise its hand, and a later `UserPromptSubmit` lowers it again.
 
+Keystrokes go to whichever application is frontmost, not to Octoboard. Activate it and confirm it is the frontmost
+process immediately before every keystroke: a `Cmd+Q` or `Cmd+W` that lands on another application closes the user's
+own work.
+
 ## Other worktrees' dev servers and daemons share the machine: confirm which one answers, stop yours by PID
 
 Several worktrees are often running at once, each with its own `packages/ui` dev server and `octoboardd`. The dev
@@ -116,3 +127,6 @@ switch the input source to a non-IME one (ABC) first and put it back afterwards.
 does nothing, as with a real hang. It is not the same state, though: a double `Cmd+Q` did not escape it, while
 scripted AppleEvent quits did. Do not read a `Cmd+Q` that fails to quit under `SIGSTOP` as a verdict on the
 wedged-window escape hatch.
+
+Every WebKit application's page process has the same name (`com.apple.WebKit.WebContent`), so find Octoboard's own
+from `launchctl print pid/<app pid>`, never by name — stopping the wrong one freezes the user's browser.

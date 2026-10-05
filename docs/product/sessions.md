@@ -172,8 +172,10 @@ own row:
   waiting session can be found with the tree collapsed.
 - A system notification fires once as a session enters that state, naming the session by its title
   and the project it runs in — or the console whose hub it is. A session that is answered and later
-  waits again notifies again. macOS asks for notification permission the first time; if it is
-  declined, the tree's own marker is the only signal and nothing is reported as having failed.
+  waits again notifies again. No notification permission is asked for: the application posts the
+  notification directly, and macOS showed no permission prompt. The banner was seen while Octoboard
+  was not the frontmost application; while it was frontmost, no banner was seen. A notification that
+  cannot be shown is not reported as having failed — the tree's own marker carries the same signal.
 - The Dock badge carries how many sessions are waiting, counted across every console, and clears
   when none is.
 

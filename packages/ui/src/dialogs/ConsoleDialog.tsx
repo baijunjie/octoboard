@@ -3,16 +3,18 @@ import React, { useState } from "react";
 import { AGENT_CONFIG_DIR, AGENT_LABEL, AGENT_OPTIONS } from "../agents";
 import type { Agent, ConfigDirField, Console } from "../protocol";
 import { useDaemon } from "../store";
-import { Dropdown } from "./Dropdown";
-import { Modal } from "./Modal";
+import { Dialog, DialogError, useDialogAction } from "./Dialog";
+import { OptionSelect } from "./OptionSelect";
+import { TextInput } from "./TextInput";
 
-interface ConsoleDialogProps {
+export function ConsoleDialog({
+  console: editing,
+  onClose,
+}: {
   /** Editing an existing console when set, creating a new one otherwise. */
   console?: Console;
   onClose: () => void;
-}
-
-export function ConsoleDialog({ console: editing, onClose }: ConsoleDialogProps): React.ReactElement {
+}): React.ReactElement {
   const { request } = useDaemon();
   const [name, setName] = useState(editing?.name ?? "");
   const [hubAgent, setHubAgent] = useState<Agent>(editing?.hub_agent ?? "claude");
@@ -22,8 +24,7 @@ export function ConsoleDialog({ console: editing, onClose }: ConsoleDialogProps)
     codex_config_dir: editing?.codex_config_dir ?? "",
     grok_config_dir: editing?.grok_config_dir ?? "",
   });
-  const [error, setError] = useState<string>();
-  const [saving, setSaving] = useState(false);
+  const { error, setError, busy, run } = useDialogAction();
 
   // One row per agent the dialog currently selects, in a fixed order. An agent that is not selected
   // keeps whatever is stored for it: its row is neither shown nor sent.
@@ -37,14 +38,12 @@ export function ConsoleDialog({ console: editing, onClose }: ConsoleDialogProps)
     return [field, configDirs[field].trim()] as const;
   });
 
-  const submit = async () => {
+  const submit = () => {
     if (!name.trim()) {
       setError("Name is required.");
       return;
     }
-    setSaving(true);
-    setError(undefined);
-    try {
+    void run(async () => {
       if (editing) {
         const changes: Partial<Record<ConfigDirField, string | null>> = {};
         for (const [field, typed] of typedDirs) {
@@ -76,53 +75,33 @@ export function ConsoleDialog({ console: editing, onClose }: ConsoleDialogProps)
         });
       }
       onClose();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
-  const footer = (
-    <>
-      <button type="button" onClick={onClose} disabled={saving}>
-        Cancel
-      </button>
-      <button type="submit" disabled={saving}>
-        {editing ? "Save" : "Create"}
-      </button>
-    </>
-  );
-
   return (
-    <Modal title={editing ? "Edit console" : "New console"} onClose={onClose} footer={footer} onSubmit={submit}>
-      <label className="field">
-        <span>Name</span>
-        <input type="text" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-      </label>
-      <label className="field">
-        <span>Hub agent</span>
-        <Dropdown options={AGENT_OPTIONS} value={hubAgent} onChange={setHubAgent} aria-label="Hub agent" />
-      </label>
-      <label className="field">
-        <span>Default agent</span>
-        <Dropdown options={AGENT_OPTIONS} value={defaultAgent} onChange={setDefaultAgent} aria-label="Default agent" />
-      </label>
+    <Dialog
+      title={editing ? "Edit console" : "New console"}
+      onClose={onClose}
+      submitLabel={editing ? "Save" : "Create"}
+      busy={busy}
+      onSubmit={submit}
+    >
+      <TextInput label="Name" value={name} onChange={setName} autoFocus />
+      <OptionSelect label="Hub agent" options={AGENT_OPTIONS} value={hubAgent} onChange={setHubAgent} />
+      <OptionSelect label="Default agent" options={AGENT_OPTIONS} value={defaultAgent} onChange={setDefaultAgent} />
       {shownAgents.map((agent) => {
         const { field, placeholder } = AGENT_CONFIG_DIR[agent];
         return (
-          <label className="field" key={agent}>
-            <span>{AGENT_LABEL[agent]} config directory (optional)</span>
-            <input
-              type="text"
-              value={configDirs[field]}
-              onChange={(e) => setConfigDirs({ ...configDirs, [field]: e.target.value })}
-              placeholder={placeholder}
-            />
-          </label>
+          <TextInput
+            key={agent}
+            label={`${AGENT_LABEL[agent]} config directory (optional)`}
+            value={configDirs[field]}
+            onChange={(value) => setConfigDirs({ ...configDirs, [field]: value })}
+            placeholder={placeholder}
+          />
         );
       })}
-      {error && <p className="error-text">{error}</p>}
-    </Modal>
+      <DialogError message={error} />
+    </Dialog>
   );
 }

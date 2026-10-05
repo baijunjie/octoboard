@@ -1,12 +1,14 @@
 import { Button } from "@heroui/react";
 import React, { useState } from "react";
 
-import type { DialogRequest } from "../dialogRequest";
+import type { DialogRequest } from "../dialogs/dialogRequest";
 import { isDormant, type Console, type Project, type Session } from "../protocol";
 import { STATUS_LABEL } from "../sessionLabel";
 import { ActionMenu, type ActionMenuItem } from "./ActionMenu";
 import { AgentBadge } from "./AgentBadge";
+import { NotificationsPrompt } from "./NotificationsPrompt";
 import { BubbledWaitingHand, StatusIcon } from "./StatusIcon";
+import { TitledControl } from "./TitledControl";
 import { TrustedFolders } from "./TrustedFolders";
 
 /** The callbacks the tree triggers. Kept as one object, passed down by reference rather than
@@ -110,17 +112,19 @@ export function Sidebar({
     });
 
   return (
-    <nav className="flex w-72 shrink-0 flex-col border-r border-separator bg-surface" aria-label="Sessions">
+    <nav className="flex w-70 shrink-0 flex-col border-r border-separator bg-surface" aria-label="Sessions">
       <div className="flex shrink-0 items-center justify-between px-3 py-2">
         <h1 className="text-base font-semibold">Octoboard</h1>
-        <Button
-          size="sm"
-          variant="secondary"
-          preventFocusOnPress
-          onPress={() => handlers.onOpenDialog({ kind: "new-console" })}
-        >
-          + Console
-        </Button>
+        <TitledControl title="New console">
+          <Button
+            size="sm"
+            variant="secondary"
+            preventFocusOnPress
+            onPress={() => handlers.onOpenDialog({ kind: "new-console" })}
+          >
+            + Console
+          </Button>
+        </TitledControl>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         {consoles.map((console) => (
@@ -140,6 +144,7 @@ export function Sidebar({
         )}
       </div>
       <TrustedFolders directories={trustedDirectories} onRemove={onRemoveTrustedDirectory} />
+      <NotificationsPrompt />
     </nav>
   );
 }

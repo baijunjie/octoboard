@@ -1,0 +1,168 @@
+import { Button, Chip } from "@heroui/react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+
+import type { Page } from "../protocol";
+import { useDaemon, useDaemonStore } from "../store";
+import { composePageDocument, SUBMIT_MESSAGE_SOURCE } from "./pageDocument";
+
+/**
+ * The console's report panel: shown only for the hub session, which is what makes a console's
+ * pages visible at all (there is nowhere else to show them). Lists pages on mount and on every
+ * snapshot — the daemon never replays a missed `page_created` on its own (see the `page_list`
+ * row under "Daemon to client" in `daemon/PROTOCOL.md`), so re-listing is the only way to recover
+ * from one. A console switch mounting a fresh instance is the call site's concern, not this
+ * component's.
+ */
+export function ReportPanel({ consoleId }: { consoleId: string }): React.ReactElement {
+  const { request, toastError } = useDaemon();
+  const consolePages = useDaemonStore((s) => s.pages.get(consoleId));
+  const connectionState = useDaemonStore((s) => s.connectionState);
+  const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
+
+  // The user's position, held as the id of the page they paged to rather than an index —
+  // `undefined` means "following the newest". An id survives the list changing size or shape
+  // (a reconnect's re-list, or a `page_created` appending) because it is looked up fresh on every
+  // render instead of being carried across one as a stale index would be.
+  const [anchorId, setAnchorId] = useState<string>();
+
+  // `snapshotEpoch` (rather than `connectionState` alone) is what makes lag recovery re-list too:
+  // the daemon answers a lagged broadcast receiver with a fresh `snapshot` on the same socket, so
+  // the connection never goes through a state change of its own.
+  useEffect(() => {
+    if (connectionState !== "open") return;
+    // Guards against a slow reply for a console the user has since switched away from (and
+    // possibly back to) landing a now-stale error after the fact.
+    let stale = false;
+    request({ type: "list_pages", console: consoleId }).catch((err) => {
+      if (!stale) toastError((err as Error).message);
+    });
+    return () => {
+      stale = true;
+    };
+  }, [consoleId, connectionState, snapshotEpoch, request, toastError]);
+
+  const handleSubmit = useCallback(
+    (page: Page, data: unknown) => {
+      // The daemon refuses `submit_page` for any page that is not this console's newest (see
+      // "Client to daemon" in `daemon/PROTOCOL.md`), so a stale submission in flight from a page
+      // the user has since paged away from is caught there, not here — this just forwards it and
+      // reports whatever comes back.
+      request({ type: "submit_page", page: page.id, data }).catch((err) => {
+        toastError((err as Error).message);
+      });
+    },
+    [request, toastError],
+  );
+
+  // The panel keeps its place in the row while the first `list_pages` is in flight: dropping out
+  // and back would resize the terminal pane, a real SIGWINCH to the agent, on every hub switch.
+  const panelClass = "flex min-h-0 min-w-[300px] flex-[0_1_420px] flex-col border-l border-separator";
+
+  if (consolePages === undefined) return <div className={panelClass} />;
+
+  if (consolePages.length === 0) {
+    return <div className={`${panelClass} items-center justify-center text-sm text-muted`}>No pages yet.</div>;
+  }
+
+  // Look the anchor up fresh: an id either still names a page in the current list or it does not,
+  // and falling back to the newest on a miss is the "re-arm following" behaviour `goTo` relies on.
+  const anchorIndex = anchorId !== undefined ? consolePages.findIndex((p) => p.id === anchorId) : -1;
+  const displayIndex = anchorIndex === -1 ? consolePages.length - 1 : anchorIndex;
+  const page = consolePages[displayIndex];
+  const isHistory = displayIndex !== consolePages.length - 1;
+
+  const goTo = (index: number) => {
+    // Clearing the anchor on the newest page makes "following" its own state again: the next
+    // `page_created` then needs no special-casing to keep the view on the new newest page.
+    setAnchorId(index === consolePages.length - 1 ? undefined : consolePages[index].id);
+  };
+
+  return (
+    <div className={panelClass}>
+      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-separator bg-surface px-3 text-xs text-muted">
+        <Button
+          isIconOnly
+          size="sm"
+          variant="ghost"
+          aria-label="Previous page"
+          preventFocusOnPress
+          isDisabled={displayIndex === 0}
+          onPress={() => goTo(displayIndex - 1)}
+        >
+          ◀
+        </Button>
+        <span className="whitespace-nowrap">
+          {displayIndex + 1} / {consolePages.length}
+        </span>
+        <Button
+          isIconOnly
+          size="sm"
+          variant="ghost"
+          aria-label="Next page"
+          preventFocusOnPress
+          isDisabled={displayIndex === consolePages.length - 1}
+          onPress={() => goTo(displayIndex + 1)}
+        >
+          ▶
+        </Button>
+        {/* The timestamp's width is whatever the user's locale makes of it, so it is the element
+            that gives way, rather than pushing the badge off the panel's edge when narrow. */}
+        <span className="ml-auto min-w-0 truncate whitespace-nowrap">{new Date(page.created_at).toLocaleString()}</span>
+        {isHistory && (
+          <Chip size="sm" variant="soft" color="warning" className="shrink-0">
+            Read-only
+          </Chip>
+        )}
+      </div>
+      <PageFrame key={page.id} page={page} isHistory={isHistory} onSubmit={handleSubmit} />
+    </div>
+  );
+}
+
+/**
+ * The sandboxed render of one page. Keyed by `page.id` at the call site so React remounts this
+ * (and so the iframe) rather than mutating it across a page change — a page's script must not keep
+ * running after the user pages away.
+ */
+function PageFrame({
+  page,
+  isHistory,
+  onSubmit,
+}: {
+  page: Page;
+  isHistory: boolean;
+  onSubmit: (page: Page, data: unknown) => void;
+}): React.ReactElement {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    // A history page's bridge already throws instead of posting (see `composePageDocument`), but a
+    // page's own script can reach the parent directly with `parent.postMessage(...)`, skipping
+    // that throw. The daemon still refuses the resulting `submit_page` (it is the enforcement
+    // point), but forwarding it at all would surface that refusal as an error toast for an action
+    // the user never took, so a history page's listener does not forward in the first place.
+    if (isHistory) return;
+    const handleMessage = (event: MessageEvent) => {
+      // `sandbox="allow-scripts"` without `allow-same-origin` gives the frame an opaque origin, so
+      // its messages arrive with `event.origin === "null"` — a string every opaque frame shares,
+      // not something that identifies this one. The only reliable check is that the message came
+      // from this iframe's own window.
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      const data = event.data as { source?: unknown; data?: unknown } | null;
+      if (!data || data.source !== SUBMIT_MESSAGE_SOURCE) return;
+      onSubmit(page, data.data);
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [page, isHistory, onSubmit]);
+
+  return (
+    <iframe
+      ref={iframeRef}
+      className="min-h-0 flex-1 border-0 bg-white"
+      title="Report page"
+      sandbox="allow-scripts"
+      srcDoc={composePageDocument(page.html, isHistory)}
+    />
+  );
+}

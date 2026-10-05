@@ -1,11 +1,13 @@
+import { Button } from "@heroui/react";
 import React, { useState } from "react";
 
 import { AGENT_OPTIONS } from "../agents";
 import type { Agent, Project, ProjectSource } from "../protocol";
 import { useDaemon } from "../store";
+import { Dialog, DialogError, useDialogAction } from "./Dialog";
 import { DirectoryPicker } from "./DirectoryPicker";
-import { Dropdown } from "./Dropdown";
-import { Modal } from "./Modal";
+import { OptionSelect } from "./OptionSelect";
+import { TextInput } from "./TextInput";
 
 const SOURCE_OPTIONS: { value: ProjectSource; label: string }[] = [
   { value: "local", label: "A single directory" },
@@ -20,15 +22,17 @@ const DEFAULT_AGENT_OPTIONS: { value: Agent | ""; label: string }[] = [
   ...AGENT_OPTIONS,
 ];
 
-interface ProjectDialogProps {
+export function ProjectDialog({
+  consoleId,
+  project: editing,
+  onClose,
+}: {
   consoleId: string;
   /** Editing an existing project when set — only name and default agent can change (see
    * `daemon/PROTOCOL.md`'s `update_project`); association details are immutable once added. */
   project?: Project;
   onClose: () => void;
-}
-
-export function ProjectDialog({ consoleId, project: editing, onClose }: ProjectDialogProps): React.ReactElement {
+}): React.ReactElement {
   const { request } = useDaemon();
   const [source, setSource] = useState<ProjectSource>(editing?.source ?? "local");
   const [path, setPath] = useState(editing?.path ?? "");
@@ -36,11 +40,9 @@ export function ProjectDialog({ consoleId, project: editing, onClose }: ProjectD
   const [name, setName] = useState(editing?.name ?? "");
   const [defaultAgent, setDefaultAgent] = useState<Agent | "">(editing?.default_agent ?? "");
   const [pickingDirectory, setPickingDirectory] = useState(false);
-  const [error, setError] = useState<string>();
-  const [saving, setSaving] = useState(false);
+  const { error, setError, busy, run } = useDialogAction();
 
-  const submit = async () => {
-    setError(undefined);
+  const submit = () => {
     if (!editing) {
       // `path` is required for every source — for `github` it is the parent directory the clone
       // lands in, not something the daemon can default — and `remote_url` additionally for
@@ -61,8 +63,7 @@ export function ProjectDialog({ consoleId, project: editing, onClose }: ProjectD
       setError("Name is required.");
       return;
     }
-    setSaving(true);
-    try {
+    void run(async () => {
       if (editing) {
         await request({
           type: "update_project",
@@ -84,60 +85,56 @@ export function ProjectDialog({ consoleId, project: editing, onClose }: ProjectD
         });
       }
       onClose();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setSaving(false);
-    }
+    });
   };
-
-  const footer = (
-    <>
-      <button type="button" onClick={onClose} disabled={saving}>
-        Cancel
-      </button>
-      <button type="submit" disabled={saving}>
-        {editing ? "Save" : "Add"}
-      </button>
-    </>
-  );
 
   return (
     <>
-      <Modal title={editing ? "Edit project" : "Add project"} onClose={onClose} footer={footer} onSubmit={submit}>
-        {!editing && (
-          <label className="field">
-            <span>Source</span>
-            <Dropdown options={SOURCE_OPTIONS} value={source} onChange={setSource} aria-label="Project source" />
-          </label>
-        )}
+      <Dialog
+        title={editing ? "Edit project" : "Add project"}
+        onClose={onClose}
+        submitLabel={editing ? "Save" : "Add"}
+        busy={busy}
+        onSubmit={submit}
+      >
+        {!editing && <OptionSelect label="Source" options={SOURCE_OPTIONS} value={source} onChange={setSource} />}
         {!editing && source === "github" && (
-          <label className="field">
-            <span>Repository URL</span>
-            <input type="text" value={remoteUrl} onChange={(e) => setRemoteUrl(e.target.value)} placeholder="https://github.com/owner/repo" />
-          </label>
+          <TextInput
+            label="Repository URL"
+            value={remoteUrl}
+            onChange={setRemoteUrl}
+            placeholder="https://github.com/owner/repo"
+          />
         )}
         {!editing && (
-          <label className="field">
-            <span>{source === "github" ? "Clone into (parent directory)" : "Directory"}</span>
-            <div className="field-with-button">
-              <input type="text" value={path} onChange={(e) => setPath(e.target.value)} placeholder="~/code" />
-              <button type="button" onClick={() => setPickingDirectory(true)}>
-                Browse…
-              </button>
+          <div className="flex items-end gap-2">
+            <div className="min-w-0 flex-1">
+              <TextInput
+                label={source === "github" ? "Clone into (parent directory)" : "Directory"}
+                value={path}
+                onChange={setPath}
+                placeholder="~/code"
+              />
             </div>
-          </label>
+            <Button type="button" variant="secondary" onPress={() => setPickingDirectory(true)}>
+              Browse…
+            </Button>
+          </div>
         )}
-        <label className="field">
-          <span>Name {editing ? "" : "(optional)"}</span>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={editing ? undefined : "derived from the directory"} />
-        </label>
-        <label className="field">
-          <span>Default agent</span>
-          <Dropdown options={DEFAULT_AGENT_OPTIONS} value={defaultAgent} onChange={setDefaultAgent} aria-label="Project default agent" />
-        </label>
-        {error && <p className="error-text">{error}</p>}
-      </Modal>
+        <TextInput
+          label={editing ? "Name" : "Name (optional)"}
+          value={name}
+          onChange={setName}
+          placeholder={editing ? undefined : "derived from the directory"}
+        />
+        <OptionSelect
+          label="Default agent"
+          options={DEFAULT_AGENT_OPTIONS}
+          value={defaultAgent}
+          onChange={setDefaultAgent}
+        />
+        <DialogError message={error} />
+      </Dialog>
       {pickingDirectory && (
         <DirectoryPicker
           title="Choose a directory"

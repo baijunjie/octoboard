@@ -53,6 +53,15 @@ agent without hook support would degrade to an ordinary terminal session with no
 
 The desktop application is only a client of the daemon: it renders terminals, shows status and forwards input.
 
+The UI is not part of the desktop shell. It is its own package, built once, which the macOS shell bundles and loads and
+which also runs in a plain browser; that is what lets a machine without the shell, such as a Linux host, offer the same
+UI. To keep one build working in both places, the UI reaches native capabilities (the quit flow and exit heartbeat,
+system notifications, the Dock badge) only through a platform adapter chosen at startup, with a Tauri implementation
+and a browser one; in a browser a capability that is not there means the feature is absent, not an error. It finds the
+daemon without Tauri as well: by an address handed to it, or at the origin it was loaded from. Its state is
+one store fed by the daemon client's events, readable outside React too. The phone's browser is not a design target —
+the native mobile apps have their own UI.
+
 ## Why the daemon is split out
 
 Session processes are owned by the daemon rather than by the window. That is what would let the daemon outlive the
@@ -79,7 +88,7 @@ back, which requires the daemon's events to be replayable by sequence number.
 | PTY | `portable-pty` | From the WezTerm project, cross-platform. |
 | MCP server | `rmcp` | A stdio child process per session, bridging to the daemon over loopback HTTP; see below. |
 | Desktop application | Tauri 2 | The daemon ships as a sidecar; native macOS APIs are callable from the Rust side. |
-| Frontend | React + TypeScript | |
+| Frontend | React + HeroUI + Tailwind CSS + TypeScript, state in a Zustand store | One component library for the whole UI; a vanilla Zustand store can be read and subscribed to outside React. |
 | Terminal | `xterm.js` | macOS cannot embed a Terminal.app or iTerm window in another application; PTY + `xterm.js` is the standard approach and terminal compatibility is its job. |
 | Report panel | sandboxed iframe (`srcdoc`) + `postMessage` | Independent of the desktop framework. |
 | Storage | SQLite (`rusqlite`, coordinator side) | |

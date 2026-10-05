@@ -1,16 +1,9 @@
-import React, { useEffect, useState } from "react";
+import { Button, Input } from "@heroui/react";
+import React, { useEffect, useRef, useState } from "react";
 
 import type { DirEntry, Event } from "../protocol";
 import { useDaemon } from "../store";
-import { Modal } from "./Modal";
-
-interface DirectoryPickerProps {
-  title: string;
-  /** Starting path; `~` resolves to the host's home directory. */
-  initialPath?: string;
-  onPick: (path: string) => void;
-  onClose: () => void;
-}
+import { Dialog, DialogError, useRefocusIfLost } from "./Dialog";
 
 /**
  * Browses directories through the daemon's `list_dir`, never the local filesystem directly — this
@@ -22,12 +15,24 @@ interface DirectoryPickerProps {
  * pitfalls of the Tauri / Rust approach" in docs/architecture.md), so a failed listing is shown
  * inline, alongside whatever was listed before it, rather than clearing the screen.
  */
-export function DirectoryPicker({ title, initialPath, onPick, onClose }: DirectoryPickerProps): React.ReactElement {
+export function DirectoryPicker({
+  title,
+  initialPath,
+  onPick,
+  onClose,
+}: {
+  title: string;
+  /** Starting path; `~` resolves to the host's home directory. */
+  initialPath?: string;
+  onPick: (path: string) => void;
+  onClose: () => void;
+}): React.ReactElement {
   const { request } = useDaemon();
   const [path, setPath] = useState(initialPath ?? "~");
   const [entries, setEntries] = useState<DirEntry[]>();
   const [resolvedPath, setResolvedPath] = useState<string>();
   const [error, setError] = useState<string>();
+  const listRef = useRef<HTMLUListElement>(null);
 
   const load = async (targetPath: string) => {
     setError(undefined);
@@ -54,6 +59,10 @@ export function DirectoryPicker({ title, initialPath, onPick, onClose }: Directo
     // via `useState`'s initializer above, so it is intentionally not a dependency here.
   }, []);
 
+  // Loading replaces the list, unmounting the entry button that was pressed. The list itself is the
+  // stable place to put focus back, so Tab carries on from the entries.
+  useRefocusIfLost(() => listRef.current, [entries]);
+
   const parentOf = (p: string): string => {
     const segments = p.split("/").filter(Boolean);
     segments.pop();
@@ -66,44 +75,48 @@ export function DirectoryPicker({ title, initialPath, onPick, onClose }: Directo
 
   const footer = (
     <>
-      <button type="button" onClick={onClose}>
+      <Button type="button" variant="secondary" onPress={onClose}>
         Cancel
-      </button>
-      <button type="button" disabled={!canSelect} onClick={() => resolvedPath && onPick(resolvedPath)}>
+      </Button>
+      <Button type="button" isDisabled={!canSelect} onPress={() => resolvedPath && onPick(resolvedPath)}>
         Select this directory
-      </button>
+      </Button>
     </>
   );
 
   return (
-    <Modal title={title} onClose={onClose} footer={footer} onSubmit={() => load(path)}>
-      <div className="directory-picker">
-        <div className="directory-picker-path-row">
-          <input type="text" value={path} onChange={(e) => setPath(e.target.value)} />
-          <button type="submit">Go</button>
-        </div>
-        {error && <p className="error-text">{error}</p>}
-        {entries && (
-          <ul className="directory-picker-list">
-            {resolvedPath && resolvedPath !== "/" && (
-              <li>
-                <button type="button" onClick={() => { const p = parentOf(resolvedPath); void load(p); }}>
-                  ..
-                </button>
-              </li>
-            )}
-            {entries.map((entry) => (
-              <li key={entry.path}>
-                <button type="button" className="directory-picker-entry" onClick={() => void load(entry.path)}>
-                  {entry.name}
-                  {entry.is_git_repo && <span className="git-badge">git</span>}
-                </button>
-              </li>
-            ))}
-            {entries.length === 0 && <li className="directory-picker-empty">No subdirectories.</li>}
-          </ul>
-        )}
+    <Dialog title={title} onClose={onClose} footer={footer} onSubmit={() => void load(path)}>
+      <div className="flex gap-2">
+        <Input fullWidth aria-label="Directory path" value={path} onChange={(e) => setPath(e.target.value)} />
+        <Button type="submit" variant="secondary">
+          Go
+        </Button>
       </div>
-    </Modal>
+      <DialogError message={error} />
+      {entries && (
+        <ul
+          ref={listRef}
+          tabIndex={-1}
+          className="max-h-72 overflow-y-auto rounded-lg border border-separator outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        >
+          {resolvedPath && resolvedPath !== "/" && (
+            <li>
+              <Button fullWidth variant="ghost" className="justify-start" onPress={() => void load(parentOf(resolvedPath))}>
+                ..
+              </Button>
+            </li>
+          )}
+          {entries.map((entry) => (
+            <li key={entry.path}>
+              <Button fullWidth variant="ghost" className="justify-start" onPress={() => void load(entry.path)}>
+                {entry.name}
+                {entry.is_git_repo && <span className="ml-2 rounded bg-default px-1 text-xs text-muted">git</span>}
+              </Button>
+            </li>
+          ))}
+          {entries.length === 0 && <li className="px-3 py-2 text-sm text-muted">No subdirectories.</li>}
+        </ul>
+      )}
+    </Dialog>
   );
 }

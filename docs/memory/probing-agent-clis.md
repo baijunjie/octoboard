@@ -149,6 +149,15 @@ Codex session: with no login under that `HOME` it stops at its sign-in screen. M
 the environment it is launched from, or Codex reads the user's own configuration and login after all. Do not count on
 a changed `HOME` hiding Claude Code's login, which lives in the macOS keychain.
 
+A fake agent CLI for such a daemon goes on `PATH` from the throwaway `HOME`'s shell rc file (`.zshrc` when `$SHELL`
+is zsh), never by prepending it to the `PATH` the daemon is started with. The daemon launches every agent with the
+environment of `$SHELL -l -i -c env`, and on macOS that login shell's `/etc/zprofile` runs `path_helper`, which moves
+the system paths (`/etc/paths`, `/etc/paths.d`, where Homebrew's `bin` usually sits) ahead of everything inherited. An
+inherited prepend therefore loses to an installed agent of the same name, and the *real* CLI launches under the
+throwaway `HOME` with nothing on screen saying so; the rc file is sourced after `/etc/zprofile`, so an
+`export PATH=<fake bin>:$PATH` there wins. Confirm from the session's process (`ps`) which executable actually ran
+before reading anything off the screen.
+
 A probe that does need a logged-in agent cannot be isolated this way, because the agents need the real `$HOME` to find
 their credentials and trust state. Expect it to create consoles and sessions in the user's real board and to run any
 pending schema migration against the user's live database — copy that database aside first whenever the change being

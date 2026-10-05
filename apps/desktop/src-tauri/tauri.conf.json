@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "identifier": "dev.octoboard.app",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "pnpm --filter @octoboard/ui dev",
     "beforeBuildCommand": "pnpm build:tauri",
-    "frontendDist": "../dist",
-    "devUrl": "http://localhost:5173"
+    "frontendDist": "../../../packages/ui/dist",
+    "devUrl": "http://localhost:5174"
   },
   "app": {
     "windows": [],

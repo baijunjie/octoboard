@@ -25,7 +25,7 @@ export function StartupScreen({ message, action }: StartupScreenProps): React.Re
 
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-4 p-8 text-center">
-      <div>{message}</div>
+      <div className="max-w-xl">{message}</div>
       <div className="flex gap-2">
         {action && <Button onPress={action.onSelect}>{action.label}</Button>}
         {canQuit && <Button onPress={() => void requestQuit()}>Quit</Button>}

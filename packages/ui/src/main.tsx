@@ -8,6 +8,7 @@ import { selectPlatform } from "./platform";
 import { PlatformProvider } from "./platform/react";
 import { StartupScreen } from "./StartupScreen";
 import { createDaemon, DaemonProvider } from "./store";
+import "./focusGuard";
 import "./style.css";
 
 const rootEl = document.getElementById("root")!;

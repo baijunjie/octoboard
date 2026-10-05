@@ -14,11 +14,19 @@ export function browserPlatform(): PlatformAdapter {
 
 function webNotifications(): NonNullable<PlatformAdapter["notifications"]> {
   return {
+    // Never asks: a browser ignores or denies a request made without a user gesture, and Chrome
+    // would ask again for every newly waiting session while the answer is undecided. The sidebar's
+    // `NotificationsPrompt` asks through `permissionPrompt` instead.
     async ensurePermission() {
-      if (Notification.permission === "granted") return true;
-      // A denial is final in a browser: asking again would only be ignored.
-      if (Notification.permission === "denied") return false;
-      return (await Notification.requestPermission().catch(() => "denied")) === "granted";
+      return Notification.permission === "granted";
+    },
+    permissionPrompt: {
+      status() {
+        return Notification.permission === "default" ? "undecided" : Notification.permission;
+      },
+      async request() {
+        await Notification.requestPermission().catch(() => {});
+      },
     },
     async notify({ title, body }) {
       new Notification(title, { body });

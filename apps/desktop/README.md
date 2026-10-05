@@ -1,7 +1,9 @@
 # Octoboard desktop application
 
-A Tauri 2 + React + TypeScript desktop application: the console/project/session menu, the `xterm.js` terminal, console
-and project management, manual sessions, archiving and reopening, and the exit flow.
+The Tauri 2 shell of the macOS desktop application: the native window and menu bar, the `octoboardd` sidecar, and the
+exit flow. It contains no UI of its own: the window loads the UI in [`../../packages/ui/`](../../packages/ui/README.md),
+bundled into the application at build time (not served by the daemon), which provides the console/project/session
+menu, the `xterm.js` terminal, console and project management, the report panel and the exit-flow screens.
 
 The UI talks to `octoboardd` (see [`../../daemon/`](../../daemon/README.md)) only over the WebSocket/HTTP protocol in
 [`../../daemon/PROTOCOL.md`](../../daemon/PROTOCOL.md) — no Tauri IPC command carries daemon traffic or session state. This
@@ -13,7 +15,8 @@ that one protocol.
 
 This is the `@octoboard/desktop` package of the repository's pnpm workspace. Its dependencies install from the
 workspace root with `pnpm install` (there is no per-package install), and its scripts run from this directory as
-`pnpm <script>`. The root's `pnpm typecheck` and `pnpm build` also run this package's script of the same name.
+`pnpm <script>`. It has no `typecheck` or `build` script, so the root's `pnpm typecheck` and `pnpm build` cover only
+`packages/ui`; the Rust side is checked with `cargo` in `src-tauri/`, which must be reachable on `PATH`.
 
 `src-tauri/tauri.conf.json` declares `octoboardd` as an `externalBin`, which Tauri resolves at **compile** time, not
 at launch. So `pnpm build:daemon` (builds `daemon/` in release and copies the binary into
@@ -22,8 +25,11 @@ before `pnpm tauri dev` or a bare `cargo build` in `src-tauri/` will succeed —
 it for you, and skipping it fails at compile time with no obvious cause. `pnpm build:tauri` (what `tauri build`
 uses) runs it automatically; rerun `build:daemon` by hand whenever `daemon/` changes during development.
 
-Running `vite dev` directly against a daemon started by hand, bypassing the Tauri shell, needs `VITE_DAEMON_PORT` set
-to that daemon's port — see `src/daemon.ts` for where to read it from.
+`pnpm tauri dev` starts the `packages/ui` dev server itself (`beforeDevCommand` in `src-tauri/tauri.conf.json`, on
+port 5174, which `devUrl` and the debug-build window URL in `src-tauri/src/lib.rs` both name) and opens the window on
+it. `pnpm build:tauri` builds the daemon sidecar and then `packages/ui`, whose `dist/` is the `frontendDist` the
+application bundles. Running the UI against a daemon started by hand, without the Tauri shell, is covered in
+[`../../packages/ui/README.md`](../../packages/ui/README.md).
 
 ### Release builds
 
@@ -73,14 +79,14 @@ machine, a browser download, `xattr -w com.apple.quarantine ...`) before running
 daemon traffic or session data in them:
 
 - `frontend_exit_heartbeat` — marks the webview as the one handling the exit flow, so a quit is no longer let through
-  unconfirmed; also doubles as a liveness ping, re-invoked on every quit gesture `useAppExit.ts` handles, which is
+  unconfirmed; also doubles as a liveness ping, re-invoked on every quit gesture `packages/ui/src/lifecycle/useAppExit.ts` handles, which is
   what clears the Rust side's force-quit debounce (`FORCE_QUIT_WINDOW` in `src-tauri/src/exit.rs`) for a webview that
   is actually still answering.
 - `confirm_quit` — marks a pending quit as user-confirmed and asks Tauri to actually exit.
 
 Beyond those two, `src-tauri/capabilities/default.json` also allowlists the `notification` plugin's commands (used by
-`src/lifecycle/useWaitingNotifications.ts` for the raised-hand system notification) and `core:window|set_badge_count`
-(the Dock badge). Both are still within the architectural rule above: they carry no daemon traffic or session state,
+`packages/ui/src/lifecycle/useWaitingNotifications.ts` for the raised-hand system notification) and
+`core:window|set_badge_count` (the Dock badge). Both are still within the architectural rule above: they carry no daemon traffic or session state,
 only a count and a text the frontend has already derived from it.
 
 Everything else `src-tauri/` does is internal: it starts `octoboardd` as a sidecar process and bakes the port it
@@ -96,19 +102,6 @@ any IPC call for it.
 | `src-tauri/src/sidecar.rs` | Spawns `octoboardd`, parses its startup port line, reports how it terminated |
 | `src-tauri/src/menu.rs` | Builds the native macOS menu bar |
 | `src-tauri/capabilities/default.json` | Allowlists the two IPC commands above plus the notification and Dock-badge commands |
-| `index.html` | The window's only Content Security Policy, delivered as a `<meta>` tag rather than through `app.security.csp` in `src-tauri/tauri.conf.json` — the file's own comment has the reasoning |
-| `src/daemon.ts` | Locates the daemon's port (`?port=` query param from the Tauri shell, or `VITE_DAEMON_PORT` for `vite dev` against a hand-started daemon) |
-| `src/daemon-client.ts` | WebSocket client for `GET /ws/control`: request/reply correlation, reconnect, event dispatch |
-| `src/protocol.ts` | Hand-written TypeScript mirror of `daemon/src/protocol.rs` / `PROTOCOL.md` |
-| `src/store.tsx` | React context holding the daemon connection and the console/project/session state derived from its events, including each console's report panel pages the queue of Claude Code trust prompts awaiting the user's answer, and the trusted folders |
-| `src/App.tsx` | Top-level layout: sidebar, terminal pane, the report panel (hub sessions only), dialogs |
-| `src/components/` | Menu, dialogs (console/project/session create-edit, confirm, directory picker), the sidebar's trusted-folders list (`TrustedFolders.tsx`) and small UI primitives |
-| `src/components/ReportPanel.tsx` | The report panel: lists a console's pushed pages, pages back through them, and renders the current one in a sandboxed iframe with a `postMessage` bridge for form submissions |
-| `src/terminal/` | `TerminalController` (owns `xterm.js`, the session's `GET /ws/term/:session` socket, connection status and focus as one unit) and the `TerminalPane` component wrapping it |
-| `src/lifecycle/useAppExit.ts` | Drives the exit-confirmation flow from the frontend side, calling the two Tauri commands above |
-| `src/lifecycle/useWaitingNotifications.ts` | Fires the system notification and sets the Dock badge count when a session raises its hand |
-| `src/sessionLabel.ts` | Where to tell the user a session is (its project, or its console's hub), since the daemon's `Session` record itself only carries ids |
-| `src/agents.ts` | Display labels for the three supported agents |
-| `src/main.tsx`, `src/StartupScreen.tsx`, `src/ErrorBoundary.tsx` | Startup sequencing and the error/retry screens shown before the daemon connection is ready |
+| `src-tauri/tauri.conf.json` | Where the window's UI comes from (`frontendDist` is `packages/ui/dist`; `devUrl` and `beforeDevCommand` are that package's dev server), the `octoboardd` `externalBin`, and the bundle targets |
 | `scripts/build-daemon.mjs` | Builds `octoboardd` in release mode and copies it into `src-tauri/binaries/` under the target-triple name Tauri's `externalBin` requires |
 | `scripts/release.mjs` | Builds the release `.app`/`.dmg` and verifies the result; see "Release builds" above |

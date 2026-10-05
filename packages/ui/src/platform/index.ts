@@ -42,8 +42,15 @@ export interface ExitCapability {
 }
 
 export interface NotificationCapability {
-  /** Whether notifications may be shown, asking the user if that has not happened yet. */
+  /** Whether notifications may be shown. Where `permissionPrompt` is present this only reads the
+   * answer and never asks; otherwise it asks the user if that has not happened yet. */
   ensurePermission(): Promise<boolean>;
+  /** Present only where asking for permission needs a user gesture, as in a browser, which ignores
+   * or denies a request made from anywhere else. The UI offers a control that calls `request`. */
+  readonly permissionPrompt?: {
+    status(): "granted" | "denied" | "undecided";
+    request(): Promise<void>;
+  };
   notify(notification: { title: string; body: string }): Promise<void>;
 }
 

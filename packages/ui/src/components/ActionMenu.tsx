@@ -1,6 +1,18 @@
 import { Dropdown, Label } from "@heroui/react";
 import React, { useRef } from "react";
 
+/** Set when a menu closed but could not hand focus back, because the item it ran opened a dialog
+ * that holds it. The dialog takes it when it closes (see `takeMenuFocusToRestore`). */
+let menuFocusToRestore: HTMLElement | null = null;
+
+/** The element a menu could not give focus back to while a dialog was open, if any; the caller
+ * returns focus to it once the dialog is gone. Each element is handed out once. */
+export function takeMenuFocusToRestore(): HTMLElement | null {
+  const element = menuFocusToRestore;
+  menuFocusToRestore = null;
+  return element;
+}
+
 export interface ActionMenuItem {
   label: string;
   onClick: () => void;
@@ -24,6 +36,7 @@ export function ActionMenu({ label, items }: { label: string; items: ActionMenuI
 
   const onOpenChange = (isOpen: boolean) => {
     if (isOpen) {
+      menuFocusToRestore = null;
       restoreRef.current = pressRef.current;
       pressRef.current = null;
       return;
@@ -34,7 +47,10 @@ export function ActionMenu({ label, items }: { label: string; items: ActionMenuI
     // the trigger as the menu closes. Its later restore on unmount only acts while focus has fallen to
     // <body>, so it leaves this alone.
     setTimeout(() => {
-      if (previous?.isConnected) previous.focus();
+      if (!previous?.isConnected) return;
+      previous.focus();
+      // A dialog the item opened keeps focus inside itself and refuses this.
+      if (document.activeElement !== previous) menuFocusToRestore = previous;
     }, 0);
   };
 

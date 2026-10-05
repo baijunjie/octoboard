@@ -30,7 +30,7 @@ everything it can do goes through the external interface below.
 | `src/main.rs` | CLI entry point: parses the three modes above, opens the store, binds the port, prints the handshake line the application waits for, runs the server until shutdown |
 | `src/access.rs` | The middleware every route sits behind: turns away, with `403`, a request whose `Host` or `Origin` is not one a local client or the application's own UI would send; the rule is in `PROTOCOL.md` |
 | `src/server.rs` | The HTTP/WebSocket router described in `PROTOCOL.md`, including `POST /mcp/:token` |
-| `src/protocol.rs` | Rust types for the wire protocol; kept in sync with `PROTOCOL.md` and with `apps/desktop/src/protocol.ts` by hand |
+| `src/protocol.rs` | Rust types for the wire protocol; kept in sync with `PROTOCOL.md` and with `packages/ui/src/protocol.ts` by hand |
 | `src/coordinator.rs` | Coordinator role: what each control-socket request does to the stored consoles/projects/sessions/pages, and which host-role work it triggers; projects are stored with absolute, lexically normalised paths |
 | `src/reporting.rs` | The channel between a console's hub and its project sessions: the brief a task is handed over as, writing a message into a running session, a report reaching the hub, the report synthesised when a session stops without sending one, automatic archiving, and rendering a report panel form submission into the hub's message |
 | `src/outbox.rs` | The per-session queue every message Octoboard writes into an agent passes through: order-preserving, one drainer per session, and what happens to a message the session only partly accepted |

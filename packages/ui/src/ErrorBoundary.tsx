@@ -33,7 +33,7 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
         message={
           <>
             Octoboard hit an error it could not recover from.
-            <pre className="mt-4 max-w-full overflow-auto text-left text-xs">{error.stack ?? error.message}</pre>
+            <pre className="mt-4 max-h-[40vh] max-w-[70ch] overflow-auto rounded-lg bg-surface p-3 text-left text-xs">{error.stack ?? error.message}</pre>
           </>
         }
         // Clearing the error remounts the subtree's components, which recovers a failure that was

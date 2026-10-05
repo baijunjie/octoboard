@@ -37,7 +37,7 @@ shared state, no Tauri IPC — which is what lets a remote host slot in later wi
 
 ```mermaid
 flowchart TB
-    subgraph App["Desktop application (Tauri 2 + React)"]
+    subgraph App["Desktop application (Tauri 2 + React / HeroUI)"]
         direction LR
         Menu["Console / project /<br/>session menu"]
         Term["Terminals<br/>(xterm.js)"]

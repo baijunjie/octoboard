@@ -67,11 +67,10 @@ function tauriExit(): ExitCapability {
   };
 }
 
-/** Cached across every call so only the first session that ever waits triggers the permission
- * prompt; a later one just reads the cached answer. Only a granted answer is cached: macOS shows
- * its own prompt once per app regardless, so re-asking after a decline nags nobody, but caching
- * `false` would leave notifications off for the rest of the process even after the user grants the
- * permission in System Settings. */
+/** Cached across every call so the plugin is asked once per process rather than once per waiting
+ * session. On macOS the plugin answers "granted" without showing any prompt. Only a granted answer
+ * is cached: caching `false` would leave notifications off for the rest of the process even after
+ * the user grants the permission later. */
 let permissionRequest: Promise<boolean> | undefined;
 
 function tauriNotifications(): NotificationCapability {

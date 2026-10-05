@@ -1,13 +1,17 @@
-import { Button, Chip } from "@heroui/react";
 import React, { useMemo, useRef, useState } from "react";
 
+import { ConnectionBanner } from "./components/ConnectionBanner";
 import { Sidebar } from "./components/Sidebar";
+import { Toasts } from "./components/Toasts";
 import { DaemonRequestError } from "./daemon-client";
-import type { DialogRequest } from "./dialogRequest";
+import { ConfirmDialog } from "./dialogs/ConfirmDialog";
+import type { DialogRequest } from "./dialogs/dialogRequest";
+import { RequestedDialog } from "./dialogs/RequestedDialog";
+import { TrustPromptDialog } from "./dialogs/TrustPromptDialog";
 import { useAppExit } from "./lifecycle/useAppExit";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
 import { isDormant, type Console, type Session } from "./protocol";
-import { sessionLocation } from "./sessionLabel";
+import { ReportPanel } from "./report/ReportPanel";
 import { useDaemon, useDaemonStore } from "./store";
 import { TerminalPane } from "./terminal/TerminalPane";
 
@@ -20,17 +24,17 @@ import { TerminalPane } from "./terminal/TerminalPane";
 const SESSION_ALREADY_RUNNING = "session_already_running";
 
 export function App(): React.ReactElement {
-  const { request, toastError, dismissToast, reconnect } = useDaemon();
+  const { request, toastError, reconnect } = useDaemon();
   const connectionState = useDaemonStore((s) => s.connectionState);
   const hosts = useDaemonStore((s) => s.hosts);
-  const toasts = useDaemonStore((s) => s.toasts);
   const consoles = useDaemonStore((s) => s.consoles);
   const projects = useDaemonStore((s) => s.projects);
   const sessions = useDaemonStore((s) => s.sessions);
   const trustedDirectories = useDaemonStore((s) => s.trustedDirectories);
+  // One dialog at a time, oldest prompt first; answering or declining it brings up the next.
+  const trustPrompt = useDaemonStore((s) => s.trustPrompts[0]);
   const [selectedSessionId, setSelectedSessionId] = useState<string>();
-  // TODO: transitional, see `dialogRequest.ts`.
-  const [, setDialogRequest] = useState<DialogRequest>();
+  const [dialogRequest, setDialogRequest] = useState<DialogRequest>();
 
   const consoleList = useMemo(() => Array.from(consoles.values()), [consoles]);
   const projectList = useMemo(() => Array.from(projects.values()), [projects]);
@@ -40,10 +44,9 @@ export function App(): React.ReactElement {
   useWaitingNotifications(sessionList, consoles, projects, hosts !== undefined);
 
   // The exit flow's frontend owner: it registers with the shell on mount, which is what makes the
-  // window quittable. The confirmation it asks for is not rendered yet.
-  // TODO: render the quit confirmation (`exitConfirmOpen`, `closeExitConfirm`, `confirmExit`) in
-  // the HeroUI UI rewrite plan's milestone 03 (remaining screens).
-  useAppExit({
+  // window quittable. Only its confirmation is needed here: the main app has no separate "Quit"
+  // control.
+  const { exitConfirmOpen, closeExitConfirm, confirmExit } = useAppExit({
     getSessions: () => sessionList,
     requestShutdown: () => request({ type: "shutdown" }),
     toastError,
@@ -97,47 +100,16 @@ export function App(): React.ReactElement {
   const removeTrustedDirectory = (path: string) =>
     void request({ type: "remove_trusted_directory", path }).catch((err) => toastError((err as Error).message));
 
-  // TODO: a simple stand-in; the HeroUI UI rewrite plan's milestone 03 (remaining screens) replaces
-  // it with the real toasts.
-  const toastStack = (
-    <div className="flex flex-col gap-1 px-3 empty:hidden">
-      {toasts.map((toast) => {
-        // The daemon's notice text deliberately does not name its session, so it is prefixed here.
-        const session = toast.session ? sessions.get(toast.session) : undefined;
-        return (
-          <div key={toast.id} className="flex items-center gap-2 py-1 text-sm">
-            <Chip size="sm" color={toast.kind === "error" ? "danger" : "default"}>
-              {toast.kind}
-            </Chip>
-            <span className="min-w-0 flex-1">
-              {session && <strong>{sessionLocation(session, consoles, projects)}: </strong>}
-              {toast.message}
-            </span>
-            <Button size="sm" variant="ghost" preventFocusOnPress onPress={() => dismissToast(toast.id)}>
-              Dismiss
-            </Button>
-          </div>
-        );
-      })}
-    </div>
-  );
-
   // Nothing to show until the first snapshot. The toasts belong here all the same, and so does the
-  // Retry the client offers once it has given up — otherwise this screen would say it is connecting
-  // forever with nothing the user can do about it.
+  // banner with the Retry the client offers once it has given up — otherwise this screen would say
+  // it is connecting forever with nothing the user can do about it.
   if (!hosts) {
     return (
       <div className="flex h-full flex-col">
-        {toastStack}
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted">
-          {connectionState === "closed" ? (
-            <>
-              <p>The daemon is not answering.</p>
-              <Button onPress={reconnect}>Retry</Button>
-            </>
-          ) : (
-            <p>Connecting to the daemon…</p>
-          )}
+        <Toasts />
+        {connectionState === "closed" && <ConnectionBanner state={connectionState} onRetry={reconnect} />}
+        <div className="flex flex-1 items-center justify-center text-muted">
+          {connectionState === "closed" ? "The daemon is not answering." : "Connecting to the daemon…"}
         </div>
       </div>
     );
@@ -145,23 +117,8 @@ export function App(): React.ReactElement {
 
   return (
     <div className="flex h-full flex-col">
-      {toastStack}
-      {/* TODO: a simple stand-in for the HeroUI UI rewrite plan's milestone 03 (remaining screens)
-          connection banner. */}
-      {(connectionState === "reconnecting" || connectionState === "closed") && (
-        <div className="flex items-center gap-2 bg-danger-soft px-3 py-1 text-sm">
-          {connectionState === "closed" ? (
-            <>
-              <span>Disconnected from the daemon.</span>
-              <Button size="sm" preventFocusOnPress onPress={reconnect}>
-                Retry
-              </Button>
-            </>
-          ) : (
-            <span>Disconnected from the daemon — reconnecting…</span>
-          )}
-        </div>
-      )}
+      <Toasts />
+      <ConnectionBanner state={connectionState} onRetry={reconnect} />
       <div className="flex min-h-0 flex-1">
         <Sidebar
           consoles={consoleList}
@@ -176,14 +133,33 @@ export function App(): React.ReactElement {
         />
         <main className="flex min-w-0 flex-1">
           <TerminalPane session={selectedSession} onResume={resumeSession} />
-          {/* TODO: the hub's report panel (a selected session with `role === "hub"` shows its
-              console's panel beside the terminal) belongs to the HeroUI UI rewrite plan's
-              milestone 03 (remaining screens). */}
+          {/* Only the hub session's console has a report panel — it is that console's panel, not
+              the session's. Keyed on the console id so switching hubs mounts a fresh instance. */}
+          {selectedSession?.role === "hub" && (
+            <ReportPanel key={selectedSession.console_id} consoleId={selectedSession.console_id} />
+          )}
         </main>
       </div>
-      {/* TODO: the HeroUI UI rewrite plan's milestone 03 (remaining screens) renders the requested
-          dialog here, along with the trust-prompt dialog (`trustPrompts`) and the quit
-          confirmation. */}
+      {dialogRequest && (
+        <RequestedDialog
+          dialog={dialogRequest}
+          onClose={() => setDialogRequest(undefined)}
+          onSessionOpened={setSelectedSessionId}
+        />
+      )}
+      {trustPrompt && (
+        <TrustPromptDialog prompt={trustPrompt} sessionTitle={sessions.get(trustPrompt.session)?.title} />
+      )}
+      {exitConfirmOpen && (
+        <ConfirmDialog
+          title="Quit Octoboard"
+          message="Some sessions are still running. Quitting interrupts them; each stays resumable next time."
+          confirmLabel="Quit"
+          destructive
+          onCancel={closeExitConfirm}
+          onConfirm={confirmExit}
+        />
+      )}
     </div>
   );
 }

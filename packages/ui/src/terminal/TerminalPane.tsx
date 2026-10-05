@@ -151,8 +151,12 @@ export function TerminalPane({ session, onResume }: TerminalPaneProps): React.Re
 
   return (
     // The background must match the xterm theme's in `TerminalController.ts`, so the padding around
-    // the terminal is not a different colour.
-    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[#1e1f22]">
+    // the terminal is not a different colour. The 520px basis and floor are the report panel's
+    // counterpart: with a 0 basis free space stays positive at any window wider than the panel's
+    // own basis, flexbox never leaves the grow phase, and the panel's shrink factor is never
+    // consulted. 520px is 55 columns at ~9.2px/column off a real agent CLI (the container's
+    // padding eats the rest).
+    <div className="relative flex min-h-0 min-w-[520px] flex-[1_1_520px] flex-col bg-[#1e1f22]">
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-separator bg-surface px-3">
         {/* With nothing selected there is no connection to have a status: the pane's own
             placeholder says what to do, and a red "Disconnected" next to it reads as a fault. */}
@@ -172,7 +176,7 @@ export function TerminalPane({ session, onResume }: TerminalPaneProps): React.Re
           </Button>
         )}
       </div>
-      <div className="min-h-0 flex-1 overflow-hidden p-2" ref={containerRef} />
+      <div className="min-h-0 flex-1 overflow-hidden p-1" ref={containerRef} />
       {!session && (
         <div className="absolute inset-x-0 top-10 bottom-0 flex items-center justify-center bg-background text-muted">
           Select a session to view its terminal.

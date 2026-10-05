@@ -98,7 +98,7 @@ fn open_main_window(app: &tauri::AppHandle, startup: Result<u16, String>) -> tau
         Err(message) => format!("error={}", percent_encode_query_value(&message)),
     };
     let url = if cfg!(debug_assertions) {
-        format!("http://localhost:5173/?{query}")
+        format!("http://localhost:5174/?{query}")
     } else {
         format!("index.html?{query}")
     };
