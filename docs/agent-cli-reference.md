@@ -1,17 +1,15 @@
 # Agent CLI reference
 
 Per-agent facts about the three agent CLIs Octoboard launches: the hook events, what their payloads carry, what the
-payloads can and cannot be correlated on, what a failing hook costs, and how a project's own configuration layers
-around an injected one.
+payloads can and cannot be correlated on, what a failing hook costs, how a project's own configuration layers around an
+injected one, and the mechanism and conditions for injecting Octoboard into each.
 
 Established against **Claude Code 2.1.274**, **Codex 0.160.0** and **Grok Build 1.0.46**. All three rewrite their hook
 surface, their payload fields and their configuration layering on upgrade, so check a detail here against the installed
 version before relying on it.
 
-What is deliberately not here: the mechanism each adapter uses to inject hooks, MCP and a role description, and the
-conditions it must satisfy, which are in `docs/mvp.md` section 6; the traps Octoboard's own status mapping already
-encodes, which are in `daemon/src/hooks.rs`; and the conditions those traps place on reporting and the raised hand,
-which are in `docs/mvp.md` sections 5.3 and 5.5.
+How Octoboard's status mapping handles these traps is encoded in `daemon/src/hooks.rs`; the product behavior built on
+them is in the product docs.
 
 ## Claude Code
 
@@ -24,25 +22,36 @@ hold state against.
 **Events whose payload a mapping has to know:**
 
 - `Stop` — `last_assistant_message` holds the turn's final assistant text, so the transcript never has to be parsed for
-  it. `background_tasks` lists work still running. An entry's id is the same value as the `backgroundTaskId` in the
-  matching `PostToolUse`'s `tool_response`, so a background task can be joined to the call that started it without
-  reading the transcript.
-- `StopFailure` — carries `error`, an optional `error_details` (the raw HTTP status plus the verbatim response body,
-  not prose) and `last_assistant_message`. On this event `last_assistant_message` is the **user-facing error text, not
-  model output**, so anything that reads that field as the turn's result has to treat `StopFailure` differently from
-  `Stop`. `error` is not a function of the HTTP status: a plain 400 gives `unknown`, a 400 whose body says the prompt is
-  too long gives `invalid_request`, and a 529 gives `server_error` rather than `overloaded`.
+  it. `background_tasks` lists work still running, and a `Stop` with a non-empty list means paused, not finished. An
+  entry's id is the same value as the `backgroundTaskId` in the matching `PostToolUse`'s `tool_response`, so a
+  background task can be joined to the call that started it without reading the transcript.
+- `StopFailure` — mutually exclusive with `Stop`: a turn that ends in an API error fires only `StopFailure`, so a
+  mapping keyed on `Stop` alone leaves that session looking busy forever. It does not mean the session died; in the
+  interactive TUI it stays alive at the prompt. It carries `error`, an optional `error_details` (the raw HTTP status
+  plus the verbatim response body, not prose) and `last_assistant_message`. On this event `last_assistant_message` is
+  the **user-facing error text, not model output**, so anything that reads that field as the turn's result has to treat
+  `StopFailure` differently from `Stop`. `error` is not a function of the HTTP status: a plain 400 gives `unknown`, a
+  400 whose body says the prompt is too long gives `invalid_request`, and a 529 gives `server_error` rather than
+  `overloaded`.
 - `PermissionRequest` — carries **no `tool_use_id`**, even though the binary's own embedded documentation lists one.
   The call the prompt belongs to has to be taken from the immediately preceding `PreToolUse`, which does carry it.
 - `PostToolBatch` — when the call it covers was rejected by Claude Code's own pre-execution guard, the rejection is
-  inside `tool_calls[0].tool_response`; that is the only place it is reported.
+  inside `tool_calls[0].tool_response`; that is the only place it is reported. Such a call fires only `PostToolBatch`,
+  skipping `PreToolUse`, `PostToolUse` and `PostToolUseFailure`, so a mapping that pairs pre with post misses it.
 - Nothing announces that the user answered a prompt or a question. What is observable is the resolution of the pending
   call, as the `PostToolUse` or `PostToolUseFailure` for it, so per-call state has to be keyed on
   `(session_id, prompt_id, tool_use_id)`.
 
-**A user interrupt leaves its only machine-readable trace in the transcript** at `transcript_path`: a `tool_result`
-with `is_error: true` beginning "The user doesn't want to proceed with this tool use", followed by a user block
-`[Request interrupted by user for tool use]`.
+**A pending permission prompt** is `PermissionRequest`; a question put through the agent's own ask-the-user tool is also
+reported. A question asked as plain prose is not: the turn simply ends, and no payload field tells it from a finished
+one.
+
+**A user interrupt emits no hook event**, in the thinking phase or mid-tool. Only the interrupted turn is silent; the
+next turn reports normally. The session's next `UserPromptSubmit` is the reliable sign that the previous turn is over
+and should close the dangling `PreToolUse`; until then the session reads as working, which is stale rather than wrong.
+The interrupted tool's own child process is already gone. The only machine-readable trace is in the transcript at
+`transcript_path`: a `tool_result` with `is_error: true` beginning "The user doesn't want to proceed with this tool
+use", followed by a user block `[Request interrupted by user for tool use]`.
 
 **A failing hook**: a non-zero exit renders an error block in the TUI carrying the hook's stderr, while hook stdout is
 never shown. `exit 2` *blocks*, event-specifically, and feeds stderr to the model. A hook entry with no `timeout`
@@ -80,8 +89,12 @@ Turn-scoped events add `turn_id`, the per-turn key. The compaction events are th
   place Codex ever publishes its own id, and the thread id is the same value. `~/.codex/session_index.jsonl` is not an
   alternative source: it records only *named* threads, and is written late.
 - `Stop` — `turn_id`, `last_assistant_message`, `stop_hook_active`.
-- `Interrupt` — the base payload plus the cancelled turn's own `turn_id`. Esc pressed while the session is idle fires
-  nothing at all, and `Interrupt` never fires in `codex exec`, so this branch cannot be exercised headlessly.
+- `Interrupt` — fires on Esc or Ctrl+C during an in-flight turn (Ctrl+C confirmed by hand). It carries the base
+  payload plus the cancelled turn's own `turn_id` and is mutually exclusive with `Stop`. Esc pressed while the session
+  is idle fires nothing at all, and `Interrupt` never fires in `codex exec`, so this branch cannot be exercised
+  headlessly. A *declined* approval aborts the turn and fires `Interrupt` too, so cancel and decline are told apart by
+  whether a `PermissionRequest` went unresolved just before it.
+- `PermissionRequest` — observed firing *before* the dialog reached the user.
 - `SessionEnd` — `reason` is schema-pinned to the constant `"other"` and therefore carries no information. `async` is
   ignored for this event: Codex forces it synchronous, so its 3 s clamp is wall-clock cost on every teardown.
 - `PreCompact` / `PostCompact` — fire on both a manual and an automatic compaction. A manual one gets a fresh
@@ -90,6 +103,14 @@ Turn-scoped events add `turn_id`, the per-turn key. The compaction events are th
   reopening. `PostCompact` carries no summary and no token counts.
 - **There is no question or notification event.** The two features that would produce a structured question to the
   user, `default_mode_request_user_input` and `request_permissions_tool`, are off in this build.
+
+**The user's own configuration can remove the prompt entirely.** With `approvals_reviewer = "auto_review"` Codex
+resolves an approval request itself: the hook fires, no modal is shown and the tool proceeds. A raised hand would ask
+the user to answer something they never see.
+
+**A Codex older than the *async* hook support Octoboard injects** (0.142.5 was seen, resolved through the login-shell
+`PATH`; inferred from the warning, since the session ended on an API error before status could be observed) prints
+"skipping async hook ... async hooks are not supported yet", so hook-driven status cannot work with it.
 
 **A failing hook** renders a visible history cell — `Hook failed` with the exit code, or `hook timed out after Ns`;
 the hook's own stderr text is not shown — and a *synchronous* hook that hangs costs the turn its full timeout. With
@@ -115,6 +136,9 @@ teardown fire carries none of them, so the two are distinguishable by payload sh
 
 **Events whose payload a mapping has to know:**
 
+- `Stop` — fires **twice** per session: once per turn with `reason: "end_turn"` and again at teardown with
+  `reason: "shutdown"`, so filter on the reason or every session ends with a phantom report. `SIGTERM` is what produces
+  the graceful teardown, so it is how a Grok session should be stopped.
 - `SessionStart` — `source` on a resume is `"load"`, not `"resume"`.
 - `PreToolUse` — fires *before* the permission check, so a call that is then denied leaves an open `PreToolUse` with
   neither `PostToolUse` nor `PostToolUseFailure` after it.
@@ -125,11 +149,31 @@ teardown fire carries none of them, so the two are distinguishable by payload sh
   and no source, so on its own it cannot say whether a rule or the user stopped the call.
 - `StopCancelled` — its `reason` / `reasonDetails` is the only place a user declining a prompt can be told apart from a
   policy denial.
-- `StopFailure` — the payload shape is taken from Grok's shipped documentation and has never been observed from a live
-  session, so the fields are the one part of this reference that rests on the vendor's own description.
+- `Notification` — `permission_prompt` is a pending permission prompt (its ordering against the dialog was not
+  established); `idle_prompt` is the turn-end backstop, below. A question through Grok's own ask-the-user tool is
+  reported.
+- `StopFailure` — observed live on Grok Build 1.0.46, with the provider answering HTTP 400: `hookEventName`
+  `stop_failure` (`hook_event_name` `StopFailure`), `error` `"invalid_request"`, `errorDetails` of the form `API error
+  (status 400 Bad Request): invalid_request_error: ...`, `lastAssistantMessage` of the form `Turn failed: API error
+  (status 400 Bad Request): ...`, and `permissionMode`. An HTTP 500 does not produce it: Grok retried for more than
+  seven minutes, past its `max_retries` of 8, and never ended the turn. It was provoked by setting the key
+  `endpoints.models_base_url` (Grok Build 1.0.46) in a throw-away `GROK_HOME`, with the user's `auth.json` linked in,
+  to a local stand-in answering HTTP 400.
+
+**Some Grok turns produce no stop event at all** (bash mode, builtin slash commands, cancel-and-send, rewinds). The
+backstop is `Notification` with `idle_prompt`: a turn cancelled before its first token emitted no stop event of any
+kind, and `idle_prompt` was the only turn-end signal. It fires about 60 s after the turn ends, carries **no turn id**
+(so it can only be attributed by session and clock) and needs at least one turn to have ended; a session that only ran a
+slash command never emits it. **Bash mode (`!`)** fires no tool or turn hook events and bypasses permissions (a deny
+rule does not stop it); in one run an `idle_prompt` backstop followed about 60 s after the command.
+
+A single observation run, so inconclusive: after a `Stop` the backstop arrived 60 s later when the session stayed idle,
+but for an ending followed by a new prompt within the same second the backstop never arrived in the capture. The guard
+against a stale backstop closing a still-running quiet turn was **not proven**: the row stayed `working` through a 180 s
+silent tool call with no spurious flip, but the backstop that would have tested it never came.
 
 **A failing hook** costs one scrollback line carrying the first line of its stderr, after which the turn proceeds —
-and those lines appear **only in the TUI**, never in headless `-p`, so hook behaviour has to be checked in the TUI. On
+and those lines appear **only in the TUI**, never in headless `-p`, so hook behavior has to be checked in the TUI. On
 `PreToolUse` a `deny` in the hook's stdout JSON is honoured **regardless of its exit code**, so a hook meant only to
 observe must emit no JSON at all.
 
@@ -156,3 +200,83 @@ session's own:
 - Grok — `SubagentStart` fires in the parent and `SubagentStop` in the child, where `sessionId` equals `subagentId`;
   the resolved `subagentType` is not the one the caller asked for, so a matcher written against a requested name never
   matches; and a parent's `Stop` is no promise that its subagents have finished.
+
+## Injecting Octoboard into each agent
+
+How each agent is given Octoboard's status hooks, its MCP server and a role description, with the condition each one
+brings. Everything is per launch (arguments, an environment variable, or files Octoboard writes itself) and never an
+edit of the project's or the user's files, and was exercised against the versions above. What a user sees of it is in
+`docs/product/launching-agents.md`.
+
+| Capability | Claude Code | Codex | Grok Build |
+|---|---|---|---|
+| Launch with an initial task | `claude "<task>"` | `codex "<task>"` | `grok "<task>"` |
+| Pre-allocate a session id | `--session-id <uuid>` | **Not possible.** Take it from the `SessionStart` payload; the interactive thread is created lazily on the first prompt, so a session opened without a task has no id until the user types | `--session-id <uuid>` (new sessions only) |
+| Inject hooks | `--settings <json-or-path>`, merged with the project settings | `-c 'hooks.<Event>=[{hooks=[{type="command",command=…,timeout=3,async=true}]}]'`, one per event, plus the hook-trust step | A per-session `GROK_HOME` whose `hooks/` directory is Octoboard's and whose other entries symlink to the source home |
+| Inject MCP | `--mcp-config <json>` | `-c 'mcp_servers.octoboard.command=…'`, `.args=[…]` and `.default_tools_approval_mode="auto"` | An `[mcp_servers.octoboard]` block appended to the `config.toml` copy inside that `GROK_HOME` |
+| Inject a role description | `--append-system-prompt` | `-c 'developer_instructions="…"'`, which adds a developer message and leaves the rest of the prompt byte-identical; not `-c instructions=`, which replaces the system prompt | `--rules "…"`, appended to the system prompt and persisted into the session record |
+| Resume | `claude --resume <id>` | `codex resume <id>` | `grok --resume <id>` |
+| Identity seen by the MCP child | `CLAUDE_CODE_SESSION_ID` is set | argv or an explicit `env` table; no `CODEX_*` variable reaches the child | `GROK_SESSION_ID` is set; `{{session_id}}` templating does *not* work |
+
+- **Claude Code** injects cleanly through flags. Never pass `--setting-sources` (it silently drops the project's own
+  permission rules and hooks) or `--strict-mcp-config` (it silently drops the project's and the user's MCP servers). The
+  injected MCP server's key must not collide with one the project defines, or the project's is silently never spawned.
+- **Grok Build** has no flag for hooks or MCP, and its `GROK_CONFIG` / `GROK_CONFIG_PATH` overlay accepts only
+  allowlisted keys, so both silently drop. The working mechanism is a per-session `GROK_HOME` where every entry links
+  back to the source home, except a copied `config.toml` carrying the MCP block, a copied `trusted_folders.toml` with
+  the project added and an Octoboard `hooks/` directory. `auth.json` and `sessions/` stay links, so login is shared
+  and sessions stay resumable from the user's own
+  `grok`.
+- **Codex** needs the project marked trusted the same way (`-c 'projects={"<canonical cwd>"={trust_level="trusted"}}'`),
+  and gates hooks behind a persisted trust hash: without it an interactive session raises a blocking review modal and a
+  headless one **hangs indefinitely**. `--dangerously-bypass-hook-trust` clears that at the cost of two warning lines
+  per launch. The hash is taken over the handler definition, which includes the hook command, and that command is the
+  session's own script path, so hashes captured once could never match a later session. Removing the warning would mean
+  a session-independent hook command.
+- **Workspace trust gates the project's own configuration on Claude Code and Grok**, and fails silently. On Grok an
+  untrusted folder makes the project's `AGENTS.md`, hooks and MCP servers not load; trust lives inside `GROK_HOME`, so
+  that store must be present there with the project added (an undocumented `--trust` flag also exists), and Grok also
+  needs a recognized **git** root, since project hooks did not load in a trusted non-git directory. On Claude Code an
+  untrusted workspace makes the project's `allow` rules ignored (with a line on stderr) while `deny` still applies, so
+  the session is only ever more restrictive. Its trust lives in the global config file (`~/.claude.json`, or
+  `.claude.json` inside the config directory in effect), which Octoboard reads and never writes. It is read rather than
+  matching the stderr line because on a PTY stderr is the rendered UI, and matching rendered text would need a VT
+  emulator in the daemon; it warns only on an explicit negative, so a renamed key does not warn on every launch.
+- **Each agent reads a different instruction filename, matched by exact spelling.** Claude Code reads `CLAUDE.md` and
+  `CLAUDE.local.md` and does **not** read `AGENTS.md`, and cannot be made to; where it must be shown a project's
+  `AGENTS.md`, `--append-system-prompt-file` lands it in the system prompt. Codex reads `AGENTS.md`. Grok reads
+  `AGENTS.md`, `Agents.md`, `CLAUDE.md`, `Claude.md` and `CLAUDE.local.md`, and on a case-sensitive volume loads every
+  matching spelling present. No agent accepts an all-lowercase name. Grok locates a project by walking up for `.git`,
+  and without one reads no project instructions and no project hooks, which is why a Grok hub's role cannot be an
+  instruction file in a console's working directory and travels in `--rules` instead.
+- **Resume re-injects everything.** Hooks and the MCP server are resolved from the launch arguments every time and are
+  lost on a resume that omits them, silently. The role description differs: Grok persists `--rules` into the session
+  record, while Claude Code records its appended system prompt on the first request and replays it verbatim, so a
+  changed role text is ignored on resume. A session's role is immutable for its lifetime.
+- **Hook scripts must fail silently and fast on all three.** Every agent surfaces a failing hook, and a hook with no
+  timeout blocks the turn for its full duration. Octoboard's scripts exit 0 unconditionally, write nothing to stderr,
+  set a short explicit timeout (Codex clamps some events to 3 s), are asynchronous where the agent allows it, and give
+  the daemon call a hard deadline. Grok's HTTP hooks cannot reach the daemon at all, since its SSRF protection rejects
+  plain HTTP and private addresses, so hooks are `command` type.
+- Injection never modifies project files or the user's global configuration; where an agent can only be configured
+  through a file, a "use this config directory" variable or flag is preferred.
+
+### Writing into a running session
+
+The sequence for all three agents is `ESC[200~`, the text with LF separators, `ESC[201~`, then `CR`; multi-line text
+arrives as one message with no delay between paste and Enter. Every agent queues a message written mid-turn and consumes
+it when the turn ends. (Codex additionally has `codex queue --thread <session id>`.) Four rules, each failing silently
+or destructively if ignored:
+
+- A message starting with `/` runs as a slash command even inside a bracketed paste; prefix a single space.
+- A macOS PTY master accepts only about 1022 bytes before `EAGAIN` when the child is not draining, so the write is a
+  non-blocking partial-write-and-retry loop in slices, never a blocking `write_all` on the daemon's event loop.
+- Nothing may be written while a modal dialog is up. The paste is discarded but the trailing `CR` confirms whatever is
+  highlighted: at Claude Code's trust dialog that was seen to exit the session for a short message (an 8.8 KB paste
+  left it untouched, unexplained), and at Grok's approval modal it would select "always-approve". Codex is the
+  exception, where a paste at its modal changes nothing. Never send bare keys either, since Grok and Codex treat
+  digits as confirm hotkeys. The one deliberate exception is the daemon's answer to Claude Code's own trust screen,
+  which types Down and Enter and nothing else.
+- The gate comes from hook-reported state, never from the terminal, because none of the agents signal modal state
+  through terminal modes. If the hook state is missing or stale, do not write. Recognizing Claude Code's trust screen is
+  the exception: no hook runs before it is answered, so it can only be read from the output.

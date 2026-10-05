@@ -108,6 +108,13 @@ Besides the terminal type, the variables set over the snapshot are:
 - for every Grok Build session, `GROK_HOME`, set to the session's own Grok home (see "Grok Build" below). A Grok Build
   config directory is not passed as `GROK_HOME` itself.
 
+The agent binary is resolved from that same snapshot's `PATH`, which is that login + interactive shell's `PATH`, not the
+one a terminal happens to have. So when the shell lists an old install of an agent before a newer one, the old one is
+launched. Seen with Codex: a Finder-style launch resolved an older Homebrew build ahead of the current one in
+`~/.local/bin`. That Codex was older than the async hook support Octoboard injects (inferred from its "skipping async
+hook" warning; the session ended on an API error before status could be observed), and such a Codex cannot supply hooks
+(see "Codex" in `docs/agent-cli-reference.md`). The cause is the user's `PATH` order, not Octoboard.
+
 Which directory a session holds, and the refusal of a launch whose directory no longer exists, are described in "Agent
 config directories" in `docs/product/consoles-and-projects.md`.
 

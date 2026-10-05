@@ -95,8 +95,8 @@ export class TerminalController {
     const keepModifiersFromArming = keepModifiersFromArmingKeyDownSeen(this.term);
 
     // `Ctrl+C` is swallowed by WKWebView above xterm.js while every other modifier combination
-    // passes through (see "Known pitfalls of the Tauri / Rust approach" in docs/mvp.md) — it is
-    // the most-used key in a terminal, so it is intercepted here and its raw byte (ETX, 0x03) is
+    // passes through (see "Known pitfalls of the Tauri / Rust approach" in docs/architecture.md) —
+    // it is the most-used key in a terminal, so it is intercepted here and its raw byte (ETX, 0x03) is
     // written directly, bypassing xterm's own key-to-data pipeline entirely.
     this.term.attachCustomKeyEventHandler((event) => {
       keepModifiersFromArming(event);
@@ -119,7 +119,7 @@ export class TerminalController {
     // Mouse reports are not UTF-8: in the default mouse protocol a coordinate is `32 + n`, so past
     // column 95 the encoded byte exceeds 127 and `onData` never sees it — only `onBinary` does,
     // as a JS string of raw code units (one per byte), hence the mask back to a byte rather than a
-    // UTF-8 encode (see "Known pitfalls of the Tauri / Rust approach" in docs/mvp.md).
+    // UTF-8 encode (see "Known pitfalls of the Tauri / Rust approach" in docs/architecture.md).
     this.term.onBinary((data) => this.sendInput(Uint8Array.from(data, (c) => c.charCodeAt(0) & 0xff)));
   }
 

@@ -90,7 +90,7 @@ export interface Session {
 }
 
 /** One page the hub pushed to its console's report panel. `anchor_message_id` is stored only — the
- * rewind linkage that reads it is after the MVP. */
+ * rewind linkage that would read it does not exist. */
 export interface Page {
   id: string;
   console_id: string;

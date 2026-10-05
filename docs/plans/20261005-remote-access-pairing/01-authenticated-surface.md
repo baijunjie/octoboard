@@ -21,4 +21,4 @@
 
 - **Reusable capabilities**: the MCP endpoint's per-launch token, which refuses an unknown token without detail.
 - **Development notes**: default-deny; refusals carry no detail.
-- **Reference docs**: `daemon/PROTOCOL.md`, `docs/mvp.md`.
+- **Reference docs**: `daemon/PROTOCOL.md`, `docs/architecture.md`.

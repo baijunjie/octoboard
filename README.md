@@ -2,10 +2,9 @@
 
 A desktop control board for orchestrating coding agents across multiple projects.
 
-> **Status: early development.** The MVP's features are built — consoles, projects, sessions in real terminals, a hub
-> agent dispatching work across projects and reporting back, and the report panel — on macOS (Apple Silicon). A final
-> round of checks on a real build is still outstanding, and no release is published yet, so for now Octoboard is built
-> from source.
+> **Status: early development.** The core features are built — consoles, projects, sessions in real terminals, a hub
+> agent dispatching work across projects and reporting back, and the report panel — on macOS (Apple Silicon). No release
+> is published yet, so for now Octoboard is built from source.
 
 ## This is an AI-native project
 
@@ -59,7 +58,7 @@ flowchart TB
         Work["<b>Project sessions</b><br/>run in each project's directory,<br/>project config stays in effect"]
     end
 
-    Remote["Remote host daemon<br/>host role only, after the MVP"]
+    Remote["Remote host daemon<br/>host role only, not built yet"]
 
     App <-->|"WebSocket only"| Daemon
     Daemon -->|"launch with injected hooks, MCP server and role<br/>description; keystrokes and messages in"| Agents
@@ -78,7 +77,7 @@ flowchart TB
 - **Agent sessions** — the hub has the orchestration tools, a project session has one tool, `report`, and the two
   never talk to each other directly: everything between them passes through the daemon.
 
-For the design in full, see [`docs/mvp.md`](docs/mvp.md) and the product docs indexed in
+For the design in full, see [`docs/architecture.md`](docs/architecture.md) and the product docs indexed in
 [`docs/README.md`](docs/README.md).
 
 ## License

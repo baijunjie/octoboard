@@ -19,8 +19,8 @@ Tailscale; Octoboard builds no network layer of its own.
 - **WebSocket upgrades check the origin.**
 - **Off by default**: whether the external surface exists at all is a setting.
 - **The QR code** is shown in the macOS application and printed in the Linux terminal.
-- **This reverses the "loopback only" premise** stated in the README, the protocol document and the MVP design; those are
-  updated in the same change.
+- **This reverses the "loopback only" premise** stated in the README, the protocol document and
+  `docs/product/application-lifecycle.md`; those are updated in the same change.
 
 ## Milestones
 

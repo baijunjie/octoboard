@@ -1,7 +1,7 @@
 # octoboardd protocol
 
 The only interface between the desktop application and the daemon. There is no Tauri IPC channel and no shared state
-between them (see "Why the daemon is split out in the MVP" in `docs/mvp.md`), so everything the UI can do is in here.
+between them (see "Why the daemon is split out" in `docs/architecture.md`), so everything the UI can do is in here.
 
 The daemon binds to `127.0.0.1` on an ephemeral port and prints `octoboardd listening on 127.0.0.1:<port>` on stdout as
 its first line; it also writes the port to `$TMPDIR/octoboardd.port`. The application reads the stdout line.
@@ -28,7 +28,7 @@ the request id as if it were a record id.
 | `update_project` | `project`, `name?`, `default_agent?` | An absent `default_agent` leaves it alone; an explicit `null` clears it, so the project inherits the console's default again |
 | `delete_project` | `project` | Removes the association and the project's session records, archived ones included; never touches the directory. Refused while the project has live sessions |
 | `list_dir` | `path` | Answered with `dir_listing` on the asking socket |
-| `open_session` | `console_id`, `project_id?`, `agent?`, `task?`, `title?`, `include_in_hub?` | Omit `project_id` for the console's hub session; a console has at most one that is not archived, so a second is refused with `session_already_running`. `agent` follows the priority in the "Which agent gets used" section of `docs/mvp.md` when omitted. `include_in_hub` defaults to false: a session the user opens by hand stays outside the hub's orchestration and sends it no reports unless this is set |
+| `open_session` | `console_id`, `project_id?`, `agent?`, `task?`, `title?`, `include_in_hub?` | Omit `project_id` for the console's hub session; a console has at most one that is not archived, so a second is refused with `session_already_running`. `agent` follows the priority in the "Which agent a session uses" section of `docs/product/sessions.md` when omitted. `include_in_hub` defaults to false: a session the user opens by hand stays outside the hub's orchestration and sends it no reports unless this is set |
 | `resume_session` | `session` | Relaunches an `interrupted` or `archived` session through the agent's own resume mechanism, re-injecting everything. Reopening an archived hub session while the console's hub is already running is refused with `session_already_running` |
 | `archive_session` | `session` | Ends the process and archives the session |
 | `send_message` | `session`, `text` | Writes a message into a running session. Refused while the session is `waiting_user`: the message would be discarded and its trailing Enter would answer whatever dialog is up. The hub's own `send_message` tool holds such a message instead of refusing it — the user can be told to answer the prompt first, the hub cannot |
@@ -85,7 +85,7 @@ directory pinned, which resume under whatever the shell exports at that moment. 
 longer exists is refused, for every agent, with an error naming it.
 `trusted_directories` is a list of absolute, lexically normalised directory paths (no symlink is resolved). A project is trusted when its path equals one or lies below one, compared component by component (`/a/Project` does not cover `/a/Project2`). They are added by `confirm_claude_trust` with `trust_parent_dir` and removed by `remove_trusted_directory`. The comparison looks at a project's path only, not at its `host_id`: there is one local host today, and a second would need its own set. A symlink is not followed when comparing, so a project reached through a link inside a trusted directory is trusted wherever the link points, and a project outside the directory is not, however it is linked from inside.
 `Project.claude_trust_consent` is true once the user has agreed, in the dialog a `claude_trust_prompt` opens, that Octoboard may answer Claude Code's trust screen for that project's directory. It is only ever set by `confirm_claude_trust` with `remember`; `update_project` neither sets nor clears it.
-`Page.anchor_message_id` is stored and never read: the rewind linkage that uses it is after the MVP. Timestamps are
+`Page.anchor_message_id` is stored and never read (see "Data model" in `docs/architecture.md`). Timestamps are
 epoch milliseconds (the UI formats them).
 
 ## `GET /ws/term/:session` — terminal stream

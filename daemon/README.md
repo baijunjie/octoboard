@@ -55,7 +55,8 @@ everything it can do goes through the external interface below.
 The Octoboard MCP server: the orchestration tools the hub drives Octoboard with, and the one reporting tool a project
 session answers through. The tool catalogue is shared by both sides of the stdio bridge, so the child process, the
 daemon, and the role descriptions cannot drift apart. The wire-level `POST /mcp/:token` contract is in
-`PROTOCOL.md`; "Octoboard MCP tools" in `docs/mvp.md` section 5.2 lists the tools and what each one does.
+`PROTOCOL.md`; "The hub's tools" and "Reporting" in `docs/product/hub-orchestration.md` list the tools and what each
+one does.
 
 | File | Role |
 |---|---|
@@ -68,7 +69,8 @@ daemon, and the role descriptions cannot drift apart. The wire-level `POST /mcp/
 
 A single adapter interface (launch, pre-allocate/obtain a session id, inject capabilities, report status, resume), so
 the rest of the daemon is agnostic to which agent it is driving. Three things are injected when a session starts: the
-status hooks, the Octoboard MCP server, and a role description (`docs/mvp.md` section 5.1).
+status hooks, the Octoboard MCP server, and a role description ("What is injected on every launch" in
+`docs/product/launching-agents.md`).
 
 | File | Agent |
 |---|---|
@@ -79,4 +81,4 @@ status hooks, the Octoboard MCP server, and a role description (`docs/mvp.md` se
 
 The design constraints each adapter has to satisfy (which flags must never be passed, workspace-trust gating, how a
 message is written into a running session, resume semantics) are documented in each file's own doc comment and in
-"Agent adapters" in `docs/mvp.md`; they are not repeated here.
+"Injecting Octoboard into each agent" in `docs/agent-cli-reference.md`; they are not repeated here.

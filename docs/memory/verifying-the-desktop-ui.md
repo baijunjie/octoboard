@@ -70,3 +70,10 @@ exercising the IME and proves nothing. Ask the user to type it and report what t
 It cuts the other way too: scripted typing can instead be fed *through* whatever input source is active —
 `cliclick t:` composes through a pinyin IME rather than typing the literal text — so any probe that types has to
 switch the input source to a non-IME one (ABC) first and put it back afterwards.
+
+## `SIGSTOP` on the WebContent process simulates a hung page, but only roughly
+
+`kill -STOP` on the app's WebContent process freezes the page without a debug build, and the window's close button then
+does nothing, as with a real hang. It is not the same state, though: a double `Cmd+Q` did not escape it, while
+scripted AppleEvent quits did. Do not read a `Cmd+Q` that fails to quit under `SIGSTOP` as a verdict on the
+wedged-window escape hatch.

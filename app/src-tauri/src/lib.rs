@@ -2,7 +2,7 @@
 //! window the port it printed (`sidecar.rs`), the native menu bar (`menu.rs`), and the
 //! exit-confirmation flow including its one `unsafe` subsystem (`exit.rs`). Everything after the
 //! window loads talks to the daemon over WebSocket only, per the architectural rule in "Why the
-//! daemon is split out in the MVP" in `docs/mvp.md` — no Tauri IPC command carries daemon traffic
+//! daemon is split out" in `docs/architecture.md` — no Tauri IPC command carries daemon traffic
 //! or session state, so this process reads the sidecar's stdout itself and bakes the port into the
 //! window's URL as a `?port=` query parameter *before* creating the window, instead of exposing an
 //! `invoke`-able command for it.

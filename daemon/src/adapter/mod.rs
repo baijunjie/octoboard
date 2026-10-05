@@ -3,8 +3,8 @@
 //! configuration. Everything else in the daemon is agent-agnostic.
 //!
 //! Three things are injected: the status hooks, the Octoboard MCP server, and a role description
-//! (`docs/mvp.md` section 5.1). The mechanism for each differs per agent and is the adapter's own
-//! business; the conditions all three share are below.
+//! ("What is injected on every launch" in `docs/product/launching-agents.md`). The mechanism for each
+//! differs per agent and is the adapter's own business; the conditions all three share are below.
 //!
 //! Three rules hold for every adapter, each of which fails silently if broken:
 //!

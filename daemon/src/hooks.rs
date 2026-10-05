@@ -17,9 +17,10 @@
 //! Three gaps are accepted rather than worked around, all of them settled during validation: a turn
 //! that ends with a plain-text question to the user is indistinguishable from a finished turn on
 //! every agent; a user interrupt on Claude Code produces no event at all, so the session reads as
-//! working until the next `UserPromptSubmit`; and Grok's bash mode (`!`) bypasses hooks entirely.
-//! None is recoverable by matching terminal text, which would need a VT emulator in the daemon and
-//! differs between an agent's own renderers.
+//! working until the next `UserPromptSubmit`; and Grok's bash mode (`!`) fires
+//! no tool or turn events (only its `idle_prompt` backstop follows). None is recoverable by matching
+//! terminal text, which would need a VT emulator in the daemon and differs between an agent's own
+//! renderers.
 //!
 //! For the payload fields behind these decisions — what each event carries, what it can be
 //! correlated on, and what never fires — see `docs/agent-cli-reference.md`.

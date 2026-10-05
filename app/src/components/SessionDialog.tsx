@@ -14,9 +14,9 @@ interface SessionDialogProps {
 }
 
 /**
- * Opens a session manually under a project. The agent picker defaults per the "Which agent gets
- * used" priority in docs/mvp.md (project default, then console default) but the user can override
- * it for this one session, matching `open_session`'s own `agent` field.
+ * Opens a session manually under a project. The agent picker defaults per the "Which agent a
+ * session uses" section of docs/product/sessions.md (project default, then console default) but
+ * the user can override it for this one session, matching `open_session`'s own `agent` field.
  *
  * `open_session` answers with `session_opened`, which names the session it started — the broadcast
  * that puts it in the tree carries no request id, so this reply is the only way to tell which of

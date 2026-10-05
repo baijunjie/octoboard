@@ -6,10 +6,11 @@ import { useDaemon } from "../store";
 /**
  * Surfaces every undismissed toast in one stack, in arrival order — including the per-volume
  * file-access failures of `list_dir` and `open_session`, which are a normal path here rather than
- * something to swallow (see "Known pitfalls of the Tauri / Rust approach" in docs/mvp.md). A
- * `notice` renders as its own visual variant, since it is something the user has to know rather
- * than something that went wrong, and names the session it is about — the daemon's message
- * deliberately does not, since it has no notion of what the client calls that session.
+ * something to swallow (see "Known pitfalls of the Tauri / Rust approach" in
+ * docs/architecture.md). A `notice` renders as its own visual variant, since it is something the
+ * user has to know rather than something that went wrong, and names the session it is about — the
+ * daemon's message deliberately does not, since it has no notion of what the client calls that
+ * session.
  */
 export function Toasts(): React.ReactElement {
   const { toasts, sessions, consoles, projects, dismissToast } = useDaemon();

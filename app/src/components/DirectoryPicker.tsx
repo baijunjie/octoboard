@@ -19,8 +19,8 @@ interface DirectoryPickerProps {
  *
  * Failure here is a normal path, not an edge case: a packaged application raises a macOS
  * file-access prompt per volume, and the user may decline it or leave it unanswered (see "Known
- * pitfalls of the Tauri / Rust approach" in docs/mvp.md), so a failed listing is shown inline,
- * alongside whatever was listed before it, rather than clearing the screen.
+ * pitfalls of the Tauri / Rust approach" in docs/architecture.md), so a failed listing is shown
+ * inline, alongside whatever was listed before it, rather than clearing the screen.
  */
 export function DirectoryPicker({ title, initialPath, onPick, onClose }: DirectoryPickerProps): React.ReactElement {
   const { request } = useDaemon();

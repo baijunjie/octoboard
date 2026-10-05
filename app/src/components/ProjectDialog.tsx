@@ -13,8 +13,8 @@ const SOURCE_OPTIONS: { value: ProjectSource; label: string }[] = [
   { value: "github", label: "A GitHub URL (clone it)" },
 ];
 
-/** `""` stands for "unset" — falls back to the console's default agent per the "Which agent gets
- * used" priority in docs/mvp.md. */
+/** `""` stands for "unset" — falls back to the console's default agent per the "Which agent a
+ * session uses" section of docs/product/sessions.md. */
 const DEFAULT_AGENT_OPTIONS: { value: Agent | ""; label: string }[] = [
   { value: "", label: "Use console default" },
   ...AGENT_OPTIONS,

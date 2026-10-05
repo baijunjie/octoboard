@@ -2,12 +2,6 @@
 
 Long-lived documentation under `docs/`. Development plan docs and bug tickets are temporary and are not listed here.
 
-## Plan
-
-- [MVP plan](mvp.md) — what Octoboard is, its architecture, the orchestration mechanism, the data model, and the scope of
-  the MVP. Section 6 holds the per-agent injection mechanisms and the conditions each adapter must satisfy; section 13
-  records what validation settled and what is still open.
-
 ## Product
 
 - [Consoles and projects](product/consoles-and-projects.md) — consoles, their working directory, agent defaults and
@@ -32,9 +26,14 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 
 ## Reference
 
+- [Architecture](architecture.md) — what Octoboard is and its core concepts, the layers and why the daemon is split from
+  the application, the technology choices, the orchestration design decisions (the MCP server as a child process,
+  structured arguments, why reporting is not forced), the known pitfalls of the Tauri / Rust approach, and the reasoning
+  behind the data model.
 - [Agent CLI reference](agent-cli-reference.md) — what the three agent CLIs themselves do, against the versions the
   facts were established on: each one's hook events, the payload fields and the keys a turn can be correlated on, what
-  a failing hook costs, and how a project's own configuration layers around an injected one.
+  a failing hook costs, how a project's own configuration layers around an injected one, how Octoboard is injected into
+  each agent and the conditions that come with it, and the rules for writing into a running session.
 
 ## Code
 

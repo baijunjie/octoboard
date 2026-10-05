@@ -144,9 +144,19 @@ limitations of what the agents expose rather than of this one:
   *working* until the next prompt is submitted.
 - Claude Code reports nothing while it is on its workspace-trust prompt, so a session sitting there keeps the status its
   launch gave it — *working* or *awaiting instructions* — and raises no hand, although it is waiting for a person.
-- Grok Build's bash mode (`!`) produces no events, so work done through it is invisible to the status.
+- Grok Build's bash mode (`!`) fires no tool or turn events, so work done through it never shows in the status; Grok's
+  turn-end backstop was seen to follow about a minute later in one run (see "When a session does not report" in
+  `docs/product/hub-orchestration.md`), but it finds the session already awaiting instructions.
 - A question the agent asks through **its own ask-the-user tool** is reported by Claude Code and Grok
   Build but not by Codex, which has no such event; a Codex session asking that way reads as *working*.
+
+Part of the Grok Build case above is Octoboard's own attribution rule rather than a limit of what the agent exposes.
+Grok Build's turn-end backstop carries no turn id, so the daemon attributes it by clock. An ending that names its own
+turn, or a cancellation, arms one expected backstop (a flag, not a count), and the next clock-attributed signal spends
+it whether or not a turn is open. When an ending's own backstop never arrives, the flag stays armed, so a later turn
+whose only ending is its backstop would have that backstop discarded: the session would keep reading as working and,
+if it reports to the hub, no report would be synthesized for that turn. Whether Grok produces that sequence in
+practice was not checked (in one run an ending followed within a second by a new prompt got no backstop).
 
 ### The raised hand
 

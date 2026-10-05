@@ -10,8 +10,8 @@
 //! reads the injected demand as prompt injection often enough to matter. So the `report` tool is
 //! encouraged and nothing is blocked; a session that stops without it has the turn's last assistant
 //! message read as its report instead, with the structured fields marked as Octoboard's guess. The
-//! conditions that qualify that synthesis are in `docs/mvp.md` section 5.3 and encoded in
-//! `crate::hooks`.
+//! conditions that qualify that synthesis are in the "Claude Code" and "Grok Build" sections of
+//! `docs/agent-cli-reference.md` and encoded in `crate::hooks`.
 
 use std::sync::Arc;
 

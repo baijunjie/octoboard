@@ -158,6 +158,14 @@ rather than a session that stays unusable, and that is the better of the two: re
 something proved the line was clean would stall a console's whole orchestration on a signal nothing
 can give.
 
+A partial write has **not been observed** in any attempt, so none of this has been seen to happen. The one try, on
+Claude Code only, sent an 8,822-byte `send_message` into a session sitting at its folder-trust dialog: the call answered
+`delivered`, the dialog stayed untouched and no text appeared in the terminal. What became of the text was not
+established, and it is unexplained: it does not match the documented effect of a write at Claude Code's trust dialog,
+where a trailing CR exits the session (see "Writing into a running session" in `docs/agent-cli-reference.md`). The
+assumption above that the next write closes the leftover fragment, bounding the damage to one spoiled message, has
+likewise never been seen to hold.
+
 The loss is reported rather than passed off as delivered, but not to everyone: the sender whose own
 call ran into it is told (a report fails, and its session is *not* archived), while a sender whose
 message was already queued behind it is not. What covers those is the message the user gets, which

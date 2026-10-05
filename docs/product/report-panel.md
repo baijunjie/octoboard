@@ -58,6 +58,10 @@ no external scripts, stylesheets or fonts — so a page has to stick to generic 
 navigate its own frame to an external URL either, so a page has no channel of its own for sending out
 what it computed or what the user typed into it. The one way data leaves a page is `octoboard.submit`.
 
+One thing is not established: the content security policy has no directive that WebKit enforces over WebRTC or over
+link-based DNS prefetching, so whether a page can leak through those was not settled. A probe in Safari produced no
+lookups to compare against, so the panel itself was not tested.
+
 That closes the outbound channel; it is not a claim that a page can do nothing. A page is
 model-authored HTML and its script runs, inside Octoboard's own window, over whatever the user puts
 into it.

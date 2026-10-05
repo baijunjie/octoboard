@@ -179,9 +179,8 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
     Ok(())
 }
 
-/// Polls the application's pid and ends the daemon once it is gone. The MVP's daemon lives and dies
-/// with the application; background operation is a later version, and only this watch stands in the
-/// way of it.
+/// Polls the application's pid and ends the daemon once it is gone. The daemon lives and dies with
+/// the application; only this watch stands in the way of background operation.
 fn spawn_parent_watch(state: Arc<AppState>, parent_pid: u32) {
     tokio::spawn(async move {
         loop {

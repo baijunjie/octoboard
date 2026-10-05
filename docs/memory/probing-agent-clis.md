@@ -17,7 +17,7 @@ prefixes and cannot be told apart by name, so a prefix sweep fails in both direc
 key-authenticated session from starting at all, with a failure that reads as a login problem — while `CLAUDE_PID` and
 `CLAUDE_EFFORT` are markers no obvious prefix catches. Build the list by dumping `env` inside a live session of each
 agent and stripping what is there and only there. The daemon has to filter its environment snapshot the same way; see
-the "Known pitfalls of the Tauri / Rust approach" section of `docs/mvp.md`.
+the "Known pitfalls of the Tauri / Rust approach" section of `docs/architecture.md`.
 
 Stripping the enumerated markers does not disturb login state, the credential-bridge variables included: Claude Code
 still resolves its Keychain credentials and reports `loggedIn: true`. So a "Not logged in" result from a correctly
@@ -51,6 +51,11 @@ paths that are otherwise unreachable.
 explicit authorisation every time.** Ask first and leave the probe undone if the answer is no; being cheap is not a
 reason to set it up quietly.
 
+With that authorisation, to provoke Grok's `StopFailure` hook (Grok Build 1.0.46), point `endpoints.models_base_url`
+at a local stand-in for the chat endpoint that answers HTTP 400. Set it in a throw-away `GROK_HOME` so the user's own
+config is untouched, and link the user's `auth.json` into it so Grok starts logged in. An HTTP 500 makes Grok retry
+for minutes and never end the turn, so no `StopFailure` fires.
+
 ## Prove an injection, and an MCP tool, out of band rather than through the model
 
 Whether a launch's hooks and MCP injection took is settled by looking at processes, not by asking an agent to use them.
@@ -64,6 +69,11 @@ and the daemon accepts a tool call as plain JSON on `POST /mcp/:token`, so `curl
 one the session's role does not have, and report delivery, against a live daemon and without a single model turn. What
 that leaves untested is the stdio child itself — the schemas it announces and the tool name the model ends up
 seeing — so keep one real session for those.
+
+## Do not look for a mouse-aware TUI through Grok's bash mode
+
+Grok's bash mode (`!`) has no controlling TTY (`TERM=dumb`, `/dev/tty` unusable), so a mouse-aware TUI such as `vim`
+cannot run in it and it is no route to testing mouse reporting.
 
 ## A probe whose expected answer is "no" needs a positive control in the same run
 

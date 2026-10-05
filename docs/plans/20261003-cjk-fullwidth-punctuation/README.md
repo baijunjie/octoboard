@@ -223,6 +223,6 @@ upstream" step, which is why that step stays unticked.
 
 - **Development notes**: verifying this needs a person. Scripted key injection bypasses macOS input methods entirely,
   so an automated check would prove nothing about this path either way.
-- **Reference docs**: the terminal requirements this sits under are in `docs/mvp.md` section 3, and the sibling
-  keyboard and WebView pitfalls — including this defect's own entry — are in its "Known pitfalls of the Tauri / Rust
-  approach" section.
+- **Reference docs**: the terminal requirements this sits under are in "The terminal" in
+  `docs/product/sessions.md`, and the sibling keyboard and WebView pitfalls — including this defect's own entry — are
+  in "Known pitfalls of the Tauri / Rust approach" in `docs/architecture.md`.

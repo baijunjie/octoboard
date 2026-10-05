@@ -104,7 +104,7 @@ any IPC call for it.
 | `src/lifecycle/useAppExit.ts` | Drives the exit-confirmation flow from the frontend side, calling the two Tauri commands above |
 | `src/lifecycle/useWaitingNotifications.ts` | Fires the system notification and sets the Dock badge count when a session raises its hand |
 | `src/sessionLabel.ts` | Where to tell the user a session is (its project, or its console's hub), since the daemon's `Session` record itself only carries ids |
-| `src/agents.ts` | Display labels for the three agents the MVP supports |
+| `src/agents.ts` | Display labels for the three supported agents |
 | `src/main.tsx`, `src/StartupScreen.tsx`, `src/ErrorBoundary.tsx` | Startup sequencing and the error/retry screens shown before the daemon connection is ready |
 | `scripts/build-daemon.mjs` | Builds `octoboardd` in release mode and copies it into `src-tauri/binaries/` under the target-triple name Tauri's `externalBin` requires |
 | `scripts/release.mjs` | Builds the release `.app`/`.dmg` and verifies the result; see "Release builds" above |

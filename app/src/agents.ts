@@ -1,6 +1,7 @@
 import type { Agent, ConfigDirField } from "./protocol";
 
-/** Display labels for the three agents the MVP supports (see "Agent adapters" in docs/mvp.md). */
+/** Display labels for the three supported agents (see "The console → project → session menu" in
+ * docs/product/sessions.md). */
 export const AGENT_LABEL: Record<Agent, string> = {
   claude: "Claude Code",
   codex: "Codex",

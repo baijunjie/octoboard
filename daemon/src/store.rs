@@ -20,9 +20,9 @@ use crate::protocol::{
     SessionStatus,
 };
 
-/// The single local host record every project and session points at. The MVP has no other host,
-/// but the column exists so that adding remote hosts needs no data migration (`docs/mvp.md`
-/// section 10).
+/// The single local host record every project and session points at. There is no other host yet,
+/// but the column exists so that adding remote hosts needs no data migration ("Data model" in
+/// `docs/architecture.md`).
 pub const LOCAL_HOST_ID: &str = "local";
 
 pub struct Store {

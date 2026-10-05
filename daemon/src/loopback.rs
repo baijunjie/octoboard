@@ -4,7 +4,7 @@
 //! Hand-rolled rather than taken from a client crate. The traffic only ever goes to `127.0.0.1`,
 //! so a TLS stack and URL normalisation would be weight with no purpose, and the IDNA chain a
 //! general client pulls in raises the Rust toolchain floor past this project's (see "Rust
-//! toolchain floor" in `docs/mvp.md` section 4.4).
+//! toolchain floor" under "Known pitfalls of the Tauri / Rust approach" in `docs/architecture.md`).
 
 use std::io::{Read, Write};
 use std::net::TcpStream;

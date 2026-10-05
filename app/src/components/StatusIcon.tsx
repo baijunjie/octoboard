@@ -6,14 +6,14 @@ import type { Agent, SessionStatus } from "../protocol";
 
 /** The raised-hand glyph path, shared by the per-session status icon below and `BubbledWaitingHand`
  * — the marker a project or console row shows when a session beneath it is waiting, per the
- * "Waiting for the user (raised hand)" section of docs/mvp.md. */
+ * "The raised hand" section of docs/product/sessions.md. */
 const RAISED_HAND_PATH =
   "M8 2c-.8 0-1.4.6-1.4 1.4v4.2L5.2 6.2c-.5-.5-1.3-.5-1.8 0-.5.5-.5 1.3 0 1.8l3.6 3.6c.4.4 1 .7 1.7.7h2.1c1.4 0 2.6-1.1 2.6-2.6V5.4C13.4 4.6 12.8 4 12 4s-1.4.6-1.4 1.4V3.4C10.6 2.6 10 2 9.2 2s-1.4.6-1.4 1.4";
 
 /**
- * The per-session state icons from the "Session states" table in docs/mvp.md, as plain SVG glyphs
- * rather than emoji (the project keeps user-facing UI free of decorative emoji, the same
- * convention `CLAUDE.md` sets for committed prose).
+ * The per-session status icons, one per status in the "Session statuses" table of
+ * docs/product/sessions.md, as plain SVG glyphs rather than emoji (the project keeps user-facing UI
+ * free of decorative emoji, the same convention `CLAUDE.md` sets for committed prose).
  */
 export function StatusIcon({ status }: { status: SessionStatus }): React.ReactElement {
   switch (status) {

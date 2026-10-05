@@ -34,8 +34,8 @@ export class DaemonRequestError extends Error {
  * all and are only ever delivered through `onEvent`.
  *
  * This is the only thing in the application that talks to the daemon's control channel; no Tauri
- * IPC is involved anywhere in this path (see "Why the daemon is split out in the MVP" in
- * `docs/mvp.md`).
+ * IPC is involved anywhere in this path (see "Why the daemon is split out" in
+ * `docs/architecture.md`).
  *
  * A dropped connection gets a couple of quick, backed-off reconnect attempts rather than being
  * treated as final: the daemon dies together with the application in this milestone (so most

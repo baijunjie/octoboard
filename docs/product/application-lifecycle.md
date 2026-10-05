@@ -8,8 +8,9 @@ with it; nothing keeps running once the application is gone.
 - **macOS 11 or later**, on **Apple Silicon only** — the release build is a single-architecture `arm64` bundle, and
   there is no Intel or universal build.
 - Octoboard is distributed as a `.dmg` disk image. The release build is signed with a Developer ID and notarized, so
-  Gatekeeper admits it on a machine other than the one it was built on, including a copy that arrived as a download;
-  opening it asks the user for no override.
+  Gatekeeper admits it as built: `spctl` reports `Notarized Developer ID` for the `.app` and the `.dmg`, including a
+  copy carrying the quarantine attribute, and `codesign --verify --deep --strict` passes on the bundled daemon. That was
+  verified on the machine that built it; installing and running it on a clean machine has not been tried yet.
 
 ## Starting up
 
@@ -37,6 +38,11 @@ A dropped connection is retried automatically a couple of times with a short bac
 banner says so. Once the attempts are spent, the banner offers a Retry button; nothing retries forever on its own.
 Each new connection re-reads the whole state, so nothing has to be replayed by hand.
 
+**Observed:** after the daemon alone was killed with `SIGTERM` while the application stayed open, the banner read
+"Disconnected from the daemon." with its Retry button up within moments (the two automatic retries fail at once against
+a daemon that is gone), together with a toast "The daemon process exited unexpectedly (exit code 0). Restart Octoboard
+to continue."
+
 Failures a user has to know about are shown as dismissible messages, and so are notices about a
 session that are not failures — each of those names the project the session runs in, or the console
 whose hub it is. A failure raised by a dialog's own action is shown in that dialog instead — except in
@@ -47,7 +53,9 @@ message (see "Claude Code's workspace-trust prompt" in `docs/product/launching-a
 
 Every way of ending the application behaves the same: the window's close button, `Cmd+Q`, the application menu's
 Quit, the Dock icon's own Quit, and a system-initiated termination — logging out, restarting or shutting down the
-machine.
+machine. The window's close button, `Cmd+Q` and the application menu's Quit were each seen to ask, and Cancel left
+everything running. The Dock icon's own Quit and a system logout were not tried by hand; an AppleEvent quit, which goes
+through the same `applicationShouldTerminate:` path, was, and asked the same way.
 
 - **While any session has a running process, quitting asks for confirmation.** The message says that quitting
   interrupts those sessions and that each stays resumable next time.
@@ -74,8 +82,14 @@ A window that is still answering resets that 2-second window every time it handl
 only when nothing answered the first gesture.
 
 The window's close button is the one exception: the window itself answers it, so a window that has stopped responding
-ignores that button entirely. `Cmd+Q`, the application menu's Quit or the Dock icon's Quit — twice — is the way out
-of that state.
+ignores that button entirely. `Cmd+Q`, the application menu's Quit or the Dock icon's Quit — twice — is the way out of
+that state.
+
+**Observed, unexplained caveat:** with the page frozen by `SIGSTOP` on the application's WebContent process, two
+scripted quits back to back (AppleEvent, or the menu item through System Events) quit without asking, as described, but
+two `Cmd+Q` key presses did not, even with a second between them. Whether that is WKWebView holding key equivalents
+while its process is frozen, or an artifact of `SIGSTOP`, was not established, and a real page hang was not tried. The
+Dock icon's Quit was not tried in that state.
 
 ## Crashes and forced termination
 

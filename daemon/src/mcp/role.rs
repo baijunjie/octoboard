@@ -144,7 +144,7 @@ pub fn hub_instructions(agent: Agent) -> String {
 
 /// The instruction file a hub of this agent reads out of its working directory, if it reads one at
 /// all. Matched by **exact spelling** by every agent, and no agent accepts an all-lowercase name
-/// (see "Agent adapters" in `docs/mvp.md`).
+/// (see "Injecting Octoboard into each agent" in `docs/agent-cli-reference.md`).
 ///
 /// `None` for Grok: it needs a git root to read project instructions, a console's working
 /// directory is not a repository, and making one a repository buys nothing else.

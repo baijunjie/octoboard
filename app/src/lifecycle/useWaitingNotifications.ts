@@ -31,7 +31,7 @@ function ensureNotificationPermission(): Promise<boolean> {
 
 /**
  * Fires a system notification and keeps the Dock badge at the number of sessions currently
- * `waiting_user`, per the "Waiting for the user (raised hand)" section of docs/mvp.md.
+ * `waiting_user`, per the "The raised hand" section of docs/product/sessions.md.
  *
  * Only a transition into `waiting_user` notifies, each session once: comparing against the
  * previous pass's waiting set (rather than, say, a per-session "already notified" flag that never

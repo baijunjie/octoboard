@@ -148,8 +148,8 @@ pub struct Session {
 
 /// One page the hub pushed to its console's report panel. Every page is kept, so the panel can be
 /// paged back through; `anchor_message_id` records the conversation position the page was pushed at
-/// and is stored only — the rewind linkage that reads it is after the MVP (see "Report panel" in
-/// `docs/mvp.md`), and no agent exposes a message id to put in it yet.
+/// and is stored only (see "Data model" in `docs/architecture.md`), and no agent exposes a message
+/// id to put in it yet.
 #[derive(Debug, Clone, Serialize)]
 pub struct Page {
     pub id: String,

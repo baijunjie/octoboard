@@ -53,9 +53,9 @@ function rowKeyHandler(activate: () => void) {
   };
 }
 
-/** The console → project → session three-level menu (docs/mvp.md "Interface"), with the list of
- * trusted folders under it. Expand/collapse state is purely local UI state; the daemon has no
- * notion of it. */
+/** The console → project → session three-level menu ("The console → project → session menu" in
+ * docs/product/sessions.md), with the list of trusted folders under it. Expand/collapse state is
+ * purely local UI state; the daemon has no notion of it. */
 export function Sidebar({
   consoles,
   projects,

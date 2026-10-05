@@ -5,7 +5,7 @@
 //! written with one blocking `write_all` parks whatever thread issues it for as long as the child
 //! takes to catch up — potentially forever, if a modal dialog is up. The write path here is a
 //! non-blocking partial-write-and-retry loop in slices with a deadline instead (see "Writing into
-//! a running session" in `docs/mvp.md` section 6).
+//! a running session" in `docs/agent-cli-reference.md`).
 //!
 //! The descriptor is put into non-blocking mode once, which is a property of the open file
 //! description and therefore applies to reads as well — hence `read_chunk`, which waits for

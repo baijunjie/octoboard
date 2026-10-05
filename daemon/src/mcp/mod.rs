@@ -7,8 +7,8 @@
 //! call to the daemon over loopback HTTP, where [`exec`] runs it against the real state. One
 //! mechanism covers all three agents, which is why it was chosen over pointing them at a
 //! Streamable HTTP endpoint in the daemon: Codex's verified injection takes a `command` and
-//! `args` (`docs/mvp.md` section 6), and Grok's SSRF protection rejects loopback HTTP outright,
-//! which is already why its hooks cannot be HTTP either.
+//! `args` ("Injecting Octoboard into each agent" in `docs/agent-cli-reference.md`), and Grok's SSRF
+//! protection rejects loopback HTTP outright, which is already why its hooks cannot be HTTP either.
 //!
 //! The tool catalogue lives here, shared by both sides: the child announces it, the daemon
 //! dispatches against it, and the role descriptions name the tools, so all three cannot drift
