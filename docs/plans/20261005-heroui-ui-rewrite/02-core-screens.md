@@ -14,6 +14,12 @@
 
 - [ ] Build screen by screen against the product docs, checking each against the current UI side by side.
 
+## Handoff
+
+- `packages/ui/src/App.tsx` is a placeholder screen, marked `TODO`, that lists consoles, projects and sessions to show
+  the daemon's state arriving. Replace it with the real screens. The placeholder is also where `useAppExit` and
+  `useWaitingNotifications` are mounted today, so move those across to the replacement too.
+
 ## Notes for the developer
 
 - **Reusable capabilities**: the existing terminal controller's behavior (replay then live output, resize on attach).

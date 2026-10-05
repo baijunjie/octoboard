@@ -32,19 +32,21 @@ and are the parity specification: the new UI is done when it does what they say.
 - **Cut over as soon as there is parity.** The new UI is not wired into the shipped application before then, so the
   application stays usable throughout; the cutover is its own milestone and is not to be delayed for anything beyond
   parity.
+- **State lives in one Zustand store** (a vanilla store, so code outside React can read and subscribe to it, with
+  selector hooks for components), fed by the daemon client's events.
 - **The phone's browser is not a design target**: a layout that works is enough. The native mobile apps have their own UI.
 
 ## Milestones
 
-- [01 Foundation](01-foundation.md) — the package, the adapter, the daemon client, the state, running in a browser
+- 01 Foundation (closed)
 - [02 Core screens](02-core-screens.md) — sidebar, sessions, terminal
 - [03 Remaining screens](03-remaining-screens.md) — dialogs, report panel, notifications and the rest
 - [04 Cutover](04-cutover.md) — the desktop shell loads the new UI, the old UI is removed
 
-Dependency order: 01 → 02 → 03 → 04. The package location, `packages/ui`, already exists as a placeholder. Until 04
-lands, the macOS application's polish is on hold.
+Dependency order: 01 → 02 → 03 → 04. Until 04 lands, the macOS application's polish is on hold.
 
 ## Open
 
-- Whether the macOS window loads the UI bundled in the application (as now) or the one the daemon serves.
-- State management; decide when starting 01.
+- Whether the macOS window loads the UI bundled in the application (as now) or the one the daemon serves. Note
+  for the decision: the daemon binds a new OS-assigned port on every start, so a browser tab given `?port=` cannot
+  reconnect to a restarted daemon; only a fixed address, such as the daemon serving the UI, survives that.

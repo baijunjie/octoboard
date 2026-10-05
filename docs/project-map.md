@@ -25,7 +25,7 @@ package. Per-package commands are in that package's doc.
 
 - [`apps/desktop/`](../apps/desktop/README.md) — `@octoboard/desktop`, the Tauri 2 + React + TypeScript desktop
   application: the console/project/session UI, terminal and report panel, a client of `daemon/` over WebSocket only.
-  The only workspace package with content so far.
+  The shipped application; it still carries its own UI.
 - [`apps/ios/`](../apps/ios/README.md) — placeholder for the native iOS client; no content, not a workspace package.
 - [`apps/android/`](../apps/android/README.md) — placeholder for the native Android client; no content, not a
   workspace package.
@@ -34,5 +34,6 @@ package. Per-package commands are in that package's doc.
 
 ## Shared packages
 
-- [`packages/ui/`](../packages/ui/README.md) — placeholder for the UI shared by the desktop clients; until it has
-  content, the UI lives inside `apps/desktop/`. Not a workspace package yet.
+- [`packages/ui/`](../packages/ui/README.md) — `@octoboard/ui`, the HeroUI + React 19 rebuild of the desktop UI: the
+  daemon client, store and platform adapter, running in a plain browser. A workspace package; not yet loaded by the
+  desktop shell, so `apps/desktop/` still ships its own UI.

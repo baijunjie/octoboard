@@ -1,7 +1,50 @@
 # Octoboard UI
 
-Placeholder. This package will hold the UI shared by the desktop clients — the macOS application in
-[`../../apps/desktop/`](../../apps/desktop/README.md) and a browser UI served for Linux. Until it has content, the UI
-lives inside the desktop application.
+`@octoboard/ui`: a HeroUI 3 + React 19 + Tailwind 4 + Vite application, the rebuild of the UI in
+[`../../apps/desktop/`](../../apps/desktop/README.md). It is not yet loaded by the desktop shell: `apps/desktop/` still
+ships its own UI and remains the shipped application. This package runs in a plain browser today, and its screen is a
+placeholder that shows the daemon connection and the session state arriving.
 
-It builds nothing and is not part of the pnpm workspace yet.
+It talks to `octoboardd` (see [`../../daemon/`](../../daemon/README.md)) only over the WebSocket protocol in
+[`../../daemon/PROTOCOL.md`](../../daemon/PROTOCOL.md), and reaches anything native (quit flow, system notifications,
+Dock badge) only through the platform adapter, which is chosen once at startup.
+
+## Development
+
+This is a package of the repository's pnpm workspace: install from the workspace root with `pnpm install`, then run
+the scripts from this directory.
+
+- `pnpm dev` — the Vite dev server on port 5174, so it can run beside the desktop application's dev server.
+- `pnpm typecheck` — `tsc --noEmit`.
+- `pnpm build` — typechecks, then writes `dist/` with relative asset paths, so a static server or a shell can serve it
+  from any path. Opening `dist/index.html` over `file://` does not work: Chrome refuses module scripts from a `null`
+  origin.
+
+### Pointing it at a daemon
+
+The daemon binds an OS-assigned port. Start `octoboardd` and read the port from the first line it prints on stdout, or
+from `$TMPDIR/octoboardd.port`. Then either:
+
+- open `http://localhost:5174/?port=<port>`, or set `VITE_DAEMON_PORT`; or
+- run `OCTOBOARD_DAEMON_PORT=<port> pnpm dev` and open the plain URL, which reaches the daemon through a same-origin
+  `/ws` proxy (`vite.config.ts`).
+
+With none of these the page shows a "no daemon address" screen. A daemon started by hand for development should get an
+isolated `HOME` and `TMPDIR`: its instance lock (`daemon.lock`) and database live under `$HOME/.octoboard`, and the
+port file under the temp directory, so the defaults would touch the real data and collide with a running instance.
+
+## Layout
+
+| Path | Role |
+|---|---|
+| `index.html` | The window's only Content Security Policy, delivered as a `<meta>` tag; the file's own comment has the reasoning |
+| `src/main.tsx` | Startup: picks the platform, locates the daemon, creates the connection, and renders either the app or `StartupScreen` |
+| `src/platform/` | The `PlatformAdapter` interface (optional `exit`, `notifications`, `badge` capabilities; an absent one means the feature is absent) and its two implementations, `tauri.ts` and `browser.ts`; `react.tsx` exposes it to components. Only `tauri.ts` may import `@tauri-apps/*`, and only dynamically, so the browser path never loads them |
+| `src/daemon.ts` | The rules for locating the daemon (`?port=`, `VITE_DAEMON_PORT`, or the page's own origin), and the `?error=` startup message |
+| `src/daemon-client.ts` | WebSocket client for `GET /ws/control`: request/reply correlation, reconnect, event dispatch |
+| `src/protocol.ts` | Hand-written TypeScript mirror of `daemon/src/protocol.rs` / `PROTOCOL.md` |
+| `src/store.ts` | The Zustand store holding the connection and the console/project/session state derived from daemon events; `createDaemon` builds it, `useDaemon` / `useDaemonStore` read it |
+| `src/lifecycle/` | `useAppExit` (the exit flow, through the platform's `exit` capability) and `useWaitingNotifications` (system notification and badge when a session raises its hand) |
+| `src/sessionLabel.ts` | Where to tell the user a session is, and the status labels |
+| `src/StartupScreen.tsx`, `src/ErrorBoundary.tsx` | The screens shown when there is no daemon connection, or the UI itself crashed |
+| `src/App.tsx` | Currently a placeholder screen |

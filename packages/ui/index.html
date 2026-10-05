@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      This UI's Content Security Policy, and the only one it ships. It is delivered here rather
+      than through `app.security.csp` in the desktop shell's `src-tauri/tauri.conf.json` for two
+      reasons: that policy is attached as a response header by Tauri's `tauri://` asset handler,
+      which serves nothing under `tauri dev` (the window loads the Vite dev server over plain
+      http instead), so it would not apply in development at all; and whenever a policy is
+      configured there, Tauri appends a `'sha256-...'` source per bundled script to `script-src`,
+      and a hash source makes `'unsafe-inline'` inert (CSP Level 3), which would leave the report
+      panel's pages blocked in a packaged build and working in development. Delivered as `<meta>`,
+      one policy applies byte for byte in both, and in a plain browser too, so what is verified in
+      development is what ships.
+      Do not configure `app.security.csp` as well: the two policies are enforced as an
+      intersection, and Tauri's hash injection into the second one would break the panel.
+
+      This tag has to stay ahead of the module script below — a `<meta>` policy only covers what
+      the parser reaches after it.
+
+      What each directive is for:
+
+      - `default-src 'none'`: nothing loads unless named below. This UI's own assets are the
+        only things that ever need naming, so anything new the UI starts loading has to be added
+        here deliberately.
+      - `frame-src 'none'`: closes the channel a report page would otherwise use to send data out
+        by navigating its own frame. A report page is untrusted model-authored HTML in a `srcdoc`
+        frame, and its own `<meta>` policy cannot stop its script from navigating the frame it
+        lives in (`location.href = "https://..."`, a `<meta refresh>`, a link click) — a
+        document's policy never governs navigation of its own browsing context. The embedder's
+        `frame-src` does: WebKit checks every navigation of a child frame against it, no matter
+        which document initiated that navigation. The frame's initial `about:srcdoc` document is
+        exempt from the check, so `'none'` costs the panel nothing: the frame still loads and
+        still runs the page, it just has nowhere to navigate to.
+      - `script-src`/`style-src 'unsafe-inline'`: required by the report panel, not by this
+        UI's own code. A `srcdoc` frame inherits its embedder's policy and enforces it on top
+        of its own, and a report page is inline script and inline style, so without
+        `'unsafe-inline'` here no page in the panel would run at all. For the same reason no nonce
+        or hash source may ever be added to these two directives: either one makes
+        `'unsafe-inline'` inert and the panel stops working.
+      - `img-src data:`: for a report page's inline images, inherited the same way. The UI's
+        own code loads no images of its own (no `<img>`, no CSS `url()`), so `'self'` is left out.
+      - `connect-src`: `'self'` is the daemon when it serves this UI, and the dev server's proxy
+        to one (the page then reaches `/ws/...` on its own origin; per CSP3, `'self'` covers the
+        `ws:`/`wss:` scheme matching the page's `http:`/`https:`). Otherwise the daemon binds an
+        OS-assigned loopback port per run, so its port can only be matched by a wildcard. `ipc:`
+        is the scheme Tauri's own `invoke` fetches on macOS, and without it every call falls back
+        to its slower `postMessage` path. `ws://localhost:*` is
+        the Vite dev server's hot-reload socket, which matches nothing in a packaged build — it is
+        the one source here that exists only for development. Per CSP3 scheme-part matching, a
+        `ws:` source expression also matches `http:`/`https:` URLs on the same host, so
+        `ws://127.0.0.1:*` already covers the one `http://127.0.0.1:*` URL the app ever builds
+        (`ws://127.0.0.1:${port}` in `packages/ui/src/daemon.ts`) without a separate entry, and
+        `ws://localhost:*` grants plain `http` to any localhost port by that same rule — harmless
+        here since nothing in `packages/ui/src` ever issues a `fetch`, `XMLHttpRequest`,
+        `EventSource`, or `sendBeacon` call.
+      - `form-action`/`base-uri 'none'`: neither falls back to `default-src`, so both are spelled
+        out rather than left open.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src data:; connect-src 'self' ipc: ws://127.0.0.1:* ws://localhost:*; frame-src 'none'; form-action 'none'; base-uri 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Octoboard</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./src/main.tsx"></script>
+  </body>
+</html>
