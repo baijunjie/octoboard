@@ -1,6 +1,42 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 
+/** Shift, Ctrl, Alt: the keys xterm itself treats as modifier-only. */
+const MODIFIER_KEY_CODES = new Set([16, 17, 18]);
+
+/**
+ * Returns a key-event observer that keeps a bare modifier keydown from arming xterm's private
+ * `_keyDownSeen` flag. xterm sets that flag on every keydown, `Shift` included, and drops an input
+ * method's direct `insertText` commit while it is set. With a CJK input method, WebKit delivers the
+ * commit for a shifted full-width mark (`？` is Shift+/) *before* the mark's own keydown, so the
+ * `Shift` keydown has already armed the flag and the first press is swallowed.
+ *
+ * xterm writes the flag before it calls the custom key handler, and clears it before it calls it on
+ * keyup, so the observer can tell what the flag held before a modifier keydown and put that back.
+ * It is restored rather than cleared: while another key is still down, that key's commit may still
+ * be pending through xterm's own deferred path, and letting the `input` event through as well
+ * would send it twice.
+ *
+ * It must run from the terminal's one custom key handler, since xterm accepts only one, and first
+ * in it, ahead of any early return, so that it sees every keydown and keyup. It reaches into a
+ * private field, so recheck it on every `@xterm/xterm` upgrade.
+ *
+ * TODO: remove once `@xterm/xterm` stops arming `_keyDownSeen` on a modifier-only keydown.
+ */
+function keepModifiersFromArmingKeyDownSeen(term: Terminal): (event: KeyboardEvent) => void {
+  const core = (term as unknown as { _core?: { _keyDownSeen?: boolean } })._core;
+  // True after a non-modifier keydown and until the next keyup: xterm's flag, minus the modifiers.
+  let armed = false;
+  return (event) => {
+    if (event.type === "keyup") {
+      armed = false;
+    } else if (event.type === "keydown") {
+      if (!MODIFIER_KEY_CODES.has(event.keyCode)) armed = true;
+      else if (core && "_keyDownSeen" in core) core._keyDownSeen = armed;
+    }
+  };
+}
+
 export type TermStatus = "connecting" | "open" | "closed" | "not_running";
 
 export interface TerminalControllerHandlers {
@@ -56,11 +92,14 @@ export class TerminalController {
     this.fitAddon = new FitAddon();
     this.term.loadAddon(this.fitAddon);
 
+    const keepModifiersFromArming = keepModifiersFromArmingKeyDownSeen(this.term);
+
     // `Ctrl+C` is swallowed by WKWebView above xterm.js while every other modifier combination
     // passes through (see "Known pitfalls of the Tauri / Rust approach" in docs/mvp.md) — it is
     // the most-used key in a terminal, so it is intercepted here and its raw byte (ETX, 0x03) is
     // written directly, bypassing xterm's own key-to-data pipeline entirely.
     this.term.attachCustomKeyEventHandler((event) => {
+      keepModifiersFromArming(event);
       if (
         event.type === "keydown" &&
         event.ctrlKey &&

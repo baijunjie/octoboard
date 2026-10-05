@@ -151,8 +151,13 @@ Each of these has an established solution, except where a bullet says otherwise:
 - **Full-width punctuation from a CJK input method needs two key presses**: a mark such as `？`, which an input method
   emits directly without a candidate window, is swallowed on the first press in `xterm.js` 5.5.0 inside WKWebView, where a
   native application takes it on the first. Composed CJK *text*, which goes through candidate conversion, is unaffected.
-  The decision is to keep the framework's default composition handling rather than write one, so the fix has to come from
-  the terminal library; until then the key is pressed twice, or the input method switched.
+  The cause is in the library: it arms a "key down seen" flag on every keydown, a bare `Shift` included, and drops the
+  input method's commit while the flag is set, but WebKit delivers that commit before the mark's own keydown. No released
+  version or option fixes it, so the terminal's key handler restores the flag after a modifier-only keydown (see
+  `TerminalController`), which reaches into a private field of the library and has to be rechecked on every `xterm.js`
+  upgrade; it can go once upstream stops arming the flag on a modifier. This is a narrow correction of one flag, not a
+  composition handler of our own, and it is not yet confirmed by hand with a real input method (the plan records the
+  checks).
 - **A packaged application needs file-access permission per volume**: the bundled `.app` raised a macOS prompt the moment
   a session's project directory lived on an external volume, which `tauri dev` never does. Projects will be scattered
   across volumes, so associating one has to cope with the user declining, or with the prompt not having been answered yet.

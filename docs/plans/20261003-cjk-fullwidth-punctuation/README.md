@@ -19,7 +19,7 @@ through candidate conversion, is not affected and lands correctly on the first t
 punctuation on the first press, so the behaviour is the terminal's, not the input method's.
 
 Everything below the composition layer was ruled out during validation: plain shifted ASCII symbols typed into the
-window reach the PTY correctly, the same symbols sent straight to the daemon arrive intact, and the UI installs no
+window reach the PTY correctly, the same symbols sent straight to the daemon arrive intact, and the prototype installed no
 custom key handler. What remains is `xterm.js` 5.5.0's own composition handling in WKWebView.
 
 ## Key design decisions
@@ -29,6 +29,14 @@ custom key handler. What remains is `xterm.js` 5.5.0's own composition handling 
   the defect it would fix. Settled with the user.
 - It follows that the fix has to come from one of: a newer `xterm.js` whose composition handling resolves it, a
   configuration option on the terminal, or an upstream fix. Which of the three applies is the open question below.
+- **Superseded in part (2026-10-05, settled with the user):** none of the three exists yet, so the terminal's custom key
+  handler carries a narrow workaround — a modifier-only keydown restores xterm's private `_keyDownSeen` flag to what the
+  preceding keys left it as, instead of leaving it armed. It is #6054's form (do not arm on a modifier) applied from
+  our side, deliberately *not* #6200's (clear it on a modifier): clearing would also drop the flag while another key is
+  still down, which is the rollover case #6045 warns about (our reasoning from the source, not something #6045 states).
+  It is not a composition handler: no composition event is handled or synthesised. The cost is a dependency on a
+  private field, so it is rechecked on every `xterm.js` upgrade and removed once upstream stops arming the flag on a
+  modifier.
 
 ## Upstream findings (2026-10-05)
 
@@ -61,13 +69,18 @@ strengthens rather than weakens the case against the library, since it shows the
 Swapping the web engine would only mask the bug, not fix it.
 
 The fix is known upstream, as [**#6200**](https://github.com/xtermjs/xterm.js/pull/6200) and
-[**#6054**](https://github.com/xtermjs/xterm.js/pull/6054) (established): both make the same change — do not arm
-`_keyDownSeen` for modifier-only keydowns — reusing the `wasModifierKeyOnlyEvent` helper that is already present in
-our pinned 5.5.0. One caveat applies to any fix here: [#6045](https://github.com/xtermjs/xterm.js/issues/6045)
+[**#6054**](https://github.com/xtermjs/xterm.js/pull/6054) (established): both keep a modifier-only keydown from arming
+`_keyDownSeen`, reusing the `wasModifierKeyOnlyEvent` helper that is already present in our pinned 5.5.0 — #6054 by
+not setting the flag (`if (!wasModifierKeyOnlyEvent(event)) this._keyDownSeen = true`), #6200 by assigning it
+(`this._keyDownSeen = !wasModifierKeyOnlyEvent(event)`), which also clears it if another key left it set. One caveat
+applies to any fix here: [#6045](https://github.com/xtermjs/xterm.js/issues/6045)
 warns that relaxing this gate in isolation can turn dropped characters into *duplicated* ones on key rollover (fast
 typing), so verifying a fix means checking for duplication as well as for the drop being gone.
 
 ## Plan
+
+Status: the workaround above is in place but **not yet confirmed by hand** — scripted key injection bypasses the input
+method, so only a person at a Mac with a Chinese input method can tick the hand-verification item below.
 
 - [ ] Reproduce on the real desktop application once it exists, and confirm the defect is not an artefact of the
       throwaway validation prototype
@@ -76,8 +89,15 @@ typing), so verifying a fix means checking for duplication as well as for the dr
       compare, so the next step is not chosen on an assumption
 - [ ] Establish whether a newer `xterm.js` than 5.5.0 fixes it, and whether any terminal option changes the behaviour
 - [ ] If neither does, report it upstream with the reproduction, and record here what the upstream outcome was
-- [ ] Once a fix exists, take it and verify against the completion criteria above — including that composed CJK text
-      still works
+- [ ] Once an upstream fix exists, take it and verify against the completion criteria above — including that composed
+      CJK text still works
+- [ ] Verify the workaround by hand in the real application: `？`, `！` and `（` appear on the first press; Pinyin
+      composition still lands correctly; typing `，？` quickly produces no duplicated character (#6045); `Ctrl+C` still
+      interrupts the agent; and, to confirm the diagnosis, releasing `Shift` between two presses of `？` no longer
+      loses the first. Expected, not a failure: a shifted mark typed while the previous key is still physically down
+      (fast rollover) can still be dropped once, as before, because the flag is deliberately left armed then (inferred
+      from the source; WebKit's event order under rollover has not been observed)
+- [ ] Remove the workaround once upstream no longer arms `_keyDownSeen` on a modifier (#6200 / #6054 merged and taken)
 
 ## Mid-task handoff
 
@@ -147,7 +167,8 @@ PRs themselves raise: [#6045](https://github.com/xtermjs/xterm.js/issues/6045) w
 isolation can turn dropped characters into *duplicated* ones in the fast-typing/key-rollover case, because
 `CompositionHelper`'s deferred textarea diff has its own ordering assumption; #6200 deliberately scopes itself to
 modifier-only keydowns to stay clear of that, and claims the rollover case is untouched — **plausible, not
-verified by us**, and the thing worth watching when the patch is tested.
+verified by us** (our own reading of the source, recorded under "Key design decisions", is that #6200's clearing
+does reach the rollover case), and the thing worth watching when the patch is tested.
 
 **Siblings and related-but-different reports — judged, not our defect.** [#5887](
 https://github.com/xtermjs/xterm.js/issues/5887) (second character lost under rapid typing when an IME reports
@@ -183,7 +204,9 @@ is in the library, not the engine — the Electron sighting on #5887 only reinfo
 step is to apply
 #6200's one-line change to our pinned 5.5.0 and check, in the real application: `？` on the first press, composed
 CJK text still correct, and — per #6045's warning — no duplicated characters when typing fast. Whether to carry a
-patched dependency while the PR waits is the user's call.
+patched dependency while the PR waits was the user's call, and it went the other way: see the "Superseded in
+part" decision under "Key design decisions" — an in-app workaround in #6054's form, not #6200's change applied to the
+dependency.
 
 **What was reported upstream, and what came back (2026-10-05).** Rather than filing a new issue, our data was
 added to the two existing threads, with the user's authorisation: [#6144 comment](
