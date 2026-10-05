@@ -15,7 +15,8 @@
 //! It is not the only writer to a session's PTY: the terminal socket writes the user's own
 //! keystrokes straight through (`server.rs`), which is deliberate — a keystroke must not wait behind
 //! a queue — and means the queue serialises Octoboard's own messages against each other, not against
-//! the person typing.
+//! the person typing. Keystrokes still skip the queue, but they wait behind a message write that is
+//! already in flight on the session's input lock and can no longer interleave with it.
 //!
 //! **A half-written message is dropped, not retried.** A PTY write can be accepted in part and then
 //! time out, leaving a truncated bracketed paste in the child's input buffer with no terminator;

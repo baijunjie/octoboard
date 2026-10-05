@@ -107,6 +107,11 @@ pub struct Project {
     pub default_agent: Option<Agent>,
     pub source: ProjectSource,
     pub remote_url: Option<String>,
+    /// The user has agreed that Octoboard may answer Claude Code's workspace-trust screen for this
+    /// project's directory, by sending the keystrokes that accept it (see `crate::trust`). Recorded
+    /// when they confirm the dialog the daemon asks them with; it covers every later Claude Code
+    /// session in the project.
+    pub claude_trust_consent: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -269,6 +274,13 @@ pub enum RequestBody {
         page: String,
         data: serde_json::Value,
     },
+    /// The user's answer to a `claude_trust_prompt`: Octoboard may answer that session's trust
+    /// screen. `remember` also records the project's consent, so its later sessions are answered
+    /// without asking.
+    ConfirmClaudeTrust {
+        session: String,
+        remember: bool,
+    },
     Shutdown,
 }
 
@@ -302,6 +314,14 @@ pub enum Event {
     SessionNotice {
         session: String,
         message: String,
+    },
+    /// A Claude Code session of a project the user has not yet agreed Octoboard may answer for is
+    /// sitting at its workspace-trust screen. Broadcast once per screen; nothing stores it, so a
+    /// client that connects later does not see it and the screen simply stays for the user.
+    ClaudeTrustPrompt {
+        session: String,
+        project: String,
+        path: String,
     },
     /// The reply to `open_session`: the session that was started. The same record is broadcast as
     /// `session_upserted` as well, but a broadcast carries no request id, so this is the only way
@@ -449,6 +469,13 @@ mod tests {
                 r#"{"type":"submit_page","id":"request-1","page":"page-7","data":{}}"#,
                 |body| match body {
                     RequestBody::SubmitPage { page, .. } => Some(page),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"confirm_claude_trust","id":"request-1","session":"session-7","remember":true}"#,
+                |body| match body {
+                    RequestBody::ConfirmClaudeTrust { session, .. } => Some(session),
                     _ => None,
                 },
             ),

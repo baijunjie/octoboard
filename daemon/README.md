@@ -36,6 +36,7 @@ everything it can do goes through the external interface below.
 | `src/store.rs` | Coordinator's SQLite storage for consoles, projects, sessions, pages and the host table |
 | `src/state.rs` | Shared daemon state and the session status transitions |
 | `src/session.rs` | One running agent process: its PTY, its output fan-out, how it is stopped |
+| `src/trust.rs` | Recognising Claude Code's workspace-trust screen in a Claude session's terminal output, deciding whether the user has consented (hub sessions are answered without asking), asking the application through `claude_trust_prompt` / `confirm_claude_trust`, and answering the screen — the only code that types keys into a session on its own |
 | `src/term.rs` | Launching an agent in a PTY, and writing messages into a running one |
 | `src/ptyio.rs` | Non-blocking read/write on a PTY master fd (a blocking write can park forever behind a modal dialog) |
 | `src/ringbuf.rs` | Fixed-capacity ring buffer holding a session's recent terminal output, replayed to a client that attaches or reconnects |

@@ -55,12 +55,24 @@ async fn handle_control(socket: WebSocket, state: Arc<AppState>) {
         }
     });
 
+    // Subscribed before anything is collected, so that a broadcast between collecting the state and
+    // listening for changes is not lost. A repeat is harmless: the records are whole and the
+    // application ignores a prompt it already holds.
+    let broadcasts = state.subscribe();
+
     // The snapshot is unprompted and goes first: it is the only way a client that just connected
     // learns the current state.
     match snapshot(&state) {
         Ok(snapshot) => {
             if outbound.send(snapshot).await.is_err() {
                 return;
+            }
+            // The snapshot cannot say that a session is waiting for the user's go-ahead, and the
+            // prompt was broadcast only once.
+            for prompt in crate::trust::pending_prompts(&state) {
+                if outbound.send(prompt).await.is_err() {
+                    return;
+                }
             }
         }
         Err(err) => {
@@ -71,7 +83,7 @@ async fn handle_control(socket: WebSocket, state: Arc<AppState>) {
 
     let forwarder = tokio::spawn(forward_broadcasts(
         state.clone(),
-        state.subscribe(),
+        broadcasts,
         outbound.clone(),
     ));
 
@@ -111,7 +123,19 @@ async fn forward_broadcasts(
         let event = match events.recv().await {
             Ok(event) => event,
             Err(broadcast::error::RecvError::Lagged(_)) => match snapshot(&state) {
-                Ok(snapshot) => snapshot,
+                Ok(snapshot) => {
+                    if outbound.send(snapshot).await.is_err() {
+                        return;
+                    }
+                    // Whatever prompt the client lagged past is asked again; see the initial
+                    // snapshot.
+                    for prompt in crate::trust::pending_prompts(&state) {
+                        if outbound.send(prompt).await.is_err() {
+                            return;
+                        }
+                    }
+                    continue;
+                }
                 Err(err) => {
                     tracing::error!(%err, "rebuilding the state snapshot failed");
                     return;
@@ -240,6 +264,12 @@ async fn hook_callback(
 ) -> impl IntoResponse {
     let payload: serde_json::Value =
         serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null);
+
+    // Claude Code runs no hook before its workspace-trust screen has been answered, so the first
+    // one means that screen is gone — and anything on the terminal that looks like it is not it.
+    if let Some(live) = state.live_session(&session_id) {
+        live.trust.mark_hook_seen();
+    }
 
     // A subagent's events are the agent's internal business and carry the subagent's own ids.
     if hooks::is_subagent(&payload) {

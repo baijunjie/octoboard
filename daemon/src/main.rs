@@ -23,6 +23,7 @@ mod session;
 mod state;
 mod store;
 mod term;
+mod trust;
 
 use std::sync::Arc;
 

@@ -11,13 +11,19 @@ This is the guarantee the whole design rests on:
   hook. Removing a project removes an association, never a directory.
 - **The user's own agent configuration is never written to.** Octoboard does not edit `~/.claude.json`,
   `~/.codex/`, `~/.grok/`, a directory chosen as one of a console's agent config directories, or anything else the
-  agent reads as the user's global setup, and it never records a trust decision on the user's behalf.
+  agent reads as the user's global setup, and it never writes a trust decision into any of them.
+
+Where Claude Code stops to ask whether to trust a folder, Octoboard does not touch a file either: it
+answers the prompt on Claude Code's own screen, with the keystrokes a person would type — for a project
+session only after the user has agreed to that in Octoboard, for a hub session in the console's own
+working directory without asking. Claude Code then records the answer in its own configuration, as it
+does when a person answers. See "Claude Code's workspace-trust prompt" below.
 
 Two settings of theirs are *read* at launch and never written: whether Claude Code has been trusted
 with the project's directory, and whether Codex resolves approval requests by itself. Each one
 changes what Octoboard can promise for that session (see "Per-agent specifics a user will notice"
-below and "The raised hand" in `docs/product/sessions.md`); both decisions remain the user's to make
-in the agent itself.
+below and "The raised hand" in `docs/product/sessions.md`). The Codex setting remains the user's to
+change in Codex itself; Claude Code's trust is given by answering its trust prompt.
 
 Everything Octoboard adds is injected **per launch** and disappears with the process. In consequence, a project's own
 configuration keeps working exactly as it does outside Octoboard: its instruction file, its skills, its hooks and its
@@ -113,8 +119,9 @@ starts. The flags that would drop the project's own permission rules, hooks or M
 When Claude Code has **not been trusted with the project's directory**, it ignores that project's own
 `allow` permission rules for the session while still applying its `deny` rules — so the session is
 only ever more restrictive, never less. Octoboard tells the user so once, when the session starts,
-naming the project it is in; accepting the trust prompt in Claude Code itself is the only fix, and Octoboard
-does not take that decision for them. It stays silent unless the user's own configuration says
+naming the project it is in: the `allow` rules stay ignored until Claude Code's trust prompt is
+answered, and Octoboard answers that prompt once the user has agreed to it (see "Claude Code's
+workspace-trust prompt" below). It stays silent unless the user's own configuration says
 explicitly that the directory is untrusted, so a configuration it cannot read leaves them alone
 rather than warning on every launch. The trust state is read from the global config file this launch's Claude Code
 will itself read: `.claude.json` inside the Claude Code config directory in effect — the session's own, or else a
@@ -161,6 +168,71 @@ Grok Build additionally **requires the project to be a git repository**: it loca
 `.git` directory, and in a directory without one it loads neither the project's instructions nor the project's hooks.
 A console's working directory is not a repository, so a Grok hub session reads no instruction file from it and takes
 its role through a launch flag instead (see "The hub's instruction file" above).
+
+## Claude Code's workspace-trust prompt
+
+The first time Claude Code runs in a directory it has not been trusted with, it stops on a screen of
+its own asking whether to trust the folder — a two-option list, "No, exit" and "Yes, I trust this
+folder", with the cursor starting on "No, exit" — and waits for a person. Until that screen is
+answered the session does nothing else and reports nothing (see "What the statuses are derived from"
+in `docs/product/sessions.md`). Octoboard recognises the screen and answers it for the user once they
+have agreed to that. Codex and Grok Build sessions are unaffected.
+
+What happens when the screen comes up depends on the session:
+
+| Session | What happens |
+|---|---|
+| Hub session | Answered at once, without a dialog and without recording anything: its working directory is the console's own, which holds nothing but the instruction file Octoboard writes there. |
+| Project session, project has the user's consent | Answered at once, without a dialog. |
+| Project session, project without consent | The user is asked in a dialog; nothing is sent until they agree. |
+
+**The dialog**, titled "Trust this folder?", names the folder and, when it is known, the session. It
+says that Claude Code is asking and that Octoboard can answer for the user, for this session and for
+the project's later sessions; it warns that the folder's `.claude/settings.json` may pre-approve tool
+permissions, which trusting the folder then applies without asking; and it says that "Not now" leaves
+the question in the terminal. Its two buttons:
+
+- **Trust and continue** — Octoboard answers this session's screen. Only if that succeeded is the
+  project's consent recorded, so the project's later Claude Code sessions are answered without a
+  dialog; an answer that fails records nothing.
+- **Not now** — also what Escape, the dialog's close button and a click outside it do. Nothing is sent
+  and nothing is recorded; the screen stays for the user to answer in the session's terminal. The same
+  session is asked about again only if the application reloads its state (a reconnect, or catching up
+  after falling behind) while the screen is still up, and a
+  later session of the project is asked about again, since the project still has no consent.
+
+Prompts are shown one at a time, oldest first; closing one brings up the next. A prompt still waiting
+is dropped, without being answered, when its session stops running. Whenever the application reloads
+its state (a connect, a reconnect, or catching up after falling behind), the daemon asks again about every screen still waiting, so a prompt the user never saw
+comes back; with no client connected the screen simply waits for the user to answer it in the
+terminal. Once one client has answered, a go-ahead from another changes nothing.
+
+**The consent** belongs to one project, is stored with it, and covers every later Claude Code session
+in that project, a resume included. It is set only by "Trust and continue" and cannot be withdrawn
+from the application; editing the project leaves it as it is, and removing the project removes it with
+the association. A project starts without it.
+
+**How the screen is answered.** Octoboard types a Down and then an Enter into the session's terminal,
+checking before each key:
+
+- before the Down, that the screen as it was recognised is still showing and the cursor is on "No,
+  exit";
+- before the Enter, that the cursor has moved to "Yes, I trust this folder" and the terminal has gone
+  quiet;
+- before either, that nothing else has written into the session's input since the attempt began —
+  the user typing in the terminal, or a message Octoboard delivers to the session. An attached
+  terminal's own protocol replies, such as focus reports and answers to Claude Code's terminal
+  queries, are not counted.
+
+When any check fails the attempt stops without sending the next key and the screen is left for the
+user. A session's screen is answered at most once per run, so a failed attempt is not retried; the user
+is told in a notice on the session that Octoboard could not answer the screen and that they should
+answer it in the terminal.
+
+**Recognition is limited to the start of a session.** The screen is looked for only in a Claude Code
+session's own terminal output, and only until the session's first hook report or until it has printed
+64 KiB or run for 30 seconds, whichever comes first — the screen is the first thing Claude Code prints,
+so the same words appearing later in a session are never taken for it.
 
 ## Agent session data
 

@@ -78,15 +78,24 @@ way — and each of them turns a whole matrix negative in a way indistinguishabl
 Running these CLIs writes into the user's real configuration. The product's rule against touching the user's global
 agent configuration does not extend to probes, and a probe cannot avoid it, so plan for the residue instead.
 
+The configuration written is whichever one the probed CLI resolves, not necessarily the default location:
+`CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `GROK_HOME` are user settings that stripping the agent markers rightly keeps, so
+a probe launched from a shell that exports one writes into that directory. Look for the residue there, and when the
+probing is done tell the user what it left in their configuration.
+
 Use a dedicated scratch directory as cwd, never a shared one such as `/tmp`: each CLI records a per-directory trust
-decision in the user's own config (Claude Code in `~/.claude.json` under `projects[<path>].hasTrustDialogAccepted`),
-so probing directly in `/tmp` marks all of `/tmp` trusted and every later probe there silently starts out trusted,
-quietly invalidating any test of untrusted-workspace behaviour. Probes also leave session records behind in the user's
-agent directories.
+decision in the user's own config (Claude Code in the `.claude.json` of the config directory in effect, under
+`projects[<path>].hasTrustDialogAccepted`), so probing directly in `/tmp` marks all of `/tmp` trusted and every later
+probe there silently starts out trusted, quietly invalidating any test of untrusted-workspace behaviour. Probes also
+leave session records behind in the user's agent directories.
 
 A fresh scratch directory is by definition untrusted, and Claude Code stops there on its folder-trust dialog and
-does nothing else — a probe that looks like it produced no output at all is usually sitting on that dialog. Unless
-untrusted behaviour is the thing being measured, answer the dialog once in that directory before any measurement.
+does nothing else — a probe that looks like it produced no output at all is usually sitting on that dialog. Grepping
+the captured output for the dialog's words finds nothing either: as of Claude Code 2.1.289 its full-screen UI places
+each word with a cursor-move sequence instead of printing spaces, so strip escape sequences *and* all whitespace before
+matching any text in a capture. Unless untrusted behaviour is the thing being measured, answer the dialog once in that
+directory before any measurement: the cursor starts on "No, exit", so the answer is Down then Enter, and an Enter on
+its own — a pasted line's trailing CR included — ends the session instead.
 
 When several probes run concurrently, each needs its own distinct scratch directory, and expect to see the other
 probes' trust entries and session records — that residue is not evidence of a defect.

@@ -13,7 +13,9 @@
 //! breaks — but the user has no way to learn why their project's permissions are not applying. It
 //! says so on stderr, which on a PTY is the same stream as the rendered UI, so the trust state is
 //! read out of Claude Code's global config file instead of matched in terminal text. Read, never
-//! written: a trust decision is the user's to make in Claude Code itself.
+//! written: Octoboard does not edit that file. The trust screen itself, which a fresh directory
+//! raises, is recognised from terminal text and answered with keystrokes once the user has agreed
+//! to that — see `crate::trust`.
 //!
 //! A console can pin its sessions to another Claude Code configuration directory
 //! (`CLAUDE_CONFIG_DIR`). That directory holds the conversation transcripts as well as the global
@@ -181,9 +183,9 @@ fn untrusted_workspace_notice(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> O
     match project.get("hasTrustDialogAccepted") {
         Some(serde_json::Value::Bool(false)) => Some(
             "Claude Code has not been trusted with this directory, so this project's own `allow` \
-             permission rules are ignored for this session — its `deny` rules still apply, so the \
-             session is only more restrictive, never less. Accept the trust prompt in Claude Code \
-             itself to change that; Octoboard does not write that decision for you."
+             permission rules are ignored until Claude Code's trust prompt is answered — its `deny` \
+             rules still apply, so a session is only more restrictive, never less. Octoboard \
+             answers that prompt for you once you have agreed to it."
                 .to_string(),
         ),
         _ => None,

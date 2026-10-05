@@ -23,6 +23,7 @@ use crate::reporting;
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
 use crate::term;
+use crate::trust;
 
 /// Handles one request. The returned event, when there is one, is the answer to that request and
 /// goes to the asking socket only; everything that changed state has already been broadcast.
@@ -267,6 +268,11 @@ pub async fn handle(
             Ok(None)
         }
 
+        RequestBody::ConfirmClaudeTrust { session, remember } => {
+            trust::confirm(state, &session, remember).await?;
+            Ok(None)
+        }
+
         RequestBody::Shutdown => {
             state.request_shutdown();
             Ok(None)
@@ -343,6 +349,7 @@ pub async fn add_project(
             default_agent,
             source,
             remote_url: remote_url.clone(),
+            claude_trust_consent: false,
         };
         state.store.insert_project(&project)?;
         state.broadcast(Event::ProjectUpserted {
@@ -601,6 +608,7 @@ async fn start_process(
     state.register_live(launch.session.clone());
     drop(claim);
     state.watch_exit(launch.session.clone());
+    trust::supervise(state, &launch.session);
     if let Some(agent_session_id) = launch.agent_session_id {
         state.set_agent_session_id(&session.id, &agent_session_id)?;
     }

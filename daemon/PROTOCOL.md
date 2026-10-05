@@ -35,6 +35,7 @@ the request id as if it were a record id.
 | `rename_session` | `session`, `title` | — |
 | `list_pages` | `console` | The console's report panel pages, oldest first. Answered with `page_list` on the asking socket |
 | `submit_page` | `page`, `data` | A report panel form submission. Written into the console's hub session as a user message naming the page it came from; held rather than refused while the hub is `waiting_user`, since the hub is not the one who has to answer that prompt. Refused when `page` is not the console's newest page — history pages are read-only |
+| `confirm_claude_trust` | `session`, `remember` | The user's go-ahead to a `claude_trust_prompt`: Octoboard may answer that session's Claude Code trust screen, which it does by typing at the session's terminal (a Down and an Enter) after checking that the screen is still up and where its cursor is. `remember` also records the project's consent (`Project.claude_trust_consent`) once the screen has been answered, so later sessions of that project are answered without a prompt, and broadcasts the updated `project_upserted`. Refused, with nothing recorded and nothing sent, unless `session` is a running Claude Code project session that is still waiting at its trust screen and has not been answered; a failure to answer once it was accepted (the screen is not as expected, or something else typed into the session meanwhile) is an `error` as well, records no consent, and is also broadcast as a `session_notice` so that it is seen even if the requesting dialog has closed. Octoboard never edits Claude Code's config files for this |
 | `shutdown` | — | Terminates every session process (leaving them `interrupted`) and exits the daemon |
 
 ### Daemon to client
@@ -45,6 +46,7 @@ the request id as if it were a record id.
 | `console_upserted` / `project_upserted` / `session_upserted` | `console` / `project` / `session` — the whole record, under that key |
 | `console_deleted` / `project_deleted` | `console` / `project` |
 | `session_notice` | `session`, `message` — something about a session the user has to be told that no status field carries: an injected capability that will not apply, a setting of theirs Octoboard had to work around, a message Octoboard accepted and could not deliver. Broadcast when it is found, which may be at launch or at any point in the session's life; nothing stores it, so a client that connects later does not see it |
+| `claude_trust_prompt` | `session`, `project`, `path` — a running Claude Code session of a project without `claude_trust_consent` is at Claude Code's workspace-trust screen, which is asking whether `path` is trusted. Broadcast once per screen, when it is recognised in the session's terminal output. Each client is also sent one for every screen still waiting — sighted, not answered, project without consent — right after every `snapshot` (on connect and on lag recovery), so a client that missed the broadcast is still asked; a client already holding the prompt ignores the repeat. A client that declines ("Not now") drops the prompt locally, and a later `snapshot` may ask again. With no client connected the screen simply stays for the person to answer in the terminal. The client answers with `confirm_claude_trust`, or leaves the screen alone. A hub session's screen is answered by the daemon without a prompt, because its working directory is the console's own |
 | `session_opened` | `id`, `session` — the reply to `open_session`, naming the session it started |
 | `dir_listing` | `id`, `path`, `entries`: `[{name, path, is_git_repo}]` — only directories are listed |
 | `page_list` | `id`, `console_id`, `pages` — oldest first. Pages are not in `snapshot`: one carries a whole HTML document, and only the console whose hub is on screen needs them, so the panel asks. Asking again after every `snapshot` is what keeps it correct across a `page_created` a lagging client never received: such a client is sent a fresh snapshot in place of the events it missed, on the socket it already has |
@@ -58,7 +60,8 @@ the request id as if it were a record id.
 Host    { id, name, kind: "local"|"ssh", ssh_config? }
 Console { id, name, workdir, hub_agent, default_agent, claude_config_dir?, codex_config_dir?,
           grok_config_dir?, created_at }
-Project { id, console_id, host_id, name, path, default_agent?, source, remote_url? }
+Project { id, console_id, host_id, name, path, default_agent?, source, remote_url?,
+          claude_trust_consent }
 Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
           role: "hub"|"worker", origin: "hub"|"user", title,
           status: "working"|"waiting_user"|"idle"|"interrupted"|"archived",
@@ -78,6 +81,7 @@ when the session is opened and never changed afterwards: each agent keeps a conv
 `resume_session` relaunches with this value and not the console's current one. It is unset for sessions started with no
 directory pinned, which resume under whatever the shell exports at that moment. A launch whose pinned directory no
 longer exists is refused, for every agent, with an error naming it.
+`Project.claude_trust_consent` is true once the user has agreed, in the dialog a `claude_trust_prompt` opens, that Octoboard may answer Claude Code's trust screen for that project's directory. It is only ever set by `confirm_claude_trust` with `remember`; `update_project` neither sets nor clears it.
 `Page.anchor_message_id` is stored and never read: the rewind linkage that uses it is after the MVP. Timestamps are
 epoch milliseconds (the UI formats them).
 

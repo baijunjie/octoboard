@@ -416,7 +416,10 @@ three adapters: Claude Code, Codex, and Grok Build.
     one is in effect), which Octoboard must not write. The adapter *reads* that file at launch and tells the
     user, rather than matching the stderr line: on a PTY stderr is the same stream as the rendered UI, so there is no
     separate descriptor to read and matching rendered text would need a VT emulator in the daemon. It warns only on an
-    explicit negative, so a renamed key leaves the user alone instead of warning them on every launch.
+    explicit negative, so a renamed key leaves the user alone instead of warning them on every launch. The trust screen
+    Claude Code shows on a folder's first launch is the one thing Octoboard answers on the user's behalf: the daemon recognises
+    it in the terminal output and, once the user has agreed in Octoboard's own dialog (remembered per project; a hub's own
+    working directory needs none), answers it by typing Down and Enter — the config file is still never written.
   - **Codex** injects through repeated `-c` overrides, with two extras: the project must be marked trusted in the same way
     (`-c 'projects={"<canonical cwd>"={trust_level="trusted"}}'`), and hooks are gated behind a persisted trust hash —
     without it an interactive session raises a blocking review modal and a headless one **hangs indefinitely**. The flag
@@ -449,10 +452,13 @@ three adapters: Claude Code, Codex, and Grok Build.
   - **Nothing may be written while a modal dialog is up.** The paste itself is discarded, but the trailing `CR` confirms
     whatever option is highlighted — at Claude Code's trust dialog that exits the session, and at Grok's approval modal it
     would select "always-approve". Codex is the exception: a paste at its modal changes nothing. Never send bare keys
-    either; Grok and Codex treat digits as confirm hotkeys.
+    either; Grok and Codex treat digits as confirm hotkeys. The one deliberate exception is the daemon's answer to Claude
+    Code's own trust screen (see above), which types Down and Enter and nothing else.
   - **The gate must come from hook-reported state, not from the terminal.** None of the agents signal their modal state
     through terminal modes, and matching rendered footer text needs a VT emulator in the daemon and differs between an
-    agent's own renderers. If the hook state is missing or stale, do not write.
+    agent's own renderers. If the hook state is missing or stale, do not write. (Recognising Claude Code's trust screen
+    is the exception: no hook runs before it is answered, so it can only be read from the output, and a failure to
+    recognise it leaves it to the person.)
 
 ### 6.1 Which agent gets used
 

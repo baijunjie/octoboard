@@ -6,6 +6,8 @@ interface ConfirmDialogProps {
   title: string;
   message: string;
   confirmLabel?: string;
+  /** What the button that declines is called. */
+  cancelLabel?: string;
   destructive?: boolean;
   /** May reject — the dialog shows the failure inline and stays open instead of closing, so the
    * caller does not need its own try/catch around the request. */
@@ -17,6 +19,7 @@ export function ConfirmDialog({
   title,
   message,
   confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
   destructive,
   onConfirm,
   onCancel,
@@ -39,7 +42,7 @@ export function ConfirmDialog({
   const footer = (
     <>
       <button type="button" onClick={onCancel} disabled={busy}>
-        Cancel
+        {cancelLabel}
       </button>
       <button type="submit" className={destructive ? "button-destructive" : undefined} disabled={busy}>
         {confirmLabel}

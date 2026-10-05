@@ -72,7 +72,9 @@ flowchart TB
   executes them, and delivers project sessions' reports to the hub, synthesising one when a session stops without
   reporting.
 - **Injection** — Octoboard's hooks, MCP server and role description are added per launch; project files and the
-  user's agent configuration are never modified.
+  user's agent configuration are never modified. The one thing it does for the user is answer Claude Code's own
+  first-launch trust prompt — for a project session only after the user has agreed; a hub's own console directory
+  needs no consent.
 - **Agent sessions** — the hub has the orchestration tools, a project session has one tool, `report`, and the two
   never talk to each other directly: everything between them passes through the daemon.
 

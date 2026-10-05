@@ -2,7 +2,7 @@
 
 use std::io;
 use std::os::unix::io::RawFd;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -13,6 +13,7 @@ use tokio::sync::mpsc;
 use crate::protocol::Agent;
 use crate::ptyio;
 use crate::ringbuf::RingBuffer;
+use crate::trust::TrustState;
 
 /// Terminal replay buffer per session.
 pub const RING_CAPACITY: usize = 2 * 1024 * 1024;
@@ -43,6 +44,9 @@ struct Subscriber {
 /// reader thread is pushing bytes.
 struct Fan {
     ring: RingBuffer,
+    /// Every byte ever pushed into `ring`, which it forgets and this does not: what lets a caller
+    /// mark a point in the output and later read exactly what came after it.
+    total: u64,
     subscribers: Vec<Subscriber>,
     next_id: u64,
 }
@@ -70,6 +74,16 @@ pub struct LiveSession {
     /// with no dialog ever shown. A raised hand here would ask the user to answer something they
     /// never see.
     pub resolves_approvals_itself: bool,
+    /// Watches a Claude Code session's output for its workspace-trust screen; inert for the other
+    /// agents.
+    pub trust: TrustState,
+    /// How many times anything but the trust path has written into this session's input. An
+    /// attached terminal's own protocol replies (focus reports, answers to the agent's terminal
+    /// queries) are not counted, because they cannot move a cursor. See [`Self::write_input`].
+    input_writes: AtomicU64,
+    /// Held across every write into the input and its count, so that the trust path's check of the
+    /// count and its key are one step that no other writer can fall between.
+    input_lock: Mutex<()>,
 }
 
 /// Everything one running session is built from. A struct rather than a parameter list: these are
@@ -97,11 +111,15 @@ impl LiveSession {
             reaped: AtomicBool::new(false),
             fan: Mutex::new(Fan {
                 ring: RingBuffer::new(RING_CAPACITY),
+                total: 0,
                 subscribers: Vec::new(),
                 next_id: 0,
             }),
             scratch_dir: Mutex::new(session.scratch_dir),
             resolves_approvals_itself: session.resolves_approvals_itself,
+            trust: TrustState::new(session.agent),
+            input_writes: AtomicU64::new(0),
+            input_lock: Mutex::new(()),
         }
     }
 
@@ -132,6 +150,19 @@ impl LiveSession {
             .tail(max_bytes)
     }
 
+    /// How many bytes this session has printed in all. A mark for [`Self::output_since`].
+    pub fn output_total(&self) -> u64 {
+        self.fan.lock().expect("fan mutex poisoned").total
+    }
+
+    /// What this session printed after `mark`, as taken from [`Self::output_total`] — less of it if
+    /// the ring buffer has already let some go.
+    pub fn output_since(&self, mark: u64) -> Vec<u8> {
+        let fan = self.fan.lock().expect("fan mutex poisoned");
+        let wanted = fan.total.saturating_sub(mark);
+        fan.ring.tail(usize::try_from(wanted).unwrap_or(usize::MAX))
+    }
+
     /// Called from the PTY reader thread for every chunk read. Blocks while a slow client catches
     /// up, which is how backpressure reaches the agent: with nobody reading the PTY, its own writes
     /// block. The alternative was measured: a reader that always runs ahead fills any bounded
@@ -142,11 +173,14 @@ impl LiveSession {
         let targets: Vec<(u64, mpsc::Sender<Bytes>)> = {
             let mut fan = self.fan.lock().expect("fan mutex poisoned");
             fan.ring.push(data);
+            fan.total += data.len() as u64;
             fan.subscribers
                 .iter()
                 .map(|sub| (sub.id, sub.tx.clone()))
                 .collect()
         };
+
+        self.trust.feed(data);
 
         let mut dropped = Vec::new();
         for (id, tx) in targets {
@@ -162,8 +196,41 @@ impl LiveSession {
 
     /// Writes raw input. The error says how many bytes went in, because a caller deciding whether
     /// to retry has to know: whatever was accepted is already in the child's input buffer.
+    ///
+    /// Counted: every writer but the trust path comes through here, which is how the trust path
+    /// learns that someone else has typed into the session since it last looked. A write made up
+    /// only of what an attached terminal sends by itself — focus reports, replies to the agent's
+    /// terminal queries — is not counted: Claude Code turns focus reporting on as it draws the trust
+    /// screen, so an attached terminal writes that traffic all the time and none of it can move
+    /// the cursor.
     pub fn write_input(&self, data: &[u8]) -> Result<(), ptyio::PartialWrite> {
+        let _input = self.input_lock.lock().expect("input mutex poisoned");
+        if !is_terminal_protocol(data) {
+            self.input_writes.fetch_add(1, Ordering::AcqRel);
+        }
         ptyio::write_all(self.fd, data)
+    }
+
+    /// Writes `data` only if nobody else has written into the input since the count read as
+    /// `expected`, and says whether it did. For the trust path alone: its own keys are not counted,
+    /// and the check and the write happen under the lock every other writer takes.
+    pub(crate) fn write_input_if_untouched(
+        &self,
+        expected: u64,
+        data: &[u8],
+    ) -> Result<bool, ptyio::PartialWrite> {
+        let _input = self.input_lock.lock().expect("input mutex poisoned");
+        if self.input_writes.load(Ordering::Acquire) != expected {
+            return Ok(false);
+        }
+        ptyio::write_all(self.fd, data).map(|()| true)
+    }
+
+    /// How many writes anyone else has made into this session's input so far.
+    pub fn input_writes(&self) -> u64 {
+        // Under the lock, so that the count is never read in the middle of a write.
+        let _input = self.input_lock.lock().expect("input mutex poisoned");
+        self.input_writes.load(Ordering::Acquire)
     }
 
     pub fn resize(&self, cols: u16, rows: u16) -> anyhow::Result<()> {
@@ -304,6 +371,67 @@ impl LiveSession {
     }
 }
 
+/// Whether a chunk written to a session's input is nothing but a terminal's own protocol traffic:
+/// focus in/out (`CSI I`, `CSI O`), device attributes (`CSI … c`), cursor position (`CSI … R`),
+/// mode reports (`CSI … $ y`), window reports (`CSI … t`), status reports (`CSI … n`), and operating
+/// system or device control string replies. Conservative: an empty chunk, any other byte, any other
+/// final byte — the arrow keys included — and a sequence cut short all say no.
+fn is_terminal_protocol(chunk: &[u8]) -> bool {
+    if chunk.is_empty() {
+        return false;
+    }
+    let mut at = 0;
+    while at < chunk.len() {
+        if chunk[at] != 0x1b {
+            return false;
+        }
+        match chunk.get(at + 1) {
+            Some(b'[') => {
+                at += 2;
+                let start = at;
+                while at < chunk.len() && (0x20..=0x3f).contains(&chunk[at]) {
+                    at += 1;
+                }
+                let Some(&final_byte) = chunk.get(at) else {
+                    return false;
+                };
+                let known = match final_byte {
+                    b'I' | b'O' | b'c' | b'R' | b't' | b'n' => true,
+                    b'y' => chunk[start..at].contains(&b'$'),
+                    _ => false,
+                };
+                if !known {
+                    return false;
+                }
+                at += 1;
+            }
+            Some(&opener @ (b']' | b'P')) => {
+                at += 2;
+                // Up to a string terminator (an escape and a backslash), or for an operating
+                // system command a bell as well.
+                // Nothing but printable bytes in between: a control byte is typed input, not a reply.
+                loop {
+                    match chunk.get(at) {
+                        None => return false,
+                        Some(0x07) if opener == b']' => {
+                            at += 1;
+                            break;
+                        }
+                        Some(0x1b) if chunk.get(at + 1) == Some(&b'\\') => {
+                            at += 2;
+                            break;
+                        }
+                        Some(byte) if *byte < 0x20 => return false,
+                        Some(_) => at += 1,
+                    }
+                }
+            }
+            _ => return false,
+        }
+    }
+    true
+}
+
 /// Hands one chunk to one client, waiting out a full queue up to `SUBSCRIBER_GRACE`. Returns
 /// `false` when the client is gone or has stopped draining, meaning it should be dropped.
 fn send_with_backpressure(tx: &mpsc::Sender<Bytes>, chunk: Bytes) -> bool {
@@ -348,9 +476,54 @@ pub fn spawn_reader_thread(session: Arc<LiveSession>, read_buf_bytes: usize) {
 mod tests {
     use std::time::Instant;
 
-    use super::{send_with_backpressure, SUBSCRIBER_GRACE};
+    use super::{is_terminal_protocol, send_with_backpressure, SUBSCRIBER_GRACE};
     use bytes::Bytes;
     use tokio::sync::mpsc;
+
+    #[test]
+    fn only_a_terminals_own_protocol_traffic_is_told_apart_from_input() {
+        for protocol in [
+            &b"\x1b[I"[..],
+            b"\x1b[O",
+            b"\x1b[I\x1b[O",
+            b"\x1b[?1;2c",
+            b"\x1b[>0;276;0c",
+            b"\x1b[24;80R",
+            b"\x1b[?2004;2$y",
+            b"\x1b[8;32;120t",
+            b"\x1b[0n",
+            b"\x1b]11;rgb:0000/0000/0000\x07",
+            b"\x1b]11;rgb:0000/0000/0000\x1b\\",
+            b"\x1bP>|xterm.js\x1b\\",
+            b"\x1b[I\x1b[?1;2c\x1b]10;rgb:ffff/ffff/ffff\x07",
+        ] {
+            assert!(is_terminal_protocol(protocol), "{protocol:?}");
+        }
+        for input in [
+            &b""[..],
+            b"\r",
+            b"x",
+            b"\x1b[B",
+            b"\x1b[A",
+            b"\x1b[C",
+            b"\x1b[3~",
+            b"\x1b",
+            b"\x1b[",
+            b"\x1b[I\x1b[B",
+            b"\x1b[Ix",
+            b"\x1b[I\r",
+            b"\x1b[?2004;2y",
+            b"\x1b[1",
+            b"\x1b]11;rgb:0000",
+            b"\x1b]11;rgb\r:0000\x07",
+            b"\x1b]11;rgb\x1b[B:0000\x07",
+            b"\x1bP>|xterm\x07.js\x1b\\",
+            b"\x1bP>|xterm.js",
+            b"\x1bOB",
+        ] {
+            assert!(!is_terminal_protocol(input), "{input:?}");
+        }
+    }
 
     #[test]
     fn a_client_that_keeps_draining_is_never_dropped() {

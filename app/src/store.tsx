@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from "react";
 
 import { DaemonClient, type ConnectionState } from "./daemon-client";
-import type { Console, Event, Host, Page, Project, RequestBody, Session } from "./protocol";
+import { isLive, type Console, type Event, type Host, type Page, type Project, type RequestBody, type Session } from "./protocol";
 
 /**
  * One entry in the dismissible toast stack: a daemon `error` or `session_notice`, or a message with
@@ -17,6 +17,13 @@ export interface Toast {
   /** The session a `notice` is about, so it can be rendered alongside the message — absent for an
    * `error`, which is never about one particular session. */
   session?: string;
+}
+
+/** A Claude Code session waiting at its workspace-trust screen for the user's say-so. */
+export interface TrustPrompt {
+  session: string;
+  project: string;
+  path: string;
 }
 
 interface State {
@@ -37,6 +44,10 @@ interface State {
    * re-list after either case depends on this counter instead. */
   snapshotEpoch: number;
   toasts: Toast[];
+  /** Oldest first; the first is the one the dialog shows. A prompt is dropped when it is answered or
+   * declined, when its session stops running, and on a `snapshot`, which cannot say whether the
+   * screen is still up — the daemon re-sends the prompts still waiting right after each snapshot. */
+  trustPrompts: TrustPrompt[];
 }
 
 type Action =
@@ -45,7 +56,8 @@ type Action =
   /** A message with nowhere inline to show it (no open dialog). Distinct from `"event"` so it
    * never counts as proof the control socket is up — see the "event" case below. */
   | { kind: "toast"; message: string }
-  | { kind: "dismiss_toast"; id: string };
+  | { kind: "dismiss_toast"; id: string }
+  | { kind: "dismiss_trust_prompt"; session: string };
 
 const initialState: State = {
   connectionState: "connecting",
@@ -55,6 +67,7 @@ const initialState: State = {
   pages: new Map(),
   snapshotEpoch: 0,
   toasts: [],
+  trustPrompts: [],
 };
 
 function reducer(state: State, action: Action): State {
@@ -65,6 +78,8 @@ function reducer(state: State, action: Action): State {
       return { ...state, toasts: [...state.toasts, { id: crypto.randomUUID(), kind: "error", message: action.message }] };
     case "dismiss_toast":
       return { ...state, toasts: state.toasts.filter((t) => t.id !== action.id) };
+    case "dismiss_trust_prompt":
+      return { ...state, trustPrompts: state.trustPrompts.filter((p) => p.session !== action.session) };
     case "event": {
       const event = action.event;
       switch (event.type) {
@@ -82,6 +97,7 @@ function reducer(state: State, action: Action): State {
             // snapshot no longer lists.
             pages: new Map(),
             snapshotEpoch: state.snapshotEpoch + 1,
+            trustPrompts: [],
           };
         case "console_upserted": {
           const consoles = new Map(state.consoles);
@@ -128,7 +144,16 @@ function reducer(state: State, action: Action): State {
         case "session_upserted": {
           const sessions = new Map(state.sessions);
           sessions.set(event.session.id, event.session);
-          return { ...state, sessions };
+          // A session that no longer runs is no longer at a screen anyone can answer.
+          const trustPrompts = isLive(event.session.status)
+            ? state.trustPrompts
+            : state.trustPrompts.filter((p) => p.session !== event.session.id);
+          return { ...state, sessions, trustPrompts };
+        }
+        case "claude_trust_prompt": {
+          if (state.trustPrompts.some((p) => p.session === event.session)) return state;
+          const prompt: TrustPrompt = { session: event.session, project: event.project, path: event.path };
+          return { ...state, trustPrompts: [...state.trustPrompts, prompt] };
         }
         case "page_list": {
           // The reply to a `list_pages` request, but requests and broadcasts are not ordered
@@ -189,6 +214,9 @@ interface DaemonContextValue extends State {
   request: (body: RequestBody) => Promise<Event>;
   toastError: (message: string) => void;
   dismissToast: (id: string) => void;
+  /** Drops a trust prompt from the queue, whether it was answered or declined — declining leaves the
+   * screen for the user in the terminal, and the daemon asks again for it only after a `snapshot`. */
+  dismissTrustPrompt: (session: string) => void;
   /** Retries the control connection right away after the automatic reconnect budget was spent. */
   reconnect: () => void;
 }
@@ -222,11 +250,13 @@ export function DaemonProvider({ url, children }: { url: string; children: React
 
   const dismissToast = useCallback((id: string) => dispatch({ kind: "dismiss_toast", id }), []);
 
+  const dismissTrustPrompt = useCallback((session: string) => dispatch({ kind: "dismiss_trust_prompt", session }), []);
+
   const reconnect = useCallback(() => clientRef.current?.reconnect(), []);
 
   const value = useMemo<DaemonContextValue>(
-    () => ({ ...state, request, toastError, dismissToast, reconnect }),
-    [state, request, toastError, dismissToast, reconnect],
+    () => ({ ...state, request, toastError, dismissToast, dismissTrustPrompt, reconnect }),
+    [state, request, toastError, dismissToast, dismissTrustPrompt, reconnect],
   );
 
   return <DaemonContext.Provider value={value}>{children}</DaemonContext.Provider>;

@@ -106,6 +106,12 @@ console's own working directory under `~/.octoboard`. No project directory is to
 A project carries a name, the directory it points at, an optional default agent, how it was associated, and — for a
 GitHub association — the remote URL it was cloned from. Every project is bound to a host (see "Hosts" below).
 
+A project also carries whether the user has agreed that Octoboard may answer Claude Code's workspace-trust prompt for
+its directory. A project starts without that consent, including one the hub associates; it is given only from the
+dialog Octoboard shows when a Claude Code session of the project stops on that prompt, and it is not part of the
+project's editable fields. The rules are in "Claude Code's workspace-trust prompt" in
+`docs/product/launching-agents.md`.
+
 ### Associating a project
 
 There are three sources:

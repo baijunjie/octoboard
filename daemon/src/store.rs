@@ -64,7 +64,8 @@ impl Store {
                 path          TEXT NOT NULL,
                 default_agent TEXT,
                 source        TEXT NOT NULL,
-                remote_url    TEXT
+                remote_url    TEXT,
+                claude_trust_consent INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS sessions (
                 id               TEXT PRIMARY KEY,
@@ -115,6 +116,14 @@ impl Store {
             .context("renaming sessions.claude_config_dir")?;
         }
         add_column_if_missing(&conn, "sessions", "config_dir", "TEXT")?;
+        // Existing projects read back as not consented, which is the right history: nobody was ever
+        // asked.
+        add_column_if_missing(
+            &conn,
+            "projects",
+            "claude_trust_consent",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
         let store = Self {
             conn: Mutex::new(conn),
         };
@@ -234,8 +243,9 @@ impl Store {
 
     pub fn insert_project(&self, project: &Project) -> Result<()> {
         self.lock().execute(
-            "INSERT INTO projects (id, console_id, host_id, name, path, default_agent, source, remote_url)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO projects (id, console_id, host_id, name, path, default_agent, source,
+                                   remote_url, claude_trust_consent)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 project.id,
                 project.console_id,
@@ -245,7 +255,19 @@ impl Store {
                 project.default_agent.as_ref().map(enum_to_text),
                 enum_to_text(&project.source),
                 project.remote_url,
+                project.claude_trust_consent,
             ],
+        )?;
+        Ok(())
+    }
+
+    /// Records the user's agreement (or its withdrawal) that Octoboard may answer Claude Code's
+    /// trust screen for this project. Its own statement rather than a field of `update_project`,
+    /// which is the user's edit of the project and never reaches this decision.
+    pub fn set_project_claude_trust_consent(&self, id: &str, consent: bool) -> Result<()> {
+        self.lock().execute(
+            "UPDATE projects SET claude_trust_consent = ?2 WHERE id = ?1",
+            params![id, consent],
         )?;
         Ok(())
     }
@@ -272,8 +294,7 @@ impl Store {
         let conn = self.lock();
         let project = conn
             .query_row(
-                "SELECT id, console_id, host_id, name, path, default_agent, source, remote_url
-                 FROM projects WHERE id = ?1",
+                &format!("SELECT {PROJECT_COLUMNS} FROM projects WHERE id = ?1"),
                 params![id],
                 read_project,
             )
@@ -296,10 +317,9 @@ impl Store {
 
     pub fn list_projects(&self) -> Result<Vec<Project>> {
         let conn = self.lock();
-        let mut stmt = conn.prepare(
-            "SELECT id, console_id, host_id, name, path, default_agent, source, remote_url
-             FROM projects ORDER BY name",
-        )?;
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {PROJECT_COLUMNS} FROM projects ORDER BY name"
+        ))?;
         let rows = stmt
             .query_map([], read_project)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -491,6 +511,9 @@ fn add_column_if_missing(
     Ok(())
 }
 
+const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agent, source,
+                               remote_url, claude_trust_consent";
+
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
                                role, origin, title, status, has_conversation, include_in_hub,
                                config_dir, started_at, ended_at";
@@ -519,6 +542,7 @@ fn read_project(row: &Row<'_>) -> rusqlite::Result<Project> {
         default_agent: enum_from_row_opt::<Agent>(row, 5)?,
         source: enum_from_row::<ProjectSource>(row, 6)?,
         remote_url: row.get(7)?,
+        claude_trust_consent: row.get(8)?,
     })
 }
 
@@ -730,6 +754,94 @@ mod tests {
         drop(store);
 
         Store::open(&path).expect("opens again");
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    fn project(consent: bool) -> Project {
+        Project {
+            id: "project-1".to_string(),
+            console_id: "console-1".to_string(),
+            host_id: LOCAL_HOST_ID.to_string(),
+            name: "Project".to_string(),
+            path: "/tmp/project-1".to_string(),
+            default_agent: None,
+            source: ProjectSource::Local,
+            remote_url: None,
+            claude_trust_consent: consent,
+        }
+    }
+
+    /// A database written before the trust consent existed is opened in place, and its projects
+    /// read back as not consented: nobody was ever asked. Opening it again is a no-op.
+    #[test]
+    fn a_database_from_before_the_trust_consent_reads_every_project_as_not_consented() {
+        let path = temp_db("trust-migration");
+        {
+            let conn = Connection::open(&path).expect("old database");
+            conn.execute_batch(
+                r#"
+                CREATE TABLE consoles (
+                    id TEXT PRIMARY KEY, name TEXT NOT NULL, workdir TEXT NOT NULL,
+                    hub_agent TEXT NOT NULL, default_agent TEXT NOT NULL, created_at INTEGER NOT NULL
+                );
+                INSERT INTO consoles VALUES ('console-1', 'Old', '/tmp/old', 'claude', 'claude', 5);
+                CREATE TABLE projects (
+                    id TEXT PRIMARY KEY, console_id TEXT NOT NULL, host_id TEXT NOT NULL,
+                    name TEXT NOT NULL, path TEXT NOT NULL, default_agent TEXT,
+                    source TEXT NOT NULL, remote_url TEXT
+                );
+                INSERT INTO projects VALUES ('project-1', 'console-1', 'local', 'Old', '/tmp/p',
+                    NULL, 'local', NULL);
+                "#,
+            )
+            .expect("old schema");
+        }
+
+        let store = Store::open(&path).expect("migrates");
+        let migrated = store.get_project("project-1").unwrap().expect("kept");
+        assert!(!migrated.claude_trust_consent);
+        drop(store);
+
+        Store::open(&path).expect("opens again");
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    /// The consent is its own statement: a project starts without it, recording it survives a read
+    /// back, and the user's own edit of the project neither grants nor withdraws it.
+    #[test]
+    fn the_trust_consent_is_recorded_on_its_own_and_an_edit_leaves_it_alone() {
+        let path = temp_db("trust-consent");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        store.insert_project(&project(false)).expect("project");
+        let consented = |store: &Store| {
+            store
+                .get_project("project-1")
+                .unwrap()
+                .unwrap()
+                .claude_trust_consent
+        };
+        assert!(!consented(&store));
+
+        store
+            .set_project_claude_trust_consent("project-1", true)
+            .expect("recorded");
+        assert!(consented(&store));
+        assert!(store.list_projects().unwrap()[0].claude_trust_consent);
+
+        let mut edited = store.get_project("project-1").unwrap().unwrap();
+        edited.name = "Renamed".to_string();
+        edited.claude_trust_consent = false;
+        store.update_project(&edited).expect("edited");
+        assert!(consented(&store), "an edit must not withdraw the consent");
+
+        store
+            .set_project_claude_trust_consent("project-1", false)
+            .expect("withdrawn");
+        assert!(!consented(&store));
+
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 

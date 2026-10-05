@@ -76,6 +76,11 @@ A session is opened under a project with:
 A session opened **with** a task starts in *working*. A session opened **without** one starts in *awaiting
 instructions*: it is sitting at the agent's prompt.
 
+A Claude Code session in a directory Claude Code has not been trusted with first stops on Claude
+Code's own workspace-trust prompt, before it takes up its task or reaches its prompt. Octoboard
+answers that prompt for the user once they have agreed, or asks them first — see "Claude Code's
+workspace-trust prompt" in `docs/product/launching-agents.md`.
+
 If the launch itself fails — the directory cannot be reached, the agent binary is not on the user's `PATH`, the
 user's shell environment could not be captured (see "The launch environment" in
 `docs/product/launching-agents.md`), the config directory the session would hold for its agent no longer exists (see
@@ -132,6 +137,8 @@ limitations of what the agents expose rather than of this one:
   all three agents, so such a session reads as *awaiting instructions* rather than waiting for the user.
 - When the user cancels an in-flight turn in Claude Code, nothing is reported at all; the session keeps reading as
   *working* until the next prompt is submitted.
+- Claude Code reports nothing while it is on its workspace-trust prompt, so a session sitting there keeps the status its
+  launch gave it — *working* or *awaiting instructions* — and raises no hand, although it is waiting for a person.
 - Grok Build's bash mode (`!`) produces no events, so work done through it is invisible to the status.
 - A question the agent asks through **its own ask-the-user tool** is reported by Claude Code and Grok
   Build but not by Codex, which has no such event; a Codex session asking that way reads as *working*.

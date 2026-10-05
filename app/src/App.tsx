@@ -35,12 +35,24 @@ type Dialog =
 const SESSION_ALREADY_RUNNING = "session_already_running";
 
 export function App({ port }: { port: number }): React.ReactElement {
-  const { connectionState, hosts, consoles, projects, sessions, request, toastError, reconnect } =
-    useDaemon();
+  const {
+    connectionState,
+    hosts,
+    consoles,
+    projects,
+    sessions,
+    trustPrompts,
+    request,
+    toastError,
+    dismissTrustPrompt,
+    reconnect,
+  } = useDaemon();
   const [selectedSessionId, setSelectedSessionId] = useState<string>();
   const [dialog, setDialog] = useState<Dialog>();
 
   const sessionList = Array.from(sessions.values());
+  // One dialog at a time, oldest prompt first; answering or declining it brings up the next.
+  const trustPrompt = trustPrompts[0];
   const selectedSession = selectedSessionId ? sessions.get(selectedSessionId) : undefined;
 
   useWaitingNotifications(sessionList, consoles, projects, hosts !== undefined);
@@ -77,6 +89,11 @@ export function App({ port }: { port: number }): React.ReactElement {
       () => request({ type: "resume_session", session: sessionId }).then(() => {}),
       suppressAlreadyRunning,
     );
+  };
+
+  const trustSessionLabel = (sessionId: string) => {
+    const title = sessions.get(sessionId)?.title;
+    return title ? ` for session "${title}"` : "";
   };
 
   const openHub = (console_: Console) =>
@@ -209,6 +226,29 @@ export function App({ port }: { port: number }): React.ReactElement {
           onConfirm={async () => {
             await request({ type: "archive_session", session: dialog.session.id });
             setDialog(undefined);
+          }}
+        />
+      )}
+      {trustPrompt && (
+        <ConfirmDialog
+          key={trustPrompt.session}
+          title="Trust this folder?"
+          message={`Claude Code is asking whether to trust ${trustPrompt.path}${trustSessionLabel(trustPrompt.session)}. Octoboard can answer for you, here and for this project's later sessions. This folder's .claude/settings.json may pre-approve tool permissions, and trusting it applies them without asking. "Not now" leaves the question in the terminal for you to answer.`}
+          confirmLabel="Trust and continue"
+          cancelLabel="Not now"
+          onCancel={() => dismissTrustPrompt(trustPrompt.session)}
+          onConfirm={async () => {
+            // Dismissed whether or not the request worked: the daemon answers a screen once, so
+            // retrying from this dialog can never succeed. The error is toasted rather than shown
+            // inline for the same reason. A failure to answer also reaches the user as the
+            // daemon's own session notice, which covers a dialog closed meanwhile.
+            try {
+              await request({ type: "confirm_claude_trust", session: trustPrompt.session, remember: true });
+            } catch (err) {
+              toastError((err as Error).message);
+            } finally {
+              dismissTrustPrompt(trustPrompt.session);
+            }
           }}
         />
       )}

@@ -25,7 +25,7 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   hub session, and the window's minimum size.
 - [Launching agents](product/launching-agents.md) — the guarantee that project files and the user's agent configuration
   are never modified, the three things injected per launch and the hub's generated instruction file, the launch
-  environment, and the per-agent specifics.
+  environment, Claude Code's workspace-trust prompt and how Octoboard answers it, and the per-agent specifics.
 - [Application lifecycle](product/application-lifecycle.md) — what Octoboard runs on and how it is distributed, startup
   and the single-instance rule, losing the daemon connection, the quit confirmation and which gestures it covers, how to
   quit a window that has stopped responding, crash behaviour, and the files Octoboard keeps under `~/.octoboard`.

@@ -62,6 +62,9 @@ export interface Project {
   default_agent?: Agent | null;
   source: ProjectSource;
   remote_url?: string | null;
+  /** The user has agreed that Octoboard may answer Claude Code's workspace-trust screen for this
+   * project's directory. Only ever set by `confirm_claude_trust` with `remember`. */
+  claude_trust_consent: boolean;
 }
 
 export interface Session {
@@ -170,6 +173,10 @@ export type RequestBody =
   /** What a report panel form was submitted with. The page is named rather than the hub session:
    * it is what the panel knows, and only a console's newest page may be submitted from. */
   | { type: "submit_page"; page: string; data: unknown }
+  /** The user's go-ahead to a `claude_trust_prompt`: Octoboard may answer that session's trust
+   * screen. `remember` also records the project's consent, so its later sessions are answered
+   * without a prompt. */
+  | { type: "confirm_claude_trust"; session: string; remember: boolean }
   | { type: "shutdown" };
 
 /** A client request as sent on the wire: the body's fields plus an optional correlation id. */
@@ -191,6 +198,11 @@ export type Event =
    * broadcast as `session_upserted`, but that broadcast carries no request id, so this is the
    * only way the caller can tell which session in the tree is the one it just opened. */
   | { type: "session_opened"; id?: string; session: Session }
+  /** A Claude Code session of a project the user has not agreed Octoboard may answer for is at its
+   * workspace-trust screen, which asks whether `path` is trusted. Broadcast once per screen, and sent
+   * again to a client right after each `snapshot` (connect or lag recovery) for every screen still
+   * waiting, so a client that missed it is still asked; a repeat is ignored. */
+  | { type: "claude_trust_prompt"; session: string; project: string; path: string }
   | { type: "dir_listing"; id?: string; path: string; entries: DirEntry[] }
   /** The reply to `list_pages`, oldest first. Pages are not in `snapshot` — a page carries a whole
    * HTML document — so the panel asks for them, and asks again after every `snapshot`: a client
