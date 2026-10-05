@@ -12,7 +12,7 @@ always available and costs about a minute.
 ## Build the daemon and confirm what the running sidecar executes before trusting any verification of it
 
 Launching the app in dev mode does not build the daemon: the dev command starts the frontend dev server only (for the
-build step itself and when to rerun it, see the "Development" section of `app/README.md`). In a worktree that has never
+build step itself and when to rerun it, see the "Development" section of `apps/desktop/README.md`). In a worktree that has never
 been built, the missing sidecar fails loudly at compile time; in one that has been built before, the launch silently
 uses the binary already sitting there, and a verification of a daemon-side change then measures the *old* behaviour and
 reports a pass or a failure that has nothing to do with the change. So build the daemon first, then confirm positively

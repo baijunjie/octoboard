@@ -165,9 +165,9 @@ function PageFrame({
  * policy, not an implementation detail of it. Verified live: this blocks every subresource load,
  * `fetch`/XHR, external `<script>`/`<link>`, and native form submission.
  *
- * The frame also enforces the window's own policy from `app/index.html` on top of this one —
- * that is the layer self-navigation is blocked at, and where the `'unsafe-inline'` and `data:`
- * sources this layer relies on must also be allowed.
+ * The frame also enforces the window's own policy from `apps/desktop/index.html` on top of this
+ * one — that is the layer self-navigation is blocked at, and where the `'unsafe-inline'` and
+ * `data:` sources this layer relies on must also be allowed.
  *
  * A `<meta>`-delivered CSP cannot carry `frame-ancestors`, and nothing here needs it. */
 const PAGE_CSP = [

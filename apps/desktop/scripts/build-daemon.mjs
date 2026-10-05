@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Builds `octoboardd` in release mode and copies it into `src-tauri/binaries/` under the
-// target-triple-suffixed name Tauri's `externalBin` requires, so `npm run tauri build` works from a
+// target-triple-suffixed name Tauri's `externalBin` requires, so `pnpm tauri build` works from a
 // clean checkout without a manual copy step: `beforeBuildCommand` in tauri.conf.json runs it.
 //
 // `tauri dev` does NOT run it — `beforeDevCommand` starts the frontend dev server and nothing else.
@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const appDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const repoRoot = path.dirname(appDir);
+const repoRoot = path.dirname(path.dirname(appDir));
 const daemonDir = path.join(repoRoot, "daemon");
 const binariesDir = path.join(appDir, "src-tauri", "binaries");
 

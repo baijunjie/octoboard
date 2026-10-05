@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "identifier": "dev.octoboard.app",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build:tauri",
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build:tauri",
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173"
   },

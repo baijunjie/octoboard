@@ -47,10 +47,10 @@
         the one source here that exists only for development. Per CSP3 scheme-part matching, a
         `ws:` source expression also matches `http:`/`https:` URLs on the same host, so
         `ws://127.0.0.1:*` already covers the one `http://127.0.0.1:*` URL the app ever builds
-        (`ws://${host}:${port}` in `app/src/daemon.ts`) without a separate entry, and
+        (`ws://${host}:${port}` in `apps/desktop/src/daemon.ts`) without a separate entry, and
         `ws://localhost:*` grants plain `http` to any localhost port by that same rule — harmless
-        here since nothing in `app/src` ever issues a `fetch`, `XMLHttpRequest`, `EventSource`, or
-        `sendBeacon` call.
+        here since nothing in `apps/desktop/src` ever issues a `fetch`, `XMLHttpRequest`,
+        `EventSource`, or `sendBeacon` call.
       - `form-action`/`base-uri 'none'`: neither falls back to `default-src`, so both are spelled
         out rather than left open.
     -->

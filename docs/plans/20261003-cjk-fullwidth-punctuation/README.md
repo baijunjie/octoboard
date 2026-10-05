@@ -111,8 +111,8 @@ against Octoboard's own build, not because it needs a person. Claims below keep 
 directly from a source), **plausible** (consistent with the evidence but not confirmed) or **searched, nothing
 found**.
 
-**Versions in use (established).** `app/package.json` declares `@xterm/xterm` `^5.5.0` and `@xterm/addon-fit`
-`^0.10.0`, and `app/package-lock.json` pins them to exactly 5.5.0 and 0.10.0 — the only two `xterm.js` packages in
+**Versions in use (established).** `apps/desktop/package.json` declares `@xterm/xterm` `^5.5.0` and `@xterm/addon-fit`
+`^0.10.0`, and the root `pnpm-lock.yaml` pins them to exactly 5.5.0 and 0.10.0 — the only two `xterm.js` packages in
 the project. The project is already on the renamed `@xterm/*` scope; the unscoped `xterm` package stopped at 5.3.0
 and is deprecated on npm, and the scoped line begins at 5.4.0 (2024-03-01), so 5.5.0 (2024-04-05) is a scoped-era
 release. Latest releases as of 2026-10-05: `@xterm/xterm` 6.0.0 and `@xterm/addon-fit` 0.11.0, both published

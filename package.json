@@ -1,0 +1,10 @@
+{
+  "name": "octoboard-workspace",
+  "private": true,
+  "description": "Workspace root for the Octoboard monorepo: the common commands run across every package that has content.",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "build": "pnpm -r build"
+  }
+}

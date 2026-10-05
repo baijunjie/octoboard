@@ -41,8 +41,8 @@ if (!signingIdentity) {
   mode = "unsigned";
   console.log(
     "APPLE_SIGNING_IDENTITY is not set — building unsigned. Gatekeeper will block this on " +
-      "another machine; see the \"Release builds\" section of app/README.md for what to export " +
-      "to produce a signed, notarized build."
+      "another machine; see the \"Release builds\" section of apps/desktop/README.md for what to " +
+      "export to produce a signed, notarized build."
   );
 } else if (!hasApplePasswordAuth && !hasAppleApiKeyAuth) {
   // The Tauri CLI itself also accepts `APPLE_API_KEY` + `APPLE_API_ISSUER` without
@@ -54,7 +54,7 @@ if (!signingIdentity) {
       "either APPLE_ID + APPLE_PASSWORD + APPLE_TEAM_ID or APPLE_API_KEY + APPLE_API_ISSUER + " +
       "APPLE_API_KEY_PATH (this script's own notarization step needs the key's path, not just " +
       "its id) — a signed-but-not-notarized build still fails Gatekeeper on a downloaded copy, " +
-      "so this script refuses to produce one. See app/README.md."
+      "so this script refuses to produce one. See apps/desktop/README.md."
   );
 } else {
   mode = "notarized";

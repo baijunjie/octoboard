@@ -38,8 +38,8 @@ are the parity specification: the Vue UI is done when it does what they say.
 - [03 Remaining screens](03-remaining-screens.md) — dialogs, report panel, notifications and the rest
 - [04 Cutover](04-cutover.md) — the desktop shell loads the Vue UI, React is removed
 
-Dependency order: 01 → 02 → 03 → 04. The package location comes from the monorepo layout work having been done, so that
-comes first. Until 04 lands, the macOS application's polish is on hold.
+Dependency order: 01 → 02 → 03 → 04. The package location, `packages/ui`, already exists as a placeholder. Until 04
+lands, the macOS application's polish is on hold.
 
 ## Open
 

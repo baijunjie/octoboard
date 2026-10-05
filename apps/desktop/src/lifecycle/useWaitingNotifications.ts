@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import type { Console, Project, Session } from "../protocol";
 import { sessionLocation } from "../sessionLabel";
 
-/** Set once we are actually running inside the Tauri shell — lets `npm run dev` in a plain browser
+/** Set once we are actually running inside the Tauri shell — lets `pnpm dev` in a plain browser
  * skip the notification/badge calls entirely instead of throwing on missing APIs, matching the same
  * check in `useAppExit`. */
 const runningInTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;

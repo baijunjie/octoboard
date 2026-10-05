@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { isLive, type Session } from "../protocol";
 
-/** Set once we are actually running inside the Tauri shell — lets `npm run dev` in a plain browser
+/** Set once we are actually running inside the Tauri shell — lets `pnpm dev` in a plain browser
  * skip the window-close/exit-event integration entirely instead of throwing on a missing API. */
 const runningInTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 

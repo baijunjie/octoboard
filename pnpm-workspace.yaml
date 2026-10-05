@@ -1,0 +1,8 @@
+packages:
+  - apps/*
+  - packages/*
+
+# pnpm runs no dependency build scripts unless listed here; esbuild (via vite) needs its postinstall to
+# verify its platform binary.
+onlyBuiltDependencies:
+  - esbuild

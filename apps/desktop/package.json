@@ -1,5 +1,5 @@
 {
-  "name": "octoboard",
+  "name": "@octoboard/desktop",
   "private": true,
   "version": "0.1.0",
   "description": "Octoboard desktop application: a Tauri 2 shell around a React/TypeScript UI that talks to octoboardd over WebSocket only.",
@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "tauri": "tauri",
     "build:daemon": "node scripts/build-daemon.mjs",
-    "build:tauri": "npm run build:daemon && npm run build",
+    "build:tauri": "pnpm build:daemon && pnpm build",
     "release": "node scripts/release.mjs"
   },
   "dependencies": {

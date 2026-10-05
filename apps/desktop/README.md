@@ -3,19 +3,23 @@
 A Tauri 2 + React + TypeScript desktop application: the console/project/session menu, the `xterm.js` terminal, console
 and project management, manual sessions, archiving and reopening, and the exit flow.
 
-The UI talks to `octoboardd` (see [`../daemon/`](../daemon/README.md)) only over the WebSocket/HTTP protocol in
-[`../daemon/PROTOCOL.md`](../daemon/PROTOCOL.md) — no Tauri IPC command carries daemon traffic or session state. This
+The UI talks to `octoboardd` (see [`../../daemon/`](../../daemon/README.md)) only over the WebSocket/HTTP protocol in
+[`../../daemon/PROTOCOL.md`](../../daemon/PROTOCOL.md) — no Tauri IPC command carries daemon traffic or session state. This
 is an architectural rule, not an implementation detail: the already-decided remote-host feature depends on the UI
 never distinguishing a local daemon from a remote one, which only holds if the daemon is reachable exclusively through
 that one protocol.
 
 ## Development
 
+This is the `@octoboard/desktop` package of the repository's pnpm workspace. Its dependencies install from the
+workspace root with `pnpm install` (there is no per-package install), and its scripts run from this directory as
+`pnpm <script>`. The root's `pnpm typecheck` and `pnpm build` also run this package's script of the same name.
+
 `src-tauri/tauri.conf.json` declares `octoboardd` as an `externalBin`, which Tauri resolves at **compile** time, not
-at launch. So `npm run build:daemon` (builds `daemon/` in release and copies the binary into
+at launch. So `pnpm build:daemon` (builds `daemon/` in release and copies the binary into
 `src-tauri/binaries/octoboardd-<target-triple>`, see `scripts/build-daemon.mjs`) must have been run at least once
-before `npm run tauri dev` or a bare `cargo build` in `src-tauri/` will succeed — neither of those two commands runs
-it for you, and skipping it fails at compile time with no obvious cause. `npm run build:tauri` (what `tauri build`
+before `pnpm tauri dev` or a bare `cargo build` in `src-tauri/` will succeed — neither of those two commands runs
+it for you, and skipping it fails at compile time with no obvious cause. `pnpm build:tauri` (what `tauri build`
 uses) runs it automatically; rerun `build:daemon` by hand whenever `daemon/` changes during development.
 
 Running `vite dev` directly against a daemon started by hand, bypassing the Tauri shell, needs `VITE_DAEMON_PORT` set
@@ -23,7 +27,7 @@ to that daemon's port — see `src/daemon.ts` for where to read it from.
 
 ### Release builds
 
-`npm run release` (`scripts/release.mjs`) runs `tauri build` — whose own `beforeBuildCommand` builds the daemon
+`pnpm release` (`scripts/release.mjs`) runs `tauri build` — whose own `beforeBuildCommand` builds the daemon
 sidecar and the frontend first, then, per `bundle.targets` in `tauri.conf.json`, produces both the `.app` and a
 `.dmg` around it — and then checks what the build actually produced (`codesign`/`spctl`/`xcrun stapler`) rather than
 assuming signing and notarization happened just because the right environment variables were set. In notarized mode
@@ -32,7 +36,7 @@ notarizes the `.app` inside it, so the disk image still trips Gatekeeper on a do
 network round trip of minutes that `tauri build` itself does not do.
 
 The bundle is arm64-only: `scripts/build-daemon.mjs` builds the daemon for the host machine's own target triple, and
-`scripts/release.mjs` passes no `--target` to `tauri build` either, so `npm run release` only ever produces a bundle
+`scripts/release.mjs` passes no `--target` to `tauri build` either, so `pnpm release` only ever produces a bundle
 for the architecture it runs on. There is no universal-binary build.
 
 Signing and notarization are both driven by environment variables the bundled Tauri CLI reads directly; this script
@@ -88,7 +92,7 @@ any IPC call for it.
 | Path | Role |
 |---|---|
 | `src-tauri/src/lib.rs` | `run()`: builds the Tauri app, wires the menu/exit-flow entry points to `exit`/`menu`, opens the main window; window-creation helpers |
-| `src-tauri/src/exit.rs` | The exit-confirmation flow: `ExitState`, the two IPC commands above, the decision all three quit gestures share, and the `applicationShouldTerminate:` override onto AppKit's own delegate — the only `unsafe` code in `app/`, for catching the Dock icon's own Quit (and a system-initiated logout/restart/shutdown, which arrives the same way) |
+| `src-tauri/src/exit.rs` | The exit-confirmation flow: `ExitState`, the two IPC commands above, the decision all three quit gestures share, and the `applicationShouldTerminate:` override onto AppKit's own delegate — the only `unsafe` code in `apps/desktop/`, for catching the Dock icon's own Quit (and a system-initiated logout/restart/shutdown, which arrives the same way) |
 | `src-tauri/src/sidecar.rs` | Spawns `octoboardd`, parses its startup port line, reports how it terminated |
 | `src-tauri/src/menu.rs` | Builds the native macOS menu bar |
 | `src-tauri/capabilities/default.json` | Allowlists the two IPC commands above plus the notification and Dock-badge commands |
