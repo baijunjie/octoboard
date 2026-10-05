@@ -84,6 +84,9 @@ impl Store {
                 started_at       INTEGER NOT NULL,
                 ended_at         INTEGER
             );
+            CREATE TABLE IF NOT EXISTS trusted_directories (
+                path TEXT PRIMARY KEY
+            );
             CREATE TABLE IF NOT EXISTS pages (
                 id                TEXT PRIMARY KEY,
                 console_id        TEXT NOT NULL REFERENCES consoles(id) ON DELETE CASCADE,
@@ -306,13 +309,17 @@ impl Store {
     /// directory discovers repositories in bulk and is expected to be re-run as new ones appear,
     /// so the duplicates it would otherwise create are filtered on this.
     pub fn project_exists_at(&self, console_id: &str, path: &str) -> Result<bool> {
+        // Compared written one way: a row stored before project paths were normalised, such as
+        // `/work/project/`, is the same project as a new `/work/project`.
+        let wanted = crate::hostfs::lexically_normalise(Path::new(path));
         let conn = self.lock();
-        let count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM projects WHERE console_id = ?1 AND path = ?2",
-            params![console_id, path],
-            |row| row.get(0),
-        )?;
-        Ok(count > 0)
+        let mut stmt = conn.prepare("SELECT path FROM projects WHERE console_id = ?1")?;
+        let stored = stmt
+            .query_map(params![console_id], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(stored
+            .iter()
+            .any(|stored| crate::hostfs::lexically_normalise(Path::new(stored)) == wanted))
     }
 
     pub fn list_projects(&self) -> Result<Vec<Project>> {
@@ -324,6 +331,37 @@ impl Store {
             .query_map([], read_project)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(rows)
+    }
+
+    // -- trusted directories -------------------------------------------------
+
+    /// The directories the user has agreed Octoboard may answer Claude Code's trust screen under,
+    /// as stored: absolute and lexically normalised by whoever wrote them.
+    pub fn trusted_directories(&self) -> Result<Vec<String>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare("SELECT path FROM trusted_directories ORDER BY path")?;
+        let rows = stmt
+            .query_map([], |row| row.get(0))?
+            .collect::<rusqlite::Result<Vec<String>>>()?;
+        Ok(rows)
+    }
+
+    /// Whether the directory was not already trusted.
+    pub fn add_trusted_directory(&self, path: &str) -> Result<bool> {
+        let added = self.lock().execute(
+            "INSERT OR IGNORE INTO trusted_directories (path) VALUES (?1)",
+            params![path],
+        )?;
+        Ok(added > 0)
+    }
+
+    /// Whether the directory was trusted.
+    pub fn remove_trusted_directory(&self, path: &str) -> Result<bool> {
+        let removed = self.lock().execute(
+            "DELETE FROM trusted_directories WHERE path = ?1",
+            params![path],
+        )?;
+        Ok(removed > 0)
     }
 
     // -- pages ---------------------------------------------------------------
@@ -841,6 +879,68 @@ mod tests {
             .set_project_claude_trust_consent("project-1", false)
             .expect("withdrawn");
         assert!(!consented(&store));
+
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    /// A project stored before paths were normalised is the same project as the normalised one.
+    #[test]
+    fn a_project_stored_with_a_trailing_slash_is_found_by_its_normalised_path() {
+        let path = temp_db("project-exists");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        let mut old = project(false);
+        old.path = "/work/project/".to_string();
+        store.insert_project(&old).expect("project");
+
+        assert!(store
+            .project_exists_at("console-1", "/work/project")
+            .unwrap());
+        assert!(store
+            .project_exists_at("console-1", "/work/./x/../project/")
+            .unwrap());
+        assert!(!store
+            .project_exists_at("console-1", "/work/project2")
+            .unwrap());
+        assert!(!store
+            .project_exists_at("console-2", "/work/project")
+            .unwrap());
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    /// A database from before the trusted directories opens in place with none, and what is written
+    /// survives opening it again.
+    #[test]
+    fn the_trusted_directories_start_empty_after_a_migration_and_round_trip() {
+        let path = temp_db("trusted-directories");
+        {
+            let conn = Connection::open(&path).expect("old database");
+            conn.execute_batch(
+                "CREATE TABLE consoles (
+                    id TEXT PRIMARY KEY, name TEXT NOT NULL, workdir TEXT NOT NULL,
+                    hub_agent TEXT NOT NULL, default_agent TEXT NOT NULL, created_at INTEGER NOT NULL
+                );",
+            )
+            .expect("old schema");
+        }
+        let store = Store::open(&path).expect("migrates");
+        assert!(store.trusted_directories().unwrap().is_empty());
+
+        assert!(store.add_trusted_directory("/work").unwrap());
+        assert!(
+            !store.add_trusted_directory("/work").unwrap(),
+            "a repeat adds nothing"
+        );
+        assert!(store.add_trusted_directory("/another").unwrap());
+        drop(store);
+
+        let store = Store::open(&path).expect("opens again");
+        assert_eq!(store.trusted_directories().unwrap(), ["/another", "/work"]);
+        assert!(store.remove_trusted_directory("/work").unwrap());
+        assert!(!store.remove_trusted_directory("/work").unwrap());
+        assert_eq!(store.trusted_directories().unwrap(), ["/another"]);
 
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }

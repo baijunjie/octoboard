@@ -276,10 +276,19 @@ pub enum RequestBody {
     },
     /// The user's answer to a `claude_trust_prompt`: Octoboard may answer that session's trust
     /// screen. `remember` also records the project's consent, so its later sessions are answered
-    /// without asking.
+    /// without asking; `trust_parent_dir` records the project's parent directory as trusted instead,
+    /// so every project under it is, and when set `remember` adds nothing. The directory is the
+    /// daemon's to derive from the session's project, never the client's to name. Either is
+    /// recorded only once the screen has been answered.
     ConfirmClaudeTrust {
         session: String,
         remember: bool,
+        #[serde(default)]
+        trust_parent_dir: bool,
+    },
+    /// Stops trusting a directory. Projects' own consents are left as they are.
+    RemoveTrustedDirectory {
+        path: String,
     },
     Shutdown,
 }
@@ -292,6 +301,12 @@ pub enum Event {
         consoles: Vec<Console>,
         projects: Vec<Project>,
         sessions: Vec<Session>,
+        trusted_directories: Vec<String>,
+    },
+    /// The directories whose projects Octoboard answers Claude Code's trust screen for changed: the
+    /// whole list, like every other upsert.
+    TrustedDirectoriesUpdated {
+        trusted_directories: Vec<String>,
     },
     ConsoleUpserted {
         console: Console,
@@ -315,13 +330,18 @@ pub enum Event {
         session: String,
         message: String,
     },
-    /// A Claude Code session of a project the user has not yet agreed Octoboard may answer for is
-    /// sitting at its workspace-trust screen. Broadcast once per screen; nothing stores it, so a
-    /// client that connects later does not see it and the screen simply stays for the user.
+    /// A Claude Code session of a project the user has not yet agreed Octoboard may answer for —
+    /// not by its own consent and not through a trusted directory — is sitting at its
+    /// workspace-trust screen. Broadcast once per screen, and sent again to a client after each
+    /// `snapshot` while the screen waits. `trust_dir` is the directory `confirm_claude_trust` with
+    /// `trust_parent_dir` would trust, and null when there is none to offer: it would be the
+    /// filesystem root, the home directory or one containing it, the home directory cannot be
+    /// determined, or the project's path is not absolute.
     ClaudeTrustPrompt {
         session: String,
         project: String,
         path: String,
+        trust_dir: Option<String>,
     },
     /// The reply to `open_session`: the session that was started. The same record is broadcast as
     /// `session_upserted` as well, but a broadcast carries no request id, so this is the only way
@@ -416,6 +436,15 @@ pub mod error_code {
     /// A launch was asked for while one was already running or already starting for that session.
     /// The client's own double click is the ordinary cause, so it is shown as nothing at all.
     pub const SESSION_ALREADY_RUNNING: &str = "session_already_running";
+    /// A directory to trust as a whole cannot be offered: it is the filesystem root, the user's home
+    /// directory or one that contains it, or it cannot be derived or checked (the project's path is
+    /// not absolute, the home directory is unknown). Nothing was answered. The dialog the request came from stays open, because the user can
+    /// still choose another way to answer.
+    pub const TRUST_DIRECTORY_TOO_BROAD: &str = "trust_directory_too_broad";
+    /// A go-ahead for a trust screen that is no longer waiting for one: answered already, by this
+    /// or another client or in the terminal, or gone with its session. Nothing is wrong, so a
+    /// client shows nothing.
+    pub const CLAUDE_TRUST_NOT_WAITING: &str = "claude_trust_not_waiting";
 }
 
 pub fn now_millis() -> i64 {
@@ -571,5 +600,57 @@ mod tests {
             ),
             _ => panic!("parses as create_console"),
         }
+    }
+
+    /// `trust_parent_dir` is newer than `remember`, so a request without it still reads, as "this
+    /// project only".
+    #[test]
+    fn a_trust_confirmation_without_a_scope_means_this_project() {
+        let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::ConfirmClaudeTrust {
+                remember,
+                trust_parent_dir,
+                ..
+            } => (remember, trust_parent_dir),
+            _ => panic!("parses as confirm_claude_trust"),
+        };
+        assert_eq!(
+            parse(r#"{"type":"confirm_claude_trust","session":"s","remember":true}"#),
+            (true, false)
+        );
+        assert_eq!(
+            parse(
+                r#"{"type":"confirm_claude_trust","session":"s","remember":false,"trust_parent_dir":true}"#
+            ),
+            (false, true)
+        );
+        match serde_json::from_str::<Request>(
+            r#"{"type":"remove_trusted_directory","path":"/work"}"#,
+        )
+        .unwrap()
+        .body
+        {
+            RequestBody::RemoveTrustedDirectory { path } => assert_eq!(path, "/work"),
+            _ => panic!("parses as remove_trusted_directory"),
+        }
+    }
+
+    #[test]
+    fn the_trusted_directories_travel_under_their_own_names() {
+        let updated = serde_json::to_value(super::Event::TrustedDirectoriesUpdated {
+            trusted_directories: vec!["/work".to_string()],
+        })
+        .unwrap();
+        assert_eq!(updated["type"], "trusted_directories_updated");
+        assert_eq!(updated["trusted_directories"][0], "/work");
+        let snapshot = serde_json::to_value(super::Event::Snapshot {
+            hosts: vec![],
+            consoles: vec![],
+            projects: vec![],
+            sessions: vec![],
+            trusted_directories: vec!["/work".to_string()],
+        })
+        .unwrap();
+        assert_eq!(snapshot["trusted_directories"][0], "/work");
     }
 }

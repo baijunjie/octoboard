@@ -24,6 +24,33 @@ export interface TrustPrompt {
   session: string;
   project: string;
   path: string;
+  /** The directory "trust all projects" would trust, or null when none is offered. */
+  trustDir: string | null;
+}
+
+/** The components of an absolute path with `.` dropped and each `..` folded into the one before it,
+ * or undefined for a path that is not absolute. */
+function pathParts(path: string): string[] | undefined {
+  if (!path.startsWith("/")) return undefined;
+  const parts: string[] = [];
+  for (const part of path.split("/")) {
+    if (part === "" || part === ".") continue;
+    if (part === "..") parts.pop();
+    else parts.push(part);
+  }
+  return parts;
+}
+
+/** Whether the absolute `path` is one of `directories` or lies below one. The paths are compared
+ * component by component, never as text — `/a/Project` does not cover `/a/Project2` — after `.` and
+ * `..` are folded, and no symlink is followed. A path that is not absolute is under nothing. */
+function isUnderAny(path: string, directories: string[]): boolean {
+  const mine = pathParts(path);
+  if (!mine) return false;
+  return directories.some((directory) => {
+    const theirs = pathParts(directory);
+    return theirs !== undefined && theirs.length <= mine.length && theirs.every((part, i) => mine[i] === part);
+  });
 }
 
 interface State {
@@ -48,6 +75,9 @@ interface State {
    * declined, when its session stops running, and on a `snapshot`, which cannot say whether the
    * screen is still up — the daemon re-sends the prompts still waiting right after each snapshot. */
   trustPrompts: TrustPrompt[];
+  /** The directories whose projects Octoboard answers the trust prompt for, as the last `snapshot`
+   * or `trusted_directories_updated` said. */
+  trustedDirectories: string[];
 }
 
 type Action =
@@ -68,6 +98,7 @@ const initialState: State = {
   snapshotEpoch: 0,
   toasts: [],
   trustPrompts: [],
+  trustedDirectories: [],
 };
 
 function reducer(state: State, action: Action): State {
@@ -98,6 +129,15 @@ function reducer(state: State, action: Action): State {
             pages: new Map(),
             snapshotEpoch: state.snapshotEpoch + 1,
             trustPrompts: [],
+            trustedDirectories: event.trusted_directories,
+          };
+        case "trusted_directories_updated":
+          // A prompt for a project under a directory that is now trusted has nothing left to ask:
+          // the daemon answers that screen itself. The others stay queued.
+          return {
+            ...state,
+            trustedDirectories: event.trusted_directories,
+            trustPrompts: state.trustPrompts.filter((p) => !isUnderAny(p.path, event.trusted_directories)),
           };
         case "console_upserted": {
           const consoles = new Map(state.consoles);
@@ -152,7 +192,14 @@ function reducer(state: State, action: Action): State {
         }
         case "claude_trust_prompt": {
           if (state.trustPrompts.some((p) => p.session === event.session)) return state;
-          const prompt: TrustPrompt = { session: event.session, project: event.project, path: event.path };
+          // Nothing left to ask about a project that a trusted directory already covers.
+          if (isUnderAny(event.path, state.trustedDirectories)) return state;
+          const prompt: TrustPrompt = {
+            session: event.session,
+            project: event.project,
+            path: event.path,
+            trustDir: event.trust_dir,
+          };
           return { ...state, trustPrompts: [...state.trustPrompts, prompt] };
         }
         case "page_list": {

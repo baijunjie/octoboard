@@ -12,7 +12,7 @@ import { DaemonRequestError } from "./daemon-client";
 import { useAppExit } from "./lifecycle/useAppExit";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
 import { isDormant, type Console, type Project, type Session } from "./protocol";
-import { useDaemon } from "./store";
+import { useDaemon, type TrustPrompt } from "./store";
 import { TerminalPane } from "./terminal/TerminalPane";
 
 type Dialog =
@@ -34,6 +34,31 @@ type Dialog =
  * whether that race is worth showing. */
 const SESSION_ALREADY_RUNNING = "session_already_running";
 
+/** The code the daemon's `error` carries when the parent directory to trust is the filesystem root,
+ * the home directory or one containing it. The trust dialog stays open on it, with the error shown. */
+const TRUST_DIRECTORY_TOO_BROAD = "trust_directory_too_broad";
+
+/** The code the daemon's `error` carries for a go-ahead to a trust screen that is no longer waiting:
+ * answered already, or its session gone. There is nothing to tell the user then. */
+const CLAUDE_TRUST_NOT_WAITING = "claude_trust_not_waiting";
+
+/** What the trust dialog says. The folder-wide choice is spelled out because it reaches beyond the
+ * project being asked about: every project under the folder, including repositories the hub clones
+ * or adds there later, is trusted without a question, and the permissions and hooks in their
+ * `.claude/settings.json` then apply without asking. */
+function trustPromptMessage(prompt: TrustPrompt, sessionLabel: string): string {
+  const folderWide = prompt.trustDir
+    ? ` "Trust all projects in ${shortDirectory(prompt.trustDir)}" trusts every project under ${prompt.trustDir} — those already there and any added there later, repositories the hub clones or adds into it included — without asking again. You can stop that again under "Trusted folders" in the sidebar.`
+    : "";
+  return `Claude Code is asking whether to trust ${prompt.path}${sessionLabel}. Octoboard can answer for you: "Trust and continue" trusts this project's sessions from now on.${folderWide} A folder's .claude/settings.json may pre-approve tool permissions, and trusting it applies them without asking. "Not now" leaves the question in the terminal for you to answer.`;
+}
+
+/** A directory shortened for a button: its last two components. The full path is in the message. */
+function shortDirectory(path: string): string {
+  const parts = path.split("/").filter((part) => part !== "");
+  return parts.length <= 2 ? path : `…/${parts.slice(-2).join("/")}`;
+}
+
 export function App({ port }: { port: number }): React.ReactElement {
   const {
     connectionState,
@@ -42,6 +67,7 @@ export function App({ port }: { port: number }): React.ReactElement {
     projects,
     sessions,
     trustPrompts,
+    trustedDirectories,
     request,
     toastError,
     dismissTrustPrompt,
@@ -90,6 +116,38 @@ export function App({ port }: { port: number }): React.ReactElement {
       suppressAlreadyRunning,
     );
   };
+
+  const answerTrustPrompt = async (prompt: TrustPrompt, trustParentDir: boolean) => {
+    // Dismissed whether or not the request worked: the daemon answers a screen once, so retrying
+    // from this dialog can never succeed. The error is toasted rather than shown inline for the
+    // same reason. A failure to answer also reaches the user as the daemon's own session notice,
+    // which covers a dialog closed meanwhile. The one exception is a parent directory that is too
+    // broad: nothing was answered, so the error stays in the dialog and the user picks again.
+    try {
+      await request({
+        type: "confirm_claude_trust",
+        session: prompt.session,
+        remember: true,
+        trust_parent_dir: trustParentDir,
+      });
+    } catch (err) {
+      if (err instanceof DaemonRequestError && err.code === TRUST_DIRECTORY_TOO_BROAD) throw err;
+      if (err instanceof DaemonRequestError && err.code === CLAUDE_TRUST_NOT_WAITING) {
+        // Nothing to tell for the plain go-ahead; but a folder the user asked to trust was not.
+        if (trustParentDir) {
+          toastError(
+            "The trust screen was already answered, so the folder was not trusted. Use the dialog again for the next screen.",
+          );
+        }
+      } else {
+        toastError((err as Error).message);
+      }
+    }
+    dismissTrustPrompt(prompt.session);
+  };
+
+  const removeTrustedDirectory = (path: string) =>
+    void request({ type: "remove_trusted_directory", path }).catch((err) => toastError((err as Error).message));
 
   const trustSessionLabel = (sessionId: string) => {
     const title = sessions.get(sessionId)?.title;
@@ -146,6 +204,8 @@ export function App({ port }: { port: number }): React.ReactElement {
           projects={Array.from(projects.values())}
           sessions={sessionList}
           selectedSessionId={selectedSessionId}
+          trustedDirectories={trustedDirectories}
+          onRemoveTrustedDirectory={removeTrustedDirectory}
           onSelectSession={selectSession}
           onNewConsole={() => setDialog({ kind: "new-console" })}
           onEditConsole={(c) => setDialog({ kind: "edit-console", console: c })}
@@ -233,23 +293,20 @@ export function App({ port }: { port: number }): React.ReactElement {
         <ConfirmDialog
           key={trustPrompt.session}
           title="Trust this folder?"
-          message={`Claude Code is asking whether to trust ${trustPrompt.path}${trustSessionLabel(trustPrompt.session)}. Octoboard can answer for you, here and for this project's later sessions. This folder's .claude/settings.json may pre-approve tool permissions, and trusting it applies them without asking. "Not now" leaves the question in the terminal for you to answer.`}
+          message={trustPromptMessage(trustPrompt, trustSessionLabel(trustPrompt.session))}
           confirmLabel="Trust and continue"
           cancelLabel="Not now"
           onCancel={() => dismissTrustPrompt(trustPrompt.session)}
-          onConfirm={async () => {
-            // Dismissed whether or not the request worked: the daemon answers a screen once, so
-            // retrying from this dialog can never succeed. The error is toasted rather than shown
-            // inline for the same reason. A failure to answer also reaches the user as the
-            // daemon's own session notice, which covers a dialog closed meanwhile.
-            try {
-              await request({ type: "confirm_claude_trust", session: trustPrompt.session, remember: true });
-            } catch (err) {
-              toastError((err as Error).message);
-            } finally {
-              dismissTrustPrompt(trustPrompt.session);
-            }
-          }}
+          onConfirm={() => answerTrustPrompt(trustPrompt, false)}
+          extraAction={
+            trustPrompt.trustDir
+              ? {
+                  label: `Trust all projects in ${shortDirectory(trustPrompt.trustDir)}`,
+                  title: trustPrompt.trustDir,
+                  onClick: () => answerTrustPrompt(trustPrompt, true),
+                }
+              : undefined
+          }
         />
       )}
       {exitConfirmOpen && (

@@ -30,17 +30,17 @@ everything it can do goes through the external interface below.
 | `src/main.rs` | CLI entry point: parses the three modes above, opens the store, binds the port, prints the handshake line the application waits for, runs the server until shutdown |
 | `src/server.rs` | The HTTP/WebSocket router described in `PROTOCOL.md`, including `POST /mcp/:token` |
 | `src/protocol.rs` | Rust types for the wire protocol; kept in sync with `PROTOCOL.md` and with `app/src/protocol.ts` by hand |
-| `src/coordinator.rs` | Coordinator role: what each control-socket request does to the stored consoles/projects/sessions/pages, and which host-role work it triggers |
+| `src/coordinator.rs` | Coordinator role: what each control-socket request does to the stored consoles/projects/sessions/pages, and which host-role work it triggers; projects are stored with absolute, lexically normalised paths |
 | `src/reporting.rs` | The channel between a console's hub and its project sessions: the brief a task is handed over as, writing a message into a running session, a report reaching the hub, the report synthesised when a session stops without sending one, automatic archiving, and rendering a report panel form submission into the hub's message |
 | `src/outbox.rs` | The per-session queue every message Octoboard writes into an agent passes through: order-preserving, one drainer per session, and what happens to a message the session only partly accepted |
-| `src/store.rs` | Coordinator's SQLite storage for consoles, projects, sessions, pages and the host table |
+| `src/store.rs` | Coordinator's SQLite storage for consoles, projects, sessions, pages, the trusted folders and the host table |
 | `src/state.rs` | Shared daemon state and the session status transitions |
 | `src/session.rs` | One running agent process: its PTY, its output fan-out, how it is stopped |
-| `src/trust.rs` | Recognising Claude Code's workspace-trust screen in a Claude session's terminal output, deciding whether the user has consented (hub sessions are answered without asking), asking the application through `claude_trust_prompt` / `confirm_claude_trust`, and answering the screen — the only code that types keys into a session on its own |
+| `src/trust.rs` | Recognising Claude Code's workspace-trust screen in a Claude session's terminal output, deciding whether the user has consented (per project or through a trusted parent folder; hub sessions are answered without asking), asking the application through `claude_trust_prompt` / `confirm_claude_trust`, and answering the screen — the only code that types keys into a session on its own |
 | `src/term.rs` | Launching an agent in a PTY, and writing messages into a running one |
 | `src/ptyio.rs` | Non-blocking read/write on a PTY master fd (a blocking write can park forever behind a modal dialog) |
 | `src/ringbuf.rs` | Fixed-capacity ring buffer holding a session's recent terminal output, replayed to a client that attaches or reconnects |
-| `src/hostfs.rs` | Host role's filesystem work: browsing directories, finding git repositories under a parent directory, cloning one |
+| `src/hostfs.rs` | Host role's filesystem work: browsing directories, finding git repositories under a parent directory, cloning one, lexical path normalisation |
 | `src/env_shell.rs` | Captures the user's real shell environment (`$SHELL -l -i -c 'env -0 && printf <marker>'`) that every agent is launched with |
 | `src/hooks.rs` | Turns one agent's hook event payload into a session status; each agent's events and payload shape differ |
 | `src/hook_mode.rs` | The `octoboardd hook` CLI mode itself |

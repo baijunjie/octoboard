@@ -5,7 +5,9 @@
 //! unattended. Octoboard answers it by typing at the terminal — a Down and an Enter, because the
 //! cursor starts on "No, exit" — and never by editing Claude Code's global config file, which
 //! Claude Code rewrites constantly and which is the user's. The user's agreement comes first, in a
-//! dialog of Octoboard's own, and is remembered per project (`Project::claude_trust_consent`).
+//! dialog of Octoboard's own, and is remembered per project (`Project::claude_trust_consent`) or
+//! for a whole directory (`trusted_directories`): every project whose path lies under it, existing
+//! or added later, is answered without asking.
 //!
 //! **Detection.** Every Claude Code session's output is watched by a [`TrustState`], fed from the
 //! PTY reader thread whether or not a client is attached. The screen is recognised by how it is
@@ -44,6 +46,7 @@
 //! the person to answer it. Each session is answered at most once, so a failed attempt is not
 //! retried behind the person's back.
 
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -51,7 +54,9 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, bail, Result};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use crate::protocol::{Agent, Event, Project, Role, Session};
+use crate::hostfs::lexically_normalise;
+use crate::paths;
+use crate::protocol::{error_code, Agent, CodedError, Event, Project, Role, Session};
 use crate::session::LiveSession;
 use crate::state::AppState;
 
@@ -289,9 +294,105 @@ impl TrustState {
 
 /// Whether Octoboard may answer this session's screen without asking: a hub session always may,
 /// because its working directory is the console's own, which holds nothing but the instruction
-/// file Octoboard wrote there; a project session only with the user's consent for that project.
-fn consented(session: &Session, project: Option<&Project>) -> bool {
-    session.role == Role::Hub || project.is_some_and(|project| project.claude_trust_consent)
+/// file Octoboard wrote there; a project session only with the user's consent, either for that
+/// project or for a trusted directory its path lies under.
+fn consented(session: &Session, project: Option<&Project>, trusted: &[String]) -> bool {
+    session.role == Role::Hub
+        || project.is_some_and(|project| {
+            project.claude_trust_consent || under_a_trusted_directory(&project.path, trusted)
+        })
+}
+
+/// A path as the trusted directories are kept and compared: lexically normalised — `.` dropped,
+/// `..` folded into the component before it, trailing slashes gone — and absolute to be of any
+/// use. Symlinks are deliberately not resolved: a directory is trusted by the path the user chose,
+/// and both sides of every comparison are normalised the same way. The consequence is that a
+/// symlink inside a trusted directory extends the trust to whatever it points at only if the
+/// project's own path goes through it.
+fn normalise_path(text: &str) -> PathBuf {
+    lexically_normalise(Path::new(text))
+}
+
+/// Whether `path` is one of the trusted directories or lies below one. Compared component by
+/// component, never as text: `/a/Project` does not cover `/a/Project2`.
+fn under_a_trusted_directory(path: &str, trusted: &[String]) -> bool {
+    let path = normalise_path(path);
+    path.is_absolute()
+        && trusted
+            .iter()
+            .any(|directory| path.starts_with(normalise_path(directory)))
+}
+
+/// The directory to trust for a project: its parent. Refused when that is the filesystem root, the
+/// user's home directory, or a directory that contains the home directory — trusting one of those
+/// would trust nearly everything the user has, which is not what a click in a dialog should grant.
+///
+/// The home directory and its ancestors, as written and as resolved, are compared with the parent
+/// both as text and, where both exist, as the same directory on disk (device and inode), so that a
+/// link to home, `/users/me` on a case-insensitive volume, or a home directory reached through a
+/// link whose real location sits under the parent does not slip past the text comparison. A home
+/// directory that is not absolute, or is the root, cannot be told apart from anything else, so
+/// nothing is offered. A project path that is not absolute is refused as such. Every refusal
+/// carries the same code: the dialog stays open, since nothing was answered.
+fn trustable_parent(project_path: &str, home: &Path) -> Result<PathBuf> {
+    let path = normalise_path(project_path);
+    if !path.is_absolute() {
+        return Err(refused(format!(
+            "`{project_path}` is not an absolute path, so there is no folder above it to trust"
+        )));
+    }
+    let parent = match path.parent() {
+        Some(parent) if parent.parent().is_some() => parent.to_path_buf(),
+        _ => return Err(too_broad(&path)),
+    };
+    let home = lexically_normalise(home);
+    if !home.is_absolute() || home.parent().is_none() {
+        return Err(refused(
+            "the home directory could not be determined, so no folder can be checked against it"
+                .to_string(),
+        ));
+    }
+    if home.starts_with(&parent) {
+        return Err(too_broad(&parent));
+    }
+    let resolved = std::fs::canonicalize(&home).ok();
+    if [Some(&home), resolved.as_ref()]
+        .into_iter()
+        .flatten()
+        .flat_map(|home| home.ancestors())
+        .any(|ancestor| same_directory(ancestor, &parent))
+    {
+        return Err(too_broad(&parent));
+    }
+    Ok(parent)
+}
+
+/// A directory to trust that cannot be offered, with the reason. One code for all of them.
+fn refused(message: String) -> anyhow::Error {
+    CodedError::raised(error_code::TRUST_DIRECTORY_TOO_BROAD, message)
+}
+
+/// Whether two paths are the same directory on disk, however they are spelled: through a symlink,
+/// or in another letter case on a volume that does not tell them apart. False when either is
+/// unreadable.
+fn same_directory(a: &Path, b: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    match (std::fs::metadata(a), std::fs::metadata(b)) {
+        (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
+        _ => false,
+    }
+}
+
+fn too_broad(directory: &Path) -> anyhow::Error {
+    CodedError::raised(
+        error_code::TRUST_DIRECTORY_TOO_BROAD,
+        format!(
+            "`{}` is too broad to trust as a whole: it is, or contains, the filesystem root or \
+             your home directory. Trust this project on its own, or move it under a narrower folder \
+             and trust that.",
+            directory.display()
+        ),
+    )
 }
 
 /// Starts acting on this session's trust screen whenever it appears. Gone when the session is.
@@ -319,17 +420,46 @@ async fn on_sighting(state: &Arc<AppState>, live: &Arc<LiveSession>) -> Result<(
         Some(id) => state.store.get_project(id)?,
         None => None,
     };
-    if consented(&session, project.as_ref()) {
+    let trusted = state.store.trusted_directories()?;
+    if consented(&session, project.as_ref(), &trusted) {
         answer_and_report(state, live).await;
         return Ok(());
     }
     let project = project.ok_or_else(|| anyhow!("the session's project is gone"))?;
-    state.broadcast(Event::ClaudeTrustPrompt {
-        session: session.id,
-        project: project.id,
-        path: project.path,
-    });
+    state.broadcast(prompt(&session.id, &project));
     Ok(())
+}
+
+/// The prompt for one session at its screen, with the directory its parent-directory button would
+/// trust, if there is one to offer.
+fn prompt(session_id: &str, project: &Project) -> Event {
+    Event::ClaudeTrustPrompt {
+        session: session_id.to_string(),
+        project: project.id.clone(),
+        path: project.path.clone(),
+        trust_dir: trustable_parent(&project.path, &paths::home_dir())
+            .ok()
+            .map(|directory| directory.to_string_lossy().into_owned()),
+    }
+}
+
+/// The live Claude Code project sessions that are at their trust screen with nobody answering it,
+/// each with its record and its project.
+fn waiting_project_sessions(state: &AppState) -> Vec<(Arc<LiveSession>, Session, Project)> {
+    state
+        .live_sessions()
+        .into_iter()
+        .filter(|live| live.trust.waiting())
+        .filter_map(|live| {
+            let session = state.store.get_session(&live.id).ok().flatten()?;
+            let project = state
+                .store
+                .get_project(session.project_id.as_deref()?)
+                .ok()
+                .flatten()?;
+            Some((live, session, project))
+        })
+        .collect()
 }
 
 /// Answers a screen nobody is being asked about, and tells the user when that did not work: the
@@ -349,22 +479,24 @@ async fn answer_off_the_runtime(live: Arc<LiveSession>) -> Result<()> {
 }
 
 /// The right to answer was not there to take: the screen is not up, or somebody else — a
-/// concurrent go-ahead — is answering it already. Nothing went wrong, so nobody is told.
-#[derive(Debug)]
-struct NotWaiting;
-
-impl std::fmt::Display for NotWaiting {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("the trust screen is not up, or is already being answered")
-    }
+/// concurrent go-ahead, or the user in the terminal — has answered it already. Nothing went wrong,
+/// so nobody is told, and a client that asked is told with a code it shows nothing for.
+fn not_waiting() -> anyhow::Error {
+    CodedError::raised(
+        error_code::CLAUDE_TRUST_NOT_WAITING,
+        "this session is not waiting at Claude Code's trust screen any more",
+    )
 }
 
-impl std::error::Error for NotWaiting {}
+fn is_not_waiting(err: &anyhow::Error) -> bool {
+    err.downcast_ref::<CodedError>()
+        .is_some_and(|coded| coded.code == error_code::CLAUDE_TRUST_NOT_WAITING)
+}
 
 /// Logs a failed answer and tells the user, whoever asked for it: the screen is then still up and
 /// theirs to answer. A lost claim is not a failure.
 fn report_failure(state: &Arc<AppState>, session_id: &str, err: &anyhow::Error) {
-    if err.downcast_ref::<NotWaiting>().is_some() {
+    if is_not_waiting(err) {
         tracing::debug!(session = %session_id, "the trust screen is already being answered");
         return;
     }
@@ -380,42 +512,32 @@ fn report_failure(state: &Arc<AppState>, session_id: &str, err: &anyhow::Error) 
 
 /// The prompts to put to a client that has just been sent a snapshot: one for each live Claude
 /// Code project session that is at its screen with nobody answering it and whose project has not
-/// consented. A prompt is broadcast once, so a client that missed it — it was not connected, or a
-/// snapshot replaced what it had — is told here, and one that already has it ignores the repeat.
+/// consented, by its own consent or through a trusted directory. A prompt is broadcast once, so a
+/// client that missed it — it was not connected, or a snapshot replaced what it had — is told here,
+/// and one that already has it ignores the repeat.
 pub fn pending_prompts(state: &AppState) -> Vec<Event> {
-    let mut prompts = Vec::new();
-    for live in state.live_sessions() {
-        if !live.trust.waiting() {
-            continue;
-        }
-        let Ok(Some(session)) = state.store.get_session(&live.id) else {
-            continue;
-        };
-        let Some(project_id) = &session.project_id else {
-            continue;
-        };
-        let Ok(Some(project)) = state.store.get_project(project_id) else {
-            continue;
-        };
-        if consented(&session, Some(&project)) {
-            continue;
-        }
-        prompts.push(Event::ClaudeTrustPrompt {
-            session: session.id,
-            project: project.id,
-            path: project.path,
-        });
-    }
-    prompts
+    let trusted = state.store.trusted_directories().unwrap_or_default();
+    waiting_project_sessions(state)
+        .into_iter()
+        .filter(|(_, session, project)| !consented(session, Some(project), &trusted))
+        .map(|(_, session, project)| prompt(&session.id, &project))
+        .collect()
 }
 
 /// The user's go-ahead for one session's screen, from the dialog a `claude_trust_prompt` opened.
 /// Refused unless that session is a running Claude Code project session still waiting at its
 /// screen — a stale dialog, a session that has since gone, or a request naming something else
-/// entirely changes nothing. Consent is recorded only once the screen has been answered, and only
-/// when `remember` asks for it; a failure to answer is reported to the user as a notice as well as
-/// to the caller, because the dialog it came from may be closed by then.
-pub async fn confirm(state: &Arc<AppState>, session_id: &str, remember: bool) -> Result<()> {
+/// entirely changes nothing. Consent is recorded only once the screen has been answered — the
+/// project's when `remember` asks for it, its parent directory's when `trust_parent_dir` does; a
+/// failure to answer is reported to the user as a notice as well as to the caller, because the
+/// dialog it came from may be closed by then. A parent directory that is too broad is refused
+/// before anything is answered.
+pub async fn confirm(
+    state: &Arc<AppState>,
+    session_id: &str,
+    remember: bool,
+    trust_parent_dir: bool,
+) -> Result<()> {
     let session = state.session_record(session_id)?;
     if session.agent != Agent::Claude {
         bail!("only Claude Code sessions have a trust screen");
@@ -424,7 +546,7 @@ pub async fn confirm(state: &Arc<AppState>, session_id: &str, remember: bool) ->
         bail!("this session is not running");
     };
     if !live.trust.waiting() {
-        bail!("this session is not waiting at Claude Code's trust screen any more");
+        return Err(not_waiting());
     }
     let Some(project_id) = &session.project_id else {
         bail!("a hub session's trust screen is answered by Octoboard without asking");
@@ -434,17 +556,58 @@ pub async fn confirm(state: &Arc<AppState>, session_id: &str, remember: bool) ->
         .get_project(project_id)?
         .ok_or_else(|| anyhow!("unknown project {project_id}"))?;
 
+    let directory = if trust_parent_dir {
+        Some(trustable_parent(&project.path, &paths::home_dir())?)
+    } else {
+        None
+    };
+
     if let Err(err) = answer_off_the_runtime(live).await {
         report_failure(state, session_id, &err);
         return Err(err);
     }
 
-    if remember && !project.claude_trust_consent {
+    if let Some(directory) = directory {
+        add_trusted_directory(state, &directory)?;
+    } else if remember && !project.claude_trust_consent {
         state
             .store
             .set_project_claude_trust_consent(&project.id, true)?;
         project.claude_trust_consent = true;
         state.broadcast(Event::ProjectUpserted { project });
+    }
+    Ok(())
+}
+
+/// Trusts a directory and everything below it, tells every client, and answers the screens already
+/// waiting in projects under it. Each project's own consent is untouched. Needs the runtime: the
+/// answers go off on tasks of their own.
+fn add_trusted_directory(state: &Arc<AppState>, directory: &Path) -> Result<()> {
+    let directory = directory.to_string_lossy().into_owned();
+    if !state.store.add_trusted_directory(&directory)? {
+        return Ok(());
+    }
+    state.broadcast(Event::TrustedDirectoriesUpdated {
+        trusted_directories: state.store.trusted_directories()?,
+    });
+    let covered = [directory];
+    for (live, _, project) in waiting_project_sessions(state) {
+        if under_a_trusted_directory(&project.path, &covered) {
+            let state = state.clone();
+            tokio::spawn(async move { answer_and_report(&state, &live).await });
+        }
+    }
+    Ok(())
+}
+
+/// Stops trusting a directory, and tells every client. Projects' own consents stay, and so do the
+/// sessions already running.
+pub fn remove_trusted_directory(state: &Arc<AppState>, path: &str) -> Result<()> {
+    let path = normalise_path(path).to_string_lossy().into_owned();
+    if state.store.remove_trusted_directory(&path)? {
+        state.broadcast(Event::TrustedDirectoriesUpdated {
+            trusted_directories: state.store.trusted_directories()?,
+        });
     }
     Ok(())
 }
@@ -459,7 +622,7 @@ fn answer(live: &LiveSession) -> Result<()> {
         bail!("only Claude Code sessions have a trust screen");
     }
     if !live.trust.claim_answer() {
-        return Err(NotWaiting.into());
+        return Err(not_waiting());
     }
     // Read before anything is looked at: a write by anyone else after this point means what was
     // looked at may no longer be true.
@@ -661,11 +824,13 @@ mod tests {
         let json = serde_json::to_value(Event::ClaudeTrustPrompt {
             session: "s".into(),
             project: "p".into(),
-            path: "/x".into(),
+            path: "/x/y".into(),
+            trust_dir: Some("/x".into()),
         })
         .unwrap();
         assert_eq!(json["type"], "claude_trust_prompt");
-        assert_eq!(json["path"], "/x");
+        assert_eq!(json["path"], "/x/y");
+        assert_eq!(json["trust_dir"], "/x");
     }
 
     /// The screen arrives in however many reads the kernel makes of it, cut anywhere — inside an
@@ -791,10 +956,20 @@ mod tests {
     fn a_hub_is_always_answered_and_a_project_only_with_the_users_consent() {
         let hub = session("s", Agent::Claude, Role::Hub, None);
         let worker = session("s", Agent::Claude, Role::Worker, Some("project-1"));
-        assert!(consented(&hub, None));
-        assert!(consented(&worker, Some(&project(true))));
-        assert!(!consented(&worker, Some(&project(false))));
-        assert!(!consented(&worker, None));
+        let none: &[String] = &[];
+        let work = ["/work".to_string()];
+        assert!(consented(&hub, None, none));
+        assert!(consented(&worker, Some(&project(true)), none));
+        assert!(!consented(&worker, Some(&project(false)), none));
+        assert!(!consented(&worker, None, none));
+        // A trusted directory covers the project under it, one with no consent of its own included.
+        assert!(consented(&worker, Some(&project(false)), &work));
+        assert!(!consented(
+            &worker,
+            Some(&project(false)),
+            &["/elsewhere".to_string()]
+        ));
+        assert!(!consented(&worker, None, &work));
     }
 
     /// A fresh directory for one test. Named without the thread id's parentheses, which the shell
@@ -1135,6 +1310,7 @@ mod tests {
                     session,
                     project,
                     path,
+                    ..
                 } = events.recv().await.expect("event")
                 {
                     return (session, project, path);
@@ -1157,7 +1333,9 @@ mod tests {
             "nothing is sent before the user agrees"
         );
 
-        confirm(&state, "worker-1", true).await.expect("confirmed");
+        confirm(&state, "worker-1", true, false)
+            .await
+            .expect("confirmed");
 
         assert_eq!(sent(&received), b"\x1b[B\r");
         assert!(
@@ -1176,7 +1354,7 @@ mod tests {
         assert!(upserted, "clients are told the project is now consented");
 
         // Answered once: a second confirmation of the same screen is stale.
-        assert!(confirm(&state, "worker-1", true).await.is_err());
+        assert!(confirm(&state, "worker-1", true, false).await.is_err());
         tokio::task::spawn_blocking(move || live.terminate())
             .await
             .unwrap();
@@ -1217,32 +1395,40 @@ mod tests {
         let (state, dir) = app_state("refused");
 
         // Unknown.
-        assert!(confirm(&state, "nobody", true).await.is_err());
+        assert!(confirm(&state, "nobody", true, false).await.is_err());
 
         // Another agent's, even running and even holding the words.
         let codex = session("codex-1", Agent::Codex, Role::Worker, Some("project-1"));
         let (codex_live, codex_received) = start(&state, &dir, codex, "sleep 30");
         codex_live.trust.feed(SCREEN);
-        let err = confirm(&state, "codex-1", true).await.expect_err("refused");
+        let err = confirm(&state, "codex-1", true, false)
+            .await
+            .expect_err("refused");
         assert!(err.to_string().contains("Claude Code"), "{err}");
 
         // Claude Code's, but not running.
         let gone = session("gone-1", Agent::Claude, Role::Worker, Some("project-1"));
         state.store.insert_session(&gone).expect("session");
-        let err = confirm(&state, "gone-1", true).await.expect_err("refused");
+        let err = confirm(&state, "gone-1", true, false)
+            .await
+            .expect_err("refused");
         assert!(err.to_string().contains("not running"), "{err}");
 
         // Running, but its screen is not up.
         let quiet = session("quiet-1", Agent::Claude, Role::Worker, Some("project-1"));
         let (quiet_live, quiet_received) = start(&state, &dir, quiet, "sleep 30");
-        let err = confirm(&state, "quiet-1", true).await.expect_err("refused");
+        let err = confirm(&state, "quiet-1", true, false)
+            .await
+            .expect_err("refused");
         assert!(err.to_string().contains("any more"), "{err}");
 
         // A hub's screen is not the user's to confirm.
         let hub = session("hub-1", Agent::Claude, Role::Hub, None);
         let (hub_live, _) = start(&state, &dir, hub, "sleep 30");
         hub_live.trust.feed(SCREEN);
-        let err = confirm(&state, "hub-1", true).await.expect_err("refused");
+        let err = confirm(&state, "hub-1", true, false)
+            .await
+            .expect_err("refused");
         assert!(err.to_string().contains("hub session"), "{err}");
 
         assert!(
@@ -1281,7 +1467,9 @@ mod tests {
         let (live, received) = start(&state, &dir, record, &full_script(Path::new("%RECEIVED%")));
         live.trust.feed(SCREEN);
 
-        confirm(&state, "worker-1", false).await.expect("confirmed");
+        confirm(&state, "worker-1", false, false)
+            .await
+            .expect("confirmed");
         assert_eq!(sent(&received), b"\x1b[B\r");
         assert!(!consented_in_store(&state));
 
@@ -1315,7 +1503,9 @@ mod tests {
         .await
         .unwrap();
 
-        let err = confirm(&state, "worker-1", true).await.expect_err("failed");
+        let err = confirm(&state, "worker-1", true, false)
+            .await
+            .expect_err("failed");
         assert!(err.to_string().contains("did not move"), "{err}");
         assert!(!consented_in_store(&state));
         let mut told = false;
@@ -1389,8 +1579,9 @@ mod tests {
         let prompts = pending_prompts(&state);
         assert_eq!(prompts.len(), 1, "{prompts:?}");
         assert!(
-            matches!(&prompts[0], Event::ClaudeTrustPrompt { session, project, path }
-            if session == "waiting-1" && project == "project-1" && path == "/work/project")
+            matches!(&prompts[0], Event::ClaudeTrustPrompt { session, project, path, trust_dir }
+            if session == "waiting-1" && project == "project-1" && path == "/work/project"
+                && trust_dir.as_deref() == Some("/work"))
         );
 
         // Once the project has consented the screen is answered, not asked about.
@@ -1402,6 +1593,485 @@ mod tests {
 
         tokio::task::spawn_blocking(move || {
             for live in [waiting_live, hub_live, quiet_live, answered_live] {
+                live.terminate();
+            }
+        })
+        .await
+        .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    fn trusted_in_store(state: &AppState) -> Vec<String> {
+        state.store.trusted_directories().unwrap()
+    }
+
+    /// Paths are compared component by component, after a lexical clean-up, and a trusted directory
+    /// covers itself and everything below it.
+    #[test]
+    fn a_trusted_directory_covers_itself_and_what_is_below_it_and_nothing_else() {
+        let work = ["/work".to_string()];
+        assert!(under_a_trusted_directory("/work", &work), "itself");
+        assert!(under_a_trusted_directory("/work/project", &work), "a child");
+        assert!(
+            under_a_trusted_directory("/work/a/b/c", &work),
+            "a descendant"
+        );
+        assert!(
+            under_a_trusted_directory("/work/project/", &work),
+            "a trailing slash"
+        );
+        assert!(
+            under_a_trusted_directory("/work/./a/../project", &work),
+            "lexical clean-up"
+        );
+        assert!(under_a_trusted_directory(
+            "/work/project",
+            &["/work/".to_string()]
+        ));
+        // Not a string prefix.
+        assert!(!under_a_trusted_directory("/workspace/project", &work));
+        assert!(!under_a_trusted_directory("/work2", &work));
+        assert!(
+            !under_a_trusted_directory("/Work/project", &work),
+            "case differs"
+        );
+        // Not above it, not beside it, not escaping it.
+        assert!(!under_a_trusted_directory("/", &work));
+        assert!(!under_a_trusted_directory("/work/../other", &work));
+        assert!(
+            !under_a_trusted_directory("work/project", &work),
+            "relative"
+        );
+        assert!(!under_a_trusted_directory("/work/project", &[]));
+    }
+
+    #[test]
+    fn the_parent_to_trust_is_never_the_root_the_home_directory_or_above_it() {
+        let home = Path::new("/Users/me");
+        assert_eq!(
+            trustable_parent("/Users/me/Coding/app", home).unwrap(),
+            Path::new("/Users/me/Coding")
+        );
+        assert_eq!(
+            trustable_parent("/Users/me/Coding/app/", home).unwrap(),
+            Path::new("/Users/me/Coding"),
+            "a trailing slash"
+        );
+        // Directly in the home directory, in the root, and the root itself.
+        for project in ["/Users/me/app", "/app", "/", "/Users/app"] {
+            let err = trustable_parent(project, home).expect_err(project);
+            let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+            assert_eq!(
+                coded.code,
+                error_code::TRUST_DIRECTORY_TOO_BROAD,
+                "{project}"
+            );
+            assert!(err.to_string().contains("too broad"), "{err}");
+        }
+        assert!(trustable_parent("relative/app", home).is_err());
+    }
+
+    /// "Trust all projects in this folder" answers this screen and, once that worked, records the
+    /// parent directory — and leaves the project's own consent unset.
+    #[tokio::test]
+    async fn confirming_for_the_parent_directory_records_it_after_the_answer() {
+        let (state, dir) = app_state("confirm-parent");
+        let mut events = state.subscribe();
+        let record = session("worker-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let (live, received) = start(&state, &dir, record, &full_script(Path::new("%RECEIVED%")));
+        live.trust.feed(SCREEN);
+
+        confirm(&state, "worker-1", false, true)
+            .await
+            .expect("confirmed");
+        assert_eq!(sent(&received), b"\x1b[B\r");
+        assert_eq!(trusted_in_store(&state), ["/work"]);
+        assert!(
+            !consented_in_store(&state),
+            "the project's own consent is separate"
+        );
+        let mut told = false;
+        while let Ok(event) = events.try_recv() {
+            told |= matches!(event, Event::TrustedDirectoriesUpdated { trusted_directories }
+                if trusted_directories == ["/work"]);
+        }
+        assert!(told, "clients are told");
+
+        tokio::task::spawn_blocking(move || live.terminate())
+            .await
+            .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn nothing_is_trusted_when_the_answer_fails_or_is_refused() {
+        let (state, dir) = app_state("confirm-parent-refused");
+        // The stand-in never moves its cursor.
+        let script = format!(
+            "cat {}; dd bs=1 count=3 2>/dev/null >> '%RECEIVED%'; sleep 30",
+            fixture("claude_trust_screen.bin")
+        );
+        let record = session("worker-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let (live, _) = start(&state, &dir, record, &script);
+        live.trust.feed(SCREEN);
+        let seen = live.clone();
+        tokio::task::spawn_blocking(move || {
+            wait_for(Duration::from_secs(5), || {
+                is_trust_screen(&seen.recent_output(WINDOW))
+            })
+        })
+        .await
+        .unwrap();
+        assert!(confirm(&state, "worker-1", false, true).await.is_err());
+        assert!(trusted_in_store(&state).is_empty());
+
+        // The same refusals as for one project: unknown, another agent's, not running, a hub's.
+        let codex = session("codex-1", Agent::Codex, Role::Worker, Some("project-1"));
+        let (codex_live, _) = start(&state, &dir, codex, "sleep 30");
+        let hub = session("hub-1", Agent::Claude, Role::Hub, None);
+        let (hub_live, _) = start(&state, &dir, hub, "sleep 30");
+        hub_live.trust.feed(SCREEN);
+        let gone = session("gone-1", Agent::Claude, Role::Worker, Some("project-1"));
+        state.store.insert_session(&gone).expect("session");
+        for id in ["nobody", "codex-1", "hub-1", "gone-1"] {
+            assert!(confirm(&state, id, true, true).await.is_err(), "{id}");
+        }
+        assert!(trusted_in_store(&state).is_empty());
+
+        tokio::task::spawn_blocking(move || {
+            live.terminate();
+            codex_live.terminate();
+            hub_live.terminate();
+        })
+        .await
+        .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A project directly under the home directory has nothing narrower to trust, so the request is
+    /// refused before anything is answered or sent.
+    #[tokio::test]
+    async fn a_parent_that_is_the_home_directory_is_refused_before_the_screen_is_answered() {
+        let (state, dir) = app_state("confirm-home");
+        let home = paths::home_dir();
+        let mut broad = project(false);
+        broad.id = "broad".to_string();
+        broad.path = home.join("app").to_string_lossy().into_owned();
+        state.store.insert_project(&broad).expect("project");
+        let record = session("worker-1", Agent::Claude, Role::Worker, Some("broad"));
+        let (live, received) = start(&state, &dir, record, &full_script(Path::new("%RECEIVED%")));
+        live.trust.feed(SCREEN);
+
+        let err = confirm(&state, "worker-1", false, true)
+            .await
+            .expect_err("refused");
+        assert_eq!(
+            err.downcast_ref::<CodedError>().map(|coded| coded.code),
+            Some(error_code::TRUST_DIRECTORY_TOO_BROAD)
+        );
+        assert!(trusted_in_store(&state).is_empty());
+        assert!(live.trust.waiting(), "the screen is still waiting");
+        assert!(sent(&received).is_empty());
+
+        tokio::task::spawn_blocking(move || live.terminate())
+            .await
+            .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn a_directory_can_be_removed_again_and_each_projects_own_consent_stays() {
+        let (state, dir) = app_state("remove");
+        state
+            .store
+            .set_project_claude_trust_consent("project-1", true)
+            .expect("consent");
+        state.store.add_trusted_directory("/work").expect("trusted");
+        let mut events = state.subscribe();
+
+        remove_trusted_directory(&state, "/work/").expect("removed");
+        remove_trusted_directory(&state, "/work").expect("a repeat");
+        assert!(trusted_in_store(&state).is_empty());
+        assert!(consented_in_store(&state));
+
+        let mut updates = Vec::new();
+        while let Ok(event) = events.try_recv() {
+            if let Event::TrustedDirectoriesUpdated {
+                trusted_directories,
+            } = event
+            {
+                updates.push(trusted_directories);
+            }
+        }
+        assert_eq!(updates, [Vec::<String>::new()], "a repeat is not announced");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A screen of a project under a directory is answered without a prompt, and trusting the
+    /// directory answers the screens already waiting under it — and only those.
+    #[tokio::test]
+    async fn trusting_a_directory_answers_the_screens_waiting_under_it_and_no_others() {
+        let (state, dir) = app_state("fan-out");
+        let mut elsewhere = project(false);
+        elsewhere.id = "project-2".to_string();
+        elsewhere.path = "/other/project".to_string();
+        state.store.insert_project(&elsewhere).expect("project");
+        let mut events = state.subscribe();
+
+        let under = session("under-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let (under_live, under_received) =
+            start(&state, &dir, under, &full_script(Path::new("%RECEIVED%")));
+        supervise(&state, &under_live);
+        let beside = session("beside-1", Agent::Claude, Role::Worker, Some("project-2"));
+        let (beside_live, beside_received) =
+            start(&state, &dir, beside, &full_script(Path::new("%RECEIVED%")));
+        supervise(&state, &beside_live);
+        let mut asked = 0;
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while asked < 2 {
+                if let Event::ClaudeTrustPrompt { .. } = events.recv().await.expect("event") {
+                    asked += 1;
+                }
+            }
+        })
+        .await
+        .expect("both are asked about");
+
+        add_trusted_directory(&state, Path::new("/work")).expect("trusted");
+        assert!(
+            tokio::task::spawn_blocking({
+                let received = under_received.clone();
+                move || wait_for(Duration::from_secs(10), || sent(&received) == b"\x1b[B\r")
+            })
+            .await
+            .unwrap(),
+            "the screen under the directory is answered"
+        );
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        assert!(
+            sent(&beside_received).is_empty(),
+            "the one beside it is not"
+        );
+        assert_eq!(pending_prompts(&state).len(), 1, "and is still asked about");
+
+        // A screen that comes up later under the directory is answered with no prompt.
+        let later = session("later-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let (later_live, later_received) =
+            start(&state, &dir, later, &full_script(Path::new("%RECEIVED%")));
+        supervise(&state, &later_live);
+        assert!(tokio::task::spawn_blocking({
+            let received = later_received.clone();
+            move || wait_for(Duration::from_secs(10), || sent(&received) == b"\x1b[B\r")
+        })
+        .await
+        .unwrap());
+
+        tokio::task::spawn_blocking(move || {
+            under_live.terminate();
+            beside_live.terminate();
+            later_live.terminate();
+        })
+        .await
+        .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    fn is_too_broad(result: &Result<PathBuf>) -> bool {
+        result.as_ref().is_err_and(|err| {
+            err.downcast_ref::<CodedError>()
+                .is_some_and(|coded| coded.code == error_code::TRUST_DIRECTORY_TOO_BROAD)
+        })
+    }
+
+    /// The guard is not fooled by a spelling of the home directory the text comparison cannot see:
+    /// a symlink to it, a symlink to something containing it, or — on a volume that ignores letter
+    /// case, which a temporary directory here may or may not be on — the same name in another case.
+    #[test]
+    fn the_guard_sees_through_symlinks_and_letter_case() {
+        let dir = scratch("guard");
+        let home = dir.join("Home");
+        std::fs::create_dir_all(home.join("app")).expect("home");
+        std::os::unix::fs::symlink(&home, dir.join("link-to-home")).expect("link");
+        std::os::unix::fs::symlink(&dir, dir.join("link-to-above")).expect("link");
+        let under = |parent: PathBuf| parent.join("app").to_string_lossy().into_owned();
+
+        // As written, for the baseline.
+        assert!(is_too_broad(&trustable_parent(&under(home.clone()), &home)));
+        // A link to the home directory, and a link to a directory above it.
+        assert!(is_too_broad(&trustable_parent(
+            &under(dir.join("link-to-home")),
+            &home
+        )));
+        assert!(is_too_broad(&trustable_parent(
+            &under(dir.join("link-to-above")),
+            &home
+        )));
+        // A sibling that is neither is still offered.
+        std::fs::create_dir_all(dir.join("Elsewhere")).expect("sibling");
+        assert!(trustable_parent(&under(dir.join("Elsewhere")), &home).is_ok());
+
+        // Another letter case. On a volume that ignores case it is the home directory and is
+        // refused; on one that does not it is a different folder, which is offered.
+        let flipped = dir.join("hOME");
+        if flipped.exists() {
+            assert!(is_too_broad(&trustable_parent(&under(flipped), &home)));
+        } else {
+            std::fs::create_dir_all(flipped.join("app")).expect("a different folder");
+            assert!(trustable_parent(&under(flipped), &home).is_ok());
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The home directory may itself be given through a link whose real location lies under the
+    /// parent being offered: `/home -> /data/home`, `HOME=/home/me`, a project at `/data/app`.
+    #[test]
+    fn the_guard_sees_a_home_directory_reached_through_a_link() {
+        let dir = scratch("guard-home-link");
+        std::fs::create_dir_all(dir.join("data/home/me")).expect("real home");
+        std::fs::create_dir_all(dir.join("data/app")).expect("project");
+        std::os::unix::fs::symlink(dir.join("data/home"), dir.join("home")).expect("link");
+        let home = dir.join("home/me");
+
+        let project = dir.join("data/app").to_string_lossy().into_owned();
+        assert!(
+            is_too_broad(&trustable_parent(&project, &home)),
+            "`data` contains the real home"
+        );
+        // A folder that does not contain it is still offered.
+        std::fs::create_dir_all(dir.join("other/app")).expect("other");
+        let other = dir.join("other/app").to_string_lossy().into_owned();
+        assert!(trustable_parent(&other, &home).is_ok());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// With no usable home directory nothing can be checked against it, so nothing is offered —
+    /// and a project path that is not absolute says so rather than blaming the root or home.
+    #[test]
+    fn an_odd_home_directory_or_a_relative_project_path_offers_nothing() {
+        for home in ["", "relative/home", "/"] {
+            let err = trustable_parent("/work/project", Path::new(home)).expect_err(home);
+            assert!(err.to_string().contains("home directory"), "{err}");
+            assert!(is_too_broad(&Err::<PathBuf, _>(err)), "{home:?}");
+        }
+        let err = trustable_parent("work/project", Path::new("/Users/me")).expect_err("relative");
+        assert!(err.to_string().contains("not an absolute path"), "{err}");
+        assert!(!err.to_string().contains("too broad"), "{err}");
+        // Still a refusal the dialog stays open for.
+        assert!(is_too_broad(&Err::<PathBuf, _>(err)));
+    }
+
+    #[test]
+    fn dot_dot_in_a_project_path_is_folded_before_anything_is_compared() {
+        let home = Path::new("/Users/me");
+        assert_eq!(
+            trustable_parent("/work/other/../project", home).unwrap(),
+            Path::new("/work")
+        );
+        let work = ["/work".to_string()];
+        assert!(under_a_trusted_directory("/work/other/../project", &work));
+        // Climbing out of the directory is not under it.
+        assert!(!under_a_trusted_directory("/work/../etc/project", &work));
+        assert!(!under_a_trusted_directory("/work/../../project", &work));
+    }
+
+    /// The prompt carries the directory its button would trust, and none when that would be too
+    /// broad.
+    #[test]
+    fn a_prompt_names_the_directory_it_would_trust_unless_that_is_too_broad() {
+        let mut inside = project(false);
+        inside.path = "/work/project".to_string();
+        assert!(matches!(prompt("s", &inside),
+            Event::ClaudeTrustPrompt { trust_dir, .. } if trust_dir.as_deref() == Some("/work")));
+        let mut at_home = project(false);
+        at_home.path = paths::home_dir().join("app").to_string_lossy().into_owned();
+        assert!(matches!(
+            prompt("s", &at_home),
+            Event::ClaudeTrustPrompt {
+                trust_dir: None,
+                ..
+            }
+        ));
+    }
+
+    /// The replay after a snapshot leaves out a screen whose project sits under a trusted
+    /// directory, as it does one whose project has consented.
+    #[tokio::test]
+    async fn the_replay_leaves_out_a_screen_under_a_trusted_directory() {
+        let (state, dir) = app_state("replay-trusted");
+        let record = session("waiting-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let (live, _) = start(&state, &dir, record, "sleep 30");
+        live.trust.feed(SCREEN);
+        assert_eq!(pending_prompts(&state).len(), 1);
+
+        state.store.add_trusted_directory("/work").expect("trusted");
+        assert!(
+            live.trust.waiting(),
+            "still waiting; only the question is moot"
+        );
+        assert!(pending_prompts(&state).is_empty());
+
+        tokio::task::spawn_blocking(move || live.terminate())
+            .await
+            .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Trusting the directory from one session's dialog answers another session's screen waiting
+    /// under it; a repeat neither announces nor answers anything again; a hub and another agent's
+    /// session are left to their own rules.
+    #[tokio::test]
+    async fn one_sessions_go_ahead_answers_the_others_waiting_under_the_directory() {
+        let (state, dir) = app_state("fan-out-end-to-end");
+        let mut events = state.subscribe();
+        let a = session("a-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let (a_live, a_received) = start(&state, &dir, a, &full_script(Path::new("%RECEIVED%")));
+        a_live.trust.feed(SCREEN);
+        let b = session("b-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let (b_live, b_received) = start(&state, &dir, b, &full_script(Path::new("%RECEIVED%")));
+        b_live.trust.feed(SCREEN);
+        let hub = session("hub-1", Agent::Claude, Role::Hub, None);
+        let (hub_live, hub_received) =
+            start(&state, &dir, hub, &full_script(Path::new("%RECEIVED%")));
+        hub_live.trust.feed(SCREEN);
+        let codex = session("codex-1", Agent::Codex, Role::Worker, Some("project-1"));
+        let (codex_live, codex_received) =
+            start(&state, &dir, codex, &full_script(Path::new("%RECEIVED%")));
+        codex_live.trust.feed(SCREEN);
+
+        confirm(&state, "a-1", false, true)
+            .await
+            .expect("confirmed");
+        assert_eq!(sent(&a_received), b"\x1b[B\r");
+        assert!(
+            tokio::task::spawn_blocking({
+                let received = b_received.clone();
+                move || wait_for(Duration::from_secs(10), || sent(&received) == b"\x1b[B\r")
+            })
+            .await
+            .unwrap(),
+            "the other screen under the directory is answered"
+        );
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        assert!(sent(&hub_received).is_empty(), "a hub is not the fan-out's");
+        assert!(sent(&codex_received).is_empty(), "nor is another agent's");
+
+        // A repeat: nothing announced, and nothing more is answered.
+        let c = session("c-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let (c_live, c_received) = start(&state, &dir, c, &full_script(Path::new("%RECEIVED%")));
+        c_live.trust.feed(SCREEN);
+        add_trusted_directory(&state, Path::new("/work")).expect("a repeat");
+        tokio::time::sleep(Duration::from_millis(800)).await;
+        assert!(sent(&c_received).is_empty());
+        let mut announced = 0;
+        while let Ok(event) = events.try_recv() {
+            if matches!(event, Event::TrustedDirectoriesUpdated { .. }) {
+                announced += 1;
+            }
+        }
+        assert_eq!(announced, 1);
+
+        tokio::task::spawn_blocking(move || {
+            for live in [a_live, b_live, hub_live, codex_live, c_live] {
                 live.terminate();
             }
         })

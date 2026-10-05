@@ -183,6 +183,7 @@ fn snapshot(state: &Arc<AppState>) -> anyhow::Result<Event> {
         consoles: state.store.list_consoles()?,
         projects: state.store.list_projects()?,
         sessions: state.store.list_sessions()?,
+        trusted_directories: state.store.trusted_directories()?,
     })
 }
 

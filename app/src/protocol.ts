@@ -175,15 +175,28 @@ export type RequestBody =
   | { type: "submit_page"; page: string; data: unknown }
   /** The user's go-ahead to a `claude_trust_prompt`: Octoboard may answer that session's trust
    * screen. `remember` also records the project's consent, so its later sessions are answered
-   * without a prompt. */
-  | { type: "confirm_claude_trust"; session: string; remember: boolean }
+   * without a prompt; `trust_parent_dir` records the project's parent directory as trusted instead
+   * (the daemon derives it; it is the prompt's `trust_dir`), covering every project under it. */
+  | { type: "confirm_claude_trust"; session: string; remember: boolean; trust_parent_dir?: boolean }
+  /** Stops trusting a directory; projects' own consents are untouched. */
+  | { type: "remove_trusted_directory"; path: string }
   | { type: "shutdown" };
 
 /** A client request as sent on the wire: the body's fields plus an optional correlation id. */
 export type Request = RequestBody & { id?: string };
 
 export type Event =
-  | { type: "snapshot"; hosts: Host[]; consoles: Console[]; projects: Project[]; sessions: Session[] }
+  | {
+      type: "snapshot";
+      hosts: Host[];
+      consoles: Console[];
+      projects: Project[];
+      sessions: Session[];
+      /** Directories whose projects Octoboard answers Claude Code's trust prompt for. */
+      trusted_directories: string[];
+    }
+  /** The whole list of trusted directories, sent when it changes. */
+  | { type: "trusted_directories_updated"; trusted_directories: string[] }
   | { type: "console_upserted"; console: Console }
   | { type: "console_deleted"; console: string }
   | { type: "project_upserted"; project: Project }
@@ -202,7 +215,15 @@ export type Event =
    * workspace-trust screen, which asks whether `path` is trusted. Broadcast once per screen, and sent
    * again to a client right after each `snapshot` (connect or lag recovery) for every screen still
    * waiting, so a client that missed it is still asked; a repeat is ignored. */
-  | { type: "claude_trust_prompt"; session: string; project: string; path: string }
+  | {
+      type: "claude_trust_prompt";
+      session: string;
+      project: string;
+      path: string;
+      /** The directory `trust_parent_dir` would trust, or null when there is none to offer (too broad
+       * to trust, the home directory cannot be determined, or `path` is not absolute): the button is shown only when it is not null. */
+      trust_dir: string | null;
+    }
   | { type: "dir_listing"; id?: string; path: string; entries: DirEntry[] }
   /** The reply to `list_pages`, oldest first. Pages are not in `snapshot` — a page carries a whole
    * HTML document — so the panel asks for them, and asks again after every `snapshot`: a client
@@ -213,7 +234,8 @@ export type Event =
   | { type: "page_created"; page: Page }
   | { type: "ack"; id?: string }
   /** `code` is present only for failures a client has to branch on rather than just show — today
-   * the one code is `"session_already_running"`. */
+   * the codes are `"session_already_running"`, `"trust_directory_too_broad"` (nothing was answered)
+   * and `"claude_trust_not_waiting"`. */
   | { type: "error"; id?: string; message: string; code?: string };
 
 /** Client-sent text frame on `/ws/term/:session`. Binary frames on that socket are raw PTY input. */

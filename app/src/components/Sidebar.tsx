@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { STATUS_LABEL } from "../sessionLabel";
 import { isDormant, type Console, type Project, type Session } from "../protocol";
 import { ActionMenu } from "./ActionMenu";
+import { TrustedFolders } from "./TrustedFolders";
 import { AgentBadge, BubbledWaitingHand, StatusIcon } from "./StatusIcon";
 
 /** The callbacks the tree triggers. Kept as one object, passed down by reference rather than
@@ -27,6 +28,9 @@ interface SidebarProps extends SidebarHandlers {
   projects: Project[];
   sessions: Session[];
   selectedSessionId?: string;
+  /** Directories whose projects Octoboard answers Claude Code's trust prompt for. */
+  trustedDirectories: string[];
+  onRemoveTrustedDirectory: (path: string) => void;
 }
 
 /** Stops a row's own mousedown from moving focus off whatever had it (typically the terminal) —
@@ -49,13 +53,16 @@ function rowKeyHandler(activate: () => void) {
   };
 }
 
-/** The console → project → session three-level menu (docs/mvp.md "Interface"). Expand/collapse
- * state is purely local UI state; the daemon has no notion of it. */
+/** The console → project → session three-level menu (docs/mvp.md "Interface"), with the list of
+ * trusted folders under it. Expand/collapse state is purely local UI state; the daemon has no
+ * notion of it. */
 export function Sidebar({
   consoles,
   projects,
   sessions,
   selectedSessionId,
+  trustedDirectories,
+  onRemoveTrustedDirectory,
   onNewConsole,
   ...handlerRest
 }: SidebarProps): React.ReactElement {
@@ -93,6 +100,7 @@ export function Sidebar({
         ))}
         {consoles.length === 0 && <p className="sidebar-empty">No consoles yet. Create one to get started.</p>}
       </div>
+      <TrustedFolders directories={trustedDirectories} onRemove={onRemoveTrustedDirectory} />
     </nav>
   );
 }

@@ -64,11 +64,13 @@ non-blank line, shortened to roughly 48 characters on a word boundary with an el
 sessions dispatched into one project can be told apart in the menu.
 
 A Claude Code session the hub starts in a directory Claude Code has not been trusted with first stops
-on Claude Code's workspace-trust prompt. When the user has given that project their consent, Octoboard
-answers the prompt and the session carries on without them; otherwise the user is asked in a dialog
+on Claude Code's workspace-trust prompt. When the user has given that project their consent, or has
+trusted a folder its directory lies under, Octoboard answers the prompt and the session carries on without them; otherwise the user is asked in a dialog
 — again after the application reconnects, if the prompt is still waiting — and the session waits on
-the prompt until it is answered, reading as *working* meanwhile. See "Claude Code's workspace-trust prompt" in
-`docs/product/launching-agents.md`.
+the prompt until it is answered, reading as *working* meanwhile. A trusted folder covers the projects the hub
+itself associates in it, a repository it clones there included: their sessions are answered without the user being
+asked, and the permission rules and hooks in those repositories' `.claude/settings.json` then apply without asking.
+See "Claude Code's workspace-trust prompt" and "Trusted folders" in `docs/product/launching-agents.md`.
 
 ## Reporting
 

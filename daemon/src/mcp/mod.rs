@@ -87,7 +87,8 @@ const HUB_TOOLS: &[ToolDef] = &[
                     "path": {
                         "type": "string",
                         "description": "The directory to associate, the parent directory to scan, \
-                                        or the parent directory to clone into.",
+                                        or the parent directory to clone into. Must be an \
+                                        absolute path or start with `~/`.",
                     },
                     "remote_url": {
                         "type": "string",

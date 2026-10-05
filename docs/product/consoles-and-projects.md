@@ -107,9 +107,13 @@ A project carries a name, the directory it points at, an optional default agent,
 GitHub association — the remote URL it was cloned from. Every project is bound to a host (see "Hosts" below).
 
 A project also carries whether the user has agreed that Octoboard may answer Claude Code's workspace-trust prompt for
-its directory. A project starts without that consent, including one the hub associates; it is given only from the
-dialog Octoboard shows when a Claude Code session of the project stops on that prompt, and it is not part of the
-project's editable fields. The rules are in "Claude Code's workspace-trust prompt" in
+its directory. A project starts without that consent, including one the hub associates; it is given only by "Trust and
+continue" in the dialog Octoboard shows when a Claude Code session of the project stops on that prompt, and it is not
+part of the project's editable fields. Separately from any project, the user can trust a whole folder, which covers
+every project under it — including any associated there later, by the user or by the hub — without giving any of them
+that consent; a trusted folder is not stored with a project, so editing or removing a project does not affect it (see
+"Trusted folders" in
+`docs/product/launching-agents.md`). The rules are in "Claude Code's workspace-trust prompt" in
 `docs/product/launching-agents.md`.
 
 ### Associating a project
@@ -123,7 +127,10 @@ There are three sources:
 | A GitHub URL | a repository URL plus a parent directory | The repository is cloned into a new directory beneath the parent, and the clone is then associated. |
 
 A path may be entered by hand or picked with the directory browser. A leading `~` is expanded to the home directory
-of the host the daemon runs on.
+of the host the daemon runs on. The path must then be absolute: a relative path is refused, for every source. It is
+recorded lexically normalised — `.` components dropped, each `..` folded into the component before it, no trailing
+slash — without resolving symbolic links, so a path through a link is kept as written. A project's recorded path is
+what a trusted folder is compared against (see "Trusted folders" in `docs/product/launching-agents.md`).
 
 The console's hub session can associate a project itself, from the same three sources and under all the
 rules in this section (see "The hub's tools" in `docs/product/hub-orchestration.md`).

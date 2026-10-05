@@ -39,7 +39,9 @@ Each new connection re-reads the whole state, so nothing has to be replayed by h
 
 Failures a user has to know about are shown as dismissible messages, and so are notices about a
 session that are not failures — each of those names the project the session runs in, or the console
-whose hub it is. A failure raised by a dialog's own action is shown in that dialog instead.
+whose hub it is. A failure raised by a dialog's own action is shown in that dialog instead — except in
+the dialog for Claude Code's workspace-trust prompt, which closes and reports most failures as a
+message (see "Claude Code's workspace-trust prompt" in `docs/product/launching-agents.md`).
 
 ## Quitting
 
@@ -93,7 +95,7 @@ Everything Octoboard writes for itself lives under `~/.octoboard`:
 
 | Path | Contents |
 |---|---|
-| `~/.octoboard/octoboard.db` | Consoles, projects, session records, and the report panel pages of every console. |
+| `~/.octoboard/octoboard.db` | Consoles, projects, session records, the report panel pages of every console, and the folders trusted for Claude Code's workspace-trust prompt (see "Trusted folders" in `docs/product/launching-agents.md`). |
 | `~/.octoboard/consoles/<console id>/` | A console's working directory, where its hub session runs, including the hub instruction file Octoboard generates there (see "The hub's instruction file" in `docs/product/launching-agents.md`). Removed when the console is deleted. |
 | `~/.octoboard/run/<session id>/` | Per-session scratch space for what a launch injects. Removed when the session's process is gone, and cleared wholesale on daemon start. |
 | `~/.octoboard/daemon.lock` | Enforces one daemon per data directory. |

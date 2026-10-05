@@ -54,6 +54,9 @@ carries an "Archived hubs (n)" group below its Hub row, for the hub sessions tha
 Each session row shows its status, its title, and a badge naming its agent (Claude Code, Codex, Grok
 Build).
 
+Below the tree, a collapsible "Trusted folders (n)" block appears while at least one folder is trusted
+for Claude Code's workspace-trust prompt; see "Trusted folders" in `docs/product/launching-agents.md`.
+
 Selecting a session shows its terminal. Clicking a row deliberately does not move keyboard focus away from the
 terminal; a row reached with Tab can be activated with Enter or Space.
 
@@ -77,9 +80,11 @@ A session opened **with** a task starts in *working*. A session opened **without
 instructions*: it is sitting at the agent's prompt.
 
 A Claude Code session in a directory Claude Code has not been trusted with first stops on Claude
-Code's own workspace-trust prompt, before it takes up its task or reaches its prompt. Octoboard
-answers that prompt for the user once they have agreed, or asks them first — see "Claude Code's
-workspace-trust prompt" in `docs/product/launching-agents.md`.
+Code's own workspace-trust prompt, before it takes up its task or reaches its prompt. A resumed
+session can stop on it as well; since a session left interrupted is relaunched only when it is
+selected or resumed, that is when its prompt appears. Octoboard answers that prompt for the user once
+they have agreed — for that project, or for a folder its directory lies under — or asks them first;
+see "Claude Code's workspace-trust prompt" in `docs/product/launching-agents.md`.
 
 If the launch itself fails — the directory cannot be reached, the agent binary is not on the user's `PATH`, the
 user's shell environment could not be captured (see "The launch environment" in

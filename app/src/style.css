@@ -129,6 +129,55 @@ body {
   margin: 0;
 }
 
+/* The folders Octoboard answers Claude Code's trust prompt under: pinned below the tree, not scrolled
+ * with it, and only there while there is something to stop trusting. */
+.sidebar-trusted {
+  flex: none;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.sidebar-trusted summary {
+  cursor: pointer;
+}
+
+.sidebar-trusted ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.sidebar-trusted li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sidebar-trusted-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* Right to left so that a long path loses its beginning, not its end; the path inside is
+   * isolated (`<bdi>`) so that its slashes and punctuation keep their places. */
+  direction: rtl;
+  text-align: left;
+}
+
+.sidebar-trusted-remove {
+  flex: none;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  cursor: pointer;
+}
+
 /* Scrolls on its own, separately from `.sidebar-header` above: the overflow belongs on the tree,
  * not on `.sidebar` as a whole, or the header scrolls out of view along with it. */
 .sidebar-tree {
@@ -582,6 +631,7 @@ body {
 
 .modal-footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 16px;

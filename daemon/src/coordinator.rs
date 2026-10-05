@@ -268,8 +268,17 @@ pub async fn handle(
             Ok(None)
         }
 
-        RequestBody::ConfirmClaudeTrust { session, remember } => {
-            trust::confirm(state, &session, remember).await?;
+        RequestBody::ConfirmClaudeTrust {
+            session,
+            remember,
+            trust_parent_dir,
+        } => {
+            trust::confirm(state, &session, remember, trust_parent_dir).await?;
+            Ok(None)
+        }
+
+        RequestBody::RemoveTrustedDirectory { path } => {
+            trust::remove_trusted_directory(state, &path)?;
             Ok(None)
         }
 
@@ -278,6 +287,18 @@ pub async fn handle(
             Ok(None)
         }
     }
+}
+
+/// What the user typed for a project's directory, as the absolute, lexically normalised path that is
+/// stored. A relative path is refused: it would mean a different directory whenever the daemon's own
+/// working directory differed, and nothing that compares project paths — the trusted directories
+/// among them — could read it.
+fn absolute_path(text: &str) -> Result<PathBuf> {
+    let path = hostfs::expand(text);
+    if !path.is_absolute() {
+        bail!("`{text}` is not an absolute path; give the full path or start it with `~/`");
+    }
+    Ok(hostfs::lexically_normalise(&path))
 }
 
 pub async fn add_project(
@@ -296,14 +317,14 @@ pub async fn add_project(
 
     let directories: Vec<PathBuf> = match source {
         ProjectSource::Local => {
-            let path = hostfs::expand(&path.ok_or_else(|| anyhow!("`path` is required"))?);
+            let path = absolute_path(&path.ok_or_else(|| anyhow!("`path` is required"))?)?;
             if !path.is_dir() {
                 bail!("`{}` is not a directory", path.display());
             }
             vec![path]
         }
         ProjectSource::Parent => {
-            let parent = hostfs::expand(&path.ok_or_else(|| anyhow!("`path` is required"))?);
+            let parent = absolute_path(&path.ok_or_else(|| anyhow!("`path` is required"))?)?;
             let repos = hostfs::discover_repos(&parent)?;
             if repos.is_empty() {
                 bail!(
@@ -317,7 +338,7 @@ pub async fn add_project(
             let url = remote_url
                 .clone()
                 .ok_or_else(|| anyhow!("`remote_url` is required"))?;
-            let parent = hostfs::expand(&path.ok_or_else(|| anyhow!("`path` is required"))?);
+            let parent = absolute_path(&path.ok_or_else(|| anyhow!("`path` is required"))?)?;
             let cloned =
                 tokio::task::spawn_blocking(move || hostfs::clone_repo(&url, &parent)).await??;
             vec![cloned]
@@ -696,18 +717,8 @@ fn normalize_config_dir(agent: Agent, text: Option<&str>) -> Result<Option<Strin
             agent.label()
         );
     }
-    // Lexical only: a symlink stays as typed, so the stored path is what the user chose. Drops a
-    // trailing `/` and `.` components and folds `..` into the component before it.
-    let mut normalized = PathBuf::new();
-    for component in dir.components() {
-        match component {
-            std::path::Component::ParentDir => {
-                normalized.pop();
-            }
-            other => normalized.push(other),
-        }
-    }
-    let dir = normalized;
+    // Lexical only: a symlink stays as typed, so the stored path is what the user chose.
+    let dir = hostfs::lexically_normalise(&dir);
     if !dir.is_dir() {
         bail!(
             "the {} config directory `{}` is not a directory",
@@ -852,5 +863,22 @@ mod tests {
         );
         // Nothing is set for Grok, and another agent's directory is never borrowed for it.
         assert_eq!(session_config_dir(Agent::Grok, &console), None);
+    }
+
+    /// A project's path is stored absolute and written one way, so the trusted directories can be
+    /// compared against it; a relative one is refused.
+    #[test]
+    fn a_project_path_is_stored_absolute_and_normalised() {
+        assert_eq!(
+            absolute_path("/work/a/../project/./").unwrap(),
+            PathBuf::from("/work/project")
+        );
+        assert_eq!(
+            absolute_path("~/code/app/").unwrap(),
+            paths::home_dir().join("code/app")
+        );
+        let err = absolute_path("work/project").expect_err("relative");
+        assert!(err.to_string().contains("not an absolute path"), "{err}");
+        assert!(absolute_path("").is_err());
     }
 }

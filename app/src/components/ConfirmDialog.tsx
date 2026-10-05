@@ -9,6 +9,8 @@ interface ConfirmDialogProps {
   /** What the button that declines is called. */
   cancelLabel?: string;
   destructive?: boolean;
+  /** A third action beside Cancel and Confirm, run and reported on the same way as Confirm. */
+  extraAction?: { label: string; title?: string; onClick: () => Promise<void> };
   /** May reject — the dialog shows the failure inline and stays open instead of closing, so the
    * caller does not need its own try/catch around the request. */
   onConfirm: () => Promise<void>;
@@ -20,6 +22,7 @@ export function ConfirmDialog({
   message,
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
+  extraAction,
   destructive,
   onConfirm,
   onCancel,
@@ -27,11 +30,11 @@ export function ConfirmDialog({
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
 
-  const handleConfirm = async () => {
+  const run = async (action: () => Promise<void>) => {
     setBusy(true);
     setError(undefined);
     try {
-      await onConfirm();
+      await action();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -39,11 +42,18 @@ export function ConfirmDialog({
     }
   };
 
+  const handleConfirm = () => run(onConfirm);
+
   const footer = (
     <>
       <button type="button" onClick={onCancel} disabled={busy}>
         {cancelLabel}
       </button>
+      {extraAction && (
+        <button type="button" title={extraAction.title} onClick={() => run(extraAction.onClick)} disabled={busy}>
+          {extraAction.label}
+        </button>
+      )}
       <button type="submit" className={destructive ? "button-destructive" : undefined} disabled={busy}>
         {confirmLabel}
       </button>

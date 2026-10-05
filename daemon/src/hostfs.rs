@@ -19,6 +19,23 @@ pub fn expand(path: &str) -> PathBuf {
     PathBuf::from(trimmed)
 }
 
+/// A path with its `.` components dropped, each `..` folded into the component before it, and no
+/// trailing separator. Lexical only: no symlink is resolved and nothing is read from disk, so the
+/// result is the path as the user chose it, written one way.
+pub fn lexically_normalise(path: &Path) -> PathBuf {
+    let mut normalised = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                normalised.pop();
+            }
+            std::path::Component::CurDir => {}
+            other => normalised.push(other),
+        }
+    }
+    normalised
+}
+
 pub fn is_git_repo(path: &Path) -> bool {
     path.join(".git").exists()
 }

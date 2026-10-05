@@ -423,8 +423,8 @@ three adapters: Claude Code, Codex, and Grok Build.
     separate descriptor to read and matching rendered text would need a VT emulator in the daemon. It warns only on an
     explicit negative, so a renamed key leaves the user alone instead of warning them on every launch. The trust screen
     Claude Code shows on a folder's first launch is the one thing Octoboard answers on the user's behalf: the daemon recognises
-    it in the terminal output and, once the user has agreed in Octoboard's own dialog (remembered per project; a hub's own
-    working directory needs none), answers it by typing Down and Enter — the config file is still never written.
+    it in the terminal output and, once the user has agreed in Octoboard's own dialog (remembered per project, or for a whole parent folder, which also covers projects added there
+    later, a hub's clones included; a hub's own working directory needs none), answers it by typing Down and Enter — the config file is still never written.
   - **Codex** injects through repeated `-c` overrides, with two extras: the project must be marked trusted in the same way
     (`-c 'projects={"<canonical cwd>"={trust_level="trusted"}}'`), and hooks are gated behind a persisted trust hash —
     without it an interactive session raises a blocking review modal and a headless one **hangs indefinitely**. The flag
@@ -516,7 +516,8 @@ Console   { id, name, workdir, hub_agent, default_agent, claude_config_dir?, cod
             grok_config_dir?, created_at }
 Host      { id, name, kind: local|ssh, ssh_config? }
 Project   { id, console_id, host_id, name, path, default_agent?,
-            source: local|parent|github, remote_url? }
+            source: local|parent|github, remote_url?, claude_trust_consent }
+TrustedDirectory { path }
 Session   { id, agent, agent_session_id, console_id, project_id?, host_id,
             role: hub|worker, origin: hub|user, title, include_in_hub,
             config_dir?,
@@ -531,6 +532,8 @@ Page      { id, console_id, html, anchor_message_id, created_at }
 - `Session.include_in_hub` says whether that session reports to its console's hub. Always set for a session the hub
   started; a session the user opened by hand is outside the orchestration unless they asked for it to be included, and it
   is fixed for the session's lifetime.
+- `Project.path` is stored absolute and lexically normalised (a relative path is refused), because `TrustedDirectory` entries are
+  compared with it component by component. Directory entries ignore `host_id`, which is harmless while every host is local.
 - A console holds an optional config directory per agent. `Session.config_dir` is the one of the session's own agent:
   `CLAUDE_CONFIG_DIR` for Claude Code, `CODEX_HOME` for Codex, the source home of the private `GROK_HOME` for Grok. The
   console's value is copied onto a session when it is opened and never changes afterwards, because the agent keeps its
