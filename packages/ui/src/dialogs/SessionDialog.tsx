@@ -64,6 +64,9 @@ export function SessionDialog({
         <Label>Initial task (optional)</Label>
         <TextArea rows={4} />
       </TextField>
+      {/* The default variant's own control now carries a visible border (`--field-border` in
+          `style.css`, shared with every other field), so it no longer needs `variant="secondary"`
+          to stay visible unselected. */}
       <Checkbox isSelected={includeInHub} onChange={setIncludeInHub}>
         {/* `Checkbox.Content` is the pressable part, so the box goes inside it with the label;
             the description is the field's, a sibling of it. */}

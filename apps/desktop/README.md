@@ -85,9 +85,15 @@ daemon traffic or session data in them:
 - `confirm_quit` — marks a pending quit as user-confirmed and asks Tauri to actually exit.
 
 Beyond those two, `src-tauri/capabilities/default.json` also allowlists the `notification` plugin's commands (used by
-`packages/ui/src/lifecycle/useWaitingNotifications.ts` for the raised-hand system notification) and
-`core:window|set_badge_count` (the Dock badge). Both are still within the architectural rule above: they carry no daemon traffic or session state,
-only a count and a text the frontend has already derived from it.
+`packages/ui/src/lifecycle/useWaitingNotifications.ts` for the raised-hand system notification),
+`core:window|set_badge_count` (the Dock badge), `core:window|set_theme` (the titlebar following the in-app theme
+choice, used by `packages/ui/src/lifecycle/useNativeWindowTheme.ts`; the permission identifier in
+`capabilities/default.json` is `core:window:allow-set-theme`) and `core:window|show` (reveals the window the shell
+creates hidden, see `open_main_window` in `src-tauri/src/lib.rs`, called once from `packages/ui/src/main.tsx` after
+it has pushed the theme; permission identifier `core:window:allow-show`). All of these are still within the
+architectural rule above: they carry no daemon traffic or session state — only a count, a text, a theme string the
+frontend has already derived or chosen, or no theme at all meaning follow the OS, or a bare reveal with no payload
+at all.
 
 Everything else `src-tauri/` does is internal: it starts `octoboardd` as a sidecar process and bakes the port it
 printed into the window's URL (`?port=`) before the window is created, so the frontend can locate the daemon without
@@ -101,7 +107,7 @@ any IPC call for it.
 | `src-tauri/src/exit.rs` | The exit-confirmation flow: `ExitState`, the two IPC commands above, the decision all three quit gestures share, and the `applicationShouldTerminate:` override onto AppKit's own delegate — the only `unsafe` code in `apps/desktop/`, for catching the Dock icon's own Quit (and a system-initiated logout/restart/shutdown, which arrives the same way) |
 | `src-tauri/src/sidecar.rs` | Spawns `octoboardd`, parses its startup port line, reports how it terminated |
 | `src-tauri/src/menu.rs` | Builds the native macOS menu bar |
-| `src-tauri/capabilities/default.json` | Allowlists the two IPC commands above plus the notification and Dock-badge commands |
+| `src-tauri/capabilities/default.json` | Allowlists the two IPC commands above plus the notification, Dock-badge, window-theme and window-reveal commands |
 | `src-tauri/tauri.conf.json` | Where the window's UI comes from (`frontendDist` is `packages/ui/dist`; `devUrl` and `beforeDevCommand` are that package's dev server), the `octoboardd` `externalBin`, and the bundle targets |
 | `scripts/build-daemon.mjs` | Builds `octoboardd` in release mode and copies it into `src-tauri/binaries/` under the target-triple name Tauri's `externalBin` requires |
 | `scripts/release.mjs` | Builds the release `.app`/`.dmg` and verifies the result; see "Release builds" above |

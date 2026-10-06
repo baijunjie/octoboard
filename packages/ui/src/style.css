@@ -1,6 +1,43 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 
+@theme {
+  /* The one named breakpoint this app has: the width at which the sidebar, the terminal and the
+     report panel all fit side by side without any of them going under its own floor (280 +
+     520 + 300, see `TerminalPane.tsx` and `ReportPanel.tsx`). Below it `App.tsx` turns the
+     sidebar and the report panel into overlays instead of row siblings. The macOS window's own
+     minimum (`apps/desktop/src-tauri/src/lib.rs`) keeps the desktop app from ever going under it,
+     so the `docked:` variant is also what "the layout as it always was" means there. */
+  --breakpoint-docked: 1100px;
+}
+
+:root {
+  /* Shared by the terminal pane's and the report panel's header bars (`TerminalPane.tsx`,
+     `ReportPanel.tsx`), so the two line up, and by the toast stack (`Toasts.tsx`), so a toast
+     clears whichever header is on screen without a second number to keep in sync. `2.5rem` is
+     what the `h-10` utility these headers used to carry resolves to at the default root font
+     size — kept as a `rem` value, rather than its pixel equivalent, so it still scales with it. */
+  --pane-header-height: 2.5rem;
+
+  /* The top offset every narrow-mode overlay starts below: the connection banner (0 when it is
+     not mounted, see `ConnectionBanner.tsx`) plus the pane header. Shared by the sidebar's and
+     the report panel's drawers (`layout.ts`'s `drawerClass`) and the toast stack (`Toasts.tsx`)
+     from one place, rather than as three copies of the same `calc()` that must happen to agree. */
+  --top-chrome-height: calc(var(--connection-banner-height, 0px) + var(--pane-header-height));
+
+  /* HeroUI's default theme leaves form fields borderless (`--field-border: transparent`,
+     `--field-border-width: 0px`) and relies on a shadow too faint to read against the dialog's
+     own surface in either theme — the unselected checkbox control, which is keyed off the same
+     two variables, has the same problem. HeroUI's own border tokens (`--border`, `--border-
+     secondary`, `--border-tertiary`) all measure under 3:1 against the surface in both themes —
+     they read as dividers between same-surface content, not as a boundary meant to stand out —
+     so this reaches for `--muted` instead, the token HeroUI already uses for secondary text,
+     which clears 3:1 in both. Overriding these two here gives every field, and the checkbox, a
+     visible boundary in both themes from one place. */
+  --field-border: var(--muted);
+  --field-border-width: var(--border-width);
+}
+
 html,
 body,
 #root {

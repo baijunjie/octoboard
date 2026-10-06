@@ -56,11 +56,11 @@ The desktop application is only a client of the daemon: it renders terminals, sh
 The UI is not part of the desktop shell. It is its own package, built once, which the macOS shell bundles and loads and
 which also runs in a plain browser; that is what lets a machine without the shell, such as a Linux host, offer the same
 UI. To keep one build working in both places, the UI reaches native capabilities (the quit flow and exit heartbeat,
-system notifications, the Dock badge) only through a platform adapter chosen at startup, with a Tauri implementation
-and a browser one; in a browser a capability that is not there means the feature is absent, not an error. It finds the
-daemon without Tauri as well: by an address handed to it, or at the origin it was loaded from. Its state is
-one store fed by the daemon client's events, readable outside React too. The phone's browser is not a design target —
-the native mobile apps have their own UI.
+system notifications, the Dock badge, the native window's own appearance) only through a platform adapter chosen at
+startup, with a Tauri implementation and a browser one; in a browser a capability that is not there means the feature
+is absent, not an error. It finds the daemon without Tauri as well: by an address handed to it, or at the origin it was
+loaded from. Its state is one store fed by the daemon client's events, readable outside React too. The phone's browser
+is not a design target — the native mobile apps have their own UI.
 
 ## Why the daemon is split out
 

@@ -2,12 +2,14 @@ import { Button } from "@heroui/react";
 import React, { useState } from "react";
 
 import type { DialogRequest } from "../dialogs/dialogRequest";
+import { drawerClass } from "../layout";
 import { isDormant, type Console, type Project, type Session } from "../protocol";
 import { STATUS_LABEL } from "../sessionLabel";
 import { ActionMenu, type ActionMenuItem } from "./ActionMenu";
 import { AgentBadge } from "./AgentBadge";
 import { NotificationsPrompt } from "./NotificationsPrompt";
 import { BubbledWaitingHand, StatusIcon } from "./StatusIcon";
+import { ThemeSwitcher } from "./ThemeSwitcher";
 import { TitledControl } from "./TitledControl";
 import { TrustedFolders } from "./TrustedFolders";
 
@@ -28,6 +30,10 @@ interface SidebarProps extends SidebarHandlers {
   /** Directories whose projects Octoboard answers Claude Code's trust prompt for. */
   trustedDirectories: string[];
   onRemoveTrustedDirectory: (path: string) => void;
+  /** Whether the drawer is open below the `docked` breakpoint; above it the tree always shows,
+   * regardless of this flag (`App.tsx` owns the state, resetting it once the window no longer
+   * needs it). */
+  open: boolean;
 }
 
 /** Stops a row's own mousedown from moving focus off whatever had it (typically the terminal) —
@@ -99,6 +105,7 @@ export function Sidebar({
   selectedSessionId,
   trustedDirectories,
   onRemoveTrustedDirectory,
+  open,
   ...handlers
 }: SidebarProps): React.ReactElement {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -112,7 +119,19 @@ export function Sidebar({
     });
 
   return (
-    <nav className="flex w-70 shrink-0 flex-col border-r border-separator bg-surface" aria-label="Sessions">
+    <nav
+      // Below the `docked` breakpoint this is a fixed overlay, closed by default, slid on and off
+      // with `open`; at or above it the `docked:` variants in `drawerClass` put it back exactly
+      // where it always was, a plain row sibling, regardless of `open` — see that function's own
+      // comment for the geometry. Starting below `--top-chrome-height` leaves both drawer toggles
+      // (and the terminal pane's whole header bar) visible while this is open.
+      //
+      // `data-escape-scope`: one of the origins `App.tsx`'s capture-phase Escape listener closes
+      // a drawer for.
+      data-escape-scope
+      className={`flex w-70 flex-col border-r border-separator bg-surface shrink-0 ${drawerClass("left", open)}`}
+      aria-label="Sessions"
+    >
       <div className="flex shrink-0 items-center justify-between px-3 py-2">
         <h1 className="text-base font-semibold">Octoboard</h1>
         <TitledControl title="New console">
@@ -145,6 +164,7 @@ export function Sidebar({
       </div>
       <TrustedFolders directories={trustedDirectories} onRemove={onRemoveTrustedDirectory} />
       <NotificationsPrompt />
+      <ThemeSwitcher />
     </nav>
   );
 }

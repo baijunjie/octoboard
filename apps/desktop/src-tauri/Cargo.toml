@@ -51,8 +51,10 @@ time = "=0.3.45"
 # Pulled in transitively at a version requiring rustc 1.89 even though none of the pins above name
 # it; same MSRV-drift story as the rest of this list.
 uuid = "=1.26.1"
-# Reached only through `tauri-plugin-notification`, and only used on Linux and Windows — but cargo
-# resolves it on macOS all the same, and its current release requires rustc 1.89.
+# Reached only through `tauri-plugin-notification`, and on macOS it is the delivery path itself:
+# `notify_rust::set_application` hands `mac-notification-sys` the bundle identifier the system
+# attributes a notification to, which is what decides the icon macOS shows on it. Pinned for the
+# same MSRV reason as the rest of this list — its current release requires rustc 1.89.
 notify-rust = "=4.11.7"
 # For the `applicationShouldTerminate:` override in `exit.rs` that catches the Dock icon's own Quit
 # (see the comment there). Pinned to the exact versions already resolved transitively through

@@ -1,6 +1,7 @@
 import { Button, Chip } from "@heroui/react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
+import { drawerClass } from "../layout";
 import type { Page } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { composePageDocument, SUBMIT_MESSAGE_SOURCE } from "./pageDocument";
@@ -12,8 +13,21 @@ import { composePageDocument, SUBMIT_MESSAGE_SOURCE } from "./pageDocument";
  * row under "Daemon to client" in `daemon/PROTOCOL.md`), so re-listing is the only way to recover
  * from one. A console switch mounting a fresh instance is the call site's concern, not this
  * component's.
+ *
+ * Below the `docked` breakpoint this renders as a closed-by-default overlay instead of a row
+ * sibling (`open`, owned by `App.tsx` alongside the sidebar's own overlay state) — never
+ * unmounted by closing it, since that would lose the `list_pages` state above and re-request it
+ * on every reopen.
  */
-export function ReportPanel({ consoleId }: { consoleId: string }): React.ReactElement {
+export function ReportPanel({
+  consoleId,
+  hubSessionId,
+  open,
+}: {
+  consoleId: string;
+  hubSessionId: string;
+  open: boolean;
+}): React.ReactElement {
   const { request, toastError } = useDaemon();
   const consolePages = useDaemonStore((s) => s.pages.get(consoleId));
   const connectionState = useDaemonStore((s) => s.connectionState);
@@ -47,21 +61,39 @@ export function ReportPanel({ consoleId }: { consoleId: string }): React.ReactEl
       // "Client to daemon" in `daemon/PROTOCOL.md`), so a stale submission in flight from a page
       // the user has since paged away from is caught there, not here — this just forwards it and
       // reports whatever comes back.
+      //
+      // A submission is delivered to the hub session, so the hub is what the daemon's refusals are
+      // about ("this session is not running", "this session is waiting for you"): naming it keeps
+      // the user from reading the message as being about whatever session they are looking at.
       request({ type: "submit_page", page: page.id, data }).catch((err) => {
-        toastError((err as Error).message);
+        toastError((err as Error).message, hubSessionId);
       });
     },
-    [request, toastError],
+    [request, toastError, hubSessionId],
   );
 
   // The panel keeps its place in the row while the first `list_pages` is in flight: dropping out
   // and back would resize the terminal pane, a real SIGWINCH to the agent, on every hub switch.
-  const panelClass = "flex min-h-0 min-w-[300px] flex-[0_1_420px] flex-col border-l border-separator";
+  // Below the `docked` breakpoint "its place" is a fixed overlay instead, so resizing the
+  // terminal never comes up there in the first place — `open` only ever slides it on and off
+  // screen, never changes whether it is mounted.
+  //
+  // `drawerClass` starts the drawer below `--top-chrome-height`, leaving both drawer toggles (and
+  // the terminal pane's whole header bar) visible while it is open, and puts it back as a plain
+  // row sibling at or above the breakpoint — see that function's own comment for the geometry.
+  const panelClass = `flex min-h-0 flex-col border-l border-separator w-[420px] max-w-[92vw] docked:w-auto docked:max-w-none docked:min-w-[300px] docked:flex-[0_1_420px] ${drawerClass("right", open)}`;
 
-  if (consolePages === undefined) return <div className={panelClass} />;
+  // `data-escape-scope`: one of the origins `App.tsx`'s capture-phase Escape listener closes a
+  // drawer for, on every branch below since any of them can be what is on screen while open.
+
+  if (consolePages === undefined) return <div data-escape-scope className={panelClass} />;
 
   if (consolePages.length === 0) {
-    return <div className={`${panelClass} items-center justify-center text-sm text-muted`}>No pages yet.</div>;
+    return (
+      <div data-escape-scope className={`${panelClass} items-center justify-center text-sm text-muted`}>
+        No pages yet.
+      </div>
+    );
   }
 
   // Look the anchor up fresh: an id either still names a page in the current list or it does not,
@@ -78,8 +110,8 @@ export function ReportPanel({ consoleId }: { consoleId: string }): React.ReactEl
   };
 
   return (
-    <div className={panelClass}>
-      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-separator bg-surface px-3 text-xs text-muted">
+    <div data-escape-scope className={panelClass}>
+      <div className="flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator bg-surface px-3 text-xs text-muted">
         <Button
           isIconOnly
           size="sm"

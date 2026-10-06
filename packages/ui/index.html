@@ -33,12 +33,13 @@
         which document initiated that navigation. The frame's initial `about:srcdoc` document is
         exempt from the check, so `'none'` costs the panel nothing: the frame still loads and
         still runs the page, it just has nowhere to navigate to.
-      - `script-src`/`style-src 'unsafe-inline'`: required by the report panel, not by this
-        UI's own code. A `srcdoc` frame inherits its embedder's policy and enforces it on top
-        of its own, and a report page is inline script and inline style, so without
-        `'unsafe-inline'` here no page in the panel would run at all. For the same reason no nonce
-        or hash source may ever be added to these two directives: either one makes
-        `'unsafe-inline'` inert and the panel stops working.
+      - `script-src`/`style-src 'unsafe-inline'`: required by the report panel, and also by this
+        page's own inline bootstrap script below (the one that applies the theme class before
+        paint). A `srcdoc` frame inherits its embedder's policy and enforces it on top of its
+        own, and a report page is inline script and inline style, so without `'unsafe-inline'`
+        here no page in the panel would run at all. For the same reason no nonce or hash source
+        may ever be added to these two directives: either one makes `'unsafe-inline'` inert and
+        the panel stops working.
       - `img-src data:`: for a report page's inline images, inherited the same way. The UI's
         own code loads no images of its own (no `<img>`, no CSS `url()`), so `'self'` is left out.
       - `connect-src`: `'self'` is the daemon when it serves this UI, and the dev server's proxy
@@ -64,6 +65,39 @@
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Octoboard</title>
+    <script>
+      // Avoids a light flash on load in dark mode. HeroUI's light variables are the `:root`
+      // default, and `useTheme` (src/theme.tsx) only applies the dark class from a React layout
+      // effect, after the module script below has loaded and run — too late to stop the first
+      // paint from being light. This duplicates that hook's own resolution (same localStorage key,
+      // same `matchMedia` fallback, same class + `data-theme` pair) deliberately, so it can run
+      // before any of that: a plain inline script is already in the parser's way by the time it
+      // reaches this point, with nothing to wait on. Keep this in sync with `useTheme`'s
+      // behaviour (`@heroui/react`) if that ever changes.
+      //
+      // Also records the unresolved choice, as `data-theme-choice`, not just the resolved theme:
+      // `main.tsx` needs both before it has rendered anything to read them from — the resolved
+      // value for the class it already applies to a `<body>` that paints before React runs, and
+      // the raw choice to tell a `"system"` user apart from one who explicitly chose today's OS
+      // appearance, which is what decides whether it pushes `null` or a concrete value onto the
+      // native window's own theme (see `index.ts`'s `NativeWindowCapability.setTheme`). Reading
+      // these two attributes back is `main.tsx`'s only use of this resolution; it must not
+      // re-derive it from `localStorage` itself, which would make this a third place doing the
+      // same resolution rather than the one place the other two already defer to.
+      (function () {
+        var stored = localStorage.getItem("heroui-theme");
+        var choice = stored === "light" || stored === "dark" ? stored : "system";
+        var theme =
+          choice === "system"
+            ? window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light"
+            : choice;
+        document.documentElement.classList.add(theme);
+        document.documentElement.setAttribute("data-theme", theme);
+        document.documentElement.setAttribute("data-theme-choice", choice);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

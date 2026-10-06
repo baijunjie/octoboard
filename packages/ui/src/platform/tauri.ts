@@ -1,4 +1,10 @@
-import type { BadgeCapability, ExitCapability, NotificationCapability, PlatformAdapter } from "./index";
+import type {
+  BadgeCapability,
+  ExitCapability,
+  NativeWindowCapability,
+  NotificationCapability,
+  PlatformAdapter,
+} from "./index";
 
 // Every Tauri module is loaded with a dynamic `import()` and only from here, so a plain browser
 // never fetches them.
@@ -9,6 +15,7 @@ export function tauriPlatform(): PlatformAdapter {
     exit: tauriExit(),
     notifications: tauriNotifications(),
     badge: tauriBadge(),
+    nativeWindow: tauriNativeWindow(),
   };
 }
 
@@ -100,6 +107,22 @@ function tauriBadge(): BadgeCapability {
     async set(count) {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       await getCurrentWindow().setBadgeCount(count > 0 ? count : undefined);
+    },
+  };
+}
+
+function tauriNativeWindow(): NativeWindowCapability {
+  return {
+    async setTheme(theme) {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      // Passing no theme is what tells the window to resume following the OS appearance; on
+      // macOS this clears the app's own `NSAppearance` override rather than freezing it at
+      // whatever the OS happened to be at the moment of the call.
+      await getCurrentWindow().setTheme(theme ?? null);
+    },
+    async reveal() {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      await getCurrentWindow().show();
     },
   };
 }

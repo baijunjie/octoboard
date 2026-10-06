@@ -28,3 +28,22 @@ Do not switch a dialog to its next subject by re-keying it (`key={item.id}`): th
 outgoing one's soon-detached element as its focus-restore target, so focus is lost again when it closes. Keep it
 mounted and reset the per-item state from `resetKey` instead (`useDialogAction(resetKey)` does that for the error and
 busy state).
+
+## A Tailwind class name has to stand in the source as literal text
+
+Tailwind 4 reads the source as plain text and emits a utility only for a class name it can find spelled out there, so
+a name assembled at runtime — `` `${side}-0` ``, a suffix appended to a prefix, anything concatenated — compiles to no
+CSS at all and the element silently loses that property. Write each variant out in full and branch between them.
+
+Nothing on the way past catches it: `packages/ui` has neither a linter nor a test suite, so `tsc --noEmit` is its only
+automated gate, and a class whose utility was never emitted is valid TypeScript, builds clean and reads fine in a
+diff. After adding or changing a utility class, grep the built `packages/ui/dist/assets/*.css` for it.
+
+## An outline meant to be seen uses `--muted`, not HeroUI's own border tokens
+
+In HeroUI 3's default theme `--border`, `--border-secondary` and `--border-tertiary` all measure under 3:1 against the
+surface they sit on in both light and dark (1.2:1 to 2.7:1) — they are dividers between content on one surface, not an
+edge a user is meant to find. `--muted`, the token HeroUI uses for secondary text, clears 3:1 in both (4.8:1 light,
+6.7:1 dark). So anything whose line has to read as a boundary — a field, a checkbox, a pressable surface — takes
+`--muted`, and the border tokens stay for separators. `style.css` already routes HeroUI's own field and checkbox
+borders through `--muted`, so a HeroUI form control needs nothing on top.

@@ -17,8 +17,10 @@ export interface Toast {
   id: string;
   kind: "error" | "notice";
   message: string;
-  /** The session a `notice` is about, so it can be rendered alongside the message — absent for an
-   * `error`, which is never about one particular session. */
+  /** The session the toast is about, so it can be rendered alongside the message. A `notice`
+   * always has one. An `error` has one only where the call site knows which session the daemon's
+   * message is about — the daemon says "this session" without naming it, having no notion of what
+   * the client calls it, so a prefix here is the only thing that tells the user which one. */
   session?: string;
 }
 
@@ -88,7 +90,7 @@ type Action =
   | { kind: "event"; event: Event }
   /** A message with nowhere inline to show it (no open dialog). Distinct from `"event"` so it
    * never counts as proof the control socket is up — see the "event" case below. */
-  | { kind: "toast"; message: string }
+  | { kind: "toast"; message: string; session?: string }
   | { kind: "dismiss_toast"; id: string }
   | { kind: "dismiss_trust_prompt"; session: string };
 
@@ -109,7 +111,10 @@ function reducer(state: State, action: Action): State {
     case "connection":
       return { ...state, connectionState: action.state };
     case "toast":
-      return { ...state, toasts: [...state.toasts, { id: crypto.randomUUID(), kind: "error", message: action.message }] };
+      return {
+        ...state,
+        toasts: [...state.toasts, { id: crypto.randomUUID(), kind: "error", message: action.message, session: action.session }],
+      };
     case "dismiss_toast":
       return { ...state, toasts: state.toasts.filter((t) => t.id !== action.id) };
     case "dismiss_trust_prompt":
@@ -266,7 +271,9 @@ export interface Daemon {
    * so toasting here too would show the same failure twice. A caller with nowhere inline to put an
    * error (no open dialog) calls `toastError` itself. */
   request: (body: RequestBody) => Promise<Event>;
-  toastError: (message: string) => void;
+  /** `session` is passed by a caller that knows which session the message is about, so the toast
+   * can name it; see `Toast.session`. */
+  toastError: (message: string, session?: string) => void;
   dismissToast: (id: string) => void;
   /** Drops a trust prompt from the queue, whether it was answered or declined — declining leaves the
    * screen for the user in the terminal, and the daemon asks again for it only after a `snapshot`. */
@@ -289,7 +296,7 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
   return {
     store,
     request: (body) => client.request(body),
-    toastError: (message) => dispatch({ kind: "toast", message }),
+    toastError: (message, session) => dispatch({ kind: "toast", message, session }),
     dismissToast: (id) => dispatch({ kind: "dismiss_toast", id }),
     dismissTrustPrompt: (session) => dispatch({ kind: "dismiss_trust_prompt", session }),
     reconnect: () => client.reconnect(),

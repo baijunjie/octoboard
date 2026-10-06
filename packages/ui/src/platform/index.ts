@@ -16,6 +16,10 @@ export interface PlatformAdapter {
   readonly exit?: ExitCapability;
   readonly notifications?: NotificationCapability;
   readonly badge?: BadgeCapability;
+  /** The native window itself — its chrome (the titlebar), which CSS cannot reach, and its own
+   * visibility; present only where a shell owns a native window — a browser tab has neither a
+   * titlebar to match nor a window to reveal. */
+  readonly nativeWindow?: NativeWindowCapability;
 }
 
 export interface ExitHandlers {
@@ -57,6 +61,19 @@ export interface NotificationCapability {
 export interface BadgeCapability {
   /** Shows `count` on the application's icon; 0 clears it. */
   set(count: number): Promise<void>;
+}
+
+export interface NativeWindowCapability {
+  /** Pins the window's appearance to `theme`; `undefined` hands control back to the OS, so the
+   * window keeps following a live system appearance change instead of being pinned to whatever
+   * it happened to resolve to at the moment of the call. */
+  setTheme(theme: "light" | "dark" | undefined): Promise<void>;
+  /** Shows a window the shell created hidden (`open_main_window` in
+   * `apps/desktop/src-tauri/src/lib.rs`), once this process has pushed the native theme and
+   * painted the page — showing it any earlier is exactly the white/dark flash of the OS's own
+   * appearance that creating it hidden exists to avoid. Idempotent: showing an already-visible
+   * window, or the shell's own timeout-driven fallback racing this call, is a no-op either way. */
+  reveal(): Promise<void>;
 }
 
 /** Picks the implementation once, at startup, from the environment the page is running in. */

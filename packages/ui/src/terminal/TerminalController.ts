@@ -1,6 +1,8 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 
+import { XTERM_THEMES } from "./xtermThemes";
+
 /** Shift, Ctrl, Alt: the keys xterm itself treats as modifier-only. */
 const MODIFIER_KEY_CODES = new Set([16, 17, 18]);
 
@@ -70,24 +72,23 @@ export class TerminalController {
   private openFrame?: number;
   private socket?: WebSocket;
   private sessionId?: string;
+  /** The session whose output is currently on screen. It outlives `sessionId`, which a `detach()`
+   * clears: that is what lets a detach tell its own session's last output from another session's
+   * (see `detach`). */
+  private screenSessionId?: string;
   private status: TermStatus = "closed";
   /** Bumped on every `attach()`; a socket's event handlers no-op once their generation is stale. */
   private generation = 0;
   private pendingInput: Uint8Array[] = [];
 
-  constructor(handlers: TerminalControllerHandlers) {
+  constructor(handlers: TerminalControllerHandlers, initialColorTheme: "light" | "dark") {
     this.handlers = handlers;
     this.term = new Terminal({
       scrollback: 10000,
       // A monospace stack with CJK coverage: these agents render box-drawing TUIs and sometimes
       // CJK status text, and the default `courier-new` xterm.js falls back to has neither.
       fontFamily: '"SF Mono", Menlo, Consolas, "Noto Sans Mono CJK SC", "PingFang SC", monospace',
-      theme: {
-        background: "#1e1f22",
-        foreground: "#e4e4e6",
-        cursor: "#e4e4e6",
-        selectionBackground: "#3a3b40",
-      },
+      theme: XTERM_THEMES[initialColorTheme],
     });
     this.fitAddon = new FitAddon();
     this.term.loadAddon(this.fitAddon);
@@ -157,6 +158,16 @@ export class TerminalController {
   }
 
   /**
+   * Switches the running terminal's colours to the given mode's palette, without recreating the
+   * `xterm.js` instance — xterm applies a theme change to the live screen immediately, so this is
+   * the one safe way to follow the app's light/dark switch (the instance itself is mount-only, per
+   * `TerminalPane`'s effect).
+   */
+  setColorTheme(mode: "light" | "dark"): void {
+    this.term.options.theme = XTERM_THEMES[mode];
+  }
+
+  /**
    * The one state transition. Tears down any existing socket, resets the screen, connects to the
    * new session's terminal stream, and — only when `userInitiated` — restores keyboard focus to
    * xterm; atomically enough that nothing outside this method ever observes a mix of old and new
@@ -186,6 +197,7 @@ export class TerminalController {
     // the ring buffer's retention window on every reconnect is the accepted cost of not risking
     // corrupted-looking duplicated output.
     this.resetScreen();
+    this.screenSessionId = sessionId;
     this.setStatus("connecting");
 
     const socket = new WebSocket(wsUrl);
@@ -224,13 +236,29 @@ export class TerminalController {
   }
 
   /** Detaches without connecting a new session — used when nothing is selected, or the selected
-   * session is dormant (interrupted/archived) and waiting to be resumed. */
-  detach(): void {
+   * session is dormant (interrupted/archived) and waiting to be resumed.
+   *
+   * `keepScreenFor` names the session the pane is detaching *to*, and the last output stays on
+   * screen only while it is the session that produced it — a process that has just ended, whose
+   * final output (why it stopped, what it was waiting for) is the most useful thing the pane can
+   * show while it offers Resume. Pass nothing when the pane is losing its session altogether:
+   * keeping one session's output under another's header, or under no header, would be a lie. The
+   * comparison is against `screenSessionId` rather than the caller's own bookkeeping so that
+   * detaching twice for the same session (any later re-render of a dormant session re-runs the
+   * same effect) keeps the screen both times. A resume re-attaches, and `attach()` clears
+   * unconditionally, so a kept screen never survives into the next connection.
+   *
+   * One real limit of that: if `TerminalPane`'s auto-reconnect timer fires before the daemon's
+   * `session_upserted` → `interrupted` broadcast arrives, `attach()` runs first and clears the
+   * screen itself, and the detach that follows once the broadcast does land then keeps a screen
+   * that is already blank. The broadcast normally wins by a wide margin, so this is a note on the
+   * contract, not something worth restructuring for. */
+  detach({ keepScreenFor }: { keepScreenFor?: string }): void {
     this.generation++;
     this.socket?.close();
     this.socket = undefined;
     this.sessionId = undefined;
-    this.resetScreen();
+    if (keepScreenFor === undefined || keepScreenFor !== this.screenSessionId) this.resetScreen();
     this.setStatus("closed");
   }
 
@@ -241,6 +269,7 @@ export class TerminalController {
   /** Skipped while the terminal is untouchable (see `mount`); there is nothing on screen to clear
    * that early anyway. */
   private resetScreen(): void {
+    this.screenSessionId = undefined;
     if (!this.touchable) return;
     this.term.reset();
   }

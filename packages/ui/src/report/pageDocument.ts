@@ -39,12 +39,21 @@ const HISTORY_LOCK = `<style>input, select, textarea, button { pointer-events: n
   });
 </script>`;
 
+/** Keeps the page's default form controls and canvas rendering in their light variant regardless of
+ * the OS preference. The panel deliberately stays a light "paper" surface in both app themes — a
+ * report page is arbitrary model-authored HTML, and a page that hard-codes dark text would become
+ * unreadable if it also inherited a dark native widget style — but without this, a browser honours
+ * `prefers-color-scheme` for a document's own unstyled controls independently of any colour the
+ * page's CSS sets, which `<iframe sandbox>` does not stop. */
+const COLOR_SCHEME_META = '<meta name="color-scheme" content="light">';
+
 /**
- * Builds the iframe's `srcdoc` document: the CSP meta tag, then the history lock (when
- * applicable), then the bridge, then the page's own HTML, in that order — a CSP delivered by
- * `<meta>` only covers what the parser reaches after it. Composed as a plain string and handed to
- * React's `srcDoc` prop (a DOM property assignment, not string-concatenation into surrounding
- * markup), so nothing the page's HTML contains has an attribute-quote boundary to break out of.
+ * Builds the iframe's `srcdoc` document: the CSP meta tag, then the colour-scheme meta, then the
+ * history lock (when applicable), then the bridge, then the page's own HTML, in that order — a CSP
+ * delivered by `<meta>` only covers what the parser reaches after it. Composed as a plain string
+ * and handed to React's `srcDoc` prop (a DOM property assignment, not string-concatenation into
+ * surrounding markup), so nothing the page's HTML contains has an attribute-quote boundary to break
+ * out of.
  */
 export function composePageDocument(html: string, isHistory: boolean): string {
   const submitBody = isHistory
@@ -59,5 +68,5 @@ export function composePageDocument(html: string, isHistory: boolean): string {
     };
   </script>`;
   const historyLock = isHistory ? HISTORY_LOCK : "";
-  return `<meta http-equiv="Content-Security-Policy" content="${PAGE_CSP}">${historyLock}${bridge}${html}`;
+  return `<meta http-equiv="Content-Security-Policy" content="${PAGE_CSP}">${COLOR_SCHEME_META}${historyLock}${bridge}${html}`;
 }

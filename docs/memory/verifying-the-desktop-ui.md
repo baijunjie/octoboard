@@ -30,6 +30,12 @@ prevents nor reverses a lock, and `caffeinate -u` does not bring the session bac
 `ioreg -n Root -d1 -r | grep CGSSessionScreenIsLocked` before concluding anything from a capture; unlocking needs the
 user, so ask.
 
+A capture aimed at the app's own window is no safer, and misleads where a full-screen one at least looks obviously
+wrong: under lock `screencapture -l <CGWindowID>` comes back with a plausible window image rather than wallpaper,
+because the suspended WebContent process leaves its last frame standing — two captures minutes apart were
+pixel-identical across a run whose window state had changed throughout. So make the `ioreg` check before every
+capture, not only when one comes back empty.
+
 ## Get a diagnosis out of a blank window by rendering it into the DOM
 
 The window's own pixels are the only readable output channel: devtools can only be opened by the keystroke injection
@@ -51,13 +57,42 @@ print the daemon's `octoboardd listening on 127.0.0.1:<port>` line again with it
 to whatever port that line on the sidecar's stdout names. This relies on the build being unsigned, as the swap breaks
 a signed bundle's signature.
 
-## Launch a built app for verification on a throwaway `HOME` and `TMPDIR`
+## Build the bundle a verification runs against with `pnpm tauri build`, never a bare `cargo build`
 
-Run a built `.app` by executing its `Contents/MacOS/octoboard` directly, with `HOME` and `TMPDIR` pointed at fresh
-directories. The daemon it starts keeps its database and instance lock under `$HOME/.octoboard` and its port file
-under the temp directory (see the "Pointing it at a daemon" section of `packages/ui/README.md`), so on the real `HOME`
-it either works on the user's own data or, while the user's own Octoboard is running, loses the lock and the window
-opens on the `?error=` startup screen instead of the app.
+The frontend bundle the window loads (`packages/ui/dist`, which `apps/desktop/src-tauri/tauri.conf.json` names as
+`frontendDist`) and the `octoboardd` sidecar under `src-tauri/binaries/` are both produced by that file's
+`beforeBuildCommand`, and only the Tauri CLI runs it. A `cargo build` in `src-tauri/` embeds whatever happens to be
+sitting in those two places — nothing at all, or the previous build's output — so the window comes up blank, or on
+code that is not the code under test. Blank is the dangerous one: it is indistinguishable from a webview that threw
+while mounting, so a build mistake reads as a defect in the change and gets chased through the frontend instead.
+
+## Launch a built app with `open`, never by exec'ing its binary
+
+An app exec'd from a shell is registered with the system but never activated, and WebKit leaves its page quiescent
+for as long as it stays that way — measured here as a WebContent process whose CPU time did not move at all across
+four seconds, and started accruing within a second of an `open -a` on that same process bringing it to the front. So
+anything read off an exec'd app about launch timing, first paint, or what is on screen is a reading of a frozen page.
+`open` still gives the run everything the shell gave it: `--env VAR=value` per variable to override, `-o` and
+`--stderr` for the app's own output, `-n` to force a second instance.
+
+## A throwaway `HOME` and `TMPDIR` isolate the daemon's data, not the webview's
+
+Point `HOME` and `TMPDIR` at fresh directories for every verification run. The daemon keeps its database and instance
+lock under `$HOME/.octoboard` and its port file under the temp directory (see the "Pointing it at a daemon" section of
+`packages/ui/README.md`), so on the real `HOME` a run either works on the user's own data or, while the user's own
+Octoboard is running, loses the lock and opens the window on the `?error=` startup screen instead of the app.
+
+WKWebView ignores both variables, though: it keeps the page's `localStorage` under the *real* user's
+`~/Library/WebKit/<bundle identifier>/WebsiteData/`, so everything the page persists — the appearance choice
+included — carries over from the previous run, and a run on a fresh `HOME` is not a fresh profile at all. Isolate it
+by moving that directory aside before the run and putting it back afterwards. To read a value out of it instead, open
+the sqlite file normally rather than with `immutable=1`: the app's last write may still be sitting in the WAL, which
+`immutable=1` skips, answering with the value before it.
+
+Keep the `.app` and both throwaway directories on the internal disk when the checkout is on a removable volume. A
+build here is ad-hoc signed and therefore has a fresh code identity every time, so macOS's consent prompt for
+reaching files on such a volume comes back at the user on every single run and no grant it is given ever applies to
+the next build.
 
 ## Bisect every terminal symptom against the daemon before blaming the agent
 

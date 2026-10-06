@@ -15,6 +15,9 @@ mod exit;
 mod menu;
 mod sidecar;
 
+use std::thread;
+use std::time::Duration;
+
 use tauri::{RunEvent, WebviewUrl, WebviewWindowBuilder};
 
 use exit::{
@@ -92,6 +95,16 @@ fn percent_encode_query_value(input: &str) -> String {
     out
 }
 
+/// Upper bound on how long the window stays hidden (see `.visible(false)` below) before this
+/// safety net shows it regardless of what the frontend is doing. The UI reveals the window itself
+/// well inside this, once it has pushed the native theme (`packages/ui/src/main.tsx`, measured at
+/// 140-220 ms after the window is created); this exists only for the paths that never reach that
+/// point at all — the webview failing to load the bundle at all, say — where a window left hidden
+/// forever is strictly worse than one that briefly shows through in the OS's own appearance. Four
+/// seconds is generous next to that measured reveal without being so long that a genuinely stuck
+/// launch reads as a hung application rather than a slow one.
+const REVEAL_SAFETY_NET: Duration = Duration::from_secs(4);
+
 fn open_main_window(app: &tauri::AppHandle, startup: Result<u16, String>) -> tauri::Result<()> {
     let query = match startup {
         Ok(port) => format!("port={port}"),
@@ -102,7 +115,7 @@ fn open_main_window(app: &tauri::AppHandle, startup: Result<u16, String>) -> tau
     } else {
         format!("index.html?{query}")
     };
-    WebviewWindowBuilder::new(app, "main", WebviewUrl::App(url.into()))
+    let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(url.into()))
         .title("Octoboard")
         .inner_size(1200.0, 760.0)
         // 280 (sidebar) + 520 (the terminal pane's own floor) + 300 (the report panel's own
@@ -110,6 +123,23 @@ fn open_main_window(app: &tauri::AppHandle, startup: Result<u16, String>) -> tau
         // left to give up, so neither can be squeezed past usability by a narrower window. Height
         // 600 gives the terminal about 30 rows, which is comfortably usable.
         .min_inner_size(1100.0, 600.0)
+        // Created hidden so AppKit never paints the window in the OS's own appearance before the
+        // webview has painted anything themed — with no window on screen yet, there is nothing
+        // for it to paint prematurely. `packages/ui/src/main.tsx` shows it once that has
+        // happened, through the `core:window:allow-show` permission this needs; `REVEAL_SAFETY_NET`
+        // below is the backstop for every path that does not reach that call.
+        .visible(false)
         .build()?;
+
+    // `WebviewWindow::show` dispatches onto the window's own event loop internally, so calling it
+    // from this background thread rather than the main one is safe; a plain `thread::sleep` here
+    // needs neither `tauri::async_runtime` nor a direct `tokio` dependency, unlike the sidecar's
+    // own async wait in `sidecar.rs`, which already had to be async to read the child's stdout.
+    let safety_net_window = window.clone();
+    thread::spawn(move || {
+        thread::sleep(REVEAL_SAFETY_NET);
+        let _ = safety_net_window.show();
+    });
+
     Ok(())
 }

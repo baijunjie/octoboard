@@ -272,12 +272,19 @@ reporting works, so an agent's own mouse-driven TUI is usable. `Ctrl+C` reaches 
   terminal itself keeps 10,000 lines of scrollback.
 - A reattach always redraws from the replay rather than appending to what is on screen, so scrollback older than the
   replay window is lost on every reconnect.
-- Resizing the window resizes the agent's terminal. The window has a minimum size, sized so that a
-  terminal and a report panel stay usable side by side — see "Where the panel sits in the window" in
-  `docs/product/report-panel.md`.
+- Resizing the window resizes the agent's terminal. The window has a minimum size, sized so that the
+  sidebar, the terminal and the report panel all stay usable side by side — see "The window's minimum
+  size" in `docs/product/window-layout.md`.
+- The terminal's colours follow the window's light or dark appearance — see "What follows the choice"
+  in `docs/product/appearance.md`.
 - A client that stops draining output for more than a few seconds is dropped by the daemon rather than letting output
   buffer without bound. The application then reconnects by itself, with a backoff, up to five times; while a running
   session's terminal is disconnected a "Reconnect" button is available as well. A reconnect in the background never
   steals keyboard focus.
 - Selecting an interrupted or archived session resumes it rather than attaching; until a process is running, the
   terminal reads "Not running" and offers "Resume".
+- **A session's last output stays on screen once its process has ended**, under that "Not running" status and beside
+  "Resume", so what the agent printed last — why it stopped, what it was waiting for — can still be read. The kept
+  screen belongs to that one session: selecting a different dormant session clears the screen rather than showing the
+  previous session's output, and resuming re-attaches and redraws from the daemon's replay rather than appending to
+  what was kept.

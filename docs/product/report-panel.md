@@ -3,7 +3,8 @@
 The **report panel** is the third pane of the window, to the right of the terminal. It belongs to a
 **console** rather than to a session: its pages are pushed by that console's hub session, and the
 panel is on screen only while the selected session is a hub session. Selecting a project session
-leaves the terminal to fill the pane on its own.
+leaves the terminal to fill the pane on its own. How wide the panel is, and what becomes of it in a
+window too narrow for three panes, is described in `docs/product/window-layout.md`.
 
 A page is a whole HTML document the hub wrote, for anything better shown than typed into the
 terminal — a table, a comparison, a set of choices. A page may carry a form, and what the user
@@ -74,7 +75,8 @@ nothing. A page is model-authored HTML and its script runs, inside Octoboard's o
 whatever the user puts into it.
 
 Each page is rendered in a sandboxed frame of its own, with no access to the application around it or
-to any other page.
+to any other page, and on a light surface whatever the window's appearance is — see "A report page
+stays on a light surface in both appearances" in `docs/product/appearance.md`.
 
 ## Submitting a form back to the hub
 
@@ -99,13 +101,6 @@ rather than refused, because the user is the one submitting and there is nobody 
 hub's prompt first.
 
 A submission fails, and the failure is shown to the user, when the page is no longer the console's
-newest or the hub's process is not running. A failed submission changes nothing.
-
-## Where the panel sits in the window
-
-The window has a **minimum size of 1100×600**, so that the terminal and the panel are both usable at
-once rather than either being squeezed out.
-
-- The panel is 420 px wide and does not grow: width a wider window frees goes to the terminal.
-- As the window narrows it is the panel that gives up width, down to a floor of 300 px.
-- The terminal never goes below 55 columns.
+newest or the hub's process is not running. A failed submission changes nothing. The message names
+which console's hub the submission was meant for, so that it cannot be read as being about whichever
+session the user happens to be looking at.

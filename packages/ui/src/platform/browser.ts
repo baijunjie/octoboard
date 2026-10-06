@@ -2,8 +2,9 @@ import type { PlatformAdapter } from "./index";
 
 /**
  * A plain browser has no shell: no quit flow (closing the tab is not quitting anything — the
- * daemon outlives it), no application icon to badge. Desktop notifications map onto the Web
- * Notifications API, absent where the browser does not have it.
+ * daemon outlives it), no application icon to badge, no native window to theme or reveal — a
+ * browser tab has neither a titlebar to match nor a window to show. Desktop notifications map
+ * onto the Web Notifications API, absent where the browser does not have it.
  */
 export function browserPlatform(): PlatformAdapter {
   return {
