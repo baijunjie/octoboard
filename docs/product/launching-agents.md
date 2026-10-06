@@ -199,7 +199,7 @@ user, with "Trust and continue" trusting this project's sessions from now on. Wh
 choice is offered, it also says, naming the full path of the folder offered, that this trusts every
 project under that folder — those already there and any added there later, repositories the hub
 clones or adds into it included — and that their `.claude/settings.json` permissions and hooks then
-apply without asking, and that this can be stopped under "Trusted folders" in the sidebar. It warns
+apply without asking, and that this can be stopped under "Trusted folders" in Settings. It warns
 that a folder's `.claude/settings.json` may pre-approve tool permissions, which trusting it applies
 without asking, and it says that "Not now" leaves the question in the terminal. Its buttons:
 
@@ -245,7 +245,7 @@ terminal. Once one client has answered, a go-ahead from another changes nothing.
 - **A trusted folder** covers every project whose directory is that folder or lies anywhere below it,
   in any console, including projects associated after the folder was trusted — by the user or by a
   hub. It is set only by "Trust all projects in *folder*", is stored on its own rather than with any
-  project, and can be removed from the sidebar. Its rules are in "Trusted folders" below.
+  project, and can be removed in Settings. Its rules are in "Trusted folders" below.
 
 **How the screen is answered.** Octoboard types a Down and then an Enter into the session's terminal,
 checking before each key:
@@ -320,12 +320,12 @@ screen still waiting in a project under it is answered, including one the user p
 now"; screens of projects outside it stay as they were and are still asked about. Each of these
 answers is checked and reported exactly as described in "How the screen is answered" above.
 
-**The list in the sidebar.** Below the console tree, pinned there rather than scrolling with the
-tree, a collapsible "Trusted folders (*n*)" block, collapsed by default, lists every trusted folder,
-sorted by path; it is shown only while at least one folder is trusted. A path too long for the
-sidebar is cut from its start, so the folder's own name stays visible, and the full path is shown as
-the entry's tooltip. Each folder has a × button that stops trusting it at once, without a
-confirmation. Removing a folder leaves every project's own consent as it is and leaves running
+**The list in Settings.** The Trusted folders section of Settings (see `docs/product/settings.md`)
+explains what trusting a folder grants, as above, and lists every trusted folder, sorted by path. A
+path too long for the row is cut from its start and fades out there, so the folder's own name stays
+visible, and the full path is then the entry's tooltip. Each folder has a Remove button that stops
+trusting it at once, without a confirmation. With no folder trusted, the section says so and that a
+folder is trusted from a session's trust prompt. Removing a folder leaves every project's own consent as it is and leaves running
 sessions alone, a screen already answered included; a trust screen that comes up afterwards in a
 project under it, without consent of its own and not under another trusted folder, is asked about
 again.

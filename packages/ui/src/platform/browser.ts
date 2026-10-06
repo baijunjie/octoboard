@@ -2,8 +2,8 @@ import type { PlatformAdapter } from "./index";
 
 /**
  * A plain browser has no shell: no quit flow (closing the tab is not quitting anything — the
- * daemon outlives it), no application icon to badge, no native window to theme or reveal — a
- * browser tab has neither a titlebar to match nor a window to show. Desktop notifications map
+ * daemon outlives it), no application icon to badge, no native window to theme or reveal, no
+ * window controls of its own to keep clear and no menu bar to answer. Desktop notifications map
  * onto the Web Notifications API, absent where the browser does not have it.
  */
 export function browserPlatform(): PlatformAdapter {
@@ -16,8 +16,8 @@ export function browserPlatform(): PlatformAdapter {
 function webNotifications(): NonNullable<PlatformAdapter["notifications"]> {
   return {
     // Never asks: a browser ignores or denies a request made without a user gesture, and Chrome
-    // would ask again for every newly waiting session while the answer is undecided. The sidebar's
-    // `NotificationsPrompt` asks through `permissionPrompt` instead.
+    // would ask again for every newly waiting session while the answer is undecided.
+    // `useNotificationPermission` asks through `permissionPrompt` instead.
     async ensurePermission() {
       return Notification.permission === "granted";
     },

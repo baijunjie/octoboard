@@ -18,7 +18,7 @@ const CLAUDE_TRUST_NOT_WAITING = "claude_trust_not_waiting";
  * `.claude/settings.json` then apply without asking. */
 function trustPromptMessage(prompt: TrustPrompt, sessionLabel: string): string {
   const folderWide = prompt.trustDir
-    ? ` "Trust all projects in ${shortDirectory(prompt.trustDir)}" trusts every project under ${prompt.trustDir} — those already there and any added there later, repositories the hub clones or adds into it included — without asking again. You can stop that again under "Trusted folders" in the sidebar.`
+    ? ` "Trust all projects in ${shortDirectory(prompt.trustDir)}" trusts every project under ${prompt.trustDir} — those already there and any added there later, repositories the hub clones or adds into it included — without asking again. You can stop that again under "Trusted folders" in Settings.`
     : "";
   return `Claude Code is asking whether to trust ${prompt.path}${sessionLabel}. Octoboard can answer for you: "Trust and continue" trusts this project's sessions from now on.${folderWide} A folder's .claude/settings.json may pre-approve tool permissions, and trusting it applies them without asking. "Not now" leaves the question in the terminal for you to answer.`;
 }

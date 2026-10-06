@@ -32,12 +32,12 @@ function dockedQuery(): string {
 
 /**
  * Whether the window is currently narrower than the `docked` breakpoint. Every other narrow-mode
- * behaviour (hiding the terminal pane's drawer toggles, swapping the sidebar's and the report
- * panel's layout) uses the `docked:` Tailwind variant directly, so it tracks the breakpoint with
- * no JavaScript at all and no hydration/resize flicker. This hook exists only for the one piece of
- * behaviour that genuinely needs the current mode in JS: closing an open drawer when the window
- * widens past the breakpoint, since an overlay left open there would otherwise cover the row it no
- * longer needs to.
+ * behaviour (swapping the sidebar's and the report panel's layout) uses the `docked:` Tailwind
+ * variant directly, so it tracks the breakpoint with no JavaScript at all and no hydration/resize
+ * flicker. This hook exists only for the behaviour that genuinely needs the current mode in JS:
+ * closing an open drawer when the window widens past the breakpoint, since an overlay left open
+ * there would otherwise cover the row it no longer needs to, and the top bar's panel toggles, which
+ * drive a drawer below the breakpoint and show or hide the docked pane above it.
  */
 export function useIsNarrow(): boolean {
   const [isNarrow, setIsNarrow] = useState(() => !window.matchMedia(dockedQuery()).matches);
@@ -67,14 +67,23 @@ export function useIsNarrow(): boolean {
  * or right) and the open/closed state are this function's job, not theirs, since both drawers
  * share the one rule for what "closed" means on either side.
  *
+ * `docked:inset-y-auto` drops the vertical offsets once docked: they would otherwise shift a
+ * `relative` drawer down by `--top-chrome-height`.
+ *
+ * `positioned` makes the docked drawer `relative` rather than `static`, for a drawer whose own
+ * children are absolutely positioned against it (the sidebar's resize handle). The two cannot be
+ * layered on from outside: both are `docked:` utilities for the same property, so which wins would
+ * be down to stylesheet order.
+ *
  * Each side's classes are spelled out rather than built by interpolating `side`: Tailwind emits a
  * utility only for a class name it can find as literal text somewhere in the source, so an
  * interpolated `left-0`/`right-0` would compile to nothing and leave the drawer unanchored.
  */
-export function drawerClass(side: "left" | "right", open: boolean): string {
+export function drawerClass(side: "left" | "right", open: boolean, positioned = false): string {
   const shared =
-    "fixed bottom-0 top-(--top-chrome-height) z-40 transition-transform duration-200 docked:static docked:z-auto docked:translate-none docked:transition-none";
+    "fixed bottom-0 top-(--top-chrome-height) z-40 transition-transform duration-200 docked:inset-y-auto docked:z-auto docked:translate-none docked:transition-none";
+  const docked = positioned ? "docked:relative" : "docked:static";
   return side === "left"
-    ? `${shared} left-0 ${open ? "translate-x-0" : "-translate-x-full"}`
-    : `${shared} right-0 ${open ? "translate-x-0" : "translate-x-full"}`;
+    ? `${shared} ${docked} left-0 ${open ? "translate-x-0" : "-translate-x-full"}`
+    : `${shared} ${docked} right-0 ${open ? "translate-x-0" : "translate-x-full"}`;
 }

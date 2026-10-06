@@ -1,7 +1,9 @@
 import { Button, Chip } from "@heroui/react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
-import { drawerClass } from "../layout";
+import { FadeOverflow } from "../components/FadeOverflow";
+import { drawerClass } from "../layout/breakpoint";
 import type { Page } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { composePageDocument, SUBMIT_MESSAGE_SOURCE } from "./pageDocument";
@@ -15,18 +17,22 @@ import { composePageDocument, SUBMIT_MESSAGE_SOURCE } from "./pageDocument";
  * component's.
  *
  * Below the `docked` breakpoint this renders as a closed-by-default overlay instead of a row
- * sibling (`open`, owned by `App.tsx` alongside the sidebar's own overlay state) — never
- * unmounted by closing it, since that would lose the `list_pages` state above and re-request it
- * on every reopen.
+ * sibling (`open`, owned by `usePaneToggles` alongside the sidebar's own overlay state) — never
+ * unmounted by closing it or by hiding the docked panel, since that would lose the `list_pages`
+ * state above and re-request it on every reopen.
  */
 export function ReportPanel({
   consoleId,
   hubSessionId,
   open,
+  dockedVisible,
 }: {
   consoleId: string;
   hubSessionId: string;
   open: boolean;
+  /** Whether the docked panel is shown; the user can hide it from the top bar. Has no effect below
+   * the breakpoint, where `open` decides. Hiding never unmounts it, for the same reason. */
+  dockedVisible: boolean;
 }): React.ReactElement {
   const { request, toastError } = useDaemon();
   const consolePages = useDaemonStore((s) => s.pages.get(consoleId));
@@ -78,12 +84,12 @@ export function ReportPanel({
   // terminal never comes up there in the first place — `open` only ever slides it on and off
   // screen, never changes whether it is mounted.
   //
-  // `drawerClass` starts the drawer below `--top-chrome-height`, leaving both drawer toggles (and
-  // the terminal pane's whole header bar) visible while it is open, and puts it back as a plain
-  // row sibling at or above the breakpoint — see that function's own comment for the geometry.
-  const panelClass = `flex min-h-0 flex-col border-l border-separator w-[420px] max-w-[92vw] docked:w-auto docked:max-w-none docked:min-w-[300px] docked:flex-[0_1_420px] ${drawerClass("right", open)}`;
+  // `drawerClass` starts the drawer below `--top-chrome-height`, leaving the top bar (and its
+  // report toggle) visible while it is open, and puts it back as a plain row sibling at or above
+  // the breakpoint — see that function's own comment for the geometry.
+  const panelClass = `flex min-h-0 flex-col border-l border-separator w-[420px] max-w-[92vw] docked:w-auto docked:max-w-none docked:min-w-[300px] docked:flex-[0_1_420px] ${dockedVisible ? "" : "docked:hidden"} ${drawerClass("right", open)}`;
 
-  // `data-escape-scope`: one of the origins `App.tsx`'s capture-phase Escape listener closes a
+  // `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener closes a
   // drawer for, on every branch below since any of them can be what is on screen while open.
 
   if (consolePages === undefined) return <div data-escape-scope className={panelClass} />;
@@ -110,7 +116,7 @@ export function ReportPanel({
   };
 
   return (
-    <div data-escape-scope className={panelClass}>
+    <div data-escape-scope data-pane="report" className={panelClass}>
       <div className="flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator bg-surface px-3 text-xs text-muted">
         <Button
           isIconOnly
@@ -121,7 +127,7 @@ export function ReportPanel({
           isDisabled={displayIndex === 0}
           onPress={() => goTo(displayIndex - 1)}
         >
-          ◀
+          <ChevronLeft aria-hidden="true" className="size-4" />
         </Button>
         <span className="whitespace-nowrap">
           {displayIndex + 1} / {consolePages.length}
@@ -135,11 +141,13 @@ export function ReportPanel({
           isDisabled={displayIndex === consolePages.length - 1}
           onPress={() => goTo(displayIndex + 1)}
         >
-          ▶
+          <ChevronRight aria-hidden="true" className="size-4" />
         </Button>
         {/* The timestamp's width is whatever the user's locale makes of it, so it is the element
             that gives way, rather than pushing the badge off the panel's edge when narrow. */}
-        <span className="ml-auto min-w-0 truncate whitespace-nowrap">{new Date(page.created_at).toLocaleString()}</span>
+        <FadeOverflow axis="x" as="span" className="ml-auto min-w-0">
+          {new Date(page.created_at).toLocaleString()}
+        </FadeOverflow>
         {isHistory && (
           <Chip size="sm" variant="soft" color="warning" className="shrink-0">
             Read-only

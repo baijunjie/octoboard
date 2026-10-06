@@ -1,5 +1,5 @@
 import { Button, Chip } from "@heroui/react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 import "@xterm/xterm/css/xterm.css";
 import { isDormant as isDormantStatus, isLive, type Session } from "../protocol";
@@ -12,15 +12,12 @@ interface TerminalPaneProps {
   /** The session whose terminal should be shown, or `undefined` when nothing is selected yet. */
   session?: Session;
   onResume: (sessionId: string) => void;
-  /** Whether the sidebar drawer is currently open, for the leading toggle shown only below the
-   * `docked` breakpoint (`App.tsx` holds the state; both overlays live there). */
-  sidebarOpen: boolean;
-  onToggleSidebar: () => void;
-  /** Whether a report panel exists at all right now — only a hub session has one, so its toggle
-   * is meaningless (and hidden) without one. */
-  hasReportPanel: boolean;
-  reportOpen: boolean;
-  onToggleReport: () => void;
+  ref?: React.Ref<TerminalPaneHandle>;
+}
+
+export interface TerminalPaneHandle {
+  /** Puts keyboard focus on the terminal. */
+  focus: () => void;
 }
 
 /** Reconnect backoff after a dropped-but-still-live session's socket closes: doubles each attempt,
@@ -44,11 +41,7 @@ const STABLE_CONNECTION_MS = 10000;
 export function TerminalPane({
   session,
   onResume,
-  sidebarOpen,
-  onToggleSidebar,
-  hasReportPanel,
-  reportOpen,
-  onToggleReport,
+  ref,
 }: TerminalPaneProps): React.ReactElement {
   const { terminalUrl } = useDaemon();
   const { resolved: colorTheme } = useOctoboardTheme();
@@ -61,6 +54,8 @@ export function TerminalPane({
   // value, and the `colorTheme` effect further down both reads and updates it. One ref rather than
   // two so the two can never claim different things about the same instance.
   const appliedColorThemeRef = useRef(colorTheme);
+
+  useImperativeHandle(ref, () => ({ focus: () => controllerRef.current?.focus() }), []);
 
   const handleStatusChange = useCallback((s: TermStatus) => {
     if (stableTimerRef.current) {
@@ -82,7 +77,7 @@ export function TerminalPane({
 
     const resizeObserver = new ResizeObserver(() => {
       controller.fit();
-      controller.resize(controller.term.cols, controller.term.rows);
+      controller.syncSize();
     });
     if (containerRef.current) resizeObserver.observe(containerRef.current);
 
@@ -199,38 +194,20 @@ export function TerminalPane({
     // than the panel's own basis, flexbox never leaves the grow phase, and the panel's shrink
     // factor is never consulted. 520px is 55 columns at ~9.2px/column off a real agent CLI (the
     // container's padding eats the rest). Below the breakpoint the sidebar and the report panel
-    // are overlays rather than row siblings (`App.tsx`), so this pane is the row's only content
-    // and takes a much smaller floor instead: 382px is 40 columns at the same ~9.2px/column plus
-    // the same padding allowance, under which the terminal stops being usable at all, so
+    // are overlays rather than row siblings (`usePaneToggles`), so this pane is the row's only
+    // content and takes a much smaller floor instead: 382px is 40 columns at the same ~9.2px/column
+    // plus the same padding allowance, under which the terminal stops being usable at all, so
     // `overflow-x-auto` on the row (`App.tsx`) scrolls rather than squeezing it further.
     //
-    // `data-escape-scope`: one of the origins `App.tsx`'s capture-phase Escape listener closes a
-    // drawer for — xterm.js holds keyboard focus here most of the time and would otherwise
+    // `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener
+    // closes a drawer for — xterm.js holds keyboard focus here most of the time and would otherwise
     // swallow the key before that listener's own bubble-phase alternative ever saw it.
     <div
       data-escape-scope
       className="relative flex min-h-0 min-w-[382px] flex-[1_1_382px] flex-col docked:min-w-[520px] docked:flex-[1_1_520px]"
       style={{ backgroundColor: XTERM_THEMES[colorTheme].background }}
     >
-      {/* `z-[35]` clears the narrow-mode scrim (`Scrim.tsx`, `z-30`) so this header's own toggle
-          stays pressable while a drawer dims the screen — not the drawers themselves (`z-40` in
-          `Sidebar.tsx`/`ReportPanel.tsx`): both now start below this header rather than at the
-          viewport top, so they no longer overlap it at all. */}
-      <div className="relative z-[35] flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator bg-surface px-3">
-        {/* Shown only below the `docked` breakpoint, via the variant rather than a width check in
-            JS, so there is no hydration/resize flicker. Above it the sidebar and the report panel
-            already sit in the row, and these would be redundant. */}
-        <Button
-          isIconOnly
-          size="sm"
-          variant="ghost"
-          aria-label={sidebarOpen ? "Hide sessions" : "Show sessions"}
-          preventFocusOnPress
-          className="docked:hidden"
-          onPress={onToggleSidebar}
-        >
-          ☰
-        </Button>
+      <div className="flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator bg-surface px-3">
         {/* With nothing selected there is no connection to have a status: the pane's own
             placeholder says what to do, and a red "Disconnected" next to it reads as a fault. */}
         {session && (
@@ -246,19 +223,6 @@ export function TerminalPane({
         {offerResume && (
           <Button size="sm" variant="primary" onPress={() => onResume(session.id)}>
             Resume
-          </Button>
-        )}
-        {hasReportPanel && (
-          <Button
-            isIconOnly
-            size="sm"
-            variant="ghost"
-            aria-label={reportOpen ? "Hide report" : "Show report"}
-            preventFocusOnPress
-            className="ml-auto docked:hidden"
-            onPress={onToggleReport}
-          >
-            ▤
           </Button>
         )}
       </div>

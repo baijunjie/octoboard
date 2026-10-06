@@ -16,10 +16,16 @@ export interface PlatformAdapter {
   readonly exit?: ExitCapability;
   readonly notifications?: NotificationCapability;
   readonly badge?: BadgeCapability;
-  /** The native window itself — its chrome (the titlebar), which CSS cannot reach, and its own
-   * visibility; present only where a shell owns a native window — a browser tab has neither a
-   * titlebar to match nor a window to reveal. */
+  /** The native window itself — its appearance (the controls and any native chrome), which CSS
+   * cannot reach, and its own visibility; present only where a shell owns a native window — a
+   * browser tab has neither an appearance to match nor a window to reveal. */
   readonly nativeWindow?: NativeWindowCapability;
+  /** Present only where the window draws no titlebar of its own, so the UI's top bar is the
+   * window's titlebar: it then carries the drag region and keeps `leadingInset` clear for the
+   * window controls the shell floats over it. */
+  readonly windowChrome?: WindowChromeCapability;
+  /** The shell's native menu bar, for the items that ask the UI to do something. */
+  readonly appMenu?: AppMenuCapability;
 }
 
 export interface ExitHandlers {
@@ -45,6 +51,8 @@ export interface ExitCapability {
   confirmQuit(): Promise<void>;
 }
 
+export type NotificationPermissionStatus = "granted" | "denied" | "undecided";
+
 export interface NotificationCapability {
   /** Whether notifications may be shown. Where `permissionPrompt` is present this only reads the
    * answer and never asks; otherwise it asks the user if that has not happened yet. */
@@ -52,7 +60,7 @@ export interface NotificationCapability {
   /** Present only where asking for permission needs a user gesture, as in a browser, which ignores
    * or denies a request made from anywhere else. The UI offers a control that calls `request`. */
   readonly permissionPrompt?: {
-    status(): "granted" | "denied" | "undecided";
+    status(): NotificationPermissionStatus;
     request(): Promise<void>;
   };
   notify(notification: { title: string; body: string }): Promise<void>;
@@ -74,6 +82,19 @@ export interface NativeWindowCapability {
    * appearance that creating it hidden exists to avoid. Idempotent: showing an already-visible
    * window, or the shell's own timeout-driven fallback racing this call, is a no-op either way. */
   reveal(): Promise<void>;
+}
+
+export interface WindowChromeCapability {
+  /** The width, in CSS pixels, at the top bar's leading edge that the window controls cover
+   * right now: none while they are hidden, as in fullscreen. */
+  leadingInset(): number;
+  /** Subscribes to changes of `leadingInset`, returning the function that undoes it. */
+  subscribe(callback: () => void): () => void;
+}
+
+export interface AppMenuCapability {
+  /** Subscribes to the menu's Settings item (Cmd+,), returning the function that undoes it. */
+  onSettingsRequested(handler: () => void): () => void;
 }
 
 /** Picks the implementation once, at startup, from the environment the page is running in. */

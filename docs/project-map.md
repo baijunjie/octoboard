@@ -24,8 +24,8 @@ package. Per-package commands are in that package's doc.
 ## Clients and apps
 
 - [`apps/desktop/`](../apps/desktop/README.md) — `@octoboard/desktop`, the Tauri 2 shell of the macOS desktop
-  application: window, `octoboardd` sidecar, exit flow and release scripts. It loads the UI from `packages/ui/` and
-  has no UI of its own; a client of `daemon/` over WebSocket only.
+  application: window (with its overlay titlebar), native menu, `octoboardd` sidecar, exit flow and release scripts. It
+  loads the UI from `packages/ui/` and has no UI of its own; a client of `daemon/` over WebSocket only.
 - [`apps/ios/`](../apps/ios/README.md) — placeholder for the native iOS client; no content, not a workspace package.
 - [`apps/android/`](../apps/android/README.md) — placeholder for the native Android client; no content, not a
   workspace package.
@@ -35,5 +35,6 @@ package. Per-package commands are in that package's doc.
 ## Shared packages
 
 - [`packages/ui/`](../packages/ui/README.md) — `@octoboard/ui`, the HeroUI + React 19 UI of the desktop application:
-  the daemon client, store and platform adapter, the console → project → session sidebar, the xterm.js terminal pane,
-  the dialogs and the hub's report panel. Loaded by the `apps/desktop/` shell and also runs in a plain browser.
+  the daemon client, store and platform adapter, the window-wide top bar, the console → project → session sidebar, the
+  xterm.js terminal pane, the pane-layout state, the settings dialog, the other dialogs and the hub's report panel.
+  Loaded by the `apps/desktop/` shell and also runs in a plain browser.

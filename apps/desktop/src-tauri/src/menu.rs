@@ -3,6 +3,13 @@
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::AppHandle;
 
+/// The Settings item's id, which `on_menu_event` in `lib.rs` matches.
+pub const SETTINGS_ITEM_ID: &str = "settings";
+
+/// What `on_menu_event` emits to the webview when the Settings item is chosen; the platform
+/// adapter's `tauri.ts` listens for it.
+pub const SETTINGS_REQUESTED_EVENT: &str = "settings-requested";
+
 /// Builds the app's menu bar. It is close to the framework's own default macOS menu, with one
 /// difference that matters: Quit is this crate's own `MenuItem`, not
 /// `PredefinedMenuItem::quit`. The predefined one sends the native `terminate:` selector straight
@@ -18,8 +25,15 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry
         .accelerator("CmdOrCtrl+Q")
         .build(app)?;
 
+    // A plain item for the same reason as Quit: the UI owns what opening settings means.
+    let settings = MenuItemBuilder::with_id(SETTINGS_ITEM_ID, "Settings…")
+        .accelerator("CmdOrCtrl+,")
+        .build(app)?;
+
     let app_menu = SubmenuBuilder::new(app, "Octoboard")
         .about(None)
+        .separator()
+        .item(&settings)
         .separator()
         .services()
         .separator()

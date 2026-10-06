@@ -18,12 +18,16 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   for, paging back through the kept history, why a history page is read-only and where that is enforced, what a page may
   contain, which outbound channels it has none of and the WebRTC and preconnect routes it still has, the `octoboard.submit(data)` bridge and how a submission reaches the
   hub session, and the light surface a page renders on whatever the window's appearance is.
-- [Window layout](product/window-layout.md) — the three panes and what each is allowed to give up, the macOS window's
-  1100×600 minimum and the arithmetic behind it, and the narrow layout a plain browser gets below 1100 px, where the
-  sidebar and the report panel become drawers over the terminal.
+- [Window layout](product/window-layout.md) — the top bar across the window and what it holds (and how it doubles as the
+  macOS titlebar), the three panes and what each is allowed to give up, resizing the sidebar and hiding the sidebar or
+  the report panel, the macOS window's 1100×600 minimum and the arithmetic behind it, and the narrow layout a plain
+  browser gets below 1100 px, where the sidebar and the report panel become drawers over the terminal.
 - [Appearance](product/appearance.md) — the light, dark and follow-the-system choice and which of them is the default,
-  what follows it (down to the terminal's palette and the native titlebar), where the choice is kept, and why a report
-  page stays on a light surface either way.
+  where it is chosen, what follows it (down to the terminal's palette and the native window's own appearance), where the
+  choice is kept, and why a report page stays on a light surface either way.
+- [Settings](product/settings.md) — the Settings dialog: how it opens (the top bar, and the macOS menu's Settings… /
+  ⌘, and when that is ignored), how it closes and where focus goes, its Appearance, Trusted folders and Notifications
+  sections, and where toasts sit while it is open.
 - [Launching agents](product/launching-agents.md) — the guarantee that project files and the user's agent configuration
   are never modified, the three things injected per launch and the hub's generated instruction file, the launch
   environment, Claude Code's workspace-trust prompt, how Octoboard answers it and trusted folders, and the per-agent specifics.

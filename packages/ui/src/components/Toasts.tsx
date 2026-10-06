@@ -26,25 +26,32 @@ import { useDaemon, useDaemonStore } from "../store";
  * focused it would drop focus to `<body>`, away from the terminal.
  *
  * The stack's top offset clears whatever top chrome the current screen actually has, so a toast
- * only ever covers passive page content and never a control: `--connection-banner-height`, which
- * `ConnectionBanner` publishes (0 when it is not mounted), plus the pane header's
- * `--pane-header-height` (via `style.css`'s combined `--top-chrome-height`) when
- * `belowPaneHeader` says this screen has one.
+ * only ever covers passive page content and never a control: `style.css`'s `--top-chrome-height`
+ * (the top bar plus the connection banner `ConnectionBanner` publishes, 0 when it is not mounted),
+ * plus the pane headers' `--pane-header-height` when `belowPaneHeader` says this screen has them.
+ * `placement="bottom"` anchors the stack to the bottom right instead, for a caller whose controls
+ * sit right under that top offset.
  */
-export function Toasts({ belowPaneHeader = false }: { belowPaneHeader?: boolean } = {}): React.ReactElement {
+export function Toasts({
+  belowPaneHeader = false,
+  placement = "top",
+}: {
+  belowPaneHeader?: boolean;
+  placement?: "top" | "bottom";
+} = {}): React.ReactElement {
   const { dismissToast } = useDaemon();
   const toasts = useDaemonStore((s) => s.toasts);
   const sessions = useDaemonStore((s) => s.sessions);
   const consoles = useDaemonStore((s) => s.consoles);
   const projects = useDaemonStore((s) => s.projects);
   const top = belowPaneHeader
-    ? "calc(0.75rem + var(--top-chrome-height))"
-    : "calc(0.75rem + var(--connection-banner-height, 0px))";
+    ? "calc(0.75rem + var(--top-chrome-height) + var(--pane-header-height))"
+    : "calc(0.75rem + var(--top-chrome-height))";
   return createPortal(
     <div
       data-react-aria-top-layer
-      style={{ top }}
-      className="fixed right-3 z-(--z-index-toast) flex w-full max-w-sm flex-col gap-2"
+      style={placement === "top" ? { top } : undefined}
+      className={`fixed right-3 z-(--z-index-toast) flex w-full max-w-sm flex-col gap-2 ${placement === "bottom" ? "bottom-3" : ""}`}
     >
       {toasts.map((toast) => {
         const session = toast.session ? sessions.get(toast.session) : undefined;

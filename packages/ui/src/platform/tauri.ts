@@ -1,9 +1,11 @@
 import type {
+  AppMenuCapability,
   BadgeCapability,
   ExitCapability,
   NativeWindowCapability,
   NotificationCapability,
   PlatformAdapter,
+  WindowChromeCapability,
 } from "./index";
 
 // Every Tauri module is loaded with a dynamic `import()` and only from here, so a plain browser
@@ -16,23 +18,81 @@ export function tauriPlatform(): PlatformAdapter {
     notifications: tauriNotifications(),
     badge: tauriBadge(),
     nativeWindow: tauriNativeWindow(),
+    windowChrome: tauriWindowChrome(),
+    appMenu: tauriAppMenu(),
+  };
+}
+
+/** Collects the unsubscribe functions of listeners registered after an `await`, so the whole
+ * registration can be undone before any of them exists. `track` unsubscribes at once when the
+ * registration is already undone, which is what keeps an undo during that window from leaking a
+ * listener: a leaked one fires for the rest of the window's life. */
+function unlistenTracker(): { track: (unlisten: () => void) => void; undo: () => void } {
+  let cancelled = false;
+  const unlisteners: Array<() => void> = [];
+  return {
+    track(unlisten) {
+      if (cancelled) unlisten();
+      else unlisteners.push(unlisten);
+    },
+    undo() {
+      cancelled = true;
+      for (const unlisten of unlisteners) unlisten();
+      unlisteners.length = 0;
+    },
+  };
+}
+
+/** What the traffic lights cover at the bar's leading edge: `TRAFFIC_LIGHT_X` in
+ * `apps/desktop/src-tauri/src/lib.rs` plus three buttons and a gap. */
+const TRAFFIC_LIGHT_INSET = 80;
+
+/** Present only on macOS, where `lib.rs` hides the native titlebar and floats the traffic lights
+ * over the page; they leave the bar in fullscreen, and with them the inset. */
+function tauriWindowChrome(): WindowChromeCapability | undefined {
+  if (!navigator.userAgent.includes("Mac")) return undefined;
+  let inset = TRAFFIC_LIGHT_INSET;
+  const callbacks = new Set<() => void>();
+  return {
+    leadingInset: () => inset,
+    subscribe(callback) {
+      callbacks.add(callback);
+      const { track, undo } = unlistenTracker();
+      void import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
+        const win = getCurrentWindow();
+        const sync = async () => {
+          const next = (await win.isFullscreen()) ? 0 : TRAFFIC_LIGHT_INSET;
+          if (next === inset) return;
+          inset = next;
+          for (const notify of callbacks) notify();
+        };
+        track(await win.onResized(() => void sync()));
+        void sync();
+      });
+      return () => {
+        callbacks.delete(callback);
+        undo();
+      };
+    },
+  };
+}
+
+function tauriAppMenu(): AppMenuCapability {
+  return {
+    onSettingsRequested(handler) {
+      const { track, undo } = unlistenTracker();
+      void import("@tauri-apps/api/event").then(async ({ listen }) => {
+        track(await listen("settings-requested", () => handler()));
+      });
+      return undo;
+    },
   };
 }
 
 function tauriExit(): ExitCapability {
   return {
     register({ onQuitRequested, onDaemonExited }) {
-      // Every listener is registered after an `await`, so the registration can be undone before any
-      // of them exists. Collecting them through `track` — which unsubscribes immediately once the
-      // registration is gone — is what keeps an undo during that window from leaking one: a leaked
-      // listener fires for the rest of the window's life, which shows up as a duplicated quit
-      // prompt and a duplicated toast for every daemon event.
-      let cancelled = false;
-      const unlisteners: Array<() => void> = [];
-      const track = (unlisten: () => void) => {
-        if (cancelled) unlisten();
-        else unlisteners.push(unlisten);
-      };
+      const { track, undo } = unlistenTracker();
 
       (async () => {
         const { invoke } = await import("@tauri-apps/api/core");
@@ -57,11 +117,7 @@ function tauriExit(): ExitCapability {
         track(await listen<string>("daemon-exited", (event) => onDaemonExited(event.payload)));
       })();
 
-      return () => {
-        cancelled = true;
-        for (const unlisten of unlisteners) unlisten();
-        unlisteners.length = 0;
-      };
+      return undo;
     },
     async heartbeat() {
       const { invoke } = await import("@tauri-apps/api/core");

@@ -66,6 +66,13 @@ sitting in those two places — nothing at all, or the previous build's output �
 code that is not the code under test. Blank is the dangerous one: it is indistinguishable from a webview that threw
 while mounting, so a build mistake reads as a defect in the change and gets chased through the frontend instead.
 
+Run that build with every `APPLE_*` variable unset (`env | grep '^APPLE_'` shows what the shell carries; drop each
+with `env -u <name>` on the build command). The Tauri CLI reads them straight from the environment (see the "Release
+builds" section of `apps/desktop/README.md`), and a shell set up to release this app has them exported, so a
+verification build otherwise gets Developer ID-signed and uploaded to Apple's notary service with nothing in the
+command or its output to warn of it — unreleased code sent to Apple, minutes added to the build, and a signed bundle
+that the wrapped-sidecar swap above breaks.
+
 ## Launch a built app with `open`, never by exec'ing its binary
 
 An app exec'd from a shell is registered with the system but never activated, and WebKit leaves its page quiescent
@@ -85,7 +92,11 @@ Octoboard is running, loses the lock and opens the window on the `?error=` start
 WKWebView ignores both variables, though: it keeps the page's `localStorage` under the *real* user's
 `~/Library/WebKit/<bundle identifier>/WebsiteData/`, so everything the page persists — the appearance choice
 included — carries over from the previous run, and a run on a fresh `HOME` is not a fresh profile at all. Isolate it
-by moving that directory aside before the run and putting it back afterwards. To read a value out of it instead, open
+by moving that directory aside before the run and putting it back afterwards — but only while no app with that
+identifier is running: the user's own installed Octoboard and every worktree's build share `dev.octoboard.app`, so the
+directory is the live profile of whichever copy is open. Check with `lsappinfo find bundleid=dev.octoboard.app`
+(empty output means none) immediately before moving it; if one is running, leave the directory in place and either
+accept the shared profile or ask the user to quit theirs. To read a value out of it instead, open
 the sqlite file normally rather than with `immutable=1`: the app's last write may still be sitting in the WAL, which
 `immutable=1` skips, answering with the value before it.
 

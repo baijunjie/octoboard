@@ -1,6 +1,6 @@
 # Writing UI components
 
-## A HeroUI control takes keyboard focus on a mouse press; keep it off the terminal's way
+## Focus dropped to `<body>` cuts the terminal off: a HeroUI control's press, a hidden pane
 
 Clicking around the terminal must not move keyboard focus off it (see the "The console → project → session menu"
 section of `docs/product/sessions.md`). In `packages/ui` every pressable HeroUI 3 control (`Button`,
@@ -15,6 +15,13 @@ top of that react-aria moves focus back to the trigger when the menu closes. Bui
 
 Nothing in the markup gives this away — a plain `<button>` never takes focus on click in WKWebView — so the defect
 only appears in the running page.
+
+Hiding a region with CSS (`hidden`, a `docked:hidden` variant) while focus is inside it drops focus to `<body>` the
+same way, with no event, and `preventFocusOnPress` does not help there: focus reaches a pane by Tab or by a click into
+an iframe. So every code path that hides a region able to hold focus — a toggle, a scrim, Escape, a breakpoint change
+— first hands focus to the terminal if the region contains `document.activeElement`. The docked panes already do this
+through `releaseFocus` in `packages/ui/src/layout/usePaneToggles.ts`; hide a new pane through that hook rather than
+beside it.
 
 ## Inside a dialog, a focused control that unmounts takes Escape and Tab with it
 

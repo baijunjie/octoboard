@@ -2,8 +2,8 @@
 
 ## Light, dark and follow the system
 
-The window has three appearances, chosen from a three-way control at the foot of the sidebar: **Light**,
-**Dark** and **System**. One of the three is always current.
+The window has three appearances, chosen in the Appearance section of Settings (see `docs/product/settings.md`):
+**Light**, **Dark** and **System**. One of the three is always current.
 
 **The default is System**, which follows the operating system's own appearance and switches with it while
 the window is open — the user does not have to come back to the control after changing the system setting.
@@ -15,10 +15,13 @@ Everything the window shows follows the chosen appearance, including:
 - **The terminal.** Each appearance has its own full palette — background, foreground, cursor, selection
   and all sixteen ANSI colours — so ordinary coloured agent output stays readable on a light background as
   well as a dark one.
-- **The native window chrome** (the titlebar) in the macOS application. Choosing System hands the window's
-  appearance back to the operating system rather than pinning it to whatever System resolved to at that
-  moment, so the titlebar keeps following a live system change too. A client with no native window, such
-  as the UI opened in a browser, has no chrome to match and ignores this.
+- **The top bar**, which in the macOS application stands in for the window's titlebar (see "The top bar" in
+  `docs/product/window-layout.md`).
+- **The native window's own appearance** in the macOS application — the window's close, minimise and zoom buttons
+  and anything else the system draws for the window. Choosing System hands the window's appearance back to the
+  operating system rather than pinning it to whatever System resolved to at that moment, so it keeps following a
+  live system change too. A client with no native window, such as the UI opened in a browser, has nothing native to
+  match and ignores this.
 
 The one deliberate exception is a report page — see below.
 

@@ -39,6 +39,9 @@ function keepModifiersFromArmingKeyDownSeen(term: Terminal): (event: KeyboardEve
   };
 }
 
+/** How long the terminal's size must hold still before `syncSize` reports it to the daemon. */
+const RESIZE_SETTLE_MS = 120;
+
 export type TermStatus = "connecting" | "open" | "closed" | "not_running";
 
 export interface TerminalControllerHandlers {
@@ -80,6 +83,9 @@ export class TerminalController {
   /** Bumped on every `attach()`; a socket's event handlers no-op once their generation is stale. */
   private generation = 0;
   private pendingInput: Uint8Array[] = [];
+  /** The pending trailing send of `syncSize`, and the size the daemon was last told. */
+  private resizeTimer?: ReturnType<typeof setTimeout>;
+  private sentSize?: { cols: number; rows: number };
 
   constructor(handlers: TerminalControllerHandlers, initialColorTheme: "light" | "dark") {
     this.handlers = handlers;
@@ -143,6 +149,7 @@ export class TerminalController {
     // The scheduled frame would otherwise fit a disposed terminal, and a throw inside it is
     // exactly the uncatchable kind this class defers around in the first place.
     if (this.openFrame !== undefined) cancelAnimationFrame(this.openFrame);
+    clearTimeout(this.resizeTimer);
     this.generation++;
     this.socket?.close();
     this.socket = undefined;
@@ -235,6 +242,12 @@ export class TerminalController {
     }
   }
 
+  /** Puts keyboard focus on the terminal, as when a session is selected. Skipped while the terminal
+   * is untouchable (see `mount`). */
+  focus(): void {
+    if (this.touchable) this.term.focus();
+  }
+
   /** Detaches without connecting a new session — used when nothing is selected, or the selected
    * session is dormant (interrupted/archived) and waiting to be resumed.
    *
@@ -262,8 +275,17 @@ export class TerminalController {
     this.setStatus("closed");
   }
 
-  resize(cols: number, rows: number): void {
-    this.sendResize(cols, rows);
+  /** Tells the daemon the terminal's current size once it has settled for `RESIZE_SETTLE_MS`, and
+   * only if it differs from what the daemon already has. Each size sent is a SIGWINCH to the agent,
+   * so a continuous container resize (a sidebar drag, a window drag) must not forward every
+   * intermediate size; `fit()` still runs live, so the screen itself keeps up. */
+  syncSize(): void {
+    clearTimeout(this.resizeTimer);
+    this.resizeTimer = setTimeout(() => {
+      const { cols, rows } = this.term;
+      if (this.sentSize?.cols === cols && this.sentSize.rows === rows) return;
+      this.sendResize(cols, rows);
+    }, RESIZE_SETTLE_MS);
   }
 
   /** Skipped while the terminal is untouchable (see `mount`); there is nothing on screen to clear
@@ -306,7 +328,11 @@ export class TerminalController {
   }
 
   private sendResize(cols: number, rows: number): void {
+    // Defensive: `fit` yields a positive size for a laid-out container, and a zero one must never
+    // be handed to the agent.
+    if (cols <= 0 || rows <= 0) return;
     if (this.socket?.readyState === WebSocket.OPEN) {
+      this.sentSize = { cols, rows };
       this.socket.send(JSON.stringify({ type: "resize", cols, rows }));
     }
   }

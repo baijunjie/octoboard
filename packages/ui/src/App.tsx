@@ -1,21 +1,26 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { Scrim } from "./components/Scrim";
 import { Sidebar } from "./components/Sidebar";
+import { BareTitleBar, TitleBar } from "./components/TitleBar";
 import { Toasts } from "./components/Toasts";
 import { DaemonRequestError } from "./daemon-client";
 import { ConfirmDialog } from "./dialogs/ConfirmDialog";
 import type { DialogRequest } from "./dialogs/dialogRequest";
 import { RequestedDialog } from "./dialogs/RequestedDialog";
 import { TrustPromptDialog } from "./dialogs/TrustPromptDialog";
-import { useIsNarrow } from "./layout";
+import { useSidebarWidth } from "./layout/sidebarWidth";
+import { usePaneToggles } from "./layout/usePaneToggles";
 import { useAppExit } from "./lifecycle/useAppExit";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
 import { isDormant, type Console, type Session } from "./protocol";
 import { ReportPanel } from "./report/ReportPanel";
+import { SettingsDialog } from "./settings/SettingsDialog";
+import { useSettingsDialog } from "./settings/useSettingsDialog";
 import { useDaemon, useDaemonStore } from "./store";
-import { TerminalPane } from "./terminal/TerminalPane";
+import { TerminalPane, type TerminalPaneHandle } from "./terminal/TerminalPane";
+import { nextWaitingSession, waitingSessionsInTreeOrder } from "./waiting";
 
 /** The code the daemon's `error` carries for a launch asked for while one was already running or
  * starting for that session, or for resuming an archived hub while a live one already exists (see
@@ -32,91 +37,26 @@ export function App(): React.ReactElement {
   const consoles = useDaemonStore((s) => s.consoles);
   const projects = useDaemonStore((s) => s.projects);
   const sessions = useDaemonStore((s) => s.sessions);
-  const trustedDirectories = useDaemonStore((s) => s.trustedDirectories);
   // One dialog at a time, oldest prompt first; answering or declining it brings up the next.
   const trustPrompt = useDaemonStore((s) => s.trustPrompts[0]);
   const [selectedSessionId, setSelectedSessionId] = useState<string>();
   const [dialogRequest, setDialogRequest] = useState<DialogRequest>();
 
-  // Below the `docked` breakpoint the sidebar and the report panel are closed-by-default overlays
-  // rather than row siblings (their own components' doc comments have the layout). Both states
-  // live here, one level above either component, since the terminal pane's header is where their
-  // toggles sit and widening the window past the breakpoint has to be able to close either one.
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [reportOpen, setReportOpen] = useState(false);
-  const isNarrow = useIsNarrow();
+  const terminalRef = useRef<TerminalPaneHandle>(null);
+  const focusTerminal = () => terminalRef.current?.focus();
 
   const consoleList = useMemo(() => Array.from(consoles.values()), [consoles]);
   const projectList = useMemo(() => Array.from(projects.values()), [projects]);
   const sessionList = useMemo(() => Array.from(sessions.values()), [sessions]);
   const selectedSession = selectedSessionId ? sessions.get(selectedSessionId) : undefined;
   // Only a hub session has a report panel at all; computed here (rather than where it is
-  // consumed below) because the effect that resets `reportOpen` needs it too.
+  // consumed below) because the pane toggles and the sidebar's width clamp need it too.
   const hasReportPanel = selectedSession?.role === "hub";
 
-  // An overlay left open stops meaning anything once the window is wide enough to show its
-  // content in the row instead — without this, widening past the breakpoint with a drawer open
-  // would leave `docked:hidden`'s sibling, the scrim, also gone (it is hidden the same way), but
-  // the drawer's own `open` state would still be true, so reopening it narrow again would show it
-  // already open with no toggle press in between.
-  useEffect(() => {
-    if (isNarrow) return;
-    setSidebarOpen(false);
-    setReportOpen(false);
-  }, [isNarrow]);
+  const panes = usePaneToggles({ hasReportPanel, focusTerminal });
 
-  // Selecting a session whose console has no report panel leaves `reportOpen` with nothing to
-  // mean: the panel stops rendering (it only exists for a hub session), but a scrim rendered on
-  // `reportOpen` alone would still dim the whole viewport with no toggle left to close it.
-  useEffect(() => {
-    if (!hasReportPanel) setReportOpen(false);
-  }, [hasReportPanel]);
-
-  // Opening either drawer closes the other — without this, both scrims can be on screen at once,
-  // and since they stack in DOM order, a press only ever reaches the later one.
-  const toggleSidebar = () => {
-    setSidebarOpen((open) => !open);
-    if (!sidebarOpen) setReportOpen(false);
-  };
-  const toggleReport = () => {
-    setReportOpen((open) => !open);
-    if (!reportOpen) setSidebarOpen(false);
-  };
-
-  // Closes whichever drawer is open — both scrims already do this on a press, Escape needs its
-  // own listener to do the same. Registered on the capture phase: xterm.js owns Escape too (it
-  // forwards the keystroke to the running agent) and stops it bubbling once it has, so a bubble
-  // listener here would never see the key while the terminal holds focus, which is most of the
-  // time.
-  //
-  // Scoped to origins marked `data-escape-scope` (the terminal pane and the drawers themselves)
-  // rather than every keydown: a dialog or a menu popover is portalled to `<body>`, outside both,
-  // and closes itself from its own bubble-phase `onKeyDown` — stopping propagation unconditionally
-  // here reached the key first and ate it before react-aria's own handler ever saw it.
-  //
-  // A target of `<body>` (or no target at all) is treated as in scope too: that is what a fresh
-  // narrow-mode window has focused once a drawer is open but no session has ever been selected, so
-  // `term.focus()` has never run. react-aria keeps focus inside an open dialog or menu, so an
-  // overlay's Escape normally cannot arrive that way. The one exception is a dialog whose focused
-  // control has just unmounted, which drops focus to `<body>`: Escape then closes the drawer under
-  // the dialog rather than the dialog. That state already costs the dialog its own Escape, which is
-  // what `useRefocusIfLost` in `dialogs/Dialog.tsx` exists to prevent, so it is not worth a second
-  // guard here.
-  useEffect(() => {
-    if (!sidebarOpen && !reportOpen) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      const target = event.target as Element | null;
-      if (target && target !== document.body && !target.closest("[data-escape-scope]")) return;
-      // Consumed here rather than also reaching the terminal: with a drawer open, Escape closes
-      // it, not whatever the running agent would have done with it.
-      event.stopPropagation();
-      setSidebarOpen(false);
-      setReportOpen(false);
-    };
-    window.addEventListener("keydown", handleKeyDown, true);
-    return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [sidebarOpen, reportOpen]);
+  // A hidden report panel gives its width back, so the sidebar's clamp must not hold it.
+  const sidebarWidth = useSidebarWidth(hasReportPanel && panes.reportDocked);
 
   useWaitingNotifications(sessionList, consoles, projects, hosts !== undefined);
 
@@ -127,6 +67,12 @@ export function App(): React.ReactElement {
     getSessions: () => sessionList,
     requestShutdown: () => request({ type: "shutdown" }),
     toastError,
+  });
+
+  const { settingsOpen, openSettings, closeSettings } = useSettingsDialog({
+    ready: hosts !== undefined,
+    otherModalOpen: dialogRequest !== undefined || trustPrompt !== undefined || exitConfirmOpen,
+    focusTerminal,
   });
 
   // Every click that could resume or create a session is guarded against its own double-click: two
@@ -174,8 +120,14 @@ export function App(): React.ReactElement {
     if (isDormant(session.status)) resumeSession(session.id);
   };
 
-  const removeTrustedDirectory = (path: string) =>
-    void request({ type: "remove_trusted_directory", path }).catch((err) => toastError((err as Error).message));
+  const waitingSessions = useMemo(
+    () => waitingSessionsInTreeOrder(consoleList, projectList, sessionList),
+    [consoleList, projectList, sessionList],
+  );
+  const selectNextWaiting = () => {
+    const next = nextWaitingSession(waitingSessions, selectedSessionId);
+    if (next) selectSession(next);
+  };
 
   // Nothing to show until the first snapshot. The toasts belong here all the same, and so does the
   // banner with the Retry the client offers once it has given up — otherwise this screen would say
@@ -183,6 +135,7 @@ export function App(): React.ReactElement {
   if (!hosts) {
     return (
       <div className="flex h-full flex-col">
+        <BareTitleBar />
         <Toasts />
         {connectionState === "closed" && <ConnectionBanner state={connectionState} onRetry={reconnect} />}
         <div className="flex flex-1 items-center justify-center text-muted">
@@ -194,35 +147,43 @@ export function App(): React.ReactElement {
 
   return (
     <div className="flex h-full flex-col">
-      <Toasts belowPaneHeader />
+      {/* The settings dialog's controls run down its right column from just under the top offset,
+          while its bottom right is padding, so toasts move to the bottom while it is open. The
+          smaller dialogs keep them at the top: their footer buttons are at their bottom right. */}
+      <Toasts belowPaneHeader placement={settingsOpen ? "bottom" : "top"} />
+      <TitleBar
+        onOpenSettings={openSettings}
+        sidebarWidth={panes.sidebarDocked ? sidebarWidth.width : undefined}
+        sidebarShown={panes.sidebarShown}
+        onToggleSidebar={panes.toggleSidebar}
+        onNewConsole={() => setDialogRequest({ kind: "new-console" })}
+        selectedSession={selectedSession}
+        waitingCount={waitingSessions.length}
+        onNextWaiting={selectNextWaiting}
+        hasReportPanel={hasReportPanel}
+        reportShown={panes.reportShown}
+        onToggleReport={panes.toggleReport}
+      />
       <ConnectionBanner state={connectionState} onRetry={reconnect} />
       <div className="flex min-h-0 flex-1">
-        {sidebarOpen && <Scrim label="Close sessions" onClose={() => setSidebarOpen(false)} />}
+        {panes.sidebarOpen && <Scrim label="Close sessions" onClose={panes.closeSidebar} />}
         <Sidebar
           consoles={consoleList}
           projects={projectList}
           sessions={sessionList}
           selectedSessionId={selectedSessionId}
-          trustedDirectories={trustedDirectories}
-          onRemoveTrustedDirectory={removeTrustedDirectory}
           onSelectSession={selectSession}
           onOpenHub={openHub}
           onOpenDialog={setDialogRequest}
-          open={sidebarOpen}
+          open={panes.sidebarOpen}
+          dockedVisible={panes.sidebarDocked}
+          sidebarWidth={sidebarWidth}
         />
         {/* Below the `docked` breakpoint the terminal is the row's only content and the floor
             drops to 382px (see `TerminalPane.tsx`); `overflow-x-auto` is what makes a viewport
             narrower than that scroll instead of clipping. */}
         <main className="flex min-w-0 flex-1 overflow-x-auto docked:overflow-visible">
-          <TerminalPane
-            session={selectedSession}
-            onResume={resumeSession}
-            sidebarOpen={sidebarOpen}
-            onToggleSidebar={toggleSidebar}
-            hasReportPanel={hasReportPanel}
-            reportOpen={reportOpen}
-            onToggleReport={toggleReport}
-          />
+          <TerminalPane ref={terminalRef} session={selectedSession} onResume={resumeSession} />
           {/* Only the hub session's console has a report panel — it is that console's panel, not
               the session's. Keyed on the console id so switching hubs mounts a fresh instance. */}
           {/* The `selectedSession &&` is only for narrowing: `hasReportPanel` already implies it. */}
@@ -231,12 +192,14 @@ export function App(): React.ReactElement {
               key={selectedSession.console_id}
               consoleId={selectedSession.console_id}
               hubSessionId={selectedSession.id}
-              open={reportOpen}
+              open={panes.reportOpen}
+              dockedVisible={panes.reportDocked}
             />
           )}
         </main>
-        {reportOpen && <Scrim label="Close report" onClose={() => setReportOpen(false)} />}
+        {panes.reportOpen && <Scrim label="Close report" onClose={panes.closeReport} />}
       </div>
+      {settingsOpen && <SettingsDialog onClose={closeSettings} />}
       {dialogRequest && (
         <RequestedDialog
           dialog={dialogRequest}

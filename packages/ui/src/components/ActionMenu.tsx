@@ -1,5 +1,6 @@
 import { Dropdown, Label } from "@heroui/react";
-import React, { useRef } from "react";
+import { Ellipsis } from "lucide-react";
+import React, { useEffect, useRef } from "react";
 
 /** Set when a menu closed but could not hand focus back, because the item it ran opened a dialog
  * that holds it. The dialog takes it when it closes (see `takeMenuFocusToRestore`). */
@@ -13,6 +14,14 @@ export function takeMenuFocusToRestore(): HTMLElement | null {
   return element;
 }
 
+/** How many menus are open right now; see `isActionMenuOpen`. */
+let openMenus = 0;
+
+/** Whether any action menu's popover is open, which holds keyboard focus like a modal does. */
+export function isActionMenuOpen(): boolean {
+  return openMenus > 0;
+}
+
 export interface ActionMenuItem {
   label: string;
   onClick: () => void;
@@ -20,10 +29,10 @@ export interface ActionMenuItem {
 }
 
 /**
- * A small "⋯" action menu; each item is a one-shot action. It lives inside a tree row that is itself
- * clickable, so a click is kept from reaching the row: the popover is portalled out of the DOM but
- * React still bubbles its events through this component's ancestors, which would otherwise select or
- * toggle the row behind the menu.
+ * A small "more" (ellipsis) action menu; each item is a one-shot action. It lives inside a tree row
+ * that is itself clickable, so a click is kept from reaching the row: the popover is portalled out
+ * of the DOM but React still bubbles its events through this component's ancestors, which would
+ * otherwise select or toggle the row behind the menu.
  */
 export function ActionMenu({ label, items }: { label: string; items: ActionMenuItem[] }): React.ReactElement {
   // The element that had focus when a pointer press on the trigger began (typically the terminal's
@@ -34,7 +43,18 @@ export function ActionMenu({ label, items }: { label: string; items: ActionMenuI
   // which is right for the keyboard but would pull it off the terminal for the mouse.
   const restoreRef = useRef<HTMLElement | null>(null);
 
+  // Counted into `openMenus`. A row can unmount with its menu open (the session it belongs to is
+  // deleted), which reports no close, so the unmount settles the count too.
+  const countedOpenRef = useRef(false);
+  const countOpen = (isOpen: boolean) => {
+    if (countedOpenRef.current === isOpen) return;
+    countedOpenRef.current = isOpen;
+    openMenus += isOpen ? 1 : -1;
+  };
+  useEffect(() => () => countOpen(false), []);
+
   const onOpenChange = (isOpen: boolean) => {
+    countOpen(isOpen);
     if (isOpen) {
       menuFocusToRestore = null;
       restoreRef.current = pressRef.current;
@@ -82,7 +102,7 @@ export function ActionMenu({ label, items }: { label: string; items: ActionMenuI
           preventFocusOnPress
           className="size-6 min-w-0 rounded-md bg-transparent p-0 text-muted hover:bg-default"
         >
-          <span aria-hidden="true">⋯</span>
+          <Ellipsis aria-hidden="true" className="size-4" />
         </Dropdown.Trigger>
         <Dropdown.Popover>
           <Dropdown.Menu onAction={(key) => items.find((item) => item.label === key)?.onClick()}>

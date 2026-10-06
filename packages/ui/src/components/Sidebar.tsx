@@ -1,17 +1,17 @@
-import { Button } from "@heroui/react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import React, { useState } from "react";
 
 import type { DialogRequest } from "../dialogs/dialogRequest";
-import { drawerClass } from "../layout";
+import { drawerClass } from "../layout/breakpoint";
+import type { SidebarWidth } from "../layout/sidebarWidth";
 import { isDormant, type Console, type Project, type Session } from "../protocol";
 import { STATUS_LABEL } from "../sessionLabel";
 import { ActionMenu, type ActionMenuItem } from "./ActionMenu";
 import { AgentBadge } from "./AgentBadge";
+import { FadeOverflow } from "./FadeOverflow";
 import { NotificationsPrompt } from "./NotificationsPrompt";
+import { SidebarResizeHandle } from "./SidebarResizeHandle";
 import { BubbledWaitingHand, StatusIcon } from "./StatusIcon";
-import { ThemeSwitcher } from "./ThemeSwitcher";
-import { TitledControl } from "./TitledControl";
-import { TrustedFolders } from "./TrustedFolders";
 
 /** The callbacks the tree triggers. Kept as one object, passed down by reference rather than
  * spread, so a child's prop list says exactly what data it narrows instead of inheriting whatever
@@ -27,13 +27,15 @@ interface SidebarProps extends SidebarHandlers {
   projects: Project[];
   sessions: Session[];
   selectedSessionId?: string;
-  /** Directories whose projects Octoboard answers Claude Code's trust prompt for. */
-  trustedDirectories: string[];
-  onRemoveTrustedDirectory: (path: string) => void;
-  /** Whether the drawer is open below the `docked` breakpoint; above it the tree always shows,
-   * regardless of this flag (`App.tsx` owns the state, resetting it once the window no longer
-   * needs it). */
+  /** Whether the drawer is open below the `docked` breakpoint; above it `dockedVisible` decides
+   * instead (`usePaneToggles` owns the state, resetting it once the window no longer needs it). */
   open: boolean;
+  /** Whether the docked sidebar is shown; the user can hide it from the top bar. Has no effect
+   * below the breakpoint, where `open` decides. */
+  dockedVisible: boolean;
+  /** The docked-mode width and its setters; `App.tsx` owns it (`useSidebarWidth`) so it can also
+   * be read from outside the sidebar. */
+  sidebarWidth: SidebarWidth;
 }
 
 /** Stops a row's own mousedown from moving focus off whatever had it (typically the terminal) —
@@ -86,26 +88,29 @@ function TreeRow({
 }
 
 function Chevron({ collapsed }: { collapsed: boolean }): React.ReactElement {
-  return (
-    <span aria-hidden="true" className="w-3 shrink-0 text-xs text-muted">
-      {collapsed ? "▸" : "▾"}
-    </span>
-  );
+  const Icon = collapsed ? ChevronRight : ChevronDown;
+  return <Icon aria-hidden="true" className="size-4 shrink-0 text-muted" />;
 }
 
-const RowLabel = ({ children }: { children: React.ReactNode }) => <span className="min-w-0 flex-1 truncate">{children}</span>;
+/** A row's single-line name: fades out at the right edge when it does not fit, rather than
+ * ending in an ellipsis. `title` is the full text, offered as a tooltip only while it is cut. */
+const RowLabel = ({ title, children }: { title?: string; children: React.ReactNode }) => (
+  <FadeOverflow axis="x" as="span" className="min-w-0 flex-1" titleWhenClipped={title}>
+    {children}
+  </FadeOverflow>
+);
 
 /** The console → project → session menu ("The console → project → session menu" in
- * docs/product/sessions.md), with the list of trusted folders under it. Expand/collapse state is
- * purely local UI state; the daemon has no notion of it. */
+ * docs/product/sessions.md). Expand/collapse state is purely local UI state; the daemon has no
+ * notion of it. */
 export function Sidebar({
   consoles,
   projects,
   sessions,
   selectedSessionId,
-  trustedDirectories,
-  onRemoveTrustedDirectory,
   open,
+  dockedVisible,
+  sidebarWidth,
   ...handlers
 }: SidebarProps): React.ReactElement {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -123,29 +128,19 @@ export function Sidebar({
       // Below the `docked` breakpoint this is a fixed overlay, closed by default, slid on and off
       // with `open`; at or above it the `docked:` variants in `drawerClass` put it back exactly
       // where it always was, a plain row sibling, regardless of `open` — see that function's own
-      // comment for the geometry. Starting below `--top-chrome-height` leaves both drawer toggles
-      // (and the terminal pane's whole header bar) visible while this is open.
+      // comment for the geometry. Starting below `--top-chrome-height` leaves the top bar, and with
+      // it the sidebar toggle, visible while this is open. `docked:hidden` is the user having hidden
+      // the sidebar from that toggle.
       //
-      // `data-escape-scope`: one of the origins `App.tsx`'s capture-phase Escape listener closes
-      // a drawer for.
+      // `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener
+      // closes a drawer for. `data-pane` is how it finds this element to see whether it holds focus.
       data-escape-scope
-      className={`flex w-70 flex-col border-r border-separator bg-surface shrink-0 ${drawerClass("left", open)}`}
+      data-pane="sidebar"
+      className={`flex w-70 flex-col border-r border-separator bg-surface shrink-0 docked:w-(--sidebar-width) ${dockedVisible ? "" : "docked:hidden"} ${drawerClass("left", open, true)}`}
+      style={{ "--sidebar-width": `${sidebarWidth.width}px` } as React.CSSProperties}
       aria-label="Sessions"
     >
-      <div className="flex shrink-0 items-center justify-between px-3 py-2">
-        <h1 className="text-base font-semibold">Octoboard</h1>
-        <TitledControl title="New console">
-          <Button
-            size="sm"
-            variant="secondary"
-            preventFocusOnPress
-            onPress={() => handlers.onOpenDialog({ kind: "new-console" })}
-          >
-            + Console
-          </Button>
-        </TitledControl>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+      <FadeOverflow axis="y" className="min-h-0 flex-1 p-2">
         {consoles.map((console) => (
           <ConsoleNode
             key={console.id}
@@ -161,10 +156,9 @@ export function Sidebar({
         {consoles.length === 0 && (
           <p className="px-2 py-1 text-sm text-muted">No consoles yet. Create one to get started.</p>
         )}
-      </div>
-      <TrustedFolders directories={trustedDirectories} onRemove={onRemoveTrustedDirectory} />
+      </FadeOverflow>
       <NotificationsPrompt />
-      <ThemeSwitcher />
+      <SidebarResizeHandle sidebarWidth={sidebarWidth} />
     </nav>
   );
 }
@@ -208,7 +202,7 @@ function ConsoleNode({
         onActivate={() => toggle(thisConsole.id)}
       >
         <Chevron collapsed={isCollapsed} />
-        <RowLabel>
+        <RowLabel title={thisConsole.name}>
           <span className="font-medium">{thisConsole.name}</span>
         </RowLabel>
         {anyWaiting && <BubbledWaitingHand />}
@@ -233,7 +227,7 @@ function ConsoleNode({
             onActivate={activateHub}
           >
             {hub ? <StatusIcon status={hub.status} /> : <span className="size-4 shrink-0" />}
-            <RowLabel>Hub</RowLabel>
+            <RowLabel title="Hub">Hub</RowLabel>
             {hub && <AgentBadge agent={hub.agent} />}
             {hub && (
               // The only way to archive the hub: it cannot archive itself, and while it sits in this
@@ -354,7 +348,7 @@ function ProjectNode({
         onActivate={() => toggle(project.id)}
       >
         <Chevron collapsed={isCollapsed} />
-        <RowLabel>{project.name}</RowLabel>
+        <RowLabel title={project.name}>{project.name}</RowLabel>
         {anyWaiting && <BubbledWaitingHand />}
         <ActionMenu
           label={`Actions for project ${project.name}`}
@@ -410,7 +404,7 @@ function SessionRow({
       onActivate={() => handlers.onSelectSession(session)}
     >
       <StatusIcon status={session.status} />
-      <RowLabel>{session.title}</RowLabel>
+      <RowLabel title={session.title}>{session.title}</RowLabel>
       <AgentBadge agent={session.agent} />
       <ActionMenu label={`Actions for session ${session.title}`} items={items} />
     </TreeRow>

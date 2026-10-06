@@ -80,7 +80,7 @@ function screen(): React.ReactElement {
 // fallback — which, per the ordering below, is outside `ThemeProvider`, so a theme hook called from
 // there would throw while the boundary rendered its own fallback, with nothing above left to catch
 // it and a blank window as the result. Here it only ever renders under `ThemeProvider`, and the
-// fallback path simply leaves the titlebar on its last pushed value.
+// fallback path simply leaves the window on its last pushed appearance.
 function NativeWindowThemeSync(): null {
   useNativeWindowTheme();
   return null;
@@ -122,5 +122,5 @@ root.render(
 // here has already rendered.
 //
 // `initialNativeThemePush` is still waited on. Revealing before that IPC round trip settles would
-// only move the flash from "before this page painted" to "before the titlebar matched it".
+// only move the flash from "before this page painted" to "before the window's appearance matched it".
 void Promise.resolve(initialNativeThemePush).then(() => platform.nativeWindow?.reveal().catch(() => {}));

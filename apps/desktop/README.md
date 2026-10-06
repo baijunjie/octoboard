@@ -84,16 +84,23 @@ daemon traffic or session data in them:
   is actually still answering.
 - `confirm_quit` — marks a pending quit as user-confirmed and asks Tauri to actually exit.
 
-Beyond those two, `src-tauri/capabilities/default.json` also allowlists the `notification` plugin's commands (used by
+Beyond those two, the shell emits one event to the webview, `settings-requested`, when the application menu's
+**Settings…** item (Cmd+,) is chosen; it carries no payload, and `packages/ui/src/platform/tauri.ts` exposes it as the
+platform adapter's `appMenu` capability. The window has no native titlebar background or title text: it is created
+with an overlay titlebar and a hidden title on macOS, and the traffic lights float over the UI's own top bar
+(`TitleBar` in `packages/ui`), centred in it by `TRAFFIC_LIGHT_X` / `TRAFFIC_LIGHT_Y` in `src-tauri/src/lib.rs`.
+
+`src-tauri/capabilities/default.json` also allowlists the `notification` plugin's commands (used by
 `packages/ui/src/lifecycle/useWaitingNotifications.ts` for the raised-hand system notification),
-`core:window|set_badge_count` (the Dock badge), `core:window|set_theme` (the titlebar following the in-app theme
-choice, used by `packages/ui/src/lifecycle/useNativeWindowTheme.ts`; the permission identifier in
+`core:window|set_badge_count` (the Dock badge), `core:window|set_theme` (the window's native appearance following the
+in-app theme choice, used by `packages/ui/src/lifecycle/useNativeWindowTheme.ts`; the permission identifier in
 `capabilities/default.json` is `core:window:allow-set-theme`) and `core:window|show` (reveals the window the shell
 creates hidden, see `open_main_window` in `src-tauri/src/lib.rs`, called once from `packages/ui/src/main.tsx` after
 it has pushed the theme; permission identifier `core:window:allow-show`). All of these are still within the
 architectural rule above: they carry no daemon traffic or session state — only a count, a text, a theme string the
 frontend has already derived or chosen, or no theme at all meaning follow the OS, or a bare reveal with no payload
-at all.
+at all, or the bare start-of-drag and zoom of the top bar's drag region (`core:window:allow-start-dragging` and
+`core:window:allow-internal-toggle-maximize`).
 
 Everything else `src-tauri/` does is internal: it starts `octoboardd` as a sidecar process and bakes the port it
 printed into the window's URL (`?port=`) before the window is created, so the frontend can locate the daemon without
@@ -106,8 +113,8 @@ any IPC call for it.
 | `src-tauri/src/lib.rs` | `run()`: builds the Tauri app, wires the menu/exit-flow entry points to `exit`/`menu`, opens the main window; window-creation helpers |
 | `src-tauri/src/exit.rs` | The exit-confirmation flow: `ExitState`, the two IPC commands above, the decision all three quit gestures share, and the `applicationShouldTerminate:` override onto AppKit's own delegate — the only `unsafe` code in `apps/desktop/`, for catching the Dock icon's own Quit (and a system-initiated logout/restart/shutdown, which arrives the same way) |
 | `src-tauri/src/sidecar.rs` | Spawns `octoboardd`, parses its startup port line, reports how it terminated |
-| `src-tauri/src/menu.rs` | Builds the native macOS menu bar |
-| `src-tauri/capabilities/default.json` | Allowlists the two IPC commands above plus the notification, Dock-badge, window-theme and window-reveal commands |
+| `src-tauri/src/menu.rs` | Builds the native macOS menu bar, including the Settings… item that `lib.rs` turns into the `settings-requested` event |
+| `src-tauri/capabilities/default.json` | Allowlists the two IPC commands above plus the notification, Dock-badge, window-theme, window-reveal and window-drag/zoom commands |
 | `src-tauri/tauri.conf.json` | Where the window's UI comes from (`frontendDist` is `packages/ui/dist`; `devUrl` and `beforeDevCommand` are that package's dev server), the `octoboardd` `externalBin`, and the bundle targets |
 | `scripts/build-daemon.mjs` | Builds `octoboardd` in release mode and copies it into `src-tauri/binaries/` under the target-triple name Tauri's `externalBin` requires |
 | `scripts/release.mjs` | Builds the release `.app`/`.dmg` and verifies the result; see "Release builds" above |

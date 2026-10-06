@@ -1,6 +1,7 @@
 import { Button } from "@heroui/react";
 import React, { useState } from "react";
 
+import { BareTitleBar } from "./components/TitleBar";
 import { useAppExit } from "./lifecycle/useAppExit";
 
 interface StartupScreenProps {
@@ -24,15 +25,18 @@ export function StartupScreen({ message, action }: StartupScreenProps): React.Re
   const { requestQuit, canQuit } = useAppExit({ toastError: setQuitError });
 
   return (
-    <div className="flex min-h-full flex-col items-center justify-center gap-4 p-8 text-center">
-      <div className="max-w-xl">{message}</div>
-      <div className="flex gap-2">
-        {action && <Button onPress={action.onSelect}>{action.label}</Button>}
-        {canQuit && <Button onPress={() => void requestQuit()}>Quit</Button>}
+    <div className="flex min-h-full flex-col">
+      <BareTitleBar />
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+        <div className="max-w-xl">{message}</div>
+        <div className="flex gap-2">
+          {action && <Button onPress={action.onSelect}>{action.label}</Button>}
+          {canQuit && <Button onPress={() => void requestQuit()}>Quit</Button>}
+        </div>
+        {/* Quitting is the only action this screen has, so a quit that fails silently would leave
+            the user with nothing at all. */}
+        {quitError && <p className="text-danger">{quitError}</p>}
       </div>
-      {/* Quitting is the only action this screen has, so a quit that fails silently would leave
-          the user with nothing at all. */}
-      {quitError && <p className="text-danger">{quitError}</p>}
     </div>
   );
 }

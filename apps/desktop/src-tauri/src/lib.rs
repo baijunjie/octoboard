@@ -18,13 +18,15 @@ mod sidecar;
 use std::thread;
 use std::time::Duration;
 
-use tauri::{RunEvent, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Emitter, RunEvent, WebviewUrl, WebviewWindowBuilder};
+#[cfg(target_os = "macos")]
+use tauri::{LogicalPosition, TitleBarStyle};
 
 use exit::{
     confirm_quit, frontend_exit_heartbeat, install_application_should_terminate_override,
     should_let_quit_through, ExitState,
 };
-use menu::build_menu;
+use menu::{build_menu, SETTINGS_ITEM_ID, SETTINGS_REQUESTED_EVENT};
 use sidecar::spawn_daemon_and_wait_for_port;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -40,7 +42,11 @@ pub fn run() {
             confirm_quit
         ])
         .on_menu_event(|app, event| {
-            if event.id() == "quit" {
+            if event.id() == SETTINGS_ITEM_ID {
+                // Only a signal: the Settings dialog is the UI's to open, and it decides whether
+                // now is a good time.
+                let _ = app.emit(SETTINGS_REQUESTED_EVENT, ());
+            } else if event.id() == "quit" {
                 // `should_let_quit_through` itself emits `exit-requested` on the `false` path;
                 // nothing left to do here but act on its answer.
                 if should_let_quit_through(app) {
@@ -105,6 +111,13 @@ fn percent_encode_query_value(input: &str) -> String {
 /// launch reads as a hung application rather than a slow one.
 const REVEAL_SAFETY_NET: Duration = Duration::from_secs(4);
 
+/// The traffic lights' inset from the window's top-left, in points, as tao applies it to the close
+/// button. `Y` was tuned by eye so the buttons sit centred in the UI's 40 pt top bar.
+#[cfg(target_os = "macos")]
+const TRAFFIC_LIGHT_X: f64 = 16.0;
+#[cfg(target_os = "macos")]
+const TRAFFIC_LIGHT_Y: f64 = 21.0;
+
 fn open_main_window(app: &tauri::AppHandle, startup: Result<u16, String>) -> tauri::Result<()> {
     let query = match startup {
         Ok(port) => format!("port={port}"),
@@ -115,7 +128,7 @@ fn open_main_window(app: &tauri::AppHandle, startup: Result<u16, String>) -> tau
     } else {
         format!("index.html?{query}")
     };
-    let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(url.into()))
+    let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(url.into()))
         .title("Octoboard")
         .inner_size(1200.0, 760.0)
         // 280 (sidebar) + 520 (the terminal pane's own floor) + 300 (the report panel's own
@@ -128,8 +141,21 @@ fn open_main_window(app: &tauri::AppHandle, startup: Result<u16, String>) -> tau
         // for it to paint prematurely. `packages/ui/src/main.tsx` shows it once that has
         // happened, through the `core:window:allow-show` permission this needs; `REVEAL_SAFETY_NET`
         // below is the backstop for every path that does not reach that call.
-        .visible(false)
-        .build()?;
+        .visible(false);
+
+    // The UI draws its own top bar across the whole window (`TitleBar` in `packages/ui`), so the
+    // native titlebar's background and text go and the traffic lights float over the page.
+    // `TRAFFIC_LIGHT_X` / `TRAFFIC_LIGHT_Y` centre them in the bar's `--title-bar-height`, and
+    // `TRAFFIC_LIGHT_INSET` in `packages/ui/src/platform/tauri.ts` is the width the bar keeps clear
+    // for them; the three move together. The window keeps its title for the Dock and Mission
+    // Control.
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .title_bar_style(TitleBarStyle::Overlay)
+        .hidden_title(true)
+        .traffic_light_position(LogicalPosition::new(TRAFFIC_LIGHT_X, TRAFFIC_LIGHT_Y));
+
+    let window = builder.build()?;
 
     // `WebviewWindow::show` dispatches onto the window's own event loop internally, so calling it
     // from this background thread rather than the main one is safe; a plain `thread::sleep` here

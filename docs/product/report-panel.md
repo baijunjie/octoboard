@@ -3,8 +3,8 @@
 The **report panel** is the third pane of the window, to the right of the terminal. It belongs to a
 **console** rather than to a session: its pages are pushed by that console's hub session, and the
 panel is on screen only while the selected session is a hub session. Selecting a project session
-leaves the terminal to fill the pane on its own. How wide the panel is, and what becomes of it in a
-window too narrow for three panes, is described in `docs/product/window-layout.md`.
+leaves the terminal to fill the pane on its own. How wide the panel is, how the user hides it, and
+what becomes of it in a window too narrow for three panes, is described in `docs/product/window-layout.md`.
 
 A page is a whole HTML document the hub wrote, for anything better shown than typed into the
 terminal — a table, a comparison, a set of choices. A page may carry a form, and what the user

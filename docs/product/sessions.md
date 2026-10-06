@@ -54,8 +54,12 @@ carries an "Archived hubs (n)" group below its Hub row, for the hub sessions tha
 Each session row shows its status, its title, and a badge naming its agent (Claude Code, Codex, Grok
 Build).
 
-Below the tree, a collapsible "Trusted folders (n)" block appears while at least one folder is trusted
-for Claude Code's workspace-trust prompt; see "Trusted folders" in `docs/product/launching-agents.md`.
+A name too long for its row fades out at the row's right edge rather than ending in an ellipsis, and the full name is
+then the row's tooltip. When the tree is taller than the sidebar it scrolls, and it fades out at whichever end has
+more of it beyond.
+
+New consoles are created from the top bar's **New console** button (see "The top bar" in
+`docs/product/window-layout.md`).
 
 Selecting a session shows its terminal. Clicking a row deliberately does not move keyboard focus away from the
 terminal; a row reached with Tab can be activated with Enter or Space.
@@ -178,6 +182,10 @@ own row:
   cannot be shown is not reported as having failed — the tree's own marker carries the same signal.
 - The Dock badge carries how many sessions are waiting, counted across every console, and clears
   when none is.
+- The top bar carries the same count, as a raised hand and the number, shown only while at least one
+  session is waiting. Pressing it selects the next waiting session after the selected one, in the order
+  the tree lists them — console by console, a console's hub before its projects' sessions — and wraps
+  from the last back to the first; when the selected session is not waiting, it selects the first.
 
 **The user answers in the session's terminal**, and the status leaves *waiting for the user* on the
 agent's next event — or, where the answer was a decline and no event follows, on the decline showing
@@ -272,9 +280,13 @@ reporting works, so an agent's own mouse-driven TUI is usable. `Ctrl+C` reaches 
   terminal itself keeps 10,000 lines of scrollback.
 - A reattach always redraws from the replay rather than appending to what is on screen, so scrollback older than the
   replay window is lost on every reconnect.
-- Resizing the window resizes the agent's terminal. The window has a minimum size, sized so that the
-  sidebar, the terminal and the report panel all stay usable side by side — see "The window's minimum
-  size" in `docs/product/window-layout.md`.
+- Whatever changes the terminal pane's size resizes the agent's terminal: resizing the window, resizing
+  the sidebar, and hiding or showing the sidebar or the report panel all do (see `docs/product/window-layout.md`). The
+  screen follows at once, but the agent is told the new size only once it has held still for about
+  120 ms, and only when it differs from the size the agent already has, so a drag sends the agent one
+  size change rather than one for every step of the drag. The window has a minimum size, sized so that
+  the sidebar, the terminal and the report panel all stay usable side by side — see "The window's
+  minimum size" in `docs/product/window-layout.md`.
 - The terminal's colours follow the window's light or dark appearance — see "What follows the choice"
   in `docs/product/appearance.md`.
 - A client that stops draining output for more than a few seconds is dropped by the daemon rather than letting output
