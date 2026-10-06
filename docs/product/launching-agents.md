@@ -222,7 +222,7 @@ without asking, and it says that "Not now" leaves the question in the terminal. 
 
 Once either trust button has been chosen the dialog closes, whether or not the screen could be
 answered — a screen is answered at most once, so trying again from the dialog could not succeed. A
-failure is then shown as a dismissible message. Two outcomes differ: the too-broad refusal keeps the
+failure is then shown as a toast. Two outcomes differ: the too-broad refusal keeps the
 dialog open, and a go-ahead for a screen that is no longer waiting — already answered, whether from
 another client, in the terminal or by Octoboard itself — closes the dialog without any message when
 it was "Trust and continue", since nothing went wrong. For "Trust all projects in …" it shows a

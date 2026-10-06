@@ -3,8 +3,9 @@ import React, { useLayoutEffect, useRef } from "react";
 
 import type { ConnectionState } from "../daemon-client";
 
-/** The CSS custom property this banner publishes its own height to, read by `Toasts` so the toast
- * stack clears it without hardcoding a height that follows the banner's text metrics. */
+/** The CSS custom property this banner publishes its own height to. `style.css` folds it into
+ * `--top-chrome-height`, the offset that everything overlaying the content area starts below, so
+ * nothing hardcodes a height that follows the banner's text metrics. */
 const BANNER_HEIGHT_VAR = "--connection-banner-height";
 
 /**
@@ -18,8 +19,8 @@ const BANNER_HEIGHT_VAR = "--connection-banner-height";
  *
  * Publishes its own height to `document.documentElement` as it mounts and resizes, and clears it
  * back to `0px` as it unmounts (`BANNER_HEIGHT_VAR`), since it is the banner's text metrics that
- * decide its height, not a fixed value — `Toasts` reads the published value rather than guessing
- * it, and would otherwise stay offset by a banner that is no longer on screen.
+ * decide its height, not a fixed value — `--top-chrome-height` follows the published value rather
+ * than guessing it, and would otherwise stay offset by a banner that is no longer on screen.
  */
 export function ConnectionBanner({
   state,
@@ -42,9 +43,9 @@ export function ConnectionBanner({
     if (!visible) return;
     const node = ref.current;
     if (!node) return;
-    // Written synchronously here too, not only from the observer's first callback, so the toast
-    // stack is never misplaced for the one frame between this banner appearing and its first
-    // `ResizeObserver` callback.
+    // Written synchronously here too, not only from the observer's first callback, so nothing that
+    // starts below `--top-chrome-height` is misplaced for the one frame between this banner
+    // appearing and its first `ResizeObserver` callback.
     document.documentElement.style.setProperty(BANNER_HEIGHT_VAR, `${node.offsetHeight}px`);
     const observer = new ResizeObserver(() => {
       document.documentElement.style.setProperty(BANNER_HEIGHT_VAR, `${node.offsetHeight}px`);

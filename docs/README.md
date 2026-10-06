@@ -19,22 +19,24 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   contain, which outbound channels it has none of and the WebRTC and preconnect routes it still has, the `octoboard.submit(data)` bridge and how a submission reaches the
   hub session, and the light surface a page renders on whatever the window's appearance is.
 - [Window layout](product/window-layout.md) — the top bar across the window and what it holds (and how it doubles as the
-  macOS titlebar), the three panes and what each is allowed to give up, resizing the sidebar and hiding the sidebar or
-  the report panel, the macOS window's 1100×600 minimum and the arithmetic behind it, and the narrow layout a plain
-  browser gets below 1100 px, where the sidebar and the report panel become drawers over the terminal.
+  macOS titlebar), the connection status it shows only on trouble, the three panes and what each is allowed to give up,
+  resizing the sidebar and the report panel, hiding either and floating it back in on hover, the macOS window's
+  1100×600 minimum and the arithmetic behind it, how the window's size and position are remembered across launches,
+  the narrow layout a plain browser gets below 1100 px, where the sidebar and the report panel become drawers over the
+  terminal, and toasts.
 - [Appearance](product/appearance.md) — the light, dark and follow-the-system choice and which of them is the default,
   where it is chosen, what follows it (down to the terminal's palette and the native window's own appearance), where the
   choice is kept, and why a report page stays on a light surface either way.
 - [Settings](product/settings.md) — the Settings dialog: how it opens (the top bar, and the macOS menu's Settings… /
   ⌘, and when that is ignored), how it closes and where focus goes, its Appearance, Trusted folders and Notifications
-  sections, and where toasts sit while it is open.
+  sections.
 - [Launching agents](product/launching-agents.md) — the guarantee that project files and the user's agent configuration
   are never modified, the three things injected per launch and the hub's generated instruction file, the launch
   environment, Claude Code's workspace-trust prompt, how Octoboard answers it and trusted folders, and the per-agent specifics.
 - [Application lifecycle](product/application-lifecycle.md) — what Octoboard runs on and how it is distributed, startup
   and the single-instance rule, who can reach the daemon (any local program, but no web page in a browser), losing the
   daemon connection, the quit confirmation and which gestures it covers, how to quit a window that has stopped
-  responding, crash behaviour, and the files Octoboard keeps under `~/.octoboard`.
+  responding, crash behaviour, and the files Octoboard keeps under `~/.octoboard` (and the one it keeps outside it).
 
 ## Reference
 
@@ -78,11 +80,15 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   every scripted keystroke, how to find the app's own WebContent process to freeze it, where to watch for a report page's blocked
   navigation, where a network probe's positive control has to come from, why another worktree's dev server or daemon
   may be the one answering and why yours are stopped by PID, and which checks need a person.
-- [Writing UI components](memory/writing-ui-components.md) — conventions for `packages/ui` components: why a HeroUI
-  control pressed with the mouse takes keyboard focus off the terminal, when `preventFocusOnPress` is needed, and why
-  "⋯" menus are built on `ActionMenu`, why a dialog must not lose focus to `<body>` when a focused control
-  unmounts, so its subject is switched with a reset key rather than by re-keying it, why a Tailwind class name has to
-  stand in the source as literal text, and which token an outline meant to be seen is built from.
+- [Writing UI components](memory/writing-ui-components.md) — conventions for `packages/ui` components: why a component
+  HeroUI 3 already provides is used rather than hand-built, where to check what it provides, and what a justified
+  hand-built one is built on and where its reason is written, why a HeroUI control pressed with the mouse takes
+  keyboard focus off the terminal, when `preventFocusOnPress` is needed, and why "⋯" menus are built on `ActionMenu`,
+  why a dialog must not lose focus to `<body>` when a focused control unmounts, so its subject is switched with a reset
+  key rather than by re-keying it, why a Tailwind class name has to stand in the source as literal text, why every
+  icon-only control also gets a tooltip through `TitledControl`, and the WCAG 2.2 AA bar the UI is held to (keyboard,
+  visible focus, names, roles and states, contrast and which token an outline meant to be seen is built from, colour,
+  motion).
 - [Writing automated tests](memory/writing-automated-tests.md) — the fixture conventions this project's tests need on
   macOS: why an executable written fresh per test flakes only under a parallel run, and how to verify behaviour the
   daemon derives from an agent's own output by replaying a committed capture rather than staging a live session.

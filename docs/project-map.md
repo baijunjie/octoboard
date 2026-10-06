@@ -24,8 +24,9 @@ package. Per-package commands are in that package's doc.
 ## Clients and apps
 
 - [`apps/desktop/`](../apps/desktop/README.md) — `@octoboard/desktop`, the Tauri 2 shell of the macOS desktop
-  application: window (with its overlay titlebar), native menu, `octoboardd` sidecar, exit flow and release scripts. It
-  loads the UI from `packages/ui/` and has no UI of its own; a client of `daemon/` over WebSocket only.
+  application: window (with its overlay titlebar and remembered frame), native menu, `octoboardd` sidecar, exit flow
+  and release scripts. It loads the UI from `packages/ui/` and has no UI of its own; a client of `daemon/` over
+  WebSocket only.
 - [`apps/ios/`](../apps/ios/README.md) — placeholder for the native iOS client; no content, not a workspace package.
 - [`apps/android/`](../apps/android/README.md) — placeholder for the native Android client; no content, not a
   workspace package.

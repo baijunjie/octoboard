@@ -100,7 +100,7 @@ export function ActionMenu({ label, items }: { label: string; items: ActionMenuI
         <Dropdown.Trigger
           aria-label={label}
           preventFocusOnPress
-          className="size-6 min-w-0 rounded-md bg-transparent p-0 text-muted hover:bg-default"
+          className="inline-flex size-6 min-w-0 items-center justify-center rounded-md bg-transparent p-0 text-muted hover:bg-transparent hover:text-foreground aria-expanded:text-foreground"
         >
           <Ellipsis aria-hidden="true" className="size-4" />
         </Dropdown.Trigger>

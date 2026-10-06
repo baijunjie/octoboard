@@ -1,11 +1,21 @@
-import { Button } from "@heroui/react";
-import { ChevronRight, Hand, PanelLeft, PanelRight, Plus, Settings } from "lucide-react";
+import { Button, Chip } from "@heroui/react";
+import {
+  ChevronRight,
+  Hand,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  Plus,
+  Settings,
+} from "lucide-react";
 import React, { useSyncExternalStore } from "react";
 
 import type { ConnectionState } from "../daemon-client";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
 import { useDaemonStore } from "../store";
+import type { TerminalProblem } from "../terminal/TerminalPane";
 import { FadeOverflow } from "./FadeOverflow";
 import { StatusIcon } from "./StatusIcon";
 import { TitledControl } from "./TitledControl";
@@ -17,15 +27,28 @@ function BarButton({
   onPress,
   children,
   isIconOnly = true,
+  onMouseHoverChange,
 }: {
   label: string;
   onPress: () => void;
   children: React.ReactNode;
   isIconOnly?: boolean;
+  /** Called as a mouse pointer enters or leaves the button; touch and pen are ignored, as the
+   * edge hot zones ignore them (`useHover` filters out touch only). */
+  onMouseHoverChange?: (hovered: boolean) => void;
 }): React.ReactElement {
   return (
     <TitledControl title={label}>
-      <Button isIconOnly={isIconOnly} size="sm" variant="ghost" aria-label={label} preventFocusOnPress onPress={onPress}>
+      <Button
+        isIconOnly={isIconOnly}
+        size="sm"
+        variant="ghost"
+        aria-label={label}
+        preventFocusOnPress
+        onPress={onPress}
+        onHoverStart={(event) => event.pointerType === "mouse" && onMouseHoverChange?.(true)}
+        onHoverEnd={(event) => event.pointerType === "mouse" && onMouseHoverChange?.(false)}
+      >
         {children}
       </Button>
     </TitledControl>
@@ -70,22 +93,50 @@ export function BareTitleBar(): React.ReactElement {
   );
 }
 
-const CONNECTION_DOT: Record<ConnectionState, { label: string; className: string }> = {
-  open: { label: "Connected", className: "bg-success" },
-  connecting: { label: "Connecting", className: "bg-warning" },
-  reconnecting: { label: "Reconnecting", className: "bg-warning" },
-  closed: { label: "Disconnected", className: "bg-danger" },
+const DAEMON_PROBLEM: Record<Exclude<ConnectionState, "open">, { label: string; color: "warning" | "danger" }> = {
+  connecting: { label: "Connecting…", color: "warning" },
+  reconnecting: { label: "Reconnecting…", color: "warning" },
+  closed: { label: "Disconnected", color: "danger" },
 };
 
-function ConnectionDot(): React.ReactElement {
-  const state = useDaemonStore((s) => s.connectionState);
-  const { label, className } = CONNECTION_DOT[state];
+const TERMINAL_PROBLEM: Record<TerminalProblem["state"], { label: string; color: "warning" | "danger" }> = {
+  reconnecting: { label: "Terminal reconnecting…", color: "warning" },
+  disconnected: { label: "Terminal disconnected", color: "danger" },
+};
+
+/** The one indicator of connection trouble, empty while everything is healthy: the daemon's own
+ * state first, since the terminal's socket cannot be better than the daemon behind it, then the
+ * selected session's terminal. The daemon's Retry lives on `ConnectionBanner`; the terminal's
+ * Reconnect is here, once automatic attempts are spent. The terminal's state is the only thing the
+ * status region announces, and it is always mounted, as a live region has to exist before its
+ * content changes to be announced; the daemon's state is announced by `ConnectionBanner`, so its
+ * chip sits outside the region and is not read out a second time. */
+function ConnectionStatus({ terminalProblem }: { terminalProblem?: TerminalProblem }): React.ReactElement {
+  const daemonState = useDaemonStore((s) => s.connectionState);
+  const daemonProblem = daemonState !== "open" ? DAEMON_PROBLEM[daemonState] : undefined;
+  const problem = daemonProblem ? undefined : terminalProblem && TERMINAL_PROBLEM[terminalProblem.state];
+  const reconnect =
+    daemonState === "open" && terminalProblem?.state === "disconnected" ? terminalProblem.reconnect : undefined;
   return (
-    <TitledControl title={`Daemon: ${label}`}>
-      <span role="img" aria-label={`Daemon: ${label}`} className="flex size-8 items-center justify-center">
-        <span className={`size-2 rounded-full ${className}`} />
+    <>
+      {daemonProblem && (
+        <Chip size="sm" variant="soft" color={daemonProblem.color}>
+          {daemonProblem.label}
+        </Chip>
+      )}
+      <span role="status" className="flex items-center">
+        {problem && (
+          <Chip size="sm" variant="soft" color={problem.color}>
+            {problem.label}
+          </Chip>
+        )}
       </span>
-    </TitledControl>
+      {reconnect && (
+        <BarButton isIconOnly={false} label="Reconnect terminal" onPress={reconnect}>
+          Reconnect
+        </BarButton>
+      )}
+    </>
   );
 }
 
@@ -119,36 +170,53 @@ interface TitleBarProps {
   /** The width of the docked sidebar when it is shown, which the left segment then matches so the
    * sidebar visually extends up into the bar; `undefined` while it is hidden. */
   sidebarWidth?: number;
-  /** Whether the sidebar is currently shown, docked or as an open drawer. */
+  /** Whether the sidebar is currently shown, docked or as an open drawer; a hidden sidebar that is
+   * only floating in on hover does not count, since pressing the toggle docks it. */
   sidebarShown: boolean;
   onToggleSidebar: () => void;
+  /** The pointer is on the sidebar toggle: with the docked sidebar hidden, that floats it in. */
+  onSidebarToggleEnter: () => void;
+  onSidebarToggleLeave: () => void;
   onNewConsole: () => void;
   selectedSession?: Session;
+  /** What is wrong with the selected session's terminal connection, if anything. */
+  terminalProblem?: TerminalProblem;
   waitingCount: number;
   onNextWaiting: () => void;
   /** Only a hub session has a report panel, so the toggle exists only for one. */
   hasReportPanel: boolean;
+  /** Whether the report panel is shown, docked or as an open drawer; hidden but floating in on
+   * hover does not count, as with the sidebar. */
   reportShown: boolean;
   onToggleReport: () => void;
+  /** The pointer is on the report toggle: with the docked report panel hidden, that floats it in. */
+  onReportToggleEnter: () => void;
+  onReportToggleLeave: () => void;
 }
 
 /**
  * The bar across the top of the window: a left segment aligned with the sidebar (sidebar toggle,
- * New console), the selected session's breadcrumb, and on the right the waiting count, the daemon
- * connection, the report panel toggle (hub session only) and Settings.
+ * New console), the selected session's breadcrumb, and on the right the waiting count, the
+ * connection trouble indicator (nothing while healthy), the report panel toggle (hub session only)
+ * and Settings.
  */
 export function TitleBar({
   onOpenSettings,
   sidebarWidth,
   sidebarShown,
   onToggleSidebar,
+  onSidebarToggleEnter,
+  onSidebarToggleLeave,
   onNewConsole,
   selectedSession,
+  terminalProblem,
   waitingCount,
   onNextWaiting,
   hasReportPanel,
   reportShown,
   onToggleReport,
+  onReportToggleEnter,
+  onReportToggleLeave,
 }: TitleBarProps): React.ReactElement {
   return (
     <BarFrame>
@@ -156,19 +224,31 @@ export function TitleBar({
           edge line, so the two read as one column; otherwise just as wide as its controls. */}
       <div
         className={`flex shrink-0 items-center ${sidebarWidth !== undefined ? "docked:w-(--bar-left-width) docked:border-r docked:border-separator" : ""}`}
-        style={sidebarWidth !== undefined ? ({ "--bar-left-width": `${sidebarWidth}px` } as React.CSSProperties) : undefined}
+        style={
+          sidebarWidth !== undefined ? ({ "--bar-left-width": `${sidebarWidth}px` } as React.CSSProperties) : undefined
+        }
       >
         <LeadingInset />
         <div className="flex items-center gap-1 px-2">
-          <BarButton label={sidebarShown ? "Hide sessions" : "Show sessions"} onPress={onToggleSidebar}>
-            <PanelLeft aria-hidden="true" className="size-4" />
+          <BarButton
+            label={sidebarShown ? "Hide sessions" : "Show sessions"}
+            onPress={onToggleSidebar}
+            onMouseHoverChange={(hovered) => (hovered ? onSidebarToggleEnter() : onSidebarToggleLeave())}
+          >
+            {sidebarShown ? (
+              <PanelLeftClose aria-hidden="true" className="size-4" />
+            ) : (
+              <PanelLeftOpen aria-hidden="true" className="size-4" />
+            )}
           </BarButton>
           <BarButton label="New console" onPress={onNewConsole}>
             <Plus aria-hidden="true" className="size-4" />
           </BarButton>
         </div>
       </div>
-      <div className="flex min-w-0 flex-1 items-center px-3">{selectedSession && <Breadcrumb session={selectedSession} />}</div>
+      <div className="flex min-w-0 flex-1 items-center px-3">
+        {selectedSession && <Breadcrumb session={selectedSession} />}
+      </div>
       <div className="flex shrink-0 items-center gap-1 px-2">
         {waitingCount > 0 && (
           <BarButton
@@ -180,10 +260,18 @@ export function TitleBar({
             {waitingCount}
           </BarButton>
         )}
-        <ConnectionDot />
+        <ConnectionStatus terminalProblem={terminalProblem} />
         {hasReportPanel && (
-          <BarButton label={reportShown ? "Hide report" : "Show report"} onPress={onToggleReport}>
-            <PanelRight aria-hidden="true" className="size-4" />
+          <BarButton
+            label={reportShown ? "Hide report" : "Show report"}
+            onPress={onToggleReport}
+            onMouseHoverChange={(hovered) => (hovered ? onReportToggleEnter() : onReportToggleLeave())}
+          >
+            {reportShown ? (
+              <PanelRightClose aria-hidden="true" className="size-4" />
+            ) : (
+              <PanelRightOpen aria-hidden="true" className="size-4" />
+            )}
           </BarButton>
         )}
         <BarButton label="Settings" onPress={onOpenSettings}>

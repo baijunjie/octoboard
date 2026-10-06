@@ -3,13 +3,18 @@ import React from "react";
 /**
  * The dimming layer behind a narrow-mode overlay (the sidebar drawer, the report panel drawer):
  * pressing it closes the overlay. Sits on an ordinary low `z-index`, well under the modal
- * overlay's and the toast stack's (`--z-index-overlay` and up in `Toasts.tsx`), so a dialog opened
- * from inside the drawer, or a toast, still renders above it. Hidden outright at or above the
- * `docked` breakpoint via the variant rather than a width check, matching the drawers themselves.
+ * overlay's and HeroUI's toast region's (`--z-index-overlay` and `--z-index-toast`, overlay + 1),
+ * so a dialog opened from inside the drawer, or a toast, still renders above it. Hidden outright at
+ * or above the `docked` breakpoint via the variant rather than a width check, matching the drawers
+ * themselves.
  *
  * Starts below the top bar and the connection banner (`--top-chrome-height`) rather than at the
  * viewport top, so the bar's toggles and the banner's Retry button stay reachable while a drawer is
  * open instead of being dimmed and swallowing the press into a close instead.
+ *
+ * It is a native `<button>` rather than HeroUI's `Button` because it is a full-bleed dimming layer
+ * with no button look, which HeroUI's styled `Button` cannot be made into without overriding it
+ * into something else.
  *
  * A plain `<button>` never takes focus on click in WKWebView, but Chrome still focuses it on
  * mousedown — this one unmounts the instant it is pressed, so without `preventDefault` here a

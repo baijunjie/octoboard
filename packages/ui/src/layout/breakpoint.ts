@@ -52,38 +52,3 @@ export function useIsNarrow(): boolean {
 
   return isNarrow;
 }
-
-/**
- * The geometry shared by the sidebar's and the report panel's narrow-mode drawers (`Sidebar.tsx`,
- * `ReportPanel.tsx`): fixed below `style.css`'s `--top-chrome-height`, sliding in from `side`, and
- * inert again — no fixed positioning, no stacking context, no transition — once `docked:` turns
- * it back into a plain row sibling. `docked:translate-none` rather than `docked:translate-x-0`
- * (which still computes to a `translate` value other than `none`) is what keeps a drawer from
- * becoming a stacking context and a containing block for fixed descendants at or above the
- * breakpoint, where the layout must stay exactly as it was before either component had a
- * `translate` at all.
- *
- * Callers add their own width/flex/border classes on top of this string; the slide direction (left
- * or right) and the open/closed state are this function's job, not theirs, since both drawers
- * share the one rule for what "closed" means on either side.
- *
- * `docked:inset-y-auto` drops the vertical offsets once docked: they would otherwise shift a
- * `relative` drawer down by `--top-chrome-height`.
- *
- * `positioned` makes the docked drawer `relative` rather than `static`, for a drawer whose own
- * children are absolutely positioned against it (the sidebar's resize handle). The two cannot be
- * layered on from outside: both are `docked:` utilities for the same property, so which wins would
- * be down to stylesheet order.
- *
- * Each side's classes are spelled out rather than built by interpolating `side`: Tailwind emits a
- * utility only for a class name it can find as literal text somewhere in the source, so an
- * interpolated `left-0`/`right-0` would compile to nothing and leave the drawer unanchored.
- */
-export function drawerClass(side: "left" | "right", open: boolean, positioned = false): string {
-  const shared =
-    "fixed bottom-0 top-(--top-chrome-height) z-40 transition-transform duration-200 docked:inset-y-auto docked:z-auto docked:translate-none docked:transition-none";
-  const docked = positioned ? "docked:relative" : "docked:static";
-  return side === "left"
-    ? `${shared} ${docked} left-0 ${open ? "translate-x-0" : "-translate-x-full"}`
-    : `${shared} ${docked} right-0 ${open ? "translate-x-0" : "translate-x-full"}`;
-}

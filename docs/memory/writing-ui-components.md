@@ -1,5 +1,23 @@
 # Writing UI components
 
+## Build from HeroUI 3's own component wherever it has one
+
+In `packages/ui`, before writing a component, check whether HeroUI 3 already provides it, and if so use that one
+rather than assembling a look-alike from other HeroUI parts or plain elements. The installed package's
+`packages/ui/node_modules/@heroui/react/dist/components/` is the authoritative list for the version in use (it
+includes less obvious ones such as `toast`, `drawer`, `disclosure`, `toolbar`, `empty-state`, `kbd`, `skeleton`);
+HeroUI's own docs are the reference for how to use each. A hand-assembled stand-in looks and behaves unlike the rest
+of the UI and lacks what HeroUI's carries: the toast stack built from `Alert` + `CloseButton` with its own timers and
+stacking had none of `Toast`'s pause on hover and focus, queueing or ARIA region semantics.
+
+- Style it through its own variants, slots and the theme tokens, not by overriding it into something else.
+- The project's existing wrappers over a HeroUI component (`Dialog` over `Modal`, `ActionMenu` over `Dropdown`) are
+  that component; use the wrapper where one exists.
+- A hand-built element is acceptable only when HeroUI has no equivalent, or its equivalent cannot meet a stated
+  requirement. Then build it on react-aria / react-aria-components hooks, as HeroUI itself is, not on bare DOM event
+  handling, and put a comment at the component saying why HeroUI's is not used (a design-intent comment under the
+  "Comment conventions" section of `.claude/skills/agent-docs/SKILL.md`).
+
 ## Focus dropped to `<body>` cuts the terminal off: a HeroUI control's press, a hidden pane
 
 Clicking around the terminal must not move keyboard focus off it (see the "The console → project → session menu"
@@ -46,11 +64,39 @@ Nothing on the way past catches it: `packages/ui` has neither a linter nor a tes
 automated gate, and a class whose utility was never emitted is valid TypeScript, builds clean and reads fine in a
 diff. After adding or changing a utility class, grep the built `packages/ui/dist/assets/*.css` for it.
 
-## An outline meant to be seen uses `--muted`, not HeroUI's own border tokens
+## An icon-only control also gets a tooltip, through `TitledControl`
 
-In HeroUI 3's default theme `--border`, `--border-secondary` and `--border-tertiary` all measure under 3:1 against the
-surface they sit on in both light and dark (1.2:1 to 2.7:1) — they are dividers between content on one surface, not an
-edge a user is meant to find. `--muted`, the token HeroUI uses for secondary text, clears 3:1 in both (4.8:1 light,
-6.7:1 dark). So anything whose line has to read as a boundary — a field, a checkbox, a pressable surface — takes
-`--muted`, and the border tokens stay for separators. `style.css` already routes HeroUI's own field and checkbox
-borders through `--muted`, so a HeroUI form control needs nothing on top.
+Every control that shows only an icon — a HeroUI `Button` with `isIconOnly`, a `CloseButton` or `Modal.CloseTrigger`,
+a menu trigger — has a hover tooltip in addition to its `aria-label`, normally the same text. Give it one by wrapping
+the control in `TitledControl` from `packages/ui/src/components/TitledControl.tsx`, as the title bar's `BarButton` in
+`packages/ui/src/components/TitleBar.tsx` does. Passing `title` to the HeroUI control itself does nothing: its
+react-aria base filters `title` out of the DOM props without a warning.
+
+## The UI meets WCAG 2.2 AA
+
+Every control and view in `packages/ui` meets WCAG 2.2 level AA, checked in both the light and the dark appearance.
+Concretely:
+
+- **Keyboard**: every interactive control is reachable with Tab and operable with Enter / Space. `preventFocusOnPress`
+  only keeps a *mouse* press from taking focus; the control still has to be a tab stop. Every button is HeroUI's
+  `Button`; a native `<button>` is allowed only where a custom button is needed that HeroUI's cannot be, with the
+  reason in a comment there. A hand-built `role="button"` element needs `tabIndex={0}` and its own Enter / Space
+  handling.
+- **Visible focus**: HeroUI controls draw their own focus ring. A hand-built control that removes the outline puts a
+  ring back (`outline-none focus-visible:ring-2 focus-visible:ring-focus`, as the sidebar rows do), never
+  `outline-none` alone.
+- **Name**: every control has an accessible name — its visible text, or an `aria-label` when it has none. An icon
+  beside a name is `aria-hidden="true"`; an icon that is the only carrier of a meaning gets `role="img"` and an
+  `aria-label`.
+- **Roles and states**: a control that shows or hides a region carries `aria-expanded`; the selected item of a list
+  or navigation carries `aria-current`; state that changes without the user acting (connection, a terminal problem)
+  is announced from a `role="status"` element, an error from `role="alert"`.
+- **Contrast**: text at least 4.5:1 against its background (3:1 for large text); an icon, a state indicator or a
+  boundary the user has to see at least 3:1 against what it sits on. HeroUI 3's default `--border`,
+  `--border-secondary` and `--border-tertiary` all fall short of 3:1 in both appearances (1.2:1 to 2.7:1): they are
+  for separators between content on one surface. A line that has to read as a boundary — a field, a checkbox, a
+  pressable surface — takes `--muted` (4.8:1 light, 6.7:1 dark). `style.css` already routes HeroUI's own field and
+  checkbox borders through `--muted`, so a HeroUI form control needs nothing on top.
+- **Not by colour alone**: a status or state that differs in colour also differs in glyph, shape or text.
+- **Motion**: an animation or transition that is not essential stops under `prefers-reduced-motion: reduce`
+  (Tailwind's `motion-safe:` / `motion-reduce:` variants).

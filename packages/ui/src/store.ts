@@ -7,20 +7,18 @@ import { daemonWsUrl, type DaemonOrigin } from "./daemon";
 import { isLive, type Console, type Event, type Host, type Page, type Project, type RequestBody, type Session } from "./protocol";
 
 /**
- * One entry in the dismissible toast stack: a daemon `error` or `session_notice`, or a message with
+ * Something to tell the user in a toast: a daemon `error` or `session_notice`, or a message with
  * nowhere inline to show it (see `toastError` below). `kind` is the only thing that tells an error
- * from a notice apart — they are otherwise the same shape and share one stack, which is what keeps
- * them in arrival order instead of a notice permanently parking itself ahead of (or behind) every
- * error around it.
+ * from a notice apart. The store does not keep them: the toast stack (`Toasts.tsx`) subscribes
+ * through `Daemon.onToast` and owns what is on screen.
  */
-export interface Toast {
-  id: string;
+export interface ToastRequest {
   kind: "error" | "notice";
   message: string;
-  /** The session the toast is about, so it can be rendered alongside the message. A `notice`
-   * always has one. An `error` has one only where the call site knows which session the daemon's
-   * message is about — the daemon says "this session" without naming it, having no notion of what
-   * the client calls it, so a prefix here is the only thing that tells the user which one. */
+  /** The session the toast is about, so the stack can say where it is. A `notice` always has one.
+   * An `error` has one only where the call site knows which session the daemon's message is
+   * about — the daemon says "this session" without naming it, having no notion of what the client
+   * calls it, so the toast's title is the only thing that tells the user which one. */
   session?: string;
 }
 
@@ -75,7 +73,6 @@ export interface State {
    * `daemon/PROTOCOL.md`), so `connectionState` alone does not change — a consumer that needs to
    * re-list after either case depends on this counter instead. */
   snapshotEpoch: number;
-  toasts: Toast[];
   /** Oldest first; the first is the one the dialog shows. A prompt is dropped when it is answered or
    * declined, when its session stops running, and on a `snapshot`, which cannot say whether the
    * screen is still up — the daemon re-sends the prompts still waiting right after each snapshot. */
@@ -88,10 +85,6 @@ export interface State {
 type Action =
   | { kind: "connection"; state: ConnectionState }
   | { kind: "event"; event: Event }
-  /** A message with nowhere inline to show it (no open dialog). Distinct from `"event"` so it
-   * never counts as proof the control socket is up — see the "event" case below. */
-  | { kind: "toast"; message: string; session?: string }
-  | { kind: "dismiss_toast"; id: string }
   | { kind: "dismiss_trust_prompt"; session: string };
 
 const initialState: State = {
@@ -101,7 +94,6 @@ const initialState: State = {
   sessions: new Map(),
   pages: new Map(),
   snapshotEpoch: 0,
-  toasts: [],
   trustPrompts: [],
   trustedDirectories: [],
 };
@@ -110,13 +102,6 @@ function reducer(state: State, action: Action): State {
   switch (action.kind) {
     case "connection":
       return { ...state, connectionState: action.state };
-    case "toast":
-      return {
-        ...state,
-        toasts: [...state.toasts, { id: crypto.randomUUID(), kind: "error", message: action.message, session: action.session }],
-      };
-    case "dismiss_toast":
-      return { ...state, toasts: state.toasts.filter((t) => t.id !== action.id) };
     case "dismiss_trust_prompt":
       return { ...state, trustPrompts: state.trustPrompts.filter((p) => p.session !== action.session) };
     case "event": {
@@ -235,23 +220,6 @@ function reducer(state: State, action: Action): State {
           pages.set(event.page.console_id, [...existing, event.page]);
           return { ...state, pages };
         }
-        case "session_notice": {
-          const notice: Toast = {
-            id: crypto.randomUUID(),
-            kind: "notice",
-            session: event.session,
-            message: event.message,
-          };
-          return { ...state, toasts: [...state.toasts, notice] };
-        }
-        case "error": {
-          // A request's own `error` reply carries its request id and is delivered to its caller as
-          // a rejected promise instead (handled where the caller awaits it) — only a genuine
-          // daemon broadcast (no id) lands here.
-          if (event.id) return state;
-          const toast: Toast = { id: crypto.randomUUID(), kind: "error", message: event.message };
-          return { ...state, toasts: [...state.toasts, toast] };
-        }
         default:
           return state;
       }
@@ -272,9 +240,11 @@ export interface Daemon {
    * error (no open dialog) calls `toastError` itself. */
   request: (body: RequestBody) => Promise<Event>;
   /** `session` is passed by a caller that knows which session the message is about, so the toast
-   * can name it; see `Toast.session`. */
+   * can name it; see `ToastRequest.session`. */
   toastError: (message: string, session?: string) => void;
-  dismissToast: (id: string) => void;
+  /** Calls `listener` for every toast to show from now on: the daemon's errors and notices that
+   * belong to no request, and what `toastError` is given. Returns the unsubscribe. */
+  onToast: (listener: (toast: ToastRequest) => void) => () => void;
   /** Drops a trust prompt from the queue, whether it was answered or declined — declining leaves the
    * screen for the user in the terminal, and the daemon asks again for it only after a `snapshot`. */
   dismissTrustPrompt: (session: string) => void;
@@ -290,14 +260,29 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
   const dispatch = (action: Action) => store.setState((state) => reducer(state, action));
 
   const client = new DaemonClient(daemonWsUrl(origin, "/ws/control"));
-  client.onEvent((event) => dispatch({ kind: "event", event }));
+  const toastListeners = new Set<(toast: ToastRequest) => void>();
+  const emitToast = (toast: ToastRequest) => toastListeners.forEach((listener) => listener(toast));
+
+  client.onEvent((event) => {
+    dispatch({ kind: "event", event });
+    if (event.type === "session_notice") {
+      emitToast({ kind: "notice", message: event.message, session: event.session });
+    } else if (event.type === "error" && !event.id) {
+      // A request's own `error` reply carries its request id and is delivered to its caller as a
+      // rejected promise instead — only a genuine daemon broadcast (no id) is a toast.
+      emitToast({ kind: "error", message: event.message });
+    }
+  });
   client.onConnectionChange((state) => dispatch({ kind: "connection", state }));
 
   return {
     store,
     request: (body) => client.request(body),
-    toastError: (message, session) => dispatch({ kind: "toast", message, session }),
-    dismissToast: (id) => dispatch({ kind: "dismiss_toast", id }),
+    toastError: (message, session) => emitToast({ kind: "error", message, session }),
+    onToast: (listener) => {
+      toastListeners.add(listener);
+      return () => void toastListeners.delete(listener);
+    },
     dismissTrustPrompt: (session) => dispatch({ kind: "dismiss_trust_prompt", session }),
     reconnect: () => client.reconnect(),
     terminalUrl: (session) => daemonWsUrl(origin, `/ws/term/${session}`),

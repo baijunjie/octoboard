@@ -60,14 +60,14 @@ Each new connection re-reads the whole state, so nothing has to be replayed by h
 a daemon that is gone), together with a toast "The daemon process exited unexpectedly (exit code 0). Restart Octoboard
 to continue."
 
-Failures a user has to know about are shown as dismissible messages, and so are notices about a
-session that are not failures. Every such notice names where its session is — the project it runs in,
+Failures a user has to know about are shown as toasts (see "Toasts" in `docs/product/window-layout.md`), and so are
+notices about a session that are not failures. Every such notice names where its session is — the project it runs in,
 or the console whose hub it is — and so does a failure that is about one particular session, since the
 daemon's own wording only ever says "this session": it has no notion of what a client calls one. A
 failed report-page submission is one such failure (see "Submitting a form back to the hub" in
 `docs/product/report-panel.md`). A failure raised by a dialog's own action is shown in that dialog instead — except in
 the dialog for Claude Code's workspace-trust prompt, which closes and reports most failures as a
-message (see "Claude Code's workspace-trust prompt" in `docs/product/launching-agents.md`).
+toast (see "Claude Code's workspace-trust prompt" in `docs/product/launching-agents.md`).
 
 ## Quitting
 
@@ -125,7 +125,8 @@ interrupted and resumable.
 
 ## Files Octoboard owns
 
-Everything Octoboard writes for itself lives under `~/.octoboard`:
+Everything Octoboard writes for itself lives under `~/.octoboard`, with one exception, the window's state, described
+after the table:
 
 | Path | Contents |
 |---|---|
@@ -133,6 +134,11 @@ Everything Octoboard writes for itself lives under `~/.octoboard`:
 | `~/.octoboard/consoles/<console id>/` | A console's working directory, where its hub session runs, including the hub instruction file Octoboard generates there (see "The hub's instruction file" in `docs/product/launching-agents.md`). Removed when the console is deleted. |
 | `~/.octoboard/run/<session id>/` | Per-session scratch space for what a launch injects. Removed when the session's process is gone, and cleared wholesale on daemon start. |
 | `~/.octoboard/daemon.lock` | Enforces one daemon per data directory. |
+
+The macOS application keeps the window's size, position and maximized state in
+`~/Library/Application Support/dev.octoboard.app/window-state.json` (see "The window's size and position across
+launches" in `docs/product/window-layout.md`). It belongs to the application's window rather than to the daemon, so it
+is not under `~/.octoboard`. Deleting it makes the next launch open the window as a first launch does.
 
 Nothing is written inside a project directory, and nothing is written into the user's own agent configuration — see
 "What Octoboard never modifies" in `docs/product/launching-agents.md`.

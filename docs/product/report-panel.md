@@ -3,8 +3,9 @@
 The **report panel** is the third pane of the window, to the right of the terminal. It belongs to a
 **console** rather than to a session: its pages are pushed by that console's hub session, and the
 panel is on screen only while the selected session is a hub session. Selecting a project session
-leaves the terminal to fill the pane on its own. How wide the panel is, how the user hides it, and
-what becomes of it in a window too narrow for three panes, is described in `docs/product/window-layout.md`.
+leaves the terminal to fill the pane on its own. How wide the panel is, how the user resizes and hides it, how a
+hidden one floats in, and what becomes of it in a window too narrow for three panes, is described in
+`docs/product/window-layout.md`.
 
 A page is a whole HTML document the hub wrote, for anything better shown than typed into the
 terminal — a table, a comparison, a set of choices. A page may carry a form, and what the user
@@ -86,7 +87,17 @@ A page is given exactly one bridge call:
 octoboard.submit(data); // `data` is any JSON-serializable value
 ```
 
-Nothing gates when it may be called: any call from the newest page reaches the hub, whether or not
+That call is the one thing sent on the page's behalf.
+
+Pressing Escape while focus is inside a page also tells the window so, on a history page too. The
+key never reaches the window from inside the frame, so without this it could not close the floating
+report panel or the narrow-window drawer. It closes whatever overlay is open, as Escape does
+anywhere else, and with nothing open it does nothing. An Escape pressed during an input
+method's composition, where it cancels the composition, is not relayed, and the page itself still
+receives the key either way. Nothing else crosses with it, and the page's own script can post the
+same signal, which is harmless since all it can do is close an overlay.
+
+Nothing gates when `submit` may be called: any call from the newest page reaches the hub, whether or not
 the user triggered it.
 
 What `submit` was called with is written into the console's hub session as a **user message**, naming

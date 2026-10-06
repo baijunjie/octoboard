@@ -14,7 +14,11 @@ own binary and shows it as it is. What it adds to each launch, and what it guara
 
 **A console has at most one hub session whose process is running**, enforced by the daemon: opening
 a hub, or reopening an interrupted or archived one, while another hub of the console is running is
-refused, and the refusal names the running hub's session id.
+refused, and the refusal names the running hub's session id. The application does not send a request it knows
+will be refused: selecting an interrupted or archived hub, or choosing its "Resume", while another hub of the same
+console is running leaves that hub selected with its last output on screen and shows an error toast, titled with
+where the hub is, saying that the console already has a live hub session, which has to be archived before this one
+is reopened.
 
 **The Hub row** holds the console's newest hub session that is not archived, whether running or
 interrupted. Clicking it starts a new hub when the row is empty and selects the hub in it otherwise,
@@ -281,7 +285,8 @@ reporting works, so an agent's own mouse-driven TUI is usable. `Ctrl+C` reaches 
 - A reattach always redraws from the replay rather than appending to what is on screen, so scrollback older than the
   replay window is lost on every reconnect.
 - Whatever changes the terminal pane's size resizes the agent's terminal: resizing the window, resizing
-  the sidebar, and hiding or showing the sidebar or the report panel all do (see `docs/product/window-layout.md`). The
+  the sidebar or the report panel, and hiding or showing either of them all do; a pane floating in or a drawer
+  opening over the terminal does not (see `docs/product/window-layout.md`). The
   screen follows at once, but the agent is told the new size only once it has held still for about
   120 ms, and only when it differs from the size the agent already has, so a drag sends the agent one
   size change rather than one for every step of the drag. The window has a minimum size, sized so that
@@ -290,13 +295,13 @@ reporting works, so an agent's own mouse-driven TUI is usable. `Ctrl+C` reaches 
 - The terminal's colours follow the window's light or dark appearance — see "What follows the choice"
   in `docs/product/appearance.md`.
 - A client that stops draining output for more than a few seconds is dropped by the daemon rather than letting output
-  buffer without bound. The application then reconnects by itself, with a backoff, up to five times; while a running
-  session's terminal is disconnected a "Reconnect" button is available as well. A reconnect in the background never
-  steals keyboard focus.
+  buffer without bound. The application then reconnects by itself, with a backoff, up to five times. Meanwhile the
+  top bar's connection status reads "Terminal reconnecting…"; once the attempts are spent it reads "Terminal
+  disconnected" and offers a "Reconnect" button, which starts them over (see "The connection status" in
+  `docs/product/window-layout.md`). A reconnect in the background never steals keyboard focus.
 - Selecting an interrupted or archived session resumes it rather than attaching; until a process is running, the
-  terminal reads "Not running" and offers "Resume".
-- **A session's last output stays on screen once its process has ended**, under that "Not running" status and beside
-  "Resume", so what the agent printed last — why it stopped, what it was waiting for — can still be read. The kept
-  screen belongs to that one session: selecting a different dormant session clears the screen rather than showing the
+  terminal shows a card at its bottom centre that reads "Not running" and offers "Resume".
+- **A session's last output stays on screen once its process has ended**, behind that "Not running" card, so what
+  the agent printed last — why it stopped, what it was waiting for — can still be read. The kept screen belongs to that one session: selecting a different dormant session clears the screen rather than showing the
   previous session's output, and resuming re-attaches and redraws from the daemon's replay rather than appending to
   what was kept.

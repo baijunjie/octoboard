@@ -3,10 +3,11 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import { FadeOverflow } from "../components/FadeOverflow";
-import { drawerClass } from "../layout/breakpoint";
+import { drawerClass, PeekHotZone } from "../layout/paneOverlay";
+import type { PanePeek } from "../layout/usePaneToggles";
 import type { Page } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
-import { composePageDocument, SUBMIT_MESSAGE_SOURCE } from "./pageDocument";
+import { composePageDocument, ESCAPE_MESSAGE_SOURCE, SUBMIT_MESSAGE_SOURCE } from "./pageDocument";
 
 /**
  * The console's report panel: shown only for the hub session, which is what makes a console's
@@ -25,14 +26,24 @@ export function ReportPanel({
   consoleId,
   hubSessionId,
   open,
-  dockedVisible,
+  reportWidth,
+  peek,
+  onEscape,
 }: {
   consoleId: string;
   hubSessionId: string;
   open: boolean;
-  /** Whether the docked panel is shown; the user can hide it from the top bar. Has no effect below
-   * the breakpoint, where `open` decides. Hiding never unmounts it, for the same reason. */
-  dockedVisible: boolean;
+  /** The user's chosen width (`usePaneWidth`) for the docked and the floating forms; the drawer
+   * below the breakpoint ignores it. */
+  reportWidth: number;
+  /** The hover reveal of the panel while the user has hidden the docked one from the top bar (which
+   * has no effect below the breakpoint, where `open` decides): the same panel, kept as a fixed
+   * overlay that floats in over the terminal, with its shadow and rounded edge. `undefined` while
+   * the docked panel is shown. Hiding never unmounts the panel, for the same reason as `open`. */
+  peek?: PanePeek;
+  /** Escape was pressed inside the page's frame, where this document never sees the key. The
+   * owner closes whichever overlay is open, as Escape does elsewhere. */
+  onEscape: () => void;
 }): React.ReactElement {
   const { request, toastError } = useDaemon();
   const consolePages = useDaemonStore((s) => s.pages.get(consoleId));
@@ -87,18 +98,54 @@ export function ReportPanel({
   // `drawerClass` starts the drawer below `--top-chrome-height`, leaving the top bar (and its
   // report toggle) visible while it is open, and puts it back as a plain row sibling at or above
   // the breakpoint — see that function's own comment for the geometry.
-  const panelClass = `flex min-h-0 flex-col border-l border-separator w-[420px] max-w-[92vw] docked:w-auto docked:max-w-none docked:min-w-[300px] docked:flex-[0_1_420px] ${dockedVisible ? "" : "docked:hidden"} ${drawerClass("right", open)}`;
+  //
+  // The drawer below the breakpoint is a fixed 420px, capped at 92vw. The docked panel is
+  // `flex: 0 1` at `--report-width`, the chosen width already held back to what the row affords;
+  // the shrink and the 300px floor are only a safety net. With the docked panel hidden,
+  // `drawerClass` instead keeps it the overlay at every width, floating in while `peek` is
+  // active at `--report-width` (still capped at 92vw); `overflow-hidden` clips the iframe to the
+  // rounded edge, and the surface background keeps the empty states from showing the terminal
+  // through.
+  const overlay = peek
+    ? `docked:w-(--report-width) docked:rounded-l-xl docked:overflow-hidden docked:bg-surface ${drawerClass("right", "floating", open, peek.active)}`
+    : `docked:w-auto docked:max-w-none docked:min-w-[300px] docked:flex-[0_1_var(--report-width)] ${drawerClass("right", "drawer", open)}`;
+  const panelClass = `flex min-h-0 flex-col border-l border-separator w-[420px] max-w-[92vw] ${overlay}`;
 
   // `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener closes a
   // drawer for, on every branch below since any of them can be what is on screen while open.
+  //
+  // The pointer handlers sit on the panel, not the iframe: a pointer inside the sandboxed frame
+  // sends nothing to this document. Entering the frame therefore must not count as leaving, and
+  // the frame's own enter and leave (reported by this document for the iframe element) stand in
+  // for the panel's across that boundary, `onPointerMove` for coming back out onto the panel's
+  // chrome, where the panel itself never saw the pointer leave.
+  const pane = {
+    "data-pane": "report",
+    "data-escape-scope": true,
+    style: { "--report-width": `${reportWidth}px` } as React.CSSProperties,
+    onPointerEnter: peek?.keep,
+    onPointerMove: peek?.keep,
+    onPointerLeave: peek?.leave,
+  };
+  const hotZone = peek && <PeekHotZone side="right" peek={peek} />;
 
-  if (consolePages === undefined) return <div data-escape-scope className={panelClass} />;
+  if (consolePages === undefined) {
+    return (
+      <>
+        <div {...pane} className={panelClass} />
+        {hotZone}
+      </>
+    );
+  }
 
   if (consolePages.length === 0) {
     return (
-      <div data-escape-scope className={`${panelClass} items-center justify-center text-sm text-muted`}>
-        No pages yet.
-      </div>
+      <>
+        <div {...pane} className={`${panelClass} items-center justify-center text-sm text-muted`}>
+          No pages yet.
+        </div>
+        {hotZone}
+      </>
     );
   }
 
@@ -116,46 +163,57 @@ export function ReportPanel({
   };
 
   return (
-    <div data-escape-scope data-pane="report" className={panelClass}>
-      <div className="flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator bg-surface px-3 text-xs text-muted">
-        <Button
-          isIconOnly
-          size="sm"
-          variant="ghost"
-          aria-label="Previous page"
-          preventFocusOnPress
-          isDisabled={displayIndex === 0}
-          onPress={() => goTo(displayIndex - 1)}
-        >
-          <ChevronLeft aria-hidden="true" className="size-4" />
-        </Button>
-        <span className="whitespace-nowrap">
-          {displayIndex + 1} / {consolePages.length}
-        </span>
-        <Button
-          isIconOnly
-          size="sm"
-          variant="ghost"
-          aria-label="Next page"
-          preventFocusOnPress
-          isDisabled={displayIndex === consolePages.length - 1}
-          onPress={() => goTo(displayIndex + 1)}
-        >
-          <ChevronRight aria-hidden="true" className="size-4" />
-        </Button>
-        {/* The timestamp's width is whatever the user's locale makes of it, so it is the element
-            that gives way, rather than pushing the badge off the panel's edge when narrow. */}
-        <FadeOverflow axis="x" as="span" className="ml-auto min-w-0">
-          {new Date(page.created_at).toLocaleString()}
-        </FadeOverflow>
-        {isHistory && (
-          <Chip size="sm" variant="soft" color="warning" className="shrink-0">
-            Read-only
-          </Chip>
-        )}
+    <>
+      <div {...pane} className={panelClass}>
+        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-separator bg-surface px-3 text-xs text-muted">
+          <Button
+            isIconOnly
+            size="sm"
+            variant="ghost"
+            aria-label="Previous page"
+            preventFocusOnPress
+            isDisabled={displayIndex === 0}
+            onPress={() => goTo(displayIndex - 1)}
+          >
+            <ChevronLeft aria-hidden="true" className="size-4" />
+          </Button>
+          <span className="whitespace-nowrap">
+            {displayIndex + 1} / {consolePages.length}
+          </span>
+          <Button
+            isIconOnly
+            size="sm"
+            variant="ghost"
+            aria-label="Next page"
+            preventFocusOnPress
+            isDisabled={displayIndex === consolePages.length - 1}
+            onPress={() => goTo(displayIndex + 1)}
+          >
+            <ChevronRight aria-hidden="true" className="size-4" />
+          </Button>
+          {/* The timestamp's width is whatever the user's locale makes of it, so it is the element
+              that gives way, rather than pushing the badge off the panel's edge when narrow. */}
+          <FadeOverflow axis="x" as="span" className="ml-auto min-w-0">
+            {new Date(page.created_at).toLocaleString()}
+          </FadeOverflow>
+          {isHistory && (
+            <Chip size="sm" variant="soft" color="warning" className="shrink-0">
+              Read-only
+            </Chip>
+          )}
+        </div>
+        <PageFrame
+          key={page.id}
+          page={page}
+          isHistory={isHistory}
+          onSubmit={handleSubmit}
+          onEscape={onEscape}
+          onPointerEnter={peek?.keep}
+          onPointerLeave={peek?.leave}
+        />
       </div>
-      <PageFrame key={page.id} page={page} isHistory={isHistory} onSubmit={handleSubmit} />
-    </div>
+      {hotZone}
+    </>
   );
 }
 
@@ -168,20 +226,20 @@ function PageFrame({
   page,
   isHistory,
   onSubmit,
+  onEscape,
+  onPointerEnter,
+  onPointerLeave,
 }: {
   page: Page;
   isHistory: boolean;
   onSubmit: (page: Page, data: unknown) => void;
+  onEscape: () => void;
+  onPointerEnter?: () => void;
+  onPointerLeave?: () => void;
 }): React.ReactElement {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
-    // A history page's bridge already throws instead of posting (see `composePageDocument`), but a
-    // page's own script can reach the parent directly with `parent.postMessage(...)`, skipping
-    // that throw. The daemon still refuses the resulting `submit_page` (it is the enforcement
-    // point), but forwarding it at all would surface that refusal as an error toast for an action
-    // the user never took, so a history page's listener does not forward in the first place.
-    if (isHistory) return;
     const handleMessage = (event: MessageEvent) => {
       // `sandbox="allow-scripts"` without `allow-same-origin` gives the frame an opaque origin, so
       // its messages arrive with `event.origin === "null"` — a string every opaque frame shares,
@@ -189,12 +247,21 @@ function PageFrame({
       // from this iframe's own window.
       if (event.source !== iframeRef.current?.contentWindow) return;
       const data = event.data as { source?: unknown; data?: unknown } | null;
-      if (!data || data.source !== SUBMIT_MESSAGE_SOURCE) return;
+      if (!data) return;
+      // The relay carries nothing from the page, so a page forging it can only ask for what the
+      // user's own Escape would do.
+      if (data.source === ESCAPE_MESSAGE_SOURCE) return onEscape();
+      // A history page's bridge already throws instead of posting (see `composePageDocument`), but
+      // a page's own script can reach the parent directly with `parent.postMessage(...)`, skipping
+      // that throw. The daemon still refuses the resulting `submit_page` (it is the enforcement
+      // point), but forwarding it at all would surface that refusal as an error toast for an
+      // action the user never took, so a history page's messages are not forwarded.
+      if (isHistory || data.source !== SUBMIT_MESSAGE_SOURCE) return;
       onSubmit(page, data.data);
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [page, isHistory, onSubmit]);
+  }, [page, isHistory, onSubmit, onEscape]);
 
   return (
     <iframe
@@ -202,6 +269,8 @@ function PageFrame({
       className="min-h-0 flex-1 border-0 bg-white"
       title="Report page"
       sandbox="allow-scripts"
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
       srcDoc={composePageDocument(page.html, isHistory)}
     />
   );

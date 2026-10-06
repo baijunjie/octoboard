@@ -18,8 +18,6 @@ Settings closes on `Escape`, on its close button, and on a press on the dimmed a
 keyboard focus back on the selected session's terminal.
 
 While Settings is open everything under it stays as it was, the terminal included, and its size does not change.
-Dismissible messages, which otherwise appear at the top right of the window, appear at its bottom right instead, so
-that they do not cover the settings' controls.
 
 ## Appearance
 

@@ -1,4 +1,4 @@
-import { Button, Chip } from "@heroui/react";
+import { Button, Surface } from "@heroui/react";
 import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 import "@xterm/xterm/css/xterm.css";
@@ -12,7 +12,18 @@ interface TerminalPaneProps {
   /** The session whose terminal should be shown, or `undefined` when nothing is selected yet. */
   session?: Session;
   onResume: (sessionId: string) => void;
+  /** Told whenever the selected session's terminal connection starts or stops being in trouble
+   * (`undefined` is healthy, or nothing to report: no session, or one that is not running). */
+  onProblemChange: (problem: TerminalProblem | undefined) => void;
   ref?: React.Ref<TerminalPaneHandle>;
+}
+
+/** What is wrong with the selected session's terminal connection while its process is meant to be
+ * running: `reconnecting` while automatic attempts are still under way, `disconnected` once they
+ * are spent, when `reconnect` is the way to try again. */
+export interface TerminalProblem {
+  state: "reconnecting" | "disconnected";
+  reconnect: () => void;
 }
 
 export interface TerminalPaneHandle {
@@ -22,7 +33,7 @@ export interface TerminalPaneHandle {
 
 /** Reconnect backoff after a dropped-but-still-live session's socket closes: doubles each attempt,
  * capped, and stops after `MAX_AUTO_RECONNECT_ATTEMPTS` so a session that keeps failing to connect
- * does not retry forever — a manual "Reconnect" button covers that case instead. The attempt
+ * does not retry forever — the top bar's Reconnect covers that case instead. The attempt
  * counter only resets once a connection has *stayed* open for `STABLE_CONNECTION_MS` — resetting it
  * on every `open` would mean a connection that opens and drops again within a few seconds (a
  * backpressure drop recurs roughly that often under sustained output) always sees attempt 0, so the
@@ -41,6 +52,7 @@ const STABLE_CONNECTION_MS = 10000;
 export function TerminalPane({
   session,
   onResume,
+  onProblemChange,
   ref,
 }: TerminalPaneProps): React.ReactElement {
   const { terminalUrl } = useDaemon();
@@ -174,16 +186,32 @@ export function TerminalPane({
     // working agent the reconnect could be postponed indefinitely.
   }, [status, session?.id, isDormant, sessionIsLive, attachCurrent]);
 
-  const reconnectNow = () => {
+  const reconnectNow = useCallback(() => {
     reconnectAttemptsRef.current = 0;
     attachCurrent(true);
-  };
+  }, [attachCurrent]);
 
-  // Whether to offer each affordance is keyed off the session's own status, not the controller's
-  // raw socket outcome — see `sessionIsLive`'s comment above for why `not_running` cannot mean
-  // "offer Resume" on its own.
-  const offerResume = session && isDormant;
-  const offerReconnect = session && !isDormant && sessionIsLive && (status === "closed" || status === "not_running");
+  // Reports the connection's trouble to the top bar. The controller's own status is read rather
+  // than `status`: a session switch attaches in an effect above, so the state still holds the
+  // previous session's outcome for one render, while the controller already has the new one's.
+  // A first connect that has not failed yet is not trouble (typing meanwhile is queued); once an
+  // attempt has failed, `connecting` is the reconnect cycle's middle and stays reported as such.
+  useEffect(() => {
+    const controller = controllerRef.current;
+    if (!controller || !session || isDormant || !sessionIsLive || controller.currentSessionId !== session.id) {
+      onProblemChange(undefined);
+      return;
+    }
+    const current = controller.currentStatus;
+    const failed = current === "closed" || current === "not_running";
+    if (current === "open" || (current === "connecting" && reconnectAttemptsRef.current === 0)) {
+      onProblemChange(undefined);
+    } else if (failed && reconnectAttemptsRef.current >= MAX_AUTO_RECONNECT_ATTEMPTS) {
+      onProblemChange({ state: "disconnected", reconnect: reconnectNow });
+    } else {
+      onProblemChange({ state: "reconnecting", reconnect: reconnectNow });
+    }
+  }, [status, session?.id, isDormant, sessionIsLive, reconnectNow, onProblemChange]);
 
   return (
     // The background must match the active xterm theme's (`XTERM_THEMES`, read here rather than
@@ -207,55 +235,26 @@ export function TerminalPane({
       className="relative flex min-h-0 min-w-[382px] flex-[1_1_382px] flex-col docked:min-w-[520px] docked:flex-[1_1_520px]"
       style={{ backgroundColor: XTERM_THEMES[colorTheme].background }}
     >
-      <div className="flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator bg-surface px-3">
-        {/* With nothing selected there is no connection to have a status: the pane's own
-            placeholder says what to do, and a red "Disconnected" next to it reads as a fault. */}
-        {session && (
-          <Chip size="sm" variant="soft" color={isDormant ? "default" : STATUS_COLOR[status]}>
-            {formatStatus(status, isDormant)}
-          </Chip>
-        )}
-        {offerReconnect && (
-          <Button size="sm" variant="secondary" onPress={reconnectNow}>
-            Reconnect
-          </Button>
-        )}
-        {offerResume && (
-          <Button size="sm" variant="primary" onPress={() => onResume(session.id)}>
-            Resume
-          </Button>
-        )}
-      </div>
       <div className="min-h-0 flex-1 overflow-hidden p-1" ref={containerRef} />
       {!session && (
-        <div className="absolute inset-x-0 bottom-0 top-(--pane-header-height) flex items-center justify-center bg-background text-muted">
+        <div className="absolute inset-0 flex items-center justify-center bg-background text-muted">
           Select a session to view its terminal.
         </div>
       )}
+      {/* Floats over the terminal rather than covering it: a session that has just ended keeps its
+          last output on screen (`TerminalController.detach`), and that output is what says why. The
+          live region stays mounted and only its content comes and goes, as a live region has to
+          exist before its content changes to be announced. */}
+      <div role="status" className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
+        {session && isDormant && (
+          <Surface className="pointer-events-auto flex items-center gap-3 rounded-lg border border-separator px-3 py-2 text-sm shadow-lg">
+            <span className="text-muted">Not running</span>
+            <Button size="sm" variant="primary" preventFocusOnPress onPress={() => onResume(session.id)}>
+              Resume
+            </Button>
+          </Surface>
+        )}
+      </div>
     </div>
   );
-}
-
-const STATUS_COLOR: Record<TermStatus, "default" | "success" | "warning" | "danger"> = {
-  connecting: "warning",
-  open: "success",
-  closed: "danger",
-  not_running: "danger",
-};
-
-function formatStatus(status: TermStatus, isDormant?: boolean): string {
-  if (isDormant) return "Not running";
-  switch (status) {
-    case "connecting":
-      return "Connecting…";
-    case "open":
-      return "Connected";
-    case "closed":
-      return "Disconnected";
-    case "not_running":
-      // Reached here only for a session the `Session` record still calls live (see
-      // `sessionIsLive`) — a reattach simply failed to connect this time, not proof the process is
-      // gone, so it reads the same as a plain drop rather than echoing the dormant wording below.
-      return "Disconnected";
-  }
 }

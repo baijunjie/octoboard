@@ -17,16 +17,11 @@
      together; a fixed pixel size, since the lights' position is fixed too. */
   --title-bar-height: 40px;
 
-  /* Shared by the terminal pane's and the report panel's header bars (`TerminalPane.tsx`,
-     `ReportPanel.tsx`), so the two line up, and by the toast stack (`Toasts.tsx`), so a toast
-     clears whichever header is on screen without a second number to keep in sync. */
-  --pane-header-height: 2.5rem;
-
-  /* The top offset every narrow-mode overlay starts below: the top bar plus the connection banner
-     (0 when it is not mounted, see `ConnectionBanner.tsx`), so the bar's toggles and the banner's
-     Retry stay reachable while a drawer is open. Shared by the sidebar's and the report panel's
-     drawers (`layout/breakpoint.ts`'s `drawerClass`), the scrim and the toast stack (`Toasts.tsx`)
-     from one place, rather than as copies of the same `calc()` that must happen to agree. */
+  /* Where the content area below the top chrome starts: the top bar plus the connection banner (0
+     when it is not mounted, see `ConnectionBanner.tsx`). Anything that overlays the content area,
+     or runs along an edge that starts there, starts at this offset rather than at the window top,
+     so the bar's controls and the banner's Retry stay reachable whatever is open. One definition,
+     rather than copies of the same `calc()` that must happen to agree. */
   --top-chrome-height: calc(var(--title-bar-height) + var(--connection-banner-height, 0px));
 
   /* HeroUI's default theme leaves form fields borderless (`--field-border: transparent`,
@@ -40,6 +35,11 @@
      visible boundary in both themes from one place. */
   --field-border: var(--muted);
   --field-border-width: var(--border-width);
+  /* HeroUI draws a focused field's ring (`--focus`) outside its border and derives the border's own
+     focused colour (`--field-border-focus`) by darkening `--field-border` a little, which with the
+     visible border above leaves a dark frame inside the blue ring. Taking the ring's colour for
+     the border too makes the focused field one clean outline, in both themes. */
+  --field-border-focus: var(--focus);
 }
 
 html,
@@ -54,10 +54,10 @@ body {
   color: var(--foreground);
 }
 
-/* While the sidebar's resize handle is dragged, every element shows the resize cursor and none
+/* While a pane's resize handle is dragged, every element shows the resize cursor and none
    starts a text selection, whatever the pointer happens to be over. */
-html.sidebar-resizing,
-html.sidebar-resizing * {
+html.pane-resizing,
+html.pane-resizing * {
   cursor: col-resize !important;
   user-select: none !important;
 }

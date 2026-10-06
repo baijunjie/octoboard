@@ -1,7 +1,14 @@
-/** The `source` tag on the one message type the bridge script posts to the parent, so the
- * listener in `ReportPanel` can tell an `octoboard.submit()` call apart from any other `message`
- * event arriving at the window (there is no origin to check instead — see `PageFrame`). */
+/** The `source` tag on the message the bridge script posts to the parent for an
+ * `octoboard.submit()` call. Together with `ESCAPE_MESSAGE_SOURCE` it lets the listener in
+ * `ReportPanel` tell the bridge's two message types apart from each other and from any other
+ * `message` event arriving at the window (there is no origin to check instead — see `PageFrame`). */
 export const SUBMIT_MESSAGE_SOURCE = "octoboard-page-submit";
+
+/** The `source` tag on the message the bridge posts when Escape is pressed inside the page. It
+ * carries nothing else: a keydown inside the sandboxed frame never reaches this window, so
+ * without the relay Escape could not close a floating or drawer report panel while the page holds
+ * focus. */
+export const ESCAPE_MESSAGE_SOURCE = "octoboard-page-escape";
 
 /** Restricts the page to an inlined, self-contained document with nowhere to phone out to for
  * its own content: `default-src 'none'` as the base, with only inline styles/script and `data:`
@@ -60,12 +67,21 @@ export function composePageDocument(html: string, isHistory: boolean): string {
     ? `console.error("octoboard.submit() is disabled: this is a history page, read-only.");
        throw new Error("octoboard.submit() is disabled on a history page.");`
     : `parent.postMessage({ source: ${JSON.stringify(SUBMIT_MESSAGE_SOURCE)}, data: data }, "*");`;
+  // Capture phase on the window, so the page's own handlers cannot swallow the key first; the
+  // event is left alone so the page still sees it. Skipped while an IME composition is active,
+  // where Escape cancels the composition rather than meaning "close". Present on history pages
+  // too, which stay unable to submit.
   const bridge = `<script>
     window.octoboard = {
       submit: function (data) {
         ${submitBody}
       },
     };
+    window.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && !event.isComposing && event.keyCode !== 229) {
+        parent.postMessage({ source: ${JSON.stringify(ESCAPE_MESSAGE_SOURCE)} }, "*");
+      }
+    }, true);
   </script>`;
   const historyLock = isHistory ? HISTORY_LOCK : "";
   return `<meta http-equiv="Content-Security-Policy" content="${PAGE_CSP}">${COLOR_SCHEME_META}${historyLock}${bridge}${html}`;

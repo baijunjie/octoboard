@@ -1,11 +1,11 @@
-//! The desktop application's Rust-side shell: launch `octoboardd` as a sidecar and hand the
-//! window the port it printed (`sidecar.rs`), the native menu bar (`menu.rs`), and the
-//! exit-confirmation flow including its one `unsafe` subsystem (`exit.rs`). Everything after the
-//! window loads talks to the daemon over WebSocket only, per the architectural rule in "Why the
-//! daemon is split out" in `docs/architecture.md` — no Tauri IPC command carries daemon traffic
-//! or session state, so this process reads the sidecar's stdout itself and bakes the port into the
-//! window's URL as a `?port=` query parameter *before* creating the window, instead of exposing an
-//! `invoke`-able command for it.
+//! The desktop application's Rust-side shell: launch `octoboardd` as a sidecar and hand the window
+//! the port it printed (`sidecar.rs`), the native menu bar (`menu.rs`), the window's remembered
+//! size and position (`window_state.rs`), and the exit-confirmation flow including its one `unsafe`
+//! subsystem (`exit.rs`). Everything after the window loads talks to the daemon over WebSocket
+//! only, per the architectural rule in "Why the daemon is split out" in `docs/architecture.md` — no
+//! Tauri IPC command carries daemon traffic or session state, so this process reads the sidecar's
+//! stdout itself and bakes the port into the window's URL as a `?port=` query parameter *before*
+//! creating the window, instead of exposing an `invoke`-able command for it.
 //!
 //! The two IPC commands this crate does expose, `frontend_exit_heartbeat` and `confirm_quit` (both
 //! in `exit.rs`), carry no daemon traffic or session data either — they are bare exit-flow signals,
@@ -14,6 +14,7 @@
 mod exit;
 mod menu;
 mod sidecar;
+mod window_state;
 
 use std::thread;
 use std::time::Duration;
@@ -56,10 +57,10 @@ pub fn run() {
         })
         .setup(|app| {
             app.set_menu(build_menu(app.handle())?)?;
-            // The event loop (and with it, tao's `NSApplicationDelegate`) is built by
-            // `Builder::build`, which calls this closure from inside itself — so the delegate this
-            // installs onto already exists by now. See the function's own doc comment for why the
-            // Dock icon's own Quit needs this at all.
+            // This closure runs once the event loop (and with it, tao's `NSApplicationDelegate`)
+            // is up and running — `App::run` calls it on the runtime's `Ready` event — so the
+            // delegate this installs onto already exists by now. See the function's own doc
+            // comment for why the Dock icon's own Quit needs this at all.
             install_application_should_terminate_override(app.handle());
             // A daemon that fails to start (another instance already holds its lock, a corrupt
             // database, ...) must not leave the user with no window and no explanation: the window
@@ -72,8 +73,8 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
-    app.run(|app_handle, event| {
-        if let RunEvent::ExitRequested { api, .. } = event {
+    app.run(|app_handle, event| match event {
+        RunEvent::ExitRequested { api, .. } => {
             if should_let_quit_through(app_handle) {
                 return;
             }
@@ -81,6 +82,10 @@ pub fn run() {
             // this gesture's own mechanism-specific line.
             api.prevent_exit();
         }
+        // Every quit path ends here: Cmd+Q and the menu's Quit through `app.exit`, the Dock's Quit
+        // and a logout through AppKit's `applicationWillTerminate:`.
+        RunEvent::Exit => window_state::save(app_handle),
+        _ => {}
     });
 }
 
@@ -128,20 +133,30 @@ fn open_main_window(app: &tauri::AppHandle, startup: Result<u16, String>) -> tau
     } else {
         format!("index.html?{query}")
     };
+    // Decided before the window exists, from the saved frame and the displays connected now, so the
+    // window is placed while it is still hidden and is never seen moving into place.
+    let (displays, main_display) = window_state::displays(app);
+    let initial =
+        window_state::initial_window(window_state::load(app).as_ref(), &displays, main_display);
+
     let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(url.into()))
         .title("Octoboard")
-        .inner_size(1200.0, 760.0)
+        .inner_size(initial.size.0, initial.size.1)
         // 280 (sidebar) + 520 (the terminal pane's own floor) + 300 (the report panel's own
         // floor) = 1100: at this minimum, both panes already sit on their floors with nothing
         // left to give up, so neither can be squeezed past usability by a narrower window. Height
         // 600 gives the terminal about 30 rows, which is comfortably usable.
-        .min_inner_size(1100.0, 600.0)
+        .min_inner_size(window_state::MIN_SIZE.0, window_state::MIN_SIZE.1)
         // Created hidden so AppKit never paints the window in the OS's own appearance before the
         // webview has painted anything themed — with no window on screen yet, there is nothing
         // for it to paint prematurely. `packages/ui/src/main.tsx` shows it once that has
         // happened, through the `core:window:allow-show` permission this needs; `REVEAL_SAFETY_NET`
         // below is the backstop for every path that does not reach that call.
         .visible(false);
+    let builder = match initial.position {
+        Some((x, y)) => builder.position(x, y),
+        None => builder,
+    };
 
     // The UI draws its own top bar across the whole window (`TitleBar` in `packages/ui`), so the
     // native titlebar's background and text go and the traffic lights float over the page.
@@ -156,6 +171,17 @@ fn open_main_window(app: &tauri::AppHandle, startup: Result<u16, String>) -> tau
         .traffic_light_position(LogicalPosition::new(TRAFFIC_LIGHT_X, TRAFFIC_LIGHT_Y));
 
     let window = builder.build()?;
+    // Not the builder's `.maximized`. AppKit first puts a new window's frame on the main display,
+    // and the builder's position is applied afterwards, queued on the main thread; tao queues a
+    // builder-requested zoom while creating the window, ahead of that move, so the zoom would
+    // happen on the main display and record that frame as the one to un-zoom to. Asked for here,
+    // the zoom is queued behind the move and happens on the display the window belongs on.
+    if initial.maximized {
+        if let Err(err) = window.maximize() {
+            eprintln!("octoboard: cannot maximize the window: {err}");
+        }
+    }
+    window_state::track(&window, &initial);
 
     // `WebviewWindow::show` dispatches onto the window's own event loop internally, so calling it
     // from this background thread rather than the main one is safe; a plain `thread::sleep` here

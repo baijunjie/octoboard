@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
 
 import { ConnectionBanner } from "./components/ConnectionBanner";
+import { PaneResizeHandle } from "./components/PaneResizeHandle";
 import { Scrim } from "./components/Scrim";
 import { Sidebar } from "./components/Sidebar";
 import { BareTitleBar, TitleBar } from "./components/TitleBar";
@@ -10,16 +11,16 @@ import { ConfirmDialog } from "./dialogs/ConfirmDialog";
 import type { DialogRequest } from "./dialogs/dialogRequest";
 import { RequestedDialog } from "./dialogs/RequestedDialog";
 import { TrustPromptDialog } from "./dialogs/TrustPromptDialog";
-import { useSidebarWidth } from "./layout/sidebarWidth";
+import { usePaneWidth } from "./layout/paneWidth";
 import { usePaneToggles } from "./layout/usePaneToggles";
 import { useAppExit } from "./lifecycle/useAppExit";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
-import { isDormant, type Console, type Session } from "./protocol";
+import { isDormant, isLive, type Console, type Session } from "./protocol";
 import { ReportPanel } from "./report/ReportPanel";
 import { SettingsDialog } from "./settings/SettingsDialog";
 import { useSettingsDialog } from "./settings/useSettingsDialog";
 import { useDaemon, useDaemonStore } from "./store";
-import { TerminalPane, type TerminalPaneHandle } from "./terminal/TerminalPane";
+import { TerminalPane, type TerminalPaneHandle, type TerminalProblem } from "./terminal/TerminalPane";
 import { nextWaitingSession, waitingSessionsInTreeOrder } from "./waiting";
 
 /** The code the daemon's `error` carries for a launch asked for while one was already running or
@@ -41,6 +42,7 @@ export function App(): React.ReactElement {
   const trustPrompt = useDaemonStore((s) => s.trustPrompts[0]);
   const [selectedSessionId, setSelectedSessionId] = useState<string>();
   const [dialogRequest, setDialogRequest] = useState<DialogRequest>();
+  const [terminalProblem, setTerminalProblem] = useState<TerminalProblem>();
 
   const terminalRef = useRef<TerminalPaneHandle>(null);
   const focusTerminal = () => terminalRef.current?.focus();
@@ -50,13 +52,15 @@ export function App(): React.ReactElement {
   const sessionList = useMemo(() => Array.from(sessions.values()), [sessions]);
   const selectedSession = selectedSessionId ? sessions.get(selectedSessionId) : undefined;
   // Only a hub session has a report panel at all; computed here (rather than where it is
-  // consumed below) because the pane toggles and the sidebar's width clamp need it too.
+  // consumed below) because the pane toggles and the panes' width clamps need it too.
   const hasReportPanel = selectedSession?.role === "hub";
 
   const panes = usePaneToggles({ hasReportPanel, focusTerminal });
 
-  // A hidden report panel gives its width back, so the sidebar's clamp must not hold it.
-  const sidebarWidth = useSidebarWidth(hasReportPanel && panes.reportDocked);
+  // A hidden report panel gives its width back, and a hidden pane takes none of the row.
+  const dockedPanes = { sidebar: panes.sidebarDocked, report: hasReportPanel && panes.reportDocked };
+  const sidebarWidth = usePaneWidth("sidebar", dockedPanes);
+  const reportWidth = usePaneWidth("report", dockedPanes);
 
   useWaitingNotifications(sessionList, consoles, projects, hosts !== undefined);
 
@@ -97,11 +101,27 @@ export function App(): React.ReactElement {
   };
 
   const resumeSession = (sessionId: string) => {
-    // The daemon also answers `session_already_running` for resuming an archived hub while a live
-    // one already exists (it refuses a second live hub outright) — unlike the plain double-click
-    // this guard exists for, suppressing that one would make the click look like it did nothing, so
-    // a hub resume lets the error through instead.
-    const suppressAlreadyRunning = sessions.get(sessionId)?.role !== "hub";
+    const session = sessions.get(sessionId);
+    // The daemon refuses to resume a hub while its console has another live one, so asking would
+    // only bring back an error naming that hub by its id. Say what the user has to do instead; the
+    // session itself stays selected, showing its last output.
+    const liveHubExists =
+      session?.role === "hub" &&
+      sessionList.some(
+        (other) =>
+          other.console_id === session.console_id &&
+          other.role === "hub" &&
+          other.id !== session.id &&
+          isLive(other.status),
+      );
+    if (liveHubExists) {
+      toastError("This console already has a live hub session. Archive it before reopening this one.", sessionId);
+      return;
+    }
+    // The daemon's `session_already_running` also covers that hub case, should a race get past the
+    // check above — unlike the plain double-click this guard exists for, suppressing it would make
+    // the click look like it did nothing, so a hub resume lets the error through instead.
+    const suppressAlreadyRunning = session?.role !== "hub";
     void runOnce(
       `resume:${sessionId}`,
       () => request({ type: "resume_session", session: sessionId }).then(() => {}),
@@ -136,7 +156,7 @@ export function App(): React.ReactElement {
     return (
       <div className="flex h-full flex-col">
         <BareTitleBar />
-        <Toasts />
+        <Toasts focusTerminal={focusTerminal} />
         {connectionState === "closed" && <ConnectionBanner state={connectionState} onRetry={reconnect} />}
         <div className="flex flex-1 items-center justify-center text-muted">
           {connectionState === "closed" ? "The daemon is not answering." : "Connecting to the daemon…"}
@@ -146,23 +166,25 @@ export function App(): React.ReactElement {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      {/* The settings dialog's controls run down its right column from just under the top offset,
-          while its bottom right is padding, so toasts move to the bottom while it is open. The
-          smaller dialogs keep them at the top: their footer buttons are at their bottom right. */}
-      <Toasts belowPaneHeader placement={settingsOpen ? "bottom" : "top"} />
+    <div className="relative flex h-full flex-col">
+      <Toasts focusTerminal={focusTerminal} />
       <TitleBar
         onOpenSettings={openSettings}
         sidebarWidth={panes.sidebarDocked ? sidebarWidth.width : undefined}
         sidebarShown={panes.sidebarShown}
         onToggleSidebar={panes.toggleSidebar}
+        onSidebarToggleEnter={() => panes.sidebarPeek.reveal()}
+        onSidebarToggleLeave={panes.sidebarPeek.leave}
         onNewConsole={() => setDialogRequest({ kind: "new-console" })}
         selectedSession={selectedSession}
+        terminalProblem={terminalProblem}
         waitingCount={waitingSessions.length}
         onNextWaiting={selectNextWaiting}
         hasReportPanel={hasReportPanel}
         reportShown={panes.reportShown}
         onToggleReport={panes.toggleReport}
+        onReportToggleEnter={() => panes.reportPeek.reveal()}
+        onReportToggleLeave={panes.reportPeek.leave}
       />
       <ConnectionBanner state={connectionState} onRetry={reconnect} />
       <div className="flex min-h-0 flex-1">
@@ -176,14 +198,20 @@ export function App(): React.ReactElement {
           onOpenHub={openHub}
           onOpenDialog={setDialogRequest}
           open={panes.sidebarOpen}
-          dockedVisible={panes.sidebarDocked}
+          peek={panes.sidebarDocked ? undefined : panes.sidebarPeek}
           sidebarWidth={sidebarWidth}
         />
+        {panes.sidebarDocked && <PaneResizeHandle side="sidebar" paneWidth={sidebarWidth} />}
         {/* Below the `docked` breakpoint the terminal is the row's only content and the floor
             drops to 382px (see `TerminalPane.tsx`); `overflow-x-auto` is what makes a viewport
             narrower than that scroll instead of clipping. */}
         <main className="flex min-w-0 flex-1 overflow-x-auto docked:overflow-visible">
-          <TerminalPane ref={terminalRef} session={selectedSession} onResume={resumeSession} />
+          <TerminalPane
+            ref={terminalRef}
+            session={selectedSession}
+            onResume={resumeSession}
+            onProblemChange={setTerminalProblem}
+          />
           {/* Only the hub session's console has a report panel — it is that console's panel, not
               the session's. Keyed on the console id so switching hubs mounts a fresh instance. */}
           {/* The `selectedSession &&` is only for narrowing: `hasReportPanel` already implies it. */}
@@ -193,10 +221,13 @@ export function App(): React.ReactElement {
               consoleId={selectedSession.console_id}
               hubSessionId={selectedSession.id}
               open={panes.reportOpen}
-              dockedVisible={panes.reportDocked}
+              reportWidth={reportWidth.width}
+              peek={panes.reportDocked ? undefined : panes.reportPeek}
+              onEscape={panes.dismissOverlays}
             />
           )}
         </main>
+        {hasReportPanel && panes.reportDocked && <PaneResizeHandle side="report" paneWidth={reportWidth} />}
         {panes.reportOpen && <Scrim label="Close report" onClose={panes.closeReport} />}
       </div>
       {settingsOpen && <SettingsDialog onClose={closeSettings} />}

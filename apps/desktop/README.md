@@ -102,6 +102,35 @@ frontend has already derived or chosen, or no theme at all meaning follow the OS
 at all, or the bare start-of-drag and zoom of the top bar's drag region (`core:window:allow-start-dragging` and
 `core:window:allow-internal-toggle-maximize`).
 
+The window remembers its size, position and maximized state across launches (`src-tauri/src/window_state.rs`; the
+frontend never calls it, so it needs no capability). What is stored is the window's *normal* frame —
+its outer top-left and inner size while it is neither maximized, fullscreen nor minimized — plus whether it is
+maximized, all in logical points in the desktop's global coordinate space, never physical pixels: a pixel means
+something different on each display of a mixed-scale setup, a point does not. The frame is followed from the window's
+move and resize events, skipping them while it is hidden (before the UI reveals it, only the shell's own placement
+moves it), minimized, maximized or in native fullscreen, and discarding frames that a zoom reports on its way to
+maximized (so none of those pollutes the normal frame, and fullscreen and minimized are never restored), and written
+to `window-state.json` in the application's config directory (`~/Library/Application Support/dev.octoboard.app/`, not
+under `~/.octoboard`: it belongs to the shell, which the daemon's data directory does not) on `RunEvent::Exit`, which
+every quit path reaches.
+
+On launch the saved state is validated against the displays connected at that moment, each display's work area
+converted to points with its own scale factor, *before* the window is created, and the result is handed to the window
+builder (position, inner size), so the window — still created hidden and revealed by the UI — is never seen moving into
+place. A saved maximized state is applied right after the window is built rather than through the builder: AppKit
+first puts a new window on the main display and the builder's position only lands afterwards, and maximizing behind
+that move is what makes the window zoom on its own display and un-zoom back to the saved frame. The decision:
+
+- no saved state, or an unreadable or malformed one: 1200×760, placed (centred) by the OS — the first-launch behaviour;
+- the saved frame's top 40 points (the UI's top bar, where the window is grabbed) overlap some connected display by at
+  least 200×20 points: restored, held inside the bounding box of all the connected displays' work areas — size first
+  (never below the 1100×600 minimum), then position — so a frame spanning displays that are all still connected comes
+  back unchanged, and one that reached onto a display since unplugged is pulled back onto the ones left;
+- otherwise (its display is gone, the bar is off every display, or the frame held inside the box no longer has its bar
+  on a display): 1200×760, centred on the main display's work area.
+
+A saved maximized state is kept in both of the last two cases.
+
 Everything else `src-tauri/` does is internal: it starts `octoboardd` as a sidecar process and bakes the port it
 printed into the window's URL (`?port=`) before the window is created, so the frontend can locate the daemon without
 any IPC call for it.
@@ -114,6 +143,7 @@ any IPC call for it.
 | `src-tauri/src/exit.rs` | The exit-confirmation flow: `ExitState`, the two IPC commands above, the decision all three quit gestures share, and the `applicationShouldTerminate:` override onto AppKit's own delegate — the only `unsafe` code in `apps/desktop/`, for catching the Dock icon's own Quit (and a system-initiated logout/restart/shutdown, which arrives the same way) |
 | `src-tauri/src/sidecar.rs` | Spawns `octoboardd`, parses its startup port line, reports how it terminated |
 | `src-tauri/src/menu.rs` | Builds the native macOS menu bar, including the Settings… item that `lib.rs` turns into the `settings-requested` event |
+| `src-tauri/src/window_state.rs` | Remembers the window's frame and maximized state: decides the initial frame from the saved one and the connected displays, follows it from window events, saves it on exit |
 | `src-tauri/capabilities/default.json` | Allowlists the two IPC commands above plus the notification, Dock-badge, window-theme, window-reveal and window-drag/zoom commands |
 | `src-tauri/tauri.conf.json` | Where the window's UI comes from (`frontendDist` is `packages/ui/dist`; `devUrl` and `beforeDevCommand` are that package's dev server), the `octoboardd` `externalBin`, and the bundle targets |
 | `scripts/build-daemon.mjs` | Builds `octoboardd` in release mode and copies it into `src-tauri/binaries/` under the target-triple name Tauri's `externalBin` requires |

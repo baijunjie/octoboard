@@ -149,7 +149,7 @@ Keystrokes go to whichever application is frontmost, not to Octoboard. Activate 
 process immediately before every keystroke: a `Cmd+Q` or `Cmd+W` that lands on another application closes the user's
 own work.
 
-## Other worktrees' dev servers and daemons share the machine: confirm which one answers, stop yours by PID
+## Running dev apps share the machine: confirm which one answers, stop yours by PID, warn before touching `src-tauri`
 
 Several worktrees are often running at once, each with its own `packages/ui` dev server and `octoboardd`. The dev
 server's port is fixed (5174, `strictPort`), so a second one started in the background fails to bind. The URL then
@@ -157,6 +157,12 @@ keeps answering with the other worktree's build, and the verification passes or 
 Confirm that the process listening on the port is the one you started, or start yours with `--port` on a free port.
 When cleaning up, stop only processes you started, by PID. A pattern kill such as `pkill -f target/debug/octoboardd`
 also matches every other worktree's daemon.
+
+A `pnpm tauri dev` app running from the worktree you edit rebuilds and restarts itself on every change under
+`apps/desktop/src-tauri/`, and the restart interrupts every session in it: the daemon exits with the app and ends the
+agents (see "Crashes and forced termination" in `docs/product/application-lifecycle.md`), which may include the very
+agents doing the editing. So when the user has that app running, tell them before editing Rust there and land the Rust
+edits together rather than one at a time.
 
 ## Input-method checks have to be done by a person
 

@@ -2,15 +2,15 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import React, { useState } from "react";
 
 import type { DialogRequest } from "../dialogs/dialogRequest";
-import { drawerClass } from "../layout/breakpoint";
-import type { SidebarWidth } from "../layout/sidebarWidth";
+import { drawerClass, PeekHotZone } from "../layout/paneOverlay";
+import type { PaneWidth } from "../layout/paneWidth";
+import type { PanePeek } from "../layout/usePaneToggles";
 import { isDormant, type Console, type Project, type Session } from "../protocol";
 import { STATUS_LABEL } from "../sessionLabel";
 import { ActionMenu, type ActionMenuItem } from "./ActionMenu";
 import { AgentBadge } from "./AgentBadge";
 import { FadeOverflow } from "./FadeOverflow";
 import { NotificationsPrompt } from "./NotificationsPrompt";
-import { SidebarResizeHandle } from "./SidebarResizeHandle";
 import { BubbledWaitingHand, StatusIcon } from "./StatusIcon";
 
 /** The callbacks the tree triggers. Kept as one object, passed down by reference rather than
@@ -27,15 +27,17 @@ interface SidebarProps extends SidebarHandlers {
   projects: Project[];
   sessions: Session[];
   selectedSessionId?: string;
-  /** Whether the drawer is open below the `docked` breakpoint; above it `dockedVisible` decides
-   * instead (`usePaneToggles` owns the state, resetting it once the window no longer needs it). */
+  /** Whether the drawer is open below the `docked` breakpoint; above it the docked sidebar is
+   * shown or, with `peek`, hidden (`usePaneToggles` owns the state, resetting it once the window no
+   * longer needs it). */
   open: boolean;
-  /** Whether the docked sidebar is shown; the user can hide it from the top bar. Has no effect
-   * below the breakpoint, where `open` decides. */
-  dockedVisible: boolean;
-  /** The docked-mode width and its setters; `App.tsx` owns it (`useSidebarWidth`) so it can also
+  /** The hover reveal of the sidebar while the user has hidden it from the top bar: the same panel,
+   * kept as a fixed overlay at the docked width that floats in over the terminal, with its shadow
+   * and rounded edge. `undefined` while the docked sidebar is shown. */
+  peek?: PanePeek;
+  /** The docked-mode width and its setters; `App.tsx` owns it (`usePaneWidth`) so it can also
    * be read from outside the sidebar. */
-  sidebarWidth: SidebarWidth;
+  sidebarWidth: PaneWidth;
 }
 
 /** Stops a row's own mousedown from moving focus off whatever had it (typically the terminal) —
@@ -109,7 +111,7 @@ export function Sidebar({
   sessions,
   selectedSessionId,
   open,
-  dockedVisible,
+  peek,
   sidebarWidth,
   ...handlers
 }: SidebarProps): React.ReactElement {
@@ -123,43 +125,52 @@ export function Sidebar({
       return next;
     });
 
+  const drawerClassName = peek
+    ? `docked:rounded-r-xl ${drawerClass("left", "floating", open, peek.active)}`
+    : drawerClass("left", "drawer", open);
+
   return (
-    <nav
-      // Below the `docked` breakpoint this is a fixed overlay, closed by default, slid on and off
-      // with `open`; at or above it the `docked:` variants in `drawerClass` put it back exactly
-      // where it always was, a plain row sibling, regardless of `open` — see that function's own
-      // comment for the geometry. Starting below `--top-chrome-height` leaves the top bar, and with
-      // it the sidebar toggle, visible while this is open. `docked:hidden` is the user having hidden
-      // the sidebar from that toggle.
-      //
-      // `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener
-      // closes a drawer for. `data-pane` is how it finds this element to see whether it holds focus.
-      data-escape-scope
-      data-pane="sidebar"
-      className={`flex w-70 flex-col border-r border-separator bg-surface shrink-0 docked:w-(--sidebar-width) ${dockedVisible ? "" : "docked:hidden"} ${drawerClass("left", open, true)}`}
-      style={{ "--sidebar-width": `${sidebarWidth.width}px` } as React.CSSProperties}
-      aria-label="Sessions"
-    >
-      <FadeOverflow axis="y" className="min-h-0 flex-1 p-2">
-        {consoles.map((console) => (
-          <ConsoleNode
-            key={console.id}
-            handlers={handlers}
-            console={console}
-            projects={projects.filter((p) => p.console_id === console.id)}
-            sessions={sessions.filter((s) => s.console_id === console.id)}
-            selectedSessionId={selectedSessionId}
-            collapsed={collapsed}
-            toggle={toggle}
-          />
-        ))}
-        {consoles.length === 0 && (
-          <p className="px-2 py-1 text-sm text-muted">No consoles yet. Create one to get started.</p>
-        )}
-      </FadeOverflow>
-      <NotificationsPrompt />
-      <SidebarResizeHandle sidebarWidth={sidebarWidth} />
-    </nav>
+    <>
+      <nav
+        // Below the `docked` breakpoint this is a fixed overlay, closed by default, slid on and off
+        // with `open`; at or above it the `docked:` variants in `drawerClass` put it back exactly
+        // where it always was, a plain row sibling, regardless of `open`. With the sidebar hidden
+        // from the top bar's toggle, `drawerClass` instead keeps it a fixed overlay at the docked
+        // width that floats in while `peek` is active. Starting below `--top-chrome-height` leaves
+        // the top bar, and with it the sidebar toggle, visible while this is open.
+        //
+        // `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener
+        // closes a drawer for. `data-pane` is how it finds this element to see whether it holds
+        // focus.
+        data-escape-scope
+        data-pane="sidebar"
+        className={`flex w-70 flex-col border-r border-separator bg-surface shrink-0 docked:w-(--sidebar-width) ${drawerClassName}`}
+        onPointerEnter={peek?.keep}
+        onPointerLeave={peek?.leave}
+        style={{ "--sidebar-width": `${sidebarWidth.width}px` } as React.CSSProperties}
+        aria-label="Sessions"
+      >
+        <FadeOverflow axis="y" className="min-h-0 flex-1 p-2">
+          {consoles.map((console) => (
+            <ConsoleNode
+              key={console.id}
+              handlers={handlers}
+              console={console}
+              projects={projects.filter((p) => p.console_id === console.id)}
+              sessions={sessions.filter((s) => s.console_id === console.id)}
+              selectedSessionId={selectedSessionId}
+              collapsed={collapsed}
+              toggle={toggle}
+            />
+          ))}
+          {consoles.length === 0 && (
+            <p className="px-2 py-1 text-sm text-muted">No consoles yet. Create one to get started.</p>
+          )}
+        </FadeOverflow>
+        <NotificationsPrompt />
+      </nav>
+      {peek && <PeekHotZone side="left" peek={peek} />}
+    </>
   );
 }
 
