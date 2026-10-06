@@ -2,11 +2,11 @@
 name = "octoboardd"
 version = "0.1.0"
 description = "Octoboard daemon: host role (PTYs, agent processes, repositories) and coordinator role (console / project / session data)."
-authors = ["Junjie Bai"]
-license = "MIT"
-repository = "https://github.com/baijunjie/octoboard"
-edition = "2021"
-rust-version = "1.86"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 publish = false
 
 [[bin]]
@@ -22,6 +22,8 @@ serde = { version = "1", features = ["derive"] }
 # `render_page_submission` renders a submitted object's fields in iteration order straight into
 # the hub's prose — without this, `serde_json::Map` is a `BTreeMap` and the fields would arrive
 # alphabetised instead.
+# The exact version is the Tauri crate's: both crates are members of one Cargo workspace, and that
+# one pins `serde_json` exactly to stay within the project's Rust floor.
 serde_json = { version = "1", features = ["preserve_order"] }
 uuid = { version = "=1.26.1", features = ["v4", "serde"] }
 bytes = "1"

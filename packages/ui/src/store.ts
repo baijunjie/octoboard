@@ -70,7 +70,7 @@ export interface State {
   pages: Map<string, Page[]>;
   /** Bumped on every `snapshot`. A snapshot arrives on the same socket for a lag recovery, not
    * just a fresh connection (see the `page_list` row under "Daemon to client" in
-   * `daemon/PROTOCOL.md`), so `connectionState` alone does not change — a consumer that needs to
+   * `apps/daemon/PROTOCOL.md`), so `connectionState` alone does not change — a consumer that needs to
    * re-list after either case depends on this counter instead. */
   snapshotEpoch: number;
   /** Oldest first; the first is the one the dialog shows. A prompt is dropped when it is answered or
@@ -198,7 +198,7 @@ function reducer(state: State, action: Action): State {
         case "page_list": {
           // The reply to a `list_pages` request, but requests and broadcasts are not ordered
           // against each other (see "Client to daemon" and "Daemon to client" in
-          // `daemon/PROTOCOL.md`), so a `page_created` for a page `show_page` inserted after this
+          // `apps/daemon/PROTOCOL.md`), so a `page_created` for a page `show_page` inserted after this
           // reply was computed can have already landed here. Replacing wholesale would drop that
           // page; instead keep the reply's order first, then append whatever locally held page
           // the reply is missing.

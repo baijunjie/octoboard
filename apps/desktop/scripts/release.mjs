@@ -16,7 +16,10 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const appDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const bundleDir = path.join(appDir, "src-tauri", "target", "release", "bundle");
+const repoRoot = path.dirname(path.dirname(appDir));
+// The Tauri crate is a member of the root Cargo workspace, so its bundle lands in the workspace's
+// own build directory at the repository root, not under `src-tauri/`.
+const bundleDir = path.join(repoRoot, "target", "release", "bundle");
 const tauriBin = path.join(appDir, "node_modules", ".bin", "tauri");
 
 // Three states, in increasing order of what Gatekeeper will accept:
@@ -161,7 +164,7 @@ function findBundle(dir, extension) {
   if (matches.length > 1) {
     throw new Error(
       `found ${matches.length} "${extension}" files in ${dir} (${matches.join(", ")}) — clean ` +
-        "src-tauri/target/release/bundle and rebuild so only the current version's is there."
+        "the workspace's target/release/bundle and rebuild so only the current version's is there."
     );
   }
   return path.join(dir, matches[0]);

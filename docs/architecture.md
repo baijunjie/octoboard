@@ -70,9 +70,9 @@ application (background operation; today it exits with the application) and lets
 very same daemon, with terminal streams, status events and orchestration commands all on one protocol so the UI need not
 tell local from remote. Doing the split up front avoids a later rewrite.
 
-**Constraint: the UI and the daemon interact only over the network protocol (`daemon/PROTOCOL.md`) — no Tauri IPC, no
-shared state.** Otherwise going remote or headless breaks. Hooks and the MCP server of a session point at the daemon
-on the host the session runs on, so a remote session never has to connect back to the user's machine.
+**Constraint: the UI and the daemon interact only over the network protocol (`apps/daemon/PROTOCOL.md`) — no Tauri
+IPC, no shared state.** Otherwise going remote or headless breaks. Hooks and the MCP server of a session point at the
+daemon on the host the session runs on, so a remote session never has to connect back to the user's machine.
 
 Remote hosts are **not built yet**; the design keeps them possible as follows: The application would install and
 start the daemon (host role only) on the remote machine over SSH and tunnel to it, and the coordinator would route
@@ -187,7 +187,7 @@ Each has an established solution unless noted; two are not yet confirmed by hand
 ## Data model
 
 Entities: console, host, project, session, report, report-panel page, and the trusted folders. The shapes are in
-`daemon/src/store.rs`; what is worth knowing is the reasoning behind a few fields.
+`apps/daemon/src/store.rs`; what is worth knowing is the reasoning behind a few fields.
 
 - `Session.id` is Octoboard's own and `agent_session_id` the agent's. They are separate because some agents cannot
   pre-allocate an id.

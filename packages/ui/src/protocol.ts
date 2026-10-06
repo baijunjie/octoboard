@@ -1,4 +1,4 @@
-// Wire types for `daemon/PROTOCOL.md`. Kept as a hand-written mirror of the daemon's
+// Wire types for `apps/daemon/PROTOCOL.md`. Kept as a hand-written mirror of the daemon's
 // `protocol.rs` rather than generated, to keep the frontend build free of a codegen step. Field
 // names and enum spellings must match `protocol.rs` exactly — in particular, no
 // request field is named `id`: what a request acts on is named for its kind (`console`, `project`,

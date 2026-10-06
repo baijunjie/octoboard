@@ -1,4 +1,4 @@
-//! The HTTP and WebSocket surface described in `daemon/PROTOCOL.md`, bound to localhost only.
+//! The HTTP and WebSocket surface described in `apps/daemon/PROTOCOL.md`, bound to localhost only.
 
 use std::sync::Arc;
 

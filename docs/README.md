@@ -51,9 +51,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 
 ## Code
 
-- [Project map](project-map.md) — the monorepo layout (the daemon at the top level, clients under `apps/`, shared code
-  under `packages/`) and the workspace root's common commands, then navigation from the code tree to each module's own
-  doc.
+- [Project map](project-map.md) — the monorepo layout (deliverables under `apps/`, the daemon among them, shared code
+  under `packages/`), the two workspace roots (pnpm and Cargo) and their common commands, then navigation from the
+  code tree to each module's own doc.
 
 ## Development memory
 

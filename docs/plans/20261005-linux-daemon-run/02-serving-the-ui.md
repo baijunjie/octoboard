@@ -16,4 +16,4 @@
 ## Notes for the developer
 
 - **Development notes**: requires the UI to run outside the Tauri shell through the adapter.
-- **Reference docs**: `daemon/README.md`, `daemon/PROTOCOL.md`.
+- **Reference docs**: `apps/daemon/README.md`, `apps/daemon/PROTOCOL.md`.

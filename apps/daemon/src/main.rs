@@ -1,7 +1,7 @@
 //! `octoboardd` — the Octoboard daemon. It plays two roles in one process: the host role (PTYs,
 //! agent processes, directories and repositories) and the coordinator role (the stored consoles,
 //! projects and sessions). The desktop application is purely a client of it, over the protocol in
-//! `daemon/PROTOCOL.md`.
+//! `apps/daemon/PROTOCOL.md`.
 
 mod access;
 mod adapter;

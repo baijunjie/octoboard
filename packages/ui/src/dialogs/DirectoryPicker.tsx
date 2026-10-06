@@ -7,7 +7,7 @@ import { Dialog, DialogError, useRefocusIfLost } from "./Dialog";
 
 /**
  * Browses directories through the daemon's `list_dir`, never the local filesystem directly — this
- * is the host role's job (`daemon/PROTOCOL.md`), and a remote host has no local file dialog to fall
+ * is the host role's job (`apps/daemon/PROTOCOL.md`), and a remote host has no local file dialog to fall
  * back to. Only directories are ever listed, each flagged with whether it is a git repository.
  *
  * Failure here is a normal path, not an edge case: a packaged application raises a macOS

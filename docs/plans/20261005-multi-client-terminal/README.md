@@ -38,7 +38,7 @@ size.
 
 - **Reusable capabilities**: control-channel broadcasts and the full snapshot on connect (state sync); the terminal stream
   already supports several attached clients with per-client backpressure.
-- **Reference docs**: `daemon/PROTOCOL.md` (terminal stream), `docs/product/sessions.md`.
+- **Reference docs**: `apps/daemon/PROTOCOL.md` (terminal stream), `docs/product/sessions.md`.
 
 ## Open
 

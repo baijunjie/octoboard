@@ -1,4 +1,4 @@
-//! The wire types of the daemon's only external interface. `daemon/PROTOCOL.md` is the
+//! The wire types of the daemon's only external interface. `apps/daemon/PROTOCOL.md` is the
 //! specification; this module is its Rust form.
 
 use serde::{Deserialize, Deserializer, Serialize};

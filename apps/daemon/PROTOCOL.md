@@ -26,7 +26,7 @@ checked before any handler or WebSocket upgrade runs, and a request that fails t
   Anything else, including `null` and a malformed value, is refused.
 
 A new client therefore either sends no `Origin`, or is served from one of the origins above. A client reaching the daemon
-under any other host name is refused until the rule is widened (`host_allowed` in `daemon/src/access.rs`).
+under any other host name is refused until the rule is widened (`host_allowed` in `apps/daemon/src/access.rs`).
 
 ## `GET /ws/control` — management and status
 

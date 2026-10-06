@@ -144,7 +144,7 @@ export function TerminalPane({
     if (!controller) return;
     // A dormant session is resumed by the caller before it is ever attached to directly — the
     // daemon closes the terminal socket immediately for a session with no running process
-    // (`daemon/PROTOCOL.md`), so connecting here would just bounce. Once the resume's
+    // (`apps/daemon/PROTOCOL.md`), so connecting here would just bounce. Once the resume's
     // `session_upserted` broadcast flips the status, this effect re-runs and attaches for real.
     if (!session || isDormant) {
       // Keeps the ended session's last output on screen; `detach` itself checks that the output

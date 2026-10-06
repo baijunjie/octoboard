@@ -9,8 +9,8 @@ says about a declined prompt was measured on **2.1.286** as well, and held ident
 hook surface, their payload fields and their configuration layering on upgrade, so check a detail here against the
 installed version before relying on it.
 
-How Octoboard's status mapping handles these traps is encoded in `daemon/src/hooks.rs`; the product behavior built on
-them is in the product docs.
+How Octoboard's status mapping handles these traps is encoded in `apps/daemon/src/hooks.rs`; the product behavior
+built on them is in the product docs.
 
 ## Claude Code
 

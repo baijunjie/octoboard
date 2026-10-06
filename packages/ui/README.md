@@ -6,10 +6,10 @@ application, not served by the daemon), and the same build also runs in a plain 
 terminal pane, the window-wide top bar, the dialogs and the settings dialog, the hub's report panel, toasts and the
 failure screens.
 
-It talks to `octoboardd` (see [`../../daemon/`](../../daemon/README.md)) only over the WebSocket protocol in
-[`../../daemon/PROTOCOL.md`](../../daemon/PROTOCOL.md), and reaches anything native (quit flow, system notifications,
-Dock badge, the native window's own theme, the window chrome, the app menu) only through the platform adapter, which is
-chosen once at startup.
+It talks to `octoboardd` (see [`../../apps/daemon/`](../../apps/daemon/README.md)) only over the WebSocket protocol in
+[`../../apps/daemon/PROTOCOL.md`](../../apps/daemon/PROTOCOL.md), and reaches anything native (quit flow, system
+notifications, Dock badge, the native window's own theme, the window chrome, the app menu) only through the platform
+adapter, which is chosen once at startup.
 
 ## Development
 
@@ -45,7 +45,7 @@ port file under the temp directory, so the defaults would touch the real data an
 | `src/platform/` | The `PlatformAdapter` interface (optional `exit`, `notifications`, `badge`, `nativeWindow`, `windowChrome` (macOS only: the window has no native titlebar, so the top bar is its titlebar; how much of its leading edge the traffic lights cover right now, none in fullscreen) and `appMenu` (the native menu's Settings… item) capabilities; an absent one means the feature is absent) and its two implementations, `tauri.ts` and `browser.ts`; `react.tsx` exposes it to components. Only `tauri.ts` may import `@tauri-apps/*`, and only dynamically, so the browser path never loads them |
 | `src/daemon.ts` | The rules for locating the daemon (`?port=`, `VITE_DAEMON_PORT`, or the page's own origin), and the `?error=` startup message |
 | `src/daemon-client.ts` | WebSocket client for `GET /ws/control`: request/reply correlation, reconnect, event dispatch |
-| `src/protocol.ts` | Hand-written TypeScript mirror of `daemon/src/protocol.rs` / `PROTOCOL.md` |
+| `src/protocol.ts` | Hand-written TypeScript mirror of `apps/daemon/src/protocol.rs` / `PROTOCOL.md` |
 | `src/store.ts` | The Zustand store holding the connection and the console/project/session state derived from daemon events; `createDaemon(origin)` builds it and exposes the request function, `terminalUrl(session)` and `onToast` (the daemon's errors and notices and `toastError`'s messages as a stream of toast requests, which the store itself does not keep), `useDaemon` / `useDaemonStore` read it |
 | `src/theme.tsx` | `ThemeProvider` / `useOctoboardTheme`: the user's light/dark/system choice and what "system" currently resolves to, wrapping HeroUI's own `useTheme` rather than tracking it separately. Exactly one instance, mounted in `main.tsx` |
 | `src/layout/breakpoint.ts` | The `docked` breakpoint (read back out of `style.css`'s own CSS variable): `useIsNarrow()`, which closes the drawers when the window widens and tells the top bar's toggles whether they drive a drawer or a docked pane |

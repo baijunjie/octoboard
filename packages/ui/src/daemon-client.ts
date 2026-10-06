@@ -16,7 +16,7 @@ const QUEUED_REQUEST_TIMEOUT_MS = 5000;
 export type ConnectionState = "connecting" | "open" | "reconnecting" | "closed";
 
 /** An `error` reply's `message` plus its machine-readable `code`, when the daemon sent one (see
- * "Daemon to client" in `daemon/PROTOCOL.md`) — present only for failures a caller has to branch
+ * "Daemon to client" in `apps/daemon/PROTOCOL.md`) — present only for failures a caller has to branch
  * on, such as a duplicate `resume_session`/`open_session`, rather than just display. */
 export class DaemonRequestError extends Error {
   readonly code?: string;

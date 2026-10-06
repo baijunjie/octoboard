@@ -34,7 +34,7 @@ cannot drift from the daemon.
 ### Notes for the developer
 
 - **Reusable capabilities**: the daemon's protocol module already defines every message as a typed structure.
-- **Reference docs**: `daemon/PROTOCOL.md`.
+- **Reference docs**: `apps/daemon/PROTOCOL.md`.
 
 ## Open
 

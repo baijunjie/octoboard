@@ -187,7 +187,7 @@ export class TerminalController {
    *
    * Call this only for a session that is actually running (`working` / `waiting_user` / `idle`);
    * an interrupted or archived session must be resumed first (`resume_session`), per
-   * `daemon/PROTOCOL.md` — "attaching to a session whose process is not running closes the socket
+   * `apps/daemon/PROTOCOL.md` — "attaching to a session whose process is not running closes the socket
    * immediately". That immediate close is still handled below (as `not_running`) as a safety net
    * for the race where a session stops between the click and the socket connecting, not as the
    * normal path for opening a dormant session.
@@ -229,7 +229,7 @@ export class TerminalController {
       if (generation !== this.generation) return;
       // The daemon closes immediately, without ever reaching "open", when the session's process
       // is not running — that is a status to display and offer resume for, not a dropped
-      // connection (daemon/PROTOCOL.md, "GET /ws/term/:session"). It is also what a *reconnect*
+      // connection (apps/daemon/PROTOCOL.md, "GET /ws/term/:session"). It is also what a *reconnect*
       // gets if it loses a race against the session genuinely ending, so callers must not treat
       // this alone as proof the process is gone — only the session's own stored status says that.
       this.setStatus(everOpened ? "closed" : "not_running");

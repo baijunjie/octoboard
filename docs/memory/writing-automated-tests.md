@@ -28,7 +28,7 @@ keyboard (answering a prompt, cancelling a turn) cannot be scripted at all.
 
 This holds even when the acceptance criteria are written in terms of what the window shows: where the
 UI only renders what the daemon derived, the derivation is the new link, and that is what has to be
-exercised. Capture the output once from a real session, commit it under `daemon/testdata/` with the
+exercised. Capture the output once from a real session, commit it under `apps/daemon/testdata/` with the
 CLI version it came from recorded beside it, and replay the production entry conditions too, not just
 the bytes — the offset the real caller would have started from, the truncation a half-finished write
 leaves. Commit the near-miss capture next to the matching one: the shape that must *not* be

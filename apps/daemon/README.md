@@ -10,6 +10,14 @@ A headless Rust binary that plays two roles in one process:
 The desktop application (`apps/desktop/`) is purely a client of this process. It never shares state or an IPC channel with it —
 everything it can do goes through the external interface below.
 
+## Development
+
+This crate is a member of the repository's root Cargo workspace, alongside the desktop shell's Tauri crate: the
+lockfile and the build directory are the root's `Cargo.lock` and `target/`. `cargo build` and `cargo test` run from
+the repository root and cover both crates; `-p octoboardd` narrows either to this one. The Tauri crate resolves its
+`octoboardd` sidecar at compile time, so on a fresh checkout a workspace-wide build or test fails until
+`pnpm --filter @octoboard/desktop build:daemon` has run once.
+
 ## External interfaces
 
 - WebSocket/HTTP server, bound to `127.0.0.1` on an OS-assigned port — the only way the desktop application (or a

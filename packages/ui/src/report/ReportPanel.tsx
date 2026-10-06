@@ -13,7 +13,7 @@ import { composePageDocument, ESCAPE_MESSAGE_SOURCE, SUBMIT_MESSAGE_SOURCE } fro
  * The console's report panel: shown only for the hub session, which is what makes a console's
  * pages visible at all (there is nowhere else to show them). Lists pages on mount and on every
  * snapshot — the daemon never replays a missed `page_created` on its own (see the `page_list`
- * row under "Daemon to client" in `daemon/PROTOCOL.md`), so re-listing is the only way to recover
+ * row under "Daemon to client" in `apps/daemon/PROTOCOL.md`), so re-listing is the only way to recover
  * from one. A console switch mounting a fresh instance is the call site's concern, not this
  * component's.
  *
@@ -75,7 +75,7 @@ export function ReportPanel({
   const handleSubmit = useCallback(
     (page: Page, data: unknown) => {
       // The daemon refuses `submit_page` for any page that is not this console's newest (see
-      // "Client to daemon" in `daemon/PROTOCOL.md`), so a stale submission in flight from a page
+      // "Client to daemon" in `apps/daemon/PROTOCOL.md`), so a stale submission in flight from a page
       // the user has since paged away from is caught there, not here — this just forwards it and
       // reports whatever comes back.
       //

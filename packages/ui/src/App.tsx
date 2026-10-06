@@ -25,7 +25,7 @@ import { nextWaitingSession, waitingSessionsInTreeOrder } from "./waiting";
 
 /** The code the daemon's `error` carries for a launch asked for while one was already running or
  * starting for that session, or for resuming an archived hub while a live one already exists (see
- * "Daemon to client" in `daemon/PROTOCOL.md`). The in-flight guard below already stops this client
+ * "Daemon to client" in `apps/daemon/PROTOCOL.md`). The in-flight guard below already stops this client
  * from causing the double-click kind, but another path to the same session — the sidebar row and
  * its own "Resume" action-menu item, for instance — can still race it; `runOnce` decides per call
  * whether that race is worth showing. */

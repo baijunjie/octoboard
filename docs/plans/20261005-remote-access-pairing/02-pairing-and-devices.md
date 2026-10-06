@@ -18,4 +18,4 @@
 
 - **Reusable capabilities**: the daemon's existing store.
 - **Development notes**: revocation has to close open sockets, not only refuse new ones.
-- **Reference docs**: `daemon/PROTOCOL.md`.
+- **Reference docs**: `apps/daemon/PROTOCOL.md`.

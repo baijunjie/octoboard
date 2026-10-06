@@ -2,36 +2,42 @@
 
 Navigation for the code tree: one line per module, linking to that module's own doc for how it works internally.
 
-The repository is a pnpm-workspace monorepo split three ways:
+The repository is a pnpm-workspace monorepo split two ways:
 
-- **`daemon/`** is the core, not a client: the one process that owns every agent process and all of Octoboard's data.
-  It stays at the top level, outside the workspace, and is a Rust crate built with `cargo`.
-- **`apps/`** holds the clients — one directory per deliverable, each talking to `daemon/` only over its protocol —
-  and the project website, which is not a client.
-- **`packages/`** holds code shared between apps.
+- **`apps/`** holds the deliverables — one directory per thing that ships, the daemon among them, since it ships as the
+  desktop application's sidecar and is the whole of a server-side deployment on its own.
+- **`packages/`** holds code shared between them.
 
-The workspace root has `package.json`, `pnpm-workspace.yaml` (workspace packages are the `apps/*` and `packages/*`
-directories that have a `package.json`) and `pnpm-lock.yaml`. Dependencies install once from the root with
-`pnpm install`; `pnpm typecheck` and `pnpm build` run the package script of the same name across every workspace
-package. Per-package commands are in that package's doc.
+The repository root is two workspace roots at once:
 
-## Core
+- The **pnpm workspace**: `package.json`, `pnpm-workspace.yaml` (workspace packages are the `apps/*` and `packages/*`
+  directories that have a `package.json`) and `pnpm-lock.yaml`. Dependencies install once from the root with
+  `pnpm install`; `pnpm typecheck` and `pnpm build` run the package script of the same name across every workspace
+  package. `apps/daemon/` has no `package.json` and so is not one of them.
+- The **Cargo workspace**: `Cargo.toml` and `Cargo.lock`, with the daemon (`apps/daemon/`) and the desktop shell's
+  Tauri crate (`apps/desktop/src-tauri/`) as its two members. `cargo build` and `cargo test` from the root cover
+  both, into the one `target/` directory here. The Tauri crate resolves its `octoboardd` sidecar at compile time, so
+  on a fresh checkout `pnpm --filter @octoboard/desktop build:daemon` has to have run once before either command
+  succeeds.
 
-- [`daemon/`](../daemon/README.md) — `octoboardd`, the Rust daemon: host role (PTYs, agent processes, directories,
-  repositories) and coordinator role (console/project/session/page data in SQLite), reachable only through the
-  WebSocket/HTTP protocol in [`daemon/PROTOCOL.md`](../daemon/PROTOCOL.md).
+Per-package commands are in that package's doc.
 
-## Clients and apps
+## Deliverables
 
+- [`apps/daemon/`](../apps/daemon/README.md) — `octoboardd`, the Rust daemon and the core of the system rather than one
+  of its clients: the one process that owns every agent process and all of Octoboard's data. Host role (PTYs, agent
+  processes, directories, repositories) and coordinator role (console/project/session/page data in SQLite). Every
+  client reaches it only through the WebSocket/HTTP protocol in
+  [`apps/daemon/PROTOCOL.md`](../apps/daemon/PROTOCOL.md).
 - [`apps/desktop/`](../apps/desktop/README.md) — `@octoboard/desktop`, the Tauri 2 shell of the macOS desktop
   application: window (with its overlay titlebar and remembered frame), native menu, `octoboardd` sidecar, exit flow
-  and release scripts. It loads the UI from `packages/ui/` and has no UI of its own; a client of `daemon/` over
+  and release scripts. It loads the UI from `packages/ui/` and has no UI of its own; a client of `apps/daemon/` over
   WebSocket only.
 - [`apps/ios/`](../apps/ios/README.md) — placeholder for the native iOS client; no content, not a workspace package.
 - [`apps/android/`](../apps/android/README.md) — placeholder for the native Android client; no content, not a
   workspace package.
-- [`apps/web/`](../apps/web/README.md) — placeholder for the project website (not a client of `daemon/`); no content,
-  not a workspace package.
+- [`apps/web/`](../apps/web/README.md) — placeholder for the project website (not a client of `apps/daemon/`); no
+  content, not a workspace package.
 
 ## Shared packages
 

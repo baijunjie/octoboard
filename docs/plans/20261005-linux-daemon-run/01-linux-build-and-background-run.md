@@ -21,4 +21,4 @@
 - **Reusable capabilities**: the single-instance lock, the port file, the optional parent-process watch, and the
   shell-environment snapshot used to launch agents.
 - **Development notes**: anything macOS-specific surfaces here; fix it or record it, do not paper over it.
-- **Reference docs**: `daemon/README.md`, `docs/product/application-lifecycle.md`.
+- **Reference docs**: `apps/daemon/README.md`, `docs/product/application-lifecycle.md`.

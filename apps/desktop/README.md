@@ -5,8 +5,8 @@ exit flow. It contains no UI of its own: the window loads the UI in [`../../pack
 bundled into the application at build time (not served by the daemon), which provides the console/project/session
 menu, the `xterm.js` terminal, console and project management, the report panel and the exit-flow screens.
 
-The UI talks to `octoboardd` (see [`../../daemon/`](../../daemon/README.md)) only over the WebSocket/HTTP protocol in
-[`../../daemon/PROTOCOL.md`](../../daemon/PROTOCOL.md) — no Tauri IPC command carries daemon traffic or session state. This
+The UI talks to `octoboardd` (see [`../daemon/`](../daemon/README.md)) only over the WebSocket/HTTP protocol in
+[`../daemon/PROTOCOL.md`](../daemon/PROTOCOL.md) — no Tauri IPC command carries daemon traffic or session state. This
 is an architectural rule, not an implementation detail: the already-decided remote-host feature depends on the UI
 never distinguishing a local daemon from a remote one, which only holds if the daemon is reachable exclusively through
 that one protocol.
@@ -16,14 +16,18 @@ that one protocol.
 This is the `@octoboard/desktop` package of the repository's pnpm workspace. Its dependencies install from the
 workspace root with `pnpm install` (there is no per-package install), and its scripts run from this directory as
 `pnpm <script>`. It has no `typecheck` or `build` script, so the root's `pnpm typecheck` and `pnpm build` cover only
-`packages/ui`; the Rust side is checked with `cargo` in `src-tauri/`, which must be reachable on `PATH`.
+`packages/ui`; the Rust side is checked with `cargo`, which must be reachable on `PATH`.
+
+`src-tauri/` is a member of the repository's root Cargo workspace, alongside `apps/daemon/`: the lockfile and the
+build directory are the root's `Cargo.lock` and `target/`, and `cargo build` / `cargo test` from the root cover both
+crates (`-p octoboard` for this one alone).
 
 `src-tauri/tauri.conf.json` declares `octoboardd` as an `externalBin`, which Tauri resolves at **compile** time, not
-at launch. So `pnpm build:daemon` (builds `daemon/` in release and copies the binary into
+at launch. So `pnpm build:daemon` (builds `apps/daemon/` in release and copies the binary into
 `src-tauri/binaries/octoboardd-<target-triple>`, see `scripts/build-daemon.mjs`) must have been run at least once
-before `pnpm tauri dev` or a bare `cargo build` in `src-tauri/` will succeed — neither of those two commands runs
-it for you, and skipping it fails at compile time with no obvious cause. `pnpm build:tauri` (what `tauri build`
-uses) runs it automatically; rerun `build:daemon` by hand whenever `daemon/` changes during development.
+before `pnpm tauri dev`, a `cargo build` in `src-tauri/` or a workspace-wide `cargo build`/`cargo test` from the root
+will succeed — none of them runs it for you, and skipping it fails at compile time with no obvious cause. `pnpm build:tauri` (what `tauri build`
+uses) runs it automatically; rerun `build:daemon` by hand whenever `apps/daemon/` changes during development.
 
 `pnpm tauri dev` starts the `packages/ui` dev server itself (`beforeDevCommand` in `src-tauri/tauri.conf.json`, on
 port 5174, which `devUrl` and the debug-build window URL in `src-tauri/src/lib.rs` both name) and opens the window on

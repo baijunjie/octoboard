@@ -1,4 +1,4 @@
-// Locates the daemon. The daemon binds an OS-assigned port (see `daemon/PROTOCOL.md`), so the UI
+// Locates the daemon. The daemon binds an OS-assigned port (see `apps/daemon/PROTOCOL.md`), so the UI
 // is never allowed to hardcode one. Sources, in priority order:
 //
 //   1. a `?port=NNNN` query parameter — this is how the Tauri shell hands the sidecar's port to

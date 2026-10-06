@@ -29,7 +29,7 @@ export function ProjectDialog({
 }: {
   consoleId: string;
   /** Editing an existing project when set — only name and default agent can change (see
-   * `daemon/PROTOCOL.md`'s `update_project`); association details are immutable once added. */
+   * `apps/daemon/PROTOCOL.md`'s `update_project`); association details are immutable once added. */
   project?: Project;
   onClose: () => void;
 }): React.ReactElement {

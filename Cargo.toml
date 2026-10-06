@@ -1,0 +1,18 @@
+# The repository's Rust crates build as one workspace: one lockfile and one build directory, so a
+# dependency both crates share compiles once and resolves to a single version.
+#
+# A virtual manifest does not inherit the dependency resolver from its members' editions, so the
+# resolver is set here explicitly; without it cargo falls back to the 2015-era resolver and warns.
+[workspace]
+resolver = "2"
+members = ["apps/daemon", "apps/desktop/src-tauri"]
+
+# `rust-version` is the project's Rust floor, and several exact dependency pins in the members
+# exist only to stay within it — see "Known pitfalls of the Tauri / Rust approach" in
+# docs/architecture.md before raising it.
+[workspace.package]
+authors = ["Junjie Bai"]
+license = "MIT"
+repository = "https://github.com/baijunjie/octoboard"
+edition = "2021"
+rust-version = "1.86"
