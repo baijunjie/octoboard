@@ -14,7 +14,7 @@ own binary and shows it as it is. What it adds to each launch, and what it guara
 
 **A console has at most one hub session whose process is running**, enforced by the daemon: opening
 a hub, or reopening an interrupted or archived one, while another hub of the console is running is
-refused, and the refusal names the running hub's session id. The application does not send a request it knows
+refused, and the refusal names the running hub (shown by its title). The application does not send a request it knows
 will be refused: selecting an interrupted or archived hub, or choosing its "Resume", while another hub of the same
 console is running leaves that hub selected with its last output on screen and shows an error toast, titled with
 where the hub is, saying that the console already has a live hub session, which has to be archived before this one
@@ -60,9 +60,9 @@ Build). The status is an icon named after the status for assistive technology; t
 still where the system asks for reduced motion. Console, project and archive-group rows tell assistive technology
 whether they are expanded or collapsed.
 
-A name too long for its row fades out at the row's right edge rather than ending in an ellipsis, and the full name is
-then the row's tooltip. When the tree is taller than the sidebar it scrolls, and it fades out at whichever end has
-more of it beyond.
+A name too long for its row fades out where it ends — the row's right edge, its left under a right-to-left language —
+rather than ending in an ellipsis, and the full name is then the row's tooltip. When the tree is taller than the sidebar
+it scrolls, and it fades out at whichever end has more of it beyond.
 
 New consoles are created from the top bar's **New console** button (see "The top bar" in
 `docs/product/window-layout.md`).

@@ -62,10 +62,9 @@ to continue."
 
 Failures a user has to know about are shown as toasts (see "Toasts" in `docs/product/window-layout.md`), and so are
 notices about a session that are not failures. Every such notice names where its session is — the project it runs in,
-or the console whose hub it is — and so does a failure that is about one particular session, since the
-daemon's own wording only ever says "this session": it has no notion of what a client calls one. A
-failed report-page submission is one such failure (see "Submitting a form back to the hub" in
-`docs/product/report-panel.md`). A failure raised by a dialog's own action is shown in that dialog instead — except in
+or the console whose hub it is — and so does a failure that is about one particular session, since what the daemon
+reports refers to the session it is about only as "this session". A failed report-page submission is one such
+failure (see "Submitting a form back to the hub" in `docs/product/report-panel.md`). A failure raised by a dialog's own action is shown in that dialog instead — except in
 the dialog for Claude Code's workspace-trust prompt, which closes and reports most failures as a
 toast (see "Claude Code's workspace-trust prompt" in `docs/product/launching-agents.md`).
 

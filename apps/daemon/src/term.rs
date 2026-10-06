@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::adapter::{self, LaunchSpec};
 use crate::env_shell;
 use crate::paths;
-use crate::protocol::{Agent, Role};
+use crate::protocol::{error_code, Agent, CodedError, Notice, Role};
 use crate::ptyio;
 use crate::session::{self, LiveSession, NewSession};
 
@@ -42,7 +42,7 @@ pub struct Launch {
     /// it from its first hook payload instead.
     pub agent_session_id: Option<String>,
     /// Something about this launch the user has to be told; see `adapter::LaunchPlan::notice`.
-    pub notice: Option<String>,
+    pub notice: Option<Notice>,
 }
 
 /// One agent process to start. Owned rather than borrowed: launching snapshots the user's shell
@@ -85,10 +85,14 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     if !cwd.is_dir() {
         // `portable_pty` falls back to the home directory for a cwd that does not exist, which
         // would silently start a write-capable agent in `$HOME`.
-        return Err(anyhow!(
-            "`{}` is not a directory the daemon can reach. A packaged application needs file \
-             access granted per volume, and the prompt may not have been answered yet.",
-            cwd.display()
+        return Err(CodedError::raised(
+            error_code::DIRECTORY_UNREACHABLE,
+            format!(
+                "`{}` is not a directory the daemon can reach. A packaged application needs file \
+                 access granted per volume, and the prompt may not have been answered yet.",
+                cwd.display()
+            ),
+            &[("path", &cwd.to_string_lossy())],
         ));
     }
 

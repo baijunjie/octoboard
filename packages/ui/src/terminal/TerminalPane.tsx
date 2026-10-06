@@ -2,6 +2,7 @@ import { Button, EmptyState, Surface } from "@heroui/react";
 import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 import "@xterm/xterm/css/xterm.css";
+import { useT } from "../i18n/react";
 import { isDormant as isDormantStatus, isLive, type Session } from "../protocol";
 import { useDaemon } from "../store";
 import { useOctoboardTheme } from "../theme";
@@ -55,6 +56,7 @@ export function TerminalPane({
   onProblemChange,
   ref,
 }: TerminalPaneProps): React.ReactElement {
+  const t = useT();
   const { terminalUrl } = useDaemon();
   const { resolved: colorTheme } = useOctoboardTheme();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -240,11 +242,12 @@ export function TerminalPane({
           the terminal from that element's computed height and width, padding included, so padding
           there gives it rows and columns that the overflow then clips. */}
       <div className="min-h-0 flex-1 p-1">
-        <div className="h-full overflow-hidden" ref={containerRef} />
+        {/* xterm lays its cells out left to right whatever the page's direction. */}
+        <div dir="ltr" className="h-full overflow-hidden" ref={containerRef} />
       </div>
       {!session && (
         <EmptyState className="absolute inset-0 flex items-center justify-center bg-background">
-          Select a session to view its terminal.
+          {t("terminal.empty")}
         </EmptyState>
       )}
       {/* Floats over the terminal rather than covering it: a session that has just ended keeps its
@@ -254,9 +257,9 @@ export function TerminalPane({
       <div role="status" className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
         {session && isDormant && (
           <Surface className="pointer-events-auto flex items-center gap-3 rounded-lg border border-separator px-3 py-2 text-sm shadow-lg">
-            <span className="text-muted">Not running</span>
+            <span className="text-muted">{t("terminal.notRunning")}</span>
             <Button size="sm" variant="primary" preventFocusOnPress onPress={() => onResume(session.id)}>
-              Resume
+              {t("terminal.resume")}
             </Button>
           </Surface>
         )}

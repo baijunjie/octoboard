@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { t } from "../i18n/language";
 import { usePlatform } from "../platform/react";
 import { isLive, type Session } from "../protocol";
 
@@ -77,7 +78,7 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
     } catch (err) {
       // Quitting must not depend on this succeeding, but a quit that silently does nothing is
       // worse than one that says why, so the failure is surfaced rather than swallowed.
-      optionsRef.current.toastError?.(`Quitting failed: ${(err as Error).message}`);
+      optionsRef.current.toastError?.(t("exit.failed", { error: (err as Error).message }));
     }
   };
 
@@ -110,9 +111,7 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
       exit?.register({
         onQuitRequested: () => void requestQuit(),
         onDaemonExited: (detail) => {
-          optionsRef.current.toastError?.(
-            `The daemon process exited unexpectedly (${detail}). Restart Octoboard to continue.`,
-          );
+          optionsRef.current.toastError?.(t("exit.daemonExited", { detail }));
         },
       }),
     // Registration happens once; `requestQuit`/`doQuit` read live state through `optionsRef`.

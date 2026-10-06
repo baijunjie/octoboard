@@ -1,38 +1,43 @@
 import React, { useEffect, useRef, useState } from "react";
 
+import { useT } from "../i18n/react";
 import type { PaneSide, PaneWidth } from "../layout/paneWidth";
 
 /** Pixels an arrow key press moves the pane's edge; Shift multiplies it. */
 const KEY_STEP = 16;
 const KEY_STEP_SHIFT = 64;
 
-/** What differs between the sides. `grow` is the direction the handle moves in when the pane gets
- * wider: right for the sidebar, whose edge is its right one, left for the report panel. `span` is
- * how far up it runs: the sidebar's edge continues up through the top bar's left segment, so its
+/** What differs between the sides. The sidebar is on the start side and the report panel on the end
+ * side, so `edge` is the logical side of the window the handle is anchored to, and `grow` is the
+ * direction, along the reading direction, that the handle moves in when the pane gets wider: toward
+ * the end for the sidebar, whose edge is its end one, toward the start for the report panel. The
+ * pointer and the arrow keys work in physical directions, so `physicalGrow` turns it into
+ * +1 (right) or -1 (left) for the direction in force. `span` is
+ * how far up it runs: the sidebar's edge continues up through the top bar's start segment, so its
  * handle starts at the window top, and while the connection banner shows it also crosses the
  * banner, which has no border there; the report panel's edge starts below the top chrome, and so
  * does its handle. */
 const SIDES = {
   sidebar: {
-    label: "Resize sidebar",
-    edge: "left",
+    label: "pane.resizeSidebar",
+    edge: "insetInlineStart",
     span: "inset-y-0",
     grow: 1,
-    growKey: "ArrowRight",
-    shrinkKey: "ArrowLeft",
   },
   report: {
-    label: "Resize report panel",
-    edge: "right",
+    label: "pane.resizeReport",
+    edge: "insetInlineEnd",
     span: "top-(--top-chrome-height) bottom-0",
     grow: -1,
-    growKey: "ArrowLeft",
-    shrinkKey: "ArrowRight",
   },
 } as const;
 
+function physicalGrow(element: HTMLElement, grow: 1 | -1): 1 | -1 {
+  return getComputedStyle(element).direction === "rtl" ? (-grow as 1 | -1) : grow;
+}
+
 /**
- * The drag handle on a docked pane's inner edge (the sidebar's right, the report panel's left): a
+ * The drag handle on a docked pane's inner edge (the sidebar's end, the report panel's start): a
  * thin hit area straddling the border, with a highlight line on hover, focus and while dragging.
  * Keyboard focus adds a ring around the handle and widens the line to fill it: the line alone is a
  * 2px stripe that, in the light theme, is under the 3:1 against the border pixel it replaces that
@@ -66,10 +71,11 @@ export function PaneResizeHandle({
   side: PaneSide;
   paneWidth: PaneWidth;
 }): React.ReactElement {
+  const t = useT();
   const { width, min, max, setWidth, persist, reset } = paneWidth;
-  const { label, edge, span, grow, growKey, shrinkKey } = SIDES[side];
+  const { label, edge, span, grow } = SIDES[side];
   const [dragging, setDragging] = useState(false);
-  const dragRef = useRef<{ startX: number; startWidth: number } | undefined>(undefined);
+  const dragRef = useRef<{ startX: number; startWidth: number; grow: 1 | -1 } | undefined>(undefined);
 
   useEffect(() => {
     if (!dragging) return;
@@ -87,6 +93,8 @@ export function PaneResizeHandle({
 
   const onKeyDown = (event: React.KeyboardEvent) => {
     const step = event.shiftKey ? KEY_STEP_SHIFT : KEY_STEP;
+    const growKey = physicalGrow(event.currentTarget as HTMLElement, grow) > 0 ? "ArrowRight" : "ArrowLeft";
+    const shrinkKey = growKey === "ArrowRight" ? "ArrowLeft" : "ArrowRight";
     const next =
       event.key === growKey
         ? width + step
@@ -106,7 +114,7 @@ export function PaneResizeHandle({
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label={label}
+      aria-label={t(label)}
       aria-valuenow={width}
       aria-valuemin={min}
       aria-valuemax={max}
@@ -115,19 +123,23 @@ export function PaneResizeHandle({
       data-pane={side}
       // `data-region`: F6 from here moves on from the pane, as from any control inside it.
       data-region={side}
-      // Centred on the pane's inner edge, 3px each side.
+      // Centred on the pane's inner edge, 3px each side, anchored to the logical side the pane is on.
       style={{ [edge]: width - 3 }}
       className={`group absolute ${span} z-10 hidden w-1.5 cursor-col-resize touch-none outline-none focus-visible:ring-2 focus-visible:ring-focus docked:block`}
       onMouseDown={(event) => event.preventDefault()}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
         event.currentTarget.setPointerCapture(event.pointerId);
-        dragRef.current = { startX: event.clientX, startWidth: width };
+        dragRef.current = {
+          startX: event.clientX,
+          startWidth: width,
+          grow: physicalGrow(event.currentTarget, grow),
+        };
         setDragging(true);
       }}
       onPointerMove={(event) => {
         const drag = dragRef.current;
-        if (drag) setWidth(drag.startWidth + grow * (event.clientX - drag.startX), { persist: false });
+        if (drag) setWidth(drag.startWidth + drag.grow * (event.clientX - drag.startX), { persist: false });
       }}
       onLostPointerCapture={endDrag}
       onDoubleClick={reset}

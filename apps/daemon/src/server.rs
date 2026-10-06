@@ -12,7 +12,7 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{broadcast, mpsc};
 
 use crate::hooks;
-use crate::protocol::{Agent, Event, Request, SessionStatus, TermControl};
+use crate::protocol::{Agent, CodedError, Event, Request, SessionStatus, TermControl};
 use crate::reporting;
 use crate::state::{AppState, TurnClose};
 use crate::transcript;
@@ -160,26 +160,17 @@ async fn forward_broadcasts(
 async fn handle_request(state: &Arc<AppState>, text: &str) -> Event {
     let request: Request = match serde_json::from_str(text) {
         Ok(request) => request,
-        Err(err) => {
-            return Event::Error {
-                id: None,
-                code: None,
-                message: format!("unreadable request: {err}"),
-            }
-        }
+        Err(err) => return Event::unreadable_request(&err.to_string()),
     };
     let id = request.id.clone();
     match crate::coordinator::handle(state, request.id, request.body).await {
         Ok(Some(event)) => event,
         Ok(None) => Event::Ack { id },
-        // The message is the user's only account of what went wrong, so the whole context chain
-        // goes through rather than just the outermost error.
-        Err(err) => Event::Error {
-            id,
-            code: err
-                .downcast_ref::<crate::protocol::CodedError>()
-                .map(|coded| coded.code.to_string()),
-            message: format!("{err:#}"),
+        Err(err) => match err.downcast_ref::<CodedError>() {
+            Some(coded) => coded.reply(id),
+            // The message is the user's only account of what went wrong, so the whole context
+            // chain goes through rather than just the outermost error.
+            None => Event::internal_error(id, format!("{err:#}")),
         },
     }
 }

@@ -11,12 +11,13 @@ import { ConfirmDialog } from "./dialogs/ConfirmDialog";
 import type { DialogRequest } from "./dialogs/dialogRequest";
 import { RequestedDialog } from "./dialogs/RequestedDialog";
 import { TrustPromptDialog } from "./dialogs/TrustPromptDialog";
+import { useT } from "./i18n/react";
 import { usePaneWidth } from "./layout/paneWidth";
 import { usePaneToggles } from "./layout/usePaneToggles";
 import { useRegionCycle } from "./layout/useRegionCycle";
 import { useAppExit } from "./lifecycle/useAppExit";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
-import { isDormant, isLive, type Console, type Session } from "./protocol";
+import { ALREADY_RUNNING_CODES, isDormant, isLive, type Console, type Session } from "./protocol";
 import { ReportPanel } from "./report/ReportPanel";
 import { SettingsDialog } from "./settings/SettingsDialog";
 import { useSettingsDialog } from "./settings/useSettingsDialog";
@@ -24,15 +25,8 @@ import { useDaemon, useDaemonStore } from "./store";
 import { TerminalPane, type TerminalPaneHandle, type TerminalProblem } from "./terminal/TerminalPane";
 import { nextWaitingSession, waitingSessionsInTreeOrder } from "./waiting";
 
-/** The code the daemon's `error` carries for a launch asked for while one was already running or
- * starting for that session, or for resuming an archived hub while a live one already exists (see
- * "Daemon to client" in `apps/daemon/PROTOCOL.md`). The in-flight guard below already stops this client
- * from causing the double-click kind, but another path to the same session — the sidebar row and
- * its own "Resume" action-menu item, for instance — can still race it; `runOnce` decides per call
- * whether that race is worth showing. */
-const SESSION_ALREADY_RUNNING = "session_already_running";
-
 export function App(): React.ReactElement {
+  const t = useT();
   const { request, toastError, reconnect } = useDaemon();
   const connectionState = useDaemonStore((s) => s.connectionState);
   const hosts = useDaemonStore((s) => s.hosts);
@@ -104,7 +98,11 @@ export function App(): React.ReactElement {
     try {
       await action();
     } catch (err) {
-      const isAlreadyRunning = err instanceof DaemonRequestError && err.code === SESSION_ALREADY_RUNNING;
+      // The in-flight guard above already stops this client from causing the double-click kind of
+      // "already running" (see `ALREADY_RUNNING_CODES`), but another path to the same session — the
+      // sidebar row and its own "Resume" action-menu item, for instance — can still race it;
+      // `suppressAlreadyRunning` decides per call whether that race is worth showing.
+      const isAlreadyRunning = err instanceof DaemonRequestError && ALREADY_RUNNING_CODES.includes(err.code);
       if (!isAlreadyRunning || !suppressAlreadyRunning) {
         toastError((err as Error).message);
       }
@@ -115,9 +113,9 @@ export function App(): React.ReactElement {
 
   const resumeSession = (sessionId: string) => {
     const session = sessions.get(sessionId);
-    // The daemon refuses to resume a hub while its console has another live one, so asking would
-    // only bring back an error naming that hub by its id. Say what the user has to do instead; the
-    // session itself stays selected, showing its last output.
+    // The daemon refuses to resume a hub while its console has another live one
+    // (`hub_reopen_blocked`), so check first and say what the user has to do instead of waiting for
+    // the refusal; the session itself stays selected, showing its last output.
     const liveHubExists =
       session?.role === "hub" &&
       sessionList.some(
@@ -128,12 +126,12 @@ export function App(): React.ReactElement {
           isLive(other.status),
       );
     if (liveHubExists) {
-      toastError("This console already has a live hub session. Archive it before reopening this one.", sessionId);
+      toastError(t("app.hubAlreadyLive"), sessionId);
       return;
     }
-    // The daemon's `session_already_running` also covers that hub case, should a race get past the
-    // check above — unlike the plain double-click this guard exists for, suppressing it would make
-    // the click look like it did nothing, so a hub resume lets the error through instead.
+    // `hub_reopen_blocked` (one of `ALREADY_RUNNING_CODES`) also reaches here should a race get past
+    // the check above — unlike the plain double-click this guard exists for, suppressing it would
+    // make the click look like it did nothing, so a hub resume lets the error through instead.
     const suppressAlreadyRunning = session?.role !== "hub";
     void runOnce(
       `resume:${sessionId}`,
@@ -172,7 +170,7 @@ export function App(): React.ReactElement {
         <Toasts focusTerminal={focusTerminal} />
         {connectionState === "closed" && <ConnectionBanner state={connectionState} onRetry={reconnect} />}
         <div className="flex flex-1 items-center justify-center text-muted">
-          {connectionState === "closed" ? "The daemon is not answering." : "Connecting to the daemon…"}
+          {connectionState === "closed" ? t("app.daemonNotAnswering") : t("app.connecting")}
         </div>
       </div>
     );
@@ -202,7 +200,7 @@ export function App(): React.ReactElement {
       />
       <ConnectionBanner state={connectionState} onRetry={reconnect} />
       <div className="flex min-h-0 flex-1">
-        {panes.sidebarOpen && <Scrim label="Close sessions" onClose={panes.closeSidebar} />}
+        {panes.sidebarOpen && <Scrim label={t("app.closeSessions")} onClose={panes.closeSidebar} />}
         <Sidebar
           consoles={consoleList}
           projects={projectList}
@@ -243,7 +241,7 @@ export function App(): React.ReactElement {
           )}
         </main>
         {hasReportPanel && panes.reportDocked && <PaneResizeHandle side="report" paneWidth={reportWidth} />}
-        {panes.reportOpen && <Scrim label="Close report" onClose={panes.closeReport} />}
+        {panes.reportOpen && <Scrim label={t("app.closeReport")} onClose={panes.closeReport} />}
       </div>
       {settingsOpen && <SettingsDialog onClose={closeSettings} />}
       {dialogRequest && (
@@ -258,9 +256,9 @@ export function App(): React.ReactElement {
       )}
       {exitConfirmOpen && (
         <ConfirmDialog
-          title="Quit Octoboard"
-          message="Some sessions are still running. Quitting interrupts them; each stays resumable next time."
-          confirmLabel="Quit"
+          title={t("app.quit.title")}
+          message={t("app.quit.message")}
+          confirmLabel={t("common.quit")}
           destructive
           onCancel={closeExitConfirm}
           onConfirm={confirmExit}

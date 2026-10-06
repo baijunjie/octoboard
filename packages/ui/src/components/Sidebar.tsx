@@ -3,11 +3,12 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import React, { useState } from "react";
 
 import type { DialogRequest } from "../dialogs/dialogRequest";
+import { useT } from "../i18n/react";
 import { drawerClass, PANE_ID, PeekHotZone } from "../layout/paneOverlay";
 import type { PaneWidth } from "../layout/paneWidth";
 import type { PanePeek } from "../layout/usePaneToggles";
 import { isDormant, type Console, type Project, type Session } from "../protocol";
-import { STATUS_LABEL } from "../sessionLabel";
+import { statusLabel } from "../sessionLabel";
 import { ActionMenu, type ActionMenuItem } from "./ActionMenu";
 import { AgentBadge } from "./AgentBadge";
 import { FadeOverflow } from "./FadeOverflow";
@@ -97,14 +98,19 @@ function TreeRow({
 }
 
 function Chevron({ collapsed }: { collapsed: boolean }): React.ReactElement {
-  const Icon = collapsed ? ChevronRight : ChevronDown;
-  return <Icon aria-hidden="true" className="size-4 shrink-0 text-muted" />;
+  // Two glyphs rather than one rotated: a rotated chevron that is already mirrored would point the
+  // wrong way under right-to-left.
+  return collapsed ? (
+    <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted rtl:-scale-x-100" />
+  ) : (
+    <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-muted" />
+  );
 }
 
-/** A row's single-line name: fades out at the right edge when it does not fit, rather than
+/** A row's single-line name: fades out at its end edge when it does not fit, rather than
  * ending in an ellipsis. `title` is the full text, offered as a tooltip only while it is cut. */
 const RowLabel = ({ title, children }: { title?: string; children: React.ReactNode }) => (
-  <FadeOverflow as="span" className="min-w-0 flex-1" titleWhenClipped={title}>
+  <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={title}>
     {children}
   </FadeOverflow>
 );
@@ -122,6 +128,7 @@ export function Sidebar({
   sidebarWidth,
   ...handlers
 }: SidebarProps): React.ReactElement {
+  const t = useT();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const toggle = (id: string) =>
@@ -133,8 +140,8 @@ export function Sidebar({
     });
 
   const drawerClassName = peek
-    ? `docked:rounded-r-xl ${drawerClass("left", "floating", open, peek.active)}`
-    : drawerClass("left", "drawer", open);
+    ? `docked:rounded-e-xl ${drawerClass("start", "floating", open, peek.active)}`
+    : drawerClass("start", "drawer", open);
 
   return (
     <>
@@ -153,11 +160,11 @@ export function Sidebar({
         id={PANE_ID.sidebar}
         data-pane="sidebar"
         data-region="sidebar"
-        className={`flex w-70 flex-col border-r border-separator bg-surface shrink-0 docked:w-(--sidebar-width) ${drawerClassName}`}
+        className={`flex w-70 flex-col border-e border-separator bg-surface shrink-0 docked:w-(--sidebar-width) ${drawerClassName}`}
         onPointerEnter={peek?.keep}
         onPointerLeave={peek?.leave}
         style={{ "--sidebar-width": `${sidebarWidth.width}px` } as React.CSSProperties}
-        aria-label="Sessions"
+        aria-label={t("sidebar.sessions")}
       >
         <ScrollShadow size={24} className="min-h-0 flex-1 p-2">
           {consoles.map((console) => (
@@ -173,11 +180,11 @@ export function Sidebar({
             />
           ))}
           {consoles.length === 0 && (
-            <p className="px-2 py-1 text-sm text-muted">No consoles yet. Create one to get started.</p>
+            <p className="px-2 py-1 text-sm text-muted">{t("sidebar.noConsoles")}</p>
           )}
         </ScrollShadow>
       </nav>
-      {peek && <PeekHotZone side="left" peek={peek} />}
+      {peek && <PeekHotZone side="start" peek={peek} />}
     </>
   );
 }
@@ -199,6 +206,7 @@ function ConsoleNode({
   collapsed: Set<string>;
   toggle: (id: string) => void;
 }): React.ReactElement {
+  const t = useT();
   const isCollapsed = collapsed.has(thisConsole.id);
   // The daemon refuses to create or resume a second live hub, so there should only ever be one —
   // but the tree stays total regardless: sorting by `started_at` and keeping only the newest in the
@@ -217,7 +225,7 @@ function ConsoleNode({
   return (
     <div>
       <TreeRow
-        ariaLabel={`${thisConsole.name} console${anyWaiting ? ", a session is waiting for you" : ""}`}
+        ariaLabel={t(anyWaiting ? "sidebar.console.ariaLabelWaiting" : "sidebar.console.ariaLabel", { name: thisConsole.name })}
         onActivate={() => toggle(thisConsole.id)}
         expanded={!isCollapsed}
       >
@@ -227,12 +235,12 @@ function ConsoleNode({
         </RowLabel>
         {anyWaiting && <BubbledWaitingHand />}
         <ActionMenu
-          label={`Actions for console ${thisConsole.name}`}
+          label={t("sidebar.console.actions", { name: thisConsole.name })}
           items={[
-            { label: "Add project", onClick: () => handlers.onOpenDialog({ kind: "new-project", console: thisConsole }) },
-            { label: "Edit console", onClick: () => handlers.onOpenDialog({ kind: "edit-console", console: thisConsole }) },
+            { label: t("sidebar.console.addProject"), onClick: () => handlers.onOpenDialog({ kind: "new-project", console: thisConsole }) },
+            { label: t("sidebar.console.edit"), onClick: () => handlers.onOpenDialog({ kind: "edit-console", console: thisConsole }) },
             {
-              label: "Delete console",
+              label: t("sidebar.console.delete"),
               onClick: () => handlers.onOpenDialog({ kind: "delete-console", console: thisConsole }),
               destructive: true,
             },
@@ -240,23 +248,23 @@ function ConsoleNode({
         />
       </TreeRow>
       {!isCollapsed && (
-        <div className="ml-3">
+        <div className="ms-3">
           <TreeRow
-            ariaLabel={hub ? `Hub session, ${STATUS_LABEL[hub.status]}` : "Start hub session"}
+            ariaLabel={hub ? t("sidebar.hub.ariaLabel", { status: statusLabel(t, hub.status) }) : t("sidebar.hub.start")}
             selected={hub !== undefined && hub.id === selectedSessionId}
             onActivate={activateHub}
           >
             {hub ? <StatusIcon status={hub.status} /> : <span className="size-4 shrink-0" />}
-            <RowLabel title="Hub">Hub</RowLabel>
+            <RowLabel title={t("sidebar.hub.name")}>{t("sidebar.hub.name")}</RowLabel>
             {hub && <AgentBadge agent={hub.agent} />}
             {hub && (
               // The only way to archive the hub: it cannot archive itself, and while it sits in this
               // row (running or interrupted), archiving it is what lets the row open a fresh one.
               <ActionMenu
-                label={`Actions for the hub of ${thisConsole.name}`}
+                label={t("sidebar.hub.actions", { name: thisConsole.name })}
                 items={[
-                  ...(isDormant(hub.status) ? [{ label: "Resume", onClick: () => handlers.onSelectSession(hub) }] : []),
-                  { label: "Archive", onClick: () => handlers.onOpenDialog({ kind: "archive-session", session: hub }), destructive: true },
+                  ...(isDormant(hub.status) ? [{ label: t("sidebar.session.resume"), onClick: () => handlers.onSelectSession(hub) }] : []),
+                  { label: t("sidebar.session.archive"), onClick: () => handlers.onOpenDialog({ kind: "archive-session", session: hub }), destructive: true },
                 ]}
               />
             )}
@@ -269,7 +277,7 @@ function ConsoleNode({
             // one — without it, an archived hub would be unreachable once a fresh one takes its
             // place in the Hub row above.
             <ArchiveGroup
-              label="Archived hubs"
+              label={t("sidebar.archive.hubs")}
               sessions={archivedHubs}
               handlers={handlers}
               selectedSessionId={selectedSessionId}
@@ -289,7 +297,7 @@ function ConsoleNode({
               toggle={toggle}
             />
           ))}
-          {projects.length === 0 && <p className="px-2 py-1 text-sm text-muted">No projects yet.</p>}
+          {projects.length === 0 && <p className="px-2 py-1 text-sm text-muted">{t("sidebar.noProjects")}</p>}
         </div>
       )}
     </div>
@@ -314,22 +322,23 @@ function ArchiveGroup({
   isCollapsed: boolean;
   onToggle: () => void;
 }): React.ReactElement {
+  const t = useT();
   return (
     <div>
       <TreeRow
-        ariaLabel={`${label}, ${sessions.length} ${sessions.length === 1 ? "session" : "sessions"}`}
+        ariaLabel={t("sidebar.archive.ariaLabel", { label, count: sessions.length })}
         onActivate={onToggle}
         expanded={!isCollapsed}
       >
         <Chevron collapsed={isCollapsed} />
         <RowLabel>
           <span className="text-muted">
-            {label} ({sessions.length})
+            {t("sidebar.archive.heading", { label, count: sessions.length })}
           </span>
         </RowLabel>
       </TreeRow>
       {!isCollapsed && (
-        <div className="ml-3">
+        <div className="ms-3">
           {sessions.map((session) => (
             <SessionRow key={session.id} handlers={handlers} session={session} selectedSessionId={selectedSessionId} />
           ))}
@@ -356,6 +365,7 @@ function ProjectNode({
   collapsed: Set<string>;
   toggle: (id: string) => void;
 }): React.ReactElement {
+  const t = useT();
   const isCollapsed = collapsed.has(project.id);
   const live = sessions.filter((s) => s.status !== "archived");
   const archived = sessions.filter((s) => s.status === "archived");
@@ -365,7 +375,7 @@ function ProjectNode({
   return (
     <div>
       <TreeRow
-        ariaLabel={`${project.name} project${anyWaiting ? ", a session is waiting for you" : ""}`}
+        ariaLabel={t(anyWaiting ? "sidebar.project.ariaLabelWaiting" : "sidebar.project.ariaLabel", { name: project.name })}
         onActivate={() => toggle(project.id)}
         expanded={!isCollapsed}
       >
@@ -373,23 +383,23 @@ function ProjectNode({
         <RowLabel title={project.name}>{project.name}</RowLabel>
         {anyWaiting && <BubbledWaitingHand />}
         <ActionMenu
-          label={`Actions for project ${project.name}`}
+          label={t("sidebar.project.actions", { name: project.name })}
           items={[
-            { label: "Open session", onClick: () => handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project }) },
-            { label: "Edit project", onClick: () => handlers.onOpenDialog({ kind: "edit-project", project }) },
-            { label: "Remove project", onClick: () => handlers.onOpenDialog({ kind: "delete-project", project }), destructive: true },
+            { label: t("sidebar.project.openSession"), onClick: () => handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project }) },
+            { label: t("sidebar.project.edit"), onClick: () => handlers.onOpenDialog({ kind: "edit-project", project }) },
+            { label: t("sidebar.project.remove"), onClick: () => handlers.onOpenDialog({ kind: "delete-project", project }), destructive: true },
           ]}
         />
       </TreeRow>
       {!isCollapsed && (
-        <div className="ml-3">
+        <div className="ms-3">
           {live.map((session) => (
             <SessionRow key={session.id} handlers={handlers} session={session} selectedSessionId={selectedSessionId} />
           ))}
-          {live.length === 0 && <p className="px-2 py-1 text-sm text-muted">No sessions.</p>}
+          {live.length === 0 && <p className="px-2 py-1 text-sm text-muted">{t("sidebar.noSessions")}</p>}
           {archived.length > 0 && (
             <ArchiveGroup
-              label="Archive"
+              label={t("sidebar.archive.project")}
               sessions={archived}
               handlers={handlers}
               selectedSessionId={selectedSessionId}
@@ -412,23 +422,24 @@ function SessionRow({
   session: Session;
   selectedSessionId?: string;
 }): React.ReactElement {
+  const t = useT();
   const items: ActionMenuItem[] = [
-    ...(isDormant(session.status) ? [{ label: "Resume", onClick: () => handlers.onSelectSession(session) }] : []),
-    { label: "Rename", onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) },
+    ...(isDormant(session.status) ? [{ label: t("sidebar.session.resume"), onClick: () => handlers.onSelectSession(session) }] : []),
+    { label: t("sidebar.session.rename"), onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) },
     ...(session.status !== "archived"
-      ? [{ label: "Archive", onClick: () => handlers.onOpenDialog({ kind: "archive-session", session }), destructive: true }]
+      ? [{ label: t("sidebar.session.archive"), onClick: () => handlers.onOpenDialog({ kind: "archive-session", session }), destructive: true }]
       : []),
   ];
   return (
     <TreeRow
-      ariaLabel={`${session.title} session, ${STATUS_LABEL[session.status]}`}
+      ariaLabel={t("sidebar.session.ariaLabel", { title: session.title, status: statusLabel(t, session.status) })}
       selected={session.id === selectedSessionId}
       onActivate={() => handlers.onSelectSession(session)}
     >
       <StatusIcon status={session.status} />
       <RowLabel title={session.title}>{session.title}</RowLabel>
       <AgentBadge agent={session.agent} />
-      <ActionMenu label={`Actions for session ${session.title}`} items={items} />
+      <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={items} />
     </TreeRow>
   );
 }

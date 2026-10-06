@@ -2,6 +2,8 @@ import { Toast, toast, type ToastContentValue } from "@heroui/react";
 import React, { useCallback, useEffect, useRef } from "react";
 import type { QueuedToast } from "react-aria-components";
 
+import { t } from "../i18n/language";
+import { useT } from "../i18n/react";
 import { sessionLocation } from "../sessionLabel";
 import { useDaemon, type ToastRequest } from "../store";
 import { TitledControl } from "./TitledControl";
@@ -18,7 +20,7 @@ const shownToasts = new Map<string, string>();
 
 /**
  * Surfaces the daemon's errors and notices, and what callers hand to `toastError`, in HeroUI's own
- * toast stack (`Toast.Provider` over its queue), floating over the bottom right so it does not move
+ * toast stack (`Toast.Provider` over its queue), floating over the bottom end corner so it does not move
  * the layout. An error is the danger variant; a notice, which is something the user has to know
  * rather than something that went wrong, is the accent one. The stack dismisses toasts by itself
  * after a few seconds and pauses while the pointer is over it or focus is inside it, which is what
@@ -53,9 +55,9 @@ const shownToasts = new Map<string, string>();
  * to `<body>`, so its toast-layer z-index is not capped by a stacking context somewhere in the
  * app's tree; react-aria already keeps it out of the set made inert while a dialog or menu is open.
  *
- * The stack always sits at the bottom right, so it never moves with what is open. The top of the
+ * The stack always sits at the bottom end corner, so it never moves with what is open. The top of the
  * window is where the controls are — the top bar, the report panel's pager, the settings dialog's
- * right column and its close button — while the bottom right is terminal or page content, or the
+ * end column and its close button — while the bottom end corner is terminal or page content, or the
  * settings dialog's empty padding; the smaller dialogs are centred, well clear of it.
  */
 export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.ReactElement {
@@ -66,7 +68,7 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
       onToast((request) => {
         const { sessions, consoles, projects } = store.getState();
         const session = request.session ? sessions.get(request.session) : undefined;
-        showToast(request, session && sessionLocation(session, consoles, projects));
+        showToast(request, session && sessionLocation(t, session, consoles, projects));
       }),
     [store, onToast],
   );
@@ -185,9 +187,16 @@ function renderToast({ toast: queued }: { toast: QueuedToast<ToastContentValue> 
         {!!title && <Toast.Title>{title}</Toast.Title>}
         {!!description && <Toast.Description>{description}</Toast.Description>}
       </Toast.Content>
-      <TitledControl title="Close">
-        <Toast.CloseButton preventFocusOnPress />
-      </TitledControl>
+      <ToastClose />
     </Toast>
+  );
+}
+
+function ToastClose(): React.ReactElement {
+  const t = useT();
+  return (
+    <TitledControl title={t("common.close")}>
+      <Toast.CloseButton preventFocusOnPress />
+    </TitledControl>
   );
 }

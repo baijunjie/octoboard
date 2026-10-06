@@ -13,6 +13,8 @@ import {
 import React, { useEffect, useRef, useSyncExternalStore } from "react";
 
 import type { ConnectionState } from "../daemon-client";
+import { useT } from "../i18n/react";
+import type { PlainMessageKey } from "../i18n/catalog";
 import { PANE_ID } from "../layout/paneOverlay";
 import { useNotificationPermission } from "../lifecycle/useNotificationPermission";
 import { usePlatform } from "../platform/react";
@@ -76,6 +78,7 @@ function BarButton({
  * bar's first control when there is no terminal to take it. Not before the answer: while the
  * browser's own prompt is up, keys must not reach the agent. */
 function NotificationsBell({ focusTerminal }: { focusTerminal: () => void }): React.ReactElement | null {
+  const t = useT();
   const { status, request } = useNotificationPermission();
   // Whether the bell held focus last. A focused element that is removed fires no blur, so this is
   // still true when the answer removes the bell from under focus; a blur of the whole window (the
@@ -101,9 +104,9 @@ function NotificationsBell({ focusTerminal }: { focusTerminal: () => void }): Re
         if (document.activeElement !== event.target) holdsFocus.current = false;
       }}
     >
-      <BarButton label="Turn on notifications" onPress={() => void request()}>
+      <BarButton label={t("titleBar.notifications.enable")} onPress={() => void request()}>
         <Bell aria-hidden="true" className="size-4" />
-        <span aria-hidden="true" className="absolute top-1.5 right-1.5 size-2 rounded-full bg-accent" />
+        <span aria-hidden="true" className="absolute top-1.5 end-1.5 size-2 rounded-full bg-accent" />
       </BarButton>
     </span>
   );
@@ -118,12 +121,14 @@ function NotificationsBell({ focusTerminal }: { focusTerminal: () => void }): Re
  * tab stop; every control here has to be a tab stop of its own. */
 function BarFrame({ children }: { children: React.ReactNode }): React.ReactElement {
   const { windowChrome } = usePlatform();
+  const inset = useWindowControlsInset();
   return (
     <header
       data-escape-scope
       data-region="topbar"
       data-tauri-drag-region={windowChrome ? "deep" : undefined}
-      className="flex h-(--title-bar-height) shrink-0 items-stretch border-b border-separator bg-surface select-none"
+      className="flex h-(--title-bar-height) shrink-0 items-stretch border-b border-separator bg-surface select-none rtl:pl-(--window-controls-inset)"
+      style={{ "--window-controls-inset": `${inset}px` } as React.CSSProperties}
     >
       {children}
     </header>
@@ -133,12 +138,19 @@ function BarFrame({ children }: { children: React.ReactNode }): React.ReactEleme
 const noSubscribe = () => () => {};
 const noInset = () => 0;
 
-/** The inset the window controls cover at the leading edge, which changes as they come and go
- * (fullscreen); nothing without them. */
-function LeadingInset(): React.ReactElement | null {
+/** The inset the window controls cover, which changes as they come and go (fullscreen); 0 without
+ * them. The macOS traffic lights sit at the window's physical left whatever the reading direction,
+ * so the clear space is physical too: under left-to-right a spacer at the start of the bar's first
+ * segment (`LeftInset`), under right-to-left, where that segment is on the right, the bar's own
+ * left padding (`rtl:pl-*` in `BarFrame`). */
+function useWindowControlsInset(): number {
   const { windowChrome } = usePlatform();
-  const inset = useSyncExternalStore(windowChrome?.subscribe ?? noSubscribe, windowChrome?.leadingInset ?? noInset);
-  return windowChrome ? <div className="shrink-0" style={{ width: inset }} /> : null;
+  return useSyncExternalStore(windowChrome?.subscribe ?? noSubscribe, windowChrome?.leftInset ?? noInset);
+}
+
+function LeftInset(): React.ReactElement | null {
+  const { windowChrome } = usePlatform();
+  return windowChrome ? <div className="w-(--window-controls-inset) shrink-0 rtl:hidden" /> : null;
 }
 
 /** The bar with nothing in it, for the screens that have no session UI yet (starting up, failed to
@@ -146,20 +158,20 @@ function LeadingInset(): React.ReactElement | null {
 export function BareTitleBar(): React.ReactElement {
   return (
     <BarFrame>
-      <LeadingInset />
+      <LeftInset />
     </BarFrame>
   );
 }
 
-const DAEMON_PROBLEM: Record<Exclude<ConnectionState, "open">, { label: string; color: "warning" | "danger" }> = {
-  connecting: { label: "Connecting…", color: "warning" },
-  reconnecting: { label: "Reconnecting…", color: "warning" },
-  closed: { label: "Disconnected", color: "danger" },
+const DAEMON_PROBLEM: Record<Exclude<ConnectionState, "open">, { label: PlainMessageKey; color: "warning" | "danger" }> = {
+  connecting: { label: "titleBar.daemon.connecting", color: "warning" },
+  reconnecting: { label: "titleBar.daemon.reconnecting", color: "warning" },
+  closed: { label: "titleBar.daemon.disconnected", color: "danger" },
 };
 
-const TERMINAL_PROBLEM: Record<TerminalProblem["state"], { label: string; color: "warning" | "danger" }> = {
-  reconnecting: { label: "Terminal reconnecting…", color: "warning" },
-  disconnected: { label: "Terminal disconnected", color: "danger" },
+const TERMINAL_PROBLEM: Record<TerminalProblem["state"], { label: PlainMessageKey; color: "warning" | "danger" }> = {
+  reconnecting: { label: "titleBar.terminal.reconnecting", color: "warning" },
+  disconnected: { label: "titleBar.terminal.disconnected", color: "danger" },
 };
 
 /** The one indicator of connection trouble, empty while everything is healthy: the daemon's own
@@ -170,6 +182,7 @@ const TERMINAL_PROBLEM: Record<TerminalProblem["state"], { label: string; color:
  * content changes to be announced; the daemon's state is announced by `ConnectionBanner`, so its
  * chip sits outside the region and is not read out a second time. */
 function ConnectionStatus({ terminalProblem }: { terminalProblem?: TerminalProblem }): React.ReactElement {
+  const t = useT();
   const daemonState = useDaemonStore((s) => s.connectionState);
   const daemonProblem = daemonState !== "open" ? DAEMON_PROBLEM[daemonState] : undefined;
   const problem = daemonProblem ? undefined : terminalProblem && TERMINAL_PROBLEM[terminalProblem.state];
@@ -179,19 +192,19 @@ function ConnectionStatus({ terminalProblem }: { terminalProblem?: TerminalProbl
     <>
       {daemonProblem && (
         <Chip size="sm" variant="soft" color={daemonProblem.color}>
-          {daemonProblem.label}
+          {t(daemonProblem.label)}
         </Chip>
       )}
       <span role="status" className="flex items-center">
         {problem && (
           <Chip size="sm" variant="soft" color={problem.color}>
-            {problem.label}
+            {t(problem.label)}
           </Chip>
         )}
       </span>
       {reconnect && (
-        <BarButton isIconOnly={false} label="Reconnect terminal" onPress={reconnect}>
-          Reconnect
+        <BarButton isIconOnly={false} label={t("titleBar.terminal.reconnectLabel")} onPress={reconnect}>
+          {t("titleBar.terminal.reconnect")}
         </BarButton>
       )}
     </>
@@ -199,12 +212,13 @@ function ConnectionStatus({ terminalProblem }: { terminalProblem?: TerminalProbl
 }
 
 /** Console › Project › session title, with the session's status icon beside it; a hub session
- * has no project and is the console's "Hub" as in the tree. The trail fades at the right edge when
+ * has no project and is the console's "Hub" as in the tree. The trail fades at its end edge when
  * too long, the icon always stays. */
 function Breadcrumb({ session }: { session: Session }): React.ReactElement {
+  const t = useT();
   const consoleName = useDaemonStore((s) => s.consoles.get(session.console_id)?.name);
   const projectName = useDaemonStore((s) => (session.project_id ? s.projects.get(session.project_id)?.name : undefined));
-  const trail = session.role === "hub" ? [consoleName, "Hub"] : [consoleName, projectName, session.title];
+  const trail = session.role === "hub" ? [consoleName, t("sidebar.hub.name")] : [consoleName, projectName, session.title];
   const names = trail.map((part) => part ?? "…");
   return (
     <div className="flex min-w-0 items-center gap-1.5 text-sm">
@@ -212,8 +226,10 @@ function Breadcrumb({ session }: { session: Session }): React.ReactElement {
         <span className="inline-flex items-center gap-1.5">
           {names.map((name, index) => (
             <React.Fragment key={index}>
-              {index > 0 && <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-muted" />}
-              <span className={index === names.length - 1 ? "font-medium" : "text-muted"}>{name}</span>
+              {index > 0 && <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-muted rtl:-scale-x-100" />}
+              <span dir="auto" className={index === names.length - 1 ? "font-medium" : "text-muted"}>
+                {name}
+              </span>
             </React.Fragment>
           ))}
         </span>
@@ -225,7 +241,7 @@ function Breadcrumb({ session }: { session: Session }): React.ReactElement {
 
 interface TitleBarProps {
   onOpenSettings: () => void;
-  /** The width of the docked sidebar when it is shown, which the left segment then matches so the
+  /** The width of the docked sidebar when it is shown, which the start segment then matches so the
    * sidebar visually extends up into the bar; `undefined` while it is hidden. */
   sidebarWidth?: number;
   /** Whether the sidebar is currently shown, docked or as an open drawer; a hidden sidebar that is
@@ -255,8 +271,8 @@ interface TitleBarProps {
 }
 
 /**
- * The bar across the top of the window: a left segment aligned with the sidebar (sidebar toggle,
- * New console), the selected session's breadcrumb, and on the right the waiting count, the
+ * The bar across the top of the window: a start segment aligned with the sidebar (sidebar toggle,
+ * New console), the selected session's breadcrumb, and at the end the waiting count, the
  * connection trouble indicator (nothing while healthy), the notifications bell (browser only, while
  * the permission is undecided), the report panel toggle (hub session only) and Settings.
  */
@@ -279,32 +295,33 @@ export function TitleBar({
   onReportToggleLeave,
   focusTerminal,
 }: TitleBarProps): React.ReactElement {
+  const t = useT();
   return (
     <BarFrame>
       {/* Above the `docked` breakpoint with the sidebar shown, exactly the sidebar's width and its
           edge line, so the two read as one column; otherwise just as wide as its controls. */}
       <div
-        className={`flex shrink-0 items-center ${sidebarWidth !== undefined ? "docked:w-(--bar-left-width) docked:border-r docked:border-separator" : ""}`}
+        className={`flex shrink-0 items-center ${sidebarWidth !== undefined ? "docked:w-(--bar-start-width) docked:border-e docked:border-separator" : ""}`}
         style={
-          sidebarWidth !== undefined ? ({ "--bar-left-width": `${sidebarWidth}px` } as React.CSSProperties) : undefined
+          sidebarWidth !== undefined ? ({ "--bar-start-width": `${sidebarWidth}px` } as React.CSSProperties) : undefined
         }
       >
-        <LeadingInset />
+        <LeftInset />
         <div className="flex items-center gap-1 px-2">
           <BarButton
-            label={sidebarShown ? "Hide sessions" : "Show sessions"}
+            label={sidebarShown ? t("titleBar.sidebar.hide") : t("titleBar.sidebar.show")}
             onPress={onToggleSidebar}
             expanded={sidebarShown}
             controls={PANE_ID.sidebar}
             onMouseHoverChange={(hovered) => (hovered ? onSidebarToggleEnter() : onSidebarToggleLeave())}
           >
             {sidebarShown ? (
-              <PanelLeftClose aria-hidden="true" className="size-4" />
+              <PanelLeftClose aria-hidden="true" className="size-4 rtl:-scale-x-100" />
             ) : (
-              <PanelLeftOpen aria-hidden="true" className="size-4" />
+              <PanelLeftOpen aria-hidden="true" className="size-4 rtl:-scale-x-100" />
             )}
           </BarButton>
-          <BarButton label="New console" onPress={onNewConsole}>
+          <BarButton label={t("titleBar.newConsole")} onPress={onNewConsole}>
             <Plus aria-hidden="true" className="size-4" />
           </BarButton>
         </div>
@@ -316,7 +333,7 @@ export function TitleBar({
         {waitingCount > 0 && (
           <BarButton
             isIconOnly={false}
-            label={`${waitingCount} ${waitingCount === 1 ? "session is" : "sessions are"} waiting for you. Go to the next one`}
+            label={t("titleBar.waiting", { count: waitingCount })}
             onPress={onNextWaiting}
           >
             <Hand aria-hidden="true" className="size-4 text-warning" />
@@ -327,20 +344,20 @@ export function TitleBar({
         <NotificationsBell focusTerminal={focusTerminal} />
         {hasReportPanel && (
           <BarButton
-            label={reportShown ? "Hide report" : "Show report"}
+            label={reportShown ? t("titleBar.report.hide") : t("titleBar.report.show")}
             onPress={onToggleReport}
             expanded={reportShown}
             controls={PANE_ID.report}
             onMouseHoverChange={(hovered) => (hovered ? onReportToggleEnter() : onReportToggleLeave())}
           >
             {reportShown ? (
-              <PanelRightClose aria-hidden="true" className="size-4" />
+              <PanelRightClose aria-hidden="true" className="size-4 rtl:-scale-x-100" />
             ) : (
-              <PanelRightOpen aria-hidden="true" className="size-4" />
+              <PanelRightOpen aria-hidden="true" className="size-4 rtl:-scale-x-100" />
             )}
           </BarButton>
         )}
-        <BarButton label="Settings" onPress={onOpenSettings}>
+        <BarButton label={t("titleBar.settings")} onPress={onOpenSettings}>
           <Settings aria-hidden="true" className="size-4" />
         </BarButton>
       </div>

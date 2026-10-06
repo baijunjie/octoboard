@@ -28,7 +28,7 @@ use serde_json::json;
 
 use super::{AgentAdapter, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS};
 use crate::mcp;
-use crate::protocol::Agent;
+use crate::protocol::{notice_code, Agent, Notice};
 
 /// The events that carry the session states Octoboard shows. `StopFailure` is registered next to
 /// `Stop` because the two are mutually exclusive — a turn ending in an API error fires only
@@ -171,7 +171,7 @@ fn global_config_file(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> PathBuf {
 /// Deliberately silent unless the trust state is explicitly negative: the field is only read, so
 /// an absent project entry or a renamed key must leave the user alone rather than warn them on
 /// every launch about something that may not be true.
-fn untrusted_workspace_notice(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Option<String> {
+fn untrusted_workspace_notice(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Option<Notice> {
     let config: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(global_config_file(spec, pinned)).ok()?)
             .ok()?;
@@ -181,13 +181,14 @@ fn untrusted_workspace_notice(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> O
         .get("projects")?
         .get(canonical.to_string_lossy().as_ref())?;
     match project.get("hasTrustDialogAccepted") {
-        Some(serde_json::Value::Bool(false)) => Some(
+        Some(serde_json::Value::Bool(false)) => Some(Notice::new(
+            notice_code::CLAUDE_WORKSPACE_UNTRUSTED,
             "Claude Code has not been trusted with this directory, so this project's own `allow` \
              permission rules are ignored until Claude Code's trust prompt is answered — its `deny` \
              rules still apply, so a session is only more restrictive, never less. Octoboard \
-             answers that prompt for you once you have agreed to it."
-                .to_string(),
-        ),
+             answers that prompt for you once you have agreed to it.",
+            &[],
+        )),
         _ => None,
     }
 }

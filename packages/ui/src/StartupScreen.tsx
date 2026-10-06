@@ -2,6 +2,7 @@ import { Button } from "@heroui/react";
 import React, { useState } from "react";
 
 import { BareTitleBar } from "./components/TitleBar";
+import { useT } from "./i18n/react";
 import { useAppExit } from "./lifecycle/useAppExit";
 
 interface StartupScreenProps {
@@ -21,6 +22,7 @@ interface StartupScreenProps {
  * sessions or to shut down, so quitting happens immediately with no confirmation.
  */
 export function StartupScreen({ message, action }: StartupScreenProps): React.ReactElement {
+  const t = useT();
   const [quitError, setQuitError] = useState<string>();
   const { requestQuit, canQuit } = useAppExit({ toastError: setQuitError });
 
@@ -31,7 +33,7 @@ export function StartupScreen({ message, action }: StartupScreenProps): React.Re
         <div className="max-w-xl">{message}</div>
         <div className="flex gap-2">
           {action && <Button onPress={action.onSelect}>{action.label}</Button>}
-          {canQuit && <Button onPress={() => void requestQuit()}>Quit</Button>}
+          {canQuit && <Button onPress={() => void requestQuit()}>{t("common.quit")}</Button>}
         </div>
         {/* Quitting is the only action this screen has, so a quit that fails silently would leave
             the user with nothing at all. */}

@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
+import { useCurrentLanguage, useT } from "../i18n/react";
 import { drawerClass, PANE_ID, PeekHotZone } from "../layout/paneOverlay";
 import type { PanePeek } from "../layout/usePaneToggles";
 import type { Page } from "../protocol";
@@ -55,6 +56,8 @@ export function ReportPanel({
    * neighbouring region of the window. */
   onCycleRegion: (backward: boolean) => void;
 }): React.ReactElement {
+  const t = useT();
+  const language = useCurrentLanguage();
   const { request, toastError } = useDaemon();
   const consolePages = useDaemonStore((s) => s.pages.get(consoleId));
   const connectionState = useDaemonStore((s) => s.connectionState);
@@ -117,9 +120,9 @@ export function ReportPanel({
   // rounded edge, and the surface background keeps the empty states from showing the terminal
   // through.
   const overlay = peek
-    ? `docked:w-(--report-width) docked:rounded-l-xl docked:overflow-hidden docked:bg-surface ${drawerClass("right", "floating", open, peek.active)}`
-    : `docked:w-auto docked:max-w-none docked:min-w-[300px] docked:flex-[0_1_var(--report-width)] ${drawerClass("right", "drawer", open)}`;
-  const panelClass = `flex min-h-0 flex-col border-l border-separator w-[420px] max-w-[92vw] ${overlay}`;
+    ? `docked:w-(--report-width) docked:rounded-s-xl docked:overflow-hidden docked:bg-surface ${drawerClass("end", "floating", open, peek.active)}`
+    : `docked:w-auto docked:max-w-none docked:min-w-[300px] docked:flex-[0_1_var(--report-width)] ${drawerClass("end", "drawer", open)}`;
+  const panelClass = `flex min-h-0 flex-col border-s border-separator w-[420px] max-w-[92vw] ${overlay}`;
 
   // `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener closes a
   // drawer for, on every branch below since any of them can be what is on screen while open.
@@ -139,7 +142,7 @@ export function ReportPanel({
     onPointerMove: peek?.keep,
     onPointerLeave: peek?.leave,
   };
-  const hotZone = peek && <PeekHotZone side="right" peek={peek} />;
+  const hotZone = peek && <PeekHotZone side="end" peek={peek} />;
 
   if (consolePages === undefined) {
     return (
@@ -154,7 +157,7 @@ export function ReportPanel({
     return (
       <>
         <div {...pane} className={`${panelClass} items-center justify-center text-sm text-muted`}>
-          No pages yet.
+          {t("report.empty")}
         </div>
         {hotZone}
       </>
@@ -180,43 +183,43 @@ export function ReportPanel({
         {/* A previous / next pager with "n / m", hand-assembled from buttons: HeroUI's `Pagination`
             is a list of numbered pages, which neither reads as nor behaves like this. */}
         <div className="flex h-10 shrink-0 items-center gap-2 border-b border-separator bg-surface px-3 text-xs text-muted">
-          <TitledControl title="Previous page">
+          <TitledControl title={t("report.previous")}>
             <Button
               isIconOnly
               size="sm"
               variant="ghost"
-              aria-label="Previous page"
+              aria-label={t("report.previous")}
               preventFocusOnPress
               isDisabled={displayIndex === 0}
               onPress={() => goTo(displayIndex - 1)}
             >
-              <ChevronLeft aria-hidden="true" className="size-4" />
+              <ChevronLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
             </Button>
           </TitledControl>
           <span className="whitespace-nowrap">
-            {displayIndex + 1} / {consolePages.length}
+            {t("report.position", { index: displayIndex + 1, total: consolePages.length })}
           </span>
-          <TitledControl title="Next page">
+          <TitledControl title={t("report.next")}>
             <Button
               isIconOnly
               size="sm"
               variant="ghost"
-              aria-label="Next page"
+              aria-label={t("report.next")}
               preventFocusOnPress
               isDisabled={displayIndex === consolePages.length - 1}
               onPress={() => goTo(displayIndex + 1)}
             >
-              <ChevronRight aria-hidden="true" className="size-4" />
+              <ChevronRight aria-hidden="true" className="size-4 rtl:-scale-x-100" />
             </Button>
           </TitledControl>
           {/* The timestamp's width is whatever the user's locale makes of it, so it is the element
               that gives way, rather than pushing the badge off the panel's edge when narrow. */}
-          <FadeOverflow as="span" className="ml-auto min-w-0">
-            {new Date(page.created_at).toLocaleString()}
+          <FadeOverflow as="span" className="ms-auto min-w-0">
+            {new Date(page.created_at).toLocaleString(language)}
           </FadeOverflow>
           {isHistory && (
             <Chip size="sm" variant="soft" color="warning" className="shrink-0">
-              Read-only
+              {t("report.readOnly")}
             </Chip>
           )}
         </div>
@@ -258,6 +261,7 @@ function PageFrame({
   onPointerEnter?: () => void;
   onPointerLeave?: () => void;
 }): React.ReactElement {
+  const t = useT();
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
@@ -294,7 +298,7 @@ function PageFrame({
     <iframe
       ref={iframeRef}
       className="min-h-0 flex-1 border-0 bg-white"
-      title="Report page"
+      title={t("report.frameTitle")}
       sandbox="allow-scripts"
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}

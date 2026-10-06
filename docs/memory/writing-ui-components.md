@@ -60,8 +60,8 @@ Tailwind 4 reads the source as plain text and emits a utility only for a class n
 a name assembled at runtime — `` `${side}-0` ``, a suffix appended to a prefix, anything concatenated — compiles to no
 CSS at all and the element silently loses that property. Write each variant out in full and branch between them.
 
-Nothing on the way past catches it: `packages/ui` has neither a linter nor a test suite, so `tsc --noEmit` is its only
-automated gate, and a class whose utility was never emitted is valid TypeScript, builds clean and reads fine in a
+Nothing on the way past catches it: `packages/ui` has no linter, and its tests (`vitest`) cover only pure modules, so `tsc --noEmit` is
+the only automated gate on a component, and a class whose utility was never emitted is valid TypeScript, builds clean and reads fine in a
 diff. After adding or changing a utility class, grep the built `packages/ui/dist/assets/*.css` for it.
 
 ## An icon-only control also gets a tooltip, through `TitledControl`
@@ -77,6 +77,43 @@ never `Tooltip.Trigger`, which renders a focusable `role="button"` `div` around 
 also takes focus on a mouse press, undoing `preventFocusOnPress`. The shape works only when the child is itself a
 react-aria-components control (any HeroUI button or trigger), which picks the tooltip's hover and focus handling up
 from context; any other child — a plain element, a `span` around the control — gets no tooltip, with no warning.
+
+## Every string the user reads goes through the catalog, in a shape a translation can follow
+
+Any text a user reads in `packages/ui` — labels, tooltips, accessible names, toasts, notifications, the native menu's
+labels — is a message in `packages/ui/src/i18n/messages/en.ts` and in every translated catalog registered in
+`CATALOGS` (type checking fails on a translated catalog that lacks it). Look it up like this:
+
+- In a component, through `useT()` from `packages/ui/src/i18n/react.tsx`. The module-level `t()` in
+  `packages/ui/src/i18n/language.ts` is for code outside React only: a component that calls it keeps showing the old
+  language after the user switches, with no error.
+- A helper that returns display text takes the `Translate` function as its first parameter (as `statusLabel(t, status)`
+  in `packages/ui/src/sessionLabel.ts` does) instead of calling `t()` itself.
+- A module-level table (options, menu items, rows) stores a `PlainMessageKey` and looks it up at render, never text
+  resolved when the module loads.
+- A sentence with a variable part is one message with a `{placeholder}`, never translated fragments joined in code,
+  since word order differs between languages; markup inside a sentence goes through `<Message id params>`. Anything
+  that depends on a count is a plural message selected by `count`, never `count === 1 ? … : …`.
+
+Only what the user reads in Octoboard's own UI is translated; text aimed at an agent stays English (see "What follows
+the language" in `docs/product/language.md`).
+
+## Lay out by reading direction; keep physical only what never mirrors
+
+Under a right-to-left language the whole window mirrors, except what the "Right-to-left layout" section of
+`docs/product/window-layout.md` lists as not mirrored. Nobody sees a regression here without switching to Arabic, so
+build it in from the start:
+
+- Position, spacing, borders, corners and alignment use Tailwind's logical utilities (`start-*` / `end-*`, `ms-*` /
+  `me-*`, `ps-*` / `pe-*`, `border-s`, `rounded-s-*`, `text-start`), not `left` / `right` / `ml` / `pr` and the like.
+  `translate-x-*` has no logical form, so a slide gets an `rtl:` counterpart with the opposite sign.
+- An icon that points a direction mirrors with `rtl:-scale-x-100`. An expand / collapse chevron switches between two
+  glyphs (forward when collapsed, down when expanded) instead of rotating one: a mirrored forward chevron turned a
+  quarter points up.
+- Content whose direction is not the UI's sets its own: a path `dir="ltr"`, a name the user typed `dir="auto"`
+  (`FadeOverflow` takes the same `dir` and fades along it).
+- An `rtl:` utility wins over a `docked:` one on the same property, so a `docked:` value for a property also set under
+  `rtl:` needs a `docked:rtl:` twin, or it silently does not apply under right-to-left.
 
 ## The UI meets WCAG 2.2 AA
 

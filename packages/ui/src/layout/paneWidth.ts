@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-import { createPersistedPreference } from "./persistedPreference";
+import { createPersistedPreference } from "../persistedPreference";
 
 /** The two panes whose docked width the user can change. */
 export type PaneSide = "sidebar" | "report";

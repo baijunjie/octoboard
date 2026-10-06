@@ -1,0 +1,8 @@
+# A custom permission for the app's own menu command; see `exit-lifecycle.toml` for why an
+# app-defined command needs a file like this.
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-set-menu-labels"
+description = "Allows the frontend to hand over the labels the native menu bar is rebuilt with."
+commands.allow = ["set_menu_labels"]

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 
+import { t } from "../i18n/language";
 import { usePlatform } from "../platform/react";
 import type { Console, Project, Session } from "../protocol";
 import { sessionLocation } from "../sessionLabel";
@@ -65,13 +66,13 @@ export function useWaitingNotifications(
       if (!(await notifications.ensurePermission())) return;
       const { consoles: currentConsoles, projects: currentProjects } = locationsRef.current;
       for (const session of newlyWaiting) {
-        const location = sessionLocation(session, currentConsoles, currentProjects);
+        const location = sessionLocation(t, session, currentConsoles, currentProjects);
         try {
           await notifications.notify({
-            title: "Waiting for you",
+            title: t("notification.waiting.title"),
             // The location already repeats the session's own title for a session titled after its
             // project, so it is dropped rather than printed twice.
-            body: location === session.title ? session.title : `${session.title} — ${location}`,
+            body: location === session.title ? session.title : t("notification.waiting.body", { session: session.title, location }),
           });
         } catch {
           // Best-effort — see the function doc.

@@ -1,4 +1,4 @@
-import { createPersistedPreference, type PersistedPreference } from "./persistedPreference";
+import { createPersistedPreference, type PersistedPreference } from "../persistedPreference";
 
 /** The two panes the user can hide at and above the `docked` breakpoint. Below it they are
  * drawers, whose open state `usePaneToggles` holds instead. */

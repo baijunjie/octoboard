@@ -2,6 +2,7 @@ import { Button } from "@heroui/react";
 import React from "react";
 
 import { TitledControl } from "../components/TitledControl";
+import { useT } from "../i18n/react";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
 
 interface ConfirmDialogProps {
@@ -27,8 +28,8 @@ interface ConfirmDialogProps {
 export function ConfirmDialog({
   title,
   message,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  confirmLabel,
+  cancelLabel,
   extraAction,
   destructive,
   resetKey,
@@ -36,12 +37,13 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps): React.ReactElement {
+  const t = useT();
   const { error, busy, run } = useDialogAction(resetKey);
 
   const footer = (
     <>
       <Button type="button" variant="secondary" onPress={onCancel} isDisabled={busy}>
-        {cancelLabel}
+        {cancelLabel ?? t("common.cancel")}
       </Button>
       {extraAction && (
         <TitledControl title={extraAction.title}>
@@ -51,7 +53,7 @@ export function ConfirmDialog({
         </TitledControl>
       )}
       <Button type="submit" variant={destructive ? "danger" : "primary"} isDisabled={busy}>
-        {confirmLabel}
+        {confirmLabel ?? t("common.confirm")}
       </Button>
     </>
   );

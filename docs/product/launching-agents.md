@@ -208,9 +208,10 @@ buttons:
   (see "Which folder" under "Trusted folders" below); a project with none to offer gets only the other
   two buttons. The button's tooltip gives the full path of the folder offered. Octoboard answers this
   session's screen, and only if that succeeded is that folder added to the trusted folders. The
-  project's own consent is not recorded; an answer that fails records nothing. If the folder turns
-  out to be too broad to trust by the time the button is chosen, it is refused before anything is
-  answered: the dialog stays open and shows why, and the user can still choose another button.
+  project's own consent is not recorded; an answer that fails records nothing. If the folder can no
+  longer be offered by the time the button is chosen (see "Which folder" under "Trusted folders"
+  below), it is refused before anything is answered: the dialog stays open and shows why, and the user
+  can still choose another button.
 - **Not now** — also what Escape, the dialog's close button and a click outside it do. Nothing is sent
   and nothing is recorded; the screen stays for the user to answer in the session's terminal. The same
   session is asked about again only if the application reloads its state (a reconnect, or catching up
@@ -219,10 +220,10 @@ buttons:
 
 Once either trust button has been chosen the dialog closes, whether or not the screen could be
 answered — a screen is answered at most once, so trying again from the dialog could not succeed. A
-failure is then shown as a toast. Two outcomes differ: the too-broad refusal keeps the
-dialog open, and a go-ahead for a screen that is no longer waiting — already answered, whether from
-another client, in the terminal or by Octoboard itself — closes the dialog without any message when
-it was "Trust and continue", since nothing went wrong. For "Trust parent folder" it shows a
+failure is then shown as a toast. Two outcomes differ: the refusal of a folder that can no longer be
+offered keeps the dialog open, and a go-ahead for a screen that is no longer waiting — already
+answered, whether from another client, in the terminal or by Octoboard itself — closes the dialog
+without any message when it was "Trust and continue", since nothing went wrong. For "Trust parent folder" it shows a
 message saying the folder was not trusted, because that choice was not carried out.
 
 Prompts are shown one at a time, oldest first; closing one brings up the next. A prompt still waiting
@@ -293,7 +294,8 @@ button is not shown — when:
 Such a project can still be trusted on its own with "Trust and continue". The same check is made
 again when the button is chosen, and a folder that fails it then is refused before anything is
 answered — with the error code `trust_directory_too_broad` when it is the root, the home directory or
-a directory containing it.
+a directory containing it, `trust_path_not_absolute` when the project's path is not absolute, and
+`trust_home_unknown` when the home directory cannot be determined.
 
 **Which projects it covers.** A project is under a trusted folder when its directory is that folder
 or lies below it at any depth. Paths are compared component by component after a purely lexical

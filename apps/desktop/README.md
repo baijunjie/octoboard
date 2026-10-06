@@ -79,20 +79,25 @@ machine, a browser download, `xattr -w com.apple.quarantine ...`) before running
 
 ## External interfaces
 
-`src-tauri/` (the Rust side) defines exactly two of its own Tauri IPC commands, both bare exit-flow signals with no
-daemon traffic or session data in them:
+`src-tauri/` (the Rust side) defines exactly three of its own Tauri IPC commands: two bare exit-flow signals with no
+daemon traffic or session data in them, and one carrying the menu's text:
 
 - `frontend_exit_heartbeat` — marks the webview as the one handling the exit flow, so a quit is no longer let through
-  unconfirmed; also doubles as a liveness ping, re-invoked on every quit gesture `packages/ui/src/lifecycle/useAppExit.ts` handles, which is
-  what clears the Rust side's force-quit debounce (`FORCE_QUIT_WINDOW` in `src-tauri/src/exit.rs`) for a webview that
-  is actually still answering.
+  unconfirmed; also doubles as a liveness ping, re-invoked on every quit gesture
+  `packages/ui/src/lifecycle/useAppExit.ts` handles, which is what clears the Rust side's force-quit debounce
+  (`FORCE_QUIT_WINDOW` in `src-tauri/src/exit.rs`) for a webview that is actually still answering.
 - `confirm_quit` — marks a pending quit as user-confirmed and asks Tauri to actually exit.
+- `set_menu_labels` (`src-tauri/src/menu.rs`, permitted by `permissions/menu-labels.toml`) — takes the menu's labels
+  from the UI (keyed by its `menu.*` message keys, in the language the UI renders) and rebuilds the menu bar with
+  them; a label it is not given keeps its English default, which is also what the menu built at startup shows. It
+  carries only that text.
 
-Beyond those two, the shell emits one event to the webview, `settings-requested`, when the application menu's
+Beyond those, the shell emits one event to the webview, `settings-requested`, when the application menu's
 **Settings…** item (Cmd+,) is chosen; it carries no payload, and `packages/ui/src/platform/tauri.ts` exposes it as the
-platform adapter's `appMenu` capability. The window has no native titlebar background or title text: it is created
-with an overlay titlebar and a hidden title on macOS, and the traffic lights float over the UI's own top bar
-(`TitleBar` in `packages/ui`), centred in it by `TRAFFIC_LIGHT_X` / `TRAFFIC_LIGHT_Y` in `src-tauri/src/lib.rs`.
+platform adapter's `appMenu` capability (whose `setLabels` is the other direction). The window has no native titlebar
+background or title text: it is created with an overlay titlebar and a hidden title on macOS, and the traffic lights
+float over the UI's own top bar (`TitleBar` in `packages/ui`), centred in it by `TRAFFIC_LIGHT_X` /
+`TRAFFIC_LIGHT_Y` in `src-tauri/src/lib.rs`.
 
 `src-tauri/capabilities/default.json` also allowlists the `notification` plugin's commands (used by
 `packages/ui/src/lifecycle/useWaitingNotifications.ts` for the raised-hand system notification),
@@ -137,18 +142,19 @@ A saved maximized state is kept in both of the last two cases.
 
 Everything else `src-tauri/` does is internal: it starts `octoboardd` as a sidecar process and bakes the port it
 printed into the window's URL (`?port=`) before the window is created, so the frontend can locate the daemon without
-any IPC call for it.
+any IPC call for it. The system's preferred languages travel the same way (`&languages=`, from
+`NSLocale.preferredLanguages` at launch), because WKWebView's own `navigator.languages` holds only the first one.
 
 ## Layout
 
 | Path | Role |
 |---|---|
 | `src-tauri/src/lib.rs` | `run()`: builds the Tauri app, wires the menu/exit-flow entry points to `exit`/`menu`, opens the main window; window-creation helpers |
-| `src-tauri/src/exit.rs` | The exit-confirmation flow: `ExitState`, the two IPC commands above, the decision all three quit gestures share, and the `applicationShouldTerminate:` override onto AppKit's own delegate — the only `unsafe` code in `apps/desktop/`, for catching the Dock icon's own Quit (and a system-initiated logout/restart/shutdown, which arrives the same way) |
+| `src-tauri/src/exit.rs` | The exit-confirmation flow: `ExitState`, the two exit-flow IPC commands above, the decision all three quit gestures share, and the `applicationShouldTerminate:` override onto AppKit's own delegate — the only `unsafe` code in `apps/desktop/`, for catching the Dock icon's own Quit (and a system-initiated logout/restart/shutdown, which arrives the same way) |
 | `src-tauri/src/sidecar.rs` | Spawns `octoboardd`, parses its startup port line, reports how it terminated |
-| `src-tauri/src/menu.rs` | Builds the native macOS menu bar, including the Settings… item that `lib.rs` turns into the `settings-requested` event |
+| `src-tauri/src/menu.rs` | Builds the native macOS menu bar from the labels the UI sends (`set_menu_labels`), including the Settings… item that `lib.rs` turns into the `settings-requested` event |
 | `src-tauri/src/window_state.rs` | Remembers the window's frame and maximized state: decides the initial frame from the saved one and the connected displays, follows it from window events, saves it on exit |
-| `src-tauri/capabilities/default.json` | Allowlists the two IPC commands above plus the notification, Dock-badge, window-theme, window-reveal and window-drag/zoom commands |
+| `src-tauri/capabilities/default.json` | Allowlists the three IPC commands above plus the notification, Dock-badge, window-theme, window-reveal and window-drag/zoom commands |
 | `src-tauri/tauri.conf.json` | Where the window's UI comes from (`frontendDist` is `packages/ui/dist`; `devUrl` and `beforeDevCommand` are that package's dev server), the `octoboardd` `externalBin`, and the bundle targets |
 | `scripts/build-daemon.mjs` | Builds `octoboardd` in release mode and copies it into `src-tauri/binaries/` under the target-triple name Tauri's `externalBin` requires |
 | `scripts/release.mjs` | Builds the release `.app`/`.dmg` and verifies the result; see "Release builds" above |

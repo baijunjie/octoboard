@@ -50,14 +50,14 @@ the request id as if it were a record id.
 | `update_project` | `project`, `name?`, `default_agent?` | An absent `default_agent` leaves it alone; an explicit `null` clears it, so the project inherits the console's default again |
 | `delete_project` | `project` | Removes the association and the project's session records, archived ones included; never touches the directory. Refused while the project has live sessions |
 | `list_dir` | `path` | Answered with `dir_listing` on the asking socket |
-| `open_session` | `console_id`, `project_id?`, `agent?`, `task?`, `title?`, `include_in_hub?` | Omit `project_id` for the console's hub session; a console has at most one that is not archived, so a second is refused with `session_already_running`. `agent` follows the priority in the "Which agent a session uses" section of `docs/product/sessions.md` when omitted. `include_in_hub` defaults to false: a session the user opens by hand stays outside the hub's orchestration and sends it no reports unless this is set |
-| `resume_session` | `session` | Relaunches an `interrupted` or `archived` session through the agent's own resume mechanism, re-injecting everything. Reopening an archived hub session while the console's hub is already running is refused with `session_already_running` |
+| `open_session` | `console_id`, `project_id?`, `agent?`, `task?`, `title?`, `include_in_hub?` | Omit `project_id` for the console's hub session; a console has at most one that is not archived, so a second is refused with `hub_already_running` (`hub_already_starting` while one is still being launched). `agent` follows the priority in the "Which agent a session uses" section of `docs/product/sessions.md` when omitted. `include_in_hub` defaults to false: a session the user opens by hand stays outside the hub's orchestration and sends it no reports unless this is set |
+| `resume_session` | `session` | Relaunches an `interrupted` or `archived` session through the agent's own resume mechanism, re-injecting everything. Reopening an archived hub session while the console's hub is already running is refused with `hub_reopen_blocked` (`hub_already_starting` while a hub is being launched) |
 | `archive_session` | `session` | Ends the process and archives the session |
 | `send_message` | `session`, `text` | Writes a message into a running session. Refused while the session is `waiting_user`: the message would be discarded and its trailing Enter would answer whatever dialog is up. The hub's own `send_message` tool holds such a message instead of refusing it — the user can be told to answer the prompt first, the hub cannot |
 | `rename_session` | `session`, `title` | — |
 | `list_pages` | `console` | The console's report panel pages, oldest first. Answered with `page_list` on the asking socket |
 | `submit_page` | `page`, `data` | A report panel form submission. Written into the console's hub session as a user message naming the page it came from; held rather than refused while the hub is `waiting_user`, since the hub is not the one who has to answer that prompt. Refused when `page` is not the console's newest page — history pages are read-only |
-| `confirm_claude_trust` | `session`, `remember`, `trust_parent_dir?` | The user's go-ahead to a `claude_trust_prompt`: Octoboard may answer that session's Claude Code trust screen, which it does by typing at the session's terminal (a Down and an Enter) after checking that the screen is still up and where its cursor is. `remember` also records the project's consent (`Project.claude_trust_consent`) once the screen has been answered, so later sessions of that project are answered without a prompt, and broadcasts the updated `project_upserted`. `trust_parent_dir` (absent means false) records the project's parent directory as trusted instead, once the screen has been answered, and then `remember` adds nothing. Every project whose path lies under that directory is trusted with it — those already there, those added later by any means, repositories the hub clones or adds into it included — and the permissions and hooks in their `.claude/settings.json` then apply without asking. The screens already waiting under it are answered at once. The daemon derives the directory from the session's project (it is the prompt's `trust_dir`); a client never names one. A parent that is the filesystem root, the user's home directory (however it is spelled or linked) or a directory containing it is refused, before anything is answered, with `error` code `trust_directory_too_broad`; so is a project whose path is not absolute, and so is any case where the home directory cannot be determined to check against. Refused, with nothing recorded and nothing sent, unless `session` is a running Claude Code project session that is still waiting at its trust screen and has not been answered (a screen that is no longer waiting is answered with `error` code `claude_trust_not_waiting`, which a client shows nothing for); a failure to answer once it was accepted (the screen is not as expected, or something else typed into the session meanwhile) is an `error` as well, records no consent, and is also broadcast as a `session_notice` so that it is seen even if the requesting dialog has closed. Octoboard never edits Claude Code's config files for this |
+| `confirm_claude_trust` | `session`, `remember`, `trust_parent_dir?` | The user's go-ahead to a `claude_trust_prompt`: Octoboard may answer that session's Claude Code trust screen, which it does by typing at the session's terminal (a Down and an Enter) after checking that the screen is still up and where its cursor is. `remember` also records the project's consent (`Project.claude_trust_consent`) once the screen has been answered, so later sessions of that project are answered without a prompt, and broadcasts the updated `project_upserted`. `trust_parent_dir` (absent means false) records the project's parent directory as trusted instead, once the screen has been answered, and then `remember` adds nothing. Every project whose path lies under that directory is trusted with it — those already there, those added later by any means, repositories the hub clones or adds into it included — and the permissions and hooks in their `.claude/settings.json` then apply without asking. The screens already waiting under it are answered at once. The daemon derives the directory from the session's project (it is the prompt's `trust_dir`); a client never names one. A parent that is the filesystem root, the user's home directory (however it is spelled or linked) or a directory containing it is refused, before anything is answered, with `error` code `trust_directory_too_broad`; so is a project whose path is not absolute (`trust_path_not_absolute`), and so is any case where the home directory cannot be determined to check against (`trust_home_unknown`). Refused, with nothing recorded and nothing sent, unless `session` is a running Claude Code project session that is still waiting at its trust screen and has not been answered (a screen that is no longer waiting is answered with `error` code `claude_trust_not_waiting`, which a client shows nothing for); a failure to answer once it was accepted (the screen is not as expected, or something else typed into the session meanwhile) is an `error` with code `claude_trust_answer_failed` as well, records no consent, and is also broadcast as a `session_notice` so that it is seen even if the requesting dialog has closed. Octoboard never edits Claude Code's config files for this |
 | `remove_trusted_directory` | `path` | Stops trusting a directory (compared after lexical normalisation, so a trailing slash does not matter) and broadcasts `trusted_directories_updated`. Projects' own consents and sessions already running are untouched. Removing one that is not trusted does nothing. Directories are added only by `confirm_claude_trust` |
 | `shutdown` | — | Terminates every session process (leaving them `interrupted`) and exits the daemon |
 
@@ -69,14 +69,104 @@ the request id as if it were a record id.
 | `trusted_directories_updated` | `trusted_directories` — the whole list of trusted directory paths, sent when it changes |
 | `console_upserted` / `project_upserted` / `session_upserted` | `console` / `project` / `session` — the whole record, under that key |
 | `console_deleted` / `project_deleted` | `console` / `project` |
-| `session_notice` | `session`, `message` — something about a session the user has to be told that no status field carries: an injected capability that will not apply, a setting of theirs Octoboard had to work around, a message Octoboard accepted and could not deliver. Broadcast when it is found, which may be at launch or at any point in the session's life; nothing stores it, so a client that connects later does not see it |
+| `session_notice` | `session`, `code`, `params`, `message` — something about a session the user has to be told that no status field carries: an injected capability that will not apply, a setting of theirs Octoboard had to work around, a message Octoboard accepted and could not deliver. Broadcast when it is found, which may be at launch or at any point in the session's life; nothing stores it, so a client that connects later does not see it. See "Coded messages" |
 | `claude_trust_prompt` | `session`, `project`, `path`, `trust_dir` — a running Claude Code session of a project is at Claude Code's workspace-trust screen, which is asking whether `path` is trusted, and the project has no consent of its own (`claude_trust_consent`) and does not lie under any of `trusted_directories`. `trust_dir` is the directory `confirm_claude_trust` with `trust_parent_dir` would trust — the project's parent — or null when there is none to offer (it would be the filesystem root, the home directory or one containing it, the home directory cannot be determined, or `path` is not absolute); a client offers the button only when it is not null. Broadcast once per screen, when it is recognised in the session's terminal output. Each client is also sent one for every screen still waiting under the same condition, with the same fields, right after every `snapshot` (on connect and on lag recovery), so a client that missed the broadcast is still asked; a client already holding the prompt ignores the repeat. A client that declines ("Not now") drops the prompt locally, and a later `snapshot` may ask again. With no client connected the screen simply stays for the person to answer in the terminal. The client answers with `confirm_claude_trust`, or leaves the screen alone. A hub session's screen is answered by the daemon without a prompt, because its working directory is the console's own; a project session's is when it meets the condition above the other way round. A client whose queue holds prompts for projects under a directory that has just become trusted drops them |
 | `session_opened` | `id`, `session` — the reply to `open_session`, naming the session it started |
 | `dir_listing` | `id`, `path`, `entries`: `[{name, path, is_git_repo}]` — only directories are listed |
 | `page_list` | `id`, `console_id`, `pages` — oldest first. Pages are not in `snapshot`: one carries a whole HTML document, and only the console whose hub is on screen needs them, so the panel asks. Asking again after every `snapshot` is what keeps it correct across a `page_created` a lagging client never received: such a client is sent a fresh snapshot in place of the events it missed, on the socket it already has |
 | `page_created` | `page` — the whole record. The hub pushed a page with `show_page` |
 | `ack` | `id` |
-| `error` | `message`, `id?`, `code?` — a code is present only for failures a client has to act on rather than just show. Today the codes are `session_already_running`, `trust_directory_too_broad` and `claude_trust_not_waiting`. `session_already_running`: a client's own double click produces it and is not worth showing; a refused second hub session produces it too, and that one has to be shown, so a client branches on what it asked for rather than on the code alone |
+| `error` | `code`, `params`, `message`, `id?` — a failure of a request (carrying its `id`) or, with no `id`, one that belongs to no request. See "Coded messages" |
+
+### Coded messages
+
+Everything the daemon sends for the user to read — every `error` and every `session_notice` — carries a stable `code`
+and `params`, an object of named string values. A client words the message from them in its own language; the daemon
+never translates. `message` is the same text in English: it is what a client shows for a code it does not know (a
+daemon newer than the client), so it must always be shown whole, never parsed. A code never changes its meaning or its
+params; a new reading gets a new code.
+
+A param named `console`, `project` or `session` is that record's id, and a client shows the record's current name
+instead (the raw value only when it does not know the record). Every other param is text to be shown as is: a path, an
+agent's name, an operating-system or `git` message that cannot be translated.
+
+A failure that is not meant to be read in detail — an unexpected one with no meaning of its own — is `internal_error`
+with the text as its `detail`.
+
+A client also branches on some codes, instead of only showing them:
+
+- `session_already_running`, `session_already_starting`, `hub_already_running`, `hub_reopen_blocked` and
+  `hub_already_starting` all mean a launch was refused because the session or the console's hub is already running or
+  being started. A client's own double click produces them and is not worth showing; a refused second hub session is,
+  so a client branches on what it asked for rather than on the code alone.
+- `trust_directory_too_broad`, `trust_path_not_absolute` and `trust_home_unknown` all mean no parent directory can be
+  offered to trust: nothing was answered and the dialog stays open.
+- `claude_trust_not_waiting` means nothing is wrong: the screen is no longer waiting, and a client shows nothing.
+
+`error` codes:
+
+| `code` | `params` | Meaning |
+|---|---|---|
+| `unreadable_request` | `detail` | The frame is not a request the daemon can read |
+| `internal_error` | `detail` | Any other failure |
+| `unknown_console` / `unknown_project` / `unknown_session` / `unknown_page` | `console` / `project` / `session` / `page` | The record is not there |
+| `field_required` | `field` | A request lacks a field its kind needs, named as on the wire |
+| `console_has_running_sessions` / `project_has_running_sessions` | — | Deleting needs the sessions archived first |
+| `path_not_absolute` | `path` | A project path that is neither absolute nor `~`-relative |
+| `path_not_found` | `path` | A directory to list does not exist |
+| `path_not_a_directory` | `path` | The path is not a directory |
+| `path_already_exists` | `path` | A clone's target directory exists already |
+| `directory_unreadable` | `path`, `detail` | A directory exists but cannot be read (on macOS, file access to its volume is not granted) |
+| `directory_unreachable` | `path` | A launch's working directory is not reachable by the daemon |
+| `no_repositories_found` | `path` | No git repository directly under a parent directory |
+| `all_projects_already_added` | — | Every directory found is already a project of the console |
+| `repository_name_missing` | `url` | A clone URL has no repository name in it |
+| `git_clone_failed` | `detail` | `git clone` failed; `detail` is its own message |
+| `config_dir_not_absolute` | `agent` | A console's config directory is neither absolute nor `~`-relative; `agent` is the agent's name |
+| `config_dir_not_a_directory` | `agent`, `path` | A console's config directory is not a directory |
+| `config_dir_unreachable` | `agent`, `path` | A session's pinned config directory has gone, which refuses the launch |
+| `session_already_running` | `session` | The session is running already, or is not interrupted or archived |
+| `session_already_starting` | `session` | The session is being started already |
+| `hub_already_running` | `session` | The console has a live hub (`session`) |
+| `hub_reopen_blocked` | `session` | The console has another live hub (`session`), which has to be archived first |
+| `hub_already_starting` | `console` | The console's hub is being started already |
+| `hub_missing` | — | The console has no hub session to submit to |
+| `session_not_running` | `session` | A message or a go-ahead for a session with no running process |
+| `session_waiting_for_user` | `session` | The session waits at a prompt only the user can answer, so a message is refused |
+| `queued_messages_lost` | — | A message queued for a session could not be written in full, and it and what was behind it were dropped |
+| `page_not_current` | — | A form can be submitted only from the console's newest page |
+| `trust_directory_too_broad` | `path` | The directory is the filesystem root, the home directory or one containing it |
+| `trust_path_not_absolute` | `path` | The project's path is not absolute |
+| `trust_home_unknown` | — | The home directory cannot be determined |
+| `claude_trust_not_waiting` | — | The trust screen is no longer waiting for an answer |
+| `claude_trust_answer_failed` | `reason`, `reason_code`, `detail?` | Octoboard accepted the go-ahead but could not answer the trust screen; the user answers it in the terminal. See the reason codes below |
+| `not_a_claude_session` | — | A go-ahead for the trust screen of a session that is not Claude Code's |
+| `hub_trust_not_asked` | — | A go-ahead for a hub session's trust screen, which Octoboard answers without asking |
+| `binary_not_found` | `binary` | The agent's binary (or `git`) is not on the shell's `PATH` |
+| `shell_environment_timeout` | `shell`, `command`, `timeout` | The login shell did not finish printing its environment in time |
+
+`session_notice` codes:
+
+| `code` | `params` | Meaning |
+|---|---|---|
+| `claude_workspace_untrusted` | — | Claude Code is not yet trusted with the session's directory, so the project's own `allow` rules are ignored until its trust prompt is answered |
+| `queued_messages_dropped` | — | Octoboard dropped what it had queued for the session; its input line may hold part of a message |
+| `claude_trust_answer_failed` | `reason`, `reason_code?`, `detail?` | Octoboard could not answer Claude Code's trust screen, so the user answers it in the terminal; `reason` is the daemon's English account of why and `reason_code`, when the failure has one, names it (the `error` of the same code carries the same params) |
+
+`reason_code` values of `claude_trust_answer_failed`, which a client words in place of `reason` and shows `reason` for
+one it does not know:
+
+| `reason_code` | `detail` | Meaning |
+|---|---|---|
+| `screen_gone` | — | The trust screen is no longer on the terminal |
+| `cursor_not_on_decline` | — | The cursor is not on the screen's first option, or could not be found |
+| `cursor_did_not_move` | — | The cursor did not move to "Yes, I trust this folder", so Enter was not sent |
+| `terminal_not_settled` | — | The terminal did not settle after the Down, so Enter was not sent |
+| `cursor_moved_away` | — | The cursor is no longer on "Yes, I trust this folder", so Enter was not sent |
+| `screen_not_dismissed` | — | The screen did not go away after Enter |
+| `screen_redrawn` | — | The screen was drawn again after Enter |
+| `input_touched` | — | Something else wrote into the terminal meanwhile, so the keys were not sent |
+| `terminal_write_failed` | the system's own message | Writing to the terminal failed |
 
 ### Records
 

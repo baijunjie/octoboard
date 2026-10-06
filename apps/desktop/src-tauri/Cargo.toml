@@ -66,3 +66,5 @@ notify-rust = "=4.11.7"
 # crate depends on.
 objc2 = "=0.6.4"
 objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSApplication", "NSResponder"] }
+# For the system's preferred languages in `lib.rs`, pinned like `objc2-app-kit` above.
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSArray", "NSLocale", "NSString"] }

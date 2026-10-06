@@ -1,6 +1,7 @@
 import { Button, Chip, Input, ListBox } from "@heroui/react";
 import React, { useEffect, useRef, useState } from "react";
 
+import { useT } from "../i18n/react";
 import type { DirEntry, Event } from "../protocol";
 import { useDaemon } from "../store";
 import { Dialog, DialogError, useRefocusIfLost } from "./Dialog";
@@ -32,6 +33,7 @@ export function DirectoryPicker({
   onPick: (path: string) => void;
   onClose: () => void;
 }): React.ReactElement {
+  const t = useT();
   const { request } = useDaemon();
   const [path, setPath] = useState(initialPath ?? "~");
   const [entries, setEntries] = useState<DirEntry[]>();
@@ -81,10 +83,10 @@ export function DirectoryPicker({
   const footer = (
     <>
       <Button type="button" variant="secondary" onPress={onClose}>
-        Cancel
+        {t("common.cancel")}
       </Button>
       <Button type="button" isDisabled={!canSelect} onPress={() => resolvedPath && onPick(resolvedPath)}>
-        Select this directory
+        {t("directoryPicker.select")}
       </Button>
     </>
   );
@@ -92,16 +94,16 @@ export function DirectoryPicker({
   return (
     <Dialog title={title} onClose={onClose} footer={footer} onSubmit={() => void load(path)}>
       <div className="flex gap-2">
-        <Input fullWidth aria-label="Directory path" value={path} onChange={(e) => setPath(e.target.value)} />
+        <Input fullWidth dir="ltr" aria-label={t("directoryPicker.path")} value={path} onChange={(e) => setPath(e.target.value)} />
         <Button type="submit" variant="secondary">
-          Go
+          {t("directoryPicker.go")}
         </Button>
       </div>
       <DialogError message={error} />
       {entries && (
         <ListBox
           ref={listRef}
-          aria-label="Subdirectories"
+          aria-label={t("directoryPicker.subdirectories")}
           // `selectionMode` stays `none`: an entry is only ever entered, never picked. Activating
           // one (click, Enter) calls `onAction`. The padding keeps the scroll container from
           // clipping the items' focus ring.
@@ -109,15 +111,15 @@ export function DirectoryPicker({
           className="max-h-72 overflow-y-auto rounded-lg border border-separator p-1"
         >
           {resolvedPath && resolvedPath !== "/" && (
-            <ListBox.Item id={PARENT_KEY} textValue="Parent directory" aria-label="Parent directory">
+            <ListBox.Item id={PARENT_KEY} textValue={t("directoryPicker.parent")} aria-label={t("directoryPicker.parent")}>
               ..
             </ListBox.Item>
           )}
           {entries.map((entry) => (
             <ListBox.Item key={entry.path} id={entry.path} textValue={entry.name}>
-              {entry.name}
+              <span dir="auto">{entry.name}</span>
               {entry.is_git_repo && (
-                <Chip size="sm" variant="soft" className="ml-2">
+                <Chip size="sm" variant="soft" className="ms-2">
                   git
                 </Chip>
               )}
@@ -126,8 +128,8 @@ export function DirectoryPicker({
           {entries.length === 0 && (
             // Inside the list, as an option that cannot be acted on: arrow keys skip it, and the
             // list is never left without an option, which a listbox needs.
-            <ListBox.Item id={EMPTY_KEY} isDisabled textValue="No subdirectories">
-              No subdirectories.
+            <ListBox.Item id={EMPTY_KEY} isDisabled textValue={t("directoryPicker.empty")}>
+              {t("directoryPicker.empty")}
             </ListBox.Item>
           )}
         </ListBox>

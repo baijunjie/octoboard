@@ -2,8 +2,9 @@
 
 Settings is a large dialog over the whole window. A list of sections runs down its left side and the selected
 section's settings fill the right, one row per setting: its name and a line saying what it does on the left, its
-control on the right. The sections, in order, are **Appearance**, **Trusted folders** and **Notifications**; the
-dialog opens on Appearance.
+control on the right; under a right-to-left language the sides swap (see "Right-to-left layout" in
+`docs/product/window-layout.md`). The sections, in order, are **General**, **Trusted folders** and
+**Notifications**; the dialog opens on General.
 
 ## Moving between sections
 
@@ -28,10 +29,20 @@ keyboard focus back on the selected session's terminal.
 
 While Settings is open everything under it stays as it was, the terminal included, and its size does not change.
 
-## Appearance
+## General
 
-The Light / Dark / System choice for the window's appearance. What each option means, which one is the default and
-where the choice is kept are in `docs/product/appearance.md`.
+The settings that shape the whole window rather than one feature: an **Appearance** row, then a **Language** row.
+
+### Appearance
+
+The Light / Dark / System choice for the window's appearance, as a three-way segmented control. What each option means,
+which one is the default and where the choice is kept are in `docs/product/appearance.md`.
+
+### Language
+
+The language of the UI, chosen from a drop-down of the offered languages, each named in its own language. What the
+options are, how the first launch picks a language, what follows the choice and where it is kept are in
+`docs/product/language.md`.
 
 ## Trusted folders
 

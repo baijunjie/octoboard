@@ -1,5 +1,11 @@
 # Verifying behaviour in the desktop app
 
+## Keep a verification as narrow as the change
+
+The user has objected to drawn-out testing. Verify in the app only the behaviour this change altered, in a short,
+targeted run — the states, languages or screens the change actually touches, not a tour of the rest or a matrix of
+every combination — and leave what a unit test or the type checker already covers to them.
+
 ## Launch the real window for any change on the startup or mount path
 
 A webview that throws while mounting is a blank window — no message anywhere, and neither `tsc` nor a reviewer reading
@@ -100,10 +106,16 @@ own installed Octoboard and every worktree's build share `dev.octoboard.app`, so
 profile. Isolating the run means moving it aside before and putting it back afterwards, which needs the user's
 go-ahead up front and is possible only while no app with that identifier is running: check with
 `lsappinfo find bundleid=dev.octoboard.app` (empty output means none) immediately before moving it. Otherwise run on
-the shared profile, note each setting the run will change (the appearance first of all) beforehand, and put it back
-afterwards, because the user's own app reads the same values. To read a value out of the profile, open the sqlite
-file normally rather than with `immutable=1`: the app's last write may still be sitting in the WAL, which
-`immutable=1` skips, answering with the value before it.
+the shared profile, note each setting the run will change (the appearance and the language first of all) beforehand,
+and put it back afterwards, because the user's own app reads the same values.
+
+The app's defaults domain is shared the same way, so to run it under other system languages pass them for that launch
+only — `open <bundle>.app --args -AppleLanguages '(zh-Hans-CN, en)'` — and never `defaults write dev.octoboard.app
+AppleLanguages`, which the user's own app then reads too. This steers only a launch whose profile has no
+`octoboard.language` key yet: that launch picks the language from the system's languages and stores it, and every
+later launch ignores them. To test that pick, note the key's value and remove it first, and restore it afterwards.
+To read a value out of the profile, open the sqlite file normally rather than with `immutable=1`: the app's last
+write may still be sitting in the WAL, which `immutable=1` skips, answering with the value before it.
 
 Keep the `.app` and both throwaway directories on the internal disk when the checkout is on a removable volume. A
 build here is ad-hoc signed and therefore has a fresh code identity every time, so macOS's consent prompt for

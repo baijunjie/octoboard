@@ -18,7 +18,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, Result};
 
 use crate::outbox::Drain;
-use crate::protocol::{Agent, Role, Session, SessionStatus};
+use crate::protocol::{error_code, Agent, CodedError, Role, Session, SessionStatus};
 use crate::state::AppState;
 use crate::{coordinator, hooks, term};
 
@@ -99,11 +99,19 @@ pub fn write_message(
     // Nothing to write to and nothing to wait for: a resume starts the agent at its prompt rather
     // than replaying a queue, so queuing here would lose the message silently.
     if session.status.is_dormant() || state.live_session(id).is_none() {
-        bail!("this session is not running");
+        return Err(CodedError::raised(
+            error_code::SESSION_NOT_RUNNING,
+            "this session is not running",
+            &[("session", id)],
+        ));
     }
     let writable = matches!(session.status, SessionStatus::Working | SessionStatus::Idle);
     if !writable && when_blocked == WhenBlocked::Refuse {
-        bail!("this session is waiting for you — answer it in the terminal first");
+        return Err(CodedError::raised(
+            error_code::SESSION_WAITING_FOR_USER,
+            "this session is waiting for you — answer it in the terminal first",
+            &[("session", id)],
+        ));
     }
 
     // Queued even when the session looks ready, so messages cannot overtake one another.
@@ -111,7 +119,11 @@ pub fn write_message(
     match state.flush_outbox(id, session.status) {
         Drain::Clear => Ok(Delivery::Written),
         Drain::Pending => Ok(Delivery::Queued),
-        Drain::Lost => bail!(lost_message()),
+        Drain::Lost => Err(CodedError::raised(
+            error_code::QUEUED_MESSAGES_LOST,
+            lost_message(),
+            &[],
+        )),
     }
 }
 

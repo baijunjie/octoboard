@@ -7,11 +7,13 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use tokio::sync::broadcast;
 
 use crate::outbox::{Drain, Outbox};
-use crate::protocol::{error_code, now_millis, CodedError, Event, Session, SessionStatus};
+use crate::protocol::{
+    error_code, notice_code, now_millis, CodedError, Event, Notice, Session, SessionStatus,
+};
 use crate::session::LiveSession;
 use crate::store::Store;
 
@@ -148,12 +150,14 @@ impl AppState {
             return Err(CodedError::raised(
                 error_code::SESSION_ALREADY_RUNNING,
                 "this session is already running",
+                &[("session", id)],
             ));
         }
         if !live.launching.insert(id.to_string()) {
             return Err(CodedError::raised(
-                error_code::SESSION_ALREADY_RUNNING,
+                error_code::SESSION_ALREADY_STARTING,
                 "this session is already being started",
+                &[("session", id)],
             ));
         }
         Ok(LaunchClaim {
@@ -226,7 +230,7 @@ impl AppState {
     pub fn session_record(&self, id: &str) -> Result<Session> {
         self.store
             .get_session(id)?
-            .ok_or_else(|| anyhow!("unknown session {id}"))
+            .ok_or_else(|| CodedError::unknown_session(id))
     }
 
     pub fn publish_session(&self, session: &Session) {
@@ -434,8 +438,9 @@ impl AppState {
             .insert(console_id.to_string())
         {
             return Err(CodedError::raised(
-                error_code::SESSION_ALREADY_RUNNING,
+                error_code::HUB_ALREADY_STARTING,
                 "this console's hub session is already being started",
+                &[("console", console_id)],
             ));
         }
         Ok(HubClaim {
@@ -486,13 +491,17 @@ impl AppState {
             // Nobody is waiting on a return value for most of these drains, and a message Octoboard
             // accepted and then could not deliver is the user's business — the more so because the
             // session's input line is the thing left in a state only they can see.
-            self.broadcast(Event::SessionNotice {
-                session: id.to_string(),
-                message: format!(
-                    "Octoboard dropped what it had queued for this session: {}",
-                    crate::term::FRAGMENT_HAZARD
-                ),
-            });
+            self.broadcast(
+                Notice::new(
+                    notice_code::QUEUED_MESSAGES_DROPPED,
+                    format!(
+                        "Octoboard dropped what it had queued for this session: {}",
+                        crate::term::FRAGMENT_HAZARD
+                    ),
+                    &[],
+                )
+                .about(id),
+            );
         }
         outcome
     }

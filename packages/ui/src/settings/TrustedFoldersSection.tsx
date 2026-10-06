@@ -3,6 +3,7 @@ import React from "react";
 
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
+import { useT } from "../i18n/react";
 import { useDaemon, useDaemonStore } from "../store";
 import { SettingRow } from "./SettingRow";
 import { useSectionRefocus } from "./useSectionRefocus";
@@ -11,6 +12,7 @@ import { useSectionRefocus } from "./useSectionRefocus";
  * way to stop each. Stopping leaves each project's own consent and every running session as it is
  * (see "Trusted folders" in `docs/product/launching-agents.md`). */
 export function TrustedFoldersSection(): React.ReactElement {
+  const t = useT();
   const { request, toastError } = useDaemon();
   const directories = useDaemonStore((s) => s.trustedDirectories);
   useSectionRefocus([directories]);
@@ -19,13 +21,11 @@ export function TrustedFoldersSection(): React.ReactElement {
   return (
     <>
       <p className="pb-2 text-sm text-muted">
-        Octoboard answers Claude Code's trust prompt without asking for every project under these folders, including
-        projects added to them later. Claude Code then applies the permission rules and hooks in each project's own
-        settings without asking either, so trust a folder only if you trust everything that ends up inside it.
+        {t("settings.trusted.description")}
       </p>
       {directories.length === 0 ? (
         <EmptyState className="border-t border-separator px-0 py-4">
-          No folders are trusted. A folder is trusted from a session's trust prompt.
+          {t("settings.trusted.empty")}
         </EmptyState>
       ) : (
         <div className="border-t border-separator">
@@ -34,21 +34,21 @@ export function TrustedFoldersSection(): React.ReactElement {
               key={path}
               label={
                 // Cut from the start when too long, so the folder's own name stays visible.
-                <FadeOverflow clip="start" titleWhenClipped={path}>
+                <FadeOverflow dir="ltr" clip="start" titleWhenClipped={path}>
                   {path}
                 </FadeOverflow>
               }
-              description="Projects under this folder are trusted."
+              description={t("settings.trusted.rowDescription")}
             >
-              <TitledControl title="Stop trusting this folder. Projects' own consents and running sessions are kept.">
+              <TitledControl title={t("settings.trusted.removeTooltip")}>
                 <Button
                   size="sm"
                   variant="outline"
                   preventFocusOnPress
-                  aria-label={`Stop trusting ${path}`}
+                  aria-label={t("settings.trusted.removeLabel", { path })}
                   onPress={() => remove(path)}
                 >
-                  Remove
+                  {t("common.remove")}
                 </Button>
               </TitledControl>
             </SettingRow>

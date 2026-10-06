@@ -21,10 +21,11 @@ export interface PlatformAdapter {
    * browser tab has neither an appearance to match nor a window to reveal. */
   readonly nativeWindow?: NativeWindowCapability;
   /** Present only where the window draws no titlebar of its own, so the UI's top bar is the
-   * window's titlebar: it then carries the drag region and keeps `leadingInset` clear for the
+   * window's titlebar: it then carries the drag region and keeps `leftInset` clear for the
    * window controls the shell floats over it. */
   readonly windowChrome?: WindowChromeCapability;
-  /** The shell's native menu bar, for the items that ask the UI to do something. */
+  /** The shell's native menu bar: the items that ask the UI to do something, and the labels the
+   * UI gives every item. */
   readonly appMenu?: AppMenuCapability;
 }
 
@@ -85,16 +86,20 @@ export interface NativeWindowCapability {
 }
 
 export interface WindowChromeCapability {
-  /** The width, in CSS pixels, at the top bar's leading edge that the window controls cover
-   * right now: none while they are hidden, as in fullscreen. */
-  leadingInset(): number;
-  /** Subscribes to changes of `leadingInset`, returning the function that undoes it. */
+  /** The width, in CSS pixels, at the window's left edge, whatever the direction, that the window
+   * controls cover right now: none while they are hidden, as in fullscreen. */
+  leftInset(): number;
+  /** Subscribes to changes of `leftInset`, returning the function that undoes it. */
   subscribe(callback: () => void): () => void;
 }
 
 export interface AppMenuCapability {
   /** Subscribes to the menu's Settings item (Cmd+,), returning the function that undoes it. */
   onSettingsRequested(handler: () => void): () => void;
+  /** Hands the shell the menu's labels, keyed by `menu.*` message key and already in the UI's
+   * language; the shell rebuilds the menu with them, and keeps its English text for any label
+   * missing. */
+  setLabels(labels: Record<string, string>): Promise<void>;
 }
 
 /** Picks the implementation once, at startup, from the environment the page is running in. */

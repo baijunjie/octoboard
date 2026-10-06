@@ -1,5 +1,6 @@
 import React from "react";
 
+import { useT } from "../i18n/react";
 import { useDaemon } from "../store";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ConsoleDialog } from "./ConsoleDialog";
@@ -19,6 +20,7 @@ export function RequestedDialog({
   onClose: () => void;
   onSessionOpened: (sessionId: string) => void;
 }): React.ReactElement {
+  const t = useT();
   const { request } = useDaemon();
 
   switch (dialog.kind) {
@@ -29,9 +31,9 @@ export function RequestedDialog({
     case "delete-console":
       return (
         <ConfirmDialog
-          title="Delete console"
-          message={`Delete "${dialog.console.name}"? This only works while it has no live sessions.`}
-          confirmLabel="Delete"
+          title={t("dialog.deleteConsole.title")}
+          message={t("dialog.deleteConsole.message", { name: dialog.console.name })}
+          confirmLabel={t("common.delete")}
           destructive
           onCancel={onClose}
           onConfirm={async () => {
@@ -47,9 +49,9 @@ export function RequestedDialog({
     case "delete-project":
       return (
         <ConfirmDialog
-          title="Remove project"
-          message={`Remove "${dialog.project.name}" from its console? This only removes the association and never touches the directory, but it deletes this project's sessions — archived ones included — and only works while none of them is still running.`}
-          confirmLabel="Remove"
+          title={t("dialog.removeProject.title")}
+          message={t("dialog.removeProject.message", { name: dialog.project.name })}
+          confirmLabel={t("common.remove")}
           destructive
           onCancel={onClose}
           onConfirm={async () => {
@@ -72,9 +74,9 @@ export function RequestedDialog({
     case "archive-session":
       return (
         <ConfirmDialog
-          title="Archive session"
-          message={`Archive "${dialog.session.title}"? Its process will end; archived sessions can be reopened later.`}
-          confirmLabel="Archive"
+          title={t("dialog.archiveSession.title")}
+          message={t("dialog.archiveSession.message", { title: dialog.session.title })}
+          confirmLabel={t("dialog.archiveSession.confirm")}
           destructive
           onCancel={onClose}
           onConfirm={async () => {

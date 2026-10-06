@@ -2,8 +2,9 @@ import { Spinner } from "@heroui/react";
 import { Archive, CircleSmall, Hand, Pause } from "lucide-react";
 import React from "react";
 
+import { useT } from "../i18n/react";
 import type { SessionStatus } from "../protocol";
-import { STATUS_LABEL } from "../sessionLabel";
+import { statusLabel } from "../sessionLabel";
 
 const ICON_CLASS = "size-4 shrink-0";
 
@@ -15,7 +16,8 @@ const ICON_CLASS = "size-4 shrink-0";
  * visible status cue.
  */
 export function StatusIcon({ status }: { status: SessionStatus }): React.ReactElement {
-  const a11y = { role: "img", "aria-label": STATUS_LABEL[status] } as const;
+  const t = useT();
+  const a11y = { role: "img", "aria-label": statusLabel(t, status) } as const;
   switch (status) {
     case "working":
       // Spinner announces itself as a live `status` named "Loading"; here it is one more status

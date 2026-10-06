@@ -2,8 +2,8 @@
 
 ## Light, dark and follow the system
 
-The window has three appearances, chosen in the Appearance section of Settings (see `docs/product/settings.md`):
-**Light**, **Dark** and **System**. One of the three is always current.
+The window has three appearances, chosen in the Appearance row of Settings' General section (see
+`docs/product/settings.md`): **Light**, **Dark** and **System**. One of the three is always current.
 
 **The default is System**, which follows the operating system's own appearance and switches with it while
 the window is open — the user does not have to come back to the control after changing the system setting.

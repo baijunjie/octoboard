@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 
 import { AGENT_CONFIG_DIR, AGENT_LABEL, AGENT_OPTIONS } from "../agents";
+import { useT } from "../i18n/react";
 import type { Agent, ConfigDirField, Console } from "../protocol";
 import { useDaemon } from "../store";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
@@ -15,6 +16,7 @@ export function ConsoleDialog({
   console?: Console;
   onClose: () => void;
 }): React.ReactElement {
+  const t = useT();
   const { request } = useDaemon();
   const [name, setName] = useState(editing?.name ?? "");
   const [hubAgent, setHubAgent] = useState<Agent>(editing?.hub_agent ?? "claude");
@@ -40,7 +42,7 @@ export function ConsoleDialog({
 
   const submit = () => {
     if (!name.trim()) {
-      setError("Name is required.");
+      setError(t("dialog.nameRequired"));
       return;
     }
     void run(async () => {
@@ -80,24 +82,25 @@ export function ConsoleDialog({
 
   return (
     <Dialog
-      title={editing ? "Edit console" : "New console"}
+      title={editing ? t("dialog.console.edit") : t("dialog.console.new")}
       onClose={onClose}
-      submitLabel={editing ? "Save" : "Create"}
+      submitLabel={editing ? t("common.save") : t("common.create")}
       busy={busy}
       onSubmit={submit}
     >
-      <TextInput label="Name" value={name} onChange={setName} autoFocus />
-      <OptionSelect label="Hub agent" options={AGENT_OPTIONS} value={hubAgent} onChange={setHubAgent} />
-      <OptionSelect label="Default agent" options={AGENT_OPTIONS} value={defaultAgent} onChange={setDefaultAgent} />
+      <TextInput label={t("common.name")} value={name} onChange={setName} autoFocus />
+      <OptionSelect label={t("dialog.console.hubAgent")} options={AGENT_OPTIONS} value={hubAgent} onChange={setHubAgent} />
+      <OptionSelect label={t("dialog.console.defaultAgent")} options={AGENT_OPTIONS} value={defaultAgent} onChange={setDefaultAgent} />
       {shownAgents.map((agent) => {
         const { field, placeholder } = AGENT_CONFIG_DIR[agent];
         return (
           <TextInput
             key={agent}
-            label={`${AGENT_LABEL[agent]} config directory (optional)`}
+            label={t("dialog.console.configDir", { agent: AGENT_LABEL[agent] })}
             value={configDirs[field]}
             onChange={(value) => setConfigDirs({ ...configDirs, [field]: value })}
             placeholder={placeholder}
+            dir="ltr"
           />
         );
       })}

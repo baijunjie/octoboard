@@ -2,6 +2,7 @@ import { Button } from "@heroui/react";
 import React, { useLayoutEffect, useRef } from "react";
 
 import type { ConnectionState } from "../daemon-client";
+import { useT } from "../i18n/react";
 
 /** The CSS custom property this banner publishes its own height to. `style.css` folds it into
  * `--top-chrome-height`, the offset that everything overlaying the content area starts below, so
@@ -29,6 +30,7 @@ export function ConnectionBanner({
   state: ConnectionState;
   onRetry: () => void;
 }): React.ReactElement | null {
+  const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const visible = state === "reconnecting" || state === "closed";
 
@@ -66,13 +68,13 @@ export function ConnectionBanner({
     >
       {state === "closed" ? (
         <>
-          <span>Disconnected from the daemon.</span>
+          <span>{t("connection.disconnected")}</span>
           <Button size="sm" variant="outline" preventFocusOnPress onPress={onRetry}>
-            Retry
+            {t("connection.retry")}
           </Button>
         </>
       ) : (
-        <span>Disconnected from the daemon — reconnecting…</span>
+        <span>{t("connection.reconnecting")}</span>
       )}
     </div>
   );

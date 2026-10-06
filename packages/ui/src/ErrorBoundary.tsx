@@ -1,5 +1,6 @@
 import React from "react";
 
+import { useT } from "./i18n/react";
 import { StartupScreen } from "./StartupScreen";
 
 interface ErrorBoundaryState {
@@ -28,19 +29,25 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
   render(): React.ReactNode {
     const { error } = this.state;
     if (!error) return this.props.children;
-    return (
-      <StartupScreen
-        message={
-          <>
-            Octoboard hit an error it could not recover from.
-            <pre className="mt-4 max-h-[40vh] max-w-[70ch] overflow-auto rounded-lg bg-surface p-3 text-left text-xs">{error.stack ?? error.message}</pre>
-          </>
-        }
-        // Clearing the error remounts the subtree's components, which recovers a failure that was
-        // transient; one that is not simply lands back here. The daemon connection and its state
-        // live outside the tree and are kept as they are.
-        action={{ label: "Try again", onSelect: () => this.setState({ error: undefined }) }}
-      />
-    );
+    // Clearing the error remounts the subtree's components, which recovers a failure that was
+    // transient; one that is not simply lands back here. The daemon connection and its state
+    // live outside the tree and are kept as they are.
+    return <ErrorScreen error={error} onRetry={() => this.setState({ error: undefined })} />;
   }
+}
+
+/** The fallback, a function component because only one can read the current language. */
+function ErrorScreen({ error, onRetry }: { error: Error; onRetry: () => void }): React.ReactElement {
+  const t = useT();
+  return (
+    <StartupScreen
+      message={
+        <>
+          {t("error.crashed")}
+          <pre className="mt-4 max-h-[40vh] max-w-[70ch] overflow-auto rounded-lg bg-surface p-3 text-left text-xs">{error.stack ?? error.message}</pre>
+        </>
+      }
+      action={{ label: t("error.tryAgain"), onSelect: onRetry }}
+    />
+  );
 }

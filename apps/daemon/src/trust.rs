@@ -51,12 +51,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use crate::hostfs::lexically_normalise;
 use crate::paths;
-use crate::protocol::{error_code, Agent, CodedError, Event, Project, Role, Session};
+use crate::protocol::{
+    error_code, notice_code, trust_reason, Agent, CodedError, Event, Notice, Project, Role, Session,
+};
 use crate::session::LiveSession;
 use crate::state::AppState;
 
@@ -333,13 +335,17 @@ fn under_a_trusted_directory(path: &str, trusted: &[String]) -> bool {
 /// link whose real location sits under the parent does not slip past the text comparison. A home
 /// directory that is not absolute, or is the root, cannot be told apart from anything else, so
 /// nothing is offered. A project path that is not absolute is refused as such. Every refusal
-/// carries the same code: the dialog stays open, since nothing was answered.
+/// carries one of the three codes that leave the dialog open, since nothing was answered.
 fn trustable_parent(project_path: &str, home: &Path) -> Result<PathBuf> {
     let path = normalise_path(project_path);
     if !path.is_absolute() {
-        return Err(refused(format!(
-            "`{project_path}` is not an absolute path, so there is no folder above it to trust"
-        )));
+        return Err(CodedError::raised(
+            error_code::TRUST_PATH_NOT_ABSOLUTE,
+            format!(
+                "`{project_path}` is not an absolute path, so there is no folder above it to trust"
+            ),
+            &[("path", project_path)],
+        ));
     }
     let parent = match path.parent() {
         Some(parent) if parent.parent().is_some() => parent.to_path_buf(),
@@ -347,9 +353,10 @@ fn trustable_parent(project_path: &str, home: &Path) -> Result<PathBuf> {
     };
     let home = lexically_normalise(home);
     if !home.is_absolute() || home.parent().is_none() {
-        return Err(refused(
-            "the home directory could not be determined, so no folder can be checked against it"
-                .to_string(),
+        return Err(CodedError::raised(
+            error_code::TRUST_HOME_UNKNOWN,
+            "the home directory could not be determined, so no folder can be checked against it",
+            &[],
         ));
     }
     if home.starts_with(&parent) {
@@ -365,11 +372,6 @@ fn trustable_parent(project_path: &str, home: &Path) -> Result<PathBuf> {
         return Err(too_broad(&parent));
     }
     Ok(parent)
-}
-
-/// A directory to trust that cannot be offered, with the reason. One code for all of them.
-fn refused(message: String) -> anyhow::Error {
-    CodedError::raised(error_code::TRUST_DIRECTORY_TOO_BROAD, message)
 }
 
 /// Whether two paths are the same directory on disk, however they are spelled: through a symlink,
@@ -392,6 +394,7 @@ fn too_broad(directory: &Path) -> anyhow::Error {
              and trust that.",
             directory.display()
         ),
+        &[("path", &directory.to_string_lossy())],
     )
 }
 
@@ -485,7 +488,37 @@ fn not_waiting() -> anyhow::Error {
     CodedError::raised(
         error_code::CLAUDE_TRUST_NOT_WAITING,
         "this session is not waiting at Claude Code's trust screen any more",
+        &[],
     )
+}
+
+fn not_a_claude_session() -> anyhow::Error {
+    CodedError::raised(
+        error_code::NOT_A_CLAUDE_SESSION,
+        "only Claude Code sessions have a trust screen",
+        &[],
+    )
+}
+
+/// Answering the screen failed for `reason`, the English account that `reason_code` names for a
+/// client to word. `detail` is what the code's wording is filled with, if anything.
+fn answer_failed(
+    reason_code: &'static str,
+    reason: impl Into<String>,
+    detail: &[(&str, &str)],
+) -> anyhow::Error {
+    let reason = reason.into();
+    let mut pairs = vec![("reason", reason.as_str()), ("reason_code", reason_code)];
+    pairs.extend_from_slice(detail);
+    CodedError::raised(
+        error_code::CLAUDE_TRUST_ANSWER_FAILED,
+        answer_failed_message(&reason),
+        &pairs,
+    )
+}
+
+fn answer_failed_message(reason: &str) -> String {
+    format!("Octoboard could not answer Claude Code's trust screen ({reason}). Answer it in the terminal.")
 }
 
 fn is_not_waiting(err: &anyhow::Error) -> bool {
@@ -501,13 +534,23 @@ fn report_failure(state: &Arc<AppState>, session_id: &str, err: &anyhow::Error) 
         return;
     }
     tracing::warn!(session = %session_id, %err, "answering the Claude Code trust screen failed");
-    state.broadcast(Event::SessionNotice {
-        session: session_id.to_string(),
-        message: format!(
-            "Octoboard could not answer Claude Code's trust screen ({err}). Answer it in the \
-             terminal."
-        ),
-    });
+    // Its code and params carry over as they are; anything else is told as its English text.
+    let notice = match err.downcast_ref::<CodedError>() {
+        Some(coded) if coded.code == error_code::CLAUDE_TRUST_ANSWER_FAILED => Notice {
+            code: notice_code::CLAUDE_TRUST_ANSWER_FAILED,
+            message: coded.message.clone(),
+            params: coded.params.clone(),
+        },
+        _ => {
+            let reason = err.to_string();
+            Notice::new(
+                notice_code::CLAUDE_TRUST_ANSWER_FAILED,
+                answer_failed_message(&reason),
+                &[("reason", &reason)],
+            )
+        }
+    };
+    state.broadcast(notice.about(session_id));
 }
 
 /// The prompts to put to a client that has just been sent a snapshot: one for each live Claude
@@ -540,21 +583,29 @@ pub async fn confirm(
 ) -> Result<()> {
     let session = state.session_record(session_id)?;
     if session.agent != Agent::Claude {
-        bail!("only Claude Code sessions have a trust screen");
+        return Err(not_a_claude_session());
     }
     let Some(live) = state.live_session(session_id) else {
-        bail!("this session is not running");
+        return Err(CodedError::raised(
+            error_code::SESSION_NOT_RUNNING,
+            "this session is not running",
+            &[("session", session_id)],
+        ));
     };
     if !live.trust.waiting() {
         return Err(not_waiting());
     }
     let Some(project_id) = &session.project_id else {
-        bail!("a hub session's trust screen is answered by Octoboard without asking");
+        return Err(CodedError::raised(
+            error_code::HUB_TRUST_NOT_ASKED,
+            "a hub session's trust screen is answered by Octoboard without asking",
+            &[],
+        ));
     };
     let mut project = state
         .store
         .get_project(project_id)?
-        .ok_or_else(|| anyhow!("unknown project {project_id}"))?;
+        .ok_or_else(|| CodedError::unknown_project(project_id))?;
 
     let directory = if trust_parent_dir {
         Some(trustable_parent(&project.path, &paths::home_dir())?)
@@ -619,7 +670,7 @@ pub fn remove_trusted_directory(state: &Arc<AppState>, path: &str) -> Result<()>
 /// the bytes are the two constants above, so nothing a model or a message wrote can reach it.
 fn answer(live: &LiveSession) -> Result<()> {
     if live.agent != Agent::Claude {
-        bail!("only Claude Code sessions have a trust screen");
+        return Err(not_a_claude_session());
     }
     if !live.trust.claim_answer() {
         return Err(not_waiting());
@@ -631,11 +682,19 @@ fn answer(live: &LiveSession) -> Result<()> {
 
     let screen = live.recent_output(WINDOW);
     if !is_trust_screen(&screen) {
-        bail!("the trust screen is no longer on the terminal");
+        return Err(answer_failed(
+            trust_reason::SCREEN_GONE,
+            "the trust screen is no longer on the terminal",
+            &[],
+        ));
     }
     // A Down from the second option wraps round to the first, where the Enter would then exit.
     if cursor_on(&screen) != Some(Cursor::Decline) {
-        bail!("the cursor is not on the screen's first option, or could not be found");
+        return Err(answer_failed(
+            trust_reason::CURSOR_NOT_ON_DECLINE,
+            "the cursor is not on the screen's first option, or could not be found",
+            &[],
+        ));
     }
 
     let mark = live.output_total();
@@ -643,15 +702,27 @@ fn answer(live: &LiveSession) -> Result<()> {
     if !wait_for(MOVE_TIMEOUT, || {
         cursor_on(&live.output_since(mark)) == Some(Cursor::Accept)
     }) {
-        bail!("the cursor did not move to \"Yes, I trust this folder\", so Enter was not sent");
+        return Err(answer_failed(
+            trust_reason::CURSOR_DID_NOT_MOVE,
+            "the cursor did not move to \"Yes, I trust this folder\", so Enter was not sent",
+            &[],
+        ));
     }
     // Quiet first, so that what is read next is the screen as it now stands, then a last look at
     // the cursor and at the input, right before the key that cannot be taken back.
     if !wait_quiet(live, MOVE_TIMEOUT) {
-        bail!("the terminal did not settle after the Down, so Enter was not sent");
+        return Err(answer_failed(
+            trust_reason::TERMINAL_NOT_SETTLED,
+            "the terminal did not settle after the Down, so Enter was not sent",
+            &[],
+        ));
     }
     if cursor_on(&live.output_since(mark)) != Some(Cursor::Accept) {
-        bail!("the cursor is no longer on \"Yes, I trust this folder\", so Enter was not sent");
+        return Err(answer_failed(
+            trust_reason::CURSOR_MOVED_AWAY,
+            "the cursor is no longer on \"Yes, I trust this folder\", so Enter was not sent",
+            &[],
+        ));
     }
 
     let mark = live.output_total();
@@ -659,11 +730,19 @@ fn answer(live: &LiveSession) -> Result<()> {
     let gone = |after: &[u8]| !after.is_empty() && !mentions_an_option(after);
     // Some output without either option, and still without one a moment later.
     if !wait_for(DISMISS_TIMEOUT, || gone(&live.output_since(mark))) {
-        bail!("the screen did not go away after Enter");
+        return Err(answer_failed(
+            trust_reason::SCREEN_NOT_DISMISSED,
+            "the screen did not go away after Enter",
+            &[],
+        ));
     }
     std::thread::sleep(QUIET);
     if !gone(&live.output_since(mark)) {
-        bail!("the screen was drawn again after Enter");
+        return Err(answer_failed(
+            trust_reason::SCREEN_REDRAWN,
+            "the screen was drawn again after Enter",
+            &[],
+        ));
     }
     Ok(())
 }
@@ -688,10 +767,19 @@ fn wait_quiet(live: &LiveSession, timeout: Duration) -> bool {
 fn write(live: &LiveSession, writes: u64, keys: &[u8]) -> Result<()> {
     match live.write_input_if_untouched(writes, keys) {
         Ok(true) => Ok(()),
-        Ok(false) => {
-            bail!("something else wrote into the terminal meanwhile, so the keys were not sent")
+        Ok(false) => Err(answer_failed(
+            trust_reason::INPUT_TOUCHED,
+            "something else wrote into the terminal meanwhile, so the keys were not sent",
+            &[],
+        )),
+        Err(err) => {
+            let detail = err.to_string();
+            Err(answer_failed(
+                trust_reason::TERMINAL_WRITE_FAILED,
+                format!("writing to the terminal failed: {detail}"),
+                &[("detail", &detail)],
+            ))
         }
-        Err(err) => Err(anyhow!("writing to the terminal failed: {err}")),
     }
 }
 
@@ -1102,6 +1190,12 @@ mod tests {
 
         let err = answer(&live).expect_err("not confirmed");
         assert!(err.to_string().contains("did not move"), "{err}");
+        let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+        assert_eq!(coded.code, error_code::CLAUDE_TRUST_ANSWER_FAILED);
+        assert_eq!(
+            coded.params["reason_code"],
+            trust_reason::CURSOR_DID_NOT_MOVE
+        );
 
         assert_eq!(sent(&received), b"\x1b[B");
         live.terminate();
@@ -1510,7 +1604,7 @@ mod tests {
         assert!(!consented_in_store(&state));
         let mut told = false;
         while let Ok(event) = events.try_recv() {
-            told |= matches!(event, Event::SessionNotice { session, message }
+            told |= matches!(event, Event::SessionNotice { session, message, .. }
                 if session == "worker-1" && message.contains("Answer it in the terminal"));
         }
         assert!(told, "a notice, for a dialog that may be closed");
@@ -1536,8 +1630,9 @@ mod tests {
 
         let notice = tokio::time::timeout(Duration::from_secs(10), async {
             loop {
-                if let Event::SessionNotice { session, message } =
-                    events.recv().await.expect("event")
+                if let Event::SessionNotice {
+                    session, message, ..
+                } = events.recv().await.expect("event")
                 {
                     return (session, message);
                 }
@@ -1876,10 +1971,17 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    fn is_too_broad(result: &Result<PathBuf>) -> bool {
+    /// Whether the refusal is one of the codes that leave the dialog open.
+    fn is_not_offerable(result: &Result<PathBuf>) -> bool {
         result.as_ref().is_err_and(|err| {
-            err.downcast_ref::<CodedError>()
-                .is_some_and(|coded| coded.code == error_code::TRUST_DIRECTORY_TOO_BROAD)
+            err.downcast_ref::<CodedError>().is_some_and(|coded| {
+                [
+                    error_code::TRUST_DIRECTORY_TOO_BROAD,
+                    error_code::TRUST_PATH_NOT_ABSOLUTE,
+                    error_code::TRUST_HOME_UNKNOWN,
+                ]
+                .contains(&coded.code)
+            })
         })
     }
 
@@ -1896,13 +1998,16 @@ mod tests {
         let under = |parent: PathBuf| parent.join("app").to_string_lossy().into_owned();
 
         // As written, for the baseline.
-        assert!(is_too_broad(&trustable_parent(&under(home.clone()), &home)));
+        assert!(is_not_offerable(&trustable_parent(
+            &under(home.clone()),
+            &home
+        )));
         // A link to the home directory, and a link to a directory above it.
-        assert!(is_too_broad(&trustable_parent(
+        assert!(is_not_offerable(&trustable_parent(
             &under(dir.join("link-to-home")),
             &home
         )));
-        assert!(is_too_broad(&trustable_parent(
+        assert!(is_not_offerable(&trustable_parent(
             &under(dir.join("link-to-above")),
             &home
         )));
@@ -1914,7 +2019,7 @@ mod tests {
         // refused; on one that does not it is a different folder, which is offered.
         let flipped = dir.join("hOME");
         if flipped.exists() {
-            assert!(is_too_broad(&trustable_parent(&under(flipped), &home)));
+            assert!(is_not_offerable(&trustable_parent(&under(flipped), &home)));
         } else {
             std::fs::create_dir_all(flipped.join("app")).expect("a different folder");
             assert!(trustable_parent(&under(flipped), &home).is_ok());
@@ -1934,7 +2039,7 @@ mod tests {
 
         let project = dir.join("data/app").to_string_lossy().into_owned();
         assert!(
-            is_too_broad(&trustable_parent(&project, &home)),
+            is_not_offerable(&trustable_parent(&project, &home)),
             "`data` contains the real home"
         );
         // A folder that does not contain it is still offered.
@@ -1951,13 +2056,13 @@ mod tests {
         for home in ["", "relative/home", "/"] {
             let err = trustable_parent("/work/project", Path::new(home)).expect_err(home);
             assert!(err.to_string().contains("home directory"), "{err}");
-            assert!(is_too_broad(&Err::<PathBuf, _>(err)), "{home:?}");
+            assert!(is_not_offerable(&Err::<PathBuf, _>(err)), "{home:?}");
         }
         let err = trustable_parent("work/project", Path::new("/Users/me")).expect_err("relative");
         assert!(err.to_string().contains("not an absolute path"), "{err}");
         assert!(!err.to_string().contains("too broad"), "{err}");
         // Still a refusal the dialog stays open for.
-        assert!(is_too_broad(&Err::<PathBuf, _>(err)));
+        assert!(is_not_offerable(&Err::<PathBuf, _>(err)));
     }
 
     #[test]

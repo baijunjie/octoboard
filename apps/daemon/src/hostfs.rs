@@ -3,9 +3,9 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 
-use crate::protocol::DirEntry;
+use crate::protocol::{error_code, CodedError, DirEntry};
 
 /// Expands a leading `~` and makes the path absolute. The UI sends whatever the user typed.
 pub fn expand(path: &str) -> PathBuf {
@@ -40,6 +40,14 @@ pub fn is_git_repo(path: &Path) -> bool {
     path.join(".git").exists()
 }
 
+pub fn not_a_directory(path: &Path) -> anyhow::Error {
+    CodedError::raised(
+        error_code::PATH_NOT_A_DIRECTORY,
+        format!("`{}` is not a directory", path.display()),
+        &[("path", &path.to_string_lossy())],
+    )
+}
+
 /// Lists the directories under `path`, each flagged with whether it is a git repository.
 ///
 /// Only directories, because a project is a directory; dot-directories are skipped as noise. A
@@ -48,16 +56,27 @@ pub fn is_git_repo(path: &Path) -> bool {
 /// a normal path, since projects are scattered across volumes.
 pub fn list_dir(path: &Path) -> Result<Vec<DirEntry>> {
     if !path.exists() {
-        bail!("`{}` does not exist", path.display());
+        return Err(CodedError::raised(
+            error_code::PATH_NOT_FOUND,
+            format!("`{}` does not exist", path.display()),
+            &[("path", &path.to_string_lossy())],
+        ));
     }
     if !path.is_dir() {
-        bail!("`{}` is not a directory", path.display());
+        return Err(not_a_directory(path));
     }
-    let read = std::fs::read_dir(path).with_context(|| {
-        format!(
-            "`{}` could not be read. On a volume the application has no file access to, macOS asks \
-             for permission per volume — grant it and try again.",
-            path.display()
+    let read = std::fs::read_dir(path).map_err(|err| {
+        CodedError::raised(
+            error_code::DIRECTORY_UNREADABLE,
+            format!(
+                "`{}` could not be read. On a volume the application has no file access to, macOS \
+                 asks for permission per volume — grant it and try again: {err}",
+                path.display()
+            ),
+            &[
+                ("path", &path.to_string_lossy()),
+                ("detail", &err.to_string()),
+            ],
         )
     })?;
 
@@ -107,11 +126,20 @@ pub fn discover_repos(parent: &Path) -> Result<Vec<PathBuf>> {
 /// the daemon's own: a daemon started from Finder has a minimal `PATH` with no `git` on it, and its
 /// own environment may carry the agent-session markers that environment exists to filter out.
 pub fn clone_repo(remote_url: &str, parent: &Path) -> Result<PathBuf> {
-    let name = repo_name(remote_url)
-        .ok_or_else(|| anyhow::anyhow!("`{remote_url}` has no repository name in it"))?;
+    let name = repo_name(remote_url).ok_or_else(|| {
+        CodedError::raised(
+            error_code::REPOSITORY_NAME_MISSING,
+            format!("`{remote_url}` has no repository name in it"),
+            &[("url", remote_url)],
+        )
+    })?;
     let target = parent.join(&name);
     if target.exists() {
-        bail!("`{}` already exists", target.display());
+        return Err(CodedError::raised(
+            error_code::PATH_ALREADY_EXISTS,
+            format!("`{}` already exists", target.display()),
+            &[("path", &target.to_string_lossy())],
+        ));
     }
     std::fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
 
@@ -127,10 +155,12 @@ pub fn clone_repo(remote_url: &str, parent: &Path) -> Result<PathBuf> {
         .output()
         .context("running `git clone`")?;
     if !output.status.success() {
-        bail!(
-            "`git clone` failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
+        let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(CodedError::raised(
+            error_code::GIT_CLONE_FAILED,
+            format!("`git clone` failed: {detail}"),
+            &[("detail", &detail)],
+        ));
     }
     Ok(target)
 }

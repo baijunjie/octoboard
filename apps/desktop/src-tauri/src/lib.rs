@@ -7,9 +7,10 @@
 //! stdout itself and bakes the port into the window's URL as a `?port=` query parameter *before*
 //! creating the window, instead of exposing an `invoke`-able command for it.
 //!
-//! The two IPC commands this crate does expose, `frontend_exit_heartbeat` and `confirm_quit` (both
-//! in `exit.rs`), carry no daemon traffic or session data either — they are bare exit-flow signals,
-//! not a channel for anything the daemon knows about.
+//! The three IPC commands this crate does expose, `frontend_exit_heartbeat` and `confirm_quit` (both
+//! in `exit.rs`) and `set_menu_labels` (in `menu.rs`), carry no daemon traffic or session data
+//! either — the first two are bare exit-flow signals, the third is the UI's menu text, not a
+//! channel for anything the daemon knows about.
 
 mod exit;
 mod menu;
@@ -27,7 +28,7 @@ use exit::{
     confirm_quit, frontend_exit_heartbeat, install_application_should_terminate_override,
     should_let_quit_through, ExitState,
 };
-use menu::{build_menu, SETTINGS_ITEM_ID, SETTINGS_REQUESTED_EVENT};
+use menu::{build_menu, set_menu_labels, Labels, SETTINGS_ITEM_ID, SETTINGS_REQUESTED_EVENT};
 use sidecar::spawn_daemon_and_wait_for_port;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -40,7 +41,8 @@ pub fn run() {
         .manage(ExitState::default())
         .invoke_handler(tauri::generate_handler![
             frontend_exit_heartbeat,
-            confirm_quit
+            confirm_quit,
+            set_menu_labels
         ])
         .on_menu_event(|app, event| {
             if event.id() == SETTINGS_ITEM_ID {
@@ -56,7 +58,7 @@ pub fn run() {
             }
         })
         .setup(|app| {
-            app.set_menu(build_menu(app.handle())?)?;
+            app.set_menu(build_menu(app.handle(), &Labels::default())?)?;
             // This closure runs once the event loop (and with it, tao's `NSApplicationDelegate`)
             // is up and running — `App::run` calls it on the runtime's `Ready` event — so the
             // delegate this installs onto already exists by now. See the function's own doc
@@ -123,10 +125,34 @@ const TRAFFIC_LIGHT_X: f64 = 16.0;
 #[cfg(target_os = "macos")]
 const TRAFFIC_LIGHT_Y: f64 = 21.0;
 
+/// The system's preferred languages, most preferred first, comma-separated, for the UI to choose
+/// its language from. The webview cannot tell it: WKWebView's `navigator.languages` holds only the
+/// first preference, so a user whose first language Octoboard does not offer would get the
+/// fallback even when a later preference is offered. A snapshot at launch, as macOS applications
+/// generally take one.
+#[cfg(target_os = "macos")]
+fn preferred_languages() -> Option<String> {
+    let languages = objc2_foundation::NSLocale::preferredLanguages();
+    let tags: Vec<String> = languages.iter().map(|tag| tag.to_string()).collect();
+    (!tags.is_empty()).then(|| tags.join(","))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn preferred_languages() -> Option<String> {
+    None
+}
+
 fn open_main_window(app: &tauri::AppHandle, startup: Result<u16, String>) -> tauri::Result<()> {
     let query = match startup {
         Ok(port) => format!("port={port}"),
         Err(message) => format!("error={}", percent_encode_query_value(&message)),
+    };
+    let query = match preferred_languages() {
+        Some(languages) => format!(
+            "{query}&languages={}",
+            percent_encode_query_value(&languages)
+        ),
+        None => query,
     };
     let url = if cfg!(debug_assertions) {
         format!("http://localhost:5174/?{query}")

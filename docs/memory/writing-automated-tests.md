@@ -1,5 +1,11 @@
 # Writing automated tests
 
+## Write only the unit tests a rule needs, one case per rule
+
+The user wants tests lean and has had over-written ones trimmed. Test a module's rules, not every variant of them:
+one representative case per rule, in a table (`it.each`) when several rules share one shape, rather than a
+`describe` block per behaviour with a handful of near-duplicate cases each.
+
 ## Never write a fresh executable per test — share one that has already been exec'd
 
 Applies to any test that needs a script of its own to run as a program: a fake shell, a fake agent

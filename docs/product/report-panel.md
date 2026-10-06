@@ -1,6 +1,7 @@
 # Report panel
 
-The **report panel** is the third pane of the window, to the right of the terminal. It belongs to a
+The **report panel** is the third pane of the window, to the right of the terminal (to its left under a right-to-left
+language, see "Right-to-left layout" in `docs/product/window-layout.md`). It belongs to a
 **console** rather than to a session: its pages are pushed by that console's hub session, and the
 panel is on screen only while the selected session is a hub session. Selecting a project session
 leaves the terminal to fill the pane on its own. How wide the panel is, how the user resizes and hides it, how a
@@ -28,9 +29,10 @@ panel when they come back to the hub.
 "Deleting a console" in `docs/product/consoles-and-projects.md`). Nothing else deletes a page, and
 the hub cannot withdraw one it has pushed.
 
-The panel's bar carries, left to right: ◀ and ▶ to step one page back and one forward, the position
-as "current / total" counted from 1 with the oldest page first, the page's creation time in the
-user's own locale format, and — on any page but the newest — a "Read-only" badge.
+The panel's bar carries, left to right (mirrored under a right-to-left language): ◀ and ▶ to step one page back
+and one forward, the position as "current / total" counted from 1 with the oldest page first, the page's creation
+time formatted for the UI's current language (see "What follows the language" in `docs/product/language.md`), and — on
+any page but the newest — a "Read-only" badge.
 
 - The panel follows the newest page: a page pushed while the user is on the newest one moves the view
   to it.
@@ -77,7 +79,9 @@ whatever the user puts into it.
 
 Each page is rendered in a sandboxed frame of its own, with no access to the application around it or
 to any other page, and on a light surface whatever the window's appearance is — see "A report page
-stays on a light surface in both appearances" in `docs/product/appearance.md`.
+stays on a light surface in both appearances" in `docs/product/appearance.md`. It also keeps its own
+language and writing direction whatever the UI's language is — see "What follows the language" in
+`docs/product/language.md`.
 
 ## Submitting a form back to the hub
 

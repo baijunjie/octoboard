@@ -11,19 +11,24 @@ export type PaneMode = "drawer" | "floating";
 /** The DOM ids of the two panes, which the top bar's toggles name in `aria-controls`. */
 export const PANE_ID = { sidebar: "sidebar-pane", report: "report-pane" } as const;
 
-/** The classes that differ between the two sides, written out in full: Tailwind emits a utility
+/** The edge a pane sits on: the reading direction's start or end. */
+export type PaneEdge = "start" | "end";
+
+/** The two sides are the reading direction's start and end, so under right-to-left the sidebar is on
+ * the right. The classes that differ between them are written out in full: Tailwind emits a utility
  * only for a class name it can find as literal text somewhere in the source, so an interpolated
- * `left-0`/`right-0` would compile to nothing and leave the pane unanchored. */
+ * `start-0`/`end-0` would compile to nothing and leave the pane unanchored. `translate-x-*` is
+ * physical, so the slide direction under `rtl:` is the opposite one. */
 const SIDE_CLASSES = {
-  left: {
-    anchor: "left-0",
-    closed: "-translate-x-full",
-    floatingAway: "docked:-translate-x-full docked:invisible",
+  start: {
+    anchor: "start-0",
+    closed: "-translate-x-full rtl:translate-x-full",
+    floatingAway: "docked:-translate-x-full docked:rtl:translate-x-full docked:invisible",
   },
-  right: {
-    anchor: "right-0",
-    closed: "translate-x-full",
-    floatingAway: "docked:translate-x-full docked:invisible",
+  end: {
+    anchor: "end-0",
+    closed: "translate-x-full rtl:-translate-x-full",
+    floatingAway: "docked:translate-x-full docked:rtl:-translate-x-full docked:invisible",
   },
 };
 
@@ -38,7 +43,8 @@ const SIDE_CLASSES = {
  * no stacking context, no transition. `docked:translate-none` rather than `docked:translate-x-0`
  * (which still computes to a `translate` value other than `none`) is what keeps it from becoming a
  * stacking context and a containing block for fixed descendants at and above the breakpoint,
- * where the layout must stay exactly as it was before the pane had a `translate` at all.
+ * where the layout must stay exactly as it was before the pane had a `translate` at all. The
+ * `rtl:` slide classes win over a plain `docked:` one, so the reset has an `rtl:` twin.
  *
  * In `floating` mode none of the `docked:` resets apply, and `peeking` takes the place of `open`
  * for whether the pane is on screen there. It is `invisible` while away, so a pane that slid out
@@ -54,12 +60,12 @@ const SIDE_CLASSES = {
  * that are also drawers and hover-peek panes, with the top bar still operable, focus staying on the
  * terminal, and the report page staying mounted.
  */
-export function drawerClass(side: "left" | "right", mode: PaneMode, open: boolean, peeking = false): string {
+export function drawerClass(side: PaneEdge, mode: PaneMode, open: boolean, peeking = false): string {
   const { anchor, closed, floatingAway } = SIDE_CLASSES[side];
   const form =
     mode === "drawer"
-      ? "transition-transform docked:static docked:z-auto docked:translate-none docked:transition-none"
-      : `transition-[translate,visibility] ${peeking ? "docked:translate-x-0 docked:shadow-xl" : floatingAway}`;
+      ? "transition-transform docked:static docked:z-auto docked:translate-none docked:rtl:translate-none docked:transition-none"
+      : `transition-[translate,visibility] ${peeking ? "docked:translate-x-0 docked:rtl:translate-x-0 docked:shadow-xl" : floatingAway}`;
   const base = "fixed bottom-0 top-(--top-chrome-height) z-40 duration-200 motion-reduce:transition-none";
   return `${base} ${anchor} ${open ? "translate-x-0" : closed} ${form}`;
 }
@@ -73,14 +79,16 @@ export function drawerClass(side: "left" | "right", mode: PaneMode, open: boolea
  * It is a bare element because it is not a control: it is `aria-hidden`, a mouse-only hover target
  * with no HeroUI equivalent.
  *
- * The left strip is 8px, easy to reach by pushing the pointer to the edge. The right one is 4px,
- * the width of the terminal's padding, so it stays off xterm's scrollbar.
+ * The strip on the window's physical right is 4px, the width of the terminal's padding, so it stays
+ * off xterm's scrollbar, which is on the right whatever the direction; the one on the left is 8px,
+ * easy to reach by pushing the pointer to the edge. That is the start strip under left-to-right and
+ * the end strip under right-to-left, hence the physical widths.
  */
 export function PeekHotZone({
   side,
   peek,
 }: {
-  side: "left" | "right";
+  side: PaneEdge;
   peek: PanePeek;
 }): React.ReactElement | null {
   if (peek.active) return null;
@@ -88,9 +96,9 @@ export function PeekHotZone({
     <div
       aria-hidden="true"
       className={
-        side === "left"
-          ? "fixed bottom-0 left-0 top-(--top-chrome-height) z-30 hidden w-2 docked:block"
-          : "fixed bottom-0 right-0 top-(--top-chrome-height) z-30 hidden w-1 docked:block"
+        side === "start"
+          ? "fixed bottom-0 start-0 top-(--top-chrome-height) z-30 hidden w-2 rtl:w-1 docked:block"
+          : "fixed bottom-0 end-0 top-(--top-chrome-height) z-30 hidden w-1 rtl:w-2 docked:block"
       }
       onPointerEnter={(event) => event.pointerType === "mouse" && peek.reveal(true)}
     />

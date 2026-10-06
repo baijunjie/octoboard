@@ -2,6 +2,8 @@ import { Button } from "@heroui/react";
 import React, { useState } from "react";
 
 import { AGENT_OPTIONS } from "../agents";
+import type { PlainMessageKey } from "../i18n/catalog";
+import { useT } from "../i18n/react";
 import type { Agent, Project, ProjectSource } from "../protocol";
 import { useDaemon } from "../store";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
@@ -9,17 +11,10 @@ import { DirectoryPicker } from "./DirectoryPicker";
 import { OptionSelect } from "./OptionSelect";
 import { TextInput } from "./TextInput";
 
-const SOURCE_OPTIONS: { value: ProjectSource; label: string }[] = [
-  { value: "local", label: "A single directory" },
-  { value: "parent", label: "A parent directory (discover git repos beneath it)" },
-  { value: "github", label: "A GitHub URL (clone it)" },
-];
-
-/** `""` stands for "unset" — falls back to the console's default agent per the "Which agent a
- * session uses" section of docs/product/sessions.md. */
-const DEFAULT_AGENT_OPTIONS: { value: Agent | ""; label: string }[] = [
-  { value: "", label: "Use console default" },
-  ...AGENT_OPTIONS,
+const SOURCE_OPTIONS: { value: ProjectSource; label: PlainMessageKey }[] = [
+  { value: "local", label: "dialog.project.source.local" },
+  { value: "parent", label: "dialog.project.source.parent" },
+  { value: "github", label: "dialog.project.source.github" },
 ];
 
 export function ProjectDialog({
@@ -33,6 +28,7 @@ export function ProjectDialog({
   project?: Project;
   onClose: () => void;
 }): React.ReactElement {
+  const t = useT();
   const { request } = useDaemon();
   const [source, setSource] = useState<ProjectSource>(editing?.source ?? "local");
   const [path, setPath] = useState(editing?.path ?? "");
@@ -49,18 +45,18 @@ export function ProjectDialog({
       // `github`. Checked here so an obviously incomplete request never reaches the daemon only to
       // come back as a raw "`path` is required" field-name error.
       if (!path.trim()) {
-        setError("A directory is required.");
+        setError(t("dialog.project.directoryRequired"));
         return;
       }
       if (source === "github" && !remoteUrl.trim()) {
-        setError("A repository URL is required.");
+        setError(t("dialog.project.urlRequired"));
         return;
       }
     } else if (!name.trim()) {
       // `name: name || undefined` below means "blank leaves it alone" everywhere else this pattern
       // is used (the field is genuinely optional on creation), but here blanking it out and saving
       // would silently keep the old name instead of doing what the empty field visually suggests.
-      setError("Name is required.");
+      setError(t("dialog.nameRequired"));
       return;
     }
     void run(async () => {
@@ -88,21 +84,29 @@ export function ProjectDialog({
     });
   };
 
+  // `""` stands for "unset" — falls back to the console's default agent per the "Which agent a
+  // session uses" section of docs/product/sessions.md.
+  const defaultAgentOptions: { value: Agent | ""; label: string }[] = [
+    { value: "", label: t("dialog.project.useConsoleDefault") },
+    ...AGENT_OPTIONS,
+  ];
+
   return (
     <>
       <Dialog
-        title={editing ? "Edit project" : "Add project"}
+        title={editing ? t("dialog.project.edit") : t("dialog.project.add")}
         onClose={onClose}
-        submitLabel={editing ? "Save" : "Add"}
+        submitLabel={editing ? t("common.save") : t("common.add")}
         busy={busy}
         onSubmit={submit}
       >
-        {!editing && <OptionSelect label="Source" options={SOURCE_OPTIONS} value={source} onChange={setSource} />}
+        {!editing && <OptionSelect label={t("dialog.project.source")} options={SOURCE_OPTIONS.map((option) => ({ ...option, label: t(option.label) }))} value={source} onChange={setSource} />}
         {!editing && source === "github" && (
           <TextInput
-            label="Repository URL"
+            label={t("dialog.project.repositoryUrl")}
             value={remoteUrl}
             onChange={setRemoteUrl}
+            dir="ltr"
             placeholder="https://github.com/owner/repo"
           />
         )}
@@ -110,26 +114,27 @@ export function ProjectDialog({
           <div className="flex items-end gap-2">
             <div className="min-w-0 flex-1">
               <TextInput
-                label={source === "github" ? "Clone into (parent directory)" : "Directory"}
+                label={source === "github" ? t("dialog.project.cloneInto") : t("dialog.project.directory")}
                 value={path}
                 onChange={setPath}
+                dir="ltr"
                 placeholder="~/code"
               />
             </div>
             <Button type="button" variant="secondary" onPress={() => setPickingDirectory(true)}>
-              Browse…
+              {t("dialog.project.browse")}
             </Button>
           </div>
         )}
         <TextInput
-          label={editing ? "Name" : "Name (optional)"}
+          label={editing ? t("common.name") : t("common.nameOptional")}
           value={name}
           onChange={setName}
-          placeholder={editing ? undefined : "derived from the directory"}
+          placeholder={editing ? undefined : t("dialog.project.nameDerived")}
         />
         <OptionSelect
-          label="Default agent"
-          options={DEFAULT_AGENT_OPTIONS}
+          label={t("dialog.project.defaultAgent")}
+          options={defaultAgentOptions}
           value={defaultAgent}
           onChange={setDefaultAgent}
         />
@@ -137,7 +142,7 @@ export function ProjectDialog({
       </Dialog>
       {pickingDirectory && (
         <DirectoryPicker
-          title="Choose a directory"
+          title={t("dialog.project.chooseDirectory")}
           initialPath={path || "~"}
           onPick={(picked) => {
             setPath(picked);

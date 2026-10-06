@@ -3,6 +3,7 @@ import React, { useEffect, useId, useRef, useState } from "react";
 
 import { takeMenuFocusToRestore } from "../components/ActionMenu";
 import { TitledControl } from "../components/TitledControl";
+import { useT } from "../i18n/react";
 
 /** The inline error and busy state every dialog that talks to the daemon needs. `run` clears the
  * error, marks the dialog busy for the duration of `action`, and shows a rejection as the error
@@ -103,6 +104,7 @@ export function Dialog({
   | { footer: BodyChildren; submitLabel?: never; busy?: never; onSubmit?: () => void }
   | { footer?: never; submitLabel: string; busy?: boolean; onSubmit: () => void }
 )): React.ReactElement {
+  const t = useT();
   // Closing returns focus to the element focused when the dialog opened, which for a dialog a menu
   // item opened is the menu's trigger. The menu knows better (the terminal, for a pointer press),
   // so that wins. Whichever runs first, the menu's element ends up focused: react-aria's own
@@ -138,7 +140,7 @@ export function Dialog({
         {footer ?? (
           <>
             <Button type="button" variant="secondary" onPress={onClose} isDisabled={busy}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" isDisabled={busy}>
               {submitLabel}
@@ -154,9 +156,9 @@ export function Dialog({
       <Frame.Container size={size}>
         <Frame.Dialog aria-describedby={alert ? bodyId : undefined}>
           <span ref={markerRef} hidden />
-          <TitledControl title="Close">
+          <TitledControl title={t("common.close")}>
             {/* Named explicitly so it always matches the tooltip. */}
-            <Frame.CloseTrigger aria-label="Close" />
+            <Frame.CloseTrigger aria-label={t("common.close")} />
           </TitledControl>
           <Frame.Header>
             <Frame.Heading>{title}</Frame.Heading>

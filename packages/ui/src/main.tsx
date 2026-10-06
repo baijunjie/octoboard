@@ -4,6 +4,8 @@ import ReactDOM from "react-dom/client";
 import { App } from "./App";
 import { resolveDaemonOrigin, resolveStartupError } from "./daemon";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { LanguageProvider, Message } from "./i18n/react";
+import { useNativeMenuLabels } from "./lifecycle/useNativeMenuLabels";
 import { useNativeWindowTheme } from "./lifecycle/useNativeWindowTheme";
 import { selectPlatform } from "./platform";
 import { PlatformProvider } from "./platform/react";
@@ -49,7 +51,7 @@ function screen(): React.ReactElement {
     // The daemon failed to start before the window even opened, and the shell passed the message
     // along via `?error=` instead of `?port=` — there is nothing to connect to, same as the
     // missing-address case below, just with a specific reason instead of a generic one.
-    return <StartupScreen message={`The daemon failed to start: ${startupError}`} />;
+    return <StartupScreen message={<Message id="startup.daemonFailed" params={{ error: startupError }} />} />;
   }
   if (!daemon) {
     // No shell handed us a `?port=`, no `VITE_DAEMON_PORT` was set, and the page's own origin is
@@ -58,12 +60,15 @@ function screen(): React.ReactElement {
     return (
       <StartupScreen
         message={
-          <>
-            No daemon address known. The Tauri shell passes a port via <code>?port=</code>; for{" "}
-            <code>vite dev</code> against a daemon started by hand, open the page with{" "}
-            <code>?port=</code>, set <code>VITE_DAEMON_PORT</code>, or start the dev server with{" "}
-            <code>OCTOBOARD_DAEMON_PORT</code> to proxy to it.
-          </>
+          <Message
+            id="startup.noAddress"
+            params={{
+              port: <code>?port=</code>,
+              dev: <code>vite dev</code>,
+              portVar: <code>VITE_DAEMON_PORT</code>,
+              proxyVar: <code>OCTOBOARD_DAEMON_PORT</code>,
+            }}
+          />
         }
       />
     );
@@ -86,6 +91,13 @@ function NativeWindowThemeSync(): null {
   return null;
 }
 
+// Mounted under `LanguageProvider` but outside `ErrorBoundary`, so the menu follows the language
+// on the error screen too; unlike the theme hook it needs nothing from `ThemeProvider`.
+function NativeMenuLabelsSync(): null {
+  useNativeMenuLabels();
+  return null;
+}
+
 // One render for every screen, so none of them is outside the boundary. `ErrorBoundary` wraps
 // `ThemeProvider`, not the other way around: `useTheme`'s state initialiser reads `localStorage`
 // unguarded, and a throw there must still land on the boundary's fallback rather than a blank
@@ -96,12 +108,15 @@ function NativeWindowThemeSync(): null {
 root.render(
   <React.StrictMode>
     <PlatformProvider value={platform}>
-      <ErrorBoundary>
-        <ThemeProvider>
-          <NativeWindowThemeSync />
-          {screen()}
-        </ThemeProvider>
-      </ErrorBoundary>
+      <LanguageProvider>
+        <NativeMenuLabelsSync />
+        <ErrorBoundary>
+          <ThemeProvider>
+            <NativeWindowThemeSync />
+            {screen()}
+          </ThemeProvider>
+        </ErrorBoundary>
+      </LanguageProvider>
     </PlatformProvider>
   </React.StrictMode>,
 );

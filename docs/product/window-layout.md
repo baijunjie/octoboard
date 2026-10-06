@@ -1,6 +1,7 @@
 # Window layout
 
-The window has a **top bar** across its whole width and, under it, up to three panes, left to right: the
+The window has a **top bar** across its whole width and, under it, up to three panes, left to right (right to left
+under a right-to-left language, see "Right-to-left layout" below): the
 **sidebar** with the console → project → session tree (see "The console → project → session menu" in
 `docs/product/sessions.md`), the selected session's **terminal**, and — only while the selected session is a hub
 session — that console's **report panel** (see `docs/product/report-panel.md`). The connection banner, while the
@@ -52,11 +53,12 @@ meanwhile; once the browser answers and the bell goes away, focus moves to the t
 when the terminal cannot take it.
 
 **In the macOS application the top bar is the window's titlebar.** The window has no native titlebar background and
-shows no title text of its own (the window is still called Octoboard in the Dock and in Mission Control). The
-window's close, minimise and zoom buttons sit inside the bar at its left end, and the bar keeps that space clear for
-them; in fullscreen, where those buttons are gone, the space goes as well. Dragging any part of the bar that is not
-a control moves the window, and double-clicking it zooms the window, as with a native titlebar. Opened in a plain
-browser, the bar has none of this: it starts at the left edge and does not move anything.
+shows no title text of its own (the window is still called Octoboard in the Dock and in Mission Control). The window's
+close, minimise and zoom buttons sit inside the bar at its left end, and the bar keeps that space clear for them; in
+fullscreen, where those buttons are gone, the space goes as well. Under a right-to-left language the buttons and their
+clear space stay at the left end, which then holds the bar's last controls rather than its first. Dragging any part of
+the bar that is not a control moves the window, and double-clicking it zooms the window, as with a native titlebar.
+Opened in a plain browser, the bar has none of this: it starts at the left edge and does not move anything.
 
 ### The connection status
 
@@ -146,10 +148,11 @@ banner, while it is shown).
 - **Dragging** the handle sets the pane's width, within its range in the table above.
 - **Double-clicking** it returns the pane to its default width.
 - The handle is also reachable with Tab and is then operated from the keyboard: the arrow pointing away from the pane
-  widens it and the other narrows it (Right widens the sidebar, Left widens the report panel), by 16 px, by 64 px with
-  Shift held; Home sets the pane's minimum, and End the widest the window currently allows. While it has keyboard
-  focus the handle is drawn as a solid accent-coloured bar with a focus ring around it. Pressing the handle with the
-  mouse does not take keyboard focus off the terminal.
+  widens it and the other narrows it (Right widens the sidebar and Left the report panel; the other way round under a
+  right-to-left language, where the panes have swapped sides), by 16 px, by 64 px with Shift held; Home sets the pane's
+  minimum, and End the widest the window currently allows. While it has keyboard focus the handle is drawn as a solid
+  accent-coloured bar with a focus ring around it. Pressing the handle with the mouse does not take keyboard focus off
+  the terminal.
 
 A handle is there only while its pane is shown in the row: not while the pane is hidden or floating in, and not below
 1100 px, where the panes are fixed-width drawers.
@@ -262,9 +265,9 @@ The control focus lands on shows its focus ring, even when the last input before
 Failures and notices that need no answer are shown as **toasts**; which ones are, and how they name the session they
 are about, is in "Losing the daemon connection" in `docs/product/application-lifecycle.md`.
 
-- **Always at the window's bottom right**, floating over whatever is there, on the main screen and on the screen
-  shown while connecting to the daemon alike, whether or not Settings or another dialog is open. They never move the
-  layout. The newest is at the front.
+- **Always at the window's bottom right** (bottom left under a right-to-left language), floating over whatever is there,
+  on the main screen and on the screen shown while connecting to the daemon alike, whether or not Settings or another
+  dialog is open. They never move the layout. The newest is at the front.
 - A toast about a particular session is titled with where that session is — the project it runs in, or the console
   whose hub it is — with the message under it; any other toast is just the message. An error is marked as one; a
   notice is not.
@@ -294,3 +297,35 @@ keyboard focus. The tooltip's text is the same name assistive technology announc
 The top bar's buttons with text get a tooltip of the same kind, matching their accessible name: the waiting count's
 says how many sessions are waiting and that pressing it goes to the next one, and the terminal's Reconnect button's
 says that it reconnects the terminal.
+
+## Right-to-left layout
+
+Under a right-to-left language — Arabic, see "What follows the language" in `docs/product/language.md` — the whole
+window is mirrored. Every left and right named in this doc swaps, and so do the sides the other product docs name for
+parts of the window:
+
+- The sidebar is on the right and the report panel on the left. The top bar's part with the sidebar toggle and New
+  console is at its right end, over the sidebar, and the bar's other controls run in mirrored order, Settings
+  outermost on the left.
+- Drawers and floating panes come in from their own pane's side: the sidebar's from the right edge, the report
+  panel's from the left. The edge strips that bring up a hidden pane are on those sides too, but they keep their
+  physical widths: 4 px along the right edge for the sidebar, 8 px along the left edge for the report panel, so the
+  4 px strip is always on the right, beside the terminal's scrollbar.
+- Each resize handle stays on its pane's inner edge, the sidebar's left edge and the report panel's right one.
+  Dragging toward the terminal still widens the pane, and so does the arrow key pointing away from the pane.
+- Settings and the other dialogs are mirrored the same way, and toasts sit at the bottom left.
+- A name or breadcrumb too long for its space fades out where it ends in its own direction: a name the user typed
+  is laid out in the direction of its own text, so a Latin name in an Arabic window still fades at its right edge.
+- Paths always read left to right, in the fields that take one and in the settings list, where a path too long for its
+  space fades at its start, so its last folder stays readable.
+- Icons that point a direction are mirrored: the two pane toggles, the breadcrumb's separators, the report panel's
+  previous-page and next-page buttons, and a collapsed tree row's chevron, which points left. An expanded row's
+  chevron points down, as in left-to-right.
+
+Not mirrored:
+
+- **The macOS window buttons** — close, minimise and zoom stay at the window's top left, and the top bar keeps its
+  clear space for them there (see "The top bar" above).
+- **The terminal**, which is never mirrored (see "What follows the language" in `docs/product/language.md`).
+- **A report page**, which keeps its own direction; only the panel around it is mirrored (see "What follows the
+  language" in `docs/product/language.md`).

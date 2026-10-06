@@ -54,7 +54,7 @@ function tauriWindowChrome(): WindowChromeCapability | undefined {
   let inset = TRAFFIC_LIGHT_INSET;
   const callbacks = new Set<() => void>();
   return {
-    leadingInset: () => inset,
+    leftInset: () => inset,
     subscribe(callback) {
       callbacks.add(callback);
       const { track, undo } = unlistenTracker();
@@ -85,6 +85,10 @@ function tauriAppMenu(): AppMenuCapability {
         track(await listen("settings-requested", () => handler()));
       });
       return undo;
+    },
+    async setLabels(labels) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("set_menu_labels", { labels });
     },
   };
 }

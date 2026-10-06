@@ -36,7 +36,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::protocol::{Agent, Role};
+use crate::protocol::{error_code, Agent, CodedError, Notice, Role};
 
 /// Everything an adapter needs to assemble one launch.
 pub struct LaunchSpec<'a> {
@@ -110,13 +110,17 @@ pub fn mcp_server_command(spec: &LaunchSpec<'_>) -> (String, Vec<String>) {
 /// logged out, without the conversation it is meant to resume.
 pub fn pinned_config_dir<'a>(spec: &LaunchSpec<'a>, agent: Agent) -> Result<Option<&'a Path>> {
     match spec.config_dir {
-        Some(dir) if !dir.is_dir() => anyhow::bail!(
-            "the {} config directory `{}` is not a directory the daemon can reach; \
-             recreate it, or clear it in the console's settings so new sessions \
-             start without it",
-            agent.label(),
-            dir.display()
-        ),
+        Some(dir) if !dir.is_dir() => Err(CodedError::raised(
+            error_code::CONFIG_DIR_UNREACHABLE,
+            format!(
+                "the {} config directory `{}` is not a directory the daemon can reach; \
+                 recreate it, or clear it in the console's settings so new sessions \
+                 start without it",
+                agent.label(),
+                dir.display()
+            ),
+            &[("agent", agent.label()), ("path", &dir.to_string_lossy())],
+        )),
         dir => Ok(dir),
     }
 }
@@ -133,7 +137,7 @@ pub struct LaunchPlan {
     pub resolves_approvals_itself: bool,
     /// Something about this launch the user has to be told, because the agent will not tell them
     /// in a way they can act on. Surfaced once, when the session starts.
-    pub notice: Option<String>,
+    pub notice: Option<Notice>,
 }
 
 pub trait AgentAdapter {

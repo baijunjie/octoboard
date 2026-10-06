@@ -1,13 +1,14 @@
 import { ToggleButton, ToggleButtonGroup } from "@heroui/react";
 import React from "react";
 
+import { useT } from "../i18n/react";
 import { useOctoboardTheme } from "../theme";
 import { SettingRow } from "./SettingRow";
 
 const OPTIONS = [
-  { key: "light", label: "Light" },
-  { key: "dark", label: "Dark" },
-  { key: "system", label: "System" },
+  { key: "light", label: "settings.appearance.light" },
+  { key: "dark", label: "settings.appearance.dark" },
+  { key: "system", label: "settings.appearance.system" },
 ] as const;
 
 /**
@@ -15,12 +16,13 @@ const OPTIONS = [
  * mode is HeroUI's segmented control, the natural fit for a three-way choice where one option is
  * always current.
  */
-export function AppearanceSection(): React.ReactElement {
+export function AppearanceSetting(): React.ReactElement {
+  const t = useT();
   const { choice, setChoice } = useOctoboardTheme();
   return (
-    <SettingRow label="Appearance" description="Light, dark, or follow the operating system and switch with it.">
+    <SettingRow label={t("settings.appearance.label")} description={t("settings.appearance.description")}>
       <ToggleButtonGroup
-        aria-label="Appearance"
+        aria-label={t("settings.appearance.label")}
         selectionMode="single"
         disallowEmptySelection
         selectedKeys={[choice]}
@@ -31,7 +33,7 @@ export function AppearanceSection(): React.ReactElement {
       >
         {OPTIONS.map((option) => (
           <ToggleButton key={option.key} id={option.key} size="sm" preventFocusOnPress>
-            {option.label}
+            {t(option.label)}
           </ToggleButton>
         ))}
       </ToggleButtonGroup>

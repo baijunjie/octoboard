@@ -6,6 +6,10 @@ export interface PersistedPreference<T> {
   set(value: T, options?: { persist?: boolean }): void;
   /** Writes the current value to storage. */
   persist(): void;
+  /** The current value, for code outside React. */
+  get(): T;
+  /** Calls `listener` after every change of the value; returns the function that unsubscribes. */
+  subscribe(listener: () => void): () => void;
   /** The current value, shared module-wide, and re-rendering the caller whenever it changes. */
   useValue(): T;
 }
@@ -54,6 +58,8 @@ export function createPersistedPreference<T>(
       for (const listener of listeners) listener();
     },
     persist,
+    get: getValue,
+    subscribe,
     useValue: () => useSyncExternalStore(subscribe, getValue),
   };
 }

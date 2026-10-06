@@ -2,6 +2,7 @@ import { Checkbox, Description, Label, TextArea, TextField } from "@heroui/react
 import React, { useState } from "react";
 
 import { AGENT_OPTIONS } from "../agents";
+import { useT } from "../i18n/react";
 import type { Agent, Console, Project } from "../protocol";
 import { useDaemon } from "../store";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
@@ -28,6 +29,7 @@ export function SessionDialog({
   onClose: () => void;
   onOpened: (sessionId: string) => void;
 }): React.ReactElement {
+  const t = useT();
   const { request } = useDaemon();
   const [agent, setAgent] = useState<Agent>(project.default_agent ?? parentConsole.default_agent);
   const [title, setTitle] = useState("");
@@ -52,16 +54,16 @@ export function SessionDialog({
 
   return (
     <Dialog
-      title={`Open session in ${project.name}`}
+      title={t("dialog.session.title", { project: project.name })}
       onClose={onClose}
-      submitLabel="Open"
+      submitLabel={t("dialog.session.open")}
       busy={busy}
       onSubmit={submit}
     >
-      <OptionSelect label="Agent" options={AGENT_OPTIONS} value={agent} onChange={setAgent} />
-      <TextInput label="Title (optional)" value={title} onChange={setTitle} />
+      <OptionSelect label={t("dialog.session.agent")} options={AGENT_OPTIONS} value={agent} onChange={setAgent} />
+      <TextInput label={t("dialog.session.titleOptional")} value={title} onChange={setTitle} />
       <TextField fullWidth value={task} onChange={setTask}>
-        <Label>Initial task (optional)</Label>
+        <Label>{t("dialog.session.task")}</Label>
         <TextArea rows={4} />
       </TextField>
       {/* The default variant's own control now carries a visible border (`--field-border` in
@@ -74,11 +76,9 @@ export function SessionDialog({
           <Checkbox.Control>
             <Checkbox.Indicator />
           </Checkbox.Control>
-          <Label>Include in hub</Label>
+          <Label>{t("dialog.session.includeInHub")}</Label>
         </Checkbox.Content>
-        <Description>
-          Reports this session's results to the console's hub, instead of staying outside the orchestration.
-        </Description>
+        <Description>{t("dialog.session.includeInHubDescription")}</Description>
       </Checkbox>
       <DialogError message={error} />
     </Dialog>

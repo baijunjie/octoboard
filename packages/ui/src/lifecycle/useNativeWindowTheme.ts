@@ -14,7 +14,7 @@ import { useOctoboardTheme } from "../theme";
  * imperatively, ahead of the window's own reveal, from the choice `index.html`'s bootstrap script
  * resolved onto `<html>` before any of this module existed — `nativeWindow.setTheme` is
  * idempotent, so the harm is one redundant IPC round trip, not a stale appearance. What this hook
- * is actually for is every push *after* that one, when the Appearance section calls `setChoice`.
+ * is actually for is every push *after* that one, when the Appearance setting calls `setChoice`.
  *
  * Best-effort, like the platform's other optional capabilities: a window stuck on the OS
  * appearance is a cosmetic defect, not one worth surfacing to the user.

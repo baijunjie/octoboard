@@ -2,7 +2,9 @@ import { createContext, useContext } from "react";
 import { createStore, type StoreApi } from "zustand";
 import { useStore } from "zustand/react";
 
-import { DaemonClient, type ConnectionState } from "./daemon-client";
+import { DaemonClient, DaemonRequestError, type ConnectionState } from "./daemon-client";
+import { daemonMessage } from "./daemonMessage";
+import { currentLanguage } from "./i18n/language";
 import { daemonWsUrl, type DaemonOrigin } from "./daemon";
 import { isLive, type Console, type Event, type Host, type Page, type Project, type RequestBody, type Session } from "./protocol";
 
@@ -266,18 +268,32 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
   client.onEvent((event) => {
     dispatch({ kind: "event", event });
     if (event.type === "session_notice") {
-      emitToast({ kind: "notice", message: event.message, session: event.session });
+      emitToast({
+        kind: "notice",
+        message: daemonMessage(currentLanguage(), event.code, event.params, event.message, store.getState()),
+        session: event.session,
+      });
     } else if (event.type === "error" && !event.id) {
       // A request's own `error` reply carries its request id and is delivered to its caller as a
       // rejected promise instead — only a genuine daemon broadcast (no id) is a toast.
-      emitToast({ kind: "error", message: event.message });
+      emitToast({
+        kind: "error",
+        message: daemonMessage(currentLanguage(), event.code, event.params, event.message, store.getState()),
+      });
     }
   });
   client.onConnectionChange((state) => dispatch({ kind: "connection", state }));
 
   return {
     store,
-    request: (body) => client.request(body),
+    // A failure's message is worded here, in the language and with the names of the moment it
+    // arrives, so every caller shows `err.message` as it always did.
+    request: (body) =>
+      client.request(body).catch((err: unknown) => {
+        if (!(err instanceof DaemonRequestError)) throw err;
+        const message = daemonMessage(currentLanguage(), err.code, err.params, err.message, store.getState());
+        throw new DaemonRequestError(message, err.code, err.params);
+      }),
     toastError: (message, session) => emitToast({ kind: "error", message, session }),
     onToast: (listener) => {
       toastListeners.add(listener);

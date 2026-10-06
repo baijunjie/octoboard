@@ -1,7 +1,21 @@
 //! The wire types of the daemon's only external interface. `apps/daemon/PROTOCOL.md` is the
 //! specification; this module is its Rust form.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Deserializer, Serialize};
+
+/// The named values a coded message is filled with. A parameter that names a console, a project or
+/// a session is that record's id under the param name `console`, `project` or `session`, so the
+/// client can show the record's current name; anything else is passed as text, verbatim.
+pub type Params = BTreeMap<String, String>;
+
+fn params(pairs: &[(&str, &str)]) -> Params {
+    pairs
+        .iter()
+        .map(|(name, value)| (name.to_string(), value.to_string()))
+        .collect()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -325,9 +339,13 @@ pub enum Event {
     },
     /// Something about a session the user has to be told, which no status field carries: an
     /// injected capability that will not apply, a setting of theirs Octoboard had to work around.
-    /// Broadcast once, when it is found; nothing stores it.
+    /// Broadcast once, when it is found; nothing stores it. `code` and `params` name the notice for
+    /// a client to word in its own language; `message` is the English text for a client that does
+    /// not know the code.
     SessionNotice {
         session: String,
+        code: String,
+        params: Params,
         message: String,
     },
     /// A Claude Code session of a project the user has not yet agreed Octoboard may answer for —
@@ -374,15 +392,67 @@ pub enum Event {
     Ack {
         id: Option<String>,
     },
+    /// A failure, with a stable `code` and the `params` that fill it. A client words the failure from
+    /// them in its own language and branches on the code where it has to act rather than just show;
+    /// `message` is the English text, for a client that does not know the code.
     Error {
         id: Option<String>,
-        /// A stable name for the failures a client has to act on rather than just show. The
-        /// message is prose and gets reworded; anything a client branches on needs a name that
-        /// does not.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        code: Option<String>,
+        code: String,
+        params: Params,
         message: String,
     },
+}
+
+impl Event {
+    /// The reply to a request the daemon could not read.
+    pub fn unreadable_request(detail: &str) -> Self {
+        Self::Error {
+            id: None,
+            code: error_code::UNREADABLE_REQUEST.to_string(),
+            params: params(&[("detail", detail)]),
+            message: format!("unreadable request: {detail}"),
+        }
+    }
+
+    /// The reply to a failure that has no code of its own: it is not meant to be read in detail,
+    /// so its text is carried whole under one generic code.
+    pub fn internal_error(id: Option<String>, message: String) -> Self {
+        Self::Error {
+            id,
+            code: error_code::INTERNAL_ERROR.to_string(),
+            params: params(&[("detail", &message)]),
+            message,
+        }
+    }
+}
+
+/// Something a session's user has to be told, as a coded message. Carried from where it is found to
+/// where it is broadcast as a `session_notice`.
+#[derive(Debug, Clone)]
+pub struct Notice {
+    pub code: &'static str,
+    pub message: String,
+    pub params: Params,
+}
+
+impl Notice {
+    pub fn new(code: &'static str, message: impl Into<String>, pairs: &[(&str, &str)]) -> Self {
+        Self {
+            code,
+            message: message.into(),
+            params: params(pairs),
+        }
+    }
+
+    /// The `session_notice` event telling the user about this, for `session`.
+    pub fn about(self, session: &str) -> Event {
+        Event::SessionNotice {
+            session: session.to_string(),
+            code: self.code.to_string(),
+            params: self.params,
+            message: self.message,
+        }
+    }
 }
 
 /// Client-sent text frame on `/ws/term/:session`. Binary frames on that socket are raw PTY input
@@ -404,22 +474,63 @@ where
     T::deserialize(deserializer).map(Some)
 }
 
-/// An error that carries a code, so a client can branch on it without matching prose. Travels
-/// inside `anyhow::Error` and is recovered by downcasting where the reply is built.
+/// An error that carries a code and its params, so a client can word it in its own language and
+/// branch on it without matching prose. Travels inside `anyhow::Error` and is recovered by
+/// downcasting where the reply is built.
 #[derive(Debug)]
 pub struct CodedError {
     pub code: &'static str,
     pub message: String,
+    pub params: Params,
 }
 
 impl CodedError {
     /// Returns the `anyhow::Error` rather than the bare value: every caller wants it in that
     /// shape, and the one place that reads it back downcasts out of exactly this.
-    pub fn raised(code: &'static str, message: impl Into<String>) -> anyhow::Error {
+    pub fn raised(
+        code: &'static str,
+        message: impl Into<String>,
+        pairs: &[(&str, &str)],
+    ) -> anyhow::Error {
         anyhow::Error::new(Self {
             code,
             message: message.into(),
+            params: params(pairs),
         })
+    }
+
+    /// The `error` reply to the request `id` that failed with this.
+    pub fn reply(&self, id: Option<String>) -> Event {
+        Event::Error {
+            id,
+            code: self.code.to_string(),
+            params: self.params.clone(),
+            message: self.message.clone(),
+        }
+    }
+
+    pub fn unknown_console(id: &str) -> anyhow::Error {
+        Self::raised(
+            error_code::UNKNOWN_CONSOLE,
+            format!("unknown console {id}"),
+            &[("console", id)],
+        )
+    }
+
+    pub fn unknown_project(id: &str) -> anyhow::Error {
+        Self::raised(
+            error_code::UNKNOWN_PROJECT,
+            format!("unknown project {id}"),
+            &[("project", id)],
+        )
+    }
+
+    pub fn unknown_session(id: &str) -> anyhow::Error {
+        Self::raised(
+            error_code::UNKNOWN_SESSION,
+            format!("unknown session {id}"),
+            &[("session", id)],
+        )
     }
 }
 
@@ -431,20 +542,109 @@ impl std::fmt::Display for CodedError {
 
 impl std::error::Error for CodedError {}
 
-/// Error codes carried by `Event::Error`. Only failures a client must recognise get one.
+/// Error codes carried by `Event::Error`; `PROTOCOL.md` lists each with its params. A code never
+/// changes its meaning or its params, because a client words the failure from them. A new code also
+/// needs a `daemon.<code>` message in the UI's catalogs (`packages/ui/src/i18n/messages/`): without
+/// one nothing fails, and the UI just shows the English `message`.
 pub mod error_code {
+    // -- what a client acts on, rather than just shows ---------------------------------------
+
     /// A launch was asked for while one was already running or already starting for that session.
-    /// The client's own double click is the ordinary cause, so it is shown as nothing at all.
+    /// The client's own double click is the ordinary cause, so it is shown as nothing at all. The
+    /// hub variants below mean the same for a console's hub.
     pub const SESSION_ALREADY_RUNNING: &str = "session_already_running";
+    /// [`SESSION_ALREADY_RUNNING`], where the launch had begun but not yet registered.
+    pub const SESSION_ALREADY_STARTING: &str = "session_already_starting";
+    /// [`SESSION_ALREADY_RUNNING`], for opening a hub while the console has a live one.
+    pub const HUB_ALREADY_RUNNING: &str = "hub_already_running";
+    /// [`SESSION_ALREADY_RUNNING`], for reopening a hub while the console has another live one.
+    pub const HUB_REOPEN_BLOCKED: &str = "hub_reopen_blocked";
+    /// [`SESSION_ALREADY_RUNNING`], for a console whose hub is already being started.
+    pub const HUB_ALREADY_STARTING: &str = "hub_already_starting";
     /// A directory to trust as a whole cannot be offered: it is the filesystem root, the user's home
-    /// directory or one that contains it, or it cannot be derived or checked (the project's path is
-    /// not absolute, the home directory is unknown). Nothing was answered. The dialog the request came from stays open, because the user can
-    /// still choose another way to answer.
+    /// directory or one that contains it. Nothing was answered. The dialog the request came from
+    /// stays open, because the user can still choose another way to answer, and so it does for the
+    /// two codes below, which are the same refusal for other reasons.
     pub const TRUST_DIRECTORY_TOO_BROAD: &str = "trust_directory_too_broad";
+    /// [`TRUST_DIRECTORY_TOO_BROAD`], where the project's path is not absolute.
+    pub const TRUST_PATH_NOT_ABSOLUTE: &str = "trust_path_not_absolute";
+    /// [`TRUST_DIRECTORY_TOO_BROAD`], where the home directory is unknown, so nothing can be
+    /// checked against it.
+    pub const TRUST_HOME_UNKNOWN: &str = "trust_home_unknown";
     /// A go-ahead for a trust screen that is no longer waiting for one: answered already, by this
     /// or another client or in the terminal, or gone with its session. Nothing is wrong, so a
     /// client shows nothing.
     pub const CLAUDE_TRUST_NOT_WAITING: &str = "claude_trust_not_waiting";
+
+    // -- for the user to read ----------------------------------------------------------------
+
+    /// Octoboard could not answer a trust screen it had accepted a go-ahead for. The `reason_code`
+    /// param says why, one of [`trust_reason`].
+    pub const CLAUDE_TRUST_ANSWER_FAILED: &str = "claude_trust_answer_failed";
+    /// A go-ahead for the trust screen of a session that is not Claude Code's.
+    pub const NOT_A_CLAUDE_SESSION: &str = "not_a_claude_session";
+    /// A go-ahead for a hub session's trust screen, which Octoboard answers without asking.
+    pub const HUB_TRUST_NOT_ASKED: &str = "hub_trust_not_asked";
+
+    /// A request that is not valid JSON of a known shape.
+    pub const UNREADABLE_REQUEST: &str = "unreadable_request";
+    /// Anything that is not meant for the user to read in detail: an unexpected failure with no
+    /// meaning of its own. The text is carried as the `detail` param.
+    pub const INTERNAL_ERROR: &str = "internal_error";
+    pub const UNKNOWN_CONSOLE: &str = "unknown_console";
+    pub const UNKNOWN_PROJECT: &str = "unknown_project";
+    pub const UNKNOWN_SESSION: &str = "unknown_session";
+    pub const UNKNOWN_PAGE: &str = "unknown_page";
+    /// A request lacks a field its kind needs.
+    pub const FIELD_REQUIRED: &str = "field_required";
+    pub const CONSOLE_HAS_RUNNING_SESSIONS: &str = "console_has_running_sessions";
+    pub const PROJECT_HAS_RUNNING_SESSIONS: &str = "project_has_running_sessions";
+    pub const PATH_NOT_ABSOLUTE: &str = "path_not_absolute";
+    pub const PATH_NOT_FOUND: &str = "path_not_found";
+    pub const PATH_NOT_A_DIRECTORY: &str = "path_not_a_directory";
+    pub const PATH_ALREADY_EXISTS: &str = "path_already_exists";
+    pub const DIRECTORY_UNREADABLE: &str = "directory_unreadable";
+    /// A session's or a launch's working directory cannot be reached by the daemon.
+    pub const DIRECTORY_UNREACHABLE: &str = "directory_unreachable";
+    pub const NO_REPOSITORIES_FOUND: &str = "no_repositories_found";
+    pub const ALL_PROJECTS_ALREADY_ADDED: &str = "all_projects_already_added";
+    pub const REPOSITORY_NAME_MISSING: &str = "repository_name_missing";
+    pub const GIT_CLONE_FAILED: &str = "git_clone_failed";
+    pub const CONFIG_DIR_NOT_ABSOLUTE: &str = "config_dir_not_absolute";
+    pub const CONFIG_DIR_NOT_A_DIRECTORY: &str = "config_dir_not_a_directory";
+    /// A session's pinned configuration directory has gone, which refuses the launch.
+    pub const CONFIG_DIR_UNREACHABLE: &str = "config_dir_unreachable";
+    pub const SESSION_NOT_RUNNING: &str = "session_not_running";
+    pub const SESSION_WAITING_FOR_USER: &str = "session_waiting_for_user";
+    pub const QUEUED_MESSAGES_LOST: &str = "queued_messages_lost";
+    pub const PAGE_NOT_CURRENT: &str = "page_not_current";
+    pub const HUB_MISSING: &str = "hub_missing";
+    pub const BINARY_NOT_FOUND: &str = "binary_not_found";
+    pub const SHELL_ENVIRONMENT_TIMEOUT: &str = "shell_environment_timeout";
+}
+
+/// The `reason_code` param of a failed answer to a trust screen, in the `error` and in the
+/// `session_notice` alike; `PROTOCOL.md` lists each. A client that does not know one shows the
+/// English `reason` instead. A new reason also needs a `daemon.trust_reason.<code>` message in the
+/// UI's catalogs.
+pub mod trust_reason {
+    pub const SCREEN_GONE: &str = "screen_gone";
+    pub const CURSOR_NOT_ON_DECLINE: &str = "cursor_not_on_decline";
+    pub const CURSOR_DID_NOT_MOVE: &str = "cursor_did_not_move";
+    pub const TERMINAL_NOT_SETTLED: &str = "terminal_not_settled";
+    pub const CURSOR_MOVED_AWAY: &str = "cursor_moved_away";
+    pub const SCREEN_NOT_DISMISSED: &str = "screen_not_dismissed";
+    pub const SCREEN_REDRAWN: &str = "screen_redrawn";
+    pub const INPUT_TOUCHED: &str = "input_touched";
+    pub const TERMINAL_WRITE_FAILED: &str = "terminal_write_failed";
+}
+
+/// Codes carried by `Event::SessionNotice`; `PROTOCOL.md` lists each with its params. Like an error
+/// code, each needs a `daemon.<code>` message in the UI's catalogs.
+pub mod notice_code {
+    pub const CLAUDE_WORKSPACE_UNTRUSTED: &str = "claude_workspace_untrusted";
+    pub const QUEUED_MESSAGES_DROPPED: &str = "queued_messages_dropped";
+    pub const CLAUDE_TRUST_ANSWER_FAILED: &str = "claude_trust_answer_failed";
 }
 
 pub fn now_millis() -> i64 {
@@ -652,5 +852,33 @@ mod tests {
         })
         .unwrap();
         assert_eq!(snapshot["trusted_directories"][0], "/work");
+    }
+
+    /// A client words a failure and a notice from their code and params; the English message rides
+    /// along for one that does not know the code.
+    #[test]
+    fn an_error_and_a_notice_carry_a_code_and_named_params() {
+        let error = super::CodedError::unknown_console("console-7");
+        let coded = error.downcast_ref::<super::CodedError>().expect("coded");
+        let event = serde_json::to_value(coded.reply(Some("request-1".to_string()))).unwrap();
+        assert_eq!(event["code"], "unknown_console");
+        assert_eq!(event["params"]["console"], "console-7");
+        assert_eq!(event["message"], "unknown console console-7");
+
+        let event =
+            serde_json::to_value(super::Event::internal_error(None, "boom".to_string())).unwrap();
+        assert_eq!(event["code"], "internal_error");
+        assert_eq!(event["params"]["detail"], "boom");
+        assert_eq!(event["message"], "boom");
+
+        let notice = serde_json::to_value(
+            super::Notice::new("a_notice", "English", &[("reason", "why")]).about("session-1"),
+        )
+        .unwrap();
+        assert_eq!(notice["type"], "session_notice");
+        assert_eq!(notice["session"], "session-1");
+        assert_eq!(notice["code"], "a_notice");
+        assert_eq!(notice["params"]["reason"], "why");
+        assert_eq!(notice["message"], "English");
     }
 }

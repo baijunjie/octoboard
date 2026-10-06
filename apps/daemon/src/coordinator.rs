@@ -9,7 +9,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::Result;
 use uuid::Uuid;
 
 use crate::hostfs;
@@ -79,7 +79,7 @@ pub async fn handle(
             let mut console = state
                 .store
                 .get_console(&id)?
-                .ok_or_else(|| anyhow!("unknown console {id}"))?;
+                .ok_or_else(|| CodedError::unknown_console(&id))?;
             if let Some(name) = name {
                 console.name = name;
             }
@@ -112,9 +112,13 @@ pub async fn handle(
             let console = state
                 .store
                 .get_console(&id)?
-                .ok_or_else(|| anyhow!("unknown console {id}"))?;
+                .ok_or_else(|| CodedError::unknown_console(&id))?;
             if state.has_live_sessions_where(|session| session.console_id == id)? {
-                bail!("this console still has running sessions; archive them first");
+                return Err(CodedError::raised(
+                    error_code::CONSOLE_HAS_RUNNING_SESSIONS,
+                    "this console still has running sessions; archive them first",
+                    &[],
+                ));
             }
             state.store.delete_console(&id)?;
             // The working directory is Octoboard's own, under `~/.octoboard/consoles/`; no project
@@ -157,7 +161,7 @@ pub async fn handle(
             let mut project = state
                 .store
                 .get_project(&id)?
-                .ok_or_else(|| anyhow!("unknown project {id}"))?;
+                .ok_or_else(|| CodedError::unknown_project(&id))?;
             if let Some(name) = name {
                 project.name = name;
             }
@@ -176,11 +180,15 @@ pub async fn handle(
             state
                 .store
                 .get_project(&id)?
-                .ok_or_else(|| anyhow!("unknown project {id}"))?;
+                .ok_or_else(|| CodedError::unknown_project(&id))?;
             if state
                 .has_live_sessions_where(|session| session.project_id.as_deref() == Some(&id))?
             {
-                bail!("this project still has running sessions; archive them first");
+                return Err(CodedError::raised(
+                    error_code::PROJECT_HAS_RUNNING_SESSIONS,
+                    "this project still has running sessions; archive them first",
+                    &[],
+                ));
             }
             // Only the association goes away. The directory is the user's.
             state.store.delete_project(&id)?;
@@ -251,7 +259,7 @@ pub async fn handle(
             state
                 .store
                 .get_console(&console)?
-                .ok_or_else(|| anyhow!("unknown console {console}"))?;
+                .ok_or_else(|| CodedError::unknown_console(&console))?;
             let pages = state.store.list_pages(&console)?;
             Ok(Some(Event::PageList {
                 id: request_id,
@@ -289,6 +297,15 @@ pub async fn handle(
     }
 }
 
+/// A request that lacks a field its kind needs. `field` is the wire name, passed as is.
+fn field_required(field: &str) -> anyhow::Error {
+    CodedError::raised(
+        error_code::FIELD_REQUIRED,
+        format!("`{field}` is required"),
+        &[("field", field)],
+    )
+}
+
 /// What the user typed for a project's directory, as the absolute, lexically normalised path that is
 /// stored. A relative path is refused: it would mean a different directory whenever the daemon's own
 /// working directory differed, and nothing that compares project paths — the trusted directories
@@ -296,7 +313,11 @@ pub async fn handle(
 fn absolute_path(text: &str) -> Result<PathBuf> {
     let path = hostfs::expand(text);
     if !path.is_absolute() {
-        bail!("`{text}` is not an absolute path; give the full path or start it with `~/`");
+        return Err(CodedError::raised(
+            error_code::PATH_NOT_ABSOLUTE,
+            format!("`{text}` is not an absolute path; give the full path or start it with `~/`"),
+            &[("path", text)],
+        ));
     }
     Ok(hostfs::lexically_normalise(&path))
 }
@@ -313,32 +334,36 @@ pub async fn add_project(
     state
         .store
         .get_console(&console_id)?
-        .ok_or_else(|| anyhow!("unknown console {console_id}"))?;
+        .ok_or_else(|| CodedError::unknown_console(&console_id))?;
 
     let directories: Vec<PathBuf> = match source {
         ProjectSource::Local => {
-            let path = absolute_path(&path.ok_or_else(|| anyhow!("`path` is required"))?)?;
+            let path = absolute_path(&path.ok_or_else(|| field_required("path"))?)?;
             if !path.is_dir() {
-                bail!("`{}` is not a directory", path.display());
+                return Err(hostfs::not_a_directory(&path));
             }
             vec![path]
         }
         ProjectSource::Parent => {
-            let parent = absolute_path(&path.ok_or_else(|| anyhow!("`path` is required"))?)?;
+            let parent = absolute_path(&path.ok_or_else(|| field_required("path"))?)?;
             let repos = hostfs::discover_repos(&parent)?;
             if repos.is_empty() {
-                bail!(
-                    "no git repositories were found directly under `{}`",
-                    parent.display()
-                );
+                return Err(CodedError::raised(
+                    error_code::NO_REPOSITORIES_FOUND,
+                    format!(
+                        "no git repositories were found directly under `{}`",
+                        parent.display()
+                    ),
+                    &[("path", &parent.to_string_lossy())],
+                ));
             }
             repos
         }
         ProjectSource::Github => {
             let url = remote_url
                 .clone()
-                .ok_or_else(|| anyhow!("`remote_url` is required"))?;
-            let parent = absolute_path(&path.ok_or_else(|| anyhow!("`path` is required"))?)?;
+                .ok_or_else(|| field_required("remote_url"))?;
+            let parent = absolute_path(&path.ok_or_else(|| field_required("path"))?)?;
             let cloned =
                 tokio::task::spawn_blocking(move || hostfs::clone_repo(&url, &parent)).await??;
             vec![cloned]
@@ -379,7 +404,11 @@ pub async fn add_project(
         added.push(project);
     }
     if added.is_empty() {
-        bail!("every directory found is already associated with this console");
+        return Err(CodedError::raised(
+            error_code::ALL_PROJECTS_ALREADY_ADDED,
+            "every directory found is already associated with this console",
+            &[],
+        ));
     }
     Ok(added)
 }
@@ -410,7 +439,7 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
     let console = state
         .store
         .get_console(&console_id)?
-        .ok_or_else(|| anyhow!("unknown console {console_id}"))?;
+        .ok_or_else(|| CodedError::unknown_console(&console_id))?;
 
     // Held for the rest of this function where a hub is involved, so the one-live-hub check and the
     // insert that follows it cannot interleave with another open.
@@ -420,7 +449,7 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
             let project = state
                 .store
                 .get_project(project_id)?
-                .ok_or_else(|| anyhow!("unknown project {project_id}"))?;
+                .ok_or_else(|| CodedError::unknown_project(project_id))?;
             let cwd = PathBuf::from(&project.path);
             let title = project.name.clone();
             _hub_claim = None;
@@ -440,8 +469,9 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
                     && !session.status.is_dormant()
             }) {
                 return Err(CodedError::raised(
-                    error_code::SESSION_ALREADY_RUNNING,
+                    error_code::HUB_ALREADY_RUNNING,
                     format!("this console already has a hub session ({})", existing.id),
+                    &[("session", &existing.id)],
                 ));
             }
             let workdir = PathBuf::from(&console.workdir);
@@ -526,6 +556,7 @@ pub async fn resume_session(
         return Err(CodedError::raised(
             error_code::SESSION_ALREADY_RUNNING,
             "this session is not interrupted or archived",
+            &[("session", id)],
         ));
     }
 
@@ -539,12 +570,13 @@ pub async fn resume_session(
                 && !other.status.is_dormant()
         }) {
             return Err(CodedError::raised(
-                error_code::SESSION_ALREADY_RUNNING,
+                error_code::HUB_REOPEN_BLOCKED,
                 format!(
                     "this console already has a hub session ({}); archive it before reopening this \
                      one",
                     existing.id
                 ),
+                &[("session", &existing.id)],
             ));
         }
         Some(claim)
@@ -633,11 +665,8 @@ async fn start_process(
     if let Some(agent_session_id) = launch.agent_session_id {
         state.set_agent_session_id(&session.id, &agent_session_id)?;
     }
-    if let Some(message) = launch.notice {
-        state.broadcast(Event::SessionNotice {
-            session: session.id.clone(),
-            message,
-        });
+    if let Some(notice) = launch.notice {
+        state.broadcast(notice.about(&session.id));
     }
     Ok(())
 }
@@ -665,16 +694,27 @@ fn send_message(state: &Arc<AppState>, id: &str, text: &str) -> Result<()> {
 /// history pages are read-only, and this is where that is actually enforced; a panel that disables
 /// its own submit button on a history page is only reflecting the rule, not the source of it.
 async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Value) -> Result<()> {
-    let page = state
-        .store
-        .get_page(page_id)?
-        .ok_or_else(|| anyhow!("unknown page {page_id}"))?;
+    let page = state.store.get_page(page_id)?.ok_or_else(|| {
+        CodedError::raised(
+            error_code::UNKNOWN_PAGE,
+            format!("unknown page {page_id}"),
+            &[("page", page_id)],
+        )
+    })?;
     let newest = state.store.newest_page_id(&page.console_id)?;
     if newest.as_deref() != Some(page.id.as_str()) {
-        bail!("this page is no longer current; its form can no longer be submitted");
+        return Err(CodedError::raised(
+            error_code::PAGE_NOT_CURRENT,
+            "this page is no longer current; its form can no longer be submitted",
+            &[],
+        ));
     }
     let hub = reporting::hub_session(state, &page.console_id)?.ok_or_else(|| {
-        anyhow!("this console has no hub session, so there is nobody to submit to")
+        CodedError::raised(
+            error_code::HUB_MISSING,
+            "this console has no hub session, so there is nobody to submit to",
+            &[],
+        )
     })?;
 
     let message = reporting::render_page_submission(&page.id, &data);
@@ -712,19 +752,27 @@ fn normalize_config_dir(agent: Agent, text: Option<&str>) -> Result<Option<Strin
     };
     let dir = hostfs::expand(text);
     if !dir.is_absolute() {
-        bail!(
-            "the {} config directory must be an absolute path or start with `~/`",
-            agent.label()
-        );
+        return Err(CodedError::raised(
+            error_code::CONFIG_DIR_NOT_ABSOLUTE,
+            format!(
+                "the {} config directory must be an absolute path or start with `~/`",
+                agent.label()
+            ),
+            &[("agent", agent.label())],
+        ));
     }
     // Lexical only: a symlink stays as typed, so the stored path is what the user chose.
     let dir = hostfs::lexically_normalise(&dir);
     if !dir.is_dir() {
-        bail!(
-            "the {} config directory `{}` is not a directory",
-            agent.label(),
-            dir.display()
-        );
+        return Err(CodedError::raised(
+            error_code::CONFIG_DIR_NOT_A_DIRECTORY,
+            format!(
+                "the {} config directory `{}` is not a directory",
+                agent.label(),
+                dir.display()
+            ),
+            &[("agent", agent.label()), ("path", &dir.to_string_lossy())],
+        ));
     }
     Ok(Some(dir.to_string_lossy().into_owned()))
 }
@@ -735,14 +783,14 @@ fn session_cwd(state: &Arc<AppState>, session: &Session) -> Result<PathBuf> {
             let project = state
                 .store
                 .get_project(project_id)?
-                .ok_or_else(|| anyhow!("unknown project {project_id}"))?;
+                .ok_or_else(|| CodedError::unknown_project(project_id))?;
             Ok(PathBuf::from(project.path))
         }
         None => {
             let console = state
                 .store
                 .get_console(&session.console_id)?
-                .ok_or_else(|| anyhow!("unknown console {}", session.console_id))?;
+                .ok_or_else(|| CodedError::unknown_console(&session.console_id))?;
             Ok(PathBuf::from(console.workdir))
         }
     }

@@ -23,13 +23,17 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   resizing the sidebar and the report panel, hiding either and floating it back in on hover, the macOS window's
   1100×600 minimum and the arithmetic behind it, how the window's size and position are remembered across launches,
   the narrow layout a plain browser gets below 1100 px, where the sidebar and the report panel become drawers over the
-  terminal, and toasts.
+  terminal, toasts, and how all of it mirrors under a right-to-left language (and what never does).
 - [Appearance](product/appearance.md) — the light, dark and follow-the-system choice and which of them is the default,
   where it is chosen, what follows it (down to the terminal's palette and the native window's own appearance), where the
   choice is kept, and why a report page stays on a light surface either way.
 - [Settings](product/settings.md) — the Settings dialog: how it opens (the top bar, and the macOS menu's Settings… /
-  ⌘, and when that is ignored), how it closes and where focus goes, its Appearance, Trusted folders and Notifications
-  sections.
+  ⌘, and when that is ignored), how it closes and where focus goes, its General (Appearance and Language), Trusted
+  folders and Notifications sections.
+- [Language](product/language.md) — the 17 offered languages and why they are ordered by tag, English as the fallback,
+  the default picked from the system's languages on the first launch and kept from then on, the language chosen in
+  Settings, how the system's languages map onto the list, what follows the current language and what does not (report
+  pages, text aimed at agents), where the choice is kept, and what is translated so far.
 - [Launching agents](product/launching-agents.md) — the guarantee that project files and the user's agent configuration
   are never modified, the three things injected per launch and the hub's generated instruction file, the launch
   environment, Claude Code's workspace-trust prompt, how Octoboard answers it and trusted folders, and the per-agent specifics.
@@ -69,8 +73,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   `HOME`/`TMPDIR`, using Codex's sign-in screen as session output, and how to put a fake agent CLI on `PATH` for an
   isolated daemon so the real one does not launch instead.
 - [Verifying the desktop UI](memory/verifying-the-desktop-ui.md) — how to verify terminal and UI behaviour in the real
-  app: why a UI change has to be launched rather than only reviewed, why a built app is launched on a throwaway `HOME`
-  and `TMPDIR` and what that still leaves shared (the webview's own profile, used only with the user's go-ahead), why
+  app: why a verification stays as narrow as the change, why a UI change has to be launched rather than only reviewed, why a built app is launched on a throwaway `HOME`
+  and `TMPDIR` and what that still leaves shared (the webview's own profile, used only with the user's go-ahead), how
+  to run the app under other system languages for one launch without touching the shared defaults domain, why
   the bundle under test is built with the Tauri CLI and launched with `open` rather than by exec'ing its binary, why a
   daemon-side change needs the daemon built and the running sidecar's binary confirmed before anything read off the
   window means anything, how to get an error out of a blank window, reading what the packaged webview sends to the
@@ -88,10 +93,13 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   keyboard focus off the terminal, when `preventFocusOnPress` is needed, and why "⋯" menus are built on `ActionMenu`,
   why a dialog must not lose focus to `<body>` when a focused control unmounts, so its subject is switched with a reset
   key rather than by re-keying it, why a Tailwind class name has to stand in the source as literal text, why every
-  icon-only control also gets a tooltip through `TitledControl`, and the WCAG 2.2 AA bar the UI is held to (keyboard,
+  icon-only control also gets a tooltip through `TitledControl`, how user-facing text goes through the message catalog
+  (`useT` over the module-level `t()`, a helper taking the translator, `PlainMessageKey` tables, placeholders and plural
+  messages instead of joined fragments), how layout follows the reading direction (logical utilities, mirrored
+  directional icons, two-glyph chevrons, `dir` on paths and typed names, `docked:rtl:` twins), and the WCAG 2.2 AA bar the UI is held to (keyboard,
   visible focus, names, roles and states (`aria-current` only on hand-built rows), contrast — which token an outline
   meant to be seen is built from, and why HeroUI's own text colours are measured rather than trusted — colour,
   motion).
-- [Writing automated tests](memory/writing-automated-tests.md) — the fixture conventions this project's tests need on
-  macOS: why an executable written fresh per test flakes only under a parallel run, and how to verify behaviour the
+- [Writing automated tests](memory/writing-automated-tests.md) — how lean unit tests are kept (one case per rule,
+  table-driven), then the fixture conventions this project's tests need on macOS: why an executable written fresh per test flakes only under a parallel run, and how to verify behaviour the
   daemon derives from an agent's own output by replaying a committed capture rather than staging a live session.

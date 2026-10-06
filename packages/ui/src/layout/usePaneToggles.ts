@@ -99,7 +99,7 @@ export interface PaneToggles {
   reportDocked: boolean;
   /** The hidden docked sidebar floating over the terminal because the pointer asked for it. */
   sidebarPeek: PanePeek;
-  /** The same for the report panel, from the right edge or the report toggle. */
+  /** The same for the report panel, from the end edge or the report toggle. */
   reportPeek: PanePeek;
   sidebarShown: boolean;
   reportShown: boolean;

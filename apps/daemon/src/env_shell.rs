@@ -27,6 +27,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 
+use crate::protocol::{error_code, CodedError};
+
 /// Upper bound on how long the login-shell snapshot may run. An rc file waiting on a version
 /// manager or a network call is routinely a second or two; this leaves a wide margin above that
 /// while still turning a wedged rc file (one blocked on something other than stdin, which never
@@ -407,11 +409,20 @@ fn kill_group_after_timeout(
             Ok(None) => thread::sleep(Duration::from_millis(20)),
         }
     }
-    anyhow::anyhow!(
-        "`{shell} -l -i -c '{command}'` did not finish within {timeout:?}; a shell startup file \
-         is probably blocked on something other than stdin, or it left a background process \
-         holding the shell's output open. Octoboard refuses to launch with an unknown environment \
-         rather than guess at one — fix or skip the slow step in the shell's rc files."
+    CodedError::raised(
+        error_code::SHELL_ENVIRONMENT_TIMEOUT,
+        format!(
+            "`{shell} -l -i -c '{command}'` did not finish within {timeout:?}; a shell startup file \
+             is probably blocked on something other than stdin, or it left a background process \
+             holding the shell's output open. Octoboard refuses to launch with an unknown \
+             environment rather than guess at one — fix or skip the slow step in the shell's rc \
+             files."
+        ),
+        &[
+            ("shell", shell),
+            ("command", command),
+            ("timeout", &format!("{timeout:?}")),
+        ],
     )
 }
 
@@ -436,7 +447,11 @@ pub fn resolve_binary(name: &str, env: &HashMap<String, String>) -> Result<Strin
             return Ok(candidate.to_string_lossy().into_owned());
         }
     }
-    bail!("`{name}` was not found on PATH in the snapshotted shell environment")
+    Err(CodedError::raised(
+        error_code::BINARY_NOT_FOUND,
+        format!("`{name}` was not found on PATH in the snapshotted shell environment"),
+        &[("binary", name)],
+    ))
 }
 
 #[cfg(test)]

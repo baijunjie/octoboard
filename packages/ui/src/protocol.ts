@@ -206,7 +206,7 @@ export type Event =
    * capability that will not apply, or a setting of theirs Octoboard had to work around. Broadcast
    * once, when the session starts; nothing stores it, so a client that connects later never sees
    * it. */
-  | { type: "session_notice"; session: string; message: string }
+  | { type: "session_notice"; session: string; code: string; params: MessageParams; message: string }
   /** The reply to `open_session`: the session that was started. The same record is also
    * broadcast as `session_upserted`, but that broadcast carries no request id, so this is the
    * only way the caller can tell which session in the tree is the one it just opened. */
@@ -233,10 +233,36 @@ export type Event =
   /** A page the hub just pushed. The panel showing that console's hub refreshes to it. */
   | { type: "page_created"; page: Page }
   | { type: "ack"; id?: string }
-  /** `code` is present only for failures a client has to branch on rather than just show — today
-   * the codes are `"session_already_running"`, `"trust_directory_too_broad"` (nothing was answered)
-   * and `"claude_trust_not_waiting"`. */
-  | { type: "error"; id?: string; message: string; code?: string };
+  /** A failure, worded from `code` and `params` (see `daemonMessage.ts`); `message` is the English
+   * text, shown for a code the client does not know. A client also branches on some codes — see
+   * `ALREADY_RUNNING_CODES`, `TRUST_REFUSED_CODES` and `CLAUDE_TRUST_NOT_WAITING`. */
+  | { type: "error"; id?: string; code: string; params: MessageParams; message: string };
+
+/** The named values a daemon message is filled with. `console`, `project` and `session` are record
+ * ids, which `daemonMessage` shows as the record's name; the rest is text to show as is. */
+export type MessageParams = Record<string, string>;
+
+/** Codes meaning a launch was refused because the session, or the console's hub, is already running
+ * or being started. A double click produces them and is not worth showing; a refused second hub
+ * session is. */
+export const ALREADY_RUNNING_CODES: readonly string[] = [
+  "session_already_running",
+  "session_already_starting",
+  "hub_already_running",
+  "hub_reopen_blocked",
+  "hub_already_starting",
+];
+
+/** Codes meaning no parent directory can be offered to trust: nothing was answered, and the dialog
+ * stays open. */
+export const TRUST_REFUSED_CODES: readonly string[] = [
+  "trust_directory_too_broad",
+  "trust_path_not_absolute",
+  "trust_home_unknown",
+];
+
+/** The go-ahead was for a trust screen no longer waiting: nothing is wrong, so nothing is shown. */
+export const CLAUDE_TRUST_NOT_WAITING = "claude_trust_not_waiting";
 
 /** Client-sent text frame on `/ws/term/:session`. Binary frames on that socket are raw PTY input. */
 export type TermControl = { type: "resize"; cols: number; rows: number };

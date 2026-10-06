@@ -3,16 +3,26 @@ import React, { useLayoutEffect, useRef, useState } from "react";
 interface Clipped {
   start: boolean;
   end: boolean;
+  /** Whether the element lays out right to left, which flips the scroll offsets and the mask. */
+  rtl: boolean;
 }
 
 /** Sub-pixel layout rounding leaves a fraction of a pixel of phantom overflow on content that
  * fits; anything within this many pixels counts as fitting. */
 const OVERFLOW_EPSILON = 1;
 
+/** How far the element is scrolled from its start edge. `scrollLeft` is 0 at the start in either
+ * direction and grows toward the end, as a negative number under right-to-left. */
+function scrolledFromStart(element: HTMLElement): number {
+  return Math.abs(element.scrollLeft);
+}
+
 function measure(element: HTMLElement): Clipped {
+  const scrolled = scrolledFromStart(element);
   return {
-    start: element.scrollLeft > OVERFLOW_EPSILON,
-    end: element.scrollWidth - element.clientWidth - element.scrollLeft > OVERFLOW_EPSILON,
+    start: scrolled > OVERFLOW_EPSILON,
+    end: element.scrollWidth - element.clientWidth - scrolled > OVERFLOW_EPSILON,
+    rtl: getComputedStyle(element).direction === "rtl",
   };
 }
 
@@ -50,15 +60,15 @@ function observe(element: Element, update: () => void): () => void {
   };
 }
 
-/** The mask that hides the clipped edges: opaque across the middle, ramping to transparent over
+/** The mask that hides the clipped edges, along the text direction: opaque across the middle, ramping to transparent over
  * `fade` px at each edge that has content beyond it. `undefined` while nothing is clipped. */
-function maskImage(fade: number, { start, end }: Clipped): string | undefined {
+function maskImage(fade: number, { start, end, rtl }: Clipped): string | undefined {
   if (!start && !end) return undefined;
   const stops = [
     start ? `transparent 0, #000 ${fade}px` : "#000 0",
     end ? `#000 calc(100% - ${fade}px), transparent 100%` : "#000 100%",
   ];
-  return `linear-gradient(to right, ${stops.join(", ")})`;
+  return `linear-gradient(to ${rtl ? "left" : "right"}, ${stops.join(", ")})`;
 }
 
 interface FadeOverflowProps {
@@ -67,6 +77,10 @@ interface FadeOverflowProps {
   /** The element to render. */
   as?: "div" | "span";
   className?: string;
+  /** The element's text direction, for content whose direction is not the UI's: `ltr` for a path,
+   * `auto` for a name the user typed. The fade follows the direction the element resolves to, while
+   * text that fits stays aligned the way its surroundings are. */
+  dir?: "ltr" | "rtl" | "auto";
   /** Which edge the content is cut at. `end` (the default) shows the content's beginning; `start`
    * aligns it to the end, so what is lost is its beginning (a path whose last folder must stay
    * readable). */
@@ -95,12 +109,13 @@ export function FadeOverflow({
   fade = 24,
   as: Tag = "div",
   className = "",
+  dir,
   clip = "end",
   titleWhenClipped,
   children,
 }: FadeOverflowProps): React.ReactElement {
   const ref = useRef<HTMLElement>(null);
-  const [clipped, setClipped] = useState<Clipped>({ start: false, end: false });
+  const [clipped, setClipped] = useState<Clipped>({ start: false, end: false, rtl: false });
 
   useLayoutEffect(() => {
     const element = ref.current;
@@ -109,10 +124,12 @@ export function FadeOverflow({
       // Pinned to the end here rather than by layout: a clipped start edge is the scroll position.
       if (clip === "start") {
         const end = element.scrollWidth - element.clientWidth;
-        if (Math.abs(element.scrollLeft - end) > 0.5) element.scrollLeft = end;
+        if (Math.abs(scrolledFromStart(element) - end) > 0.5) {
+          element.scrollLeft = getComputedStyle(element).direction === "rtl" ? -end : end;
+        }
       }
       const next = measure(element);
-      setClipped((prev) => (prev.start === next.start && prev.end === next.end ? prev : next));
+      setClipped((prev) => (prev.start === next.start && prev.end === next.end && prev.rtl === next.rtl ? prev : next));
     };
     update();
     const stopObserving = observe(element, update);
@@ -134,7 +151,8 @@ export function FadeOverflow({
   return (
     <Tag
       ref={ref as React.RefObject<never>}
-      className={`overflow-hidden whitespace-nowrap ${className}`}
+      dir={dir}
+      className={`overflow-hidden whitespace-nowrap${dir ? " align-match-parent" : ""} ${className}`}
       title={clipped.start || clipped.end ? titleWhenClipped : undefined}
       style={mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined}
     >

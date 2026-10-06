@@ -1,4 +1,5 @@
-import type { Event, Request, RequestBody } from "./protocol";
+import { t } from "./i18n/language";
+import type { Event, MessageParams, Request, RequestBody } from "./protocol";
 
 type Listener = (event: Event) => void;
 type PendingReply = { resolve: (event: Event) => void; reject: (error: Error) => void };
@@ -15,14 +16,16 @@ const QUEUED_REQUEST_TIMEOUT_MS = 5000;
  * `reconnecting`, so a window that has never connected does not claim to be re-trying. */
 export type ConnectionState = "connecting" | "open" | "reconnecting" | "closed";
 
-/** An `error` reply's `message` plus its machine-readable `code`, when the daemon sent one (see
- * "Daemon to client" in `apps/daemon/PROTOCOL.md`) — present only for failures a caller has to branch
- * on, such as a duplicate `resume_session`/`open_session`, rather than just display. */
+/** An `error` reply: its `code` and `params` (see "Coded messages" in `apps/daemon/PROTOCOL.md`)
+ * for a caller that branches on the failure, and a `message` to show. The client puts the daemon's
+ * English text there, and the store replaces it with the wording in the current language. */
 export class DaemonRequestError extends Error {
-  readonly code?: string;
-  constructor(message: string, code?: string) {
+  readonly code: string;
+  readonly params: MessageParams;
+  constructor(message: string, code: string, params: MessageParams) {
     super(message);
     this.code = code;
+    this.params = params;
   }
 }
 
@@ -101,7 +104,7 @@ export class DaemonClient {
       // Whatever this socket had outstanding cannot be answered by a reconnect's new socket — the
       // daemon has no memory of a prior connection's in-flight requests — so these are rejected
       // unconditionally rather than held pending a retry.
-      this.failPending("the daemon control connection closed");
+      this.failPending(t("connection.error.connectionClosed"));
       // Rejecting and retrying are contradictory: a payload still queued here would otherwise be
       // flushed on the next connection and run an action the caller was already told had failed.
       this.sendQueue.length = 0;
@@ -143,7 +146,7 @@ export class DaemonClient {
     if (id && this.pending.has(id)) {
       const pending = this.pending.get(id)!;
       this.pending.delete(id);
-      if (event.type === "error") pending.reject(new DaemonRequestError(event.message, event.code));
+      if (event.type === "error") pending.reject(new DaemonRequestError(event.message, event.code, event.params));
       else pending.resolve(event);
     }
     for (const listener of this.listeners) listener(event);
@@ -165,7 +168,7 @@ export class DaemonClient {
   }
 
   /** Sends a request and resolves with its correlated reply, or rejects with the `error` message
-   * (as a `DaemonRequestError`, carrying its `code` if the daemon sent one). */
+   * (as a `DaemonRequestError`, carrying its `code` and `params`). */
   request(body: RequestBody): Promise<Event> {
     const id = crypto.randomUUID();
     const payload: Request = { ...body, id };
@@ -180,7 +183,7 @@ export class DaemonClient {
       if (socket?.readyState === WebSocket.CLOSED && !this.reconnectTimer) {
         // The socket is dead and no retry is scheduled (the reconnect budget is spent) — queuing
         // would hang the caller forever, which a quit's `shutdown` request must never do.
-        reject(new Error("the daemon control connection is closed"));
+        reject(new Error(t("connection.error.connectionIsClosed")));
         return;
       }
       // Still connecting, or a reconnect is scheduled: queue it, but bounded — the daemon might
@@ -192,7 +195,7 @@ export class DaemonClient {
         if (!this.pending.delete(id)) return;
         const queuedIndex = this.sendQueue.indexOf(json);
         if (queuedIndex !== -1) this.sendQueue.splice(queuedIndex, 1);
-        reject(new Error("timed out waiting for the daemon connection"));
+        reject(new Error(t("connection.error.timedOut")));
       }, QUEUED_REQUEST_TIMEOUT_MS);
     });
   }
