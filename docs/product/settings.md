@@ -5,6 +5,15 @@ section's settings fill the right, one row per setting: its name and a line sayi
 control on the right. The sections, in order, are **Appearance**, **Trusted folders** and **Notifications**; the
 dialog opens on Appearance.
 
+## Moving between sections
+
+The list of sections is a vertical tab list, with the selected section highlighted. Opening Settings puts keyboard
+focus on the selected section's tab. Only that tab is reached with Tab: the arrow keys move to the previous or next
+section and show it at once, wrapping around at either end, and Tab from the list moves on into the section's
+settings. When a control holding keyboard focus disappears from a section — a trusted folder's Remove button, which
+goes with its folder, or the Notifications Enable button once the browser has answered — focus goes back to the
+selected section's tab rather than leaving the dialog.
+
 ## Opening and closing Settings
 
 Settings opens from:
@@ -44,7 +53,9 @@ Whether Octoboard may show a system notification when a session starts waiting f
 | A client with no notifications at all | That notifications are not available there. |
 
 A browser is asked only from a press of the user's, never on its own: a browser ignores or refuses an ask made
-otherwise. Besides the Enable button here, a browser that has not decided yet gets the same offer as a row at the
-foot of the sidebar, which can also be dismissed until the page is next loaded. Answering from either place
-removes the offer from both. A browser's state is read again whenever the window regains focus, since it can be
-changed in the browser's own settings meanwhile.
+otherwise. Besides the Enable button here, a browser that has not decided yet gets the same ask as the **Turn on
+notifications** button in the top bar: a bell icon with a small dot on it, shown only while the browser's answer is
+undecided (see "The top bar" in `docs/product/window-layout.md`). It cannot be dismissed; pressing it asks the
+browser. Once the browser has answered, whichever the answer, the bell is gone, and answering from either place
+updates the other. The macOS application never shows the bell, since it asks nothing. A browser's state is read
+again whenever the window regains focus, since it can be changed in the browser's own settings meanwhile.

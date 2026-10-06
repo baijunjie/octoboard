@@ -1,7 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 
-type Axis = "x" | "y";
-
 interface Clipped {
   start: boolean;
   end: boolean;
@@ -11,14 +9,10 @@ interface Clipped {
  * fits; anything within this many pixels counts as fitting. */
 const OVERFLOW_EPSILON = 1;
 
-function measure(element: HTMLElement, axis: Axis): Clipped {
-  const [size, client, offset] =
-    axis === "x"
-      ? [element.scrollWidth, element.clientWidth, element.scrollLeft]
-      : [element.scrollHeight, element.clientHeight, element.scrollTop];
+function measure(element: HTMLElement): Clipped {
   return {
-    start: offset > OVERFLOW_EPSILON,
-    end: size - client - offset > OVERFLOW_EPSILON,
+    start: element.scrollLeft > OVERFLOW_EPSILON,
+    end: element.scrollWidth - element.clientWidth - element.scrollLeft > OVERFLOW_EPSILON,
   };
 }
 
@@ -58,27 +52,24 @@ function observe(element: Element, update: () => void): () => void {
 
 /** The mask that hides the clipped edges: opaque across the middle, ramping to transparent over
  * `fade` px at each edge that has content beyond it. `undefined` while nothing is clipped. */
-function maskImage(axis: Axis, fade: number, { start, end }: Clipped): string | undefined {
+function maskImage(fade: number, { start, end }: Clipped): string | undefined {
   if (!start && !end) return undefined;
   const stops = [
     start ? `transparent 0, #000 ${fade}px` : "#000 0",
     end ? `#000 calc(100% - ${fade}px), transparent 100%` : "#000 100%",
   ];
-  return `linear-gradient(${axis === "x" ? "to right" : "to bottom"}, ${stops.join(", ")})`;
+  return `linear-gradient(to right, ${stops.join(", ")})`;
 }
 
 interface FadeOverflowProps {
-  /** The axis along which content may be clipped. The element is made to clip (never wrap) along
-   * it: `x` is a single line cut at the right edge, `y` a vertical scroll container. */
-  axis: Axis;
   /** Length of the fade at each clipped edge, in px. */
   fade?: number;
   /** The element to render. */
   as?: "div" | "span";
   className?: string;
-  /** For `x` only: which edge the content is cut at. `end` (the default) shows the content's
-   * beginning; `start` aligns it to the end, so what is lost is its beginning (a path whose last
-   * folder must stay readable). */
+  /** Which edge the content is cut at. `end` (the default) shows the content's beginning; `start`
+   * aligns it to the end, so what is lost is its beginning (a path whose last folder must stay
+   * readable). */
   clip?: "start" | "end";
   /** Set as the element's `title` only while an edge is clipped, so a name that fits does not
    * grow a tooltip repeating itself. */
@@ -87,18 +78,20 @@ interface FadeOverflowProps {
 }
 
 /**
- * Content that fades out at an edge where it is cut off, instead of ending hard or in an ellipsis.
- * An edge fades only while content is actually hidden behind it: nothing when everything fits, and
- * for a scroll container the start edge only once scrolled away from the start, the end edge only
- * while there is more to scroll. The fade is a CSS mask on this element alone, so a background on
- * an ancestor (a hovered or selected row) is not faded with it.
+ * A single line of text that fades out at an edge where it is cut off, instead of ending hard or in
+ * an ellipsis. An edge fades only while text is actually hidden behind it, nothing when it all
+ * fits. The fade is a CSS mask on this element alone, so a background on an ancestor (a hovered or
+ * selected row) is not faded with it.
  *
- * It sets `overflow` and `whitespace-nowrap` (for `x`) itself, so the caller supplies only the
- * sizing (`min-w-0 flex-1` inside a flex row, a height for a scroll area). The first measurement
- * is made before the first paint, so a label that does not fit never shows a hard cut.
+ * This is hand-built rather than HeroUI's `ScrollShadow`: that turns its element into a vertical or
+ * horizontal scroll container with a scrollbar, fades only an end that can be scrolled to, and has
+ * no way to pin a line to its end (a clipped start edge) or to offer a title only while clipped.
+ *
+ * It sets `overflow` and `whitespace-nowrap` itself, so the caller supplies only the sizing
+ * (`min-w-0 flex-1` inside a flex row). The first measurement is made before the first paint, so a
+ * label that does not fit never shows a hard cut.
  */
 export function FadeOverflow({
-  axis,
   fade = 24,
   as: Tag = "div",
   className = "",
@@ -114,11 +107,11 @@ export function FadeOverflow({
     if (!element) return;
     const update = () => {
       // Pinned to the end here rather than by layout: a clipped start edge is the scroll position.
-      if (axis === "x" && clip === "start") {
+      if (clip === "start") {
         const end = element.scrollWidth - element.clientWidth;
         if (Math.abs(element.scrollLeft - end) > 0.5) element.scrollLeft = end;
       }
-      const next = measure(element, axis);
+      const next = measure(element);
       setClipped((prev) => (prev.start === next.start && prev.end === next.end ? prev : next));
     };
     update();
@@ -129,20 +122,19 @@ export function FadeOverflow({
       stopObserving();
       element.removeEventListener("scroll", onScroll);
     };
-  }, [axis, clip]);
+  }, [clip]);
 
-  // Content can change without its container's box changing (a renamed row, a row added to a
-  // scroll area), which the observer never reports, so every render re-measures.
+  // Content can change without its container's box changing (a renamed row), which the observer
+  // never reports, so every render re-measures.
   useLayoutEffect(() => {
     if (ref.current) scheduleMeasure(ref.current);
   });
 
-  const mask = maskImage(axis, fade, clipped);
-  const overflow = axis === "x" ? "overflow-hidden whitespace-nowrap" : "overflow-y-auto";
+  const mask = maskImage(fade, clipped);
   return (
     <Tag
       ref={ref as React.RefObject<never>}
-      className={`${overflow} ${className}`}
+      className={`overflow-hidden whitespace-nowrap ${className}`}
       title={clipped.start || clipped.end ? titleWhenClipped : undefined}
       style={mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined}
     >

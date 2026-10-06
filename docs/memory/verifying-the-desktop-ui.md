@@ -88,16 +88,21 @@ Point `HOME` and `TMPDIR` at fresh directories for every verification run. The d
 lock under `$HOME/.octoboard` and its port file under the temp directory (see the "Pointing it at a daemon" section of
 `packages/ui/README.md`), so on the real `HOME` a run either works on the user's own data or, while the user's own
 Octoboard is running, loses the lock and opens the window on the `?error=` startup screen instead of the app.
+The daemon then takes that directory as the user's home, and the app offers less around it: a project whose parent
+folder is or contains it gets no "Trust parent folder" (see the "Trusted folders" section of
+`docs/product/launching-agents.md`). So put project directories inside the throwaway `HOME` (`$HOME/code/<project>`),
+not beside it in one scratch directory.
 
 WKWebView ignores both variables, though: it keeps the page's `localStorage` under the *real* user's
 `~/Library/WebKit/<bundle identifier>/WebsiteData/`, so everything the page persists — the appearance choice
-included — carries over from the previous run, and a run on a fresh `HOME` is not a fresh profile at all. Isolate it
-by moving that directory aside before the run and putting it back afterwards — but only while no app with that
-identifier is running: the user's own installed Octoboard and every worktree's build share `dev.octoboard.app`, so the
-directory is the live profile of whichever copy is open. Check with `lsappinfo find bundleid=dev.octoboard.app`
-(empty output means none) immediately before moving it; if one is running, leave the directory in place and either
-accept the shared profile or ask the user to quit theirs. To read a value out of it instead, open
-the sqlite file normally rather than with `immutable=1`: the app's last write may still be sitting in the WAL, which
+included — carries over from the previous run, and a run on a fresh `HOME` is not a fresh profile at all. The user's
+own installed Octoboard and every worktree's build share `dev.octoboard.app`, so that directory is the user's own
+profile. Isolating the run means moving it aside before and putting it back afterwards, which needs the user's
+go-ahead up front and is possible only while no app with that identifier is running: check with
+`lsappinfo find bundleid=dev.octoboard.app` (empty output means none) immediately before moving it. Otherwise run on
+the shared profile, note each setting the run will change (the appearance first of all) beforehand, and put it back
+afterwards, because the user's own app reads the same values. To read a value out of the profile, open the sqlite
+file normally rather than with `immutable=1`: the app's last write may still be sitting in the WAL, which
 `immutable=1` skips, answering with the value before it.
 
 Keep the `.app` and both throwaway directories on the internal disk when the checkout is on a removable volume. A
@@ -136,6 +141,15 @@ Events, `keystroke "<letter>" using control down` can be dropped silently where 
 where the same key sent as `key code` moves it immediately; its clicks (`c:`) are fine. Prefer `osascript` with
 `key code`, and never conclude "the app swallows this key" from a scripted probe without confirming by hand.
 
+The page's HeroUI controls depend on input modality and timing in ways scripted input easily misses, in the app and
+in a plain browser alike. A tooltip opens on focus only after a real Tab key press (`element.focus()` or a click
+leaves it closed), and on hover only once HeroUI's `--tooltip-delay` (1500 ms in its default theme) has passed with
+the pointer resting on the control; a toast's close button takes pointer events only while the toast is hovered. So a
+tooltip that did not appear, or a control a script could not press, is not a finding until real input reproduces it.
+A Tab walk, on the other hand, needs no change to the system's keyboard-navigation setting: unlike Safari by default,
+this app's WKWebView moves Tab onto buttons whether `AppleKeyboardUIMode` is set or not, so a button that Tab skips
+is not explained by that setting.
+
 Two further limits on macOS: driving the real app this way requires Accessibility permission granted to the host
 application of whatever runs the script, and native `<select>` popups cannot be driven through the accessibility tree
 at all — to make a control scriptable, build it from something other than a native `<select>`, or drive it by hand.
@@ -143,11 +157,13 @@ at all — to make a control scriptable, build it from something other than a na
 So keep the GUI out of the setup: create the consoles, projects and sessions a verification needs by sending the
 daemon's own protocol requests, and drive only the behaviour under test through the window. A session's status can be
 set up the same way, without an agent prompt or a model turn: POST `{"hook_event_name":"PermissionRequest"}` to the
-daemon's `/hook/<session>` to raise its hand, and a later `UserPromptSubmit` lowers it again.
+daemon's `/hook/<session>` to raise its hand, and a later `UserPromptSubmit` lowers it again. Trusted folders are the
+exception: the protocol adds one only as the answer to a live Claude Code trust screen, so seed them by inserting
+rows into the `trusted_directories` table of `$HOME/.octoboard/octoboard.db` while the app is stopped.
 
-Keystrokes go to whichever application is frontmost, not to Octoboard. Activate it and confirm it is the frontmost
-process immediately before every keystroke: a `Cmd+Q` or `Cmd+W` that lands on another application closes the user's
-own work.
+Keystrokes go to whichever application is frontmost, and a click at screen coordinates to whichever window is on top
+at that point, not to Octoboard. Activate it and confirm it is the frontmost process immediately before every
+keystroke and every click: a `Cmd+Q` or `Cmd+W` that lands on another application closes the user's own work.
 
 ## Running dev apps share the machine: confirm which one answers, stop yours by PID, warn before touching `src-tauri`
 
@@ -164,7 +180,7 @@ agents (see "Crashes and forced termination" in `docs/product/application-lifecy
 agents doing the editing. So when the user has that app running, tell them before editing Rust there and land the Rust
 edits together rather than one at a time.
 
-## Input-method checks have to be done by a person
+## Input-method and reduced-motion checks need the user's hands
 
 Injected keystrokes bypass macOS input methods entirely, so a scripted CJK composition test passes without ever
 exercising the IME and proves nothing. Ask the user to type it and report what they saw.
@@ -172,6 +188,11 @@ exercising the IME and proves nothing. Ask the user to type it and report what t
 It cuts the other way too: scripted typing can instead be fed *through* whatever input source is active —
 `cliclick t:` composes through a pinyin IME rather than typing the literal text — so any probe that types has to
 switch the input source to a non-IME one (ABC) first and put it back afterwards.
+
+Reduce motion cannot be switched on from a shell either: `defaults write com.apple.universalaccess reduceMotion` is
+refused, and `defaults write com.apple.Accessibility ReduceMotionEnabled` succeeds but WebKit does not read it — the
+app keeps animating after a relaunch, which reads as the page ignoring `prefers-reduced-motion`. For a check in the
+app, ask the user to turn on System Settings → Accessibility → Display → Reduce motion, and off again afterwards.
 
 ## `SIGSTOP` on the WebContent process simulates a hung page, but only roughly
 

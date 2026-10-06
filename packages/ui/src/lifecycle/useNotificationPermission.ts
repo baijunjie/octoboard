@@ -4,8 +4,7 @@ import type { NotificationPermissionStatus } from "../platform";
 import { usePlatform } from "../platform/react";
 
 // A browser's answer is not an event, so every hook instance is told when any of them asked: the
-// sidebar's prompt row goes away when the Settings dialog's button is pressed, and the other way
-// round.
+// top bar's bell goes away when the Settings dialog's button is pressed.
 const askedListeners = new Set<() => void>();
 
 /**

@@ -181,6 +181,12 @@ The directory browser lists directories only — a project is a directory — an
 dot. Each entry is flagged with whether it is a git repository. Entries are sorted case-insensitively by name. The
 listing always comes from the host the projects live on, never from the application's own filesystem view.
 
+In the browser, the listed directory's subdirectories are one list, with a `..` entry for the parent directory at its
+top except at the filesystem root (announced to assistive technology as the parent directory), and a "git" tag on
+each entry that is a git repository. Clicking an entry, or pressing Enter on it, lists that directory. The list is a
+single Tab stop: the arrow keys, Home and End move between its entries. A directory with no subdirectories shows an
+entry saying so, which does nothing.
+
 A listing can fail, and that is a normal path rather than an edge case: a packaged application is granted file access
 per volume by macOS, and the user may decline the prompt or leave it unanswered. The failure is reported with the path
 and with the hint that per-volume access has to be granted; whatever was listed before stays on screen so the browser

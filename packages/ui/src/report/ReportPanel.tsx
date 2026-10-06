@@ -3,11 +3,17 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import { FadeOverflow } from "../components/FadeOverflow";
-import { drawerClass, PeekHotZone } from "../layout/paneOverlay";
+import { TitledControl } from "../components/TitledControl";
+import { drawerClass, PANE_ID, PeekHotZone } from "../layout/paneOverlay";
 import type { PanePeek } from "../layout/usePaneToggles";
 import type { Page } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
-import { composePageDocument, ESCAPE_MESSAGE_SOURCE, SUBMIT_MESSAGE_SOURCE } from "./pageDocument";
+import {
+  composePageDocument,
+  ESCAPE_MESSAGE_SOURCE,
+  REGION_MESSAGE_SOURCE,
+  SUBMIT_MESSAGE_SOURCE,
+} from "./pageDocument";
 
 /**
  * The console's report panel: shown only for the hub session, which is what makes a console's
@@ -29,6 +35,7 @@ export function ReportPanel({
   reportWidth,
   peek,
   onEscape,
+  onCycleRegion,
 }: {
   consoleId: string;
   hubSessionId: string;
@@ -44,6 +51,9 @@ export function ReportPanel({
   /** Escape was pressed inside the page's frame, where this document never sees the key. The
    * owner closes whichever overlay is open, as Escape does elsewhere. */
   onEscape: () => void;
+  /** F6 (`backward` with Shift) was pressed inside the page's frame; the owner moves focus to the
+   * neighbouring region of the window. */
+  onCycleRegion: (backward: boolean) => void;
 }): React.ReactElement {
   const { request, toastError } = useDaemon();
   const consolePages = useDaemonStore((s) => s.pages.get(consoleId));
@@ -120,7 +130,9 @@ export function ReportPanel({
   // for the panel's across that boundary, `onPointerMove` for coming back out onto the panel's
   // chrome, where the panel itself never saw the pointer leave.
   const pane = {
+    id: PANE_ID.report,
     "data-pane": "report",
+    "data-region": "report",
     "data-escape-scope": true,
     style: { "--report-width": `${reportWidth}px` } as React.CSSProperties,
     onPointerEnter: peek?.keep,
@@ -165,35 +177,41 @@ export function ReportPanel({
   return (
     <>
       <div {...pane} className={panelClass}>
+        {/* A previous / next pager with "n / m", hand-assembled from buttons: HeroUI's `Pagination`
+            is a list of numbered pages, which neither reads as nor behaves like this. */}
         <div className="flex h-10 shrink-0 items-center gap-2 border-b border-separator bg-surface px-3 text-xs text-muted">
-          <Button
-            isIconOnly
-            size="sm"
-            variant="ghost"
-            aria-label="Previous page"
-            preventFocusOnPress
-            isDisabled={displayIndex === 0}
-            onPress={() => goTo(displayIndex - 1)}
-          >
-            <ChevronLeft aria-hidden="true" className="size-4" />
-          </Button>
+          <TitledControl title="Previous page">
+            <Button
+              isIconOnly
+              size="sm"
+              variant="ghost"
+              aria-label="Previous page"
+              preventFocusOnPress
+              isDisabled={displayIndex === 0}
+              onPress={() => goTo(displayIndex - 1)}
+            >
+              <ChevronLeft aria-hidden="true" className="size-4" />
+            </Button>
+          </TitledControl>
           <span className="whitespace-nowrap">
             {displayIndex + 1} / {consolePages.length}
           </span>
-          <Button
-            isIconOnly
-            size="sm"
-            variant="ghost"
-            aria-label="Next page"
-            preventFocusOnPress
-            isDisabled={displayIndex === consolePages.length - 1}
-            onPress={() => goTo(displayIndex + 1)}
-          >
-            <ChevronRight aria-hidden="true" className="size-4" />
-          </Button>
+          <TitledControl title="Next page">
+            <Button
+              isIconOnly
+              size="sm"
+              variant="ghost"
+              aria-label="Next page"
+              preventFocusOnPress
+              isDisabled={displayIndex === consolePages.length - 1}
+              onPress={() => goTo(displayIndex + 1)}
+            >
+              <ChevronRight aria-hidden="true" className="size-4" />
+            </Button>
+          </TitledControl>
           {/* The timestamp's width is whatever the user's locale makes of it, so it is the element
               that gives way, rather than pushing the badge off the panel's edge when narrow. */}
-          <FadeOverflow axis="x" as="span" className="ml-auto min-w-0">
+          <FadeOverflow as="span" className="ml-auto min-w-0">
             {new Date(page.created_at).toLocaleString()}
           </FadeOverflow>
           {isHistory && (
@@ -208,6 +226,7 @@ export function ReportPanel({
           isHistory={isHistory}
           onSubmit={handleSubmit}
           onEscape={onEscape}
+          onCycleRegion={onCycleRegion}
           onPointerEnter={peek?.keep}
           onPointerLeave={peek?.leave}
         />
@@ -227,6 +246,7 @@ function PageFrame({
   isHistory,
   onSubmit,
   onEscape,
+  onCycleRegion,
   onPointerEnter,
   onPointerLeave,
 }: {
@@ -234,6 +254,7 @@ function PageFrame({
   isHistory: boolean;
   onSubmit: (page: Page, data: unknown) => void;
   onEscape: () => void;
+  onCycleRegion: (backward: boolean) => void;
   onPointerEnter?: () => void;
   onPointerLeave?: () => void;
 }): React.ReactElement {
@@ -251,6 +272,12 @@ function PageFrame({
       // The relay carries nothing from the page, so a page forging it can only ask for what the
       // user's own Escape would do.
       if (data.source === ESCAPE_MESSAGE_SOURCE) return onEscape();
+      // Likewise only moves focus, as the user's own F6 would, and only while focus is in the frame:
+      // a page posting it at any other time would pull focus off wherever the user is.
+      if (data.source === REGION_MESSAGE_SOURCE) {
+        if (document.activeElement !== iframeRef.current) return;
+        return onCycleRegion((data as { backward?: unknown }).backward === true);
+      }
       // A history page's bridge already throws instead of posting (see `composePageDocument`), but
       // a page's own script can reach the parent directly with `parent.postMessage(...)`, skipping
       // that throw. The daemon still refuses the resulting `submit_page` (it is the enforcement
@@ -261,7 +288,7 @@ function PageFrame({
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [page, isHistory, onSubmit, onEscape]);
+  }, [page, isHistory, onSubmit, onEscape, onCycleRegion]);
 
   return (
     <iframe

@@ -23,8 +23,8 @@ const shownToasts = new Map<string, string>();
  * rather than something that went wrong, is the accent one. The stack dismisses toasts by itself
  * after a few seconds and pauses while the pointer is over it or focus is inside it, which is what
  * WCAG 2.2.1 (timing adjustable) asks for. The stack's own Alt+T hotkey is off (`hotkey={[]}`): it
- * would swallow Option+T typed into the terminal and pull focus into the stack. react-aria still
- * registers the region as a landmark that F6 cycles to while a toast is shown; that has no switch.
+ * would swallow Option+T typed into the terminal and pull focus into the stack. The region is
+ * marked `data-region="toast"`, which makes it a stop of the window's F6 cycle while a toast is shown.
  *
  * A toast that carries a session is titled with where that session is and carries the message as
  * its description: the daemon's own messages say "this session" without naming it, since it has no
@@ -82,6 +82,7 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
   const keepFocus = useCallback((node: HTMLDivElement | null) => {
     if (!node) return;
     const region = node;
+    region.dataset.region = "toast";
     // Where focus was before it entered the region.
     let origin: HTMLElement | null = null;
     let press: AbortController | undefined;
@@ -184,7 +185,7 @@ function renderToast({ toast: queued }: { toast: QueuedToast<ToastContentValue> 
         {!!title && <Toast.Title>{title}</Toast.Title>}
         {!!description && <Toast.Description>{description}</Toast.Description>}
       </Toast.Content>
-      <TitledControl title="Close" contents>
+      <TitledControl title="Close">
         <Toast.CloseButton preventFocusOnPress />
       </TitledControl>
     </Toast>

@@ -1,9 +1,14 @@
-import { Button, Input } from "@heroui/react";
+import { Button, Chip, Input, ListBox } from "@heroui/react";
 import React, { useEffect, useRef, useState } from "react";
 
 import type { DirEntry, Event } from "../protocol";
 import { useDaemon } from "../store";
 import { Dialog, DialogError, useRefocusIfLost } from "./Dialog";
+
+/** The ids of the list's two entries that are not a directory. A real entry's id is its absolute
+ * path, which neither of these can be. */
+const PARENT_KEY = "..";
+const EMPTY_KEY = "empty";
 
 /**
  * Browses directories through the daemon's `list_dir`, never the local filesystem directly — this
@@ -32,7 +37,7 @@ export function DirectoryPicker({
   const [entries, setEntries] = useState<DirEntry[]>();
   const [resolvedPath, setResolvedPath] = useState<string>();
   const [error, setError] = useState<string>();
-  const listRef = useRef<HTMLUListElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const load = async (targetPath: string) => {
     setError(undefined);
@@ -59,7 +64,7 @@ export function DirectoryPicker({
     // via `useState`'s initializer above, so it is intentionally not a dependency here.
   }, []);
 
-  // Loading replaces the list, unmounting the entry button that was pressed. The list itself is the
+  // Loading replaces the list, unmounting the entry that was pressed. The list itself is the
   // stable place to put focus back, so Tab carries on from the entries.
   useRefocusIfLost(() => listRef.current, [entries]);
 
@@ -94,28 +99,38 @@ export function DirectoryPicker({
       </div>
       <DialogError message={error} />
       {entries && (
-        <ul
+        <ListBox
           ref={listRef}
-          tabIndex={-1}
-          className="max-h-72 overflow-y-auto rounded-lg border border-separator outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          aria-label="Subdirectories"
+          // `selectionMode` stays `none`: an entry is only ever entered, never picked. Activating
+          // one (click, Enter) calls `onAction`. The padding keeps the scroll container from
+          // clipping the items' focus ring.
+          onAction={(key) => void load(key === PARENT_KEY ? parentOf(resolvedPath ?? "/") : String(key))}
+          className="max-h-72 overflow-y-auto rounded-lg border border-separator p-1"
         >
           {resolvedPath && resolvedPath !== "/" && (
-            <li>
-              <Button fullWidth variant="ghost" className="justify-start" onPress={() => void load(parentOf(resolvedPath))}>
-                ..
-              </Button>
-            </li>
+            <ListBox.Item id={PARENT_KEY} textValue="Parent directory" aria-label="Parent directory">
+              ..
+            </ListBox.Item>
           )}
           {entries.map((entry) => (
-            <li key={entry.path}>
-              <Button fullWidth variant="ghost" className="justify-start" onPress={() => void load(entry.path)}>
-                {entry.name}
-                {entry.is_git_repo && <span className="ml-2 rounded bg-default px-1 text-xs text-muted">git</span>}
-              </Button>
-            </li>
+            <ListBox.Item key={entry.path} id={entry.path} textValue={entry.name}>
+              {entry.name}
+              {entry.is_git_repo && (
+                <Chip size="sm" variant="soft" className="ml-2">
+                  git
+                </Chip>
+              )}
+            </ListBox.Item>
           ))}
-          {entries.length === 0 && <li className="px-3 py-2 text-sm text-muted">No subdirectories.</li>}
-        </ul>
+          {entries.length === 0 && (
+            // Inside the list, as an option that cannot be acted on: arrow keys skip it, and the
+            // list is never left without an option, which a listbox needs.
+            <ListBox.Item id={EMPTY_KEY} isDisabled textValue="No subdirectories">
+              No subdirectories.
+            </ListBox.Item>
+          )}
+        </ListBox>
       )}
     </Dialog>
   );

@@ -1,4 +1,4 @@
-import { Button, Surface } from "@heroui/react";
+import { Button, EmptyState, Surface } from "@heroui/react";
 import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 import "@xterm/xterm/css/xterm.css";
@@ -232,14 +232,20 @@ export function TerminalPane({
     // swallow the key before that listener's own bubble-phase alternative ever saw it.
     <div
       data-escape-scope
+      data-region="terminal"
       className="relative flex min-h-0 min-w-[382px] flex-[1_1_382px] flex-col docked:min-w-[520px] docked:flex-[1_1_520px]"
       style={{ backgroundColor: XTERM_THEMES[colorTheme].background }}
     >
-      <div className="min-h-0 flex-1 overflow-hidden p-1" ref={containerRef} />
+      {/* The padding sits on a wrapper, not on the element xterm is mounted in: the fit addon sizes
+          the terminal from that element's computed height and width, padding included, so padding
+          there gives it rows and columns that the overflow then clips. */}
+      <div className="min-h-0 flex-1 p-1">
+        <div className="h-full overflow-hidden" ref={containerRef} />
+      </div>
       {!session && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background text-muted">
+        <EmptyState className="absolute inset-0 flex items-center justify-center bg-background">
           Select a session to view its terminal.
-        </div>
+        </EmptyState>
       )}
       {/* Floats over the terminal rather than covering it: a session that has just ended keeps its
           last output on screen (`TerminalController.detach`), and that output is what says why. The

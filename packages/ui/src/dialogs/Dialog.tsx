@@ -1,7 +1,8 @@
-import { Button, Modal } from "@heroui/react";
-import React, { useEffect, useRef, useState } from "react";
+import { AlertDialog, Button, Modal } from "@heroui/react";
+import React, { useEffect, useId, useRef, useState } from "react";
 
 import { takeMenuFocusToRestore } from "../components/ActionMenu";
+import { TitledControl } from "../components/TitledControl";
 
 /** The inline error and busy state every dialog that talks to the daemon needs. `run` clears the
  * error, marks the dialog busy for the duration of `action`, and shows a rejection as the error
@@ -70,7 +71,8 @@ type BodyChildren = React.ComponentProps<typeof Modal.Footer>["children"];
 let openDialogs = 0;
 
 /**
- * The frame every dialog shares. Escape and a click outside both call `onClose`; the dialog is
+ * The frame every dialog shares. Escape and a click outside both call `onClose` (for an `alert`
+ * dialog too, which HeroUI's `AlertDialog` would otherwise make explicit-action only); the dialog is
  * mounted only while it is open, so `isOpen` is constant. With `onSubmit` the body and footer sit in
  * a `<form>`, so Enter in a text field submits it — the dialog decides what "submit" means. The
  * footer is Cancel plus a submit button labelled `submitLabel`, both disabled while `busy`, unless
@@ -92,7 +94,7 @@ export function Dialog({
   onClose: () => void;
   children: BodyChildren;
   size?: "sm" | "md" | "lg";
-  /** A confirmation that interrupts the user, announced as an alert dialog. */
+  /** A confirmation that interrupts the user: HeroUI's `AlertDialog`, announced as an alert dialog. */
   alert?: boolean;
   /** Names what a dialog reused across subjects currently asks about; when it changes and focus
    * was lost with the old content, it is put back on the dialog. */
@@ -121,10 +123,18 @@ export function Dialog({
   const markerRef = useRef<HTMLSpanElement>(null);
   useRefocusIfLost(() => markerRef.current?.closest<HTMLElement>("[role=dialog], [role=alertdialog]"), [resetKey]);
 
+  const Frame = alert ? AlertDialog : Modal;
+  // An alert dialog is described by its whole body, so a screen reader announces what is asked
+  // together with the title; react-aria only wires up a `slot="description"` Text, which this body
+  // is not.
+  const bodyId = useId();
+
   const body = (
     <>
-      <Modal.Body className="flex flex-col gap-4 p-1">{children}</Modal.Body>
-      <Modal.Footer className="flex-wrap">
+      <Frame.Body id={bodyId} className="flex flex-col gap-4 p-1">
+        {children}
+      </Frame.Body>
+      <Frame.Footer className="flex-wrap">
         {footer ?? (
           <>
             <Button type="button" variant="secondary" onPress={onClose} isDisabled={busy}>
@@ -135,19 +145,22 @@ export function Dialog({
             </Button>
           </>
         )}
-      </Modal.Footer>
+      </Frame.Footer>
     </>
   );
 
   return (
-    <Modal.Backdrop isOpen onOpenChange={(open) => !open && onClose()}>
-      <Modal.Container size={size}>
-        <Modal.Dialog role={alert ? "alertdialog" : "dialog"}>
+    <Frame.Backdrop isOpen isDismissable isKeyboardDismissDisabled={false} onOpenChange={(open) => !open && onClose()}>
+      <Frame.Container size={size}>
+        <Frame.Dialog aria-describedby={alert ? bodyId : undefined}>
           <span ref={markerRef} hidden />
-          <Modal.CloseTrigger />
-          <Modal.Header>
-            <Modal.Heading>{title}</Modal.Heading>
-          </Modal.Header>
+          <TitledControl title="Close">
+            {/* Named explicitly so it always matches the tooltip. */}
+            <Frame.CloseTrigger aria-label="Close" />
+          </TitledControl>
+          <Frame.Header>
+            <Frame.Heading>{title}</Frame.Heading>
+          </Frame.Header>
           {onSubmit ? (
             <form
               className="contents"
@@ -161,8 +174,8 @@ export function Dialog({
           ) : (
             body
           )}
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+        </Frame.Dialog>
+      </Frame.Container>
+    </Frame.Backdrop>
   );
 }

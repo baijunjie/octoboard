@@ -42,6 +42,15 @@
   --field-border-focus: var(--focus);
 }
 
+/* HeroUI's light `--muted` (L 0.5517) is secondary text everywhere, but it reaches 4.5:1 only on
+   white: 4.43:1 on `--background` and 4.05:1 on `--default`. A slightly darker one clears 4.5:1 on
+   all three (5.07, 4.63, 5.52). Dark's own value already does, so this is light-only; the selector
+   excludes the dark theme rather than relying on order, since this sheet's unlayered `:root` would
+   otherwise beat HeroUI's layered dark rule. */
+:root:not(.dark):not([data-theme="dark"]) {
+  --muted: oklch(0.52 0.0138 285.94);
+}
+
 html,
 body,
 #root {

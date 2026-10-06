@@ -56,7 +56,9 @@ Under each project, sessions whose process is running and sessions that were int
 archived sessions are grouped under an "Archive (n)" row that expands on its own. The console itself
 carries an "Archived hubs (n)" group below its Hub row, for the hub sessions that have been archived.
 Each session row shows its status, its title, and a badge naming its agent (Claude Code, Codex, Grok
-Build).
+Build). The status is an icon named after the status for assistive technology; the *working* icon spins, and holds
+still where the system asks for reduced motion. Console, project and archive-group rows tell assistive technology
+whether they are expanded or collapsed.
 
 A name too long for its row fades out at the row's right edge rather than ending in an ellipsis, and the full name is
 then the row's tooltip. When the tree is taller than the sidebar it scrolls, and it fades out at whichever end has
@@ -278,7 +280,9 @@ A session's title can be changed at any time, archived sessions included. An emp
 ## The terminal
 
 The selected session's terminal is live: keystrokes go straight to the agent, exactly as in a system terminal. Mouse
-reporting works, so an agent's own mouse-driven TUI is usable. `Ctrl+C` reaches the agent.
+reporting works, so an agent's own mouse-driven TUI is usable. `Ctrl+C` reaches the agent, and so do `Tab` and
+`Shift+Tab`. `F6` and `Shift+F6` never do: they move keyboard focus to another region of the window (see "Moving
+focus between regions with F6" in `docs/product/window-layout.md`).
 
 - Attaching to a session replays the **most recent 2 MiB** of that session's output, then follows live output. The
   terminal itself keeps 10,000 lines of scrollback.

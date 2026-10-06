@@ -6,7 +6,8 @@ import { Dialog, DialogError, useDialogAction } from "./Dialog";
 
 interface ConfirmDialogProps {
   title: string;
-  message: string;
+  /** What the dialog says: a string is one paragraph; a node lays out its own structure. */
+  message: React.ReactNode;
   confirmLabel?: string;
   /** What the button that declines is called. */
   cancelLabel?: string;
@@ -16,6 +17,7 @@ interface ConfirmDialogProps {
   /** Names what the dialog currently asks about, for one reused across subjects: a change clears
    * the failure shown for the previous one. */
   resetKey?: string;
+  size?: "sm" | "md" | "lg";
   /** May reject — the dialog shows the failure inline and stays open instead of closing, so the
    * caller does not need its own try/catch around the request. */
   onConfirm: () => Promise<void>;
@@ -30,6 +32,7 @@ export function ConfirmDialog({
   extraAction,
   destructive,
   resetKey,
+  size,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps): React.ReactElement {
@@ -54,8 +57,12 @@ export function ConfirmDialog({
   );
 
   return (
-    <Dialog title={title} onClose={onCancel} footer={footer} resetKey={resetKey} onSubmit={() => void run(onConfirm)} alert>
-      <p className="text-sm">{message}</p>
+    <Dialog title={title} onClose={onCancel} footer={footer} resetKey={resetKey} size={size} onSubmit={() => void run(onConfirm)} alert>
+      {typeof message === "string" ? (
+        <p className="text-sm">{message}</p>
+      ) : (
+        <div className="flex flex-col gap-3 text-sm text-foreground">{message}</div>
+      )}
       <DialogError message={error} />
     </Dialog>
   );

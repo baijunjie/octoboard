@@ -193,23 +193,20 @@ What happens when the screen comes up depends on the session:
 | Project session whose project has the user's consent, or whose directory lies under a trusted folder | Answered at once, without a dialog. |
 | Any other project session | The user is asked in a dialog; nothing is sent until they agree. |
 
-**The dialog**, titled "Trust this folder?", names the folder Claude Code is asking about and, when
-it is known, the session. It says that Claude Code is asking and that Octoboard can answer for the
-user, with "Trust and continue" trusting this project's sessions from now on. When a folder-wide
-choice is offered, it also says, naming the full path of the folder offered, that this trusts every
-project under that folder — those already there and any added there later, repositories the hub
-clones or adds into it included — and that their `.claude/settings.json` permissions and hooks then
-apply without asking, and that this can be stopped under "Trusted folders" in Settings. It warns
-that a folder's `.claude/settings.json` may pre-approve tool permissions, which trusting it applies
-without asking, and it says that "Not now" leaves the question in the terminal. Its buttons:
+**The dialog**, titled "Trust this folder?", opens by saying that Claude Code is asking whether to
+trust this folder — for the named session, when the session is known — with the project's full path
+set apart below in a monospace block. When "Trust parent folder" is offered, one sentence then says
+that it also trusts every project in the folder that holds this one, named by its last two path
+components, including projects added there later. A warning callout, tinted and set apart at the
+end, says that a trusted folder's `.claude/settings.json` may pre-approve tool permissions. Its
+buttons:
 
 - **Trust and continue** — Octoboard answers this session's screen. Only if that succeeded is the
   project's consent recorded, so the project's later Claude Code sessions are answered without a
   dialog; an answer that fails records nothing.
-- **Trust all projects in *folder*** — shown only when the daemon offers a folder for this project
+- **Trust parent folder** — shown only when the daemon offers a folder for this project
   (see "Which folder" under "Trusted folders" below); a project with none to offer gets only the other
-  two buttons. *folder* is the folder offered, shortened on the button to its last two path
-  components; the message and the button's tooltip give the full path. Octoboard answers this
+  two buttons. The button's tooltip gives the full path of the folder offered. Octoboard answers this
   session's screen, and only if that succeeded is that folder added to the trusted folders. The
   project's own consent is not recorded; an answer that fails records nothing. If the folder turns
   out to be too broad to trust by the time the button is chosen, it is refused before anything is
@@ -225,7 +222,7 @@ answered — a screen is answered at most once, so trying again from the dialog 
 failure is then shown as a toast. Two outcomes differ: the too-broad refusal keeps the
 dialog open, and a go-ahead for a screen that is no longer waiting — already answered, whether from
 another client, in the terminal or by Octoboard itself — closes the dialog without any message when
-it was "Trust and continue", since nothing went wrong. For "Trust all projects in …" it shows a
+it was "Trust and continue", since nothing went wrong. For "Trust parent folder" it shows a
 message saying the folder was not trusted, because that choice was not carried out.
 
 Prompts are shown one at a time, oldest first; closing one brings up the next. A prompt still waiting
@@ -244,7 +241,7 @@ terminal. Once one client has answered, a go-ahead from another changes nothing.
   removes it with the association. A project starts without it.
 - **A trusted folder** covers every project whose directory is that folder or lies anywhere below it,
   in any console, including projects associated after the folder was trusted — by the user or by a
-  hub. It is set only by "Trust all projects in *folder*", is stored on its own rather than with any
+  hub. It is set only by "Trust parent folder", is stored on its own rather than with any
   project, and can be removed in Settings. Its rules are in "Trusted folders" below.
 
 **How the screen is answered.** Octoboard types a Down and then an Enter into the session's terminal,
@@ -281,7 +278,7 @@ ends up inside it, for as long as the folder stays trusted.
 
 **Which folder.** The folder offered, and the only one that can be trusted from a session's dialog,
 is the parent directory of that session's project; the daemon derives it from the project's path, and
-no client can name a folder of its own. None is offered — and the "Trust all projects in *folder*"
+no client can name a folder of its own. None is offered — and the "Trust parent folder"
 button is not shown — when:
 
 - the project's path is not absolute;

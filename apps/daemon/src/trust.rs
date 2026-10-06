@@ -1671,7 +1671,7 @@ mod tests {
         assert!(trustable_parent("relative/app", home).is_err());
     }
 
-    /// "Trust all projects in this folder" answers this screen and, once that worked, records the
+    /// "Trust parent folder" answers this screen and, once that worked, records the
     /// parent directory — and leaves the project's own consent unset.
     #[tokio::test]
     async fn confirming_for_the_parent_directory_records_it_after_the_answer() {

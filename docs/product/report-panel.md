@@ -94,8 +94,15 @@ key never reaches the window from inside the frame, so without this it could not
 report panel or the narrow-window drawer. It closes whatever overlay is open, as Escape does
 anywhere else, and with nothing open it does nothing. An Escape pressed during an input
 method's composition, where it cancels the composition, is not relayed, and the page itself still
-receives the key either way. Nothing else crosses with it, and the page's own script can post the
-same signal, which is harmless since all it can do is close an overlay.
+receives the key either way. The page's own script can post the same signal, which is harmless
+since all it can do is close an overlay.
+
+`F6` and `Shift+F6` pressed while focus is inside a page are likewise passed to the window, on a
+history page too, and move focus to the next or previous region of the window (see "Moving focus
+between regions with F6" in `docs/product/window-layout.md`); the browser's own handling of the key
+inside the frame is cancelled. A page cannot move focus this way by itself: the signal is acted on
+only while focus is inside the page's frame. Neither this signal nor Escape's carries anything else
+from the page.
 
 Nothing gates when `submit` may be called: any call from the newest page reaches the hub, whether or not
 the user triggered it.

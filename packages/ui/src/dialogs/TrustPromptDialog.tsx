@@ -1,3 +1,4 @@
+import { Alert, Code } from "@heroui/react";
 import React from "react";
 
 import { DaemonRequestError } from "../daemon-client";
@@ -12,18 +13,64 @@ const TRUST_DIRECTORY_TOO_BROAD = "trust_directory_too_broad";
  * answered already, or its session gone. There is nothing to tell the user then. */
 const CLAUDE_TRUST_NOT_WAITING = "claude_trust_not_waiting";
 
-/** What the trust dialog says. The folder-wide choice is spelled out because it reaches beyond the
- * project being asked about: every project under the folder, including repositories the hub clones
- * or adds there later, is trusted without a question, and the permissions and hooks in their
- * `.claude/settings.json` then apply without asking. */
-function trustPromptMessage(prompt: TrustPrompt, sessionLabel: string): string {
-  const folderWide = prompt.trustDir
-    ? ` "Trust all projects in ${shortDirectory(prompt.trustDir)}" trusts every project under ${prompt.trustDir} — those already there and any added there later, repositories the hub clones or adds into it included — without asking again. You can stop that again under "Trusted folders" in Settings.`
-    : "";
-  return `Claude Code is asking whether to trust ${prompt.path}${sessionLabel}. Octoboard can answer for you: "Trust and continue" trusts this project's sessions from now on.${folderWide} A folder's .claude/settings.json may pre-approve tool permissions, and trusting it applies them without asking. "Not now" leaves the question in the terminal for you to answer.`;
+/** A file path or directory in the dialog's text. A block one (the project's full path) breaks at any
+ * character, so it wraps to the dialog's width rather than splitting at a hyphen; an inline one
+ * breaks only where it would otherwise overflow, since a folder's name has no length limit. */
+function Path({ children, block }: { children: string; block?: boolean }): React.ReactElement {
+  return (
+    <Code className={block ? "block w-full break-all select-text" : "[overflow-wrap:anywhere] select-text"}>
+      {children}
+    </Code>
+  );
 }
 
-/** A directory shortened for a button: its last two components. The full path is in the message. */
+/** What the trust dialog says: the question with the project's path, a line on the folder-wide
+ * choice when it is offered, since it reaches beyond the project asked about (every project in the
+ * folder, including ones added there later), and the caution set apart. Kept short on purpose:
+ * the buttons' names carry the rest. */
+function TrustPromptMessage({
+  prompt,
+  sessionTitle,
+}: {
+  prompt: TrustPrompt;
+  sessionTitle: string | undefined;
+}): React.ReactElement {
+  return (
+    <>
+      <div className="flex flex-col gap-2">
+        <p>
+          Claude Code is asking whether to trust this folder{sessionTitle ? ` for session "${sessionTitle}"` : ""}:
+        </p>
+        <Path block>{prompt.path}</Path>
+      </div>
+      {prompt.trustDir && (
+        <p>
+          &ldquo;{TRUST_PARENT_LABEL}&rdquo; also trusts every project in <Path>{shortDirectory(prompt.trustDir)}</Path>, including
+          ones added there later.
+        </p>
+      )}
+      {/* HeroUI's own warning tint rather than its default surface, which is the dialog's own fill and
+          leaves the callout unmarked. */}
+      <Alert status="warning" className="bg-warning-soft shadow-none">
+        <Alert.Indicator />
+        <Alert.Content>
+          <Alert.Description className="text-foreground">
+            {/* The icon is presentational, so the word that makes this a caution is spoken instead. */}
+            <span className="sr-only">Caution: </span>A trusted folder&rsquo;s <Path>.claude/settings.json</Path> may
+            pre-approve tool permissions.
+          </Alert.Description>
+        </Alert.Content>
+      </Alert>
+    </>
+  );
+}
+
+/** The folder-wide choice's button. Short, so the three buttons fit one row; the message names the
+ * folder, and the button's tooltip gives its full path. */
+const TRUST_PARENT_LABEL = "Trust parent folder";
+
+/** A directory shortened for the dialog's text: its last two components. The project's own full path,
+ * which the folder holds, is shown above it. */
 function shortDirectory(path: string): string {
   const parts = path.split("/").filter((part) => part !== "");
   return parts.length <= 2 ? path : `…/${parts.slice(-2).join("/")}`;
@@ -74,8 +121,10 @@ export function TrustPromptDialog({
       // Not keyed on the session: remounting the modal for the next queued prompt would leave its
       // focus scope restoring focus to the element the previous one was holding, by then detached.
       resetKey={prompt.session}
+      // Wide enough for the three buttons on one row.
+      size="lg"
       title="Trust this folder?"
-      message={trustPromptMessage(prompt, sessionTitle ? ` for session "${sessionTitle}"` : "")}
+      message={<TrustPromptMessage prompt={prompt} sessionTitle={sessionTitle} />}
       confirmLabel="Trust and continue"
       cancelLabel="Not now"
       onCancel={() => dismissTrustPrompt(prompt.session)}
@@ -83,7 +132,7 @@ export function TrustPromptDialog({
       extraAction={
         prompt.trustDir
           ? {
-              label: `Trust all projects in ${shortDirectory(prompt.trustDir)}`,
+              label: TRUST_PARENT_LABEL,
               title: prompt.trustDir,
               onClick: () => answer(true),
             }

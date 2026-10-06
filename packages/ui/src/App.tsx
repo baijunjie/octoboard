@@ -13,6 +13,7 @@ import { RequestedDialog } from "./dialogs/RequestedDialog";
 import { TrustPromptDialog } from "./dialogs/TrustPromptDialog";
 import { usePaneWidth } from "./layout/paneWidth";
 import { usePaneToggles } from "./layout/usePaneToggles";
+import { useRegionCycle } from "./layout/useRegionCycle";
 import { useAppExit } from "./lifecycle/useAppExit";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
 import { isDormant, isLive, type Console, type Session } from "./protocol";
@@ -56,6 +57,18 @@ export function App(): React.ReactElement {
   const hasReportPanel = selectedSession?.role === "hub";
 
   const panes = usePaneToggles({ hasReportPanel, focusTerminal });
+
+  // A region off screen is skipped by F6: a hidden docked pane, a closed drawer, and a floating pane
+  // too, which is only a hover away rather than shown. The top bar is always there.
+  const regionCycle = useRegionCycle({
+    shown: {
+      topbar: true,
+      sidebar: panes.sidebarShown,
+      terminal: selectedSession !== undefined,
+      report: hasReportPanel && panes.reportShown,
+    },
+    focusTerminal,
+  });
 
   // A hidden report panel gives its width back, and a hidden pane takes none of the row.
   const dockedPanes = { sidebar: panes.sidebarDocked, report: hasReportPanel && panes.reportDocked };
@@ -185,6 +198,7 @@ export function App(): React.ReactElement {
         onToggleReport={panes.toggleReport}
         onReportToggleEnter={() => panes.reportPeek.reveal()}
         onReportToggleLeave={panes.reportPeek.leave}
+        focusTerminal={focusTerminal}
       />
       <ConnectionBanner state={connectionState} onRetry={reconnect} />
       <div className="flex min-h-0 flex-1">
@@ -224,6 +238,7 @@ export function App(): React.ReactElement {
               reportWidth={reportWidth.width}
               peek={panes.reportDocked ? undefined : panes.reportPeek}
               onEscape={panes.dismissOverlays}
+              onCycleRegion={regionCycle.cycle}
             />
           )}
         </main>

@@ -1,4 +1,4 @@
-import { Button } from "@heroui/react";
+import { Button, EmptyState } from "@heroui/react";
 import React from "react";
 
 import { FadeOverflow } from "../components/FadeOverflow";
@@ -24,9 +24,9 @@ export function TrustedFoldersSection(): React.ReactElement {
         settings without asking either, so trust a folder only if you trust everything that ends up inside it.
       </p>
       {directories.length === 0 ? (
-        <p className="border-t border-separator py-4 text-sm text-muted">
+        <EmptyState className="border-t border-separator px-0 py-4">
           No folders are trusted. A folder is trusted from a session's trust prompt.
-        </p>
+        </EmptyState>
       ) : (
         <div className="border-t border-separator">
           {directories.map((path) => (
@@ -34,7 +34,7 @@ export function TrustedFoldersSection(): React.ReactElement {
               key={path}
               label={
                 // Cut from the start when too long, so the folder's own name stays visible.
-                <FadeOverflow axis="x" clip="start" titleWhenClipped={path}>
+                <FadeOverflow clip="start" titleWhenClipped={path}>
                   {path}
                 </FadeOverflow>
               }

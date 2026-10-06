@@ -35,14 +35,21 @@ It has three parts:
   - the **waiting count**, a raised hand and the number of sessions waiting for the user, shown only while at least
     one is; pressing it goes to the next waiting session (see "The raised hand" in `docs/product/sessions.md`);
   - the **connection status**, described below;
+  - **Turn on notifications**, a bell with a small dot on it, shown only in a browser whose answer to notifications is
+    still undecided; pressing it asks the browser (see "Notifications" in `docs/product/settings.md`);
   - the report panel toggle ("Show report" / "Hide report"), shown only while the selected session is a hub session;
   - **Settings**, which opens the settings dialog.
 
 What the two toggles do depends on the window's width: see "Hiding the sidebar and the report panel" and "Below
 1100 px: the sidebar and the report panel become drawers" below. Each toggle's label and icon say what pressing it
 will do: "Show …" with an open-pane icon while its pane is hidden, "Hide …" with a close-pane icon while it is shown.
-A hidden pane that is only floating in counts as hidden. Pressing any of the bar's controls leaves keyboard focus
-where it was, so the terminal keeps receiving keystrokes.
+Each toggle also tells assistive technology whether its pane is expanded: expanded while the pane is shown, which
+below 1100 px means its drawer is open. A hidden pane that is only floating in counts as hidden for both. Every control
+in the bar has a tooltip (see "Tooltips on icon-only controls" below). Pressing any of the bar's controls leaves
+keyboard focus where it was, so after a mouse press the terminal keeps receiving keystrokes. Turn on notifications
+pressed from the keyboard keeps focus on itself while the browser's prompt is up, so no keystrokes reach the session
+meanwhile; once the browser answers and the bell goes away, focus moves to the terminal, or to the bar's first control
+when the terminal cannot take it.
 
 **In the macOS application the top bar is the window's titlebar.** The window has no native titlebar background and
 shows no title text of its own (the window is still called Octoboard in the Dock and in Mission Control). The
@@ -140,8 +147,9 @@ banner, while it is shown).
 - **Double-clicking** it returns the pane to its default width.
 - The handle is also reachable with Tab and is then operated from the keyboard: the arrow pointing away from the pane
   widens it and the other narrows it (Right widens the sidebar, Left widens the report panel), by 16 px, by 64 px with
-  Shift held; Home sets the pane's minimum, and End the widest the window currently allows. Pressing the handle with
-  the mouse does not take keyboard focus off the terminal.
+  Shift held; Home sets the pane's minimum, and End the widest the window currently allows. While it has keyboard
+  focus the handle is drawn as a solid accent-coloured bar with a focus ring around it. Pressing the handle with the
+  mouse does not take keyboard focus off the terminal.
 
 A handle is there only while its pane is shown in the row: not while the pane is hidden or floating in, and not below
 1100 px, where the panes are fixed-width drawers.
@@ -214,6 +222,41 @@ resizes the terminal**, so the running agent is never sent a terminal-size chang
 The terminal's floor below the breakpoint is 382 px, about 40 columns. A viewport narrower than that
 **scrolls horizontally** rather than squeezing the terminal further.
 
+## Moving focus between regions with F6
+
+`F6` moves keyboard focus to the next region of the window and `Shift+F6` to the previous one, in a cycle, in this
+order:
+
+1. the top bar;
+2. the sidebar;
+3. the terminal;
+4. the report panel;
+5. the toasts, only while at least one toast is shown.
+
+It works wherever focus is, the terminal included: there `Tab` and `Shift+Tab` still go to the agent, and `F6` and
+`Shift+F6` never do. It works from inside a report page too (see "Submitting a form back to the hub" in
+`docs/product/report-panel.md`). With focus in none of the regions, `F6` goes to the first region shown and
+`Shift+F6` to the last.
+
+**A region not on screen is skipped**: a docked pane the user has hidden, a drawer that is closed, a hidden pane that
+is only floating in, the report panel when there is none or it has no controls (before its pages have arrived, or
+with no pages yet), and the terminal when no session is selected. A pane counts as shown when it is docked in the row
+at 1100 px and wider, or its drawer is open below that.
+
+Where focus lands in each region:
+
+| Region | Lands on |
+|---|---|
+| Top bar | its first control |
+| Sidebar | the selected session's row, or the sidebar's first control when that row is not on screen |
+| Terminal | the terminal, so typing reaches the agent |
+| Report panel | the pager's first enabled button, else the report page itself |
+| Toasts | the newest toast |
+
+The control focus lands on shows its focus ring, even when the last input before `F6` was the mouse.
+
+`F6` does nothing while a modal dialog, Settings included, or a menu is open; focus stays where it is.
+
 ## Toasts
 
 Failures and notices that need no answer are shown as **toasts**; which ones are, and how they name the session they
@@ -234,5 +277,20 @@ are about, is in "Losing the daemon connection" in `docs/product/application-lif
   and a plain click on the text, which takes it for a moment, hands it straight back. A drag that leaves text
   selected keeps focus in the toast so `Cmd+C` copies it, and the copy hands focus back. Focus goes back to whatever
   had it before, or to the terminal when that is gone.
-- There is no keyboard shortcut to jump to the toasts. **Known limitation**: while a toast is shown, `F6` moves
-  keyboard focus onto the toasts, as it cycles through the window's regions.
+- The toasts are reached from the keyboard with `F6` and `Shift+F6`: while at least one is shown they are the last
+  stop of the window's region cycle, landing on the newest toast (see "Moving focus between regions with F6" below).
+
+## Tooltips on icon-only controls
+
+A control shown only as an icon has a tooltip naming it, shown both when the mouse rests on it and when it receives
+keyboard focus. The tooltip's text is the same name assistive technology announces for the control. These are:
+
+- the top bar's icon buttons — the sidebar and report toggles, whose tooltip follows their "Show …" / "Hide …"
+  label, New console, Turn on notifications and Settings;
+- the ⋯ button that opens a row's action menu;
+- the report panel's previous-page and next-page buttons;
+- the close button of every dialog, of Settings and of each toast ("Close").
+
+The top bar's buttons with text get a tooltip of the same kind, matching their accessible name: the waiting count's
+says how many sessions are waiting and that pressing it goes to the next one, and the terminal's Reconnect button's
+says that it reconnects the terminal.

@@ -1,5 +1,6 @@
 import { Button, Chip } from "@heroui/react";
 import {
+  Bell,
   ChevronRight,
   Hand,
   PanelLeftClose,
@@ -9,9 +10,11 @@ import {
   Plus,
   Settings,
 } from "lucide-react";
-import React, { useSyncExternalStore } from "react";
+import React, { useEffect, useRef, useSyncExternalStore } from "react";
 
 import type { ConnectionState } from "../daemon-client";
+import { PANE_ID } from "../layout/paneOverlay";
+import { useNotificationPermission } from "../lifecycle/useNotificationPermission";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
 import { useDaemonStore } from "../store";
@@ -21,18 +24,24 @@ import { StatusIcon } from "./StatusIcon";
 import { TitledControl } from "./TitledControl";
 
 /** A press on any of the bar's controls must leave keyboard focus on the terminal, so every one of
- * them is built from this. `TitledControl` gives it the native tooltip HeroUI's buttons drop. */
+ * them is built from this. `TitledControl` gives it the tooltip. */
 function BarButton({
   label,
   onPress,
   children,
   isIconOnly = true,
   onMouseHoverChange,
+  expanded,
+  controls,
 }: {
   label: string;
   onPress: () => void;
   children: React.ReactNode;
   isIconOnly?: boolean;
+  /** For a button that shows or hides a region: whether the region is shown, as `aria-expanded`;
+   * `controls` is the region's id. */
+  expanded?: boolean;
+  controls?: string;
   /** Called as a mouse pointer enters or leaves the button; touch and pen are ignored, as the
    * edge hot zones ignore them (`useHover` filters out touch only). */
   onMouseHoverChange?: (hovered: boolean) => void;
@@ -44,6 +53,8 @@ function BarButton({
         size="sm"
         variant="ghost"
         aria-label={label}
+        aria-expanded={expanded}
+        aria-controls={controls}
         preventFocusOnPress
         onPress={onPress}
         onHoverStart={(event) => event.pointerType === "mouse" && onMouseHoverChange?.(true)}
@@ -55,15 +66,62 @@ function BarButton({
   );
 }
 
+/** The invitation to turn notifications on, where the platform wants the ask to come from a user
+ * gesture (a browser) and the answer is still undecided; gone once the answer is given, whichever
+ * it is. The dot only draws the eye, the label carries the meaning. The Settings dialog's
+ * Notifications section is the other place to see and change the answer.
+ *
+ * Pressed from the keyboard, the bell holds focus until the answer removes it, and focus would then
+ * fall to `<body>`; so once the answer is in, focus that was lost goes to the terminal, or to the
+ * bar's first control when there is no terminal to take it. Not before the answer: while the
+ * browser's own prompt is up, keys must not reach the agent. */
+function NotificationsBell({ focusTerminal }: { focusTerminal: () => void }): React.ReactElement | null {
+  const { status, request } = useNotificationPermission();
+  // Whether the bell held focus last. A focused element that is removed fires no blur, so this is
+  // still true when the answer removes the bell from under focus; a blur of the whole window (the
+  // browser's own prompt taking focus) leaves the bell the active element and keeps it too. Focus
+  // moved by script while the window is unfocused fires nothing either, so the hand-off also needs
+  // focus to have actually fallen to `<body>`.
+  const holdsFocus = useRef(false);
+  useEffect(() => {
+    if (status === "undecided" || !holdsFocus.current) return;
+    holdsFocus.current = false;
+    if (document.activeElement !== document.body) return;
+    focusTerminal();
+    if (document.activeElement === document.body) {
+      document.querySelector<HTMLElement>("[data-region=topbar] button")?.focus();
+    }
+  }, [status, focusTerminal]);
+  if (!request || status !== "undecided") return null;
+  return (
+    <span
+      className="contents"
+      onFocus={() => (holdsFocus.current = true)}
+      onBlur={(event) => {
+        if (document.activeElement !== event.target) holdsFocus.current = false;
+      }}
+    >
+      <BarButton label="Turn on notifications" onPress={() => void request()}>
+        <Bell aria-hidden="true" className="size-4" />
+        <span aria-hidden="true" className="absolute top-1.5 right-1.5 size-2 rounded-full bg-accent" />
+      </BarButton>
+    </span>
+  );
+}
+
 /** The bar's frame: full window width, above everything, and the window's drag handle where the
  * platform has no native titlebar. `deep` makes every non-interactive descendant draggable, and
  * Tauri's drag script already leaves buttons alone; a double-click zooms the window like a native
- * titlebar. `data-escape-scope`: Escape on one of its controls closes an open drawer too. */
+ * titlebar. `data-escape-scope`: Escape on one of its controls closes an open drawer too.
+ *
+ * It is a plain `header` rather than HeroUI's `Toolbar`, which would make its buttons one roving
+ * tab stop; every control here has to be a tab stop of its own. */
 function BarFrame({ children }: { children: React.ReactNode }): React.ReactElement {
   const { windowChrome } = usePlatform();
   return (
     <header
       data-escape-scope
+      data-region="topbar"
       data-tauri-drag-region={windowChrome ? "deep" : undefined}
       className="flex h-(--title-bar-height) shrink-0 items-stretch border-b border-separator bg-surface select-none"
     >
@@ -150,7 +208,7 @@ function Breadcrumb({ session }: { session: Session }): React.ReactElement {
   const names = trail.map((part) => part ?? "…");
   return (
     <div className="flex min-w-0 items-center gap-1.5 text-sm">
-      <FadeOverflow axis="x" className="min-w-0" titleWhenClipped={names.join(" › ")}>
+      <FadeOverflow className="min-w-0" titleWhenClipped={names.join(" › ")}>
         <span className="inline-flex items-center gap-1.5">
           {names.map((name, index) => (
             <React.Fragment key={index}>
@@ -192,13 +250,15 @@ interface TitleBarProps {
   /** The pointer is on the report toggle: with the docked report panel hidden, that floats it in. */
   onReportToggleEnter: () => void;
   onReportToggleLeave: () => void;
+  /** Where focus goes when a control that held it goes away (the notifications bell). */
+  focusTerminal: () => void;
 }
 
 /**
  * The bar across the top of the window: a left segment aligned with the sidebar (sidebar toggle,
  * New console), the selected session's breadcrumb, and on the right the waiting count, the
- * connection trouble indicator (nothing while healthy), the report panel toggle (hub session only)
- * and Settings.
+ * connection trouble indicator (nothing while healthy), the notifications bell (browser only, while
+ * the permission is undecided), the report panel toggle (hub session only) and Settings.
  */
 export function TitleBar({
   onOpenSettings,
@@ -217,6 +277,7 @@ export function TitleBar({
   onToggleReport,
   onReportToggleEnter,
   onReportToggleLeave,
+  focusTerminal,
 }: TitleBarProps): React.ReactElement {
   return (
     <BarFrame>
@@ -233,6 +294,8 @@ export function TitleBar({
           <BarButton
             label={sidebarShown ? "Hide sessions" : "Show sessions"}
             onPress={onToggleSidebar}
+            expanded={sidebarShown}
+            controls={PANE_ID.sidebar}
             onMouseHoverChange={(hovered) => (hovered ? onSidebarToggleEnter() : onSidebarToggleLeave())}
           >
             {sidebarShown ? (
@@ -261,10 +324,13 @@ export function TitleBar({
           </BarButton>
         )}
         <ConnectionStatus terminalProblem={terminalProblem} />
+        <NotificationsBell focusTerminal={focusTerminal} />
         {hasReportPanel && (
           <BarButton
             label={reportShown ? "Hide report" : "Show report"}
             onPress={onToggleReport}
+            expanded={reportShown}
+            controls={PANE_ID.report}
             onMouseHoverChange={(hovered) => (hovered ? onReportToggleEnter() : onReportToggleLeave())}
           >
             {reportShown ? (

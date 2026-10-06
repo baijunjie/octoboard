@@ -1,8 +1,9 @@
+import { ScrollShadow } from "@heroui/react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import React, { useState } from "react";
 
 import type { DialogRequest } from "../dialogs/dialogRequest";
-import { drawerClass, PeekHotZone } from "../layout/paneOverlay";
+import { drawerClass, PANE_ID, PeekHotZone } from "../layout/paneOverlay";
 import type { PaneWidth } from "../layout/paneWidth";
 import type { PanePeek } from "../layout/usePaneToggles";
 import { isDormant, type Console, type Project, type Session } from "../protocol";
@@ -10,7 +11,6 @@ import { STATUS_LABEL } from "../sessionLabel";
 import { ActionMenu, type ActionMenuItem } from "./ActionMenu";
 import { AgentBadge } from "./AgentBadge";
 import { FadeOverflow } from "./FadeOverflow";
-import { NotificationsPrompt } from "./NotificationsPrompt";
 import { BubbledWaitingHand, StatusIcon } from "./StatusIcon";
 
 /** The callbacks the tree triggers. Kept as one object, passed down by reference rather than
@@ -61,16 +61,22 @@ function rowKeyHandler(activate: () => void) {
 }
 
 /** One row of the tree: a `div` announcing itself as a button, since it carries an action menu and
- * a button cannot hold another. */
+ * a button cannot hold another. That is also why the tree is hand-built: HeroUI 3 has no Tree or
+ * GridList, and its `Disclosure` trigger is itself a button, so it cannot contain the row's menu.
+ * `expanded` is for a row that shows or hides the rows beneath it, and is announced as
+ * `aria-expanded`. It is not a popup trigger: without `aria-haspopup` it does not match the
+ * open-popup lookup in `usePaneToggles`, which keeps a floating sidebar open while a menu is. */
 function TreeRow({
   ariaLabel,
   onActivate,
   selected,
+  expanded,
   children,
 }: {
   ariaLabel: string;
   onActivate: () => void;
   selected?: boolean;
+  expanded?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
   return (
@@ -79,6 +85,7 @@ function TreeRow({
       tabIndex={0}
       aria-label={ariaLabel}
       aria-current={selected ? "true" : undefined}
+      aria-expanded={expanded}
       className={`flex min-h-8 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm outline-none select-none hover:bg-default focus-visible:ring-2 focus-visible:ring-focus ${selected ? "bg-default" : ""}`}
       onMouseDown={keepFocus}
       onClick={onActivate}
@@ -97,7 +104,7 @@ function Chevron({ collapsed }: { collapsed: boolean }): React.ReactElement {
 /** A row's single-line name: fades out at the right edge when it does not fit, rather than
  * ending in an ellipsis. `title` is the full text, offered as a tooltip only while it is cut. */
 const RowLabel = ({ title, children }: { title?: string; children: React.ReactNode }) => (
-  <FadeOverflow axis="x" as="span" className="min-w-0 flex-1" titleWhenClipped={title}>
+  <FadeOverflow as="span" className="min-w-0 flex-1" titleWhenClipped={title}>
     {children}
   </FadeOverflow>
 );
@@ -143,14 +150,16 @@ export function Sidebar({
         // closes a drawer for. `data-pane` is how it finds this element to see whether it holds
         // focus.
         data-escape-scope
+        id={PANE_ID.sidebar}
         data-pane="sidebar"
+        data-region="sidebar"
         className={`flex w-70 flex-col border-r border-separator bg-surface shrink-0 docked:w-(--sidebar-width) ${drawerClassName}`}
         onPointerEnter={peek?.keep}
         onPointerLeave={peek?.leave}
         style={{ "--sidebar-width": `${sidebarWidth.width}px` } as React.CSSProperties}
         aria-label="Sessions"
       >
-        <FadeOverflow axis="y" className="min-h-0 flex-1 p-2">
+        <ScrollShadow size={24} className="min-h-0 flex-1 p-2">
           {consoles.map((console) => (
             <ConsoleNode
               key={console.id}
@@ -166,8 +175,7 @@ export function Sidebar({
           {consoles.length === 0 && (
             <p className="px-2 py-1 text-sm text-muted">No consoles yet. Create one to get started.</p>
           )}
-        </FadeOverflow>
-        <NotificationsPrompt />
+        </ScrollShadow>
       </nav>
       {peek && <PeekHotZone side="left" peek={peek} />}
     </>
@@ -211,6 +219,7 @@ function ConsoleNode({
       <TreeRow
         ariaLabel={`${thisConsole.name} console${anyWaiting ? ", a session is waiting for you" : ""}`}
         onActivate={() => toggle(thisConsole.id)}
+        expanded={!isCollapsed}
       >
         <Chevron collapsed={isCollapsed} />
         <RowLabel title={thisConsole.name}>
@@ -310,6 +319,7 @@ function ArchiveGroup({
       <TreeRow
         ariaLabel={`${label}, ${sessions.length} ${sessions.length === 1 ? "session" : "sessions"}`}
         onActivate={onToggle}
+        expanded={!isCollapsed}
       >
         <Chevron collapsed={isCollapsed} />
         <RowLabel>
@@ -357,6 +367,7 @@ function ProjectNode({
       <TreeRow
         ariaLabel={`${project.name} project${anyWaiting ? ", a session is waiting for you" : ""}`}
         onActivate={() => toggle(project.id)}
+        expanded={!isCollapsed}
       >
         <Chevron collapsed={isCollapsed} />
         <RowLabel title={project.name}>{project.name}</RowLabel>

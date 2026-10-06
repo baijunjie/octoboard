@@ -2,6 +2,8 @@ import { Dropdown, Label } from "@heroui/react";
 import { Ellipsis } from "lucide-react";
 import React, { useEffect, useRef } from "react";
 
+import { TitledControl } from "./TitledControl";
+
 /** Set when a menu closed but could not hand focus back, because the item it ran opened a dialog
  * that holds it. The dialog takes it when it closes (see `takeMenuFocusToRestore`). */
 let menuFocusToRestore: HTMLElement | null = null;
@@ -97,13 +99,15 @@ export function ActionMenu({ label, items }: { label: string; items: ActionMenuI
       <Dropdown onOpenChange={onOpenChange}>
         {/* `preventFocusOnPress` keeps a press from moving focus off whatever had it (typically
             the terminal); the menu itself takes focus once it opens. */}
-        <Dropdown.Trigger
-          aria-label={label}
-          preventFocusOnPress
-          className="inline-flex size-6 min-w-0 items-center justify-center rounded-md bg-transparent p-0 text-muted hover:bg-transparent hover:text-foreground aria-expanded:text-foreground"
-        >
-          <Ellipsis aria-hidden="true" className="size-4" />
-        </Dropdown.Trigger>
+        <TitledControl title={label}>
+          <Dropdown.Trigger
+            aria-label={label}
+            preventFocusOnPress
+            className="inline-flex size-6 min-w-0 items-center justify-center rounded-md bg-transparent p-0 text-muted hover:bg-transparent hover:text-foreground aria-expanded:text-foreground"
+          >
+            <Ellipsis aria-hidden="true" className="size-4" />
+          </Dropdown.Trigger>
+        </TitledControl>
         <Dropdown.Popover>
           <Dropdown.Menu onAction={(key) => items.find((item) => item.label === key)?.onClick()}>
             {items.map((item) => (

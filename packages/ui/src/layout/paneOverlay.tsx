@@ -8,6 +8,9 @@ import type { PanePeek } from "./usePaneToggles";
  *   request, so it stays a fixed overlay at every width. */
 export type PaneMode = "drawer" | "floating";
 
+/** The DOM ids of the two panes, which the top bar's toggles name in `aria-controls`. */
+export const PANE_ID = { sidebar: "sidebar-pane", report: "report-pane" } as const;
+
 /** The classes that differ between the two sides, written out in full: Tailwind emits a utility
  * only for a class name it can find as literal text somewhere in the source, so an interpolated
  * `left-0`/`right-0` would compile to nothing and leave the pane unanchored. */

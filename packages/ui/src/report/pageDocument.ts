@@ -10,6 +10,11 @@ export const SUBMIT_MESSAGE_SOURCE = "octoboard-page-submit";
  * focus. */
 export const ESCAPE_MESSAGE_SOURCE = "octoboard-page-escape";
 
+/** The `source` tag on the message the bridge posts when F6 or Shift+F6 is pressed inside the
+ * page, for the same reason as `ESCAPE_MESSAGE_SOURCE`: without the relay focus could not leave
+ * the frame by keyboard. It carries only `backward`, whether Shift was held. */
+export const REGION_MESSAGE_SOURCE = "octoboard-page-region";
+
 /** Restricts the page to an inlined, self-contained document with nowhere to phone out to for
  * its own content: `default-src 'none'` as the base, with only inline styles/script and `data:`
  * images allowed back in. `connect-src` and `form-action` are named explicitly even though
@@ -67,10 +72,11 @@ export function composePageDocument(html: string, isHistory: boolean): string {
     ? `console.error("octoboard.submit() is disabled: this is a history page, read-only.");
        throw new Error("octoboard.submit() is disabled on a history page.");`
     : `parent.postMessage({ source: ${JSON.stringify(SUBMIT_MESSAGE_SOURCE)}, data: data }, "*");`;
-  // Capture phase on the window, so the page's own handlers cannot swallow the key first; the
-  // event is left alone so the page still sees it. Skipped while an IME composition is active,
-  // where Escape cancels the composition rather than meaning "close". Present on history pages
-  // too, which stay unable to submit.
+  // Capture phase on the window, so the page's own handlers cannot swallow the key first; an
+  // Escape is left alone so the page still sees it, while F6 is the window's own key and the
+  // browser's default for it (moving focus to its own chrome) is cancelled. Skipped while an IME
+  // composition is active, where Escape cancels the composition rather than meaning "close".
+  // Present on history pages too, which stay unable to submit.
   const bridge = `<script>
     window.octoboard = {
       submit: function (data) {
@@ -80,6 +86,10 @@ export function composePageDocument(html: string, isHistory: boolean): string {
     window.addEventListener("keydown", function (event) {
       if (event.key === "Escape" && !event.isComposing && event.keyCode !== 229) {
         parent.postMessage({ source: ${JSON.stringify(ESCAPE_MESSAGE_SOURCE)} }, "*");
+      }
+      if (event.key === "F6" && !event.isComposing && !event.ctrlKey && !event.altKey && !event.metaKey) {
+        event.preventDefault();
+        parent.postMessage({ source: ${JSON.stringify(REGION_MESSAGE_SOURCE)}, backward: event.shiftKey }, "*");
       }
     }, true);
   </script>`;

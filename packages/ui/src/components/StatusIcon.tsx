@@ -1,4 +1,5 @@
-import { Archive, CircleSmall, Hand, LoaderCircle, Pause } from "lucide-react";
+import { Spinner } from "@heroui/react";
+import { Archive, CircleSmall, Hand, Pause } from "lucide-react";
 import React from "react";
 
 import type { SessionStatus } from "../protocol";
@@ -8,15 +9,18 @@ const ICON_CLASS = "size-4 shrink-0";
 
 /**
  * The per-session status icons, one per status in the "Session statuses" table of
- * docs/product/sessions.md, as lucide glyphs rather than emoji (the project keeps user-facing UI
- * free of decorative emoji, the same convention `CLAUDE.md` sets for committed prose). Each
- * carries the status as its accessible name, since it is the row's only visible status cue.
+ * docs/product/sessions.md, as lucide glyphs (HeroUI's `Spinner` for working) rather than emoji
+ * (the project keeps user-facing UI free of decorative emoji, the same convention `CLAUDE.md` sets
+ * for committed prose). Each carries the status as its accessible name, since it is the row's only
+ * visible status cue.
  */
 export function StatusIcon({ status }: { status: SessionStatus }): React.ReactElement {
   const a11y = { role: "img", "aria-label": STATUS_LABEL[status] } as const;
   switch (status) {
     case "working":
-      return <LoaderCircle {...a11y} className={`${ICON_CLASS} animate-spin text-accent`} />;
+      // Spinner announces itself as a live `status` named "Loading"; here it is one more status
+      // glyph among many rows, named like the others and not a live region.
+      return <Spinner {...a11y} size="sm" color="accent" />;
     case "waiting_user":
       return <Hand {...a11y} className={`${ICON_CLASS} text-warning`} />;
     case "idle":

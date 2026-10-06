@@ -67,10 +67,16 @@ diff. After adding or changing a utility class, grep the built `packages/ui/dist
 ## An icon-only control also gets a tooltip, through `TitledControl`
 
 Every control that shows only an icon — a HeroUI `Button` with `isIconOnly`, a `CloseButton` or `Modal.CloseTrigger`,
-a menu trigger — has a hover tooltip in addition to its `aria-label`, normally the same text. Give it one by wrapping
-the control in `TitledControl` from `packages/ui/src/components/TitledControl.tsx`, as the title bar's `BarButton` in
+a menu trigger — has a HeroUI tooltip in addition to its `aria-label`, the same text. Give it one by wrapping the
+control in `TitledControl` from `packages/ui/src/components/TitledControl.tsx`, as the title bar's `BarButton` in
 `packages/ui/src/components/TitleBar.tsx` does. Passing `title` to the HeroUI control itself does nothing: its
 react-aria base filters `title` out of the DOM props without a warning.
+
+Any tooltip on a control takes this shape — the control directly inside HeroUI's `Tooltip`, as `TitledControl` does —
+never `Tooltip.Trigger`, which renders a focusable `role="button"` `div` around the control: an extra tab stop that
+also takes focus on a mouse press, undoing `preventFocusOnPress`. The shape works only when the child is itself a
+react-aria-components control (any HeroUI button or trigger), which picks the tooltip's hover and focus handling up
+from context; any other child — a plain element, a `span` around the control — gets no tooltip, with no warning.
 
 ## The UI meets WCAG 2.2 AA
 
@@ -81,22 +87,40 @@ Concretely:
   only keeps a *mouse* press from taking focus; the control still has to be a tab stop. Every button is HeroUI's
   `Button`; a native `<button>` is allowed only where a custom button is needed that HeroUI's cannot be, with the
   reason in a comment there. A hand-built `role="button"` element needs `tabIndex={0}` and its own Enter / Space
-  handling.
+  handling. The terminal keeps Tab and Shift+Tab for the agent, so F6 / Shift+F6 region cycling
+  (`packages/ui/src/layout/useRegionCycle.ts`) is the only keyboard way out of it: every new region of the window
+  that holds controls — a pane, a panel, an overlay — is marked `data-region` and added to that hook's `REGIONS` and
+  `shown`, or F6 skips it and a keyboard user in the terminal has no way to reach it.
 - **Visible focus**: HeroUI controls draw their own focus ring. A hand-built control that removes the outline puts a
   ring back (`outline-none focus-visible:ring-2 focus-visible:ring-focus`, as the sidebar rows do), never
-  `outline-none` alone.
+  `outline-none` alone. A keyboard handler that moves focus itself calls react-aria's
+  `setInteractionModality("keyboard")` first when the handler sits on the window's capture phase and stops
+  propagation (react-aria tracks modality from a capture-phase listener on the document, which the key then never
+  reaches), or what it focuses draws no ring when the previous input was a pointer.
 - **Name**: every control has an accessible name — its visible text, or an `aria-label` when it has none. An icon
   beside a name is `aria-hidden="true"`; an icon that is the only carrier of a meaning gets `role="img"` and an
   `aria-label`.
-- **Roles and states**: a control that shows or hides a region carries `aria-expanded`; the selected item of a list
-  or navigation carries `aria-current`; state that changes without the user acting (connection, a terminal problem)
-  is announced from a `role="status"` element, an error from `role="alert"`.
+- **Roles and states**: a control that shows or hides a region carries `aria-expanded`; the selected row of a
+  hand-built list or tree carries `aria-current` (as the sidebar rows do), while HeroUI's `Tabs` and `ListBox` mark
+  their selection themselves with `aria-selected` and get no `aria-current` on top; state that changes without the
+  user acting (connection, a terminal problem) is announced from a `role="status"` element, an error from
+  `role="alert"`.
 - **Contrast**: text at least 4.5:1 against its background (3:1 for large text); an icon, a state indicator or a
   boundary the user has to see at least 3:1 against what it sits on. HeroUI 3's default `--border`,
   `--border-secondary` and `--border-tertiary` all fall short of 3:1 in both appearances (1.2:1 to 2.7:1): they are
   for separators between content on one surface. A line that has to read as a boundary — a field, a checkbox, a
-  pressable surface — takes `--muted` (4.8:1 light, 6.7:1 dark). `style.css` already routes HeroUI's own field and
-  checkbox borders through `--muted`, so a HeroUI form control needs nothing on top.
+  pressable surface — takes `--muted` (at least 4.6:1 light on every surface, 6.7:1 dark). `style.css` already
+  routes HeroUI's own field and checkbox borders through `--muted`, so a HeroUI form control needs nothing on top.
+  HeroUI's text colours are no safer: its stock light `--muted` (`text-muted`, its secondary text) reached 4.5:1 only
+  on the white surfaces and fell short on `--background` and `--default`, where its own components put it, so
+  `style.css` overrides the light value at the token level. Even so, the `Tabs` list dims a hovered tab to 70%
+  opacity, which brings it down to about 3:1. So measure each text and indicator colour a HeroUI component draws by
+  default against what it actually sits on, in both appearances, rather than assuming it passes, and fix a shortfall
+  with a utility class on that part (Tailwind's utilities layer overrides HeroUI's components layer without `!`), or
+  at the token in `style.css` when the token itself falls short. HeroUI's `--surface` equals its `--overlay` in both
+  appearances, so a surface-filled component (`Alert`, `Card`) inside a dialog or popover is set apart only by its
+  shadow, which does not show in the dark appearance; give it a fill of its own there (a tint such as
+  `bg-warning/10 shadow-none`).
 - **Not by colour alone**: a status or state that differs in colour also differs in glyph, shape or text.
 - **Motion**: an animation or transition that is not essential stops under `prefers-reduced-motion: reduce`
   (Tailwind's `motion-safe:` / `motion-reduce:` variants).

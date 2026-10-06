@@ -70,16 +70,18 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   isolated daemon so the real one does not launch instead.
 - [Verifying the desktop UI](memory/verifying-the-desktop-ui.md) — how to verify terminal and UI behaviour in the real
   app: why a UI change has to be launched rather than only reviewed, why a built app is launched on a throwaway `HOME`
-  and `TMPDIR` and what that still leaves shared (the webview's own storage), why the bundle under test is built with
-  the Tauri CLI and launched with `open` rather than by exec'ing its binary, why a daemon-side change needs the daemon built
-  and the running sidecar's binary confirmed before anything read off the window means anything, how to get an error
-  out of a blank window, reading what the packaged webview sends to the daemon through a wrapped sidecar (dev mode
-  sends a different origin), ruling out a locked screen before trusting a capture, bisecting a symptom against the daemon,
-  what a scripted GUI probe can and cannot prove and why its setup should go through the daemon's protocol instead
-  (including raising a session's hand with a forged hook event) and why Octoboard must be confirmed frontmost before
-  every scripted keystroke, how to find the app's own WebContent process to freeze it, where to watch for a report page's blocked
-  navigation, where a network probe's positive control has to come from, why another worktree's dev server or daemon
-  may be the one answering and why yours are stopped by PID, and which checks need a person.
+  and `TMPDIR` and what that still leaves shared (the webview's own profile, used only with the user's go-ahead), why
+  the bundle under test is built with the Tauri CLI and launched with `open` rather than by exec'ing its binary, why a
+  daemon-side change needs the daemon built and the running sidecar's binary confirmed before anything read off the
+  window means anything, how to get an error out of a blank window, reading what the packaged webview sends to the
+  daemon through a wrapped sidecar (dev mode sends a different origin), ruling out a locked screen before trusting a
+  capture, bisecting a symptom against the daemon, what a scripted GUI probe can and cannot prove (HeroUI tooltips and
+  toast controls included) and why its setup should go through the daemon's protocol instead (including raising a
+  session's hand with a forged hook event and seeding trusted folders) and why Octoboard must be confirmed frontmost
+  before every scripted keystroke, how to find the app's own WebContent process to freeze it, where to watch for a
+  report page's blocked navigation, where a network probe's positive control has to come from, why another worktree's
+  dev server or daemon may be the one answering and why yours are stopped by PID, and which checks need a person
+  (input methods, reduced motion).
 - [Writing UI components](memory/writing-ui-components.md) — conventions for `packages/ui` components: why a component
   HeroUI 3 already provides is used rather than hand-built, where to check what it provides, and what a justified
   hand-built one is built on and where its reason is written, why a HeroUI control pressed with the mouse takes
@@ -87,7 +89,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   why a dialog must not lose focus to `<body>` when a focused control unmounts, so its subject is switched with a reset
   key rather than by re-keying it, why a Tailwind class name has to stand in the source as literal text, why every
   icon-only control also gets a tooltip through `TitledControl`, and the WCAG 2.2 AA bar the UI is held to (keyboard,
-  visible focus, names, roles and states, contrast and which token an outline meant to be seen is built from, colour,
+  visible focus, names, roles and states (`aria-current` only on hand-built rows), contrast — which token an outline
+  meant to be seen is built from, and why HeroUI's own text colours are measured rather than trusted — colour,
   motion).
 - [Writing automated tests](memory/writing-automated-tests.md) — the fixture conventions this project's tests need on
   macOS: why an executable written fresh per test flakes only under a parallel run, and how to verify behaviour the
