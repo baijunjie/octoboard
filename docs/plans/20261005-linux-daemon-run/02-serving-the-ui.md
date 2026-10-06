@@ -13,6 +13,14 @@
 
 - [ ] Add the embedding to the daemon's build, ordered after the UI build.
 
+## Handoff
+
+- Decide whether `apps/daemon` becomes a pnpm workspace package — a `package.json` wrapping its cargo commands — so
+  the workspace itself can order "build the UI, then embed it in the daemon" rather than leaving that order to be
+  remembered by hand. It has no `package.json` today and is therefore skipped by the `apps/*` glob in
+  `pnpm-workspace.yaml`, which was deliberate while nothing in it depended on a workspace package; this milestone is
+  the first thing that makes it depend on one.
+
 ## Notes for the developer
 
 - **Development notes**: requires the UI to run outside the Tauri shell through the adapter.
