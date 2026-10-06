@@ -184,11 +184,32 @@ impl AppState {
             .collect()
     }
 
-    /// Whether any session of this console (or of one of its projects) is still running. Deleting a
-    /// console or a project with live sessions is refused rather than silently killing them.
+    /// Whether any session matching is running or still being launched or resumed. Deleting a
+    /// console or a project in that state is refused rather than silently killing them.
     pub fn has_live_sessions_where(&self, matches: impl Fn(&Session) -> bool) -> Result<bool> {
         for live in self.live_sessions() {
             if let Some(record) = self.store.get_session(&live.id)? {
+                if matches(&record) {
+                    return Ok(true);
+                }
+            }
+        }
+        self.has_launching_sessions_where(matches)
+    }
+
+    /// Whether any session being launched or resumed right now matches. Its process is not yet
+    /// registered, so it cannot be stopped; whatever it belongs to must not be deleted under it.
+    pub fn has_launching_sessions_where(&self, matches: impl Fn(&Session) -> bool) -> Result<bool> {
+        let launching: Vec<String> = self
+            .live
+            .read()
+            .expect("live sessions lock poisoned")
+            .launching
+            .iter()
+            .cloned()
+            .collect();
+        for id in launching {
+            if let Some(record) = self.store.get_session(&id)? {
                 if matches(&record) {
                     return Ok(true);
                 }
@@ -239,11 +260,30 @@ impl AppState {
         });
     }
 
-    /// Writes a session record and tells every client about it.
+    /// Writes a session record and tells every client about it. A record deleted in the meantime
+    /// is not written and not announced: publishing it would leave a ghost row in every client.
     pub fn save_session(&self, session: &Session) -> Result<()> {
-        self.store.update_session(session)?;
-        self.publish_session(session);
+        if self.store.update_session(session)? {
+            self.publish_session(session);
+        }
         Ok(())
+    }
+
+    /// Deletes the session's record if it is archived, and broadcasts `session_deleted` when it
+    /// was. `false` means it was not archived, is gone already, or is being launched right now (a
+    /// resume in flight). Checked and deleted under the live-sessions lock (`live`), so a resume
+    /// cannot claim the session between the two. An archived session whose process is still
+    /// exiting is deleted: its exit watcher finds no record and skips.
+    pub fn delete_if_archived(&self, id: &str) -> Result<bool> {
+        let live = self.live.read().expect("live sessions lock poisoned");
+        if live.launching.contains(id) || !self.store.delete_session_if_archived(id)? {
+            return Ok(false);
+        }
+        drop(live);
+        self.broadcast(Event::SessionDeleted {
+            session: id.to_string(),
+        });
+        Ok(true)
     }
 
     /// Applies a status reported by a hook. Dormant statuses are never reached this way — a session
@@ -591,8 +631,8 @@ impl AppState {
                 }
             }
             state.unregister_live(&live);
-            match state.session_record(&live.id) {
-                Ok(mut session) => {
+            match state.store.get_session(&live.id) {
+                Ok(Some(mut session)) => {
                     if session.status != SessionStatus::Archived {
                         session.status = SessionStatus::Interrupted;
                     }
@@ -601,8 +641,12 @@ impl AppState {
                         tracing::warn!(session = %live.id, %err, "recording the session's exit failed");
                     }
                 }
+                // Deleted while its process was still exiting, which is allowed.
+                Ok(None) => {
+                    tracing::debug!(session = %live.id, "the session was deleted while exiting")
+                }
                 Err(err) => {
-                    tracing::warn!(session = %live.id, %err, "the exited session has no record")
+                    tracing::warn!(session = %live.id, %err, "reading the exited session failed")
                 }
             }
         });

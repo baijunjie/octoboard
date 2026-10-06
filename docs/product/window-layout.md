@@ -2,9 +2,10 @@
 
 The window has a **top bar** across its whole width and, under it, up to three panes, left to right (right to left
 under a right-to-left language, see "Right-to-left layout" below): the
-**sidebar** with the console → project → session tree (see "The console → project → session menu" in
-`docs/product/sessions.md`), the selected session's **terminal**, and — only while the selected session is a hub
-session — that console's **report panel** (see `docs/product/report-panel.md`). The connection banner, while the
+**sidebar**, showing one console's hub, projects and sessions (see `docs/product/sidebar.md`), the selected session's
+**terminal**, which the archive view covers while it is open (see "The archive view" in `docs/product/sidebar.md`),
+and — only while the selected session is a hub session — that console's **report panel** (see
+`docs/product/report-panel.md`). The connection banner, while the
 daemon connection is down, sits between the top bar and the panes (see "Losing the daemon connection" in
 `docs/product/application-lifecycle.md`). Toasts float over the bottom right (see "Toasts" below).
 
@@ -30,8 +31,10 @@ It has three parts:
   wide as its controls.
 - **Middle**: the selected session's breadcrumb — *console › project › session title* for a project session,
   *console › Hub* for a hub session — followed by the session's status icon. A trail too long for the bar fades out at
-  its right edge, the status icon always stays visible, and the full trail is then the breadcrumb's tooltip. With no
-  session selected the middle is empty.
+  its right edge, as in "Names too long for their space" below, and the status icon always stays visible. With no
+  session selected the middle is empty. While the archive view is open (see "The archive view" in
+  `docs/product/sidebar.md`) the breadcrumb shows where that is instead, with no status icon: *console › project ›
+  Archived sessions*, or *console › Archived hubs*.
 - **Right**, left to right:
   - the **waiting count**, a raised hand and the number of sessions waiting for the user, shown only while at least
     one is; pressing it goes to the next waiting session (see "The raised hand" in `docs/product/sessions.md`);
@@ -42,8 +45,9 @@ It has three parts:
   - **Settings**, which opens the settings dialog.
 
 What the two toggles do depends on the window's width: see "Hiding the sidebar and the report panel" and "Below
-1100 px: the sidebar and the report panel become drawers" below. Each toggle's label and icon say what pressing it
-will do: "Show …" with an open-pane icon while its pane is hidden, "Hide …" with a close-pane icon while it is shown.
+1100 px: the sidebar and the report panel become drawers" below. Each toggle's label says what pressing it will
+do — "Show …" while its pane is hidden, "Hide …" while it is shown — and its icon shows the pane's current state: a
+window with that side's pane drawn solid while the pane is shown, and drawn dashed while it is hidden.
 Each toggle also tells assistive technology whether its pane is expanded: expanded while the pane is shown, which
 below 1100 px means its drawer is open. A hidden pane that is only floating in counts as hidden for both. Every control
 in the bar has a tooltip (see "Tooltips on icon-only controls" below). Pressing any of the bar's controls leaves
@@ -172,7 +176,7 @@ At 1100 px and wider, the top bar's two toggles hide and show the docked panes:
 Both panes are shown by default. **Whether each one is hidden is remembered per client**, the same way as the panes'
 widths. Hiding a pane hands its width to the terminal.
 
-Hiding a pane that holds keyboard focus — a tree row reached with Tab, say, or a report page — moves focus to the
+Hiding a pane that holds keyboard focus — a sidebar row reached with Tab, say, or a report page — moves focus to the
 terminal.
 
 ### A hidden pane floats in on hover
@@ -232,9 +236,10 @@ order:
 
 1. the top bar;
 2. the sidebar;
-3. the terminal;
-4. the report panel;
-5. the toasts, only while at least one toast is shown.
+3. the archive view, only while it is open (see "The archive view" in `docs/product/sidebar.md`);
+4. the terminal;
+5. the report panel;
+6. the toasts, only while at least one toast is shown.
 
 It works wherever focus is, the terminal included: there `Tab` and `Shift+Tab` still go to the agent, and `F6` and
 `Shift+F6` never do. It works from inside a report page too (see "Submitting a form back to the hub" in
@@ -243,7 +248,7 @@ It works wherever focus is, the terminal included: there `Tab` and `Shift+Tab` s
 
 **A region not on screen is skipped**: a docked pane the user has hidden, a drawer that is closed, a hidden pane that
 is only floating in, the report panel when there is none or it has no controls (before its pages have arrived, or
-with no pages yet), and the terminal when no session is selected. A pane counts as shown when it is docked in the row
+with no pages yet), and the terminal when no session is selected or while the archive view covers it. A pane counts as shown when it is docked in the row
 at 1100 px and wider, or its drawer is open below that.
 
 Where focus lands in each region:
@@ -252,6 +257,7 @@ Where focus lands in each region:
 |---|---|
 | Top bar | its first control |
 | Sidebar | the selected session's row, or the sidebar's first control when that row is not on screen |
+| Archive view | its first control |
 | Terminal | the terminal, so typing reaches the agent |
 | Report panel | the pager's first enabled button, else the report page itself |
 | Toasts | the newest toast |
@@ -286,17 +292,42 @@ are about, is in "Losing the daemon connection" in `docs/product/application-lif
 ## Tooltips on icon-only controls
 
 A control shown only as an icon has a tooltip naming it, shown both when the mouse rests on it and when it receives
-keyboard focus. The tooltip's text is the same name assistive technology announces for the control. These are:
+keyboard focus. The tooltip's text is the same name assistive technology announces for the control, except on the ⋮
+buttons below. These are:
 
 - the top bar's icon buttons — the sidebar and report toggles, whose tooltip follows their "Show …" / "Hide …"
   label, New console, Turn on notifications and Settings;
-- the ⋯ button that opens a row's action menu;
+- the ⋮ button that opens an action menu — a row's, the console's beside the console switcher, and the project's in
+  focus mode. Its tooltip is a short "More actions", while the name announced for it also names what it belongs to
+  ("Actions for session …" and the like), so that each ⋮ can be told apart;
+- the sidebar's other icon buttons — a project's **+** (New session), wherever it appears, the Projects heading's
+  Filter projects and the Clear filter beside it, and focus mode's Leave focus mode;
+- the archive view's Close button and each of its rows' Delete button, whose tooltip names the session;
+- the three options of Settings' Appearance row — Light, Dark and System (see "Appearance" in
+  `docs/product/settings.md`);
 - the report panel's previous-page and next-page buttons;
 - the close button of every dialog, of Settings and of each toast ("Close").
 
 The top bar's buttons with text get a tooltip of the same kind, matching their accessible name: the waiting count's
 says how many sessions are waiting and that pressing it goes to the next one, and the terminal's Reconnect button's
 says that it reconnects the terminal.
+
+## Names too long for their space
+
+A single-line name or label too long for its space — a sidebar row's name, the top bar's breadcrumb, a session listed
+in a confirmation, the report panel's page timestamp — fades out where it is cut off rather than ending in an
+ellipsis. A name, unlike the timestamp, then has its full text as its tooltip.
+
+**While the pointer is over it, such a label runs as a marquee**, so all of it can be read:
+
+- For a sidebar row the pointer only has to be over the row; elsewhere it has to be over the label itself.
+- After a short pause the text scrolls through at reading speed, about 60 px a second, pauses at its end, scrolls
+  quickly back to its start and goes round again for as long as the pointer stays.
+- When the pointer leaves, the text scrolls back to its start.
+- The fades follow the text: its start fades once text has scrolled past it, and its end stops fading once the last
+  of the text is in view.
+- Nothing moves where the system asks for reduced motion, and a label that is cut at its start, such as a path
+  (see "Right-to-left layout" below), never runs.
 
 ## Right-to-left layout
 
@@ -318,9 +349,10 @@ parts of the window:
   is laid out in the direction of its own text, so a Latin name in an Arabic window still fades at its right edge.
 - Paths always read left to right, in the fields that take one and in the settings list, where a path too long for its
   space fades at its start, so its last folder stays readable.
-- Icons that point a direction are mirrored: the two pane toggles, the breadcrumb's separators, the report panel's
-  previous-page and next-page buttons, and a collapsed tree row's chevron, which points left. An expanded row's
-  chevron points down, as in left-to-right.
+- Icons that point a direction or show a side are mirrored: the two pane toggles, whose pane is drawn on its own
+  side, the breadcrumb's separators, the report panel's
+  previous-page and next-page buttons, focus mode's back button, and a collapsed project row's chevron, which points
+  left. An expanded row's chevron points down, as in left-to-right.
 
 Not mirrored:
 

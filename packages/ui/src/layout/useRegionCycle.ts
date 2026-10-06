@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
  * toast stack comes last and is a stop only while a toast is on screen; unlike the others it is not
  * for the caller to say: the stack is in the DOM while it holds a toast, and one that is closing
  * (kept mounted for its exit animation, `data-exiting`) is not a landing place. */
-const REGIONS = ["topbar", "sidebar", "terminal", "report", "toast"] as const;
+const REGIONS = ["topbar", "sidebar", "archive", "terminal", "report", "toast"] as const;
 export type Region = (typeof REGIONS)[number];
 type ShownRegion = Exclude<Region, "toast">;
 
@@ -19,7 +19,7 @@ const LIVE_TOAST = '[data-slot="toast"]:not([data-exiting="true"]):not([data-hid
 
 /** A dialog or a menu is open: react-aria keeps focus inside it and Escape closes it, so F6 must
  * not carry focus out from under it. A toast is an `alertdialog` too, but a non-modal one. */
-const MODAL_OPEN =
+export const MODAL_OPEN =
   '[role="dialog"]:not([aria-modal="false"]), [role="alertdialog"]:not([aria-modal="false"]), [role="menu"]';
 
 function regionElements(region: Region): Element[] {

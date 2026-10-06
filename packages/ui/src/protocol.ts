@@ -65,6 +65,8 @@ export interface Project {
   /** The user has agreed that Octoboard may answer Claude Code's workspace-trust screen for this
    * project's directory. Only ever set by `confirm_claude_trust` with `remember`. */
   claude_trust_consent: boolean;
+  /** The user pinned this project to the top of its console's project list. */
+  pinned: boolean;
 }
 
 export interface Session {
@@ -85,6 +87,8 @@ export interface Session {
   /** The config directory of this session's own agent that it was started with, fixed at creation
    * so a resume finds its transcript even after the console's setting changes. */
   config_dir?: string | null;
+  /** The user pinned this session to the top of its list; survives archiving and resuming. */
+  pinned: boolean;
   started_at: number;
   ended_at?: number | null;
 }
@@ -151,8 +155,12 @@ export type RequestBody =
        * how the project goes back to inheriting the console's default — the two must stay
        * distinguishable, so this field is never sent as `undefined` when the user means "clear". */
       default_agent?: Agent | null;
+      /** Absent leaves the project's pin alone. */
+      pinned?: boolean;
     }
-  | { type: "delete_project"; project: string }
+  /** `stop_sessions` ends the project's running sessions first (as `archive_session` does) instead
+   * of being refused with `project_has_running_sessions`; default false. */
+  | { type: "delete_project"; project: string; stop_sessions?: boolean }
   | { type: "list_dir"; path: string }
   | {
       type: "open_session";
@@ -167,6 +175,13 @@ export type RequestBody =
     }
   | { type: "resume_session"; session: string }
   | { type: "archive_session"; session: string }
+  /** Removes Octoboard's record of one archived session; refused with `session_not_archived`
+   * otherwise. The agent's own transcript is never touched. */
+  | { type: "delete_session"; session: string }
+  /** With `project`: every archived session of that project. Without: every archived hub session
+   * of the console. Each removal is broadcast as `session_deleted`. */
+  | { type: "delete_archived_sessions"; console: string; project?: string }
+  | { type: "set_session_pinned"; session: string; pinned: boolean }
   | { type: "send_message"; session: string; text: string }
   | { type: "rename_session"; session: string; title: string }
   | { type: "list_pages"; console: string }
@@ -202,6 +217,7 @@ export type Event =
   | { type: "project_upserted"; project: Project }
   | { type: "project_deleted"; project: string }
   | { type: "session_upserted"; session: Session }
+  | { type: "session_deleted"; session: string }
   /** Something about a session the user has to be told that no status field carries — an injected
    * capability that will not apply, or a setting of theirs Octoboard had to work around. Broadcast
    * once, when the session starts; nothing stores it, so a client that connects later never sees

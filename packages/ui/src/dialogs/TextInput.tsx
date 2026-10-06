@@ -1,7 +1,8 @@
 import { Input, Label, TextField } from "@heroui/react";
 import React from "react";
 
-/** A labelled single-line text field. `ltr` lays out a value that always reads left to right (a
+/** A labelled single-line text field, in HeroUI's variant for a field on a surface, since it is
+ * always in a dialog. `ltr` lays out a value that always reads left to right (a
  * path, a URL) whatever the UI's direction. */
 export function TextInput({
   label,
@@ -19,7 +20,7 @@ export function TextInput({
   dir?: "ltr";
 }): React.ReactElement {
   return (
-    <TextField fullWidth value={value} onChange={onChange} autoFocus={autoFocus}>
+    <TextField fullWidth variant="secondary" value={value} onChange={onChange} autoFocus={autoFocus}>
       <Label>{label}</Label>
       <Input dir={dir} placeholder={placeholder} />
     </TextField>

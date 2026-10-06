@@ -1,0 +1,71 @@
+import { isLive, type Project, type Session, type SessionStatus } from "../protocol";
+
+/** How urgently a status asks for the user's attention: a raised hand first, then a session at
+ * work, then one sitting at its prompt, then one with no process. Archived sessions are listed
+ * apart and never ranked against the others. */
+const STATUS_RANK: Record<SessionStatus, number> = {
+  waiting_user: 0,
+  working: 1,
+  idle: 2,
+  interrupted: 3,
+  archived: 4,
+};
+
+/** Pinned first; then by status (`STATUS_RANK`); then newest first. */
+export function compareSessions(a: Session, b: Session): number {
+  return (
+    Number(b.pinned) - Number(a.pinned) ||
+    STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
+    b.started_at - a.started_at
+  );
+}
+
+/** A project's rank by the most urgent of its sessions: one with a raised hand, then one with a
+ * session at work, then one with a session merely running, then the inactive ones (no session
+ * with a running process), which therefore end the list after the pinned ones. */
+function projectRank(sessions: Session[]): number {
+  if (sessions.some((s) => s.status === "waiting_user")) return 0;
+  if (sessions.some((s) => s.status === "working")) return 1;
+  if (sessions.some((s) => s.status === "idle")) return 2;
+  return 3;
+}
+
+/** Whether a project has no session with a running process. */
+export function isInactiveProject(sessions: Session[]): boolean {
+  return !sessions.some((s) => isLive(s.status));
+}
+
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+/** The projects in sidebar order: pinned first; then by `projectRank`; then by name. */
+export function sortProjects(projects: Project[], sessionsOf: (project: Project) => Session[]): Project[] {
+  const rank = new Map(projects.map((p) => [p.id, projectRank(sessionsOf(p))]));
+  return [...projects].sort(
+    (a, b) =>
+      Number(b.pinned) - Number(a.pinned) ||
+      rank.get(a.id)! - rank.get(b.id)! ||
+      collator.compare(a.name, b.name),
+  );
+}
+
+/** A project's sessions in sidebar order: the ones not archived, ranked by `compareSessions`. */
+export function liveSessions(sessions: Session[]): Session[] {
+  return sessions.filter((s) => s.status !== "archived").sort(compareSessions);
+}
+
+/** Archived sessions, most recently ended first. */
+export function archivedSessions(sessions: Session[]): Session[] {
+  return sessions
+    .filter((s) => s.status === "archived")
+    .sort((a, b) => (b.ended_at ?? b.started_at) - (a.ended_at ?? a.started_at));
+}
+
+/** What a console in the switcher or a project row shows: the most pressing activity among its sessions. */
+export type Activity = "waiting" | "working" | "running" | undefined;
+
+export function consoleActivity(sessions: Session[]): Activity {
+  if (sessions.some((s) => s.status === "waiting_user")) return "waiting";
+  if (sessions.some((s) => s.status === "working")) return "working";
+  if (sessions.some((s) => s.status === "idle")) return "running";
+  return undefined;
+}

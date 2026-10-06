@@ -15,64 +15,44 @@ own binary and shows it as it is. What it adds to each launch, and what it guara
 **A console has at most one hub session whose process is running**, enforced by the daemon: opening
 a hub, or reopening an interrupted or archived one, while another hub of the console is running is
 refused, and the refusal names the running hub (shown by its title). The application does not send a request it knows
-will be refused: selecting an interrupted or archived hub, or choosing its "Resume", while another hub of the same
-console is running leaves that hub selected with its last output on screen and shows an error toast, titled with
-where the hub is, saying that the console already has a live hub session, which has to be archived before this one
-is reopened.
+will be refused: selecting an interrupted hub, typing into an archived hub's terminal, or pressing "Resume" or
+"Reopen" for either, while another hub of the same console is running leaves that hub selected, not running, and
+shows an error toast, titled with where the hub is, saying that the console already has a live hub
+session, which has to be archived before this one is reopened.
 
 **The Hub row** holds the console's newest hub session that is not archived, whether running or
 interrupted. Clicking it starts a new hub when the row is empty and selects the hub in it otherwise,
-which resumes an interrupted hub as selecting any interrupted session does. While the row holds a hub
-it has an action menu:
+which resumes an interrupted hub as selecting any interrupted session does; the row's menu has no
+Resume item. Its action menu, shown while the row holds a hub or the console has an archived hub,
+offers:
 
-- **Archive** — always offered. It asks for confirmation, then archives the hub as described in
-  "Archiving, interruption and resuming" below.
-- **Resume** — offered only while the hub is interrupted.
+- **Archived hubs** — a submenu of the console's newest archived hubs, each of which can be selected,
+  and the way to the archive view of all of them (see "The Hub row and the project list" and "The
+  archive view" in `docs/product/sidebar.md`).
+- **Archive** — only while the row holds a hub. It asks for confirmation, then archives the hub as
+  described in "Archiving, interruption and resuming" below.
 
 There is no Rename on the Hub row; its label is always "Hub". The hub cannot archive itself (see
 "The hub's tools" in `docs/product/hub-orchestration.md`), so the user archives it from this menu.
-Archiving the hub moves it to the console's "Archived hubs" group and leaves the Hub row empty, so the
+Archiving the hub moves it among the console's archived hubs and leaves the Hub row empty, so the
 next click on the row starts a fresh hub. That fresh hub is opened with the console's current hub
 agent and agent config directory, whereas resuming or reopening a hub keeps the ones it was opened
 with (see "Agent config directories" in `docs/product/consoles-and-projects.md`).
 
-Should a console ever have more than one hub that is not archived, the ones not in the Hub row are
-listed directly below it as ordinary session rows.
-
 A hub session carries no project; it runs in the console's working directory. It is given Octoboard's
 orchestration tools and dispatches work to sessions in the console's projects — see
-`docs/product/hub-orchestration.md`. Because it belongs to no project, archived hubs are listed in
-the console's own "Archived hubs" group rather than under any project.
+`docs/product/hub-orchestration.md`. Because it belongs to no project, archived hubs belong to the
+console rather than to any project, and are reached from the Hub row's menu.
 
 Selecting a hub session also shows its console's **report panel** beside the terminal, described in
 `docs/product/report-panel.md`; a project session's terminal has the pane to itself.
 
-## The console → project → session menu
+## Where sessions are listed
 
-The left-hand tree has three levels: console → project → session. Console and project rows expand and collapse;
-collapse state is per window and is not stored.
-
-Under each project, sessions whose process is running and sessions that were interrupted are listed directly;
-archived sessions are grouped under an "Archive (n)" row that expands on its own. The console itself
-carries an "Archived hubs (n)" group below its Hub row, for the hub sessions that have been archived.
-Each session row shows its status, its title, and a badge naming its agent (Claude Code, Codex, Grok
-Build). The status is an icon named after the status for assistive technology; the *working* icon spins, and holds
-still where the system asks for reduced motion. Console, project and archive-group rows tell assistive technology
-whether they are expanded or collapsed.
-
-A name too long for its row fades out where it ends — the row's right edge, its left under a right-to-left language —
-rather than ending in an ellipsis, and the full name is then the row's tooltip. When the tree is taller than the sidebar
-it scrolls, and it fades out at whichever end has more of it beyond.
-
-New consoles are created from the top bar's **New console** button (see "The top bar" in
-`docs/product/window-layout.md`).
-
-Selecting a session shows its terminal. Clicking a row deliberately does not move keyboard focus away from the
-terminal; a row reached with Tab can be activated with Enter or Space.
-
-A session is selected automatically only when this application is the one that opened it — through the Hub row or the
-new-session dialog. A session that appears any other way, such as one the hub started or one another client of the
-daemon opened, is added to the tree unselected and is put on screen by the user selecting it.
+Sessions are listed in the sidebar, one console at a time: the hub in its console's Hub row, a project session under
+its project. Archived sessions are not listed among the others; they are reached from their project's or the Hub row's
+action menu and from the archive view. Everything about the sidebar — its rows and menus, the order sessions are listed
+in, pinning, focus mode, the archive view and how selecting a session works — is in `docs/product/sidebar.md`.
 
 ## Opening a session
 
@@ -80,14 +60,15 @@ A session is opened under a project with:
 
 - **Agent** — defaulted as below, overridable for this session only.
 - **Title** (optional) — defaults to the project's name. A hub session's title defaults to "Hub".
-- **Initial task** (optional) — handed to the agent as its initial prompt.
 - **Include in hub** (a checkbox, off by default) — makes this session report its results to the
   console's hub instead of staying outside the orchestration. The choice is fixed for the session's
   lifetime. A session the hub itself starts always reports to it; see "Which sessions the hub drives"
   in `docs/product/hub-orchestration.md`.
 
-A session opened **with** a task starts in *working*. A session opened **without** one starts in *awaiting
-instructions*: it is sitting at the agent's prompt.
+The dialog takes no task: a session the user opens by hand starts in *awaiting instructions*, sitting at the agent's
+prompt, and is given its work by typing into its terminal. Only a session the hub starts is handed an opening prompt,
+the brief it is started with (see "Handing out a task: the brief" in `docs/product/hub-orchestration.md`); it starts
+in *working*.
 
 A Claude Code session in a directory Claude Code has not been trusted with first stops on Claude
 Code's own workspace-trust prompt, before it takes up its task or reaches its prompt. A resumed
@@ -99,7 +80,7 @@ see "Claude Code's workspace-trust prompt" in `docs/product/launching-agents.md`
 If the launch itself fails — the directory cannot be reached, the agent binary is not on the user's `PATH`, the
 user's shell environment could not be captured (see "The launch environment" in
 `docs/product/launching-agents.md`), the config directory the session would hold for its agent no longer exists (see
-"Agent config directories" in `docs/product/consoles-and-projects.md`) — no session appears in the tree and the
+"Agent config directories" in `docs/product/consoles-and-projects.md`) — no session appears in the sidebar and the
 failure is reported.
 
 ### Which agent a session uses
@@ -117,19 +98,25 @@ session records belong to a specific agent and cannot be moved across agents.
 
 ## Session statuses
 
-| Status | Wire value | Meaning |
-|---|---|---|
-| Working | `working` | The agent is executing a turn. |
-| Waiting for the user | `waiting_user` | The agent is waiting on a permission decision or has asked the user a question through its own ask-the-user tool. |
-| Awaiting instructions | `idle` | The process is running and sitting at its prompt. |
-| Interrupted | `interrupted` | No process is running, and it did not end by being archived. The session stays in its project's list (a hub, in its console's Hub row) and can be resumed. |
-| Archived | `archived` | Ended by being archived (see "Archiving, interruption and resuming"). Listed in the project's Archive group (a hub, in its console's "Archived hubs" group) and can be reopened. |
+| Status | Wire value | Glyph | Meaning |
+|---|---|---|---|
+| Working | `working` | an accent-coloured dot pulsing a fading copy of itself outward | The agent is executing a turn. |
+| Waiting for the user | `waiting_user` | a raised hand that waves now and then | The agent is waiting on a permission decision or has asked the user a question through its own ask-the-user tool. |
+| Awaiting instructions | `idle` | a green speech bubble | The process is running and sitting at its prompt. |
+| Interrupted | `interrupted` | a power-off sign | No process is running, and it did not end by being archived. The session stays in its project's list (a hub, in its console's Hub row) and can be resumed. |
+| Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming"). No longer listed among its project's sessions (a hub, no longer in the Hub row); reached through the archive (see "Archived sessions" below) and can be reopened. |
 
 The first three mean a process is running; the last two mean none is, and both can be resumed.
 
+The glyph stands for the status wherever one is shown — the sidebar's rows, focus mode's cards, the top bar's
+breadcrumb — and is named after the status for assistive technology. The waving hand and the outward pulse stand still
+where the system asks for reduced motion, leaving the working glyph a plain accent-coloured dot; working and awaiting
+instructions still differ by shape as well as by colour.
+
 Transitions:
 
-- Opening a session puts it in *working* or *awaiting instructions*, per the initial task.
+- Opening a session puts it in *working* when it is handed an opening prompt (a session the hub starts), and in
+  *awaiting instructions* otherwise (see "Opening a session").
 - While the process runs, reports from the agent move the session between *working*, *waiting for the user* and
   *awaiting instructions*.
 - The process ending for any reason other than archiving — the agent exiting on its own, a crash, the application
@@ -178,20 +165,26 @@ practice was not checked (in one run an ending followed within a second by a new
 *Waiting for the user* is the raised hand, and it is made findable rather than left on the session's
 own row:
 
-- The session's row shows a raised-hand icon, and so do its project row and its console row, so a
-  waiting session can be found with the tree collapsed.
+- The session's row shows the raised hand. Its project row shows one while the project is collapsed,
+  its console shows one in the console switcher's list, and the switcher itself shows one while the
+  waiting session is in a console other than the one shown, so a waiting session can be found
+  whatever the sidebar is showing (see "The console switcher" and "Project rows" in
+  `docs/product/sidebar.md`).
 - A system notification fires once as a session enters that state, naming the session by its title
   and the project it runs in — or the console whose hub it is. A session that is answered and later
   waits again notifies again. No notification permission is asked for: the application posts the
   notification directly, and macOS showed no permission prompt. The banner was seen while Octoboard
   was not the frontmost application; while it was frontmost, no banner was seen. A notification that
-  cannot be shown is not reported as having failed — the tree's own marker carries the same signal.
+  cannot be shown is not reported as having failed — the sidebar's own marker carries the same signal.
 - The Dock badge carries how many sessions are waiting, counted across every console, and clears
   when none is.
 - The top bar carries the same count, as a raised hand and the number, shown only while at least one
-  session is waiting. Pressing it selects the next waiting session after the selected one, in the order
-  the tree lists them — console by console, a console's hub before its projects' sessions — and wraps
-  from the last back to the first; when the selected session is not waiting, it selects the first.
+  session is waiting. Pressing it selects the next waiting session after the selected one — console by
+  console in the order the consoles were created, a console's hub before its projects' sessions, and
+  those in the sidebar's order (see "Order of projects and sessions" in `docs/product/sidebar.md`) —
+  and wraps from the last back to the first; when the selected session is not waiting, it selects the
+  first. The sidebar follows the session it selects (see "Selecting a session" in
+  `docs/product/sidebar.md`).
 
 **The user answers in the session's terminal**, and the status leaves *waiting for the user* on the
 agent's next event — or, where the answer was a decline and no event follows, on the decline showing
@@ -215,8 +208,8 @@ conversation, and moves the session to *awaiting instructions* once the decline 
 normally within about a second of the user answering. Both ways a Claude Code session raises its hand
 are covered: a permission prompt and its own ask-the-user question.
 
-What follows from that move is nothing special to this path: the raised hand comes down on the
-session row, its project row and its console row, the Dock badge count drops, and a message queued
+What follows from that move is nothing special to this path: the raised hand comes down wherever the
+sidebar showed it, the Dock badge count drops, and a message queued
 for the session while its hand was up is released (see "Messages held until a session can take them"
 in `docs/product/hub-orchestration.md`). A later prompt or question in the same session raises the
 hand and notifies afresh, as any other does.
@@ -251,27 +244,63 @@ can observe by itself tells that apart from a user who simply has not answered y
 exit first and is killed only if it does not; a kill takes the agent's tool subprocesses with it.
 Archiving is available for any session that is not already archived, including an interrupted one;
 for the hub it is on the Hub row's menu (see "Hub sessions and project sessions" above). The user
-archives a session from its row's menu, and is asked to confirm first.
+archives a session from its row's menu, and is asked to confirm first. An archived session keeps its
+pin, if it had one (see "Order of projects and sessions" in `docs/product/sidebar.md`).
 
 Besides the user, two things archive a session: the hub, explicitly, and a project session's own
 report saying the work is finished with nothing left open (see "Automatic archiving" in
 `docs/product/hub-orchestration.md`).
 
-**Resuming** happens by selecting an interrupted or archived session, or through its "Resume" action. It relaunches
-the same agent in the same directory and reassembles everything Octoboard injects.
+**Resuming** an interrupted session happens by selecting it, or by pressing "Resume" on its terminal's card (see
+"The terminal" below). **Reopening** an archived session is the same relaunch, but selecting an archived session does
+not do it: the session is shown, still archived, and is reopened by typing into its terminal, by pressing "Reopen" on
+its terminal's card, or by pressing "Reopen" in the archive view (see "The archive view" in
+`docs/product/sidebar.md`). Either relaunches the same agent in the same directory and reassembles everything
+Octoboard injects.
 
 - Where the agent has a stored conversation, that conversation is resumed.
 - A session that **nobody ever typed into** has no stored conversation on the agent's side; resuming it opens a fresh
   conversation in its place, in the same project and under the same session.
-- A resume carries no initial task, so the session comes up at the agent's prompt.
+- A resume carries no opening prompt, so the session comes up at the agent's prompt; an archived session reopened by
+  typing into its terminal is then handed what was typed (see "The terminal" below).
 - A session relaunches with the config directory it was opened with for its agent, not the console's current setting,
   and is refused if that directory no longer exists (see "Agent config directories" in
   `docs/product/consoles-and-projects.md`).
 - Resuming a session whose process is already running is refused. The refusal a double-click produces is not surfaced
   to the user.
 
-An interrupted session and an archived session are resumed the same way; the difference is only how the session got
-there, and where it appears in the tree.
+An interrupted session and an archived session are relaunched the same way; the difference is how the session got
+there, where it is listed, and that selecting an archived one does not relaunch it.
+
+### Archived sessions
+
+A project's archived sessions, and a console's archived hubs, stay until the user deletes them, the project is
+removed or the console is deleted. They are listed most recently archived first, and reached:
+
+- from the project's "View archive" submenu, or for hubs the Hub row's "Archived hubs" submenu, with the newest
+  five;
+- from the project's focus mode, with the newest ten;
+- from the archive view, with all of them.
+
+How each of those looks and behaves is in "Project rows", "Focus mode" and "The archive view" in
+`docs/product/sidebar.md`.
+
+### Deleting archived sessions
+
+Only an archived session can be deleted: one at a time, or at once every archived session of a project or every
+archived hub of a console. The user is asked to confirm either way.
+
+- **Deleting removes only Octoboard's record of the session**, for good. The session disappears from every client, and
+  the hub's `list_archived` and `reopen_session` no longer find it. The agent's own record of the conversation, in the
+  agent's own configuration directory, and the project's directory are never touched.
+- Deleting a session that is not archived is refused, saying that only an archived session can be deleted. So is
+  deleting an archived session that is being resumed at that moment. An archived session whose process is still on its
+  way out can be deleted.
+- Deleting everything at once skips a session that stopped being archived meanwhile, because a resume got there first,
+  rather than failing.
+
+Removing a project or deleting a console also deletes its archived sessions along with every other session record
+(see "Removing a project" and "Deleting a console" in `docs/product/consoles-and-projects.md`).
 
 ## Renaming a session
 
@@ -279,7 +308,8 @@ A session's title can be changed at any time, archived sessions included. An emp
 
 ## The terminal
 
-The selected session's terminal is live: keystrokes go straight to the agent, exactly as in a system terminal. Mouse
+With no session selected, the terminal's area says so and asks for a session to be selected. The selected session's
+terminal is live: keystrokes go straight to the agent, exactly as in a system terminal. Mouse
 reporting works, so an agent's own mouse-driven TUI is usable. `Ctrl+C` reaches the agent, and so do `Tab` and
 `Shift+Tab`. `F6` and `Shift+F6` never do: they move keyboard focus to another region of the window (see "Moving
 focus between regions with F6" in `docs/product/window-layout.md`).
@@ -303,9 +333,19 @@ focus between regions with F6" in `docs/product/window-layout.md`).
   top bar's connection status reads "Terminal reconnecting…"; once the attempts are spent it reads "Terminal
   disconnected" and offers a "Reconnect" button, which starts them over (see "The connection status" in
   `docs/product/window-layout.md`). A reconnect in the background never steals keyboard focus.
-- Selecting an interrupted or archived session resumes it rather than attaching; until a process is running, the
-  terminal shows a card at its bottom centre that reads "Not running" and offers "Resume".
-- **A session's last output stays on screen once its process has ended**, behind that "Not running" card, so what
+- **Until the session's first output is on screen, the terminal is covered by a loading state** — a spinner and a
+  line saying the session is being resumed, while a resume of it is under way or it has no process yet, and that the
+  terminal is loading otherwise. It covers whatever comes before that first output, every time the terminal attaches
+  — when a session is selected, resumed or reconnected: the resume starting the process, the connection being made,
+  and a freshly started agent drawing its first screen. An agent that prints nothing does not keep it up: after
+  10 seconds without output the bare terminal is shown.
+- Selecting an interrupted session resumes it rather than attaching. While a session has no process and no resume of
+  it is under way, the terminal shows a card at its bottom centre: for an interrupted session it reads "Not running"
+  and offers "Resume"; for an archived one it says the session is archived and that typing reopens it, and offers
+  "Reopen". The card is hidden while the session is being resumed.
+- **Typing into an archived session's terminal reopens it.** The first input starts the relaunch, and what is typed
+  until the session is connected is held and handed to the agent once it is, so it reaches the agent's prompt.
+- **A session's last output stays on screen once its process has ended**, behind that card, so what
   the agent printed last — why it stopped, what it was waiting for — can still be read. The kept screen belongs to that one session: selecting a different dormant session clears the screen rather than showing the
   previous session's output, and resuming re-attaches and redraws from the daemon's replay rather than appending to
   what was kept.

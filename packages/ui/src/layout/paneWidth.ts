@@ -13,8 +13,8 @@ const PANES = {
   report: { key: "octoboard.reportWidth", min: 300, default: 420, max: 720 },
 } satisfies Record<PaneSide, { key: string; min: number; default: number; max: number }>;
 
-/** The terminal pane's floor (`TerminalPane.tsx`); the window's 1100px minimum is this plus the
- * sidebar's default and the report panel's minimum. */
+/** The terminal pane's floor (the terminal's wrapper in `App.tsx`); the window's 1100px minimum is
+ * this plus the sidebar's default and the report panel's minimum. */
 const TERMINAL_FLOOR = 520;
 
 function clamp(value: number, min: number, max: number): number {

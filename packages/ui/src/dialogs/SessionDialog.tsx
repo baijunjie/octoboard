@@ -1,7 +1,7 @@
-import { Checkbox, Description, Label, TextArea, TextField } from "@heroui/react";
+import { Checkbox, Description, Label } from "@heroui/react";
 import React, { useState } from "react";
 
-import { AGENT_OPTIONS } from "../agents";
+import { AGENT_ICON_OPTIONS } from "../components/AgentIcon";
 import { useT } from "../i18n/react";
 import type { Agent, Console, Project } from "../protocol";
 import { useDaemon } from "../store";
@@ -33,7 +33,6 @@ export function SessionDialog({
   const { request } = useDaemon();
   const [agent, setAgent] = useState<Agent>(project.default_agent ?? parentConsole.default_agent);
   const [title, setTitle] = useState("");
-  const [task, setTask] = useState("");
   const [includeInHub, setIncludeInHub] = useState(false);
   const { error, busy, run } = useDialogAction();
 
@@ -44,7 +43,6 @@ export function SessionDialog({
         console_id: parentConsole.id,
         project_id: project.id,
         agent,
-        task: task || undefined,
         title: title || undefined,
         include_in_hub: includeInHub || undefined,
       });
@@ -60,16 +58,11 @@ export function SessionDialog({
       busy={busy}
       onSubmit={submit}
     >
-      <OptionSelect label={t("dialog.session.agent")} options={AGENT_OPTIONS} value={agent} onChange={setAgent} />
+      <OptionSelect label={t("dialog.session.agent")} options={AGENT_ICON_OPTIONS} value={agent} onChange={setAgent} />
       <TextInput label={t("dialog.session.titleOptional")} value={title} onChange={setTitle} />
-      <TextField fullWidth value={task} onChange={setTask}>
-        <Label>{t("dialog.session.task")}</Label>
-        <TextArea rows={4} />
-      </TextField>
-      {/* The default variant's own control now carries a visible border (`--field-border` in
-          `style.css`, shared with every other field), so it no longer needs `variant="secondary"`
-          to stay visible unselected. */}
-      <Checkbox isSelected={includeInHub} onChange={setIncludeInHub}>
+      {/* HeroUI's variant for a control on a surface (the dialog), whose unselected box the default
+          variant would leave to blend into it. */}
+      <Checkbox variant="secondary" isSelected={includeInHub} onChange={setIncludeInHub}>
         {/* `Checkbox.Content` is the pressable part, so the box goes inside it with the label;
             the description is the field's, a sibling of it. */}
         <Checkbox.Content>

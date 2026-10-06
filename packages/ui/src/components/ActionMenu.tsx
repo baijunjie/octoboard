@@ -1,8 +1,10 @@
-import { Dropdown, Label } from "@heroui/react";
-import { Ellipsis } from "lucide-react";
+import { Dropdown, Label, Separator } from "@heroui/react";
+import { EllipsisVertical, type LucideIcon } from "lucide-react";
 import React, { useEffect, useRef } from "react";
 
+import { useT } from "../i18n/react";
 import { TitledControl } from "./TitledControl";
+import { usePointerFocusReturn } from "./usePointerFocusReturn";
 
 /** Set when a menu closed but could not hand focus back, because the item it ran opened a dialog
  * that holds it. The dialog takes it when it closes (see `takeMenuFocusToRestore`). */
@@ -26,24 +28,128 @@ export function isActionMenuOpen(): boolean {
 
 export interface ActionMenuItem {
   label: string;
+  /** A lucide glyph, or any element drawn at the same size (an agent's mark). */
+  icon: LucideIcon | React.ReactElement;
   onClick: () => void;
   destructive?: boolean;
+  disabled?: boolean;
+  /** The accessible name when it should say more than `label` (a console and what is going on in it). */
+  ariaLabel?: string;
+  /** Drawn after the label, at the item's end edge (a status marker). */
+  end?: React.ReactNode;
+  /** Makes the item one of a single-selection group (consecutive items that set it): HeroUI marks
+   * the chosen one (`true`) with its check and announces it as checked. */
+  selected?: boolean;
 }
 
-/**
- * A small "more" (ellipsis) action menu; each item is a one-shot action. It lives inside a tree row
- * that is itself clickable, so a click is kept from reaching the row: the popover is portalled out
- * of the DOM but React still bubbles its events through this component's ancestors, which would
- * otherwise select or toggle the row behind the menu.
- */
-export function ActionMenu({ label, items }: { label: string; items: ActionMenuItem[] }): React.ReactElement {
-  // The element that had focus when a pointer press on the trigger began (typically the terminal's
-  // textarea). It is held only until that press ends; if the press opened the menu it moves to
-  // `restoreRef`, so a press that never opens it (dragged off the trigger) leaves nothing behind.
-  const pressRef = useRef<HTMLElement | null>(null);
-  // Set only for a pointer-opened menu. react-aria returns focus to the trigger when a menu closes,
+/** An item that opens a nested menu of its own items. */
+export interface ActionMenuSubmenu {
+  label: string;
+  icon: LucideIcon | React.ReactElement;
+  items: ActionMenuItem[];
+}
+
+export type ActionMenuEntry = ActionMenuItem | ActionMenuSubmenu | "separator";
+
+/** A lucide glyph is drawn quieter than the label beside it, or in the danger colour with a
+ * destructive item's label; an element (an agent's mark) keeps its own colours. */
+function ItemIcon({ icon, destructive }: { icon: LucideIcon | React.ReactElement; destructive?: boolean }): React.ReactElement {
+  if (React.isValidElement(icon)) return icon;
+  const Icon = icon;
+  return <Icon aria-hidden="true" className={`size-4 shrink-0 ${destructive ? "text-danger" : "text-muted"}`} />;
+}
+
+function isChoice(entry: ActionMenuEntry): entry is ActionMenuItem {
+  return entry !== "separator" && !("items" in entry) && entry.selected !== undefined;
+}
+
+function MenuItems({ entries, label }: { entries: ActionMenuEntry[]; label: string }): React.ReactElement {
+  // Items are keyed by position: two entries may share a label (two sessions of one title).
+  const run = (key: React.Key) => {
+    const entry = entries[Number(key)];
+    if (entry && entry !== "separator" && !("items" in entry)) entry.onClick();
+  };
+
+  const renderItem = (entry: ActionMenuItem, index: number) => (
+    <Dropdown.Item
+      key={index}
+      id={String(index)}
+      textValue={entry.label}
+      aria-label={entry.ariaLabel}
+      variant={entry.destructive ? "danger" : "default"}
+      isDisabled={entry.disabled}
+    >
+      <ItemIcon icon={entry.icon} destructive={entry.destructive} />
+      <Label className="min-w-0 flex-1 truncate">{entry.label}</Label>
+      {entry.end}
+      {entry.selected !== undefined && <Dropdown.ItemIndicator />}
+    </Dropdown.Item>
+  );
+
+  // A run of consecutive `selected` items is a section of its own with single selection, so the
+  // menu's other items stay plain menu items rather than becoming radios.
+  const nodes: React.ReactNode[] = [];
+  for (let index = 0; index < entries.length; index++) {
+    const entry = entries[index];
+    if (isChoice(entry)) {
+      const group: number[] = [];
+      while (index < entries.length && isChoice(entries[index])) group.push(index++);
+      index--;
+      nodes.push(
+        <Dropdown.Section
+          key={group[0]}
+          aria-label={label}
+          selectionMode="single"
+          selectedKeys={group.filter((i) => (entries[i] as ActionMenuItem).selected).map(String)}
+        >
+          {group.map((i) => renderItem(entries[i] as ActionMenuItem, i))}
+        </Dropdown.Section>,
+      );
+    } else if (entry === "separator") {
+      nodes.push(<Separator key={index} />);
+    } else if ("items" in entry) {
+      nodes.push(
+        <Dropdown.SubmenuTrigger key={index}>
+          <Dropdown.Item id={String(index)} textValue={entry.label}>
+            <ItemIcon icon={entry.icon} />
+            <Label>{entry.label}</Label>
+            <Dropdown.SubmenuIndicator />
+          </Dropdown.Item>
+          <Dropdown.Popover className="max-w-72">
+            <MenuItems entries={entry.items} label={entry.label} />
+          </Dropdown.Popover>
+        </Dropdown.SubmenuTrigger>,
+      );
+    } else {
+      nodes.push(renderItem(entry, index));
+    }
+  }
+  return <Dropdown.Menu onAction={run}>{nodes}</Dropdown.Menu>;
+}
+
+export function ActionMenu({
+  label,
+  items,
+  trigger,
+  triggerClassName,
+  className = "shrink-0",
+  tooltip,
+}: {
+  label: string;
+  items: ActionMenuEntry[];
+  /** What the trigger shows; a vertical ellipsis by default. */
+  trigger?: React.ReactNode;
+  triggerClassName?: string;
+  className?: string;
+  /** The trigger's tooltip: "More actions" by default, short where `label` (its accessible name)
+   * has to name the row it belongs to so each trigger is told apart; off for a trigger whose
+   * visible text already says what it does. */
+  tooltip?: string | false;
+}): React.ReactElement {
+  const t = useT();
+  // Set only for a pointer-opened menu: react-aria returns focus to the trigger when a menu closes,
   // which is right for the keyboard but would pull it off the terminal for the mouse.
-  const restoreRef = useRef<HTMLElement | null>(null);
+  const pointerFocus = usePointerFocusReturn();
 
   // Counted into `openMenus`. A row can unmount with its menu open (the session it belongs to is
   // deleted), which reports no close, so the unmount settles the count too.
@@ -57,14 +163,10 @@ export function ActionMenu({ label, items }: { label: string; items: ActionMenuI
 
   const onOpenChange = (isOpen: boolean) => {
     countOpen(isOpen);
-    if (isOpen) {
-      menuFocusToRestore = null;
-      restoreRef.current = pressRef.current;
-      pressRef.current = null;
-      return;
-    }
-    const previous = restoreRef.current;
-    restoreRef.current = null;
+    if (isOpen) menuFocusToRestore = null;
+    const restore = pointerFocus.opened(isOpen);
+    if (isOpen) return;
+    const previous = restore?.previous;
     // Deferred by one task: a synchronous `focus()` here is overridden by react-aria moving focus to
     // the trigger as the menu closes. Its later restore on unmount only acts while focus has fallen to
     // <body>, so it leaves this alone.
@@ -78,49 +180,27 @@ export function ActionMenu({ label, items }: { label: string; items: ActionMenuI
 
   return (
     <div
-      className="shrink-0"
+      className={className}
       onClick={(e) => e.stopPropagation()}
-      onPointerDownCapture={(e) => {
-        // Only a press on the trigger itself: the popover's items bubble through here as well.
-        if (!e.currentTarget.contains(e.target as Node)) return;
-        const active = document.activeElement;
-        pressRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
-        // The press opens the menu during this gesture (on pointerdown for a mouse, on release for
-        // touch), before this timeout runs.
-        const listeners = new AbortController();
-        const end = () => {
-          listeners.abort();
-          setTimeout(() => (pressRef.current = null), 0);
-        };
-        window.addEventListener("pointerup", end, { signal: listeners.signal });
-        window.addEventListener("pointercancel", end, { signal: listeners.signal });
-      }}
+      onPointerDownCapture={pointerFocus.onPointerDownCapture}
     >
       <Dropdown onOpenChange={onOpenChange}>
         {/* `preventFocusOnPress` keeps a press from moving focus off whatever had it (typically
             the terminal); the menu itself takes focus once it opens. */}
-        <TitledControl title={label}>
+        <TitledControl title={tooltip === false ? undefined : (tooltip ?? t("common.moreActions"))}>
           <Dropdown.Trigger
             aria-label={label}
             preventFocusOnPress
-            className="inline-flex size-6 min-w-0 items-center justify-center rounded-md bg-transparent p-0 text-muted hover:bg-transparent hover:text-foreground aria-expanded:text-foreground"
+            className={
+              triggerClassName ??
+              "inline-flex size-6 min-w-0 items-center justify-center rounded-md p-0 text-muted hover:bg-default hover:text-foreground aria-expanded:bg-default aria-expanded:text-foreground"
+            }
           >
-            <Ellipsis aria-hidden="true" className="size-4" />
+            {trigger ?? <EllipsisVertical aria-hidden="true" className="size-4" />}
           </Dropdown.Trigger>
         </TitledControl>
-        <Dropdown.Popover>
-          <Dropdown.Menu onAction={(key) => items.find((item) => item.label === key)?.onClick()}>
-            {items.map((item) => (
-              <Dropdown.Item
-                key={item.label}
-                id={item.label}
-                textValue={item.label}
-                variant={item.destructive ? "danger" : "default"}
-              >
-                <Label>{item.label}</Label>
-              </Dropdown.Item>
-            ))}
-          </Dropdown.Menu>
+        <Dropdown.Popover className="min-w-48 max-w-72">
+          <MenuItems entries={items} label={label} />
         </Dropdown.Popover>
       </Dropdown>
     </div>

@@ -185,6 +185,11 @@ function reducer(state: State, action: Action): State {
             : state.trustPrompts.filter((p) => p.session !== event.session.id);
           return { ...state, sessions, trustPrompts };
         }
+        case "session_deleted": {
+          const sessions = new Map(state.sessions);
+          sessions.delete(event.session);
+          return { ...state, sessions };
+        }
         case "claude_trust_prompt": {
           if (state.trustPrompts.some((p) => p.session === event.session)) return state;
           // Nothing left to ask about a project that a trusted directory already covers.

@@ -10,18 +10,27 @@ HeroUI's own docs are the reference for how to use each. A hand-assembled stand-
 of the UI and lacks what HeroUI's carries: the toast stack built from `Alert` + `CloseButton` with its own timers and
 stacking had none of `Toast`'s pause on hover and focus, queueing or ARIA region semantics.
 
-- Style it through its own variants, slots and the theme tokens, not by overriding it into something else.
+- Style it through its own variants, slots and the theme tokens, not by overriding it into something else. An
+  override on a HeroUI component stays only for a colour fix accessibility needs or for layout and sizing (filling a
+  column, truncating); one that only changes its look to taste goes. So when asked to strip custom styling, sort each
+  override by that reason rather than removing them wholesale: dropping a sizing override with the look ones broke
+  the layout.
+- Give a compound component's layout classes to its parts themselves and never put an element of your own between
+  two parts: some of HeroUI's variant styles use direct-child selectors (`.tabs--secondary > .tabs__list-container`,
+  the `switch--sm` / `switch--lg` sizes), so a wrapper `div` silently switches the variant off.
 - The project's existing wrappers over a HeroUI component (`Dialog` over `Modal`, `ActionMenu` over `Dropdown`) are
-  that component; use the wrapper where one exists.
+  that component; use the wrapper where one exists. The same goes for the shared dialogs built on them: a
+  confirmation, including one where the user types a word to confirm a deletion, is `ConfirmDialog`
+  (`packages/ui/src/dialogs/ConfirmDialog.tsx`, its `typeToConfirm`), never a dialog of its own.
 - A hand-built element is acceptable only when HeroUI has no equivalent, or its equivalent cannot meet a stated
   requirement. Then build it on react-aria / react-aria-components hooks, as HeroUI itself is, not on bare DOM event
   handling, and put a comment at the component saying why HeroUI's is not used (a design-intent comment under the
   "Comment conventions" section of `.claude/skills/agent-docs/SKILL.md`).
 
-## Focus dropped to `<body>` cuts the terminal off: a HeroUI control's press, a hidden pane
+## Focus dropped to `<body>`: a HeroUI control's press, a hidden pane, a reordered list
 
-Clicking around the terminal must not move keyboard focus off it (see the "The console → project → session menu"
-section of `docs/product/sessions.md`). In `packages/ui` every pressable HeroUI 3 control (`Button`,
+Clicking around the terminal must not move keyboard focus off it (see the "Rows, names and keyboard focus" section of
+`docs/product/sidebar.md`). In `packages/ui` every pressable HeroUI 3 control (`Button`,
 `Dropdown.Trigger` and the rest, all built on react-aria's press handling) focuses itself when pressed with the
 mouse. For a control that unmounts right after the press, such as a list item's × or a toast's Dismiss, focus then
 falls to `<body>` and the terminal silently stops receiving keystrokes.
@@ -40,6 +49,11 @@ an iframe. So every code path that hides a region able to hold focus — a toggl
 — first hands focus to the terminal if the region contains `document.activeElement`. The docked panes already do this
 through `releaseFocus` in `packages/ui/src/layout/usePaneToggles.ts`; hide a new pane through that hook rather than
 beside it.
+
+Reordering does it too: React reorders keyed children by moving their DOM nodes, and moving the node that holds focus
+blurs it to `<body>`, so a keyboard user on a row loses their place whenever a live status update re-sorts the list.
+Render any list whose order can change while one of its rows may hold focus through `useFlip`
+(`packages/ui/src/sidebar/useFlip.ts`), which puts focus back after the move, rather than beside it.
 
 ## Inside a dialog, a focused control that unmounts takes Escape and Tab with it
 
@@ -64,10 +78,22 @@ Nothing on the way past catches it: `packages/ui` has no linter, and its tests (
 the only automated gate on a component, and a class whose utility was never emitted is valid TypeScript, builds clean and reads fine in a
 diff. After adding or changing a utility class, grep the built `packages/ui/dist/assets/*.css` for it.
 
+## Dim a region with a veil, not `opacity` on it
+
+In the app's WKWebView, `opacity` below 1 on an ancestor of anything that fades (an opacity transition, such as a
+row's hover controls) or sits on its own GPU layer (HeroUI's buttons are `transform-gpu`) makes WebKit paint those
+descendants as blank tiles, and patching the descendants one by one did not hold. To dim a region, lay a veil of the
+surface colour over it instead: an `after:` pseudo-element with `after:pointer-events-none after:absolute
+after:inset-0` and a translucent fill such as `bg-surface/55` on a `relative` container, as the sidebar's inactive
+projects in `packages/ui/src/sidebar/Sidebar.tsx` do.
+
 ## An icon-only control also gets a tooltip, through `TitledControl`
 
 Every control that shows only an icon — a HeroUI `Button` with `isIconOnly`, a `CloseButton` or `Modal.CloseTrigger`,
-a menu trigger — has a HeroUI tooltip in addition to its `aria-label`, the same text. Give it one by wrapping the
+a menu trigger — has a HeroUI tooltip in addition to its `aria-label`. The user wants tooltips short: the tooltip says
+what the control does ("More actions"), while the `aria-label` carries whatever tells it apart from its neighbours for
+assistive technology ("Actions for session <title>" on each row's menu), so the two differ wherever the accessible
+name needs that context; `ActionMenu` already does this by default. Give it one by wrapping the
 control in `TitledControl` from `packages/ui/src/components/TitledControl.tsx`, as the title bar's `BarButton` in
 `packages/ui/src/components/TitleBar.tsx` does. Passing `title` to the HeroUI control itself does nothing: its
 react-aria base filters `title` out of the DOM props without a warning.
@@ -118,7 +144,8 @@ build it in from the start:
 ## The UI meets WCAG 2.2 AA
 
 Every control and view in `packages/ui` meets WCAG 2.2 level AA, checked in both the light and the dark appearance.
-Concretely:
+The user has kept a few shortfalls on purpose, each marked by a comment at its code saying so; leave one that is
+marked as it is, and do not add a new exception without the user's say. Concretely:
 
 - **Keyboard**: every interactive control is reachable with Tab and operable with Enter / Space. `preventFocusOnPress`
   only keeps a *mouse* press from taking focus; the control still has to be a tab stop. Every button is HeroUI's
@@ -142,19 +169,23 @@ Concretely:
   their selection themselves with `aria-selected` and get no `aria-current` on top; state that changes without the
   user acting (connection, a terminal problem) is announced from a `role="status"` element, an error from
   `role="alert"`.
-- **Contrast**: text at least 4.5:1 against its background (3:1 for large text); an icon, a state indicator or a
-  boundary the user has to see at least 3:1 against what it sits on. HeroUI 3's default `--border`,
-  `--border-secondary` and `--border-tertiary` all fall short of 3:1 in both appearances (1.2:1 to 2.7:1): they are
-  for separators between content on one surface. A line that has to read as a boundary — a field, a checkbox, a
-  pressable surface — takes `--muted` (at least 4.6:1 light on every surface, 6.7:1 dark). `style.css` already
-  routes HeroUI's own field and checkbox borders through `--muted`, so a HeroUI form control needs nothing on top.
-  HeroUI's text colours are no safer: its stock light `--muted` (`text-muted`, its secondary text) reached 4.5:1 only
-  on the white surfaces and fell short on `--background` and `--default`, where its own components put it, so
-  `style.css` overrides the light value at the token level. Even so, the `Tabs` list dims a hovered tab to 70%
-  opacity, which brings it down to about 3:1. So measure each text and indicator colour a HeroUI component draws by
-  default against what it actually sits on, in both appearances, rather than assuming it passes, and fix a shortfall
-  with a utility class on that part (Tailwind's utilities layer overrides HeroUI's components layer without `!`), or
-  at the token in `style.css` when the token itself falls short. HeroUI's `--surface` equals its `--overlay` in both
+- **Contrast**: text at least 4.5:1 against its background (3:1 for large text); an icon or a state indicator at
+  least 3:1 against what it sits on, and a boundary too when it alone shows where a control is. Contrast is not a
+  reason to change how a HeroUI component looks: the user had the `style.css` overrides that gave every field and
+  checkbox a `--muted` border removed, because HeroUI's own are borderless, so never add a border, frame or outline
+  that HeroUI does not draw itself. A form control on a surface — in a dialog, a popover, a card — takes HeroUI's
+  `variant="secondary"` (`TextField`, `Input`, `Select`, `Checkbox` alike), HeroUI's own variant for that case: the
+  default variant leaves it blending into the surface in both appearances. A hand-built row or card that its content already identifies takes HeroUI's
+  separator colour for its outline (`border-separator`, as the focus-mode session cards do), even though that is
+  under 3:1; its selected state still has to reach 3:1 (`border-accent`).
+  HeroUI's text colours, on the other hand, do need checking: its stock light `--muted` (`text-muted`, its secondary
+  text) reached 4.5:1 only on the white surfaces and fell short on `--background` and `--default`, where its own
+  components put it, so `style.css` darkens the light value slightly at the token level. Even so, the `Tabs` list
+  dims a hovered tab to 70% opacity, which brings it down to about 3:1. So measure each text and indicator colour a
+  HeroUI component draws by default against what it actually sits on, in both appearances, rather than assuming it
+  passes, and fix a shortfall in that colour alone with a utility class on that part (Tailwind's utilities layer
+  overrides HeroUI's components layer without `!`), or at the token in `style.css` when the token itself falls
+  short. HeroUI's `--surface` equals its `--overlay` in both
   appearances, so a surface-filled component (`Alert`, `Card`) inside a dialog or popover is set apart only by its
   shadow, which does not show in the dark appearance; give it a fill of its own there (a tint such as
   `bg-warning/10 shadow-none`).

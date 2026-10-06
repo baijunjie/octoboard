@@ -1017,6 +1017,7 @@ mod tests {
             source: ProjectSource::Local,
             remote_url: None,
             claude_trust_consent: consent,
+            pinned: false,
         }
     }
 
@@ -1035,6 +1036,7 @@ mod tests {
             has_conversation: false,
             include_in_hub: false,
             config_dir: None,
+            pinned: false,
             started_at: 0,
             ended_at: None,
         }

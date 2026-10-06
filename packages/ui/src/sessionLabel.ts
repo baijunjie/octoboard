@@ -1,3 +1,4 @@
+import { AGENT_LABEL } from "./agents";
 import type { MessageKey, Translate } from "./i18n/catalog";
 import type { Console, Project, Session, SessionStatus } from "./protocol";
 
@@ -27,4 +28,14 @@ const STATUS_KEY = {
 
 export function statusLabel(t: Translate, status: SessionStatus): string {
   return t(STATUS_KEY[status]);
+}
+
+/** A session row's accessible name: the row is one button, so its icons are not announced, and
+ * the title, agent, status and pin all have to be in this. */
+export function sessionAriaLabel(t: Translate, session: Session): string {
+  return t(session.pinned ? "sidebar.session.ariaLabelPinned" : "sidebar.session.ariaLabel", {
+    title: session.title,
+    agent: AGENT_LABEL[session.agent],
+    status: statusLabel(t, session.status),
+  });
 }

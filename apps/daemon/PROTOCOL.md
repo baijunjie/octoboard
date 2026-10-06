@@ -47,12 +47,15 @@ the request id as if it were a record id.
 | `update_console` | `console`, `name?`, `hub_agent?`, `default_agent?`, `claude_config_dir?`, `codex_config_dir?`, `grok_config_dir?` | For each config directory independently: absent leaves it alone; an explicit `null` or a blank string clears it. A value is validated as in `create_console`. Only sessions opened afterwards take a changed value (see `Session.config_dir`) |
 | `delete_console` | `console` | Takes its projects and all their session records with it. Refused while any of them is still running |
 | `add_project` | `console_id`, `source` (`local`\|`parent`\|`github`), `path?`, `remote_url?`, `name?`, `default_agent?` | `local` associates one directory; `parent` associates every git repository directly beneath `path`; `github` clones `remote_url` into `path` (used as the parent directory) and associates the clone. A `path` must be absolute or start with `~/`, and is stored lexically normalised (`.` and `..` folded, no trailing slash); a relative one is refused, because the trusted directories compare project paths and a relative path means nothing to them |
-| `update_project` | `project`, `name?`, `default_agent?` | An absent `default_agent` leaves it alone; an explicit `null` clears it, so the project inherits the console's default again |
-| `delete_project` | `project` | Removes the association and the project's session records, archived ones included; never touches the directory. Refused while the project has live sessions |
+| `update_project` | `project`, `name?`, `default_agent?`, `pinned?` | An absent `default_agent` leaves it alone; an explicit `null` clears it, so the project inherits the console's default again. An absent `pinned` leaves the pin alone |
+| `delete_project` | `project`, `stop_sessions?` | Removes the association and the project's session records, archived ones included; never touches the directory. Refused with `project_has_running_sessions` while the project has live sessions, unless `stop_sessions` (absent means false) is true: the running ones are then ended first, exactly as `archive_session` ends one, and the project goes with them. A session being launched or resumed at that moment is not stoppable, so it refuses either way |
 | `list_dir` | `path` | Answered with `dir_listing` on the asking socket |
 | `open_session` | `console_id`, `project_id?`, `agent?`, `task?`, `title?`, `include_in_hub?` | Omit `project_id` for the console's hub session; a console has at most one that is not archived, so a second is refused with `hub_already_running` (`hub_already_starting` while one is still being launched). `agent` follows the priority in the "Which agent a session uses" section of `docs/product/sessions.md` when omitted. `include_in_hub` defaults to false: a session the user opens by hand stays outside the hub's orchestration and sends it no reports unless this is set |
 | `resume_session` | `session` | Relaunches an `interrupted` or `archived` session through the agent's own resume mechanism, re-injecting everything. Reopening an archived hub session while the console's hub is already running is refused with `hub_reopen_blocked` (`hub_already_starting` while a hub is being launched) |
 | `archive_session` | `session` | Ends the process and archives the session |
+| `delete_session` | `session` | Removes Octoboard's record of one archived session and broadcasts `session_deleted`. Refused with `session_not_archived` unless the session is archived. An archived session whose process is still ending can be deleted; one being resumed right now cannot. Only Octoboard's own record goes: the agent's transcript and the project's directory are never touched |
+| `delete_archived_sessions` | `console`, `project?` | With `project` (which must belong to `console`), deletes every archived session of that project; without it, every archived hub session of the console. Broadcasts `session_deleted` for each. A session that stopped being archived meanwhile (a resume got there first) is skipped, not an error |
+| `set_session_pinned` | `session`, `pinned` | Pins or unpins a session; broadcasts `session_upserted` |
 | `send_message` | `session`, `text` | Writes a message into a running session. Refused while the session is `waiting_user`: the message would be discarded and its trailing Enter would answer whatever dialog is up. The hub's own `send_message` tool holds such a message instead of refusing it — the user can be told to answer the prompt first, the hub cannot |
 | `rename_session` | `session`, `title` | — |
 | `list_pages` | `console` | The console's report panel pages, oldest first. Answered with `page_list` on the asking socket |
@@ -68,7 +71,7 @@ the request id as if it were a record id.
 | `snapshot` | `hosts`, `consoles`, `projects`, `sessions`, `trusted_directories` — sent once, unprompted, when a control socket connects |
 | `trusted_directories_updated` | `trusted_directories` — the whole list of trusted directory paths, sent when it changes |
 | `console_upserted` / `project_upserted` / `session_upserted` | `console` / `project` / `session` — the whole record, under that key |
-| `console_deleted` / `project_deleted` | `console` / `project` |
+| `console_deleted` / `project_deleted` / `session_deleted` | `console` / `project` / `session` — the id of the record that was removed |
 | `session_notice` | `session`, `code`, `params`, `message` — something about a session the user has to be told that no status field carries: an injected capability that will not apply, a setting of theirs Octoboard had to work around, a message Octoboard accepted and could not deliver. Broadcast when it is found, which may be at launch or at any point in the session's life; nothing stores it, so a client that connects later does not see it. See "Coded messages" |
 | `claude_trust_prompt` | `session`, `project`, `path`, `trust_dir` — a running Claude Code session of a project is at Claude Code's workspace-trust screen, which is asking whether `path` is trusted, and the project has no consent of its own (`claude_trust_consent`) and does not lie under any of `trusted_directories`. `trust_dir` is the directory `confirm_claude_trust` with `trust_parent_dir` would trust — the project's parent — or null when there is none to offer (it would be the filesystem root, the home directory or one containing it, the home directory cannot be determined, or `path` is not absolute); a client offers the button only when it is not null. Broadcast once per screen, when it is recognised in the session's terminal output. Each client is also sent one for every screen still waiting under the same condition, with the same fields, right after every `snapshot` (on connect and on lag recovery), so a client that missed the broadcast is still asked; a client already holding the prompt ignores the repeat. A client that declines ("Not now") drops the prompt locally, and a later `snapshot` may ask again. With no client connected the screen simply stays for the person to answer in the terminal. The client answers with `confirm_claude_trust`, or leaves the screen alone. A hub session's screen is answered by the daemon without a prompt, because its working directory is the console's own; a project session's is when it meets the condition above the other way round. A client whose queue holds prompts for projects under a directory that has just become trusted drops them |
 | `session_opened` | `id`, `session` — the reply to `open_session`, naming the session it started |
@@ -131,6 +134,7 @@ A client also branches on some codes, instead of only showing them:
 | `hub_reopen_blocked` | `session` | The console has another live hub (`session`), which has to be archived first |
 | `hub_already_starting` | `console` | The console's hub is being started already |
 | `hub_missing` | — | The console has no hub session to submit to |
+| `session_not_archived` | `session` | Only an archived session can be deleted (also: one being resumed right now cannot) |
 | `session_not_running` | `session` | A message or a go-ahead for a session with no running process |
 | `session_waiting_for_user` | `session` | The session waits at a prompt only the user can answer, so a message is refused |
 | `queued_messages_lost` | — | A message queued for a session could not be written in full, and it and what was behind it were dropped |
@@ -175,11 +179,11 @@ Host    { id, name, kind: "local"|"ssh", ssh_config? }
 Console { id, name, workdir, hub_agent, default_agent, claude_config_dir?, codex_config_dir?,
           grok_config_dir?, created_at }
 Project { id, console_id, host_id, name, path, default_agent?, source, remote_url?,
-          claude_trust_consent }
+          claude_trust_consent, pinned }
 Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
           role: "hub"|"worker", origin: "hub"|"user", title,
           status: "working"|"waiting_user"|"idle"|"interrupted"|"archived",
-          has_conversation, include_in_hub, config_dir?, started_at, ended_at? }
+          has_conversation, include_in_hub, config_dir?, pinned, started_at, ended_at? }
 Page    { id, console_id, html, anchor_message_id?, created_at }
 ```
 
@@ -197,6 +201,7 @@ directory pinned, which resume under whatever the shell exports at that moment. 
 longer exists is refused, for every agent, with an error naming it.
 `trusted_directories` is a list of absolute, lexically normalised directory paths (no symlink is resolved). A project is trusted when its path equals one or lies below one, compared component by component (`/a/Project` does not cover `/a/Project2`). They are added by `confirm_claude_trust` with `trust_parent_dir` and removed by `remove_trusted_directory`. The comparison looks at a project's path only, not at its `host_id`: there is one local host today, and a second would need its own set. A symlink is not followed when comparing, so a project reached through a link inside a trusted directory is trusted wherever the link points, and a project outside the directory is not, however it is linked from inside.
 `Project.claude_trust_consent` is true once the user has agreed, in the dialog a `claude_trust_prompt` opens, that Octoboard may answer Claude Code's trust screen for that project's directory. It is only ever set by `confirm_claude_trust` with `remember`; `update_project` neither sets nor clears it.
+`pinned` (on a project and on a session) is the user's pin, false until set: by `update_project` for a project and `set_session_pinned` for a session. It is only a flag for the client to order by; archiving and resuming leave it alone.
 `Page.anchor_message_id` is stored and never read (see "Data model" in `docs/architecture.md`). Timestamps are
 epoch milliseconds (the UI formats them).
 

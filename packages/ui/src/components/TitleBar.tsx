@@ -3,10 +3,10 @@ import {
   Bell,
   ChevronRight,
   Hand,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PanelRightClose,
-  PanelRightOpen,
+  PanelLeft,
+  PanelLeftDashed,
+  PanelRight,
+  PanelRightDashed,
   Plus,
   Settings,
 } from "lucide-react";
@@ -219,7 +219,16 @@ function Breadcrumb({ session }: { session: Session }): React.ReactElement {
   const consoleName = useDaemonStore((s) => s.consoles.get(session.console_id)?.name);
   const projectName = useDaemonStore((s) => (session.project_id ? s.projects.get(session.project_id)?.name : undefined));
   const trail = session.role === "hub" ? [consoleName, t("sidebar.hub.name")] : [consoleName, projectName, session.title];
-  const names = trail.map((part) => part ?? "…");
+  return (
+    <Trail names={trail.map((part) => part ?? "…")}>
+      <StatusIcon status={session.status} />
+    </Trail>
+  );
+}
+
+/** A trail of names, the last one emphasised; it fades at its end edge when too long, and what
+ * follows it (a status icon) always stays. */
+function Trail({ names, children }: { names: string[]; children?: React.ReactNode }): React.ReactElement {
   return (
     <div className="flex min-w-0 items-center gap-1.5 text-sm">
       <FadeOverflow className="min-w-0" titleWhenClipped={names.join(" › ")}>
@@ -234,7 +243,7 @@ function Breadcrumb({ session }: { session: Session }): React.ReactElement {
           ))}
         </span>
       </FadeOverflow>
-      <StatusIcon status={session.status} />
+      {children}
     </div>
   );
 }
@@ -253,6 +262,9 @@ interface TitleBarProps {
   onSidebarToggleLeave: () => void;
   onNewConsole: () => void;
   selectedSession?: Session;
+  /** What the content area shows instead of the selected session's terminal (the archive view),
+   * as the breadcrumb's names; it then takes the session's place in the bar. */
+  viewTrail?: string[];
   /** What is wrong with the selected session's terminal connection, if anything. */
   terminalProblem?: TerminalProblem;
   waitingCount: number;
@@ -285,6 +297,7 @@ export function TitleBar({
   onSidebarToggleLeave,
   onNewConsole,
   selectedSession,
+  viewTrail,
   terminalProblem,
   waitingCount,
   onNextWaiting,
@@ -316,9 +329,9 @@ export function TitleBar({
             onMouseHoverChange={(hovered) => (hovered ? onSidebarToggleEnter() : onSidebarToggleLeave())}
           >
             {sidebarShown ? (
-              <PanelLeftClose aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+              <PanelLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
             ) : (
-              <PanelLeftOpen aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+              <PanelLeftDashed aria-hidden="true" className="size-4 rtl:-scale-x-100" />
             )}
           </BarButton>
           <BarButton label={t("titleBar.newConsole")} onPress={onNewConsole}>
@@ -327,7 +340,7 @@ export function TitleBar({
         </div>
       </div>
       <div className="flex min-w-0 flex-1 items-center px-3">
-        {selectedSession && <Breadcrumb session={selectedSession} />}
+        {viewTrail ? <Trail names={viewTrail} /> : selectedSession && <Breadcrumb session={selectedSession} />}
       </div>
       <div className="flex shrink-0 items-center gap-1 px-2">
         {waitingCount > 0 && (
@@ -351,9 +364,9 @@ export function TitleBar({
             onMouseHoverChange={(hovered) => (hovered ? onReportToggleEnter() : onReportToggleLeave())}
           >
             {reportShown ? (
-              <PanelRightClose aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+              <PanelRight aria-hidden="true" className="size-4 rtl:-scale-x-100" />
             ) : (
-              <PanelRightOpen aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+              <PanelRightDashed aria-hidden="true" className="size-4 rtl:-scale-x-100" />
             )}
           </BarButton>
         )}

@@ -39,6 +39,10 @@ function keepModifiersFromArmingKeyDownSeen(term: Terminal): (event: KeyboardEve
   };
 }
 
+/** Turns off the mouse tracking (X10 to any-motion, and the SGR and urxvt encodings) and focus
+ * reporting an agent may have switched on, which xterm answers with input of its own. */
+const RESET_REPORTING_MODES = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?1015l";
+
 /** How long the terminal's size must hold still before `syncSize` reports it to the daemon. */
 const RESIZE_SETTLE_MS = 120;
 
@@ -46,6 +50,13 @@ export type TermStatus = "connecting" | "open" | "closed" | "not_running";
 
 export interface TerminalControllerHandlers {
   onStatusChange: (status: TermStatus) => void;
+  /** Whether the screen shows anything of the current session yet: false from a reset until the
+   * first output after it has been written and drawn. */
+  onPaintedChange?: (painted: boolean) => void;
+  /** The first input typed while armed for a session with no process (see `armWake`); resolves to
+   * whether the session was started. When it was not, the held input is dropped and the next
+   * input asks again. */
+  onWake?: (sessionId: string) => Promise<boolean>;
 }
 
 /**
@@ -80,9 +91,12 @@ export class TerminalController {
    * (see `detach`). */
   private screenSessionId?: string;
   private status: TermStatus = "closed";
+  private painted = false;
   /** Bumped on every `attach()`; a socket's event handlers no-op once their generation is stale. */
   private generation = 0;
   private pendingInput: Uint8Array[] = [];
+  /** The session whose process typing should start (an archived one on screen), if any. */
+  private wakeFor: string | undefined;
   /** The pending trailing send of `syncSize`, and the size the daemon was last told. */
   private resizeTimer?: ReturnType<typeof setTimeout>;
   private sentSize?: { cols: number; rows: number };
@@ -197,7 +211,10 @@ export class TerminalController {
     this.socket?.close();
     this.socket = undefined;
     this.sessionId = sessionId;
-    this.pendingInput = [];
+    // Input typed to wake this very session carries over into its connection; anything else held
+    // belonged to another session.
+    if (this.wakeFor !== sessionId) this.pendingInput = [];
+    this.wakeFor = undefined;
     // Reset unconditionally rather than appending the replay to what is already on screen: the
     // ring buffer always replays its full retained window from the start, not just what changed
     // since the drop, so appending would duplicate whatever overlaps. Losing scrollback older than
@@ -223,7 +240,18 @@ export class TerminalController {
     });
     socket.addEventListener("message", (ev) => {
       if (generation !== this.generation) return;
-      if (ev.data instanceof ArrayBuffer) this.term.write(new Uint8Array(ev.data));
+      if (!(ev.data instanceof ArrayBuffer)) return;
+      if (this.painted) {
+        this.term.write(new Uint8Array(ev.data));
+        return;
+      }
+      // The write callback fires once xterm has parsed the data; the frame after it is when the
+      // renderer has drawn it.
+      this.term.write(new Uint8Array(ev.data), () =>
+        requestAnimationFrame(() => {
+          if (generation === this.generation) this.setPainted(true);
+        }),
+      );
     });
     socket.addEventListener("close", () => {
       if (generation !== this.generation) return;
@@ -292,6 +320,7 @@ export class TerminalController {
    * that early anyway. */
   private resetScreen(): void {
     this.screenSessionId = undefined;
+    this.setPainted(false);
     if (!this.touchable) return;
     this.term.reset();
   }
@@ -311,12 +340,49 @@ export class TerminalController {
     this.fitAddon.fit();
   }
 
+  private setPainted(painted: boolean): void {
+    if (this.painted === painted) return;
+    this.painted = painted;
+    this.handlers.onPaintedChange?.(painted);
+  }
+
   private setStatus(status: TermStatus): void {
     this.status = status;
     this.handlers.onStatusChange(status);
   }
 
+  /** Makes the next input start `sessionId`'s process: it is held (`pendingInput`) and handed to
+   * the session once `attach` connects to it, and `onWake` is told once. Re-arming the same session
+   * keeps what is already held.
+   *
+   * The screen is kept, along with the modes the dead process left on it (mouse tracking, focus
+   * reports), under which xterm would answer a click or a focus change with a report that is not
+   * the user typing; so the modes are reset locally, without clearing the screen. */
+  armWake(sessionId: string): void {
+    if (this.wakeFor === sessionId) return;
+    this.wakeFor = sessionId;
+    this.pendingInput = [];
+    if (this.touchable) this.term.write(RESET_REPORTING_MODES);
+  }
+
+  disarmWake(): void {
+    this.wakeFor = undefined;
+  }
+
   private sendInput(data: Uint8Array): void {
+    if (!this.socket && this.wakeFor !== undefined) {
+      const first = this.pendingInput.length === 0;
+      this.pendingInput.push(data);
+      if (first) {
+        const sessionId = this.wakeFor;
+        void this.handlers.onWake?.(sessionId).then((started) => {
+          // Still waiting on this very session: forget what was typed, so the next input tries again
+          // instead of replaying stale keystrokes into whenever the session does start.
+          if (!started && this.wakeFor === sessionId && !this.socket) this.pendingInput = [];
+        });
+      }
+      return;
+    }
     if (this.socket?.readyState === WebSocket.OPEN) {
       this.socket.send(data);
     } else if (this.socket?.readyState === WebSocket.CONNECTING) {

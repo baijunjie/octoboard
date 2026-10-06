@@ -8,7 +8,7 @@ control on the right; under a right-to-left language the sides swap (see "Right-
 
 ## Moving between sections
 
-The list of sections is a vertical tab list, with the selected section highlighted. Opening Settings puts keyboard
+The list of sections is a vertical tab list, with the selected section marked. Opening Settings puts keyboard
 focus on the selected section's tab. Only that tab is reached with Tab: the arrow keys move to the previous or next
 section and show it at once, wrapping around at either end, and Tab from the list moves on into the section's
 settings. When a control holding keyboard focus disappears from a section — a trusted folder's Remove button, which
@@ -35,7 +35,8 @@ The settings that shape the whole window rather than one feature: an **Appearanc
 
 ### Appearance
 
-The Light / Dark / System choice for the window's appearance, as a three-way segmented control. What each option means,
+The Light / Dark / System choice for the window's appearance, as a three-way segmented control showing each option as
+an icon — a sun for Light, a moon for Dark, a monitor for System — named by its word. What each option means,
 which one is the default and where the choice is kept are in `docs/product/appearance.md`.
 
 ### Language

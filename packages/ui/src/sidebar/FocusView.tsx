@@ -1,0 +1,192 @@
+import { Button, ScrollShadow } from "@heroui/react";
+import { Archive, ArrowLeft, List, MessageSquarePlus, Pin, Plus, Radio } from "lucide-react";
+import React from "react";
+
+import { AGENT_LABEL } from "../agents";
+import { ActionMenu } from "../components/ActionMenu";
+import { AgentIcon } from "../components/AgentIcon";
+import { EmptyPanel } from "../components/EmptyPanel";
+import { StatusIcon } from "../components/StatusIcon";
+import { TitledControl } from "../components/TitledControl";
+import { useCurrentLanguage, useT } from "../i18n/react";
+import type { Console, Project, Session } from "../protocol";
+import { formatRelativeTime } from "../relativeTime";
+import { sessionAriaLabel, statusLabel } from "../sessionLabel";
+import { projectMenu, sessionMenu } from "./menus";
+import { archivedSessions, liveSessions } from "./order";
+import { RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
+import type { SidebarHandlers } from "./types";
+import { useFlip } from "./useFlip";
+
+/** How many archived sessions focus mode lists before "View all". */
+const ARCHIVE_PREVIEW = 10;
+
+/** A project's focus mode: the sidebar given over to one project, its sessions as cards and its
+ * recent archive below them ("Focus mode" in docs/product/sidebar.md). */
+export function FocusView({
+  handlers,
+  console: parentConsole,
+  project,
+  sessions,
+  selectedSessionId,
+}: {
+  handlers: SidebarHandlers;
+  console: Console;
+  project: Project;
+  sessions: Session[];
+  selectedSessionId?: string;
+}): React.ReactElement {
+  const t = useT();
+  const live = liveSessions(sessions);
+  const archived = archivedSessions(sessions);
+  const listRef = useFlip<HTMLDivElement>();
+  const openSession = () => handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project });
+  const viewAll = () => handlers.onOpenArchive({ console: project.console_id, project: project.id });
+
+  return (
+    <>
+      <div className="flex h-14 shrink-0 items-center gap-1 border-b border-separator px-2">
+        <TitledControl title={t("sidebar.focus.exit")}>
+          <Button
+            isIconOnly
+            size="sm"
+            variant="ghost"
+            aria-label={t("sidebar.focus.exit")}
+            data-focus-exit
+            preventFocusOnPress
+            onPress={() => handlers.onFocusProject(undefined)}
+          >
+            <ArrowLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+          </Button>
+        </TitledControl>
+        <div className="min-w-0 flex-1 px-1">
+          <div className="truncate text-xs text-muted" dir="auto">
+            {parentConsole.name}
+          </div>
+          <RowLabel title={project.name} className="block min-w-0">
+            <span className="text-sm font-semibold">{project.name}</span>
+          </RowLabel>
+        </div>
+        <RowIconButton icon={Plus} label={t("sidebar.project.openSession")} onPress={openSession} />
+        <ActionMenu
+          label={t("sidebar.project.actions", { name: project.name })}
+          items={projectMenu(t, handlers, project, archived, { inFocus: true })}
+        />
+      </div>
+      <ScrollShadow size={24} className="min-h-0 flex-1 px-2 pb-2">
+        <SectionHeading>{t("sidebar.focus.sessions", { count: live.length })}</SectionHeading>
+        {live.length === 0 ? (
+          <EmptyPanel
+            icon={MessageSquarePlus}
+            message={t("sidebar.noSessions")}
+            action={{ label: t("sidebar.project.openSession"), icon: Plus, onPress: openSession }}
+          />
+        ) : (
+          <div ref={listRef} className="relative flex flex-col gap-2">
+            {live.map((session) => (
+              <div key={session.id} data-flip={session.id}>
+                <SessionCard handlers={handlers} session={session} selected={session.id === selectedSessionId} />
+              </div>
+            ))}
+          </div>
+        )}
+        <SectionHeading>{t("sidebar.focus.archived", { count: archived.length })}</SectionHeading>
+        {archived.length === 0 ? (
+          <EmptyPanel compact icon={Archive} message={t("sidebar.archive.empty")} />
+        ) : (
+          <>
+            <div className="flex flex-col gap-0.5">
+              {archived.slice(0, ARCHIVE_PREVIEW).map((session) => (
+                <ArchivedRow key={session.id} handlers={handlers} session={session} selected={session.id === selectedSessionId} />
+              ))}
+            </div>
+            <Button size="sm" variant="ghost" fullWidth preventFocusOnPress onPress={viewAll} className="mt-1 justify-start font-normal text-muted hover:text-foreground">
+              <List aria-hidden="true" className="size-4" />
+              {t("sidebar.archive.viewAll", { count: archived.length })}
+            </Button>
+          </>
+        )}
+      </ScrollShadow>
+    </>
+  );
+}
+
+/** A session in focus mode: its status put into words, its agent, its title over two lines, and
+ * when it started. */
+function SessionCard({
+  handlers,
+  session,
+  selected,
+}: {
+  handlers: SidebarHandlers;
+  session: Session;
+  selected: boolean;
+}): React.ReactElement {
+  const t = useT();
+  const language = useCurrentLanguage();
+  return (
+    <TreeRow
+      ariaLabel={sessionAriaLabel(t, session)}
+      selected={selected}
+      onActivate={() => handlers.onSelectSession(session)}
+      className="min-h-8 flex-col gap-1.5 border border-separator bg-background p-3 data-selected:border-accent"
+    >
+      <div className="flex items-center gap-2">
+        <StatusIcon status={session.status} decorative />
+        <span className="text-xs font-medium text-muted">{statusLabel(t, session.status)}</span>
+        <span className="flex-1" />
+        {session.pinned && <Pin aria-hidden="true" className="size-3 shrink-0 text-muted" />}
+        <RowControls always>
+          <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session)} />
+        </RowControls>
+      </div>
+      <div dir="auto" className="line-clamp-2 text-sm font-medium break-words">
+        {session.title}
+      </div>
+      <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
+        <AgentIcon agent={session.agent} className="size-3.5" />
+        <span className="truncate">{AGENT_LABEL[session.agent]}</span>
+        <span aria-hidden="true">·</span>
+        <span className="shrink-0">{formatRelativeTime(language, session.started_at)}</span>
+        {session.include_in_hub && (
+          <>
+            <span aria-hidden="true">·</span>
+            <Radio aria-hidden="true" className="size-3 shrink-0" />
+            <span className="truncate">{t("sidebar.focus.reportsToHub")}</span>
+          </>
+        )}
+      </div>
+    </TreeRow>
+  );
+}
+
+function ArchivedRow({
+  handlers,
+  session,
+  selected,
+}: {
+  handlers: SidebarHandlers;
+  session: Session;
+  selected: boolean;
+}): React.ReactElement {
+  const t = useT();
+  const language = useCurrentLanguage();
+  return (
+    <TreeRow
+      ariaLabel={sessionAriaLabel(t, session)}
+      selected={selected}
+      onActivate={() => handlers.onSelectSession(session)}
+    >
+      <AgentIcon agent={session.agent} />
+      <RowLabel title={session.title}>
+        <span className="text-muted">{session.title}</span>
+      </RowLabel>
+      <span className="shrink-0 text-xs text-muted">
+        {formatRelativeTime(language, session.ended_at ?? session.started_at)}
+      </span>
+      <RowControls>
+        <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session)} />
+      </RowControls>
+    </TreeRow>
+  );
+}

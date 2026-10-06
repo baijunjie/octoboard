@@ -1,8 +1,8 @@
-import { Button } from "@heroui/react";
-import React from "react";
+import { Button, Input, Label, TextField } from "@heroui/react";
+import React, { useState } from "react";
 
 import { TitledControl } from "../components/TitledControl";
-import { useT } from "../i18n/react";
+import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
 
 interface ConfirmDialogProps {
@@ -19,6 +19,10 @@ interface ConfirmDialogProps {
    * the failure shown for the previous one. */
   resetKey?: string;
   size?: "sm" | "md" | "lg";
+  /** For an action that cannot be undone and loses a lot: the word the user has to type before
+   * Confirm is enabled, shown in capitals. What is typed shows in capitals too, and is compared
+   * ignoring case, so a script without case (Chinese) works unchanged. */
+  typeToConfirm?: string;
   /** May reject — the dialog shows the failure inline and stays open instead of closing, so the
    * caller does not need its own try/catch around the request. */
   onConfirm: () => Promise<void>;
@@ -34,11 +38,16 @@ export function ConfirmDialog({
   destructive,
   resetKey,
   size,
+  typeToConfirm,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps): React.ReactElement {
   const t = useT();
+  const language = useCurrentLanguage();
   const { error, busy, run } = useDialogAction(resetKey);
+  const [typed, setTyped] = useState("");
+  const word = typeToConfirm?.toLocaleUpperCase(language);
+  const confirmed = word === undefined || typed.trim().toLocaleUpperCase(language) === word;
 
   const footer = (
     <>
@@ -52,18 +61,34 @@ export function ConfirmDialog({
           </Button>
         </TitledControl>
       )}
-      <Button type="submit" variant={destructive ? "danger" : "primary"} isDisabled={busy}>
+      <Button type="submit" variant={destructive ? "danger" : "primary"} isDisabled={busy || !confirmed}>
         {confirmLabel ?? t("common.confirm")}
       </Button>
     </>
   );
 
   return (
-    <Dialog title={title} onClose={onCancel} footer={footer} resetKey={resetKey} size={size} onSubmit={() => void run(onConfirm)} alert>
+    <Dialog title={title} onClose={onCancel} footer={footer} resetKey={resetKey} size={size} onSubmit={() => confirmed && void run(onConfirm)} alert>
       {typeof message === "string" ? (
         <p className="text-sm">{message}</p>
       ) : (
         <div className="flex flex-col gap-3 text-sm text-foreground">{message}</div>
+      )}
+      {word !== undefined && (
+        <TextField
+          fullWidth
+          variant="secondary"
+          value={typed}
+          onChange={setTyped}
+          autoFocus
+        >
+          <Label>
+            <Message id="dialog.typeToConfirm.label" params={{ word: <strong className="font-semibold">{word}</strong> }} />
+          </Label>
+          {/* Capitals by styling rather than by rewriting the value: rewriting a controlled value
+              mid-composition breaks an input method's composition. */}
+          <Input className="uppercase" autoComplete="off" spellCheck={false} />
+        </TextField>
       )}
       <DialogError message={error} />
     </Dialog>

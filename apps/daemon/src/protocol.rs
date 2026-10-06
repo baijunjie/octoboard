@@ -126,6 +126,9 @@ pub struct Project {
     /// when they confirm the dialog the daemon asks them with; it covers every later Claude Code
     /// session in the project.
     pub claude_trust_consent: bool,
+    /// The user pinned this project to the top of its console's project list. Only the user's
+    /// `update_project` changes it.
+    pub pinned: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -156,6 +159,9 @@ pub struct Session {
     /// reaches a session that already exists. Unset for a session started with no directory
     /// pinned; such a session resumes under whatever the shell exports at that moment.
     pub config_dir: Option<String>,
+    /// The user pinned this session to the top of its list. Only `set_session_pinned` changes it,
+    /// and a pinned session stays pinned across archiving and resuming.
+    pub pinned: bool,
     pub started_at: i64,
     pub ended_at: Option<i64>,
 }
@@ -246,9 +252,15 @@ pub enum RequestBody {
         /// `None`, exactly as if the field had not been sent.
         #[serde(default, deserialize_with = "present_option")]
         default_agent: Option<Option<Agent>>,
+        /// Absent leaves the project's pin alone.
+        pinned: Option<bool>,
     },
     DeleteProject {
         project: String,
+        /// Ends the project's running sessions first, as `archive_session` does, instead of
+        /// refusing while there are any. Absent is false.
+        #[serde(default)]
+        stop_sessions: bool,
     },
     ListDir {
         path: String,
@@ -269,6 +281,21 @@ pub enum RequestBody {
     },
     ArchiveSession {
         session: String,
+    },
+    /// Removes Octoboard's record of one archived session; the agent's own transcript is never
+    /// touched.
+    DeleteSession {
+        session: String,
+    },
+    /// Removes every archived session of `project`, or, with no `project`, every archived hub
+    /// session of `console`.
+    DeleteArchivedSessions {
+        console: String,
+        project: Option<String>,
+    },
+    SetSessionPinned {
+        session: String,
+        pinned: bool,
     },
     SendMessage {
         session: String,
@@ -336,6 +363,9 @@ pub enum Event {
     },
     SessionUpserted {
         session: Session,
+    },
+    SessionDeleted {
+        session: String,
     },
     /// Something about a session the user has to be told, which no status field carries: an
     /// injected capability that will not apply, a setting of theirs Octoboard had to work around.
@@ -615,6 +645,8 @@ pub mod error_code {
     /// A session's pinned configuration directory has gone, which refuses the launch.
     pub const CONFIG_DIR_UNREACHABLE: &str = "config_dir_unreachable";
     pub const SESSION_NOT_RUNNING: &str = "session_not_running";
+    /// Only an archived session can be deleted.
+    pub const SESSION_NOT_ARCHIVED: &str = "session_not_archived";
     pub const SESSION_WAITING_FOR_USER: &str = "session_waiting_for_user";
     pub const QUEUED_MESSAGES_LOST: &str = "queued_messages_lost";
     pub const PAGE_NOT_CURRENT: &str = "page_not_current";
@@ -676,7 +708,7 @@ mod tests {
             (
                 r#"{"type":"delete_project","id":"request-1","project":"project-7"}"#,
                 |body| match body {
-                    RequestBody::DeleteProject { project } => Some(project),
+                    RequestBody::DeleteProject { project, .. } => Some(project),
                     _ => None,
                 },
             ),
@@ -691,6 +723,20 @@ mod tests {
                 r#"{"type":"archive_session","id":"request-1","session":"session-7"}"#,
                 |body| match body {
                     RequestBody::ArchiveSession { session } => Some(session),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"delete_session","id":"request-1","session":"session-7"}"#,
+                |body| match body {
+                    RequestBody::DeleteSession { session } => Some(session),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"set_session_pinned","id":"request-1","session":"session-7","pinned":true}"#,
+                |body| match body {
+                    RequestBody::SetSessionPinned { session, .. } => Some(session),
                     _ => None,
                 },
             ),

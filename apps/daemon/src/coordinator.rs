@@ -116,7 +116,7 @@ pub async fn handle(
             if state.has_live_sessions_where(|session| session.console_id == id)? {
                 return Err(CodedError::raised(
                     error_code::CONSOLE_HAS_RUNNING_SESSIONS,
-                    "this console still has running sessions; archive them first",
+                    "this console still has running or starting sessions; archive the running ones, or wait for the starting ones to finish",
                     &[],
                 ));
             }
@@ -157,6 +157,7 @@ pub async fn handle(
             project: id,
             name,
             default_agent,
+            pinned,
         } => {
             let mut project = state
                 .store
@@ -171,24 +172,48 @@ pub async fn handle(
             if let Some(default_agent) = default_agent {
                 project.default_agent = default_agent;
             }
+            if let Some(pinned) = pinned {
+                project.pinned = pinned;
+            }
             state.store.update_project(&project)?;
             state.broadcast(Event::ProjectUpserted { project });
             Ok(None)
         }
 
-        RequestBody::DeleteProject { project: id } => {
+        RequestBody::DeleteProject {
+            project: id,
+            stop_sessions,
+        } => {
             state
                 .store
                 .get_project(&id)?
                 .ok_or_else(|| CodedError::unknown_project(&id))?;
-            if state
-                .has_live_sessions_where(|session| session.project_id.as_deref() == Some(&id))?
-            {
+            let in_project = |session: &Session| session.project_id.as_deref() == Some(&id);
+            // A session still being launched has no process to stop, so it refuses either way.
+            let refused = if stop_sessions {
+                state.has_launching_sessions_where(in_project)?
+            } else {
+                state.has_live_sessions_where(in_project)?
+            };
+            if refused {
                 return Err(CodedError::raised(
                     error_code::PROJECT_HAS_RUNNING_SESSIONS,
-                    "this project still has running sessions; archive them first",
+                    "this project still has running or starting sessions; archive the running ones, or wait for the starting ones to finish",
                     &[],
                 ));
+            }
+            if stop_sessions {
+                // Archived the way the user's own archive request does it; a process still
+                // exiting when its rows are gone is tolerated by `watch_exit` and the hook paths.
+                for live in state.live_sessions() {
+                    if state
+                        .store
+                        .get_session(&live.id)?
+                        .is_some_and(|s| in_project(&s))
+                    {
+                        archive_session(state, &live.id)?;
+                    }
+                }
             }
             // Only the association goes away. The directory is the user's.
             state.store.delete_project(&id)?;
@@ -240,6 +265,25 @@ pub async fn handle(
 
         RequestBody::ArchiveSession { session } => {
             archive_session(state, &session)?;
+            Ok(None)
+        }
+
+        RequestBody::DeleteSession { session } => {
+            delete_session(state, &session)?;
+            Ok(None)
+        }
+
+        RequestBody::DeleteArchivedSessions { console, project } => {
+            delete_archived_sessions(state, &console, project.as_deref())?;
+            Ok(None)
+        }
+
+        RequestBody::SetSessionPinned {
+            session: id,
+            pinned,
+        } => {
+            state.store.set_session_pinned(&id, pinned)?;
+            state.publish_session(&state.session_record(&id)?);
             Ok(None)
         }
 
@@ -396,6 +440,7 @@ pub async fn add_project(
             source,
             remote_url: remote_url.clone(),
             claude_trust_consent: false,
+            pinned: false,
         };
         state.store.insert_project(&project)?;
         state.broadcast(Event::ProjectUpserted {
@@ -514,6 +559,7 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         config_dir: session_config_dir(agent, &console),
         // A hub session is the recipient of reports, never a sender of them.
         include_in_hub: role == Role::Worker && (origin == Origin::Hub || include_in_hub),
+        pinned: false,
         started_at: now_millis(),
         ended_at: None,
     };
@@ -547,9 +593,10 @@ pub async fn resume_session(
     id: &str,
     instruction: Option<&str>,
 ) -> Result<()> {
-    let mut session = state.session_record(id)?;
-    // Claimed before anything else, so two overlapping relaunches cannot both get through.
+    // Claimed before anything else, so two overlapping relaunches cannot both get through, and
+    // before the record is read, so a delete cannot slip in between reading and launching.
     let claim = state.begin_launch(id)?;
+    let mut session = state.session_record(id)?;
     if !session.status.is_dormant() {
         // The ordinary cause is a second click landing after the first relaunch already moved the
         // session, so it carries the same code as a launch that is already under way.
@@ -679,6 +726,55 @@ pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<()> {
     if let Some(live) = state.live_session(id) {
         // Ending the process waits out the graceful period, which the caller should not.
         tokio::task::spawn_blocking(move || live.terminate());
+    }
+    Ok(())
+}
+
+/// Removes Octoboard's record of one archived session. Nothing else of Octoboard's hangs off a
+/// session: its queue, MCP token and turn bookkeeping go when its process does, and so does its
+/// scratch directory (clearing the run directory at startup is only the fallback). The agent's own
+/// transcript and the project are never touched.
+fn delete_session(state: &Arc<AppState>, id: &str) -> Result<()> {
+    state.session_record(id)?;
+    if !state.delete_if_archived(id)? {
+        return Err(CodedError::raised(
+            error_code::SESSION_NOT_ARCHIVED,
+            "only an archived session can be deleted",
+            &[("session", id)],
+        ));
+    }
+    Ok(())
+}
+
+/// Deletes every archived session of `project`, or with no project every archived hub session of
+/// `console`. One that stopped being archived meanwhile (a resume got there first) is skipped.
+fn delete_archived_sessions(
+    state: &Arc<AppState>,
+    console_id: &str,
+    project_id: Option<&str>,
+) -> Result<()> {
+    state
+        .store
+        .get_console(console_id)?
+        .ok_or_else(|| CodedError::unknown_console(console_id))?;
+    if let Some(project_id) = project_id {
+        let project = state
+            .store
+            .get_project(project_id)?
+            .ok_or_else(|| CodedError::unknown_project(project_id))?;
+        if project.console_id != console_id {
+            return Err(CodedError::unknown_project(project_id));
+        }
+    }
+    for session in state.store.list_sessions()? {
+        let in_scope = session.console_id == console_id
+            && match project_id {
+                Some(project_id) => session.project_id.as_deref() == Some(project_id),
+                None => session.role == Role::Hub,
+            };
+        if in_scope {
+            state.delete_if_archived(&session.id)?;
+        }
     }
     Ok(())
 }
@@ -883,6 +979,169 @@ mod tests {
         assert!(normalize(Some(&file.to_string_lossy())).is_err());
 
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Only an archived session can be deleted, and the bulk delete takes exactly its scope: a
+    /// project's archived sessions, or with no project the console's own archived hubs.
+    #[test]
+    fn deleting_sessions_is_limited_to_archived_ones_in_scope() {
+        let state = Arc::new(crate::state::tests::app_state("delete-sessions"));
+        let dir = temp_dir("delete-sessions");
+        for id in ["console-1", "console-2"] {
+            let mut other = console(Agent::Claude, &dir);
+            other.id = id.to_string();
+            state.store.insert_console(&other).unwrap();
+        }
+        state
+            .store
+            .insert_project(&Project {
+                id: "project-1".to_string(),
+                console_id: "console-1".to_string(),
+                host_id: LOCAL_HOST_ID.to_string(),
+                name: "Project".to_string(),
+                path: "/tmp/project-1".to_string(),
+                default_agent: None,
+                source: ProjectSource::Local,
+                remote_url: None,
+                claude_trust_consent: false,
+                pinned: false,
+            })
+            .unwrap();
+        let add = |id: &str, console: &str, role: Role, project: Option<&str>, status| {
+            state
+                .store
+                .insert_session(&Session {
+                    id: id.to_string(),
+                    agent: Agent::Claude,
+                    agent_session_id: None,
+                    console_id: console.to_string(),
+                    project_id: project.map(str::to_string),
+                    host_id: LOCAL_HOST_ID.to_string(),
+                    role,
+                    origin: Origin::User,
+                    title: id.to_string(),
+                    status,
+                    has_conversation: false,
+                    include_in_hub: false,
+                    config_dir: None,
+                    pinned: false,
+                    started_at: 0,
+                    ended_at: None,
+                })
+                .unwrap();
+        };
+        let archived = SessionStatus::Archived;
+        add(
+            "worker-archived",
+            "console-1",
+            Role::Worker,
+            Some("project-1"),
+            archived,
+        );
+        add(
+            "worker-idle",
+            "console-1",
+            Role::Worker,
+            Some("project-1"),
+            SessionStatus::Idle,
+        );
+        add("hub-archived", "console-1", Role::Hub, None, archived);
+        add("other-hub-archived", "console-2", Role::Hub, None, archived);
+        let remaining = || -> Vec<String> {
+            let mut ids: Vec<String> = state
+                .store
+                .list_sessions()
+                .unwrap()
+                .into_iter()
+                .map(|session| session.id)
+                .collect();
+            ids.sort();
+            ids
+        };
+
+        // A resume in flight holds the session's launch claim, which keeps it from being deleted.
+        let claim = state.begin_launch("worker-archived").unwrap();
+        assert!(!state.delete_if_archived("worker-archived").unwrap());
+        drop(claim);
+
+        let refused = delete_session(&state, "worker-idle").expect_err("not archived");
+        let coded = refused.downcast_ref::<CodedError>().expect("a coded error");
+        assert_eq!(coded.code, error_code::SESSION_NOT_ARCHIVED);
+
+        delete_archived_sessions(&state, "console-1", Some("project-1")).unwrap();
+        assert_eq!(
+            remaining(),
+            ["hub-archived", "other-hub-archived", "worker-idle"]
+        );
+
+        delete_archived_sessions(&state, "console-1", None).unwrap();
+        assert_eq!(remaining(), ["other-hub-archived", "worker-idle"]);
+
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    /// A project's deletion can be told to stop its sessions, but never goes ahead under a session
+    /// that is being launched; with nothing in flight it removes the project and its sessions.
+    #[tokio::test]
+    async fn deleting_a_project_with_stop_sessions_refuses_a_launch_in_flight() {
+        let state = Arc::new(crate::state::tests::app_state("delete-project-stop"));
+        let dir = temp_dir("delete-project-stop");
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &dir))
+            .unwrap();
+        state
+            .store
+            .insert_project(&Project {
+                id: "project-1".to_string(),
+                console_id: "console-1".to_string(),
+                host_id: LOCAL_HOST_ID.to_string(),
+                name: "Project".to_string(),
+                path: "/tmp/project-1".to_string(),
+                default_agent: None,
+                source: ProjectSource::Local,
+                remote_url: None,
+                claude_trust_consent: false,
+                pinned: false,
+            })
+            .unwrap();
+        state
+            .store
+            .insert_session(&Session {
+                id: "worker".to_string(),
+                agent: Agent::Claude,
+                agent_session_id: None,
+                console_id: "console-1".to_string(),
+                project_id: Some("project-1".to_string()),
+                host_id: LOCAL_HOST_ID.to_string(),
+                role: Role::Worker,
+                origin: Origin::User,
+                title: "Worker".to_string(),
+                status: SessionStatus::Archived,
+                has_conversation: false,
+                include_in_hub: false,
+                config_dir: None,
+                pinned: false,
+                started_at: 0,
+                ended_at: None,
+            })
+            .unwrap();
+        let delete = || RequestBody::DeleteProject {
+            project: "project-1".to_string(),
+            stop_sessions: true,
+        };
+
+        let claim = state.begin_launch("worker").unwrap();
+        let refused = handle(&state, None, delete()).await.expect_err("launching");
+        let coded = refused.downcast_ref::<CodedError>().expect("a coded error");
+        assert_eq!(coded.code, error_code::PROJECT_HAS_RUNNING_SESSIONS);
+        drop(claim);
+
+        handle(&state, None, delete()).await.unwrap();
+        assert!(state.store.get_project("project-1").unwrap().is_none());
+        assert!(state.store.get_session("worker").unwrap().is_none());
+
+        std::fs::remove_dir_all(dir).ok();
     }
 
     /// `~` is the home directory of the host the daemon runs on, like every other path it takes.

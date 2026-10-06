@@ -386,6 +386,7 @@ mod tests {
             has_conversation: true,
             include_in_hub: true,
             config_dir: None,
+            pinned: false,
             started_at: 0,
             ended_at: None,
         }

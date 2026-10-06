@@ -94,8 +94,14 @@ stored directory has since disappeared.
 
 ### Deleting a console
 
-Deleting a console is **refused while any of its sessions still has a running process** — those must be archived (or
-the application restarted, which interrupts them) first. The error names the reason.
+Deleting a console asks for confirmation, and the Delete button stays disabled until the word for "delete" in the
+current language — "DELETE" in English, and in any language not yet translated (see "What is translated so far" in
+`docs/product/language.md`), "删除" in Simplified Chinese — has been typed into the confirmation's field. What is typed
+is shown in capitals and compared ignoring case and surrounding spaces.
+
+Deleting a console is **refused while any of its sessions still has a running process**, or is being launched or
+resumed at that moment — those must be archived (or the application restarted, which interrupts them) first. The
+error names the reason.
 
 When it goes through, deleting a console also deletes every project association under it, every session record
 belonging to it, archived sessions included, and every page its hub pushed to the report panel, and removes the
@@ -103,8 +109,9 @@ console's own working directory under `~/.octoboard`. No project directory is to
 
 ## Projects
 
-A project carries a name, the directory it points at, an optional default agent, how it was associated, and — for a
-GitHub association — the remote URL it was cloned from. Every project is bound to a host (see "Hosts" below).
+A project carries a name, the directory it points at, an optional default agent, how it was associated, the remote
+URL it was cloned from (for a GitHub association), and whether the user has pinned it (see "Order of projects and
+sessions" in `docs/product/sidebar.md`). Every project is bound to a host (see "Hosts" below).
 
 A project also carries whether the user has agreed that Octoboard may answer Claude Code's workspace-trust prompt for
 its directory. A project starts without that consent, including one the hub associates; it is given only by "Trust and
@@ -162,8 +169,10 @@ session is in "Which agent a session uses" in `docs/product/sessions.md`.
 
 ### Editing a project
 
-Only the name and the default agent can be changed. The association itself — the source, the directory, the remote
-URL — is fixed once the project exists; a project that should point somewhere else is removed and associated again.
+Only the name and the default agent can be changed, besides pinning and unpinning the project. The name is changed from
+the project's Rename or Project settings, the default agent from Project settings (see "Project rows" in
+`docs/product/sidebar.md`). The association itself — the source, the directory, the remote URL — is fixed once the
+project exists; a project that should point somewhere else is removed and associated again.
 
 The name cannot be cleared: saving an empty name is rejected. The default agent can be cleared, which puts the project
 back to inheriting the console's default.
@@ -173,7 +182,18 @@ back to inheriting the console's default.
 Removing a project **never touches the directory or anything in it**. It removes the association, and with it the
 records of that project's sessions, archived ones included.
 
-It is refused while any session of that project still has a running process.
+Removing a project asks for confirmation. **Sessions of the project that are still running do not block it**:
+
+- With none running, the confirmation offers **Remove**.
+- With some running, the confirmation lists them — each with its status glyph, its agent's icon and its title, in the
+  sidebar's order (see "Order of projects and sessions" in `docs/product/sidebar.md`) — under a warning that that
+  many sessions are still running and will be ended, and its button reads **End and remove**. The list follows
+  sessions starting or stopping while the confirmation is open. Confirming ends each running session's process the way
+  archiving does (see "Archiving, interruption and resuming" in `docs/product/sessions.md`), then removes the project
+  with all its sessions.
+
+Removal is refused only while a session of the project is being launched or resumed at that moment, since that
+session has no process yet that could be ended; the error names the reason, and nothing is ended or removed.
 
 ## Browsing directories
 

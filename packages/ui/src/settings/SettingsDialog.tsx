@@ -17,8 +17,8 @@ const SECTIONS: { id: string; label: PlainMessageKey; Icon: LucideIcon; Content:
 ];
 
 /**
- * The settings: a large modal over the whole window, vertical tabs for the sections on the start side and
- * the selected one beside it. It is a plain modal, so everything under it, the terminal
+ * The settings: a large modal over the whole window, the sections as vertical tabs on the start
+ * side and the selected one beside it. It is a plain modal, so everything under it, the terminal
  * included, stays mounted and sized. Escape, the close button and a click on the backdrop call
  * `onClose`; opening moves focus to the selected section's entry (also where a section's
  * `useSectionRefocus` sends it back to), and `useSettingsDialog` puts it back on the terminal when
@@ -40,6 +40,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.Reac
     }
   }, []);
 
+  // Where a section that loses focus (see `useSectionRefocus`) sends it back: the selected tab.
   const focusTarget = useCallback(() => selectedRef.current, []);
 
   return (
@@ -56,27 +57,32 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.Reac
             orientation="vertical"
             selectedKey={sectionId}
             onSelectionChange={(key) => setSectionId(String(key))}
-            className="min-w-0 flex-1 gap-0"
+            className="min-w-0 flex-1"
           >
-            <div className="flex w-52 shrink-0 flex-col gap-1 border-e border-separator p-3">
-              <div className="px-5 pb-1 text-xs font-medium text-muted">{t("settings.title")}</div>
-              {/* A sidebar list rather than HeroUI's segmented control: no list background, rows as
-                  wide as the column, the selected one a flat fill. HeroUI dims a hovered tab to
-                  70%, which takes its muted label below 4.5:1, so the hover darkens it instead. */}
-              <Tabs.ListContainer className="rounded-none bg-transparent">
-                <Tabs.List aria-label={t("settings.sections")} className="flex w-full">
-                  {SECTIONS.map(({ id, label, Icon }) => (
-                    <Tabs.Tab key={id} id={id} className="justify-start gap-2 rounded-lg text-start hover:text-foreground hover:opacity-100" ref={id === sectionId ? attachSelected : undefined}>
-                      <Icon aria-hidden="true" className="size-4 shrink-0" />
-                      {t(label)}
-                      <Tabs.Indicator className="rounded-lg bg-default shadow-none dark:bg-segment" />
-                    </Tabs.Tab>
-                  ))}
-                </Tabs.List>
-              </Tabs.ListContainer>
-            </div>
+            {/* A direct child of `Tabs`, as HeroUI's styling of it expects; it is the section column
+                itself, with no rule between it and the section. */}
+            <Tabs.ListContainer className="my-6 ms-4 w-48 shrink-0 self-start">
+              {/* HeroUI sizes a vertical list to its widest tab; it fills the column here, and its
+                  tabs read from the start like any list of names rather than centred. */}
+              <Tabs.List aria-label={t("settings.sections")} className="w-full">
+                {SECTIONS.map(({ id, label, Icon }) => (
+                  // HeroUI dims a hovered tab to 70%, which takes its muted label under WCAG AA's
+                  // 4.5:1; the hover darkens it instead.
+                  <Tabs.Tab
+                    key={id}
+                    id={id}
+                    className="justify-start gap-2 hover:text-foreground hover:opacity-100"
+                    ref={id === sectionId ? attachSelected : undefined}
+                  >
+                    <Icon aria-hidden="true" className="size-4 shrink-0" />
+                    {t(label)}
+                    <Tabs.Indicator />
+                  </Tabs.Tab>
+                ))}
+              </Tabs.List>
+            </Tabs.ListContainer>
             {SECTIONS.map(({ id, label, Content }) => (
-              <Tabs.Panel key={id} id={id} className="ms-0 min-w-0 flex-1 overflow-y-auto px-8 py-6">
+              <Tabs.Panel key={id} id={id} className="min-w-0 flex-1 overflow-y-auto px-8 py-6">
                 <h2 className="pb-2 text-xl font-semibold">{t(label)}</h2>
                 <SettingsFocusContext.Provider value={focusTarget}>
                   <Content />

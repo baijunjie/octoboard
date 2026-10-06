@@ -1,0 +1,249 @@
+# Sidebar
+
+The sidebar is the window's left-hand pane (its width, hiding it and the drawer it becomes in a narrow window are in
+`docs/product/window-layout.md`). It shows **one console at a time**: a switcher naming that console at its top, then
+the console's Hub row, then its projects with their sessions. A project's **focus mode** gives the whole sidebar over
+to that one project, and a project's or a console's full archive opens in the **archive view**, over the terminal.
+What consoles, projects and sessions are is in `docs/product/consoles-and-projects.md` and
+`docs/product/sessions.md`.
+
+Archived sessions are never listed among a project's sessions. They are reached through the project's "View archive"
+submenu, through focus mode, and through the archive view; archived hubs through the Hub row's "Archived hubs" submenu
+and the archive view.
+
+## The console switcher
+
+The top of the sidebar names the console being shown. Pressing it opens a list of every console, in the order they
+were created, with the shown one checked, followed by **New console**, which opens the same dialog as the top bar's
+New console button (see "The top bar" in `docs/product/window-layout.md`). Choosing a console shows it instead, its
+view fading in (see "Focus mode" below for how the sidebar's view changes are animated). A
+console created from this window, by either button, is shown as soon as it appears; one created from another client is
+only added to the list.
+
+Every console in the list carries a marker of what is going on in it, taken from all its sessions, the hub included:
+
+| Marker | Shown when |
+|---|---|
+| A waving hand | at least one session is waiting for the user |
+| The *working* glyph | otherwise, at least one session is working |
+| A green speech bubble | otherwise, at least one session is running and awaiting instructions |
+| none | no session has a running process |
+
+The switcher itself carries the waving hand while a session in **another** console is waiting for the user, so a
+raised hand elsewhere is not hidden behind the console being shown.
+
+Beside the switcher is the shown console's action menu: **Add project**, **Edit console** and **Delete console** (see
+"Associating a project", "Editing a console" and "Deleting a console" in `docs/product/consoles-and-projects.md`;
+deleting asks for a typed confirmation first).
+
+**Which console is shown is remembered per client**, in that client's own browser storage, as the panes' widths are
+(see "Resizing the sidebar and the report panel" in `docs/product/window-layout.md`). A remembered console that no
+longer exists falls back to the first console. Selecting a session anywhere switches the sidebar to that session's
+console (see "Selecting a session" below).
+
+With no console at all, the sidebar shows a message saying so and a **New console** button.
+
+## The Hub row and the project list
+
+Under the switcher comes the console's **Hub row**. What it holds, what clicking it does and what its menu offers are
+in "Hub sessions and project sessions" in `docs/product/sessions.md`. It shows the hub's status glyph, the icon of the
+hub's agent and the label "Hub"; while it holds no hub it shows a start glyph and a hint that clicking it starts one.
+Its "Archived hubs" submenu works like a project's "View archive" submenu (see "Project rows" below). Should the
+console ever have more than one hub that is not archived, the ones not in the Hub row are listed directly below it as
+session rows.
+
+Below it, a **Projects** heading and the console's projects (see "Order of projects
+and sessions" below). With no project, a message saying the console has none yet and an **Add project** button take
+their place.
+
+### Filtering the project list
+
+While the console has projects, a magnifier button, **Filter projects**, sits at the end of the Projects heading. It
+opens a small popover with a search field, and what is typed filters the project list as it is typed: a project stays
+listed when its name contains the keyword, ignoring case and the keyword's surrounding spaces. Enter or `Escape`
+closes the popover and keeps the keyword. Opening and closing it with the mouse leaves keyboard focus where it was.
+
+- While a keyword is in force it shows as a tag right after the "Projects" label, and a **Clear filter** button
+  appears just before the magnifier at the heading's end. That button clears the keyword, and so does the search
+  field's own clear button.
+- The filtered list keeps the order and the dimming of "Order of projects and sessions" below.
+- With no project matching, a single line says so; the heading's Clear filter button clears the keyword.
+- Each console has its own keyword: switching to another console shows that console's own, and switching back, or
+  entering and leaving focus mode, keeps it. Keywords are not stored, so reloading the window shows every list
+  unfiltered.
+
+## Project rows
+
+A project row shows the project's name, a pin glyph when the project is pinned, and a chevron after the name. Clicking
+the row, or Enter or Space on it, collapses or expands it. Projects start expanded; whether one is collapsed is kept
+per window and is not stored. The chevron always shows while the project is collapsed, and only while the row is
+hovered or focused while it is expanded.
+
+A collapsed project shows the same activity marker as the console switcher's list (see "The console switcher" above),
+taken from its sessions that are not archived, so a waiting session can be found with its project collapsed.
+
+At the row's end are a **+** button, **New session**, which opens the new-session dialog for that project (see
+"Opening a session" in `docs/product/sessions.md`), and the project's action menu:
+
+- **Pin** / **Unpin** — see "Order of projects and sessions" below.
+- **Rename** — a dialog with the name alone; an empty name is rejected.
+- **Project settings** — the project dialog, see "Editing a project" in `docs/product/consoles-and-projects.md`.
+- **Focus mode** — see "Focus mode" below.
+- **View archive** — a submenu of the project's newest five archived sessions (most recently archived first), each
+  with its agent's icon and its title; choosing one selects it (see "Selecting a session" below). After them, **View all (n)**, with the number of
+  archived sessions, opens the archive view. A project with no archived session shows only a disabled item saying
+  so.
+- **Remove project** — see "Removing a project" in `docs/product/consoles-and-projects.md`; it asks for confirmation
+  first.
+
+An expanded project lists its sessions that are not archived as session rows. With none, it shows a single line
+saying there are no sessions yet, with a **+** button that opens a new session.
+
+## Session rows
+
+A session row shows the session's status glyph (see "Session statuses" in `docs/product/sessions.md`), its agent's
+icon, its title, and a pin glyph when it is pinned. Selecting it resumes it when it is interrupted; no menu item does
+that. Its action menu offers:
+
+- **Pin** / **Unpin**.
+- **Rename** — see "Renaming a session" in `docs/product/sessions.md`.
+- **Archive** — it asks for confirmation, then archives the session (see "Archiving, interruption and resuming" in
+  `docs/product/sessions.md`).
+
+## Rows, names and keyboard focus
+
+- A name too long for its row fades out where it ends — the row's right edge, its left under a right-to-left
+  language — rather than ending in an ellipsis, the full name is then the row's tooltip, and pointing anywhere on the
+  row runs the name as a marquee (see "Names too long for their space" in `docs/product/window-layout.md`). When the
+  sidebar's content is taller than the sidebar it scrolls, and fades out at whichever end has more of it beyond.
+- A row's **+** and action-menu buttons show while the row is hovered, holds keyboard focus, is the selected session,
+  or has its menu open; they are still reached with Tab when hidden, and show once one of them has focus.
+- Clicking a row deliberately does not move keyboard focus away from the terminal; a row reached with Tab can be
+  activated with Enter or Space.
+- Each row tells assistive technology what its icons show: a session row its title, agent (Claude Code, Codex or Grok
+  Build), status and whether it is pinned; the Hub row the hub's agent and status; a project row whether it is pinned
+  and, while it carries an activity marker, what that marker means. A project row also tells it whether it is
+  expanded or collapsed.
+
+## Order of projects and sessions
+
+**Projects** are listed:
+
+1. pinned projects first;
+2. then a project with a session waiting for the user;
+3. then a project with a session working;
+4. then a project with a session running and awaiting instructions;
+5. then the **inactive** projects — those with no session whose process is running;
+6. within each of those, by name, case-insensitively and in natural order, so that "item 2" comes before "item 10".
+
+Each rule applies only among projects the rules before it leave tied, so pinned projects come first whatever their
+sessions are doing, and the unpinned inactive projects end the list.
+
+Inactive projects, pinned ones included, are drawn dimmed, as one group. Pointing at any of them, keyboard focus inside
+one, or an open menu in one brings the whole group back to full strength while it lasts.
+
+**Sessions** within a project are listed, by the same scheme:
+
+1. pinned sessions first;
+2. then by status: waiting for the user, working, awaiting instructions, interrupted;
+3. then the most recently started first.
+
+The order follows status changes as they happen. A row that moves slides to its new place over about a quarter of a
+second, and moves at once where the system asks for reduced motion. The top bar's waiting count walks waiting sessions
+in this same order (see "The raised hand" in `docs/product/sessions.md`).
+
+**Pinning** is the user's own mark on a project or a session, set and cleared from its action menu; nothing is pinned
+to begin with. Its only effect is the order above. The pin is stored by the daemon with the project or the session,
+so every window and every client sees the same pins, and they survive a restart. A pinned session stays pinned when it
+is archived and when it is resumed; an archived session's menu offers no Pin or Unpin.
+
+## Selecting a session
+
+Selecting a session shows its terminal; selecting an interrupted one resumes it. Selecting an archived one does not
+reopen it: it is shown still archived, and typing into its terminal or pressing Reopen reopens it (see "Archiving,
+interruption and resuming" and "The terminal" in `docs/product/sessions.md`). Whatever it is selected from — a sidebar row, a "View
+archive" or "Archived hubs" submenu, focus mode, the archive view, or the top bar's waiting count — **the sidebar
+follows it**: it switches to the session's console, and leaves focus mode when focus mode is on another project.
+
+A session is selected automatically only when this application is the one that opened it — through the Hub row or the
+new-session dialog — and that closes the archive view if it is open. A session that appears any other way, such as one
+the hub started or one another client of the daemon opened, is listed unselected and is put on screen by the user
+selecting it.
+
+When the selected session stops existing — deleted from the archive, by this client or another, for instance — nothing is
+selected in its place, and the terminal's area shows its empty state.
+
+## Focus mode
+
+Choosing **Focus mode** from a project's action menu replaces the whole sidebar — the console switcher and the project
+list — with that project alone:
+
+- **The header**: a back button, **Leave focus mode**, which returns to the full sidebar; the console's name above the
+  project's name; a **+** button for a new session; and the project's action menu, without its Focus mode item.
+- **Sessions (n)**: the project's sessions that are not archived, as cards, in the order of "Order of projects and
+  sessions" above. A card shows the session's status glyph with the status in words, a pin glyph when it is pinned,
+  its action menu (always shown), its title over up to two lines, its agent's icon and name, how long ago it was
+  started, and "Reports to hub" when the session reports to the console's hub (see "Which sessions the hub drives" in
+  `docs/product/hub-orchestration.md`). Clicking a card selects the session. With no session, a message and a **New
+  session** button take their place.
+- **Archived (n)**: the project's ten most recently archived sessions, each showing its agent's icon, its title and how
+  long ago it was archived. Clicking one selects it. Its action menu offers **Rename** and **Delete**
+  (which asks for confirmation; see "Deleting archived sessions" in `docs/product/sessions.md`). Below them **View all
+  (n)** opens the archive view. With none archived, a line saying so.
+
+Relative times ("5 minutes ago") are worded in the current language, and anything under a minute reads as now.
+
+**The sidebar's view changes are animated**, the incoming view only, over about a fifth of a second: entering a
+project's focus mode slides it in from the sidebar's end edge as it fades in, a level down; returning to the console's
+view slides that in from the start edge, a level up; and switching to another console fades its view in with a slight
+upward drift. The horizontal slides are mirrored under a right-to-left language, and nothing moves where the system
+asks for reduced motion.
+
+**Focus mode is remembered per client** together with the console shown. It is left by the back button, by switching
+console, by selecting a session of another project, and when the project no longer exists.
+
+**A keyboard shortcut toggles focus mode**: `Shift+Cmd+F` on a Mac (the macOS application, or a browser on a Mac),
+`Ctrl+Shift+F` elsewhere, matched on the physical F key whatever the keyboard layout. The project menu's Focus mode
+item shows it.
+
+- Outside focus mode it enters focus mode for the project of the selected session, switching the sidebar to that
+  session's console first when needed. With a hub session selected, which belongs to no project, or with nothing
+  selected, it does nothing.
+- In focus mode it leaves focus mode.
+- It does nothing while a dialog or a menu is open, and during an input-method composition.
+- The key combination never reaches the terminal, so the agent never receives it.
+
+When keyboard focus was in the sidebar, entering or leaving focus mode moves it to somewhere useful in the new view:
+on entering, to the back button; on leaving, to the project's row. Otherwise — the mouse used, or the shortcut
+pressed from the terminal — keyboard focus stays where it was, normally on the terminal.
+
+## The archive view
+
+**View all (n)** — in a project's "View archive" submenu, in focus mode's archived list, or in the Hub row's "Archived
+hubs" submenu — opens the archive view: **every** archived session of that project, or every archived hub of that
+console.
+
+- It **covers the terminal's area only**: the sidebar and, for a hub, the report panel stay as they are. The terminal
+  goes on running beneath it and is not resized.
+- Its header says how many archived sessions there are, over the title "Archived sessions" (for a console's hubs,
+  "Archived hubs"), with **Delete all** while there is at least one, and a **Close** button. Which project or console
+  it is for is shown in the top bar's breadcrumb (see "The top bar" in `docs/product/window-layout.md`).
+- The list is in the order the sessions were archived, most recent first. It shows 30 rows and adds 30 more each time
+  its end is scrolled into view. Each row shows the session's agent's icon, its title, and its agent's name with how
+  long ago it was archived. Its **Reopen** and **Delete** buttons show while the row is hovered or holds keyboard
+  focus, and are still reached with Tab.
+- **Reopen** resumes the session and selects it, which closes the view (see "Selecting a session" above).
+- **Delete** asks for confirmation, then deletes that session; **Delete all** asks for confirmation, naming how many,
+  then deletes every archived session in the view's scope. What deleting does and does not remove is in "Deleting
+  archived sessions" in `docs/product/sessions.md`.
+- With nothing archived — including after everything has been deleted — the view stays open and says there are no
+  archived sessions.
+
+**It closes** on its Close button, on `Escape` while keyboard focus is in it, when a session is selected (from it or
+from anywhere else, as in "Selecting a session" above), when this window opens a new session, and by itself when its project or its
+console no longer exists. Closing it hands keyboard focus to the terminal.
+
+It takes keyboard focus as it opens, so keystrokes stop reaching the terminal it covers, and it keeps focus after a
+deletion. It is a region of its own in the `F6` cycle (see "Moving focus between regions with F6" in
+`docs/product/window-layout.md`). Below 1100 px, where the sidebar is a drawer, opening the archive view closes the
+sidebar's drawer so that the view is not hidden behind it.

@@ -1,7 +1,9 @@
-import { Button, EmptyState, Surface } from "@heroui/react";
+import { Button, Spinner, Surface } from "@heroui/react";
+import { SquareTerminal } from "lucide-react";
 import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 import "@xterm/xterm/css/xterm.css";
+import { EmptyPanel } from "../components/EmptyPanel";
 import { useT } from "../i18n/react";
 import { isDormant as isDormantStatus, isLive, type Session } from "../protocol";
 import { useDaemon } from "../store";
@@ -9,10 +11,16 @@ import { useOctoboardTheme } from "../theme";
 import { TerminalController, type TermStatus } from "./TerminalController";
 import { XTERM_THEMES } from "./xtermThemes";
 
+/** The longest the loading state covers a terminal still waiting for its first output. */
+const LOADING_LIMIT_MS = 10_000;
+
 interface TerminalPaneProps {
   /** The session whose terminal should be shown, or `undefined` when nothing is selected yet. */
   session?: Session;
-  onResume: (sessionId: string) => void;
+  /** Resumes a session; resolves to whether it was accepted. */
+  onResume: (sessionId: string) => Promise<boolean>;
+  /** A resume of `session` is in flight: its process is being started. */
+  resuming?: boolean;
   /** Told whenever the selected session's terminal connection starts or stops being in trouble
    * (`undefined` is healthy, or nothing to report: no session, or one that is not running). */
   onProblemChange: (problem: TerminalProblem | undefined) => void;
@@ -53,6 +61,7 @@ const STABLE_CONNECTION_MS = 10000;
 export function TerminalPane({
   session,
   onResume,
+  resuming = false,
   onProblemChange,
   ref,
 }: TerminalPaneProps): React.ReactElement {
@@ -62,6 +71,7 @@ export function TerminalPane({
   const containerRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<TerminalController | undefined>(undefined);
   const [status, setStatus] = useState<TermStatus>("closed");
+  const [painted, setPainted] = useState(false);
   const reconnectAttemptsRef = useRef(0);
   const stableTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // What the controller's theme currently is: the construction below reads it for the initial
@@ -70,6 +80,10 @@ export function TerminalPane({
   const appliedColorThemeRef = useRef(colorTheme);
 
   useImperativeHandle(ref, () => ({ focus: () => controllerRef.current?.focus() }), []);
+  // The controller is built once; what it calls on input that wakes an archived session must be
+  // the latest `onResume`.
+  const onResumeRef = useRef(onResume);
+  onResumeRef.current = onResume;
 
   const handleStatusChange = useCallback((s: TermStatus) => {
     if (stableTimerRef.current) {
@@ -85,7 +99,14 @@ export function TerminalPane({
   }, []);
 
   useEffect(() => {
-    const controller = new TerminalController({ onStatusChange: handleStatusChange }, appliedColorThemeRef.current);
+    const controller = new TerminalController(
+      {
+        onStatusChange: handleStatusChange,
+        onPaintedChange: setPainted,
+        onWake: (sessionId) => onResumeRef.current(sessionId),
+      },
+      appliedColorThemeRef.current,
+    );
     controllerRef.current = controller;
     if (containerRef.current) controller.mount(containerRef.current);
 
@@ -144,14 +165,19 @@ export function TerminalPane({
   useEffect(() => {
     const controller = controllerRef.current;
     if (!controller) return;
-    // A dormant session is resumed by the caller before it is ever attached to directly — the
-    // daemon closes the terminal socket immediately for a session with no running process
-    // (`apps/daemon/PROTOCOL.md`), so connecting here would just bounce. Once the resume's
-    // `session_upserted` broadcast flips the status, this effect re-runs and attaches for real.
+    // A dormant session is resumed by the caller before it is ever attached to directly (selecting
+    // an interrupted one, or typing to or reopening an archived one) — the daemon closes the
+    // terminal socket immediately for a session with no running process (`apps/daemon/PROTOCOL.md`),
+    // so connecting here would just bounce. Once the resume's `session_upserted` broadcast flips the
+    // status, this effect re-runs and attaches for real.
     if (!session || isDormant) {
       // Keeps the ended session's last output on screen; `detach` itself checks that the output
       // belongs to this session, so selecting a different dormant session clears as before.
       controller.detach({ keepScreenFor: session?.id });
+      // An archived session is not reopened by selecting it, only by typing to it: the first
+      // input starts it (`onResume`), and is handed to it once connected.
+      if (session?.status === "archived") controller.armWake(session.id);
+      else controller.disarmWake();
       return;
     }
     // Only skip when a connection to this exact session is already in flight or open — any other
@@ -188,6 +214,20 @@ export function TerminalPane({
     // working agent the reconnect could be postponed indefinitely.
   }, [status, session?.id, isDormant, sessionIsLive, attachCurrent]);
 
+  // From selecting a session until its first output is on screen — through a resume starting the
+  // process, the socket connecting, and a freshly started agent drawing its first frame — the
+  // blank terminal is covered by a loading state. An agent that stays silent does not keep it up
+  // forever: past `LOADING_LIMIT_MS` the bare terminal is shown.
+  const awaitingOutput = session !== undefined && !painted && (resuming || !isDormant);
+  const [loadingExpired, setLoadingExpired] = useState(false);
+  useEffect(() => {
+    setLoadingExpired(false);
+    if (!awaitingOutput) return;
+    const timer = setTimeout(() => setLoadingExpired(true), LOADING_LIMIT_MS);
+    return () => clearTimeout(timer);
+  }, [awaitingOutput, session?.id]);
+  const loading = awaitingOutput && !loadingExpired;
+
   const reconnectNow = useCallback(() => {
     reconnectAttemptsRef.current = 0;
     attachCurrent(true);
@@ -219,15 +259,7 @@ export function TerminalPane({
     // The background must match the active xterm theme's (`XTERM_THEMES`, read here rather than
     // duplicated as a literal), so the padding around the terminal is not a different colour —
     // a plain Tailwind class cannot do this since the colour now changes at runtime with the
-    // theme, not at build time. Above the `docked` breakpoint the 520px basis and floor are the
-    // report panel's counterpart: with a 0 basis free space stays positive at any window wider
-    // than the panel's own basis, flexbox never leaves the grow phase, and the panel's shrink
-    // factor is never consulted. 520px is 55 columns at ~9.2px/column off a real agent CLI (the
-    // container's padding eats the rest). Below the breakpoint the sidebar and the report panel
-    // are overlays rather than row siblings (`usePaneToggles`), so this pane is the row's only
-    // content and takes a much smaller floor instead: 382px is 40 columns at the same ~9.2px/column
-    // plus the same padding allowance, under which the terminal stops being usable at all, so
-    // `overflow-x-auto` on the row (`App.tsx`) scrolls rather than squeezing it further.
+    // theme, not at build time.
     //
     // `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener
     // closes a drawer for — xterm.js holds keyboard focus here most of the time and would otherwise
@@ -235,7 +267,7 @@ export function TerminalPane({
     <div
       data-escape-scope
       data-region="terminal"
-      className="relative flex min-h-0 min-w-[382px] flex-[1_1_382px] flex-col docked:min-w-[520px] docked:flex-[1_1_520px]"
+      className="relative flex min-h-0 min-w-0 flex-1 flex-col"
       style={{ backgroundColor: XTERM_THEMES[colorTheme].background }}
     >
       {/* The padding sits on a wrapper, not on the element xterm is mounted in: the fit addon sizes
@@ -245,21 +277,38 @@ export function TerminalPane({
         {/* xterm lays its cells out left to right whatever the page's direction. */}
         <div dir="ltr" className="h-full overflow-hidden" ref={containerRef} />
       </div>
+      {loading && (
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-sm text-muted"
+          style={{ backgroundColor: XTERM_THEMES[colorTheme].background }}
+        >
+          <Spinner size="md" color="current" aria-hidden="true" />
+          {t(resuming ? "terminal.resuming" : "terminal.loading")}
+        </div>
+      )}
+      {/* A live region has to exist before its content changes to be announced, so the loading
+          text is announced from this one, which stays mounted; the overlay itself is for the eyes. */}
+      <div role="status" className="sr-only">
+        {loading && t(resuming ? "terminal.resuming" : "terminal.loading")}
+      </div>
       {!session && (
-        <EmptyState className="absolute inset-0 flex items-center justify-center bg-background">
-          {t("terminal.empty")}
-        </EmptyState>
+        <div className="absolute inset-0 flex items-center justify-center bg-background">
+          <EmptyPanel icon={SquareTerminal} message={t("terminal.empty")} />
+        </div>
       )}
       {/* Floats over the terminal rather than covering it: a session that has just ended keeps its
           last output on screen (`TerminalController.detach`), and that output is what says why. The
           live region stays mounted and only its content comes and goes, as a live region has to
           exist before its content changes to be announced. */}
       <div role="status" className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
-        {session && isDormant && (
+        {session && isDormant && !resuming && (
           <Surface className="pointer-events-auto flex items-center gap-3 rounded-lg border border-separator px-3 py-2 text-sm shadow-lg">
-            <span className="text-muted">{t("terminal.notRunning")}</span>
+            <span className="text-muted">
+              {t(session.status === "archived" ? "terminal.archived" : "terminal.notRunning")}
+            </span>
             <Button size="sm" variant="primary" preventFocusOnPress onPress={() => onResume(session.id)}>
-              {t("terminal.resume")}
+              {t(session.status === "archived" ? "sidebar.session.reopen" : "terminal.resume")}
             </Button>
           </Surface>
         )}

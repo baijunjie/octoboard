@@ -4,8 +4,9 @@
 @theme {
   /* The one named breakpoint this app has: the width at which the sidebar, the terminal and the
      report panel all fit side by side without any of them going under its own floor (280 +
-     520 + 300, see `TerminalPane.tsx` and `ReportPanel.tsx`). Below it `usePaneToggles` turns the
-     sidebar and the report panel into overlays instead of row siblings. The macOS window's own
+     520 + 300, see the terminal's wrapper in `App.tsx` and `ReportPanel.tsx`). Below it
+     `usePaneToggles` turns the sidebar and the report panel into overlays instead of row
+     siblings. The macOS window's own
      minimum (`apps/desktop/src-tauri/src/lib.rs`) keeps the desktop app from ever going under it,
      so the `docked:` variant is also what "the layout as it always was" means there. */
   --breakpoint-docked: 1100px;
@@ -23,23 +24,6 @@
      so the bar's controls and the banner's Retry stay reachable whatever is open. One definition,
      rather than copies of the same `calc()` that must happen to agree. */
   --top-chrome-height: calc(var(--title-bar-height) + var(--connection-banner-height, 0px));
-
-  /* HeroUI's default theme leaves form fields borderless (`--field-border: transparent`,
-     `--field-border-width: 0px`) and relies on a shadow too faint to read against the dialog's
-     own surface in either theme — the unselected checkbox control, which is keyed off the same
-     two variables, has the same problem. HeroUI's own border tokens (`--border`, `--border-
-     secondary`, `--border-tertiary`) all measure under 3:1 against the surface in both themes —
-     they read as dividers between same-surface content, not as a boundary meant to stand out —
-     so this reaches for `--muted` instead, the token HeroUI already uses for secondary text,
-     which clears 3:1 in both. Overriding these two here gives every field, and the checkbox, a
-     visible boundary in both themes from one place. */
-  --field-border: var(--muted);
-  --field-border-width: var(--border-width);
-  /* HeroUI draws a focused field's ring (`--focus`) outside its border and derives the border's own
-     focused colour (`--field-border-focus`) by darkening `--field-border` a little, which with the
-     visible border above leaves a dark frame inside the blue ring. Taking the ring's colour for
-     the border too makes the focused field one clean outline, in both themes. */
-  --field-border-focus: var(--focus);
 }
 
 /* HeroUI's light `--muted` (L 0.5517) is secondary text everywhere, but it reaches 4.5:1 only on
@@ -76,4 +60,36 @@ html.pane-resizing * {
 .align-match-parent {
   text-align: -webkit-match-parent;
   text-align: match-parent;
+}
+
+/* The raised hand's motion (`StatusIcon.tsx`): it waves now and then (a working session's dot uses
+   Tailwind's own `animate-ping`). Applied through `motion-safe:` only, so both stand still where the
+   system asks for reduced motion. */
+@keyframes status-wave {
+  0%,
+  60%,
+  100% {
+    transform: rotate(0deg);
+  }
+  10%,
+  30% {
+    transform: rotate(16deg);
+  }
+  20%,
+  40% {
+    transform: rotate(-10deg);
+  }
+}
+
+@theme {
+  --animate-status-wave: status-wave 2.4s ease-in-out infinite;
+}
+
+/* The sidebar's view changes (`Sidebar.tsx`, played with the Web Animations API so the view is
+   not remounted): the horizontal shift is a variable so a right-to-left layout can reverse it. */
+:root {
+  --view-shift: 24px;
+}
+[dir="rtl"] {
+  --view-shift: -24px;
 }

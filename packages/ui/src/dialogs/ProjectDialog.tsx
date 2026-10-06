@@ -1,7 +1,7 @@
 import { Button } from "@heroui/react";
 import React, { useState } from "react";
 
-import { AGENT_OPTIONS } from "../agents";
+import { AGENT_ICON_OPTIONS } from "../components/AgentIcon";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
 import type { Agent, Project, ProjectSource } from "../protocol";
@@ -86,9 +86,9 @@ export function ProjectDialog({
 
   // `""` stands for "unset" — falls back to the console's default agent per the "Which agent a
   // session uses" section of docs/product/sessions.md.
-  const defaultAgentOptions: { value: Agent | ""; label: string }[] = [
+  const defaultAgentOptions: { value: Agent | ""; label: string; icon?: React.ReactNode }[] = [
     { value: "", label: t("dialog.project.useConsoleDefault") },
-    ...AGENT_OPTIONS,
+    ...AGENT_ICON_OPTIONS,
   ];
 
   return (

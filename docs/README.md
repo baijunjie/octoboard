@@ -7,10 +7,13 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Consoles and projects](product/consoles-and-projects.md) — consoles, their working directory, agent defaults and
   per-agent config directories; the three ways a project is associated, what is editable afterwards, and what deleting
   either one does.
-- [Sessions](product/sessions.md) — hub and project sessions, the three-level menu, agent selection, the five session
-  statuses and their transitions, the raised hand and its notification, how a declined Claude Code prompt lowers the
-  hand from the agent's own transcript and what that costs to keep working, archiving, interruption and resuming, and
-  the terminal.
+- [Sessions](product/sessions.md) — hub and project sessions, agent selection, the five session statuses, their
+  glyphs and their transitions, the raised hand and its notification, how a declined Claude Code prompt lowers the
+  hand from the agent's own transcript and what that costs to keep working, archiving, interruption and resuming,
+  where archived sessions are kept and deleting them, and the terminal.
+- [Sidebar](product/sidebar.md) — one console at a time and the switcher with its activity markers, the Hub row and the
+  project list, project and session rows and their menus, keyboard focus on rows, the order of projects and sessions
+  and pinning, how the sidebar follows the selected session, a project's focus mode, and the archive view.
 - [Hub orchestration](product/hub-orchestration.md) — what the hub can do: its tools and a project session's `report`,
   the brief a task is handed over as, the reporting loop and what happens when a session stops without reporting,
   automatic archiving, and which sessions the hub drives.
@@ -72,21 +75,20 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   `~/.octoboard` data — and how a probe that needs no logged-in agent avoids the latter with a throwaway
   `HOME`/`TMPDIR`, using Codex's sign-in screen as session output, and how to put a fake agent CLI on `PATH` for an
   isolated daemon so the real one does not launch instead.
+- [Building and launching the app for verification](memory/building-and-launching-the-app-for-verification.md) —
+  how to build, launch and isolate the app for a verification: when to launch the real window, building the daemon and
+  confirming the running sidecar's binary, `pnpm tauri build` without `APPLE_*`, `open` rather than exec'ing the
+  binary, a throwaway `HOME` and `TMPDIR` and the webview profile they still share (and running under other system
+  languages for one launch), reading the wire through a wrapped sidecar, sharing the machine with other worktrees'
+  dev apps (fixed port, stopping by PID only), and fully reloading a dev window before judging a defect in it.
 - [Verifying the desktop UI](memory/verifying-the-desktop-ui.md) — how to verify terminal and UI behaviour in the real
-  app: why a verification stays as narrow as the change, why a UI change has to be launched rather than only reviewed, why a built app is launched on a throwaway `HOME`
-  and `TMPDIR` and what that still leaves shared (the webview's own profile, used only with the user's go-ahead), how
-  to run the app under other system languages for one launch without touching the shared defaults domain, why
-  the bundle under test is built with the Tauri CLI and launched with `open` rather than by exec'ing its binary, why a
-  daemon-side change needs the daemon built and the running sidecar's binary confirmed before anything read off the
-  window means anything, how to get an error out of a blank window, reading what the packaged webview sends to the
-  daemon through a wrapped sidecar (dev mode sends a different origin), ruling out a locked screen before trusting a
-  capture, bisecting a symptom against the daemon, what a scripted GUI probe can and cannot prove (HeroUI tooltips and
-  toast controls included) and why its setup should go through the daemon's protocol instead (including raising a
-  session's hand with a forged hook event and seeding trusted folders) and why Octoboard must be confirmed frontmost
-  before every scripted keystroke, how to find the app's own WebContent process to freeze it, where to watch for a
-  report page's blocked navigation, where a network probe's positive control has to come from, why another worktree's
-  dev server or daemon may be the one answering and why yours are stopped by PID, and which checks need a person
-  (input methods, reduced motion).
+  app: why a verification stays as narrow as the change, checking in WebKit with real pointer input and with long and
+  CJK text, ruling out a locked screen before trusting a capture, getting an error out of a blank window, bisecting a
+  symptom against the daemon, what a scripted GUI probe can and cannot prove and why its setup goes through the
+  daemon's protocol (raising a session's hand with a forged hook event, seeding trusted folders), confirming Octoboard
+  is frontmost before a scripted keystroke, freezing the app's WebContent process, where to watch for a report page's
+  blocked navigation, where a network probe's positive control comes from, and which checks need a person (input
+  methods, reduced motion).
 - [Writing UI components](memory/writing-ui-components.md) — conventions for `packages/ui` components: why a component
   HeroUI 3 already provides is used rather than hand-built, where to check what it provides, and what a justified
   hand-built one is built on and where its reason is written, why a HeroUI control pressed with the mouse takes

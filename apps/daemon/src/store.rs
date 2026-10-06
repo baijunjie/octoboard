@@ -65,7 +65,8 @@ impl Store {
                 default_agent TEXT,
                 source        TEXT NOT NULL,
                 remote_url    TEXT,
-                claude_trust_consent INTEGER NOT NULL DEFAULT 0
+                claude_trust_consent INTEGER NOT NULL DEFAULT 0,
+                pinned        INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS sessions (
                 id               TEXT PRIMARY KEY,
@@ -81,6 +82,7 @@ impl Store {
                 has_conversation INTEGER NOT NULL DEFAULT 0,
                 include_in_hub   INTEGER NOT NULL DEFAULT 0,
                 config_dir       TEXT,
+                pinned           INTEGER NOT NULL DEFAULT 0,
                 started_at       INTEGER NOT NULL,
                 ended_at         INTEGER
             );
@@ -127,6 +129,9 @@ impl Store {
             "claude_trust_consent",
             "INTEGER NOT NULL DEFAULT 0",
         )?;
+        // Nothing was pinned before pinning existed.
+        add_column_if_missing(&conn, "projects", "pinned", "INTEGER NOT NULL DEFAULT 0")?;
+        add_column_if_missing(&conn, "sessions", "pinned", "INTEGER NOT NULL DEFAULT 0")?;
         let store = Self {
             conn: Mutex::new(conn),
         };
@@ -247,8 +252,8 @@ impl Store {
     pub fn insert_project(&self, project: &Project) -> Result<()> {
         self.lock().execute(
             "INSERT INTO projects (id, console_id, host_id, name, path, default_agent, source,
-                                   remote_url, claude_trust_consent)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                                   remote_url, claude_trust_consent, pinned)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 project.id,
                 project.console_id,
@@ -259,6 +264,7 @@ impl Store {
                 enum_to_text(&project.source),
                 project.remote_url,
                 project.claude_trust_consent,
+                project.pinned,
             ],
         )?;
         Ok(())
@@ -277,11 +283,12 @@ impl Store {
 
     pub fn update_project(&self, project: &Project) -> Result<()> {
         self.lock().execute(
-            "UPDATE projects SET name = ?2, default_agent = ?3 WHERE id = ?1",
+            "UPDATE projects SET name = ?2, default_agent = ?3, pinned = ?4 WHERE id = ?1",
             params![
                 project.id,
                 project.name,
                 project.default_agent.as_ref().map(enum_to_text),
+                project.pinned,
             ],
         )?;
         Ok(())
@@ -429,8 +436,8 @@ impl Store {
         self.lock().execute(
             "INSERT INTO sessions (id, agent, agent_session_id, console_id, project_id, host_id,
                                    role, origin, title, status, has_conversation, include_in_hub,
-                                   config_dir, started_at, ended_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+                                   config_dir, pinned, started_at, ended_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             params![
                 session.id,
                 enum_to_text(&session.agent),
@@ -445,6 +452,7 @@ impl Store {
                 session.has_conversation,
                 session.include_in_hub,
                 session.config_dir,
+                session.pinned,
                 session.started_at,
                 session.ended_at,
             ],
@@ -454,9 +462,11 @@ impl Store {
 
     /// Writes back the fields that change over a session's life. Identity and placement
     /// (`console_id`, `project_id`, `role`, `origin`, `include_in_hub`) never change, and neither does
-    /// `config_dir`, so they are not touched.
-    pub fn update_session(&self, session: &Session) -> Result<()> {
-        self.lock().execute(
+    /// `config_dir`, so they are not touched. `pinned` is the user's own statement
+    /// ([`Self::set_session_pinned`]), which a record read earlier must not overwrite.
+    /// Returns whether a row was written: `false` means the session is gone (deleted meanwhile).
+    pub fn update_session(&self, session: &Session) -> Result<bool> {
+        let changed = self.lock().execute(
             "UPDATE sessions SET agent = ?2, agent_session_id = ?3, title = ?4, status = ?5,
                                  has_conversation = ?6, started_at = ?7, ended_at = ?8
              WHERE id = ?1",
@@ -471,7 +481,7 @@ impl Store {
                 session.ended_at,
             ],
         )?;
-        Ok(())
+        Ok(changed > 0)
     }
 
     /// Moves a session to `status`, but only while it is still `expected`, and returns the record
@@ -505,10 +515,27 @@ impl Store {
         Ok(session)
     }
 
+    pub fn set_session_pinned(&self, id: &str, pinned: bool) -> Result<()> {
+        self.lock().execute(
+            "UPDATE sessions SET pinned = ?2 WHERE id = ?1",
+            params![id, pinned],
+        )?;
+        Ok(())
+    }
+
     pub fn delete_session(&self, id: &str) -> Result<()> {
         self.lock()
             .execute("DELETE FROM sessions WHERE id = ?1", params![id])?;
         Ok(())
+    }
+
+    /// Deletes the session only while it is archived, and says whether it did.
+    pub fn delete_session_if_archived(&self, id: &str) -> Result<bool> {
+        let deleted = self.lock().execute(
+            "DELETE FROM sessions WHERE id = ?1 AND status = ?2",
+            params![id, enum_to_text(&SessionStatus::Archived)],
+        )?;
+        Ok(deleted > 0)
     }
 
     pub fn get_session(&self, id: &str) -> Result<Option<Session>> {
@@ -581,11 +608,11 @@ fn add_column_if_missing(
 }
 
 const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agent, source,
-                               remote_url, claude_trust_consent";
+                               remote_url, claude_trust_consent, pinned";
 
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
                                role, origin, title, status, has_conversation, include_in_hub,
-                               config_dir, started_at, ended_at";
+                               config_dir, pinned, started_at, ended_at";
 
 fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
     Ok(Console {
@@ -612,6 +639,7 @@ fn read_project(row: &Row<'_>) -> rusqlite::Result<Project> {
         source: enum_from_row::<ProjectSource>(row, 6)?,
         remote_url: row.get(7)?,
         claude_trust_consent: row.get(8)?,
+        pinned: row.get(9)?,
     })
 }
 
@@ -640,8 +668,9 @@ fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         has_conversation: row.get(10)?,
         include_in_hub: row.get(11)?,
         config_dir: row.get(12)?,
-        started_at: row.get(13)?,
-        ended_at: row.get(14)?,
+        pinned: row.get(13)?,
+        started_at: row.get(14)?,
+        ended_at: row.get(15)?,
     })
 }
 
@@ -726,6 +755,7 @@ mod tests {
             has_conversation: false,
             include_in_hub: false,
             config_dir: config_dir.map(str::to_string),
+            pinned: false,
             started_at: 0,
             ended_at: None,
         }
@@ -885,6 +915,7 @@ mod tests {
             source: ProjectSource::Local,
             remote_url: None,
             claude_trust_consent: consent,
+            pinned: false,
         }
     }
 
@@ -920,6 +951,95 @@ mod tests {
         drop(store);
 
         Store::open(&path).expect("opens again");
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    /// A database written before pinning existed is opened in place, and nothing in it is pinned.
+    /// A pin then round-trips on a project and a session.
+    #[test]
+    fn a_database_from_before_pinning_reads_nothing_as_pinned() {
+        let path = temp_db("pinned-migration");
+        {
+            let conn = Connection::open(&path).expect("old database");
+            conn.execute_batch(
+                r#"
+                CREATE TABLE consoles (
+                    id TEXT PRIMARY KEY, name TEXT NOT NULL, workdir TEXT NOT NULL,
+                    hub_agent TEXT NOT NULL, default_agent TEXT NOT NULL, created_at INTEGER NOT NULL
+                );
+                INSERT INTO consoles VALUES ('console-1', 'Old', '/tmp/old', 'claude', 'claude', 5);
+                CREATE TABLE projects (
+                    id TEXT PRIMARY KEY, console_id TEXT NOT NULL, host_id TEXT NOT NULL,
+                    name TEXT NOT NULL, path TEXT NOT NULL, default_agent TEXT,
+                    source TEXT NOT NULL, remote_url TEXT, claude_trust_consent INTEGER NOT NULL DEFAULT 0
+                );
+                INSERT INTO projects VALUES ('project-1', 'console-1', 'local', 'Old', '/tmp/p',
+                    NULL, 'local', NULL, 0);
+                CREATE TABLE sessions (
+                    id TEXT PRIMARY KEY, agent TEXT NOT NULL, agent_session_id TEXT,
+                    console_id TEXT NOT NULL, project_id TEXT, host_id TEXT NOT NULL,
+                    role TEXT NOT NULL, origin TEXT NOT NULL, title TEXT NOT NULL,
+                    status TEXT NOT NULL, has_conversation INTEGER NOT NULL DEFAULT 0,
+                    include_in_hub INTEGER NOT NULL DEFAULT 0, config_dir TEXT,
+                    started_at INTEGER NOT NULL, ended_at INTEGER
+                );
+                INSERT INTO sessions VALUES ('session-1', 'claude', NULL, 'console-1', NULL, 'local',
+                    'hub', 'user', 'Old', 'idle', 0, 0, NULL, 1, NULL);
+                "#,
+            )
+            .expect("old schema");
+        }
+
+        let store = Store::open(&path).expect("migrates");
+        assert!(
+            !store
+                .get_project("project-1")
+                .unwrap()
+                .expect("kept")
+                .pinned
+        );
+        assert!(
+            !store
+                .get_session("session-1")
+                .unwrap()
+                .expect("kept")
+                .pinned
+        );
+
+        let mut pinned = store.get_project("project-1").unwrap().expect("kept");
+        pinned.pinned = true;
+        store.update_project(&pinned).unwrap();
+        assert!(store.get_project("project-1").unwrap().unwrap().pinned);
+
+        store.set_session_pinned("session-1", true).unwrap();
+        assert!(store.get_session("session-1").unwrap().unwrap().pinned);
+        drop(store);
+
+        Store::open(&path).expect("opens again");
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    /// A session record read before the user pinned it, written back afterwards, does not undo
+    /// the pin; and writing back a deleted session reports that nothing was written.
+    #[test]
+    fn a_stale_session_write_leaves_the_pin_alone_and_a_deleted_one_is_not_written() {
+        let path = temp_db("stale-session");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        let mut archived = session(None);
+        archived.status = SessionStatus::Archived;
+        store.insert_session(&archived).expect("insert");
+
+        let stale = store.get_session("session-1").unwrap().unwrap();
+        store.set_session_pinned("session-1", true).unwrap();
+        assert!(store.update_session(&stale).unwrap());
+        assert!(store.get_session("session-1").unwrap().unwrap().pinned);
+
+        assert!(store.delete_session_if_archived("session-1").unwrap());
+        assert!(!store.update_session(&stale).unwrap());
+        drop(store);
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 

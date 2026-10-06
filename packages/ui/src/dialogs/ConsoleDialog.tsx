@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 
 import { AGENT_CONFIG_DIR, AGENT_LABEL, AGENT_OPTIONS } from "../agents";
+import { AGENT_ICON_OPTIONS } from "../components/AgentIcon";
 import { useT } from "../i18n/react";
 import type { Agent, ConfigDirField, Console } from "../protocol";
 import { useDaemon } from "../store";
@@ -89,8 +90,8 @@ export function ConsoleDialog({
       onSubmit={submit}
     >
       <TextInput label={t("common.name")} value={name} onChange={setName} autoFocus />
-      <OptionSelect label={t("dialog.console.hubAgent")} options={AGENT_OPTIONS} value={hubAgent} onChange={setHubAgent} />
-      <OptionSelect label={t("dialog.console.defaultAgent")} options={AGENT_OPTIONS} value={defaultAgent} onChange={setDefaultAgent} />
+      <OptionSelect label={t("dialog.console.hubAgent")} options={AGENT_ICON_OPTIONS} value={hubAgent} onChange={setHubAgent} />
+      <OptionSelect label={t("dialog.console.defaultAgent")} options={AGENT_ICON_OPTIONS} value={defaultAgent} onChange={setDefaultAgent} />
       {shownAgents.map((agent) => {
         const { field, placeholder } = AGENT_CONFIG_DIR[agent];
         return (

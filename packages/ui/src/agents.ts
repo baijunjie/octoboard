@@ -1,7 +1,7 @@
 import type { Agent, ConfigDirField } from "./protocol";
 
-/** Display labels for the three supported agents (see "The console → project → session menu" in
- * docs/product/sessions.md). */
+/** Display labels for the three supported agents (see "Rows, names and keyboard focus" in
+ * docs/product/sidebar.md). */
 export const AGENT_LABEL: Record<Agent, string> = {
   claude: "Claude Code",
   codex: "Codex",

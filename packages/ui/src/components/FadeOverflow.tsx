@@ -71,6 +71,98 @@ function maskImage(fade: number, { start, end, rtl }: Clipped): string | undefin
   return `linear-gradient(to ${rtl ? "left" : "right"}, ${stops.join(", ")})`;
 }
 
+/** Marquee pacing: a pause at the start, a scroll at reading speed, a pause at the end, a quicker
+ * scroll back, and again while the pointer stays. */
+const MARQUEE_SPEED = 60; // px per second
+const MARQUEE_RETURN_SPEED = 160;
+const MARQUEE_PAUSE_START = 700; // ms
+const MARQUEE_PAUSE_END = 1200;
+
+/** The element the pointer has to be over for a label's marquee to run: the nearest ancestor marked
+ * `data-marquee-scope` (a whole row), or the label itself. */
+function marqueeScope(element: HTMLElement): HTMLElement {
+  return element.closest<HTMLElement>("[data-marquee-scope]") ?? element;
+}
+
+/**
+ * Scrolls a clipped label through its whole text while the pointer is over its scope, and back to
+ * its start when the pointer leaves. It moves the element's own scroll position, so the edge fades
+ * follow by themselves: the start fades in as text passes it, the end fades out once the last of it
+ * is in view. Off where the system asks for reduced motion, and for a label clipped at its start.
+ */
+function useMarquee(ref: React.RefObject<HTMLElement | null>, enabled: boolean): void {
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element || !enabled) return;
+    const scope = marqueeScope(element);
+    let frame: number | undefined;
+    let running = false;
+    // Kept here rather than read back from `scrollLeft`, which WebKit rounds to whole pixels: a
+    // frame's step at reading speed is under a pixel, so reading it back would never advance.
+    let position = scrolledFromStart(element);
+
+    const setOffset = (offset: number) => {
+      position = offset;
+      element.scrollLeft = getComputedStyle(element).direction === "rtl" ? -offset : offset;
+    };
+    // Moves toward `target` at `speed` px/s, then waits `pause` ms, then calls `next`.
+    const move = (target: number, speed: number, pause: number, next?: () => void) => {
+      let last: number | undefined;
+      let waitedSince: number | undefined;
+      const step = (now: number) => {
+        const current = position;
+        if (Math.abs(target - current) > 0.5) {
+          const elapsed = last === undefined ? 0 : (now - last) / 1000;
+          last = now;
+          const delta = Math.min(Math.abs(target - current), speed * elapsed);
+          setOffset(current + Math.sign(target - current) * delta);
+          frame = requestAnimationFrame(step);
+          return;
+        }
+        waitedSince ??= now;
+        if (now - waitedSince < pause) {
+          frame = requestAnimationFrame(step);
+          return;
+        }
+        frame = undefined;
+        next?.();
+      };
+      frame = requestAnimationFrame(step);
+    };
+    const cycle = () => {
+      if (!running) return;
+      const end = element.scrollWidth - element.clientWidth;
+      if (end <= OVERFLOW_EPSILON) {
+        running = false;
+        return;
+      }
+      move(end, MARQUEE_SPEED, MARQUEE_PAUSE_END, () => move(0, MARQUEE_RETURN_SPEED, MARQUEE_PAUSE_START, cycle));
+    };
+    const start = () => {
+      if (running || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      if (element.scrollWidth - element.clientWidth <= OVERFLOW_EPSILON) return;
+      running = true;
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      position = scrolledFromStart(element);
+      move(0, MARQUEE_RETURN_SPEED, MARQUEE_PAUSE_START, cycle);
+    };
+    const stop = () => {
+      running = false;
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      move(0, MARQUEE_RETURN_SPEED, 0);
+    };
+
+    scope.addEventListener("pointerenter", start);
+    scope.addEventListener("pointerleave", stop);
+    return () => {
+      running = false;
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      scope.removeEventListener("pointerenter", start);
+      scope.removeEventListener("pointerleave", stop);
+    };
+  }, [enabled]);
+}
+
 interface FadeOverflowProps {
   /** Length of the fade at each clipped edge, in px. */
   fade?: number;
@@ -88,6 +180,8 @@ interface FadeOverflowProps {
   /** Set as the element's `title` only while an edge is clipped, so a name that fits does not
    * grow a tooltip repeating itself. */
   titleWhenClipped?: string;
+  /** Off to keep a clipped label still on hover (see `useMarquee`); on by default. */
+  marquee?: boolean;
   children: React.ReactNode;
 }
 
@@ -101,6 +195,9 @@ interface FadeOverflowProps {
  * horizontal scroll container with a scrollbar, fades only an end that can be scrolled to, and has
  * no way to pin a line to its end (a clipped start edge) or to offer a title only while clipped.
  *
+ * While clipped at its end, the text runs as a marquee while the pointer is over it, or over the
+ * nearest ancestor marked `data-marquee-scope` (a row), so all of it can be read without a tooltip.
+ *
  * It sets `overflow` and `whitespace-nowrap` itself, so the caller supplies only the sizing
  * (`min-w-0 flex-1` inside a flex row). The first measurement is made before the first paint, so a
  * label that does not fit never shows a hard cut.
@@ -112,6 +209,7 @@ export function FadeOverflow({
   dir,
   clip = "end",
   titleWhenClipped,
+  marquee = true,
   children,
 }: FadeOverflowProps): React.ReactElement {
   const ref = useRef<HTMLElement>(null);
@@ -146,6 +244,8 @@ export function FadeOverflow({
   useLayoutEffect(() => {
     if (ref.current) scheduleMeasure(ref.current);
   });
+
+  useMarquee(ref, marquee && clip === "end");
 
   const mask = maskImage(fade, clipped);
   return (
