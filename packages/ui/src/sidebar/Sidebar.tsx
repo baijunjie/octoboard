@@ -69,8 +69,9 @@ interface SidebarProps extends SidebarHandlers {
 }
 
 /** The sidebar: one console at a time, picked from the switcher at its top (see
- * docs/product/sidebar.md), with its hub and projects — or, in a project's focus mode, that
- * project alone. Expand/collapse state is purely local UI state; the daemon has no notion of it. */
+ * docs/product/sidebar.md), with its console session and projects — or, in a project's focus mode,
+ * that project alone. Expand/collapse state is purely local UI state; the daemon has no notion of
+ * it. */
 export function Sidebar({
   consoles,
   projects,
@@ -391,7 +392,7 @@ function ConsoleBody({
 
   return (
     <>
-      <HubRows handlers={handlers} console={thisConsole} sessions={sessions} selectedSessionId={selectedSessionId} />
+      <ConsoleSessionRows handlers={handlers} console={thisConsole} sessions={sessions} selectedSessionId={selectedSessionId} />
       <SectionHeading
         after={
           // Only while the filter button is there (below): the chip hands focus to it when removed.
@@ -484,9 +485,9 @@ function ConsoleBody({
   );
 }
 
-/** The console's Hub row, and below it any further hub that is not archived (should one ever
- * exist). Archived hubs are reached from the row's menu. */
-function HubRows({
+/** The console session row, and below it any further console session that is not archived (should
+ * one ever exist). Archived console sessions are reached from the row's menu. */
+function ConsoleSessionRows({
   handlers,
   console: thisConsole,
   sessions,
@@ -498,49 +499,56 @@ function HubRows({
   selectedSessionId?: string;
 }): React.ReactElement {
   const t = useT();
-  // The daemon refuses to create or resume a second live hub, so there should only ever be one —
-  // but the sidebar stays total regardless: sorting by `started_at` and keeping only the newest in
-  // the Hub row means a second one (were it ever to exist) still gets a row, as an ordinary
-  // session, rather than disappearing.
-  const liveHubs = sessions
-    .filter((s) => s.role === "hub" && s.status !== "archived")
+  // The daemon refuses to create or resume a second live console session, so there should only
+  // ever be one — but the sidebar stays total regardless: sorting by `started_at` and keeping only
+  // the newest in the console session row means a second one (were it ever to exist) still gets a
+  // row, as an ordinary session, rather than disappearing.
+  const liveConsoleSessions = sessions
+    .filter((s) => s.role === "console" && s.status !== "archived")
     .sort((a, b) => b.started_at - a.started_at);
-  const hub = liveHubs[0];
-  const extraHubs = liveHubs.slice(1);
-  const archivedHubs = archivedSessions(sessions.filter((s) => s.role === "hub"));
-  const activateHub = () => (hub ? handlers.onSelectSession(hub) : handlers.onOpenHub(thisConsole));
+  const consoleSession = liveConsoleSessions[0];
+  const extraConsoleSessions = liveConsoleSessions.slice(1);
+  const archivedConsoleSessions = archivedSessions(sessions.filter((s) => s.role === "console"));
+  const activateConsoleSession = () =>
+    consoleSession ? handlers.onSelectSession(consoleSession) : handlers.onOpenConsoleSession(thisConsole);
 
   const menu: ActionMenuEntry[] = [
-    archiveSubmenu(t, t("sidebar.archive.hubs"), archivedHubs, handlers.onSelectSession, () =>
+    archiveSubmenu(t, t("sidebar.archive.consoleSessions"), archivedConsoleSessions, handlers.onSelectSession, () =>
       handlers.onOpenArchive({ console: thisConsole.id }),
     ),
-    // The only way to archive the hub: it cannot archive itself, and while it sits in this row
-    // (running or interrupted), archiving it is what lets the row open a fresh one.
-    ...(hub
-      ? (["separator", { label: t("sidebar.session.archive"), icon: Archive, onClick: () => handlers.onOpenDialog({ kind: "archive-session", session: hub }) }] as ActionMenuEntry[])
+    // The only way to archive the console session: it cannot archive itself, and while it sits in
+    // this row (running or interrupted), archiving it is what lets the row open a fresh one.
+    ...(consoleSession
+      ? (["separator", { label: t("sidebar.session.archive"), icon: Archive, onClick: () => handlers.onOpenDialog({ kind: "archive-session", session: consoleSession }) }] as ActionMenuEntry[])
       : []),
   ];
 
   return (
     <div className="flex flex-col gap-0.5 pt-2">
       <TreeRow
-        ariaLabel={hub ? t("sidebar.hub.ariaLabel", { agent: AGENT_LABEL[hub.agent], status: statusLabel(t, hub.status) }) : t("sidebar.hub.start")}
-        selected={hub !== undefined && hub.id === selectedSessionId}
-        onActivate={activateHub}
+        ariaLabel={
+          consoleSession
+            ? t("sidebar.consoleSession.ariaLabel", { agent: AGENT_LABEL[consoleSession.agent], status: statusLabel(t, consoleSession.status) })
+            : t("sidebar.consoleSession.start")
+        }
+        selected={consoleSession !== undefined && consoleSession.id === selectedSessionId}
+        onActivate={activateConsoleSession}
       >
         <span className="flex size-4 shrink-0 items-center justify-center">
-          {hub ? <StatusIcon status={hub.status} decorative /> : <Play aria-hidden="true" className="size-3.5 text-muted" />}
+          {consoleSession ? <StatusIcon status={consoleSession.status} decorative /> : <Play aria-hidden="true" className="size-3.5 text-muted" />}
         </span>
-        {hub ? <AgentIcon agent={hub.agent} /> : <Waypoints aria-hidden="true" className="size-4 shrink-0 text-muted" />}
-        <RowLabel title={t("sidebar.hub.name")}>
-          <span className="font-medium">{t("sidebar.hub.name")}</span>
-          {!hub && <span className="ms-2 text-muted">{t("sidebar.hub.startHint")}</span>}
+        {consoleSession ? <AgentIcon agent={consoleSession.agent} /> : <Waypoints aria-hidden="true" className="size-4 shrink-0 text-muted" />}
+        <RowLabel title={t("sidebar.consoleSession.name")}>
+          <span className="font-medium">{t("sidebar.consoleSession.name")}</span>
+          {!consoleSession && <span className="ms-2 text-muted">{t("sidebar.consoleSession.startHint")}</span>}
         </RowLabel>
         <RowControls>
-          {(hub || archivedHubs.length > 0) && <ActionMenu label={t("sidebar.hub.actions", { name: thisConsole.name })} items={menu} />}
+          {(consoleSession || archivedConsoleSessions.length > 0) && (
+            <ActionMenu label={t("sidebar.consoleSession.actions", { name: thisConsole.name })} items={menu} />
+          )}
         </RowControls>
       </TreeRow>
-      {extraHubs.map((session) => (
+      {extraConsoleSessions.map((session) => (
         <SessionRow key={session.id} handlers={handlers} session={session} selectedSessionId={selectedSessionId} />
       ))}
     </div>

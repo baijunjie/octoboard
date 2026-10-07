@@ -2,9 +2,9 @@
 
 A desktop control board for orchestrating coding agents across multiple projects.
 
-> **Status: early development.** The core features are built — consoles, projects, sessions in real terminals, a hub
-> agent dispatching work across projects and reporting back, and the report panel — on macOS (Apple Silicon). No release
-> is published yet, so for now Octoboard is built from source.
+> **Status: early development.** The core features are built — consoles, projects, sessions in real terminals, a
+> console session dispatching work across projects and reporting back, and the report panel — on macOS (Apple
+> Silicon). No release is published yet, so for now Octoboard is built from source.
 
 ## This is an AI-native project
 
@@ -19,10 +19,11 @@ Because of that, the contribution model is unusual:
 
 ## What it is
 
-In Octoboard, a **console** groups a set of projects and has its own **hub agent**. You hand a request to the hub
-agent, and it decides which project the task belongs to, starts a dedicated agent session in that project's
-directory, and hands the task over. When the session finishes it reports back to the hub, and the hub reports to you.
-You can switch to any session at any moment to watch it or take over by typing into its terminal directly.
+In Octoboard, a **console** groups a set of projects and has its own **console session**, running the agent of your
+choice. You hand a request to the console session, and it decides which project the task belongs to, starts a
+dedicated agent session in that project's directory, and hands the task over. When the session finishes it reports
+back to the console session, and the console session reports to you. You can switch to any session at any moment to
+watch it or take over by typing into its terminal directly.
 
 Octoboard is neither a new agent nor a new terminal. Every session is a native agent CLI process — Claude Code,
 Codex, Grok Build — running in the project directory so that the project's own configuration (`CLAUDE.md` /
@@ -54,7 +55,7 @@ flowchart TB
 
     subgraph Agents["Agent processes: one per session, each in a PTY"]
         direction LR
-        Hub["<b>Hub session</b><br/>runs in the console's<br/>working directory"]
+        ConsoleSession["<b>Console session</b><br/>runs in the console's<br/>working directory"]
         Work["<b>Project sessions</b><br/>run in each project's directory,<br/>project config stays in effect"]
     end
 
@@ -68,14 +69,14 @@ flowchart TB
 
 - **Desktop application** — also raises the notification when a session is waiting for the user.
 - **Coordinator and host** — the host role receives each agent's hook events and MCP tool calls; the coordinator
-  executes them, and delivers project sessions' reports to the hub, synthesising one when a session stops without
-  reporting.
+  executes them, and delivers project sessions' reports to the console session, synthesising one when a session
+  stops without reporting.
 - **Injection** — Octoboard's hooks, MCP server and role description are added per launch; project files and the
   user's agent configuration are never modified. The one thing it does for the user is answer Claude Code's own
-  first-launch trust prompt — for a project session only after the user has agreed (for that project or for a whole parent folder); a hub's own
-  console directory needs no consent.
-- **Agent sessions** — the hub has the orchestration tools, a project session has one tool, `report`, and the two
-  never talk to each other directly: everything between them passes through the daemon.
+  first-launch trust prompt — for a project session only after the user has agreed (for that project or for a whole
+  parent folder); a console session's own console directory needs no consent.
+- **Agent sessions** — the console session has the orchestration tools, a project session has one tool, `report`,
+  and the two never talk to each other directly: everything between them passes through the daemon.
 
 For the design in full, see [`docs/architecture.md`](docs/architecture.md) and the product docs indexed in
 [`docs/README.md`](docs/README.md).

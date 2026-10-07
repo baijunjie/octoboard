@@ -45,7 +45,7 @@ const projects: Project[] = projectNames.map((name, i) =>
 );
 projects.push(projectOf("p-other", "c-2", "Side project"), projectOf("p-exp", "c-4", "Prototype"));
 
-const sessions: Session[] = [sessionOf("s-hub-1", "c-1", undefined, "Hub", "working")];
+const sessions: Session[] = [sessionOf("s-console-1", "c-1", undefined, "Hub", "working")];
 projects.slice(0, projectNames.length).forEach((project, p) => {
   const count = 2 + (p % 5);
   for (let i = 0; i < count; i++) {

@@ -23,7 +23,7 @@ export function ConsoleDialog({
   const t = useT();
   const { request } = useDaemon();
   const [name, setName] = useState(editing?.name ?? "");
-  const [hubAgent, setHubAgent] = useState<Agent>(editing?.hub_agent ?? "claude");
+  const [consoleSessionAgent, setConsoleSessionAgent] = useState<Agent>(editing?.console_session_agent ?? "claude");
   const [defaultAgent, setDefaultAgent] = useState<Agent>(editing?.default_agent ?? "claude");
   const [configDirs, setConfigDirs] = useState<Record<ConfigDirField, string>>({
     claude_config_dir: editing?.claude_config_dir ?? "",
@@ -54,7 +54,7 @@ export function ConsoleDialog({
   // One row per agent the dialog currently selects, in a fixed order. An agent that is not selected
   // keeps whatever is stored for it: its row is neither shown nor sent.
   const shownAgents = AGENT_OPTIONS.map((option) => option.value).filter(
-    (agent) => agent === hubAgent || agent === defaultAgent,
+    (agent) => agent === consoleSessionAgent || agent === defaultAgent,
   );
 
   // What was typed for each shown row, trimmed.
@@ -86,7 +86,7 @@ export function ConsoleDialog({
           type: "update_console",
           console: editing.id,
           name,
-          hub_agent: hubAgent,
+          console_session_agent: consoleSessionAgent,
           default_agent: defaultAgent,
           ...changes,
         });
@@ -98,7 +98,7 @@ export function ConsoleDialog({
         await request({
           type: "create_console",
           name,
-          hub_agent: hubAgent,
+          console_session_agent: consoleSessionAgent,
           default_agent: defaultAgent,
           ...(icon && { icon }),
           ...dirs,
@@ -146,7 +146,7 @@ export function ConsoleDialog({
           />
         </div>
       </div>
-      <OptionSelect label={t("dialog.console.hubAgent")} options={AGENT_ICON_OPTIONS} value={hubAgent} onChange={setHubAgent} />
+      <OptionSelect label={t("dialog.console.consoleSessionAgent")} options={AGENT_ICON_OPTIONS} value={consoleSessionAgent} onChange={setConsoleSessionAgent} />
       <OptionSelect label={t("dialog.console.defaultAgent")} options={AGENT_ICON_OPTIONS} value={defaultAgent} onChange={setDefaultAgent} />
       {shownAgents.map((agent) => {
         const { field, placeholder } = AGENT_CONFIG_DIR[agent];

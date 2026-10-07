@@ -39,14 +39,14 @@ impl Agent {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
-    Hub,
-    Worker,
+    Console,
+    Project,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Origin {
-    Hub,
+    Console,
     User,
 }
 
@@ -96,7 +96,7 @@ pub struct Console {
     pub id: String,
     pub name: String,
     pub workdir: String,
-    pub hub_agent: Agent,
+    pub console_session_agent: Agent,
     pub default_agent: Agent,
     /// Where each agent's sessions opened in this console keep their configuration, login and
     /// transcripts, as an absolute path; one setting per agent, and a session reads only its own
@@ -155,9 +155,9 @@ pub struct Session {
     /// found", and a session the user opened and never typed into is the common case of that. A
     /// resume therefore starts a fresh conversation rather than failing.
     pub has_conversation: bool,
-    /// Whether this session's reports go to its console's hub. Always true for a session the hub
-    /// started; a session the user opened by hand is outside the orchestration unless they asked
-    /// for it to be included.
+    /// Whether this session's reports go to its console session. Always true for a session the
+    /// console session started; a session the user opened by hand is outside the orchestration
+    /// unless they asked for it to be included.
     pub include_in_hub: bool,
     /// The configuration directory of this session's own agent that it was started with, fixed at
     /// creation: the console's setting for that agent at the time. An agent keeps a conversation's
@@ -173,10 +173,10 @@ pub struct Session {
     pub ended_at: Option<i64>,
 }
 
-/// One page the hub pushed to its console's report panel. Every page is kept, so the panel can be
-/// paged back through; `anchor_message_id` records the conversation position the page was pushed at
-/// and is stored only (see "Data model" in `docs/architecture.md`), and no agent exposes a message
-/// id to put in it yet.
+/// One page the console session pushed to its console's report panel. Every page is kept, so the
+/// panel can be paged back through; `anchor_message_id` records the conversation position the page
+/// was pushed at and is stored only (see "Data model" in `docs/architecture.md`), and no agent
+/// exposes a message id to put in it yet.
 #[derive(Debug, Clone, Serialize)]
 pub struct Page {
     pub id: String,
@@ -258,7 +258,7 @@ pub struct Request {
 pub enum RequestBody {
     CreateConsole {
         name: String,
-        hub_agent: Agent,
+        console_session_agent: Agent,
         default_agent: Agent,
         #[serde(default)]
         claude_config_dir: Option<String>,
@@ -272,7 +272,7 @@ pub enum RequestBody {
     UpdateConsole {
         console: String,
         name: Option<String>,
-        hub_agent: Option<Agent>,
+        console_session_agent: Option<Agent>,
         default_agent: Option<Agent>,
         /// Each config directory: absent leaves the setting alone; an explicit `null` (or a blank
         /// string) clears it, so the user's shell environment applies again.
@@ -330,8 +330,9 @@ pub enum RequestBody {
         agent: Option<Agent>,
         task: Option<String>,
         title: Option<String>,
-        /// Whether the session reports to the hub. Absent is false: a session the user opens by
-        /// hand stays outside the orchestration unless they check "include in hub".
+        /// Whether the session reports to its console session. Absent is false: a session the user
+        /// opens by hand stays outside the orchestration unless they check "Report to console
+        /// session".
         #[serde(default)]
         include_in_hub: bool,
     },
@@ -346,7 +347,7 @@ pub enum RequestBody {
     DeleteSession {
         session: String,
     },
-    /// Removes every archived session of `project`, or, with no `project`, every archived hub
+    /// Removes every archived session of `project`, or, with no `project`, every archived console
     /// session of `console`.
     DeleteArchivedSessions {
         console: String,
@@ -368,7 +369,7 @@ pub enum RequestBody {
         console: String,
     },
     /// What a report panel form was submitted with. The page it came from is named rather than the
-    /// hub session, because that is what the panel knows and it is also what decides whether the
+    /// console session, because that is what the panel knows and it is also what decides whether the
     /// submission is allowed at all: only the console's newest page is live.
     SubmitPage {
         page: String,
@@ -491,17 +492,18 @@ pub enum Event {
         entries: Vec<DirEntry>,
     },
     /// The reply to `list_pages`, oldest first. Pages are not in `snapshot`: a page carries a whole
-    /// HTML document, and only a console whose hub the user is looking at needs its pages, so the
-    /// panel asks for them instead — and asks again after every `snapshot`, which is what keeps it
-    /// correct across a `page_created` the client was too far behind to receive. A lagging client is
-    /// sent a fresh snapshot in place of the events it missed, on the socket it already has, so
-    /// nothing else tells it that its list is now short.
+    /// HTML document, and only a console whose console session the user is looking at needs its
+    /// pages, so the panel asks for them instead — and asks again after every `snapshot`, which is
+    /// what keeps it correct across a `page_created` the client was too far behind to receive. A
+    /// lagging client is sent a fresh snapshot in place of the events it missed, on the socket it
+    /// already has, so nothing else tells it that its list is now short.
     PageList {
         id: Option<String>,
         console_id: String,
         pages: Vec<Page>,
     },
-    /// A page the hub just pushed. The panel showing that console's hub refreshes to it.
+    /// A page the console session just pushed. The panel showing that console session refreshes to
+    /// it.
     PageCreated {
         page: Page,
     },
@@ -667,16 +669,17 @@ pub mod error_code {
 
     /// A launch was asked for while one was already running or already starting for that session.
     /// The client's own double click is the ordinary cause, so it is shown as nothing at all. The
-    /// hub variants below mean the same for a console's hub.
+    /// console session variants below mean the same for a console session.
     pub const SESSION_ALREADY_RUNNING: &str = "session_already_running";
     /// [`SESSION_ALREADY_RUNNING`], where the launch had begun but not yet registered.
     pub const SESSION_ALREADY_STARTING: &str = "session_already_starting";
-    /// [`SESSION_ALREADY_RUNNING`], for opening a hub while the console has a live one.
-    pub const HUB_ALREADY_RUNNING: &str = "hub_already_running";
-    /// [`SESSION_ALREADY_RUNNING`], for reopening a hub while the console has another live one.
-    pub const HUB_REOPEN_BLOCKED: &str = "hub_reopen_blocked";
-    /// [`SESSION_ALREADY_RUNNING`], for a console whose hub is already being started.
-    pub const HUB_ALREADY_STARTING: &str = "hub_already_starting";
+    /// [`SESSION_ALREADY_RUNNING`], for opening a console session while the console has a live one.
+    pub const CONSOLE_SESSION_ALREADY_RUNNING: &str = "console_session_already_running";
+    /// [`SESSION_ALREADY_RUNNING`], for reopening a console session while the console has another
+    /// live one.
+    pub const CONSOLE_SESSION_REOPEN_BLOCKED: &str = "console_session_reopen_blocked";
+    /// [`SESSION_ALREADY_RUNNING`], for a console whose console session is already being started.
+    pub const CONSOLE_SESSION_ALREADY_STARTING: &str = "console_session_already_starting";
     /// A directory to trust as a whole cannot be offered: it is the filesystem root, the user's home
     /// directory or one that contains it. Nothing was answered. The dialog the request came from
     /// stays open, because the user can still choose another way to answer, and so it does for the
@@ -699,8 +702,8 @@ pub mod error_code {
     pub const CLAUDE_TRUST_ANSWER_FAILED: &str = "claude_trust_answer_failed";
     /// A go-ahead for the trust screen of a session that is not Claude Code's.
     pub const NOT_A_CLAUDE_SESSION: &str = "not_a_claude_session";
-    /// A go-ahead for a hub session's trust screen, which Octoboard answers without asking.
-    pub const HUB_TRUST_NOT_ASKED: &str = "hub_trust_not_asked";
+    /// A go-ahead for a console session's trust screen, which Octoboard answers without asking.
+    pub const CONSOLE_SESSION_TRUST_NOT_ASKED: &str = "console_session_trust_not_asked";
 
     /// A request that is not valid JSON of a known shape.
     pub const UNREADABLE_REQUEST: &str = "unreadable_request";
@@ -738,7 +741,7 @@ pub mod error_code {
     pub const SESSION_WAITING_FOR_USER: &str = "session_waiting_for_user";
     pub const QUEUED_MESSAGES_LOST: &str = "queued_messages_lost";
     pub const PAGE_NOT_CURRENT: &str = "page_not_current";
-    pub const HUB_MISSING: &str = "hub_missing";
+    pub const CONSOLE_SESSION_MISSING: &str = "console_session_missing";
     pub const BINARY_NOT_FOUND: &str = "binary_not_found";
     pub const SHELL_ENVIRONMENT_TIMEOUT: &str = "shell_environment_timeout";
 }
@@ -963,7 +966,7 @@ mod tests {
     #[test]
     fn creating_a_console_needs_no_config_dir() {
         let request: Request = serde_json::from_str(
-            r#"{"type":"create_console","name":"n","hub_agent":"claude","default_agent":"codex"}"#,
+            r#"{"type":"create_console","name":"n","console_session_agent":"claude","default_agent":"codex"}"#,
         )
         .unwrap();
         match request.body {

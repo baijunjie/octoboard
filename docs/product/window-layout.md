@@ -1,10 +1,10 @@
 # Window layout
 
 The window has a **top bar** across its whole width and, under it, up to three panes, left to right (right to left
-under a right-to-left language, see "Right-to-left layout" below): the **sidebar**, showing one console's hub,
-projects and sessions (see `docs/product/sidebar.md`), the selected session's **terminal**, which the archive view
-covers while it is open (see "The archive view" in `docs/product/sidebar.md`), and — only while the selected session is
-a hub session — that console's **report panel** (see `docs/product/report-panel.md`). The connection banner, while the
+under a right-to-left language, see "Right-to-left layout" below): the **sidebar**, showing one console's console
+session, projects and sessions (see `docs/product/sidebar.md`), the selected session's **terminal**, which the archive
+view covers while it is open (see "The archive view" in `docs/product/sidebar.md`), and — only while the selected
+session is a console session — that console's **report panel** (see `docs/product/report-panel.md`). The connection banner, while the
 daemon connection is down, is a full-width strip along the window's bottom edge, under the panes (see "Losing the
 daemon connection" in `docs/product/application-lifecycle.md`). Toasts float over the bottom right, above the banner
 while it is shown (see "Toasts" below).
@@ -30,11 +30,11 @@ It has three parts:
   two read as one column; it follows the sidebar's width while the sidebar is being resized. Otherwise it is only as
   wide as its controls.
 - **Middle**: the selected session's breadcrumb — *console › project › session title* for a project session,
-  *console › Hub* for a hub session — followed by the session's status icon. A trail too long for the bar fades out at
-  its right edge, as in "Names too long for their space" below, and the status icon always stays visible. With no
-  session selected the middle is empty. While the archive view is open (see "The archive view" in
-  `docs/product/sidebar.md`) the breadcrumb shows where that is instead, with no status icon: *console › project ›
-  Archived sessions*, or *console › Archived hubs*.
+  *console › Console session* for a console session — followed by the session's status icon. A trail too long for
+  the bar fades out at its right edge, as in "Names too long for their space" below, and the status icon always
+  stays visible. With no session selected the middle is empty. While the archive view is open (see "The archive view"
+  in `docs/product/sidebar.md`) the breadcrumb shows where that is instead, with no status icon: *console › project ›
+  Archived sessions*, or *console › Archived console sessions*.
 - **Right**, left to right:
   - the **waiting count**, a raised hand with the number of sessions waiting for the user in a badge on its corner,
     shown only while at least one is (99+ beyond 99); pressing it goes to the next waiting session (see "The raised
@@ -42,7 +42,8 @@ It has three parts:
   - the **connection status**, described below;
   - **Turn on notifications**, a bell with a small dot on it, shown only in a browser whose answer to notifications is
     still undecided; pressing it asks the browser (see "Notifications" in `docs/product/settings.md`);
-  - the report panel toggle ("Show report" / "Hide report"), shown only while the selected session is a hub session;
+  - the report panel toggle ("Show report" / "Hide report"), shown only while the selected session is a console
+    session;
   - **Settings**, which opens the settings dialog.
 
 What the two toggles do depends on the window's width: see "Hiding the sidebar and the report panel" and "Below
@@ -141,7 +142,7 @@ remembered width: when the window widens again, each pane gets its chosen width 
 
 A pane the user has hidden takes no width at all, and neither does one only floating in: its width goes to the
 terminal, and a hidden report panel stops holding back the sidebar's width (see "Hiding the sidebar and the report
-panel" below). With no hub session selected there is no report panel in the row either.
+panel" below). With no console session selected there is no report panel in the row either.
 
 Anything that changes the terminal's size — resizing the window, resizing a pane, hiding or showing a pane —
 resizes the agent's terminal (see "The terminal" in `docs/product/sessions.md`).
@@ -174,8 +175,8 @@ page is reloaded.
 At 1100 px and wider, the top bar's two toggles hide and show the docked panes:
 
 - The sidebar toggle hides or shows the sidebar.
-- The report toggle, there only while a hub session is selected, hides or shows the report panel. A hidden report
-  panel stays hidden for every hub session selected afterwards, until it is shown again.
+- The report toggle, there only while a console session is selected, hides or shows the report panel. A hidden
+  report panel stays hidden for every console session selected afterwards, until it is shown again.
 
 Both panes are shown by default. **Whether each one is hidden is remembered per client**, the same way as the panes'
 widths. Hiding a pane hands its width to the terminal.
@@ -202,8 +203,8 @@ pane**:
 - **Only one at a time**: bringing one up sends the other away.
 - **Pressing the toggle** while the pane is floating shows it for good: it joins the row, and keyboard focus stays
   where it was. Until then the toggle still reads "Show …".
-- The report panel floats in only while a hub session is selected. There are no floating panes below 1100 px, and
-  narrowing the window below it sends one away.
+- The report panel floats in only while a console session is selected. There are no floating panes below 1100 px,
+  and narrowing the window below it sends one away.
 
 ## Below 1100 px: the sidebar and the report panel become drawers
 
@@ -215,7 +216,7 @@ report panel each become an **overlay drawer** over it, **closed by default**:
   above the connection banner (when it is shown), so the bar and the banner's Retry stay usable while a drawer is open.
 - Each is opened and closed with the same top bar toggle that hides and shows it at 1100 px and wider — the sidebar
   toggle on the left, the report toggle on the right. The report toggle is there only while the selected session is a
-  hub session, since no other session has a panel.
+  console session, since no other session has a panel.
 - A drawer closes on its toggle, on a press anywhere in the dimmed area beside it, or on `Escape`.
   While a drawer is open `Escape` closes it and **does not reach the running agent**.
 - Opening one drawer closes the other; at most one is ever open.
@@ -285,8 +286,8 @@ are about, is in "Losing the daemon connection" in `docs/product/application-lif
   dialog is open. They never move the layout; the stack rides above the connection banner while that is shown. The
   newest is at the front.
 - A toast about a particular session is titled with where that session is — the project it runs in, or the console
-  whose hub it is — with the message under it; any other toast is just the message. An error is marked as one; a
-  notice is not.
+  whose console session it is — with the message under it; any other toast is just the message. An error is marked
+  as one; a notice is not.
 - **A toast dismisses itself**: a notice after about 5 seconds, an error after about 8. The countdown pauses while
   the pointer is over the toasts or keyboard focus is inside them. Each toast also has a close button.
 - **An identical toast** — the same kind, message and session — arriving while one is still shown does not stack a

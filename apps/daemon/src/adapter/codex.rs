@@ -121,8 +121,8 @@ impl AgentAdapter for CodexAdapter {
                 .join(",")
         ));
         // Octoboard's own tools are not a decision to put to the user: every one of them is
-        // something the hub was told to do, and a modal for each would make orchestration
-        // unusable.
+        // something the console session was told to do, and a modal for each would make
+        // orchestration unusable.
         args.push("-c".to_string());
         args.push(format!(
             "mcp_servers.{key}.default_tools_approval_mode=\"auto\""

@@ -2,7 +2,7 @@ import type { DialogRequest } from "../dialogs/dialogRequest";
 import type { Console, Project, Session } from "../protocol";
 
 /** Which archive the archive view lists: a project's archived sessions, or with no `project` the
- * console's archived hubs. */
+ * console's archived console sessions. */
 export interface ArchiveScope {
   console: string;
   project?: string;
@@ -13,7 +13,7 @@ export interface ArchiveScope {
  * the parent happened to have in scope under the same names. */
 export interface SidebarHandlers {
   onSelectSession: (session: Session) => void;
-  onOpenHub: (console: Console) => void;
+  onOpenConsoleSession: (console: Console) => void;
   onOpenDialog: (dialog: DialogRequest) => void;
   onSelectConsole: (consoleId: string) => void;
   /** Enters a project's focus mode, or with `undefined` leaves it. */

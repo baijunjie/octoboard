@@ -1,13 +1,13 @@
 //! Answering Claude Code's workspace-trust screen for the user, once they have agreed to that.
 //!
-//! The first time Claude Code runs in a directory it stops on a screen asking whether the folder
-//! is trusted, and waits for a person. A session the hub starts in a fresh project would sit there
-//! unattended. Octoboard answers it by typing at the terminal — a Down and an Enter, because the
-//! cursor starts on "No, exit" — and never by editing Claude Code's global config file, which
-//! Claude Code rewrites constantly and which is the user's. The user's agreement comes first, in a
-//! dialog of Octoboard's own, and is remembered per project (`Project::claude_trust_consent`) or
-//! for a whole directory (`trusted_directories`): every project whose path lies under it, existing
-//! or added later, is answered without asking.
+//! The first time Claude Code runs in a directory it stops on a screen asking whether the folder is
+//! trusted, and waits for a person. A session the console session starts in a fresh project would
+//! sit there unattended. Octoboard answers it by typing at the terminal — a Down and an Enter,
+//! because the cursor starts on "No, exit" — and never by editing Claude Code's global config file,
+//! which Claude Code rewrites constantly and which is the user's. The user's agreement comes first,
+//! in a dialog of Octoboard's own, and is remembered per project (`Project::claude_trust_consent`)
+//! or for a whole directory (`trusted_directories`): every project whose path lies under it,
+//! existing or added later, is answered without asking.
 //!
 //! **Detection.** Every Claude Code session's output is watched by a [`TrustState`], fed from the
 //! PTY reader thread whether or not a client is attached. The screen is recognised by how it is
@@ -23,7 +23,7 @@
 //! it reproduces the first-draw pattern inside that window before any hook has run; and whatever is
 //! sighted, keys are sent only if the cursor check below passes.
 //!
-//! **What happens next** is decided by [`supervise`]: a hub session's working directory is
+//! **What happens next** is decided by [`supervise`]: a console session's working directory is
 //! Octoboard's own console directory, so it is answered at once; a project session is answered at
 //! once when the project has the user's consent, and otherwise a `claude_trust_prompt` is
 //! broadcast and the screen is left alone until `confirm_claude_trust` comes back. With no client
@@ -294,12 +294,12 @@ impl TrustState {
     }
 }
 
-/// Whether Octoboard may answer this session's screen without asking: a hub session always may,
-/// because its working directory is the console's own, which holds nothing but the instruction
-/// file Octoboard wrote there; a project session only with the user's consent, either for that
-/// project or for a trusted directory its path lies under.
+/// Whether Octoboard may answer this session's screen without asking: a console session always
+/// may, because its working directory is the console's own, which holds nothing but the
+/// instruction file Octoboard wrote there; a project session only with the user's consent, either
+/// for that project or for a trusted directory its path lies under.
 fn consented(session: &Session, project: Option<&Project>, trusted: &[String]) -> bool {
-    session.role == Role::Hub
+    session.role == Role::Console
         || project.is_some_and(|project| {
             project.claude_trust_consent || under_a_trusted_directory(&project.path, trusted)
         })
@@ -600,9 +600,9 @@ pub async fn confirm(
     }
     let Some(project_id) = &session.project_id else {
         return Err(CodedError::raised(
-            error_code::HUB_TRUST_NOT_ASKED,
+            error_code::CONSOLE_SESSION_TRUST_NOT_ASKED,
             format!(
-                "a hub session's trust screen is answered by {} without asking",
+                "a console session's trust screen is answered by {} without asking",
                 crate::APP_NAME
             ),
             &[],
@@ -1003,7 +1003,7 @@ mod tests {
             id: "console-1".to_string(),
             name: "Console".to_string(),
             workdir: "/tmp/console-1".to_string(),
-            hub_agent: Agent::Claude,
+            console_session_agent: Agent::Claude,
             default_agent: Agent::Claude,
             claude_config_dir: None,
             codex_config_dir: None,
@@ -1051,23 +1051,23 @@ mod tests {
     }
 
     #[test]
-    fn a_hub_is_always_answered_and_a_project_only_with_the_users_consent() {
-        let hub = session("s", Agent::Claude, Role::Hub, None);
-        let worker = session("s", Agent::Claude, Role::Worker, Some("project-1"));
+    fn a_console_session_is_always_answered_and_a_project_only_with_the_users_consent() {
+        let console_session = session("s", Agent::Claude, Role::Console, None);
+        let project_session = session("s", Agent::Claude, Role::Project, Some("project-1"));
         let none: &[String] = &[];
         let work = ["/work".to_string()];
-        assert!(consented(&hub, None, none));
-        assert!(consented(&worker, Some(&project(true)), none));
-        assert!(!consented(&worker, Some(&project(false)), none));
-        assert!(!consented(&worker, None, none));
+        assert!(consented(&console_session, None, none));
+        assert!(consented(&project_session, Some(&project(true)), none));
+        assert!(!consented(&project_session, Some(&project(false)), none));
+        assert!(!consented(&project_session, None, none));
         // A trusted directory covers the project under it, one with no consent of its own included.
-        assert!(consented(&worker, Some(&project(false)), &work));
+        assert!(consented(&project_session, Some(&project(false)), &work));
         assert!(!consented(
-            &worker,
+            &project_session,
             Some(&project(false)),
             &["/elsewhere".to_string()]
         ));
-        assert!(!consented(&worker, None, &work));
+        assert!(!consented(&project_session, None, &work));
     }
 
     /// A fresh directory for one test. Named without the thread id's parentheses, which the shell
@@ -1372,10 +1372,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_hub_sessions_screen_is_answered_without_asking() {
-        let (state, dir) = app_state("hub");
+    async fn a_console_sessions_screen_is_answered_without_asking() {
+        let (state, dir) = app_state("console-session");
         let mut events = state.subscribe();
-        let record = session("hub-1", Agent::Claude, Role::Hub, None);
+        let record = session("console-session-1", Agent::Claude, Role::Console, None);
         let (live, received) = start(&state, &dir, record, &full_script(Path::new("%RECEIVED%")));
         supervise(&state, &live);
 
@@ -1391,7 +1391,7 @@ mod tests {
         while let Ok(event) = events.try_recv() {
             assert!(
                 !matches!(event, Event::ClaudeTrustPrompt { .. }),
-                "a hub is not asked about"
+                "a console session is not asked about"
             );
         }
         tokio::task::spawn_blocking(move || live.terminate())
@@ -1404,7 +1404,12 @@ mod tests {
     async fn a_project_without_consent_is_asked_about_and_nothing_is_sent_until_confirmed() {
         let (state, dir) = app_state("ask");
         let mut events = state.subscribe();
-        let record = session("worker-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let record = session(
+            "project-session-1",
+            Agent::Claude,
+            Role::Project,
+            Some("project-1"),
+        );
         let (live, received) = start(&state, &dir, record, &full_script(Path::new("%RECEIVED%")));
         supervise(&state, &live);
 
@@ -1426,7 +1431,7 @@ mod tests {
         assert_eq!(
             prompt,
             (
-                "worker-1".to_string(),
+                "project-session-1".to_string(),
                 "project-1".to_string(),
                 "/work/project".to_string()
             )
@@ -1437,7 +1442,7 @@ mod tests {
             "nothing is sent before the user agrees"
         );
 
-        confirm(&state, "worker-1", true, false)
+        confirm(&state, "project-session-1", true, false)
             .await
             .expect("confirmed");
 
@@ -1458,7 +1463,9 @@ mod tests {
         assert!(upserted, "clients are told the project is now consented");
 
         // Answered once: a second confirmation of the same screen is stale.
-        assert!(confirm(&state, "worker-1", true, false).await.is_err());
+        assert!(confirm(&state, "project-session-1", true, false)
+            .await
+            .is_err());
         tokio::task::spawn_blocking(move || live.terminate())
             .await
             .unwrap();
@@ -1473,7 +1480,12 @@ mod tests {
             .set_project_claude_trust_consent("project-1", true)
             .expect("consent");
         let mut events = state.subscribe();
-        let record = session("worker-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let record = session(
+            "project-session-1",
+            Agent::Claude,
+            Role::Project,
+            Some("project-1"),
+        );
         let (live, received) = start(&state, &dir, record, &full_script(Path::new("%RECEIVED%")));
         supervise(&state, &live);
 
@@ -1502,7 +1514,7 @@ mod tests {
         assert!(confirm(&state, "nobody", true, false).await.is_err());
 
         // Another agent's, even running and even holding the words.
-        let codex = session("codex-1", Agent::Codex, Role::Worker, Some("project-1"));
+        let codex = session("codex-1", Agent::Codex, Role::Project, Some("project-1"));
         let (codex_live, codex_received) = start(&state, &dir, codex, "sleep 30");
         codex_live.trust.feed(SCREEN);
         let err = confirm(&state, "codex-1", true, false)
@@ -1511,7 +1523,7 @@ mod tests {
         assert!(err.to_string().contains("Claude Code"), "{err}");
 
         // Claude Code's, but not running.
-        let gone = session("gone-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let gone = session("gone-1", Agent::Claude, Role::Project, Some("project-1"));
         state.store.insert_session(&gone).expect("session");
         let err = confirm(&state, "gone-1", true, false)
             .await
@@ -1519,21 +1531,21 @@ mod tests {
         assert!(err.to_string().contains("not running"), "{err}");
 
         // Running, but its screen is not up.
-        let quiet = session("quiet-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let quiet = session("quiet-1", Agent::Claude, Role::Project, Some("project-1"));
         let (quiet_live, quiet_received) = start(&state, &dir, quiet, "sleep 30");
         let err = confirm(&state, "quiet-1", true, false)
             .await
             .expect_err("refused");
         assert!(err.to_string().contains("any more"), "{err}");
 
-        // A hub's screen is not the user's to confirm.
-        let hub = session("hub-1", Agent::Claude, Role::Hub, None);
-        let (hub_live, _) = start(&state, &dir, hub, "sleep 30");
-        hub_live.trust.feed(SCREEN);
-        let err = confirm(&state, "hub-1", true, false)
+        // A console session's screen is not the user's to confirm.
+        let console_session = session("console-session-1", Agent::Claude, Role::Console, None);
+        let (console_session_live, _) = start(&state, &dir, console_session, "sleep 30");
+        console_session_live.trust.feed(SCREEN);
+        let err = confirm(&state, "console-session-1", true, false)
             .await
             .expect_err("refused");
-        assert!(err.to_string().contains("hub session"), "{err}");
+        assert!(err.to_string().contains("console session"), "{err}");
 
         assert!(
             !state
@@ -1547,7 +1559,7 @@ mod tests {
         tokio::task::spawn_blocking(move || {
             codex_live.terminate();
             quiet_live.terminate();
-            hub_live.terminate();
+            console_session_live.terminate();
         })
         .await
         .unwrap();
@@ -1567,11 +1579,16 @@ mod tests {
     #[tokio::test]
     async fn without_remember_the_screen_is_answered_and_no_consent_is_recorded() {
         let (state, dir) = app_state("no-remember");
-        let record = session("worker-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let record = session(
+            "project-session-1",
+            Agent::Claude,
+            Role::Project,
+            Some("project-1"),
+        );
         let (live, received) = start(&state, &dir, record, &full_script(Path::new("%RECEIVED%")));
         live.trust.feed(SCREEN);
 
-        confirm(&state, "worker-1", false, false)
+        confirm(&state, "project-session-1", false, false)
             .await
             .expect("confirmed");
         assert_eq!(sent(&received), b"\x1b[B\r");
@@ -1594,7 +1611,12 @@ mod tests {
             "cat {}; dd bs=1 count=3 2>/dev/null >> '%RECEIVED%'; sleep 30",
             fixture("claude_trust_screen.bin")
         );
-        let record = session("worker-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let record = session(
+            "project-session-1",
+            Agent::Claude,
+            Role::Project,
+            Some("project-1"),
+        );
         let (live, _) = start(&state, &dir, record, &script);
         live.trust.feed(SCREEN);
         // The stand-in's own output is what the answer reads, so wait for it to be printed.
@@ -1607,7 +1629,7 @@ mod tests {
         .await
         .unwrap();
 
-        let err = confirm(&state, "worker-1", true, false)
+        let err = confirm(&state, "project-session-1", true, false)
             .await
             .expect_err("failed");
         assert!(err.to_string().contains("did not move"), "{err}");
@@ -1615,7 +1637,7 @@ mod tests {
         let mut told = false;
         while let Ok(event) = events.try_recv() {
             told |= matches!(event, Event::SessionNotice { session, message, .. }
-                if session == "worker-1" && message.contains("Answer it in the terminal"));
+                if session == "project-session-1" && message.contains("Answer it in the terminal"));
         }
         assert!(told, "a notice, for a dialog that may be closed");
 
@@ -1634,7 +1656,7 @@ mod tests {
             "cat {}; dd bs=1 count=3 2>/dev/null >> '%RECEIVED%'; sleep 30",
             fixture("claude_trust_screen.bin")
         );
-        let record = session("hub-1", Agent::Claude, Role::Hub, None);
+        let record = session("console-session-1", Agent::Claude, Role::Console, None);
         let (live, _) = start(&state, &dir, record, &script);
         supervise(&state, &live);
 
@@ -1650,7 +1672,7 @@ mod tests {
         })
         .await
         .expect("the notice");
-        assert_eq!(notice.0, "hub-1");
+        assert_eq!(notice.0, "console-session-1");
         assert!(
             notice.1.contains("Answer it in the terminal"),
             "{}",
@@ -1668,16 +1690,21 @@ mod tests {
     #[tokio::test]
     async fn a_snapshot_is_followed_by_the_prompts_still_waiting() {
         let (state, dir) = app_state("replay");
-        let waiting = session("waiting-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let waiting = session("waiting-1", Agent::Claude, Role::Project, Some("project-1"));
         let (waiting_live, _) = start(&state, &dir, waiting, "sleep 30");
-        let hub = session("hub-1", Agent::Claude, Role::Hub, None);
-        let (hub_live, _) = start(&state, &dir, hub, "sleep 30");
-        let quiet = session("quiet-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let console_session = session("console-session-1", Agent::Claude, Role::Console, None);
+        let (console_session_live, _) = start(&state, &dir, console_session, "sleep 30");
+        let quiet = session("quiet-1", Agent::Claude, Role::Project, Some("project-1"));
         let (quiet_live, _) = start(&state, &dir, quiet, "sleep 30");
-        let answered = session("answered-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let answered = session(
+            "answered-1",
+            Agent::Claude,
+            Role::Project,
+            Some("project-1"),
+        );
         let (answered_live, _) = start(&state, &dir, answered, "sleep 30");
         waiting_live.trust.feed(SCREEN);
-        hub_live.trust.feed(SCREEN);
+        console_session_live.trust.feed(SCREEN);
         answered_live.trust.feed(SCREEN);
         assert!(answered_live.trust.claim_answer());
 
@@ -1697,7 +1724,12 @@ mod tests {
         assert!(pending_prompts(&state).is_empty());
 
         tokio::task::spawn_blocking(move || {
-            for live in [waiting_live, hub_live, quiet_live, answered_live] {
+            for live in [
+                waiting_live,
+                console_session_live,
+                quiet_live,
+                answered_live,
+            ] {
                 live.terminate();
             }
         })
@@ -1782,11 +1814,16 @@ mod tests {
     async fn confirming_for_the_parent_directory_records_it_after_the_answer() {
         let (state, dir) = app_state("confirm-parent");
         let mut events = state.subscribe();
-        let record = session("worker-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let record = session(
+            "project-session-1",
+            Agent::Claude,
+            Role::Project,
+            Some("project-1"),
+        );
         let (live, received) = start(&state, &dir, record, &full_script(Path::new("%RECEIVED%")));
         live.trust.feed(SCREEN);
 
-        confirm(&state, "worker-1", false, true)
+        confirm(&state, "project-session-1", false, true)
             .await
             .expect("confirmed");
         assert_eq!(sent(&received), b"\x1b[B\r");
@@ -1816,7 +1853,12 @@ mod tests {
             "cat {}; dd bs=1 count=3 2>/dev/null >> '%RECEIVED%'; sleep 30",
             fixture("claude_trust_screen.bin")
         );
-        let record = session("worker-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let record = session(
+            "project-session-1",
+            Agent::Claude,
+            Role::Project,
+            Some("project-1"),
+        );
         let (live, _) = start(&state, &dir, record, &script);
         live.trust.feed(SCREEN);
         let seen = live.clone();
@@ -1827,18 +1869,21 @@ mod tests {
         })
         .await
         .unwrap();
-        assert!(confirm(&state, "worker-1", false, true).await.is_err());
+        assert!(confirm(&state, "project-session-1", false, true)
+            .await
+            .is_err());
         assert!(trusted_in_store(&state).is_empty());
 
-        // The same refusals as for one project: unknown, another agent's, not running, a hub's.
-        let codex = session("codex-1", Agent::Codex, Role::Worker, Some("project-1"));
+        // The same refusals as for one project: unknown, another agent's, not running, a console
+        // session's.
+        let codex = session("codex-1", Agent::Codex, Role::Project, Some("project-1"));
         let (codex_live, _) = start(&state, &dir, codex, "sleep 30");
-        let hub = session("hub-1", Agent::Claude, Role::Hub, None);
-        let (hub_live, _) = start(&state, &dir, hub, "sleep 30");
-        hub_live.trust.feed(SCREEN);
-        let gone = session("gone-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let console_session = session("console-session-1", Agent::Claude, Role::Console, None);
+        let (console_session_live, _) = start(&state, &dir, console_session, "sleep 30");
+        console_session_live.trust.feed(SCREEN);
+        let gone = session("gone-1", Agent::Claude, Role::Project, Some("project-1"));
         state.store.insert_session(&gone).expect("session");
-        for id in ["nobody", "codex-1", "hub-1", "gone-1"] {
+        for id in ["nobody", "codex-1", "console-session-1", "gone-1"] {
             assert!(confirm(&state, id, true, true).await.is_err(), "{id}");
         }
         assert!(trusted_in_store(&state).is_empty());
@@ -1846,7 +1891,7 @@ mod tests {
         tokio::task::spawn_blocking(move || {
             live.terminate();
             codex_live.terminate();
-            hub_live.terminate();
+            console_session_live.terminate();
         })
         .await
         .unwrap();
@@ -1863,11 +1908,16 @@ mod tests {
         broad.id = "broad".to_string();
         broad.path = home.join("app").to_string_lossy().into_owned();
         state.store.insert_project(&broad).expect("project");
-        let record = session("worker-1", Agent::Claude, Role::Worker, Some("broad"));
+        let record = session(
+            "project-session-1",
+            Agent::Claude,
+            Role::Project,
+            Some("broad"),
+        );
         let (live, received) = start(&state, &dir, record, &full_script(Path::new("%RECEIVED%")));
         live.trust.feed(SCREEN);
 
-        let err = confirm(&state, "worker-1", false, true)
+        let err = confirm(&state, "project-session-1", false, true)
             .await
             .expect_err("refused");
         assert_eq!(
@@ -1923,11 +1973,11 @@ mod tests {
         state.store.insert_project(&elsewhere).expect("project");
         let mut events = state.subscribe();
 
-        let under = session("under-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let under = session("under-1", Agent::Claude, Role::Project, Some("project-1"));
         let (under_live, under_received) =
             start(&state, &dir, under, &full_script(Path::new("%RECEIVED%")));
         supervise(&state, &under_live);
-        let beside = session("beside-1", Agent::Claude, Role::Worker, Some("project-2"));
+        let beside = session("beside-1", Agent::Claude, Role::Project, Some("project-2"));
         let (beside_live, beside_received) =
             start(&state, &dir, beside, &full_script(Path::new("%RECEIVED%")));
         supervise(&state, &beside_live);
@@ -1960,7 +2010,7 @@ mod tests {
         assert_eq!(pending_prompts(&state).len(), 1, "and is still asked about");
 
         // A screen that comes up later under the directory is answered with no prompt.
-        let later = session("later-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let later = session("later-1", Agent::Claude, Role::Project, Some("project-1"));
         let (later_live, later_received) =
             start(&state, &dir, later, &full_script(Path::new("%RECEIVED%")));
         supervise(&state, &later_live);
@@ -2113,7 +2163,7 @@ mod tests {
     #[tokio::test]
     async fn the_replay_leaves_out_a_screen_under_a_trusted_directory() {
         let (state, dir) = app_state("replay-trusted");
-        let record = session("waiting-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let record = session("waiting-1", Agent::Claude, Role::Project, Some("project-1"));
         let (live, _) = start(&state, &dir, record, "sleep 30");
         live.trust.feed(SCREEN);
         assert_eq!(pending_prompts(&state).len(), 1);
@@ -2132,23 +2182,27 @@ mod tests {
     }
 
     /// Trusting the directory from one session's dialog answers another session's screen waiting
-    /// under it; a repeat neither announces nor answers anything again; a hub and another agent's
-    /// session are left to their own rules.
+    /// under it; a repeat neither announces nor answers anything again; a console session and
+    /// another agent's session are left to their own rules.
     #[tokio::test]
     async fn one_sessions_go_ahead_answers_the_others_waiting_under_the_directory() {
         let (state, dir) = app_state("fan-out-end-to-end");
         let mut events = state.subscribe();
-        let a = session("a-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let a = session("a-1", Agent::Claude, Role::Project, Some("project-1"));
         let (a_live, a_received) = start(&state, &dir, a, &full_script(Path::new("%RECEIVED%")));
         a_live.trust.feed(SCREEN);
-        let b = session("b-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let b = session("b-1", Agent::Claude, Role::Project, Some("project-1"));
         let (b_live, b_received) = start(&state, &dir, b, &full_script(Path::new("%RECEIVED%")));
         b_live.trust.feed(SCREEN);
-        let hub = session("hub-1", Agent::Claude, Role::Hub, None);
-        let (hub_live, hub_received) =
-            start(&state, &dir, hub, &full_script(Path::new("%RECEIVED%")));
-        hub_live.trust.feed(SCREEN);
-        let codex = session("codex-1", Agent::Codex, Role::Worker, Some("project-1"));
+        let console_session = session("console-session-1", Agent::Claude, Role::Console, None);
+        let (console_session_live, console_session_received) = start(
+            &state,
+            &dir,
+            console_session,
+            &full_script(Path::new("%RECEIVED%")),
+        );
+        console_session_live.trust.feed(SCREEN);
+        let codex = session("codex-1", Agent::Codex, Role::Project, Some("project-1"));
         let (codex_live, codex_received) =
             start(&state, &dir, codex, &full_script(Path::new("%RECEIVED%")));
         codex_live.trust.feed(SCREEN);
@@ -2167,11 +2221,14 @@ mod tests {
             "the other screen under the directory is answered"
         );
         tokio::time::sleep(Duration::from_millis(600)).await;
-        assert!(sent(&hub_received).is_empty(), "a hub is not the fan-out's");
+        assert!(
+            sent(&console_session_received).is_empty(),
+            "a console session is not the fan-out's"
+        );
         assert!(sent(&codex_received).is_empty(), "nor is another agent's");
 
         // A repeat: nothing announced, and nothing more is answered.
-        let c = session("c-1", Agent::Claude, Role::Worker, Some("project-1"));
+        let c = session("c-1", Agent::Claude, Role::Project, Some("project-1"));
         let (c_live, c_received) = start(&state, &dir, c, &full_script(Path::new("%RECEIVED%")));
         c_live.trust.feed(SCREEN);
         add_trusted_directory(&state, Path::new("/work")).expect("a repeat");
@@ -2186,7 +2243,7 @@ mod tests {
         assert_eq!(announced, 1);
 
         tokio::task::spawn_blocking(move || {
-            for live in [a_live, b_live, hub_live, codex_live, c_live] {
+            for live in [a_live, b_live, console_session_live, codex_live, c_live] {
                 live.terminate();
             }
         })

@@ -1,22 +1,23 @@
-# Hub orchestration
+# Console session orchestration
 
-A console's **hub session** is the one the user brings a request to. It does not change project code
-itself: it works out which project a request belongs to, starts sessions there, follows them up, and
-summarizes what they came back with. The sessions it starts are ordinary project sessions, described
-in `docs/product/sessions.md`. Besides its terminal the hub has one surface of its own for showing
-the user something — the report panel, described in `docs/product/report-panel.md`.
+A **console session** is the one the user brings a request to. It does not change project
+code itself: it works out which project a request belongs to, starts sessions there, follows them up,
+and summarizes what they came back with. The sessions it starts are ordinary project sessions,
+described in `docs/product/sessions.md`. Besides its terminal the console session has one surface of
+its own for showing the user something — the report panel, described in `docs/product/report-panel.md`.
 
-The hub drives Octoboard through tools Octoboard injects into the session; a project session gets one
-tool back the other way. **Which tools a session sees follows from its role alone**, so a project
-session cannot start or archive sessions, and the hub cannot report to itself.
+The console session drives Octoboard through tools Octoboard injects into the session; a project
+session gets one tool back the other way. **Which tools a session sees follows from its role alone**,
+so a project session cannot start or archive sessions, and the console session cannot report to
+itself.
 
-## One live hub per console
+## One live console session per console
 
-A console runs at most one hub session at a time. The rule, how a hub is archived to make room for a
-fresh one, and where archived hubs are listed are in "Hub sessions and project sessions" in
-`docs/product/sessions.md`.
+A console runs at most one console session at a time. The rule, how a console session is archived to
+make room for a fresh one, and where archived console sessions are listed are in "Console sessions and
+project sessions" in `docs/product/sessions.md`.
 
-## The hub's tools
+## The console session's tools
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -28,7 +29,7 @@ fresh one, and where archived hubs are listed are in "Hub sessions and project s
 | `archive_session` | `session` | Ends the session's process and archives it. |
 | `list_archived` | `project` | The archived sessions of one project. |
 | `reopen_session` | `session`, `text?` | Relaunches an archived or interrupted session, continuing its conversation, and optionally hands it an instruction, delivered once the relaunched session can take one. |
-| `show_page` | `html` | Pushes an HTML page to the console's report panel, beside the hub's own terminal. Answers with the new page's id. See `docs/product/report-panel.md`. |
+| `show_page` | `html` | Pushes an HTML page to the console's report panel, beside the console session's own terminal. Answers with the new page's id. See `docs/product/report-panel.md`. |
 
 A project is named either by its id or by its name where that name is unambiguous within the
 console; an ambiguous name is refused and asks for the id.
@@ -37,8 +38,8 @@ console; an ambiguous name is refused and asks for the id.
 sequences and cursor-control bytes stripped and runs of blank lines collapsed, so it is readable
 prose rather than a rendered frame. A session that is waiting for the user carries a note saying so.
 
-The hub reaches only its own console: a session or project id from another console is refused. So is
-`send_message` or `archive_session` aimed at a hub session.
+The console session reaches only its own console: a session or project id from another console is
+refused. So is `send_message` or `archive_session` aimed at a console session.
 
 A refused call comes back to the agent as a **tool error carrying the reason in prose**, not as a
 transport failure — "this session is waiting for the user" is advice the model is meant to act on.
@@ -56,21 +57,23 @@ transport failure — "this session is waiting for the user" is advice the model
 
 Octoboard renders the brief into the session's opening prompt from a **fixed template** — one
 section per field, in the order above, headed `## Goal`, `## Context`, `## Acceptance`,
-`## Constraints`. A field the hub left out or left blank is omitted entirely rather than sent as an
-empty heading.
+`## Constraints`. A field the console session left out or left blank is omitted entirely rather than
+sent as an empty heading.
 
-A session the hub starts is **titled from its goal** rather than from its project — the goal's first
-non-blank line, shortened to roughly 48 characters on a word boundary with an ellipsis — so several
-sessions dispatched into one project can be told apart in the menu.
+A session the console session starts is **titled from its goal** rather than from its project — the
+goal's first non-blank line, shortened to roughly 48 characters on a word boundary with an ellipsis —
+so several sessions dispatched into one project can be told apart in the menu.
 
-A Claude Code session the hub starts in a directory Claude Code has not been trusted with first stops
-on Claude Code's workspace-trust prompt. When the user has given that project their consent, or has
-trusted a folder its directory lies under, Octoboard answers the prompt and the session carries on without them; otherwise the user is asked in a dialog
-— again after the application reconnects, if the prompt is still waiting — and the session waits on
-the prompt until it is answered, reading as *working* meanwhile. A trusted folder covers the projects the hub
-itself associates in it, a repository it clones there included: their sessions are answered without the user being
-asked, and the permission rules and hooks in those repositories' `.claude/settings.json` then apply without asking.
-See "Claude Code's workspace-trust prompt" and "Trusted folders" in `docs/product/launching-agents.md`.
+A Claude Code session the console session starts in a directory Claude Code has not been trusted with
+first stops on Claude Code's workspace-trust prompt. When the user has given that project their
+consent, or has trusted a folder its directory lies under, Octoboard answers the prompt and the
+session carries on without them; otherwise the user is asked in a dialog — again after the application
+reconnects, if the prompt is still waiting — and the session waits on the prompt until it is answered,
+reading as *working* meanwhile. A trusted folder covers the projects the console session itself
+associates in it, a repository it clones there included: their sessions are answered without the user
+being asked, and the permission rules and hooks in those repositories' `.claude/settings.json` then
+apply without asking. See "Claude Code's workspace-trust prompt" and "Trusted folders" in
+`docs/product/launching-agents.md`.
 
 ## Reporting
 
@@ -82,26 +85,26 @@ A project session reports a round of work with `report`:
 | `status` | yes | One of `done`, `failed`, `needs_decision`. No other value is accepted. |
 | `open_items` | no | Strings naming what is left unfinished. Empty when nothing is. |
 
-The report is written into the console's hub session as a user message naming the reporting
+The report is written into the console session as a user message naming the reporting
 session's id, its title and project, the status, the open items, and then the summary. The reporting
-session is told either that it was delivered or that it was accepted and will reach the hub as soon
-as the hub can take a message.
+session is told either that it was delivered or that it was accepted and will reach the console
+session as soon as the console session can take a message.
 
 Reporting fails, and leaves the session exactly as it was, when:
 
-- the session is outside the hub's orchestration, so there is nobody to report to;
-- the console has no hub session on record;
+- the session is outside the console session's orchestration, so there is nobody to report to;
+- the console has no console session on record;
 - the session has already been wrapped up — a session archived by its own `done` report cannot
   report a second time.
 
 ### When a session does not report
 
-**Reporting is not forced.** When a session that reports to the hub ends a turn without having
-called `report`, Octoboard delivers that turn's last assistant message as the report instead. The
-message says plainly that the session stopped without reporting and that the status is Octoboard's
-guess rather than its own word. The status is `needs_decision`, or `failed` when the turn ended in
-an error, and the open-items list is empty. A session whose turn produced no message at all is
-reported as such, with the suggestion that the hub check it with `get_session`.
+**Reporting is not forced.** When a session that reports to the console session ends a turn without
+having called `report`, Octoboard delivers that turn's last assistant message as the report instead.
+The message says plainly that the session stopped without reporting and that the status is
+Octoboard's guess rather than its own word. The status is `needs_decision`, or `failed` when the turn
+ended in an error, and the open-items list is empty. A session whose turn produced no message at all
+is reported as such, with the suggestion that the console session check it with `get_session`.
 
 A synthesised report never archives the session: only a session's own `done` report does that.
 
@@ -112,21 +115,23 @@ arrives that much later. Sessions outside the orchestration are never reported o
 ### Automatic archiving
 
 A report with `status: done` and **no** open items wraps the session up: once the report has been
-accepted for the hub, the session's process is ended and the session is archived. "Accepted" rather
-than "read" — a hub that is merely busy has the report queued for it, and the session is archived
-anyway rather than being left alive until the hub gets round to it.
+accepted for the console session, the session's process is ended and the session is archived.
+"Accepted" rather than "read" — a console session that is merely busy has the report queued for it,
+and the session is archived anyway rather than being left alive until the console session gets round
+to it.
 
 Anything else — open items, `failed`, `needs_decision` — leaves the session running and awaiting
-instructions, for the hub to continue with `send_message` or to archive explicitly.
+instructions, for the console session to continue with `send_message` or to archive explicitly.
 
-## Which sessions the hub drives
+## Which sessions the console session drives
 
-A session the hub started always reports to it. A session **the user opens by hand does not**,
-unless they check "Include in hub" in the session dialog; the box is unchecked by default and the
-choice is fixed for that session's lifetime. Every session record the hub reads carries that flag,
-and a session outside the orchestration is the user's — the hub is told to leave it alone.
+A session the console session started always reports to it. A session **the user opens by hand does
+not**, unless they check "Report to console session" in the session dialog; the box is unchecked by
+default and the choice is fixed for that session's lifetime. Every session record the console session
+reads carries that flag, and a session outside the orchestration is the user's — the console session
+is told to leave it alone.
 
-A hub session itself never reports anywhere.
+A console session itself never reports anywhere.
 
 ## Messages held until a session can take them
 
@@ -141,8 +146,8 @@ submission — because all three can be model-authored and none is reviewed firs
 
 An instruction or a report for a session that **cannot** take one right now — it is waiting for the
 user at a permission prompt or a question — is queued rather than dropped, and delivered as soon as
-the session can take one, oldest first. The hub is told the message was queued and that it must not
-send it again.
+the session can take one, oldest first. The console session is told the message was queued and that it
+must not send it again.
 
 A message for a session with no process running is refused outright: a resume starts the agent at
 its prompt and replays nothing. Anything still queued when a session's process ends goes with it.

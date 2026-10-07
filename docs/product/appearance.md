@@ -44,7 +44,7 @@ own unstyled form controls stay light as well, regardless of the operating syste
 chrome around the page — the header bar with the paging controls — follows the chosen appearance like everything
 else.
 
-This is a decision, not an oversight. A page is arbitrary HTML the hub's model wrote (see "What a page may
+This is a decision, not an oversight. A page is arbitrary HTML the console session's model wrote (see "What a page may
 contain, and what it cannot do" in `docs/product/report-panel.md`), and one that hard-codes dark text would
 become unreadable if the surface under it went dark. Holding the surface light keeps every page legible, at
 the cost of a page not matching a dark window.

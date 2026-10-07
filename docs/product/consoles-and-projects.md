@@ -1,8 +1,8 @@
 # Consoles and projects
 
 A **console** groups a set of projects and owns a working directory of its own. A **project** is a directory on a
-host, associated with one console. A console is created and managed by the user; a project is associated either by the
-user or by that console's hub session. Sessions that run inside them are described in
+host, associated with one console. A console is created and managed by the user; a project is associated either by
+the user or by its console session. Sessions that run inside them are described in
 `docs/product/sessions.md`.
 
 ## Consoles
@@ -12,7 +12,7 @@ A console carries:
 | Field | Set by | Notes |
 |---|---|---|
 | Name | the user, required | Free text. |
-| Hub agent | the user | The agent the console's own hub session runs. |
+| Console session agent | the user | The agent the console's console sessions run. |
 | Default agent | the user | The fallback agent for sessions opened under this console's projects. |
 | Agent config directories | the user, optional | One per agent: where that agent's sessions in this console keep their configuration; see "Agent config directories" below. |
 | Avatar | the user, optional | A custom image shown in place of the default glyph, in a circle; see "Avatar" below. |
@@ -47,17 +47,18 @@ default one, such as `~/.claude-alt`:
 How each agent is pointed at its directory is in "The launch environment" and "Per-agent specifics a user will notice"
 in `docs/product/launching-agents.md`.
 
-The console dialog shows one input for each agent currently selected as the console's hub agent or default agent —
-one row or two, in the order Claude Code, Codex, Grok Build — labelled with that agent's name and marked optional, with
-the agent's usual default as its placeholder. A directory can therefore be entered only for an agent selected in one
-of those two fields. A directory already stored for an agent that is not currently selected is kept as it is: it is
-neither shown nor saved by the dialog, and it still applies to that agent's sessions, such as those of a project whose
-own default agent it is. To see or clear it, select that agent as the hub or default agent again.
+The console dialog shows one input for each agent currently selected as the console's console session agent or
+default agent — one row or two, in the order Claude Code, Codex, Grok Build — labelled with that agent's name and
+marked optional, with the agent's usual default as its placeholder. A directory can therefore be entered only for an
+agent selected in one of those two fields. A directory already stored for an agent that is not currently selected is
+kept as it is: it is neither shown nor saved by the dialog, and it still applies to that agent's sessions, such as
+those of a project whose own default agent it is. To see or clear it, select that agent as the console session or
+default agent again.
 
 - **Left blank**, it is unset: that agent's sessions use whatever the user's login shell exports for the agent's
   variable, and the agent's own default when it exports none.
-- **When set**, it applies to every session of that agent opened in the console afterwards — the hub and project
-  sessions alike, including a session whose agent was chosen for that session alone — and takes precedence over the
+- **When set**, it applies to every session of that agent opened in the console afterwards — the console session and
+  project sessions alike, including a session whose agent was chosen for that session alone — and takes precedence over the
   value in the user's shell environment (see "The launch environment" in `docs/product/launching-agents.md`). A session
   reads only its own agent's directory; sessions of the other agents are unaffected.
 
@@ -93,11 +94,11 @@ existing session can be resumed again only once the directory exists at that pat
 
 ### Editing a console
 
-The name, the hub agent, the default agent and the config directories the dialog shows can be changed, and a config
-directory can be cleared. Changing an agent or a config directory affects sessions opened afterwards; a session that
-already exists keeps the agent and the config directory it was started with. For the console's hub, the change
-therefore takes effect once the existing hub is archived and a fresh one is started from the Hub row (see "Hub sessions
-and project sessions" in `docs/product/sessions.md`).
+The name, the console session agent, the default agent and the config directories the dialog shows can be changed,
+and a config directory can be cleared. Changing an agent or a config directory affects sessions opened afterwards; a
+session that already exists keeps the agent and the config directory it was started with. For the console session,
+the change therefore takes effect once the existing console session is archived and a fresh one is started
+from the console session row (see "Console sessions and project sessions" in `docs/product/sessions.md`).
 
 A config directory is checked only when it is changed: saving a console with that field untouched succeeds even if the
 stored directory has since disappeared.
@@ -114,8 +115,8 @@ resumed at that moment — those must be archived (or the application restarted,
 error names the reason.
 
 When it goes through, deleting a console also deletes every project association under it, every session record
-belonging to it, archived sessions included, and every page its hub pushed to the report panel, and removes the
-console's own working directory under `~/.octoboard`. No project directory is touched.
+belonging to it, archived sessions included, and every page its console session pushed to the report panel, and
+removes the console's own working directory under `~/.octoboard`. No project directory is touched.
 
 ## Projects
 
@@ -124,10 +125,11 @@ URL it was cloned from (for a GitHub association), whether the user has pinned i
 sessions" in `docs/product/sidebar.md`), and any number of tags. Every project is bound to a host (see "Hosts" below).
 
 A project also carries whether the user has agreed that Octoboard may answer Claude Code's workspace-trust prompt for
-its directory. A project starts without that consent, including one the hub associates; it is given only by "Trust and
-continue" in the dialog Octoboard shows when a Claude Code session of the project stops on that prompt, and it is not
-part of the project's editable fields. Separately from any project, the user can trust a whole folder, which covers
-every project under it — including any associated there later, by the user or by the hub — without giving any of them
+its directory. A project starts without that consent, including one the console session associates; it is given only
+by "Trust and continue" in the dialog Octoboard shows when a Claude Code session of the project stops on that prompt,
+and it is not part of the project's editable fields. Separately from any project, the user can trust a whole folder,
+which covers every project under it — including any associated there later, by the user or by the console session —
+without giving any of them
 that consent; a trusted folder is not stored with a project, so editing or removing a project does not affect it (see
 "Trusted folders" in
 `docs/product/launching-agents.md`). The rules are in "Claude Code's workspace-trust prompt" in
@@ -159,8 +161,8 @@ recorded lexically normalised — `.` components dropped, each `..` folded into 
 slash — without resolving symbolic links, so a path through a link is kept as written. A project's recorded path is
 what a trusted folder is compared against (see "Trusted folders" in `docs/product/launching-agents.md`).
 
-The console's hub session can associate a project itself, from the same three sources and under all the
-rules in this section (see "The hub's tools" in `docs/product/hub-orchestration.md`).
+The console session can associate a project itself, from the same three sources and under all the
+rules in this section (see "The console session's tools" in `docs/product/hub-orchestration.md`).
 
 For a GitHub association:
 

@@ -2,9 +2,9 @@
 //! sessions, and which host-role work it triggers — including the launch flow every way of starting
 //! a session goes through.
 //!
-//! Writing into a running session and everything built on it (the hub's reports, synthesis,
-//! automatic archiving) is `crate::reporting`'s, because the hub's tools and the hook callback reach
-//! it without going through a control-socket request at all.
+//! Writing into a running session and everything built on it (the console session's reports,
+//! synthesis, automatic archiving) is `crate::reporting`'s, because the console session's tools and
+//! the hook callback reach it without going through a control-socket request at all.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -37,7 +37,7 @@ pub async fn handle(
     match body {
         RequestBody::CreateConsole {
             name,
-            hub_agent,
+            console_session_agent,
             default_agent,
             claude_config_dir,
             codex_config_dir,
@@ -58,7 +58,7 @@ pub async fn handle(
                 id,
                 name,
                 workdir: workdir.to_string_lossy().into_owned(),
-                hub_agent,
+                console_session_agent,
                 default_agent,
                 claude_config_dir,
                 codex_config_dir,
@@ -66,7 +66,7 @@ pub async fn handle(
                 icon,
                 created_at: now_millis(),
             };
-            mcp::role::write_hub_instructions(&console)?;
+            mcp::role::write_console_session_instructions(&console)?;
             state.store.insert_console(&console)?;
             state.broadcast(Event::ConsoleUpserted { console });
             Ok(None)
@@ -75,7 +75,7 @@ pub async fn handle(
         RequestBody::UpdateConsole {
             console: id,
             name,
-            hub_agent,
+            console_session_agent,
             default_agent,
             claude_config_dir,
             codex_config_dir,
@@ -89,8 +89,8 @@ pub async fn handle(
             if let Some(name) = name {
                 console.name = name;
             }
-            if let Some(hub_agent) = hub_agent {
-                console.hub_agent = hub_agent;
+            if let Some(console_session_agent) = console_session_agent {
+                console.console_session_agent = console_session_agent;
             }
             if let Some(default_agent) = default_agent {
                 console.default_agent = default_agent;
@@ -109,9 +109,9 @@ pub async fn handle(
             if let Some(icon) = icon {
                 console.icon = normalize_icon(icon.as_deref())?;
             }
-            // Rewritten rather than left alone: the file is named for the hub's agent, so a
-            // console that changed agents would otherwise keep reading the old one's.
-            mcp::role::write_hub_instructions(&console)?;
+            // Rewritten rather than left alone: the file is named for the console session's agent,
+            // so a console that changed agents would otherwise keep reading the old one's.
+            mcp::role::write_console_session_instructions(&console)?;
             state.store.update_console(&console)?;
             state.broadcast(Event::ConsoleUpserted { console });
             Ok(None)
@@ -421,8 +421,9 @@ fn normalise_tags(tags: Vec<String>) -> Vec<String> {
 }
 
 /// One association request. A struct rather than a parameter list because the two callers differ
-/// in more than one field — the user's control-socket request, and the hub's tool call, which has
-/// no tags — and most of the fields are optional strings that would otherwise be positional.
+/// in more than one field — the user's control-socket request, and the console session's tool call,
+/// which has no tags — and most of the fields are optional strings that would otherwise be
+/// positional.
 pub struct AddProjectRequest {
     pub console_id: String,
     pub source: ProjectSource,
@@ -533,8 +534,8 @@ pub async fn add_project(
 }
 
 /// One session to open. A struct rather than a parameter list because the two callers differ in
-/// more than one field — the user opening a session by hand, and the hub dispatching one — and the
-/// fields that differ are all optional strings that would otherwise be positional.
+/// more than one field — the user opening a session by hand, and the console session dispatching
+/// one — and the fields that differ are all optional strings that would otherwise be positional.
 pub struct OpenRequest {
     pub console_id: String,
     pub project_id: Option<String>,
@@ -560,9 +561,9 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         .get_console(&console_id)?
         .ok_or_else(|| CodedError::unknown_console(&console_id))?;
 
-    // Held for the rest of this function where a hub is involved, so the one-live-hub check and the
-    // insert that follows it cannot interleave with another open.
-    let _hub_claim;
+    // Held for the rest of this function where a console session is involved, so the one-live-
+    // console-session check and the insert that follows it cannot interleave with another open.
+    let _console_session_claim;
     let (role, cwd, project, default_title) = match &project_id {
         Some(project_id) => {
             let project = state
@@ -571,40 +572,44 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
                 .ok_or_else(|| CodedError::unknown_project(project_id))?;
             let cwd = PathBuf::from(&project.path);
             let title = project.name.clone();
-            _hub_claim = None;
-            (Role::Worker, cwd, Some(project), title)
+            _console_session_claim = None;
+            (Role::Project, cwd, Some(project), title)
         }
         None => {
-            // One live hub per console. Reports route to the console's hub by lookup, and the menu
-            // has one Hub row, so a second live hub would be both unreachable and able to swallow
-            // reports meant for the first. The UI guards against it too, but the rule belongs here:
-            // the application is only a client. The claim is what makes the check mean anything —
-            // every request runs in its own task, so reading the store and then inserting would
-            // otherwise let two concurrent opens both through.
-            _hub_claim = Some(state.claim_hub(&console_id)?);
+            // One live console session per console. Reports route to the console's console session
+            // by lookup, and the menu has one console session row, so a second live console session
+            // would be both unreachable and able to swallow reports meant for the first. The UI
+            // guards against it too, but the rule belongs here: the application is only a client.
+            // The claim is what makes the check mean anything — every request runs in its own task,
+            // so reading the store and then inserting would otherwise let two concurrent opens both
+            // through.
+            _console_session_claim = Some(state.claim_console_session(&console_id)?);
             if let Some(existing) = state.store.list_sessions()?.into_iter().find(|session| {
                 session.console_id == console_id
-                    && session.role == Role::Hub
+                    && session.role == Role::Console
                     && !session.status.is_dormant()
             }) {
                 return Err(CodedError::raised(
-                    error_code::HUB_ALREADY_RUNNING,
-                    format!("this console already has a hub session ({})", existing.id),
+                    error_code::CONSOLE_SESSION_ALREADY_RUNNING,
+                    format!(
+                        "this console already has a console session ({})",
+                        existing.id
+                    ),
                     &[("session", &existing.id)],
                 ));
             }
             let workdir = PathBuf::from(&console.workdir);
-            // Refreshed right before the hub launches, so the file it reads is the one for the
-            // agent this console currently uses whatever happened to it since.
-            mcp::role::write_hub_instructions(&console)?;
-            (Role::Hub, workdir, None, "Hub".to_string())
+            // Refreshed right before the console session launches, so the file it reads is the one
+            // for the agent this console currently uses whatever happened to it since.
+            mcp::role::write_console_session_instructions(&console)?;
+            (Role::Console, workdir, None, "Hub".to_string())
         }
     };
 
     // Agent selection, in descending priority: what this launch asked for, the project's default,
-    // then the console's. A hub session uses the console's hub agent instead.
+    // then the console's. A console session uses the console's console session agent instead.
     let agent = agent.unwrap_or(match (&role, &project) {
-        (Role::Hub, _) => console.hub_agent,
+        (Role::Console, _) => console.console_session_agent,
         (_, Some(project)) => project.default_agent.unwrap_or(console.default_agent),
         (_, None) => console.default_agent,
     });
@@ -631,8 +636,8 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         // Taken from the console now and kept: a resume must find the transcript where the first
         // launch put it, whatever the console's setting says by then.
         config_dir: session_config_dir(agent, &console),
-        // A hub session is the recipient of reports, never a sender of them.
-        include_in_hub: role == Role::Worker && (origin == Origin::Hub || include_in_hub),
+        // A console session is the recipient of reports, never a sender of them.
+        include_in_hub: role == Role::Project && (origin == Origin::Console || include_in_hub),
         pinned: false,
         started_at: now_millis(),
         ended_at: None,
@@ -682,19 +687,19 @@ pub async fn resume_session(
     }
 
     // Same claim as `open_session`: reading the store and then relaunching is two steps.
-    let _hub_claim = if session.role == Role::Hub {
-        let claim = state.claim_hub(&session.console_id)?;
+    let _console_session_claim = if session.role == Role::Console {
+        let claim = state.claim_console_session(&session.console_id)?;
         if let Some(existing) = state.store.list_sessions()?.into_iter().find(|other| {
             other.console_id == session.console_id
-                && other.role == Role::Hub
+                && other.role == Role::Console
                 && other.id != session.id
                 && !other.status.is_dormant()
         }) {
             return Err(CodedError::raised(
-                error_code::HUB_REOPEN_BLOCKED,
+                error_code::CONSOLE_SESSION_REOPEN_BLOCKED,
                 format!(
-                    "this console already has a hub session ({}); archive it before reopening this \
-                     one",
+                    "this console already has a console session ({}); archive it before reopening \
+                     this one",
                     existing.id
                 ),
                 &[("session", &existing.id)],
@@ -820,8 +825,8 @@ fn delete_session(state: &Arc<AppState>, id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Deletes every archived session of `project`, or with no project every archived hub session of
-/// `console`. One that stopped being archived meanwhile (a resume got there first) is skipped.
+/// Deletes every archived session of `project`, or with no project every archived console session
+/// of `console`. One that stopped being archived meanwhile (a resume got there first) is skipped.
 fn delete_archived_sessions(
     state: &Arc<AppState>,
     console_id: &str,
@@ -844,7 +849,7 @@ fn delete_archived_sessions(
         let in_scope = session.console_id == console_id
             && match project_id {
                 Some(project_id) => session.project_id.as_deref() == Some(project_id),
-                None => session.role == Role::Hub,
+                None => session.role == Role::Console,
             };
         if in_scope {
             state.delete_if_archived(&session.id)?;
@@ -879,13 +884,14 @@ async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Val
             &[],
         ));
     }
-    let hub = reporting::hub_session(state, &page.console_id)?.ok_or_else(|| {
-        CodedError::raised(
-            error_code::HUB_MISSING,
-            "this console has no hub session, so there is nobody to submit to",
-            &[],
-        )
-    })?;
+    let console_session =
+        reporting::console_session_of(state, &page.console_id)?.ok_or_else(|| {
+            CodedError::raised(
+                error_code::CONSOLE_SESSION_MISSING,
+                "this console has no console session, so there is nobody to submit to",
+                &[],
+            )
+        })?;
 
     let message = reporting::render_page_submission(&page.id, &data);
     let owned_state = state.clone();
@@ -894,7 +900,7 @@ async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Val
     tokio::task::spawn_blocking(move || {
         reporting::write_message(
             &owned_state,
-            &hub.id,
+            &console_session.id,
             &message,
             reporting::WhenBlocked::Queue,
         )
@@ -1054,12 +1060,12 @@ mod tests {
         assert!(tags(&[]).is_empty());
     }
 
-    fn console(hub_agent: Agent, workdir: &Path) -> Console {
+    fn console(console_session_agent: Agent, workdir: &Path) -> Console {
         Console {
             id: "console-1".to_string(),
             name: "Console".to_string(),
             workdir: workdir.to_string_lossy().into_owned(),
-            hub_agent,
+            console_session_agent,
             default_agent: Agent::Claude,
             claude_config_dir: None,
             codex_config_dir: None,
@@ -1083,20 +1089,23 @@ mod tests {
     /// them — so a file left behind by a console that changed agents would be loaded alongside the
     /// right one.
     #[test]
-    fn the_hub_instruction_file_is_the_only_one_left_in_the_working_directory() {
-        let workdir = temp_dir("hub-instructions");
+    fn the_console_session_instruction_file_is_the_only_one_left_in_the_working_directory() {
+        let workdir = temp_dir("console-session-instructions");
 
-        mcp::role::write_hub_instructions(&console(Agent::Claude, &workdir)).expect("written");
+        mcp::role::write_console_session_instructions(&console(Agent::Claude, &workdir))
+            .expect("written");
         assert!(workdir.join("CLAUDE.md").is_file());
         assert!(!workdir.join("AGENTS.md").exists());
 
-        mcp::role::write_hub_instructions(&console(Agent::Codex, &workdir)).expect("written");
+        mcp::role::write_console_session_instructions(&console(Agent::Codex, &workdir))
+            .expect("written");
         assert!(workdir.join("AGENTS.md").is_file());
         assert!(!workdir.join("CLAUDE.md").exists());
 
         // Grok reads no project instructions without a git root, and a console's working directory
         // is not a repository — so it gets none, and the previous agent's file goes.
-        mcp::role::write_hub_instructions(&console(Agent::Grok, &workdir)).expect("written");
+        mcp::role::write_console_session_instructions(&console(Agent::Grok, &workdir))
+            .expect("written");
         assert!(!workdir.join("AGENTS.md").exists());
         assert!(!workdir.join("CLAUDE.md").exists());
 
@@ -1140,7 +1149,7 @@ mod tests {
     }
 
     /// Only an archived session can be deleted, and the bulk delete takes exactly its scope: a
-    /// project's archived sessions, or with no project the console's own archived hubs.
+    /// project's archived sessions, or with no project the console's own archived console sessions.
     #[test]
     fn deleting_sessions_is_limited_to_archived_ones_in_scope() {
         let state = Arc::new(crate::state::tests::app_state("delete-sessions"));
@@ -1191,21 +1200,33 @@ mod tests {
         };
         let archived = SessionStatus::Archived;
         add(
-            "worker-archived",
+            "project-archived",
             "console-1",
-            Role::Worker,
+            Role::Project,
             Some("project-1"),
             archived,
         );
         add(
-            "worker-idle",
+            "project-idle",
             "console-1",
-            Role::Worker,
+            Role::Project,
             Some("project-1"),
             SessionStatus::Idle,
         );
-        add("hub-archived", "console-1", Role::Hub, None, archived);
-        add("other-hub-archived", "console-2", Role::Hub, None, archived);
+        add(
+            "console-archived",
+            "console-1",
+            Role::Console,
+            None,
+            archived,
+        );
+        add(
+            "other-console-archived",
+            "console-2",
+            Role::Console,
+            None,
+            archived,
+        );
         let remaining = || -> Vec<String> {
             let mut ids: Vec<String> = state
                 .store
@@ -1219,22 +1240,22 @@ mod tests {
         };
 
         // A resume in flight holds the session's launch claim, which keeps it from being deleted.
-        let claim = state.begin_launch("worker-archived").unwrap();
-        assert!(!state.delete_if_archived("worker-archived").unwrap());
+        let claim = state.begin_launch("project-archived").unwrap();
+        assert!(!state.delete_if_archived("project-archived").unwrap());
         drop(claim);
 
-        let refused = delete_session(&state, "worker-idle").expect_err("not archived");
+        let refused = delete_session(&state, "project-idle").expect_err("not archived");
         let coded = refused.downcast_ref::<CodedError>().expect("a coded error");
         assert_eq!(coded.code, error_code::SESSION_NOT_ARCHIVED);
 
         delete_archived_sessions(&state, "console-1", Some("project-1")).unwrap();
         assert_eq!(
             remaining(),
-            ["hub-archived", "other-hub-archived", "worker-idle"]
+            ["console-archived", "other-console-archived", "project-idle"]
         );
 
         delete_archived_sessions(&state, "console-1", None).unwrap();
-        assert_eq!(remaining(), ["other-hub-archived", "worker-idle"]);
+        assert_eq!(remaining(), ["other-console-archived", "project-idle"]);
 
         std::fs::remove_dir_all(dir).ok();
     }
@@ -1268,15 +1289,15 @@ mod tests {
         state
             .store
             .insert_session(&Session {
-                id: "worker".to_string(),
+                id: "project".to_string(),
                 agent: Agent::Claude,
                 agent_session_id: None,
                 console_id: "console-1".to_string(),
                 project_id: Some("project-1".to_string()),
                 host_id: LOCAL_HOST_ID.to_string(),
-                role: Role::Worker,
+                role: Role::Project,
                 origin: Origin::User,
-                title: "Worker".to_string(),
+                title: "Project".to_string(),
                 status: SessionStatus::Archived,
                 has_conversation: false,
                 include_in_hub: false,
@@ -1291,7 +1312,7 @@ mod tests {
             stop_sessions: true,
         };
 
-        let claim = state.begin_launch("worker").unwrap();
+        let claim = state.begin_launch("project").unwrap();
         let refused = handle(&state, None, delete()).await.expect_err("launching");
         let coded = refused.downcast_ref::<CodedError>().expect("a coded error");
         assert_eq!(coded.code, error_code::PROJECT_HAS_RUNNING_SESSIONS);
@@ -1299,7 +1320,7 @@ mod tests {
 
         handle(&state, None, delete()).await.unwrap();
         assert!(state.store.get_project("project-1").unwrap().is_none());
-        assert!(state.store.get_session("worker").unwrap().is_none());
+        assert!(state.store.get_session("project").unwrap().is_none());
 
         std::fs::remove_dir_all(dir).ok();
     }

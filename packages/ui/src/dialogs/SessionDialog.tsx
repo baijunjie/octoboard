@@ -33,7 +33,7 @@ export function SessionDialog({
   const { request } = useDaemon();
   const [agent, setAgent] = useState<Agent>(project.default_agent ?? parentConsole.default_agent);
   const [title, setTitle] = useState("");
-  const [includeInHub, setIncludeInHub] = useState(false);
+  const [reportToConsoleSession, setReportToConsoleSession] = useState(false);
   const { error, busy, run } = useDialogAction();
 
   const submit = () =>
@@ -44,7 +44,7 @@ export function SessionDialog({
         project_id: project.id,
         agent,
         title: title || undefined,
-        include_in_hub: includeInHub || undefined,
+        include_in_hub: reportToConsoleSession || undefined,
       });
       if (reply.type === "session_opened") onOpened(reply.session.id);
       onClose();
@@ -62,16 +62,16 @@ export function SessionDialog({
       <TextInput label={t("dialog.session.titleOptional")} value={title} onChange={setTitle} />
       {/* HeroUI's variant for a control on a surface (the dialog), whose unselected box the default
           variant would leave to blend into it. */}
-      <Checkbox variant="secondary" isSelected={includeInHub} onChange={setIncludeInHub}>
+      <Checkbox variant="secondary" isSelected={reportToConsoleSession} onChange={setReportToConsoleSession}>
         {/* `Checkbox.Content` is the pressable part, so the box goes inside it with the label;
             the description is the field's, a sibling of it. */}
         <Checkbox.Content>
           <Checkbox.Control>
             <Checkbox.Indicator />
           </Checkbox.Control>
-          <Label>{t("dialog.session.includeInHub")}</Label>
+          <Label>{t("dialog.session.reportToConsoleSession")}</Label>
         </Checkbox.Content>
-        <Description>{t("dialog.session.includeInHubDescription")}</Description>
+        <Description>{t("dialog.session.reportToConsoleSessionDescription")}</Description>
       </Checkbox>
       <DialogError message={error} />
     </Dialog>

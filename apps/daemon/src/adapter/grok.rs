@@ -41,8 +41,9 @@
 //! protection is why the injected MCP server is a child process here too.
 //!
 //! The first of those conditions also decides where the role description comes from: a console's
-//! working directory is not a repository, so a Grok hub reads no instruction file written there and
-//! its whole role has to travel in `--rules`, which Grok persists into the session record.
+//! working directory is not a repository, so a Grok console session reads no instruction file
+//! written there and its whole role has to travel in `--rules`, which Grok persists into the
+//! session record.
 
 use std::path::{Path, PathBuf};
 
@@ -410,8 +411,9 @@ mod tests {
         assert!(config.contains(&fixture.mcp_token));
     }
 
-    /// Grok reads no project instruction file without a git root, so a hub's role can only come
-    /// from `--rules` — and the flag is passed for every session, not just a hub's.
+    /// Grok reads no project instruction file without a git root, so a console session's role can
+    /// only come from `--rules` — and the flag is passed for every session, not just a console
+    /// session's.
     #[test]
     fn the_role_text_travels_in_rules() {
         let mut fixture = spec_fixture();

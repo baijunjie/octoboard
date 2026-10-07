@@ -7,27 +7,28 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Consoles and projects](product/consoles-and-projects.md) — consoles, their working directory, agent defaults and
   per-agent config directories; the three ways a project is associated, what is editable afterwards, and what deleting
   either one does.
-- [Sessions](product/sessions.md) — hub and project sessions, agent selection, the five session statuses, their
+- [Sessions](product/sessions.md) — console and project sessions, agent selection, the five session statuses, their
   glyphs and their transitions, the raised hand and its notification, how a declined Claude Code prompt lowers the
   hand from the agent's own transcript and what that costs to keep working, archiving, interruption and resuming,
   where archived sessions are kept and deleting them, and the terminal.
-- [Sidebar](product/sidebar.md) — one console at a time and the switcher with its activity markers, the Hub row and the
-  project list, project and session rows and their menus, keyboard focus on rows, the order of projects and sessions
-  and pinning, how the sidebar follows the selected session, a project's focus mode, and the archive view.
+- [Sidebar](product/sidebar.md) — one console at a time and the switcher with its activity markers, the console
+  session row and the project list, project and session rows and their menus, keyboard focus on rows, the order of
+  projects and sessions and pinning, how the sidebar follows the selected session, a project's focus mode, and the
+  archive view.
 - [Project git status](product/project-git-status.md) — the branch badge on a project's row and in focus mode's header:
   its glyphs for a branch, a detached `HEAD`, a check in flight and a fast-forward in flight, the ahead and behind
   counts, the marker a failed check leaves and what it tells assistive technology; when and how often the shown
   console's projects are checked against their remotes and what one check runs; and the Automatically sync
   repositories switch — what it fast-forwards, what it never does, where it is kept, and the immediate
   fast-forward pass turning it on runs.
-- [Hub orchestration](product/hub-orchestration.md) — what the hub can do: its tools and a project session's `report`,
-  the brief a task is handed over as, the reporting loop and what happens when a session stops without reporting,
-  automatic archiving, and which sessions the hub drives.
-- [Report panel](product/report-panel.md) — the hub's third pane: pushing a page with `show_page` and what the page id is
-  for, paging back through the kept history, why a history page is read-only and where that is enforced, why a page is a
-  static document whose scripts never run and what is stripped from it, why it has no route to the network, submitting
-  a native form and how its fields reach the hub session, Escape and F6 inside a page, and the light surface a page
-  renders on whatever the window's appearance is.
+- [Console session orchestration](product/hub-orchestration.md) — what the console session can do: its tools and a
+  project session's `report`, the brief a task is handed over as, the reporting loop and what happens when a session
+  stops without reporting, automatic archiving, and which sessions the console session drives.
+- [Report panel](product/report-panel.md) — the console session's third pane: pushing a page with `show_page` and what
+  the page id is for, paging back through the kept history, why a history page is read-only and where that is
+  enforced, why a page is a static document whose scripts never run and what is stripped from it, why it has no route
+  to the network, submitting a native form and how its fields reach the console session, Escape and F6 inside a page,
+  and the light surface a page renders on whatever the window's appearance is.
 - [Window layout](product/window-layout.md) — the top bar across the window and what it holds (and how it doubles as the
   macOS titlebar), the connection status it shows only on trouble, the three panes and what each is allowed to give up,
   resizing the sidebar and the report panel, hiding either and floating it back in on hover, the macOS window's
@@ -46,8 +47,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   pages, text aimed at agents), where the choice is kept, and what is translated so far.
 - [Launching agents](product/launching-agents.md) — the guarantee that Octoboard installs nothing into a project and
   never writes the user's agent configuration (and the one thing it touches a project directory for, once the user
-  turns it on), the three things injected per launch and the hub's generated instruction file, the launch
-  environment, Claude Code's workspace-trust prompt, how Octoboard answers it and trusted folders, and the per-agent specifics.
+  turns it on), the three things injected per launch and the console session's generated instruction file, the
+  launch environment, Claude Code's workspace-trust prompt, how Octoboard answers it and trusted folders, and the
+  per-agent specifics.
 - [Application lifecycle](product/application-lifecycle.md) — what Octoboard runs on and how it is distributed, startup
   and the single-instance rule, who can reach the daemon (any local program, but no web page in a browser), losing the
   daemon connection, the quit confirmation and which gestures it covers, how to quit a window that has stopped

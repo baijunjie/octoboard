@@ -80,15 +80,15 @@ enum Command {
 /// has to derive a value parser for it, and the protocol types are the wire's, not the CLI's.
 #[derive(Clone, Copy, clap::ValueEnum)]
 enum McpRole {
-    Hub,
-    Worker,
+    Console,
+    Project,
 }
 
 impl From<McpRole> for protocol::Role {
     fn from(role: McpRole) -> Self {
         match role {
-            McpRole::Hub => protocol::Role::Hub,
-            McpRole::Worker => protocol::Role::Worker,
+            McpRole::Console => protocol::Role::Console,
+            McpRole::Project => protocol::Role::Project,
         }
     }
 }

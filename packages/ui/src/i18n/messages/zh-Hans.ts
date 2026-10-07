@@ -2,8 +2,8 @@ import type { Translation } from "../catalog";
 
 /** The Simplified Chinese catalog, following Apple's zh-Hans macOS terminology: one half-width
  * space between Chinese and Latin text, numbers or placeholders, full-width punctuation in Chinese
- * sentences, and fixed terms — 控制台 console, 会话 session, 枢纽 hub, 智能体 agent. Chinese has only the
- * `other` plural category. */
+ * sentences, and fixed terms — 控制台 console, 会话 session, 控制台会话 console session, 项目会话 project
+ * session, 智能体 agent. Chinese has only the `other` plural category. */
 export const zhHans: Translation<"other"> = {
   "common.add": "添加",
   "common.cancel": "取消",
@@ -50,7 +50,7 @@ export const zhHans: Translation<"other"> = {
   "app.daemonNotAnswering": "守护进程没有响应。",
   "app.closeSessions": "关闭会话列表",
   "app.closeReport": "关闭报告",
-  "app.hubAlreadyLive": "此控制台已有一个运行中的枢纽会话。请先将其归档，再重新打开此会话。",
+  "app.consoleSessionAlreadyLive": "此控制台已有一个运行中的控制台会话。请先将其归档，再重新打开此会话。",
   "app.quit.title": "退出 {appName}",
   "app.quit.message": "仍有会话在运行。退出会中断它们。下次启动时可以恢复每一个。",
 
@@ -88,10 +88,10 @@ export const zhHans: Translation<"other"> = {
   "daemon.icon_too_large": "控制台头像大于 {limit_kib} KiB。",
   "daemon.session_already_running": "此会话已在运行。",
   "daemon.session_already_starting": "此会话已在启动。",
-  "daemon.hub_already_running": "此控制台已有一个枢纽会话（{session}）。",
-  "daemon.hub_reopen_blocked": "此控制台已有一个枢纽会话（{session}）。请先将其归档，再重新打开此会话。",
-  "daemon.hub_already_starting": "此控制台的枢纽会话已在启动。",
-  "daemon.hub_missing": "此控制台没有可提交的枢纽会话。",
+  "daemon.console_session_already_running": "此控制台已有一个控制台会话（{session}）。",
+  "daemon.console_session_reopen_blocked": "此控制台已有一个控制台会话（{session}）。请先将其归档，再重新打开此会话。",
+  "daemon.console_session_already_starting": "此控制台的控制台会话已在启动。",
+  "daemon.console_session_missing": "此控制台没有可提交的控制台会话。",
   "daemon.session_not_running": "此会话未在运行。",
   "daemon.session_not_archived": "只能删除已归档的会话。",
   "daemon.session_waiting_for_user": "此会话正在等你回应。请先在终端中回答。",
@@ -104,7 +104,7 @@ export const zhHans: Translation<"other"> = {
   "daemon.trust_home_unknown": "无法确定家目录，因此无法据此检查任何文件夹。",
   "daemon.claude_trust_not_waiting": "此会话已不再在 Claude Code 的信任界面等待。",
   "daemon.not_a_claude_session": "只有 Claude Code 会话才有信任界面。",
-  "daemon.hub_trust_not_asked": "枢纽会话的信任界面由 {appName} 直接回应，无需询问。",
+  "daemon.console_session_trust_not_asked": "控制台会话的信任界面由 {appName} 直接回应，无需询问。",
   "daemon.binary_not_found": "在已快照的 shell 环境的 PATH 中找不到“{binary}”。",
   "daemon.shell_environment_timeout":
     "“{shell} -l -i -c '{command}'”未在 {timeout} 内完成。某个 shell 启动文件可能卡在了 stdin 以外的地方，或留下了占住 shell 输出的后台进程。{appName} 不会在环境未知时凭猜测启动。请修复 shell 的 rc 文件中缓慢的步骤，或跳过它。",
@@ -131,8 +131,8 @@ export const zhHans: Translation<"other"> = {
   "notification.waiting.body": "{session}，{location}",
 
   "session.location.project": "某个项目",
-  "session.location.hub": "{console} 的枢纽",
-  "session.location.ownHub": "所属控制台的枢纽",
+  "session.location.consoleSession": "{console} 的控制台会话",
+  "session.location.ownConsoleSession": "所属控制台的控制台会话",
   "session.status.working": "工作中",
   "session.status.waitingUser": "等你回应",
   "session.status.idle": "等待指示",
@@ -193,12 +193,12 @@ export const zhHans: Translation<"other"> = {
   "sidebar.console.addProject": "添加项目",
   "sidebar.console.edit": "编辑控制台",
   "sidebar.console.delete": "删除控制台",
-  "sidebar.hub.name": "枢纽",
-  "sidebar.hub.ariaLabel": "枢纽会话，{agent}，{status}",
-  "sidebar.hub.start": "启动枢纽会话",
-  "sidebar.hub.startHint": "尚未启动",
-  "sidebar.hub.actions": "{name} 的枢纽的操作",
-  "sidebar.archive.hubs": "已归档的枢纽",
+  "sidebar.consoleSession.name": "控制台会话",
+  "sidebar.consoleSession.ariaLabel": "控制台会话，{agent}，{status}",
+  "sidebar.consoleSession.start": "启动控制台会话",
+  "sidebar.consoleSession.startHint": "尚未启动",
+  "sidebar.consoleSession.actions": "{name} 的控制台会话的操作",
+  "sidebar.archive.consoleSessions": "已归档的控制台会话",
   "sidebar.archive.empty": "没有已归档的会话",
   "sidebar.archive.viewAll": {
     other: "查看全部（{count}）",
@@ -221,7 +221,7 @@ export const zhHans: Translation<"other"> = {
   "sidebar.focus.exit": "退出专注模式",
   "sidebar.focus.sessions": "会话（{count}）",
   "sidebar.focus.archived": "已归档（{count}）",
-  "sidebar.focus.reportsToHub": "向枢纽汇报",
+  "sidebar.focus.reportsToConsoleSession": "向控制台会话汇报",
 
   "sidebar.git.branch": "分支 {branch}",
   "sidebar.git.detachedBranch": "分离头指针位于 {branch}",
@@ -239,9 +239,9 @@ export const zhHans: Translation<"other"> = {
   "sidebar.git.error": "Git 错误：{error}",
 
   "archive.heading.project": "已归档会话",
-  "archive.heading.hubs": "已归档的枢纽",
+  "archive.heading.consoleSessions": "已归档的控制台会话",
   "archive.title.project": "{name} 的已归档会话",
-  "archive.title.hubs": "{name} 的已归档枢纽",
+  "archive.title.consoleSessions": "{name} 的已归档控制台会话",
   "archive.count": {
     other: "{count} 个已归档会话",
   },
@@ -267,7 +267,7 @@ export const zhHans: Translation<"other"> = {
   "dialog.nameRequired": "必须填写名称。",
   "dialog.console.new": "新建控制台",
   "dialog.console.edit": "编辑控制台",
-  "dialog.console.hubAgent": "枢纽智能体",
+  "dialog.console.consoleSessionAgent": "控制台会话智能体",
   "dialog.console.defaultAgent": "默认智能体",
   "dialog.console.configDir": "{agent} 配置目录（可选）",
   "dialog.console.avatar": "头像",
@@ -304,8 +304,8 @@ export const zhHans: Translation<"other"> = {
   "dialog.session.open": "打开",
   "dialog.session.agent": "智能体",
   "dialog.session.titleOptional": "标题（可选）",
-  "dialog.session.includeInHub": "纳入枢纽",
-  "dialog.session.includeInHubDescription": "将此会话的结果汇报给控制台的枢纽。",
+  "dialog.session.reportToConsoleSession": "汇报给控制台会话",
+  "dialog.session.reportToConsoleSessionDescription": "将此会话的结果汇报给控制台会话。",
   "dialog.rename.title": "重命名会话",
   "dialog.rename.field": "标题",
   "dialog.rename.titleRequired": "必须填写标题。",

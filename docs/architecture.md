@@ -8,9 +8,9 @@ reasoning and the constraints, not a restatement of the code.
 ## Positioning
 
 Octoboard is a desktop control board for orchestrating agents across several projects. In a **console** the user gives
-a request to a hub agent; the hub decides which project it belongs to, starts a dedicated agent session in that
-project's directory and hands it the task; the session reports back to the hub, and the hub reports to the user. The
-user can step into any session at any time to watch it or take over.
+a request to a console session; the console session decides which project it belongs to, starts a dedicated agent
+session in that project's directory and hands it the task; the session reports back to the console session, and the
+console session reports to the user. The user can step into any session at any time to watch it or take over.
 
 It is neither a new agent nor a new terminal. Every session is a native agent CLI process (Claude Code, Codex, Grok
 Build), and Octoboard only adds organization, orchestration and observation on top. It is not tied to any vendor, and
@@ -20,11 +20,11 @@ the retention and cleanup of session data follows each agent's own rules.
 
 | Concept | Description |
 |---|---|
-| Console | A management unit for a group of projects, independent of other consoles. It has its own working directory and its own hub agent. |
+| Console | A management unit for a group of projects, independent of other consoles. It has its own working directory and its own console session agent. |
 | Host | A machine that runs sessions. Only the local machine exists today; every project and session still carries a `host_id`. |
 | Project | A directory on some host, associated with a console. |
-| Session | An agent CLI process running in a project directory, created by the hub or by the user. |
-| Hub session | The agent process running in the console's working directory, given the orchestration tools. |
+| Session | An agent CLI process running in a project directory, created by the console session or by the user. |
+| Console session | The agent process running in the console's working directory, given the orchestration tools. |
 | Agent adapter | The layer that plugs an agent CLI in: how to launch it, inject capabilities, report status and resume it. |
 
 The daemon defines a single adapter interface and the rest of Octoboard does not know which agent it is driving. An
@@ -49,7 +49,8 @@ agent without hook support would degrade to an ordinary terminal session with no
 - **Host role**, present on every machine that runs sessions: manages PTYs and agent processes, receives hook reports,
   serves MCP for local sessions, lists directories and clones repositories.
 - **Coordinator role**, on the user's own machine: stores console, project, session and report-page data, executes the
-  hub's orchestration requests and routes them to the right host, and handles report delivery and synthesis.
+  console session's orchestration requests and routes them to the right host, and handles report delivery and
+  synthesis.
 
 The desktop application is only a client of the daemon: it renders terminals, shows status and forwards input.
 
@@ -76,8 +77,8 @@ daemon on the host the session runs on, so a remote session never has to connect
 
 Remote hosts are **not built yet**; the design keeps them possible as follows: The application would install and
 start the daemon (host role only) on the remote machine over SSH and tunnel to it, and the coordinator would route
-`start_session` to the host role of the daemon on the right host. A remote hub would mean deploying the whole
-coordinator remotely and pointing the application at it, with no protocol change. After a disconnect the remote daemon
+`start_session` to the host role of the daemon on the right host. A remote console session would mean deploying the
+whole coordinator remotely and pointing the application at it, with no protocol change. After a disconnect the remote daemon
 keeps running on its own, and the coordinator would pull the status events and reports of the gap once the tunnel is
 back, which requires the daemon's events to be replayable by sequence number.
 
@@ -116,11 +117,12 @@ back, which requires the daemon's events to be replayable by sequence number.
   every gated turn shows an error-styled `Stop hook error` line that `suppressOutput` does not suppress, and the model
   sometimes reads the injected demand as prompt injection and refuses — too costly for a product meant to feel calm. So
   the role description encourages `report`, nothing is blocked, and the daemon synthesizes a report for a session that
-  reports to the hub and stops without one. The price is that `status` and `open_items` degrade to prose on those turns.
-- **A project session goes to the user directly for permissions and questions, not through the hub.** Relaying through
-  the hub only creates confusion when several projects ask at once. "Needs a hub decision" (the agent calls
-  `report(status: needs_decision)`) and "needs a user decision" (a permission prompt or a question to a person, shown as
-  the raised hand) are kept apart.
+  reports to the console session and stops without one. The price is that `status` and `open_items` degrade to prose
+  on those turns.
+- **A project session goes to the user directly for permissions and questions, not through the console session.**
+  Relaying through the console session only creates confusion when several projects ask at once. "Needs a console
+  session decision" (the agent calls `report(status: needs_decision)`) and "needs a user decision" (a permission
+  prompt or a question to a person, shown as the raised hand) are kept apart.
 - **Detecting the raised hand is limited by what the hooks expose**, not by Octoboard: a question asked as plain prose
   is indistinguishable from a finished turn on all three agents, and that is a known gap rather than something to work
   around with terminal-text matching. State is read from hooks, never from rendered output, because that would need a
@@ -191,8 +193,8 @@ Entities: console, host, project, session, report, report-panel page, and the tr
 
 - `Session.id` is Octoboard's own and `agent_session_id` the agent's. They are separate because some agents cannot
   pre-allocate an id.
-- `Session.include_in_hub` says whether a session reports to its console's hub. It is always set for a hub-started
-  session, and fixed for the session's lifetime.
+- `Session.include_in_hub` says whether a session reports to its console session. It is always set for a
+  console-session-started session, and fixed for the session's lifetime.
 - `Project.path` is stored absolute and lexically normalized (a relative path is refused), because trusted-folder
   entries are compared with it component by component.
 - A console holds an optional config directory per agent, and `Session.config_dir` is the one of the session's own

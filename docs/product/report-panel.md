@@ -2,32 +2,32 @@
 
 The **report panel** is the third pane of the window, to the right of the terminal (to its left under a right-to-left
 language, see "Right-to-left layout" in `docs/product/window-layout.md`). It belongs to a
-**console** rather than to a session: its pages are pushed by that console's hub session, and the
-panel is on screen only while the selected session is a hub session. Selecting a project session
-leaves the terminal to fill the pane on its own. How wide the panel is, how the user resizes and hides it, how a
+**console** rather than to a session: its pages are pushed by its console session, and
+the panel is on screen only while the selected session is a console session. Selecting a project
+session leaves the terminal to fill the pane on its own. How wide the panel is, how the user resizes and hides it, how a
 hidden one floats in, and what becomes of it in a window too narrow for three panes, is described in
 `docs/product/window-layout.md`.
 
-A page is a whole HTML document the hub wrote, for anything better shown than typed into the
-terminal — a table, a comparison, a set of choices. A page may carry a form, and what the user
-submits comes back into the hub session as a message.
+A page is a whole HTML document the console session wrote, for anything better shown than typed
+into the terminal — a table, a comparison, a set of choices. A page may carry a form, and what the
+user submits comes back into the console session as a message.
 
 ## Pushing a page
 
-The hub pushes a page with its `show_page` tool (see "The hub's tools" in
+The console session pushes a page with its `show_page` tool (see "The console session's tools" in
 `docs/product/hub-orchestration.md`). The call answers with the new page's **id**, which is what a
-later form submission names, so a hub that has pushed several pages can tell which one a submission
-came from. An `html` argument that is empty or only whitespace is refused.
+later form submission names, so a console session that has pushed several pages can tell which one a
+submission came from. An `html` argument that is empty or only whitespace is refused.
 
 Pushing a page keeps it and moves the panel to it. Nothing else in Octoboard shows a page and nothing
 announces one: a page pushed while the user was looking at another session is simply there in the
-panel when they come back to the hub.
+panel when they come back to the console session.
 
 ## Paging through the history
 
 **Every page ever pushed is kept.** Pages belong to the console and are deleted with it (see
 "Deleting a console" in `docs/product/consoles-and-projects.md`). Nothing else deletes a page, and
-the hub cannot withdraw one it has pushed.
+the console session cannot withdraw one it has pushed.
 
 The panel's bar carries, left to right (mirrored under a right-to-left language): ◀ and ▶ to step one page back
 and one forward, the position as "current / total" counted from 1 with the oldest page first, the page's creation
@@ -56,7 +56,7 @@ the console's newest, whatever that page's own markup does.
 
 A page is a **static, self-contained HTML document**. None of its own scripts run, nothing external
 loads, and the only way data leaves it is a form the user submits (see "Submitting a form back to the
-hub" below).
+console session" below).
 
 Before a page is shown, its HTML is cleaned inside the page's frame. Removed, silently — the push is
 not refused, and the rest of the page is shown without them:
@@ -99,7 +99,7 @@ stays on a light surface in both appearances" in `docs/product/appearance.md`. I
 language and writing direction whatever the UI's language is — see "What follows the language" in
 `docs/product/language.md`.
 
-## Submitting a form back to the hub
+## Submitting a form back to the console session
 
 A page sends data back **only through a native HTML form**, and only when the user submits it —
 pressing a submit button, or pressing Enter in a field where the browser submits the form. Native
@@ -114,20 +114,20 @@ is offered: `<button name="choice" value="…">`. Several fields sharing one nam
 checkboxes, say — become one field whose values are joined with ", ". A file field sends only the
 chosen file's name, never its contents.
 
-The submission is written into the console's hub session as a **user message**: a line naming the
-page it came from, then one `key: value` line per field. A form with no named fields is still
+The submission is written into the console session as a **user message**: a line naming
+the page it came from, then one `key: value` line per field. A form with no named fields is still
 delivered, with `{}` in place of the field lines.
 
 Delivery takes the same path as every other write into a running session (see "Messages held until a
-session can take them" in `docs/product/hub-orchestration.md`): written straight away while the hub
-is working or awaiting instructions, and **queued** while the hub is waiting for the user — queued
-rather than refused, because the user is the one submitting and there is nobody to ask to answer the
-hub's prompt first.
+session can take them" in `docs/product/hub-orchestration.md`): written straight away while the
+console session is working or awaiting instructions, and **queued** while the console session is
+waiting for the user — queued rather than refused, because the user is the one submitting and there
+is nobody to ask to answer the console session's prompt first.
 
 A submission fails, and the failure is shown to the user, when the page is no longer the console's
-newest or the hub's process is not running. A failed submission changes nothing. The message names
-which console's hub the submission was meant for, so that it cannot be read as being about whichever
-session the user happens to be looking at.
+newest or the console session's process is not running. A failed submission changes nothing. The
+message names which console session the submission was meant for, so that it cannot be
+read as being about whichever session the user happens to be looking at.
 
 ## Escape and F6 inside a page
 

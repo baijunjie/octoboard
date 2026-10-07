@@ -1,18 +1,18 @@
 import type { Console, Project, Session } from "./protocol";
 import { compareSessions, sortProjects } from "./sidebar/order";
 
-/** The sessions waiting for the user, in the order the sidebar tree lists them: console by
- * console, a console's hub first, then its projects' sessions in the sidebar's own order. */
+/** The sessions waiting for the user, in the order the sidebar tree lists them: console by console,
+ * its console session first, then its projects' sessions in the sidebar's own order. */
 export function waitingSessionsInTreeOrder(consoles: Console[], projects: Project[], sessions: Session[]): Session[] {
   const waiting = sessions.filter((s) => s.status === "waiting_user");
   return consoles.flatMap((console) => {
     const mine = waiting.filter((s) => s.console_id === console.id);
     return [
-      ...mine.filter((s) => s.role === "hub").sort((a, b) => b.started_at - a.started_at),
+      ...mine.filter((s) => s.role === "console").sort((a, b) => b.started_at - a.started_at),
       ...sortProjects(
         projects.filter((p) => p.console_id === console.id),
         (project) => sessions.filter((s) => s.project_id === project.id),
-      ).flatMap((project) => mine.filter((s) => s.role !== "hub" && s.project_id === project.id).sort(compareSessions)),
+      ).flatMap((project) => mine.filter((s) => s.role !== "console" && s.project_id === project.id).sort(compareSessions)),
     ];
   });
 }

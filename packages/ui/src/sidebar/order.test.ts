@@ -9,7 +9,7 @@ const session = (id: string, status: SessionStatus, started_at: number, pinned =
   console_id: "c",
   project_id: "p",
   host_id: "h",
-  role: "worker",
+  role: "project",
   origin: "user",
   title: id,
   status,

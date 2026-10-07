@@ -12,7 +12,7 @@ const allStatuses = snapshotState({
   consoles: [console_],
   projects: [project],
   sessions: [
-    sessionOf("s-hub", console_.id, undefined, "Hub", "working"),
+    sessionOf("s-console", console_.id, undefined, "Hub", "working"),
     sessionOf("s-working", console_.id, project.id, "Working on the layout", "working"),
     sessionOf("s-waiting", console_.id, project.id, "Waiting for an answer", "waiting_user"),
     sessionOf("s-idle", console_.id, project.id, "Awaiting instructions", "idle"),
@@ -26,7 +26,7 @@ export const statusScenarios: Scenario[] = [
     id: "status-all",
     group: GROUP,
     title: "All five statuses",
-    description: "One project session in each status and a working hub; the working session is selected.",
+    description: "One project session in each status and a working console session; the working session is selected.",
     state: allStatuses,
     steps: [(ui) => ui.press(ui.session("Working on the layout"))],
   },
@@ -35,12 +35,12 @@ export const statusScenarios: Scenario[] = [
     group: GROUP,
     title: "Raised hands",
     description:
-      "Three sessions waiting, one of them a hub and one in another console: the top bar's waiting count and the console switcher's marker.",
+      "Three sessions waiting, one of them a console session and one in another console: the top bar's waiting count and the console switcher's marker.",
     state: snapshotState({
       consoles: [console_, second],
       projects: [project, other],
       sessions: [
-        sessionOf("s-hub", console_.id, undefined, "Hub", "waiting_user"),
+        sessionOf("s-console", console_.id, undefined, "Hub", "waiting_user"),
         sessionOf("s-1", console_.id, project.id, "Needs permission to run tests", "waiting_user"),
         sessionOf("s-2", console_.id, project.id, "Working quietly", "working"),
         sessionOf("s-3", second.id, other.id, "Asks which branch to use", "waiting_user"),

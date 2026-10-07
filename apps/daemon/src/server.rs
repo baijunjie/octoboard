@@ -380,7 +380,8 @@ fn read_turn_boundary(
             TurnClose::OwesReport => {
                 let state = state.clone();
                 let session_id = session_id.to_string();
-                // Delivery writes into the hub's PTY, which blocks, so it goes off this response.
+                // Delivery writes into the console session's PTY, which blocks, so it goes off
+                // this response.
                 tokio::task::spawn_blocking(move || {
                     reporting::synthesise_report(&state, &session_id, turn)
                 });

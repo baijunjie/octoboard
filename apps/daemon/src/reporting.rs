@@ -1,9 +1,10 @@
-//! The channel between a console's hub and its project sessions: the brief a task is handed over as,
-//! the message writing that carries both directions, the report that comes back, and the report
-//! Octoboard synthesises when a session stops without having sent one.
+//! The channel between a console session and its project sessions: the brief a task is
+//! handed over as, the message writing that carries both directions, the report that comes back,
+//! and the report Octoboard synthesises when a session stops without having sent one.
 //!
-//! That is the one concern the hub's tools, the worker's `report` tool and the hook callback all
-//! share, which is why it sits apart from the control-socket handling in `coordinator`.
+//! That is the one concern the console session's tools, the project session's `report` tool and
+//! the hook callback all share, which is why it sits apart from the control-socket handling in
+//! `coordinator`.
 //!
 //! **Reporting is never forced.** Gating the stop through the `Stop` hook was measured to work, but
 //! every gated turn shows the user an error-styled line the agent will not suppress, and the model
@@ -22,11 +23,12 @@ use crate::protocol::{error_code, Agent, CodedError, Role, Session, SessionStatu
 use crate::state::AppState;
 use crate::{coordinator, hooks, term};
 
-/// What a session is handed as its opening prompt, rendered from the hub's `brief`.
+/// What a session is handed as its opening prompt, rendered from the console session's `brief`.
 ///
-/// A fixed template rather than something the hub composes, so what a session is handed does not
-/// vary with the hub's mood; a field the hub left out is omitted entirely rather than sent as an
-/// empty heading, which would tell the session there was something to say and then say nothing.
+/// A fixed template rather than something the console session composes, so what a session is
+/// handed does not vary with the console session's mood; a field the console session left out is
+/// omitted entirely rather than sent as an empty heading, which would tell the session there was
+/// something to say and then say nothing.
 pub fn render_brief(
     goal: &str,
     context: Option<&str>,
@@ -75,8 +77,8 @@ pub enum WhenBlocked {
     /// Refuse, so the sender can be told why. The right answer for the user: they are the one who
     /// has to answer the prompt that is blocking it.
     Refuse,
-    /// Queue it. The right answer for the hub and for a report, neither of which has anyone to tell
-    /// and neither of which may be dropped.
+    /// Queue it. The right answer for the console session and for a report, neither of which has
+    /// anyone to tell and neither of which may be dropped.
     Queue,
 }
 
@@ -146,14 +148,14 @@ pub fn release_after_relaunch(state: &Arc<AppState>, session: &Session) {
     }
 }
 
-/// A report from a project session, as the hub reads it.
+/// A report from a project session, as the console session reads it.
 pub struct Report<'a> {
     pub summary: &'a str,
     pub status: ReportStatus,
     pub open_items: &'a [String],
     /// True when Octoboard built this report from the turn's last assistant message rather than the
-    /// session sending one, which the hub has to know: the structured fields are then a guess and
-    /// only the prose is the session's own.
+    /// session sending one, which the console session has to know: the structured fields are then a
+    /// guess and only the prose is the session's own.
     pub synthesised: bool,
 }
 
@@ -183,67 +185,72 @@ impl ReportStatus {
     }
 }
 
-/// Delivers one project session's report to its console's hub, and wraps the session up when the
-/// report says there is nothing left.
+/// Delivers one project session's report to its console session, and wraps the session up when
+/// the report says there is nothing left.
 ///
-/// Archiving happens once the report has been *accepted* for the hub rather than once the hub has
-/// read it: a hub that is merely busy still has the report queued for it, and leaving a finished
-/// session alive until the hub gets round to it would strand it. A hub that is not running at all is
-/// a different matter — the report fails, and the session stays as it is for the user to deal with.
+/// Archiving happens once the report has been *accepted* for the console session rather than once
+/// the console session has read it: a console session that is merely busy still has the report
+/// queued for it, and leaving a finished session alive until the console session gets round to it
+/// would strand it. A console session that is not running at all is a different matter — the
+/// report fails, and the session stays as it is for the user to deal with.
 pub fn deliver_report(
     state: &Arc<AppState>,
-    worker_id: &str,
+    session_id: &str,
     report: Report<'_>,
 ) -> Result<String> {
-    let worker = state.session_record(worker_id)?;
-    if !worker.include_in_hub {
+    let session = state.session_record(session_id)?;
+    if !session.include_in_hub {
         bail!(
-            "this session is not part of the hub's orchestration, so there is nobody to report to"
+            "this session is not part of the console session's orchestration, so there is nobody \
+             to report to"
         );
     }
     // A session that reported `done` is archived by the time a second report could arrive, and its
     // process is on its way out. Refusing is what keeps that race from delivering the same round of
-    // work to the hub twice.
-    if worker.status.is_dormant() {
+    // work to the console session twice.
+    if session.status.is_dormant() {
         bail!("this session has already been wrapped up; there is nothing further to report");
     }
 
-    let hub = hub_session(state, &worker.console_id)?.ok_or_else(|| {
-        anyhow!("this console has no hub session, so there is nobody to report to")
+    let console_session = console_session_of(state, &session.console_id)?.ok_or_else(|| {
+        anyhow!("this console has no console session, so there is nobody to report to")
     })?;
 
-    let project = match &worker.project_id {
+    let project = match &session.project_id {
         Some(id) => state.store.get_project(id)?.map(|project| project.name),
         None => None,
     };
-    let message = render_report(&worker, project.as_deref(), &report);
-    // A lost message propagates rather than being treated as delivered: the worker must not be
-    // archived on the strength of a report the hub never got.
-    let delivery = write_message(state, &hub.id, &message, WhenBlocked::Queue)?;
+    let message = render_report(&session, project.as_deref(), &report);
+    // A lost message propagates rather than being treated as delivered: the project session must
+    // not be archived on the strength of a report the console session never got.
+    let delivery = write_message(state, &console_session.id, &message, WhenBlocked::Queue)?;
 
     let finished = report.status == ReportStatus::Done && report.open_items.is_empty();
     if finished {
-        coordinator::archive_session(state, worker_id)?;
+        coordinator::archive_session(state, session_id)?;
     }
 
     Ok(match (delivery, finished) {
-        (Delivery::Written, true) => "Reported to the hub. This session is now archived.".into(),
-        (Delivery::Written, false) => "Reported to the hub.".into(),
+        (Delivery::Written, true) => {
+            "Reported to the console session. This session is now archived.".into()
+        }
+        (Delivery::Written, false) => "Reported to the console session.".into(),
         (Delivery::Queued, true) => {
-            "Report accepted; the hub will see it as soon as it can take a message. This session \
-             is now archived."
+            "Report accepted; the console session will see it as soon as it can take a message. \
+             This session is now archived."
                 .into()
         }
         (Delivery::Queued, false) => {
-            "Report accepted; the hub will see it as soon as it can take a message.".into()
+            "Report accepted; the console session will see it as soon as it can take a message."
+                .into()
         }
     })
 }
 
-/// Reports for the hub on a session that stopped without reporting for itself. The caller has
-/// already closed the turn and established that a report is owed.
+/// Reports for the console session on a session that stopped without reporting for itself. The
+/// caller has already closed the turn and established that a report is owed.
 ///
-/// **Blocks** on writing into the hub's session.
+/// **Blocks** on writing into the console session.
 pub fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::TurnEnd) {
     match state.store.get_session(session_id) {
         Ok(Some(session)) if session.include_in_hub => {}
@@ -258,7 +265,7 @@ pub fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::T
     let report = Report {
         summary: &summary,
         // A turn that ended in an error failed; a turn that merely ended without a report is the
-        // hub's to judge, which is what `needs_decision` asks it to do.
+        // console session's to judge, which is what `needs_decision` asks it to do.
         status: if turn.failed {
             ReportStatus::Failed
         } else {
@@ -272,30 +279,33 @@ pub fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::T
     }
 }
 
-/// The console's hub session, preferring one with a process behind it. A console has at most one
-/// hub that is not archived, but an older archived one may still be on record.
-pub(crate) fn hub_session(state: &Arc<AppState>, console_id: &str) -> Result<Option<Session>> {
-    let mut hubs: Vec<Session> = state
+/// The console's console session, preferring one with a process behind it. A console has at most
+/// one console session that is not archived, but an older archived one may still be on record.
+pub(crate) fn console_session_of(
+    state: &Arc<AppState>,
+    console_id: &str,
+) -> Result<Option<Session>> {
+    let mut candidates: Vec<Session> = state
         .store
         .list_sessions()?
         .into_iter()
-        .filter(|session| session.console_id == console_id && session.role == Role::Hub)
+        .filter(|session| session.console_id == console_id && session.role == Role::Console)
         .collect();
-    hubs.sort_by_key(|session| (session.status.is_dormant(), -session.started_at));
-    Ok(hubs.into_iter().next())
+    candidates.sort_by_key(|session| (session.status.is_dormant(), -session.started_at));
+    Ok(candidates.into_iter().next())
 }
 
-/// The report as it is written into the hub's session. Plain prose with the structured fields
-/// spelled out: the hub reads this as a user message, so it has to be readable rather than a
-/// payload, and the session id has to be in it or the hub cannot follow up.
-fn render_report(worker: &Session, project: Option<&str>, report: &Report<'_>) -> String {
-    let origin = match project.filter(|project| *project != worker.title) {
-        Some(project) => format!("{} ({})", worker.title, project),
-        None => worker.title.clone(),
+/// The report as it is written into the console session. Plain prose with the structured fields
+/// spelled out: the console session reads this as a user message, so it has to be readable rather
+/// than a payload, and the session id has to be in it or the console session cannot follow up.
+fn render_report(session: &Session, project: Option<&str>, report: &Report<'_>) -> String {
+    let origin = match project.filter(|project| *project != session.title) {
+        Some(project) => format!("{} ({})", session.title, project),
+        None => session.title.clone(),
     };
     let mut message = format!(
         "Report from session {} — {origin}\nStatus: {}",
-        worker.id,
+        session.id,
         report.status.label()
     );
     if report.synthesised {
@@ -315,7 +325,7 @@ fn render_report(worker: &Session, project: Option<&str>, report: &Report<'_>) -
     message
 }
 
-/// What a report panel form submission is written into the hub's session as. Plain prose, like
+/// What a report panel form submission is written into the console session as. Plain prose, like
 /// [`render_report`]: a header line naming the page, then the submitted data.
 ///
 /// `data` is arbitrary JSON from the form, so it is rendered readably only in the shape a form
@@ -371,7 +381,7 @@ mod tests {
     use super::*;
     use crate::protocol::{Origin, SessionStatus};
 
-    fn worker(title: &str) -> Session {
+    fn project_session(title: &str) -> Session {
         Session {
             id: "session-7".to_string(),
             agent: Agent::Claude,
@@ -379,8 +389,8 @@ mod tests {
             console_id: "console-1".to_string(),
             project_id: None,
             host_id: "local".to_string(),
-            role: Role::Worker,
-            origin: Origin::Hub,
+            role: Role::Project,
+            origin: Origin::Console,
             title: title.to_string(),
             status: SessionStatus::Idle,
             has_conversation: true,
@@ -392,8 +402,8 @@ mod tests {
         }
     }
 
-    /// A field the hub left out is omitted entirely: an empty heading tells the session there was
-    /// something to say and then says nothing.
+    /// A field the console session left out is omitted entirely: an empty heading tells the
+    /// session there was something to say and then says nothing.
     #[test]
     fn a_brief_omits_the_sections_it_was_given_nothing_for() {
         let full = render_brief(
@@ -413,11 +423,11 @@ mod tests {
         assert!(!bare.contains("## Acceptance"));
     }
 
-    /// The hub follows a session up by id, so the id has to be in the message it reads.
+    /// The console session follows a session up by id, so the id has to be in the message it reads.
     #[test]
     fn a_report_names_the_session_its_status_and_what_is_open() {
         let rendered = render_report(
-            &worker("api"),
+            &project_session("api"),
             Some("backend"),
             &Report {
                 summary: "done the easy half",
@@ -437,7 +447,7 @@ mod tests {
     #[test]
     fn a_report_does_not_name_the_project_twice() {
         let rendered = render_report(
-            &worker("api"),
+            &project_session("api"),
             Some("api"),
             &Report {
                 summary: "done",
@@ -450,12 +460,12 @@ mod tests {
         assert!(!rendered.contains("api (api)"));
     }
 
-    /// The hub has to be able to tell the session's own report from Octoboard's guess, or it will
-    /// treat a status nobody chose as the session's word.
+    /// The console session has to be able to tell the session's own report from Octoboard's guess,
+    /// or it will treat a status nobody chose as the session's word.
     #[test]
     fn a_synthesised_report_says_so() {
         let synthesised = render_report(
-            &worker("api"),
+            &project_session("api"),
             None,
             &Report {
                 summary: "last thing it said",
@@ -467,7 +477,7 @@ mod tests {
         assert!(synthesised.contains("stopped without reporting"));
 
         let own = render_report(
-            &worker("api"),
+            &project_session("api"),
             None,
             &Report {
                 summary: "last thing it said",

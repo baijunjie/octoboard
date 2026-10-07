@@ -188,7 +188,8 @@ mod tests {
     }
 
     /// A refusal has to reach the model as a readable reason it can act on, not as a protocol
-    /// failure: "this session is waiting for the user" is the hub's cue to leave it alone.
+    /// failure: "this session is waiting for the user" is the console session's cue to leave it
+    /// alone.
     #[test]
     fn a_refusal_becomes_an_error_result_carrying_the_reason() {
         let result = read_outcome(br#"{"ok":false,"error":"this session is waiting for you"}"#);

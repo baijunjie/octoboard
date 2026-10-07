@@ -232,14 +232,14 @@ function ConnectionStatus({
   );
 }
 
-/** Console › Project › session title, with the session's status icon beside it; a hub session
- * has no project and is the console's "Hub" as in the tree. The trail fades at its end edge when
- * too long, the icon always stays. */
+/** Console › Project › session title, with the session's status icon beside it; a console session
+ * has no project and is the console's "Console session" as in the tree. The trail fades at its
+ * end edge when too long, the icon always stays. */
 function Breadcrumb({ session }: { session: Session }): React.ReactElement {
   const t = useT();
   const consoleName = useDaemonStore((s) => s.consoles.get(session.console_id)?.name);
   const projectName = useDaemonStore((s) => (session.project_id ? s.projects.get(session.project_id)?.name : undefined));
-  const trail = session.role === "hub" ? [consoleName, t("sidebar.hub.name")] : [consoleName, projectName, session.title];
+  const trail = session.role === "console" ? [consoleName, t("sidebar.consoleSession.name")] : [consoleName, projectName, session.title];
   return (
     <Trail names={trail.map((part) => part ?? "…")}>
       <StatusIcon status={session.status} />
@@ -290,7 +290,7 @@ interface TitleBarProps {
   terminalProblem?: TerminalProblem;
   waitingCount: number;
   onNextWaiting: () => void;
-  /** Only a hub session has a report panel, so the toggle exists only for one. */
+  /** Only a console session has a report panel, so the toggle exists only for one. */
   hasReportPanel: boolean;
   /** Whether the report panel is shown, docked or as an open drawer; hidden but floating in on
    * hover does not count, as with the sidebar. */
@@ -308,7 +308,7 @@ interface TitleBarProps {
  * The bar across the top of the window: a start segment aligned with the sidebar (sidebar toggle,
  * New console), the selected session's breadcrumb, and at the end the waiting count, the
  * connection trouble indicator (nothing while healthy), the notifications bell (browser only, while
- * the permission is undecided), the report panel toggle (hub session only) and Settings.
+ * the permission is undecided), the report panel toggle (console session only) and Settings.
  */
 export function TitleBar({
   onOpenSettings,

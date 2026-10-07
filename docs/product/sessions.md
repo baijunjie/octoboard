@@ -5,53 +5,57 @@ terminal the user types into directly. Octoboard is not an agent and not a termi
 own binary and shows it as it is. What it adds to each launch, and what it guarantees it does not change, is in
 `docs/product/launching-agents.md`.
 
-## Hub sessions and project sessions
+## Console sessions and project sessions
 
 | | Working directory | Where it appears |
 |---|---|---|
-| Hub session | the console's working directory | the console's "Hub" row |
+| Console session | the console's working directory | the console session row |
 | Project session | the project's directory | under that project |
 
-**A console has at most one hub session whose process is running**, enforced by the daemon: opening
-a hub, or reopening an interrupted or archived one, while another hub of the console is running is
-refused, and the refusal names the running hub (shown by its title). The application does not send a request it knows
-will be refused: selecting an interrupted hub, typing into an archived hub's terminal, or pressing "Resume" or
-"Reopen" for either, while another hub of the same console is running leaves that hub selected, not running, and
-shows an error toast, titled with where the hub is, saying that the console already has a live hub
-session, which has to be archived before this one is reopened.
+**A console has at most one console session whose process is running**, enforced by the daemon:
+opening a console session, or reopening an interrupted or archived one, while another console session
+of the console is running is refused, and the refusal names the running console session (shown by
+its title). The application does not send a request it knows will be refused: selecting an
+interrupted console session, typing into an archived console session's terminal, or pressing "Resume"
+or "Reopen" for either, while another console session of the same console is running leaves that
+console session selected, not running, and shows an error toast, titled with where the console session
+is, saying that the console already has a live console session, which has to be archived before this
+one is reopened.
 
-**The Hub row** holds the console's newest hub session that is not archived, whether running or
-interrupted. Clicking it starts a new hub when the row is empty and selects the hub in it otherwise,
-which resumes an interrupted hub as selecting any interrupted session does; the row's menu has no
-Resume item. Its action menu, shown while the row holds a hub or the console has an archived hub,
-offers:
+**The console session row** holds the console's newest console session that is not archived, whether
+running or interrupted. Clicking it starts a new console session when the row is empty and selects the
+console session in it otherwise, which resumes an interrupted console session as selecting any
+interrupted session does; the row's menu has no Resume item. Its action menu, shown while the row
+holds a console session or the console has an archived console session, offers:
 
-- **Archived hubs** — a submenu of the console's newest archived hubs, each of which can be selected,
-  and the way to the archive view of all of them (see "The Hub row and the project list" and "The
-  archive view" in `docs/product/sidebar.md`).
-- **Archive** — only while the row holds a hub. It asks for confirmation, then archives the hub as
-  described in "Archiving, interruption and resuming" below.
+- **Archived console sessions** — a submenu of the console's newest archived console sessions, each of
+  which can be selected, and the way to the archive view of all of them (see "The console session row
+  and the project list" and "The archive view" in `docs/product/sidebar.md`).
+- **Archive** — only while the row holds a console session. It asks for confirmation, then archives
+  the console session as described in "Archiving, interruption and resuming" below.
 
-There is no Rename on the Hub row; its label is always "Hub". The hub cannot archive itself (see
-"The hub's tools" in `docs/product/hub-orchestration.md`), so the user archives it from this menu.
-Archiving the hub moves it among the console's archived hubs and leaves the Hub row empty, so the
-next click on the row starts a fresh hub. That fresh hub is opened with the console's current hub
-agent and agent config directory, whereas resuming or reopening a hub keeps the ones it was opened
-with (see "Agent config directories" in `docs/product/consoles-and-projects.md`).
+There is no Rename on the console session row; its label is always "Console session". The console
+session cannot archive itself (see "The console session's tools" in `docs/product/hub-orchestration.md`),
+so the user archives it from this menu. Archiving the console session moves it among the console's
+archived console sessions and leaves the console session row empty, so the next click on the row
+starts a fresh console session. That fresh console session is opened with the console's current
+console session agent and agent config directory, whereas resuming or reopening a console session
+keeps the ones it was opened with (see "Agent config directories" in `docs/product/consoles-and-projects.md`).
 
-A hub session carries no project; it runs in the console's working directory. It is given Octoboard's
-orchestration tools and dispatches work to sessions in the console's projects — see
-`docs/product/hub-orchestration.md`. Because it belongs to no project, archived hubs belong to the
-console rather than to any project, and are reached from the Hub row's menu.
+A console session carries no project; it runs in the console's working directory. It is given
+Octoboard's orchestration tools and dispatches work to sessions in the console's projects — see
+`docs/product/hub-orchestration.md`. Because it belongs to no project, archived console sessions
+belong to the console rather than to any project, and are reached from the console session row's menu.
 
-Selecting a hub session also shows its console's **report panel** beside the terminal, described in
-`docs/product/report-panel.md`; a project session's terminal has the pane to itself.
+Selecting a console session also shows its console's **report panel** beside the terminal, described
+in `docs/product/report-panel.md`; a project session's terminal has the pane to itself.
 
 ## Where sessions are listed
 
-Sessions are listed in the sidebar, one console at a time: the hub in its console's Hub row, a project session under
-its project. Archived sessions are not listed among the others; they are reached from their project's or the Hub row's
-action menu and from the archive view. Everything about the sidebar — its rows and menus, the order sessions are listed
+Sessions are listed in the sidebar, one console at a time: the console session in its console session
+row, a project session under its project. Archived sessions are not listed among the others;
+they are reached from their project's or the console session row's action menu and from the archive
+view. Everything about the sidebar — its rows and menus, the order sessions are listed
 in, pinning, focus mode, the archive view and how selecting a session works — is in `docs/product/sidebar.md`.
 
 ## Opening a session
@@ -59,16 +63,16 @@ in, pinning, focus mode, the archive view and how selecting a session works — 
 A session is opened under a project with:
 
 - **Agent** — defaulted as below, overridable for this session only.
-- **Title** (optional) — defaults to the project's name. A hub session's title defaults to "Hub".
-- **Include in hub** (a checkbox, off by default) — makes this session report its results to the
-  console's hub instead of staying outside the orchestration. The choice is fixed for the session's
-  lifetime. A session the hub itself starts always reports to it; see "Which sessions the hub drives"
-  in `docs/product/hub-orchestration.md`.
+- **Title** (optional) — defaults to the project's name. A console session's title defaults to "Hub".
+- **Report to console session** (a checkbox, off by default) — makes this session report its results
+  to the console session instead of staying outside the orchestration. The choice is fixed
+  for the session's lifetime. A session the console session itself starts always reports to it; see
+  "Which sessions the console session drives" in `docs/product/hub-orchestration.md`.
 
 The dialog takes no task: a session the user opens by hand starts in *awaiting instructions*, sitting at the agent's
-prompt, and is given its work by typing into its terminal. Only a session the hub starts is handed an opening prompt,
-the brief it is started with (see "Handing out a task: the brief" in `docs/product/hub-orchestration.md`); it starts
-in *working*.
+prompt, and is given its work by typing into its terminal. Only a session the console session starts is handed an
+opening prompt, the brief it is started with (see "Handing out a task: the brief" in `docs/product/hub-orchestration.md`);
+it starts in *working*.
 
 A Claude Code session in a directory Claude Code has not been trusted with first stops on Claude
 Code's own workspace-trust prompt, before it takes up its task or reaches its prompt. A resumed
@@ -91,7 +95,7 @@ In descending priority:
 2. the project's default agent;
 3. the console's default agent.
 
-A hub session uses the console's hub agent instead.
+A console session uses the console's console session agent instead.
 
 A session's agent is fixed for its lifetime. Resuming or reopening a session always relaunches the same agent —
 session records belong to a specific agent and cannot be moved across agents.
@@ -103,8 +107,8 @@ session records belong to a specific agent and cannot be moved across agents.
 | Working | `working` | an accent-coloured dot pulsing a fading copy of itself outward | The agent is executing a turn. |
 | Waiting for the user | `waiting_user` | a raised hand that waves now and then | The agent is waiting on a permission decision or has asked the user a question through its own ask-the-user tool. |
 | Awaiting instructions | `idle` | a green speech bubble | The process is running and sitting at its prompt. |
-| Interrupted | `interrupted` | a power-off sign | No process is running, and it did not end by being archived. The session stays in its project's list (a hub, in its console's Hub row) and can be resumed. |
-| Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming"). No longer listed among its project's sessions (a hub, no longer in the Hub row); reached through the archive (see "Archived sessions" below) and can be reopened. |
+| Interrupted | `interrupted` | a power-off sign | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in its console session row) and can be resumed. |
+| Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming"). No longer listed among its project's sessions (a console session, no longer in the console session row); reached through the archive (see "Archived sessions" below) and can be reopened. |
 
 The first three mean a process is running; the last two mean none is, and both can be resumed.
 
@@ -115,7 +119,7 @@ instructions still differ by shape as well as by colour.
 
 Transitions:
 
-- Opening a session puts it in *working* when it is handed an opening prompt (a session the hub starts), and in
+- Opening a session puts it in *working* when it is handed an opening prompt (a session the console session starts), and in
   *awaiting instructions* otherwise (see "Opening a session").
 - While the process runs, reports from the agent move the session between *working*, *waiting for the user* and
   *awaiting instructions*.
@@ -157,7 +161,7 @@ Grok Build's turn-end backstop carries no turn id, so the daemon attributes it b
 turn, or a cancellation, arms one expected backstop (a flag, not a count), and the next clock-attributed signal spends
 it whether or not a turn is open. When an ending's own backstop never arrives, the flag stays armed, so a later turn
 whose only ending is its backstop would have that backstop discarded: the session would keep reading as working and,
-if it reports to the hub, no report would be synthesized for that turn. Whether Grok produces that sequence in
+if it reports to the console session, no report would be synthesized for that turn. Whether Grok produces that sequence in
 practice was not checked (in one run an ending followed within a second by a new prompt got no backstop).
 
 ### The raised hand
@@ -171,7 +175,7 @@ own row:
   whatever the sidebar is showing (see "The console switcher" and "Project rows" in
   `docs/product/sidebar.md`).
 - A system notification fires once as a session enters that state, naming the session by its title
-  and the project it runs in — or the console whose hub it is. A session that is answered and later
+  and the project it runs in — or the console whose console session it is. A session that is answered and later
   waits again notifies again. No notification permission is asked for: the application posts the
   notification directly, and macOS showed no permission prompt. The banner was seen while Octoboard
   was not the frontmost application; while it was frontmost, no banner was seen. A notification that
@@ -180,7 +184,8 @@ own row:
   when none is.
 - The top bar carries the same count, as a raised hand and the number, shown only while at least one
   session is waiting. Pressing it selects the next waiting session after the selected one — console by
-  console in the order the consoles were created, a console's hub before its projects' sessions, and
+  console in the order the consoles were created, its console session before its projects'
+  sessions, and
   those in the sidebar's order (see "Order of projects and sessions" in `docs/product/sidebar.md`) —
   and wraps from the last back to the first; when the selected session is not waiting, it selects the
   first. The sidebar follows the session it selects (see "Selecting a session" in
@@ -189,9 +194,9 @@ own row:
 **The user answers in the session's terminal**, and the status leaves *waiting for the user* on the
 agent's next event — or, where the answer was a decline and no event follows, on the decline showing
 up in the agent's own record of the conversation, which only Claude Code sessions are read for (see
-"Declining a Claude Code prompt or question" below). Nobody can answer for them: the hub is told to
-leave such a session alone, and a message addressed to it is held until the user is done — see
-"Messages held until a session can take them" in `docs/product/hub-orchestration.md`.
+"Declining a Claude Code prompt or question" below). Nobody can answer for them: the console session
+is told to leave such a session alone, and a message addressed to it is held until the user is done —
+see "Messages held until a session can take them" in `docs/product/hub-orchestration.md`.
 
 Where the user's own Codex configuration **resolves approval requests by itself**, Octoboard raises
 no hand at all: the permission event still fires, but Codex resolves the request, no dialog ever
@@ -216,7 +221,7 @@ hand and notifies afresh, as any other does.
 
 - The agent prints that the turn was interrupted, but its process is still running, so the session is
   *awaiting instructions* and not *interrupted*.
-- No turn end was reported, so no report is synthesised for the hub for that turn either (see "When a
+- No turn end was reported, so no report is synthesised for the console session for that turn either (see "When a
   session does not report" in `docs/product/hub-orchestration.md`).
 - **Claude Code sessions only.** Codex and Grok Build report a decline through their own hook events,
   and the transcript read here is Claude Code's own format; neither is watched this way.
@@ -243,12 +248,13 @@ can observe by itself tells that apart from a user who simply has not answered y
 **Archiving** ends the agent's process and keeps the session and its record. The agent is asked to
 exit first and is killed only if it does not; a kill takes the agent's tool subprocesses with it.
 Archiving is available for any session that is not already archived, including an interrupted one;
-for the hub it is on the Hub row's menu (see "Hub sessions and project sessions" above). The user
-archives a session from its row's menu, and is asked to confirm first. An archived session keeps its
-pin, if it had one (see "Order of projects and sessions" in `docs/product/sidebar.md`).
+for the console session it is on the console session row's menu (see "Console sessions and project
+sessions" above). The user archives a session from its row's menu, and is asked to confirm first. An
+archived session keeps its pin, if it had one (see "Order of projects and sessions" in
+`docs/product/sidebar.md`).
 
-Besides the user, two things archive a session: the hub, explicitly, and a project session's own
-report saying the work is finished with nothing left open (see "Automatic archiving" in
+Besides the user, two things archive a session: the console session, explicitly, and a project
+session's own report saying the work is finished with nothing left open (see "Automatic archiving" in
 `docs/product/hub-orchestration.md`).
 
 **Resuming** an interrupted session happens by selecting it, or by pressing "Resume" on its terminal's card (see
@@ -274,11 +280,11 @@ there, where it is listed, and that selecting an archived one does not relaunch 
 
 ### Archived sessions
 
-A project's archived sessions, and a console's archived hubs, stay until the user deletes them, the project is
-removed or the console is deleted. They are listed most recently archived first, and reached:
+A project's archived sessions, and a console's archived console sessions, stay until the user deletes them, the
+project is removed or the console is deleted. They are listed most recently archived first, and reached:
 
-- from the project's "View archive" submenu, or for hubs the Hub row's "Archived hubs" submenu, with the newest
-  five;
+- from the project's "View archive" submenu, or for console sessions the console session row's "Archived console
+  sessions" submenu, with the newest five;
 - from the project's focus mode, with the newest ten;
 - from the archive view, with all of them.
 
@@ -288,10 +294,10 @@ How each of those looks and behaves is in "Project rows", "Focus mode" and "The 
 ### Deleting archived sessions
 
 Only an archived session can be deleted: one at a time, or at once every archived session of a project or every
-archived hub of a console. The user is asked to confirm either way.
+archived console session of a console. The user is asked to confirm either way.
 
 - **Deleting removes only Octoboard's record of the session**, for good. The session disappears from every client, and
-  the hub's `list_archived` and `reopen_session` no longer find it. The agent's own record of the conversation, in the
+  the console session's `list_archived` and `reopen_session` no longer find it. The agent's own record of the conversation, in the
   agent's own configuration directory, and the project's directory are never touched.
 - Deleting a session that is not archived is refused, saying that only an archived session can be deleted. So is
   deleting an archived session that is being resumed at that moment. An archived session whose process is still on its

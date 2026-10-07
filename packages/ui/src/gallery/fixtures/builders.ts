@@ -15,7 +15,7 @@ export function consoleOf(id: string, name: string, extra: Partial<Console> = {}
     id,
     name,
     workdir: `/Users/dev/octoboard/${id}`,
-    hub_agent: "claude",
+    console_session_agent: "claude",
     default_agent: "claude",
     created_at: minutesAgo(60 * 24 * 30),
     ...extra,
@@ -51,8 +51,8 @@ export function sessionOf(
     console_id: consoleId,
     project_id: projectId,
     host_id: LOCAL_HOST.id,
-    role: projectId ? "worker" : "hub",
-    origin: projectId ? "user" : "hub",
+    role: projectId ? "project" : "console",
+    origin: projectId ? "user" : "console",
     title,
     status,
     has_conversation: true,
@@ -111,18 +111,18 @@ export function snapshotState(parts: {
   };
 }
 
-/** A small, ordinary console to build a scenario on: one console, two projects, a hub and a few
- * sessions. */
+/** A small, ordinary console to build a scenario on: one console, two projects, a console session
+ * and a few sessions. */
 export const SAMPLE = (() => {
   const console_ = consoleOf("c-main", "Main");
   const web = projectOf("p-web", console_.id, "Website");
   const api = projectOf("p-api", console_.id, "Search API");
-  const hub = sessionOf("s-hub", console_.id, undefined, "Hub", "idle");
+  const consoleSession = sessionOf("s-console", console_.id, undefined, "Hub", "idle");
   const sessions = [
-    hub,
+    consoleSession,
     sessionOf("s-web-1", console_.id, web.id, "Fix the summary layout", "working"),
     sessionOf("s-web-2", console_.id, web.id, "Update the dependencies", "idle"),
     sessionOf("s-api-1", console_.id, api.id, "Add idempotency keys", "waiting_user"),
   ];
-  return { console: console_, web, api, hub, sessions };
+  return { console: console_, web, api, consoleSession, sessions };
 })();

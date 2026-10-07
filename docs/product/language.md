@@ -91,10 +91,10 @@ What follows the current language:
 
 What does not follow it:
 
-- **A report page.** It is content the hub's model wrote, with its own language and direction, and it is never
+- **A report page.** It is content the console session's model wrote, with its own language and direction, and it is never
   mirrored under a right-to-left language; only the panel around it follows the UI (see `docs/product/report-panel.md`).
 - **The terminal.** What the agent draws is laid out left to right whatever the language, and is never mirrored.
-- **Text aimed at the agents** — the hub's instructions, the tool descriptions and the tools' replies, the prompts
+- **Text aimed at the agents** — the console session's instructions, the tool descriptions and the tools' replies, the prompts
   injected into a launch — stays English whatever the language. Only what the user reads in Octoboard's own UI is
   localized.
 - **What a daemon error quotes from elsewhere** — a path, an agent's name, the operating system's or `git`'s own

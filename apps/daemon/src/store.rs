@@ -7,8 +7,9 @@
 //! A list-valued field is one JSON text column rather than a join table: a project's tags are
 //! always read and written whole, so `read_project` stays a single-row read.
 //!
-//! `Report` is not among these tables: it is an in-flight struct passed between the worker's
-//! `report` tool and the hub's session, never stored of its own accord (see `reporting.rs`).
+//! `Report` is not among these tables: it is an in-flight struct passed between the project
+//! session's `report` tool and the console session, never stored of its own accord (see
+//! `reporting.rs`).
 
 use std::path::Path;
 use std::sync::Mutex;
@@ -57,7 +58,7 @@ impl Store {
                 id            TEXT PRIMARY KEY,
                 name          TEXT NOT NULL,
                 workdir       TEXT NOT NULL,
-                hub_agent     TEXT NOT NULL,
+                console_session_agent TEXT NOT NULL,
                 default_agent TEXT NOT NULL,
                 claude_config_dir TEXT,
                 codex_config_dir  TEXT,
@@ -136,6 +137,31 @@ impl Store {
             .context("renaming sessions.claude_config_dir")?;
         }
         add_column_if_missing(&conn, "sessions", "config_dir", "TEXT")?;
+        // `hub_agent` predates the console-session rename; renamed rather than copied, so an
+        // existing console keeps the agent it already set.
+        if column_exists(&conn, "consoles", "hub_agent")? {
+            conn.execute(
+                "ALTER TABLE consoles RENAME COLUMN hub_agent TO console_session_agent",
+                [],
+            )
+            .context("renaming consoles.hub_agent")?;
+        }
+        // The role and origin values were renamed from "hub"/"worker" to "console"/"project" in the
+        // same rename; existing rows keep their meaning under the new spelling. Unconditional and
+        // idempotent, like the column renames above: with nothing left to rename, each `UPDATE`
+        // matches no row.
+        conn.execute(
+            "UPDATE sessions SET role = 'console' WHERE role = 'hub'",
+            [],
+        )?;
+        conn.execute(
+            "UPDATE sessions SET role = 'project' WHERE role = 'worker'",
+            [],
+        )?;
+        conn.execute(
+            "UPDATE sessions SET origin = 'console' WHERE origin = 'hub'",
+            [],
+        )?;
         // Existing projects read back as not consented, which is the right history: nobody was ever
         // asked.
         add_column_if_missing(
@@ -205,14 +231,14 @@ impl Store {
 
     pub fn insert_console(&self, console: &Console) -> Result<()> {
         self.lock().execute(
-            "INSERT INTO consoles (id, name, workdir, hub_agent, default_agent, claude_config_dir,
+            "INSERT INTO consoles (id, name, workdir, console_session_agent, default_agent, claude_config_dir,
                                    codex_config_dir, grok_config_dir, icon, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 console.id,
                 console.name,
                 console.workdir,
-                enum_to_text(&console.hub_agent),
+                enum_to_text(&console.console_session_agent),
                 enum_to_text(&console.default_agent),
                 console.claude_config_dir,
                 console.codex_config_dir,
@@ -226,14 +252,14 @@ impl Store {
 
     pub fn update_console(&self, console: &Console) -> Result<()> {
         self.lock().execute(
-            "UPDATE consoles SET name = ?2, hub_agent = ?3, default_agent = ?4,
+            "UPDATE consoles SET name = ?2, console_session_agent = ?3, default_agent = ?4,
                                  claude_config_dir = ?5, codex_config_dir = ?6,
                                  grok_config_dir = ?7, icon = ?8
              WHERE id = ?1",
             params![
                 console.id,
                 console.name,
-                enum_to_text(&console.hub_agent),
+                enum_to_text(&console.console_session_agent),
                 enum_to_text(&console.default_agent),
                 console.claude_config_dir,
                 console.codex_config_dir,
@@ -254,7 +280,7 @@ impl Store {
         let conn = self.lock();
         let console = conn
             .query_row(
-                "SELECT id, name, workdir, hub_agent, default_agent, claude_config_dir,
+                "SELECT id, name, workdir, console_session_agent, default_agent, claude_config_dir,
                         codex_config_dir, grok_config_dir, icon, created_at
                  FROM consoles WHERE id = ?1",
                 params![id],
@@ -267,7 +293,7 @@ impl Store {
     pub fn list_consoles(&self) -> Result<Vec<Console>> {
         let conn = self.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, name, workdir, hub_agent, default_agent, claude_config_dir,
+            "SELECT id, name, workdir, console_session_agent, default_agent, claude_config_dir,
                     codex_config_dir, grok_config_dir, icon, created_at
              FROM consoles ORDER BY created_at",
         )?;
@@ -683,7 +709,7 @@ fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
         id: row.get(0)?,
         name: row.get(1)?,
         workdir: row.get(2)?,
-        hub_agent: enum_from_row(row, 3)?,
+        console_session_agent: enum_from_row(row, 3)?,
         default_agent: enum_from_row(row, 4)?,
         claude_config_dir: row.get(5)?,
         codex_config_dir: row.get(6)?,
@@ -812,7 +838,7 @@ mod tests {
             id: "console-1".to_string(),
             name: "Console".to_string(),
             workdir: "/tmp/console-1".to_string(),
-            hub_agent: Agent::Claude,
+            console_session_agent: Agent::Claude,
             default_agent: Agent::Claude,
             claude_config_dir: claude.map(str::to_string),
             codex_config_dir: codex.map(str::to_string),
@@ -830,7 +856,7 @@ mod tests {
             console_id: "console-1".to_string(),
             project_id: None,
             host_id: LOCAL_HOST_ID.to_string(),
-            role: Role::Hub,
+            role: Role::Console,
             origin: Origin::User,
             title: "Hub".to_string(),
             status: SessionStatus::Idle,
@@ -905,6 +931,11 @@ mod tests {
     /// A database written before the config directories existed is opened in place: its consoles
     /// and sessions read back with the setting unset — which is what they were started with — and
     /// opening it again is a no-op.
+    ///
+    /// The same fixture pins the `role`/`origin` rename: one row per old value that normalizes to a
+    /// new one (`hub`→`console` and `worker`→`project` for `role`, `hub`→`console` for `origin`),
+    /// plus a row already on the new spelling to confirm the rename is idempotent rather than
+    /// matching everything.
     #[test]
     fn a_database_from_before_the_config_dirs_is_migrated_in_place() {
         let path = temp_db("migration");
@@ -924,7 +955,13 @@ mod tests {
                 .expect("old sessions");
             conn.execute_batch(
                 "INSERT INTO sessions VALUES ('session-1', 'claude', 'agent-1', 'console-1', NULL,
-                    'local', 'hub', 'user', 'Hub', 'archived', 1, 0, 6, 7);",
+                    'local', 'hub', 'user', 'Hub', 'archived', 1, 0, 6, 7);
+                 INSERT INTO sessions VALUES ('session-2', 'claude', 'agent-2', 'console-1', NULL,
+                    'local', 'worker', 'user', 'Worker', 'archived', 1, 0, 6, 7);
+                 INSERT INTO sessions VALUES ('session-3', 'claude', 'agent-3', 'console-1', NULL,
+                    'local', 'worker', 'hub', 'Dispatched', 'archived', 1, 0, 6, 7);
+                 INSERT INTO sessions VALUES ('session-4', 'claude', 'agent-4', 'console-1', NULL,
+                    'local', 'console', 'console', 'Already new', 'archived', 1, 0, 6, 7);",
             )
             .expect("old session");
         }
@@ -937,6 +974,20 @@ mod tests {
         assert_eq!(consoles[0].grok_config_dir, None);
         let migrated = store.get_session("session-1").expect("read").expect("kept");
         assert_eq!(migrated.config_dir, None);
+
+        // (session id, expected role, expected origin) — one row per rename rule, plus session-4
+        // which was already on the new spelling and must come through unchanged.
+        let expected = [
+            ("session-1", Role::Console, Origin::User),
+            ("session-2", Role::Project, Origin::User),
+            ("session-3", Role::Project, Origin::Console),
+            ("session-4", Role::Console, Origin::Console),
+        ];
+        for (id, role, origin) in expected {
+            let session = store.get_session(id).expect("read").expect("kept");
+            assert_eq!(session.role, role, "role for {id}");
+            assert_eq!(session.origin, origin, "origin for {id}");
+        }
         drop(store);
 
         Store::open(&path).expect("opens again");

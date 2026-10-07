@@ -5,8 +5,8 @@
 // `session`), because the envelope's own `id` and the request's fields share one flat object.
 
 export type Agent = "claude" | "codex" | "grok";
-export type Role = "hub" | "worker";
-export type Origin = "hub" | "user";
+export type Role = "console" | "project";
+export type Origin = "console" | "user";
 export type SessionStatus = "working" | "waiting_user" | "idle" | "interrupted" | "archived";
 export type HostKind = "local" | "ssh";
 export type ProjectSource = "local" | "parent" | "github";
@@ -37,7 +37,7 @@ export interface Console {
   id: string;
   name: string;
   workdir: string;
-  hub_agent: Agent;
+  console_session_agent: Agent;
   default_agent: Agent;
   /** Absolute path of each agent's own config directory, one setting per agent. A session opened in
    * this console reads only its agent's: Claude Code is launched with it as `CLAUDE_CONFIG_DIR`,
@@ -87,8 +87,8 @@ export interface Session {
   title: string;
   status: SessionStatus;
   has_conversation: boolean;
-  /** Whether this session's reports go to its console's hub. Always true for a hub-started session;
-   * for one the user opened by hand, only when they asked for it. */
+  /** Whether this session's reports go to its console session. Always true for a console-session-
+   * started session; for one the user opened by hand, only when they asked for it. */
   include_in_hub: boolean;
   /** The config directory of this session's own agent that it was started with, fixed at creation
    * so a resume finds its transcript even after the console's setting changes. */
@@ -99,7 +99,7 @@ export interface Session {
   ended_at?: number | null;
 }
 
-/** One page the hub pushed to its console's report panel. `anchor_message_id` is stored only — the
+/** One page the console session pushed to its console's report panel. `anchor_message_id` is stored only — the
  * rewind linkage that would read it does not exist. */
 export interface Page {
   id: string;
@@ -158,7 +158,7 @@ export type RequestBody =
   | {
       type: "create_console";
       name: string;
-      hub_agent: Agent;
+      console_session_agent: Agent;
       default_agent: Agent;
       claude_config_dir?: string;
       codex_config_dir?: string;
@@ -169,7 +169,7 @@ export type RequestBody =
       type: "update_console";
       console: string;
       name?: string;
-      hub_agent?: Agent;
+      console_session_agent?: Agent;
       default_agent?: Agent;
       /** Each config directory: absent leaves it alone; an explicit `null` clears it, so the user's
        * shell environment applies again. */
@@ -215,8 +215,8 @@ export type RequestBody =
       agent?: Agent;
       task?: string;
       title?: string;
-      /** Defaults to false: a session opened by hand stays outside the hub's orchestration and
-       * sends it no reports unless this is set. */
+      /** Defaults to false: a session opened by hand stays outside the console session's
+       * orchestration and sends it no reports unless this is set. */
       include_in_hub?: boolean;
     }
   | { type: "resume_session"; session: string }
@@ -224,15 +224,15 @@ export type RequestBody =
   /** Removes Octoboard's record of one archived session; refused with `session_not_archived`
    * otherwise. The agent's own transcript is never touched. */
   | { type: "delete_session"; session: string }
-  /** With `project`: every archived session of that project. Without: every archived hub session
-   * of the console. Each removal is broadcast as `session_deleted`. */
+  /** With `project`: every archived session of that project. Without: every archived console
+   * session of the console. Each removal is broadcast as `session_deleted`. */
   | { type: "delete_archived_sessions"; console: string; project?: string }
   | { type: "set_session_pinned"; session: string; pinned: boolean }
   | { type: "send_message"; session: string; text: string }
   | { type: "rename_session"; session: string; title: string }
   | { type: "list_pages"; console: string }
-  /** What a report panel form was submitted with. The page is named rather than the hub session:
-   * it is what the panel knows, and only a console's newest page may be submitted from. */
+  /** What a report panel form was submitted with. The page is named rather than the console
+   * session: it is what the panel knows, and only a console's newest page may be submitted from. */
   | { type: "submit_page"; page: string; data: unknown }
   /** The user's go-ahead to a `claude_trust_prompt`: Octoboard may answer that session's trust
    * screen. `remember` also records the project's consent, so its later sessions are answered
@@ -310,7 +310,7 @@ export type Event =
    * that falls too far behind the daemon's broadcasts is sent a fresh snapshot in place of the
    * events it missed, on the same socket, so re-listing is the only way back to a correct list. */
   | { type: "page_list"; id?: string; console_id: string; pages: Page[] }
-  /** A page the hub just pushed. The panel showing that console's hub refreshes to it. */
+  /** A page the console session just pushed. The panel showing that console session refreshes to it. */
   | { type: "page_created"; page: Page }
   | { type: "ack"; id?: string }
   /** A failure, worded from `code` and `params` (see `daemonMessage.ts`); `message` is the English
@@ -322,15 +322,15 @@ export type Event =
  * ids, which `daemonMessage` shows as the record's name; the rest is text to show as is. */
 export type MessageParams = Record<string, string>;
 
-/** Codes meaning a launch was refused because the session, or the console's hub, is already running
- * or being started. A double click produces them and is not worth showing; a refused second hub
- * session is. */
+/** Codes meaning a launch was refused because the session, or the console's console session, is
+ * already running or being started. A double click produces them and is not worth showing; a
+ * refused second console session is. */
 export const ALREADY_RUNNING_CODES: readonly string[] = [
   "session_already_running",
   "session_already_starting",
-  "hub_already_running",
-  "hub_reopen_blocked",
-  "hub_already_starting",
+  "console_session_already_running",
+  "console_session_reopen_blocked",
+  "console_session_already_starting",
 ];
 
 /** Codes meaning no parent directory can be offered to trust: nothing was answered, and the dialog

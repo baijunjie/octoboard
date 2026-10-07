@@ -86,8 +86,8 @@ pub struct LaunchSpec<'a> {
 /// route all three agree on.
 pub fn mcp_server_command(spec: &LaunchSpec<'_>) -> (String, Vec<String>) {
     let role = match spec.role {
-        Role::Hub => "hub",
-        Role::Worker => "worker",
+        Role::Console => "console",
+        Role::Project => "project",
     };
     (
         spec.self_exe.to_string(),
@@ -268,7 +268,7 @@ pub mod tests {
 
         SpecFixture {
             session_id: "session-1".to_string(),
-            role: crate::protocol::Role::Worker,
+            role: crate::protocol::Role::Project,
             new_agent_session_id: format!("agent-{}", std::process::id()),
             cwd,
             scratch: root,

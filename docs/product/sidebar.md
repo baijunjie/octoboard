@@ -2,14 +2,14 @@
 
 The sidebar is the window's left-hand pane (its width, hiding it and the drawer it becomes in a narrow window are in
 `docs/product/window-layout.md`). It shows **one console at a time**: a switcher naming that console at its top, then
-the console's Hub row, then its projects with their sessions. A project's **focus mode** gives the whole sidebar over
+the console session row, then its projects with their sessions. A project's **focus mode** gives the whole sidebar over
 to that one project, and a project's or a console's full archive opens in the **archive view**, over the terminal.
 What consoles, projects and sessions are is in `docs/product/consoles-and-projects.md` and
 `docs/product/sessions.md`.
 
 Archived sessions are never listed among a project's sessions. They are reached through the project's "View archive"
-submenu, through focus mode, and through the archive view; archived hubs through the Hub row's "Archived hubs" submenu
-and the archive view.
+submenu, through focus mode, and through the archive view; archived console sessions through the console session
+row's "Archived console sessions" submenu and the archive view.
 
 ## The console switcher
 
@@ -22,7 +22,8 @@ only added to the list.
 
 Each console is shown by its avatar (see "Avatar" in `docs/product/consoles-and-projects.md`), here and in the list.
 
-Every console in the list carries a marker of what is going on in it, taken from all its sessions, the hub included:
+Every console in the list carries a marker of what is going on in it, taken from all its sessions, the console
+session included:
 
 | Marker | Shown when |
 |---|---|
@@ -45,14 +46,15 @@ console (see "Selecting a session" below).
 
 With no console at all, the sidebar shows a message saying so and a **New console** button.
 
-## The Hub row and the project list
+## The console session row and the project list
 
-Under the switcher comes the console's **Hub row**. What it holds, what clicking it does and what its menu offers are
-in "Hub sessions and project sessions" in `docs/product/sessions.md`. It shows the hub's status glyph, the icon of the
-hub's agent and the label "Hub"; while it holds no hub it shows a start glyph and a hint that clicking it starts one.
-Its "Archived hubs" submenu works like a project's "View archive" submenu (see "Project rows" below). Should the
-console ever have more than one hub that is not archived, the ones not in the Hub row are listed directly below it as
-session rows.
+Under the switcher comes the console's **console session row**. What it holds, what clicking it does and what its
+menu offers are in "Console sessions and project sessions" in `docs/product/sessions.md`. It shows the console
+session's status glyph, the icon of the console session's agent and the label "Console session"; while it holds no
+console session it shows a start glyph and a hint that clicking it starts one. Its "Archived console sessions"
+submenu works like a project's "View archive" submenu (see "Project rows" below). Should the console ever have more
+than one console session that is not archived, the ones not in the console session row are listed directly below it
+as session rows.
 
 Below it, a **Projects** heading and the console's projects (see "Order of projects
 and sessions" below). With no project, a message saying the console has none yet and an **Add project** button take
@@ -159,9 +161,10 @@ that. Its action menu offers:
 - Clicking a row deliberately does not move keyboard focus away from the terminal; a row reached with Tab can be
   activated with Enter or Space.
 - Each row tells assistive technology what its icons show: a session row its title, agent (Claude Code, Codex or Grok
-  Build), status and whether it is pinned; the Hub row the hub's agent and status; a project row whether it is pinned
-  and, while it carries an activity marker, what that marker means, plus its branch badge's facts (see "The branch
-  badge" in `docs/product/project-git-status.md`). A project row also tells it whether it is expanded or collapsed.
+  Build), status and whether it is pinned; the console session row the console session's agent and status; a project
+  row whether it is pinned and, while it carries an activity marker, what that marker means, plus its branch badge's
+  facts (see "The branch badge" in `docs/product/project-git-status.md`). A project row also tells it whether it is
+  expanded or collapsed.
 
 ## Order of projects and sessions
 
@@ -200,13 +203,13 @@ is archived and when it is resumed; an archived session's menu offers no Pin or 
 Selecting a session shows its terminal; selecting an interrupted one resumes it. Selecting an archived one does not
 reopen it: it is shown still archived, and typing into its terminal or pressing Reopen reopens it (see "Archiving,
 interruption and resuming" and "The terminal" in `docs/product/sessions.md`). Whatever it is selected from — a sidebar row, a "View
-archive" or "Archived hubs" submenu, focus mode, the archive view, or the top bar's waiting count — **the sidebar
+archive" or "Archived console sessions" submenu, focus mode, the archive view, or the top bar's waiting count — **the sidebar
 follows it**: it switches to the session's console, and leaves focus mode when focus mode is on another project.
 
-A session is selected automatically only when this application is the one that opened it — through the Hub row or the
-new-session dialog — and that closes the archive view if it is open. A session that appears any other way, such as one
-the hub started or one another client of the daemon opened, is listed unselected and is put on screen by the user
-selecting it.
+A session is selected automatically only when this application is the one that opened it — through the console
+session row or the new-session dialog — and that closes the archive view if it is open. A session that appears any
+other way, such as one the console session started or one another client of the daemon opened, is listed unselected
+and is put on screen by the user selecting it.
 
 When the selected session stops existing — deleted from the archive, by this client or another, for instance — nothing is
 selected in its place, and the terminal's area shows its empty state.
@@ -222,9 +225,9 @@ list — with that project alone:
 - **Sessions (n)**: the project's sessions that are not archived, as cards, in the order of "Order of projects and
   sessions" above. A card shows the session's status glyph with the status in words, a pin glyph when it is pinned,
   its action menu (always shown), its title over up to two lines, its agent's icon and name, how long ago it was
-  started, and "Reports to hub" when the session reports to the console's hub (see "Which sessions the hub drives" in
-  `docs/product/hub-orchestration.md`). Clicking a card selects the session. With no session, a message and a **New
-  session** button take their place.
+  started, and "Reports to console session" when the session reports to its console session (see "Which
+  sessions the console session drives" in `docs/product/hub-orchestration.md`). Clicking a card selects the session.
+  With no session, a message and a **New session** button take their place.
 - **Archived (n)**: the project's ten most recently archived sessions, each showing its agent's icon, its title and how
   long ago it was archived. Clicking one selects it. Its action menu offers **Rename** and **Delete**
   (which asks for confirmation; see "Deleting archived sessions" in `docs/product/sessions.md`). Below them **View all
@@ -246,7 +249,7 @@ console, by selecting a session of another project, and when the project no long
 item shows it.
 
 - Outside focus mode it enters focus mode for the project of the selected session, switching the sidebar to that
-  session's console first when needed. With a hub session selected, which belongs to no project, or with nothing
+  session's console first when needed. With a console session selected, which belongs to no project, or with nothing
   selected, it does nothing.
 - In focus mode it leaves focus mode.
 - It does nothing while a dialog or a menu is open, and during an input-method composition.
@@ -258,14 +261,14 @@ pressed from the terminal — keyboard focus stays where it was, normally on the
 
 ## The archive view
 
-**View all (n)** — in a project's "View archive" submenu, in focus mode's archived list, or in the Hub row's "Archived
-hubs" submenu — opens the archive view: **every** archived session of that project, or every archived hub of that
-console.
+**View all (n)** — in a project's "View archive" submenu, in focus mode's archived list, or in the console session
+row's "Archived console sessions" submenu — opens the archive view: **every** archived session of that project, or
+every archived console session of that console.
 
-- It **covers the terminal's area only**: the sidebar and, for a hub, the report panel stay as they are. The terminal
-  goes on running beneath it and is not resized.
-- Its header says how many archived sessions there are, over the title "Archived sessions" (for a console's hubs,
-  "Archived hubs"), with **Delete all** while there is at least one, and a **Close** button. Which project or console
+- It **covers the terminal's area only**: the sidebar and, for a console session, the report panel stay as they are.
+  The terminal goes on running beneath it and is not resized.
+- Its header says how many archived sessions there are, over the title "Archived sessions" (for console
+  sessions, "Archived console sessions"), with **Delete all** while there is at least one, and a **Close** button. Which project or console
   it is for is shown in the top bar's breadcrumb (see "The top bar" in `docs/product/window-layout.md`).
 - The list is in the order the sessions were archived, most recent first. It shows 30 rows and adds 30 more each time
   its end is scrolled into view. Each row shows the session's agent's icon, its title, and its agent's name with how

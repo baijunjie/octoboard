@@ -62,9 +62,9 @@ to continue."
 
 Failures a user has to know about are shown as toasts (see "Toasts" in `docs/product/window-layout.md`), and so are
 notices about a session that are not failures. Every such notice names where its session is — the project it runs in,
-or the console whose hub it is — and so does a failure that is about one particular session, since what the daemon
-reports refers to the session it is about only as "this session". A failed report-page submission is one such
-failure (see "Submitting a form back to the hub" in `docs/product/report-panel.md`). A failure raised by a dialog's own action is shown in that dialog instead — except in
+or the console whose console session it is — and so does a failure that is about one particular session, since
+what the daemon reports refers to the session it is about only as "this session". A failed report-page submission is
+one such failure (see "Submitting a form back to the console session" in `docs/product/report-panel.md`). A failure raised by a dialog's own action is shown in that dialog instead — except in
 the dialog for Claude Code's workspace-trust prompt, which closes and reports most failures as a
 toast (see "Claude Code's workspace-trust prompt" in `docs/product/launching-agents.md`).
 
@@ -137,7 +137,7 @@ after the table:
 | Path | Contents |
 |---|---|
 | `~/.octoboard/octoboard.db` | Consoles, projects, session records, the report panel pages of every console, the folders trusted for Claude Code's workspace-trust prompt (see "Trusted folders" in `docs/product/launching-agents.md`), and the settings the daemon keeps for every client (see "Git" in `docs/product/settings.md`). |
-| `~/.octoboard/consoles/<console id>/` | A console's working directory, where its hub session runs, including the hub instruction file Octoboard generates there (see "The hub's instruction file" in `docs/product/launching-agents.md`). Removed when the console is deleted. |
+| `~/.octoboard/consoles/<console id>/` | A console's working directory, where its console session runs, including the console session instruction file Octoboard generates there (see "The console session's instruction file" in `docs/product/launching-agents.md`). Removed when the console is deleted. |
 | `~/.octoboard/run/<session id>/` | Per-session scratch space for what a launch injects. Removed when the session's process is gone, and cleared wholesale on daemon start. |
 | `~/.octoboard/daemon.lock` | Enforces one daemon per data directory. |
 

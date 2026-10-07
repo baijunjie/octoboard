@@ -4,7 +4,7 @@ import { consoleOf, projectOf, sessionOf, snapshotState } from "./builders";
 const console_ = consoleOf("c-1", "Main");
 const project = projectOf("p-1", console_.id, "Website");
 const sessions = [
-  sessionOf("s-hub", console_.id, undefined, "Hub", "idle"),
+  sessionOf("s-console", console_.id, undefined, "Hub", "idle"),
   sessionOf("s-working", console_.id, project.id, "Fix the summary layout", "working"),
   sessionOf("s-interrupted", console_.id, project.id, "Interrupted by a restart", "interrupted"),
   sessionOf("s-archived", console_.id, project.id, "Archived and done", "archived"),

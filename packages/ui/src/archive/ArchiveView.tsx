@@ -17,8 +17,8 @@ import { archivedSessions } from "../sidebar/order";
 const PAGE = 30;
 
 /**
- * Every archived session of a project, or every archived hub of a console, newest first: the full
- * archive the sidebar's menus and focus mode lead to ("The archive view" in
+ * Every archived session of a project, or every archived console session of a console, newest
+ * first: the full archive the sidebar's menus and focus mode lead to ("The archive view" in
  * docs/product/sidebar.md). It covers the terminal while open, which stays mounted beneath it. The
  * list is rendered a page at a time, adding the next page as its end scrolls into view; the records
  * themselves are all in the daemon's snapshot already.
@@ -78,7 +78,7 @@ export function ArchiveView({
     return () => clearTimeout(timer);
   }, [archived.length, dialogOpen]);
 
-  const heading = project ? t("archive.title.project", { name: project.name }) : t("archive.title.hubs", { name: owner.name });
+  const heading = project ? t("archive.title.project", { name: project.name }) : t("archive.title.consoleSessions", { name: owner.name });
   const deleteAll = () =>
     onOpenDialog({ kind: "delete-archived", console: owner, project, count: archived.length });
 
@@ -102,7 +102,7 @@ export function ArchiveView({
       <header className="flex h-14 shrink-0 items-center gap-1 border-b border-separator px-2 ps-4">
         <div className="min-w-0 flex-1">
           <div className="truncate text-xs text-muted">{t("archive.count", { count: archived.length })}</div>
-          <h2 className="truncate text-sm font-semibold">{t(project ? "archive.heading.project" : "archive.heading.hubs")}</h2>
+          <h2 className="truncate text-sm font-semibold">{t(project ? "archive.heading.project" : "archive.heading.consoleSessions")}</h2>
         </div>
         {archived.length > 0 && (
           <Button size="sm" variant="danger-soft" preventFocusOnPress onPress={deleteAll}>

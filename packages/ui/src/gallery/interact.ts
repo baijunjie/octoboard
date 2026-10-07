@@ -32,8 +32,8 @@ export interface Ui {
   t: <K extends MessageKey>(key: K, ...args: MessageArgs<K>) => string;
   /** The sidebar row of the session titled `title`, not its actions menu. */
   session: (title: string) => Matcher;
-  /** The console's hub row. */
-  hub: () => Matcher;
+  /** The console session row. */
+  consoleSession: () => Matcher;
   /** Presses the first control named `matcher`, waiting for it to appear. Mind a name that exists
    * twice: a tag already picked in the filter is on the sidebar's heading row (earlier in the DOM)
    * and in the filter picker, so pressing it again to unpick it would hit the sidebar row. */
@@ -59,11 +59,11 @@ export function createUi(doc: Document, language: Language): Ui {
   return {
     t,
     session: (title) => (name) => name.includes(title) && name !== t("sidebar.session.actions", { title }),
-    hub: () => {
+    consoleSession: () => {
       // The row's label is a sentence around two placeholders; what comes before the first is what
       // tells it from every other row, in any language.
-      const prefix = t("sidebar.hub.ariaLabel", { agent: "\u0000", status: "\u0001" }).split("\u0000")[0];
-      if (!prefix) throw new Error("The hub row's label has no fixed start to find it by");
+      const prefix = t("sidebar.consoleSession.ariaLabel", { agent: "\u0000", status: "\u0001" }).split("\u0000")[0];
+      if (!prefix) throw new Error("The console session row's label has no fixed start to find it by");
       return (name) => name.startsWith(prefix);
     },
     wait,

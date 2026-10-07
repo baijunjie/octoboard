@@ -236,7 +236,7 @@ milestone 1 settles. Nothing it adds says "hub".
 
 ## Milestones
 
-1. [Terminology: console sessions and project sessions](01-terminology.md)
+1. 01 Terminology: console sessions and project sessions (closed)
 2. [The binding, and the end of the one-live rule](02-binding-data-model.md)
 3. [The sidebar's console sessions](03-sidebar.md)
 4. [Accounts: storage and protocol](04-accounts-storage.md)

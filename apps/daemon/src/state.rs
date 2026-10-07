@@ -42,10 +42,10 @@ pub struct AppState {
     /// correlating turn ids. Entries are added on a turn start and removed when the session's
     /// process goes away.
     turns: Mutex<HashMap<String, TurnState>>,
-    /// The consoles a hub session is being opened or reopened for. Checking the store and then
-    /// inserting is two steps, and every request runs in its own task, so without a claim two
-    /// concurrent opens both pass the one-live-hub check.
-    hub_claims: Mutex<HashSet<String>>,
+    /// The consoles a console session is being opened or reopened for. Checking the store and
+    /// then inserting is two steps, and every request runs in its own task, so without a claim two
+    /// concurrent opens both pass the one-live-console-session check.
+    console_session_claims: Mutex<HashSet<String>>,
     /// The generation each session's transcript watch (`crate::transcript`) is currently on.
     /// Starting a watch records a fresh value here; the watch keeps polling only while its own
     /// value is still the one recorded, which is what lets a newer watch for the same session
@@ -86,7 +86,7 @@ struct TurnState {
     /// When this turn last showed any sign of life. A clock-attributed turn end (Grok's
     /// `idle_prompt`) can only belong to a turn that has been quiet at least as long as that
     /// signal's own delay; without this, one left over from a finished turn would close the turn
-    /// running now and hand the hub a report for work still in flight.
+    /// running now and hand the console session a report for work still in flight.
     last_event_at: i64,
     /// A turn of this session has ended through a signal that names its own turn, and Grok's
     /// clock-attributed echo of that ending has not been seen yet. The quiet gate alone is not
@@ -121,7 +121,7 @@ impl AppState {
             live: RwLock::new(LiveSessions::default()),
             mcp_tokens: RwLock::new(HashMap::new()),
             turns: Mutex::new(HashMap::new()),
-            hub_claims: Mutex::new(HashSet::new()),
+            console_session_claims: Mutex::new(HashSet::new()),
             transcript_watch_generations: Mutex::new(HashMap::new()),
             next_transcript_watch_generation: std::sync::atomic::AtomicU64::new(0),
             outbox: Outbox::default(),
@@ -428,9 +428,9 @@ impl AppState {
         self.set_reported(id, true);
     }
 
-    /// Takes that credit back, for a report that turned out not to reach the hub. Left set, the
-    /// session's stop would produce no synthesised report either and the hub would get nothing at
-    /// all.
+    /// Takes that credit back, for a report that turned out not to reach the console session. Left
+    /// set, the session's stop would produce no synthesised report either and the console session
+    /// would get nothing at all.
     pub fn clear_reported(&self, id: &str) {
         self.set_reported(id, false);
     }
@@ -488,31 +488,34 @@ impl AppState {
         }
     }
 
-    /// Claims the right to open or reopen this console's hub session. Released when the returned
-    /// guard is dropped.
-    pub fn claim_hub(self: &Arc<Self>, console_id: &str) -> Result<HubClaim> {
+    /// Claims the right to open or reopen this console's console session. Released when the
+    /// returned guard is dropped.
+    pub fn claim_console_session(
+        self: &Arc<Self>,
+        console_id: &str,
+    ) -> Result<ConsoleSessionClaim> {
         if !self
-            .hub_claims
+            .console_session_claims
             .lock()
-            .expect("hub claim lock poisoned")
+            .expect("console session claim lock poisoned")
             .insert(console_id.to_string())
         {
             return Err(CodedError::raised(
-                error_code::HUB_ALREADY_STARTING,
-                "this console's hub session is already being started",
+                error_code::CONSOLE_SESSION_ALREADY_STARTING,
+                "this console's console session is already being started",
                 &[("console", console_id)],
             ));
         }
-        Ok(HubClaim {
+        Ok(ConsoleSessionClaim {
             state: self.clone(),
             console_id: console_id.to_string(),
         })
     }
 
-    fn release_hub_claim(&self, console_id: &str) {
-        self.hub_claims
+    fn release_console_session_claim(&self, console_id: &str) {
+        self.console_session_claims
             .lock()
-            .expect("hub claim lock poisoned")
+            .expect("console session claim lock poisoned")
             .remove(console_id);
     }
 
@@ -802,17 +805,17 @@ struct LiveSessions {
     launching: HashSet<String>,
 }
 
-/// The right to open or reopen one console's hub session, released on drop. A console has at most
-/// one live hub, and the check for that reads the store before inserting — two steps that this
-/// keeps from interleaving.
-pub struct HubClaim {
+/// The right to open or reopen one console's console session, released on drop. A console has at
+/// most one live console session, and the check for that reads the store before inserting — two
+/// steps that this keeps from interleaving.
+pub struct ConsoleSessionClaim {
     state: Arc<AppState>,
     console_id: String,
 }
 
-impl Drop for HubClaim {
+impl Drop for ConsoleSessionClaim {
     fn drop(&mut self) {
-        self.state.release_hub_claim(&self.console_id);
+        self.state.release_console_session_claim(&self.console_id);
     }
 }
 
@@ -929,7 +932,8 @@ pub(crate) mod tests {
     }
 
     /// A clock-attributed end left over from a finished turn must not close the turn running now,
-    /// or the hub gets a report for work still in flight and the real end finds nothing open.
+    /// or the console session gets a report for work still in flight and the real end finds nothing
+    /// open.
     #[test]
     fn a_clock_attributed_end_is_refused_while_the_open_turn_is_still_active() {
         let state = app_state("backstop");
@@ -970,8 +974,9 @@ pub(crate) mod tests {
         assert!(!state.echo_pending("s"));
     }
 
-    /// A report that never reached the hub must not leave the session looking as though it reported,
-    /// or its stop produces no synthesised report either and the hub gets nothing at all.
+    /// A report that never reached the console session must not leave the session looking as
+    /// though it reported, or its stop produces no synthesised report either and the console
+    /// session gets nothing at all.
     #[test]
     fn credit_for_reporting_can_be_taken_back() {
         let state = app_state("reported");
@@ -982,16 +987,20 @@ pub(crate) mod tests {
     }
 
     /// Two concurrent opens for one console would both pass a check that reads the store and then
-    /// inserts, so the claim is what actually enforces one live hub.
+    /// inserts, so the claim is what actually enforces one live console session.
     #[test]
-    fn only_one_hub_may_be_opened_for_a_console_at_a_time() {
-        let state = Arc::new(app_state("hub-claim"));
-        let claim = state.claim_hub("console-1").expect("the first claim");
-        assert!(state.claim_hub("console-1").is_err());
+    fn only_one_console_session_may_be_opened_for_a_console_at_a_time() {
+        let state = Arc::new(app_state("console-session-claim"));
+        let claim = state
+            .claim_console_session("console-1")
+            .expect("the first claim");
+        assert!(state.claim_console_session("console-1").is_err());
         // A different console is unaffected.
-        let _other = state.claim_hub("console-2").expect("another console");
+        let _other = state
+            .claim_console_session("console-2")
+            .expect("another console");
         drop(claim);
-        assert!(state.claim_hub("console-1").is_ok());
+        assert!(state.claim_console_session("console-1").is_ok());
     }
 
     /// A cancelled turn owes no report, but leaving it open is what lets a later backstop invent

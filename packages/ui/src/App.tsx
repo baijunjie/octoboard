@@ -54,9 +54,9 @@ export function App(): React.ReactElement {
   const projectList = useMemo(() => Array.from(projects.values()), [projects]);
   const sessionList = useMemo(() => Array.from(sessions.values()), [sessions]);
   const selectedSession = selectedSessionId ? sessions.get(selectedSessionId) : undefined;
-  // Only a hub session has a report panel at all; computed here (rather than where it is
+  // Only a console session has a report panel at all; computed here (rather than where it is
   // consumed below) because the pane toggles and the panes' width clamps need it too.
-  const hasReportPanel = selectedSession?.role === "hub";
+  const hasReportPanel = selectedSession?.role === "console";
   const sidebarView = useSidebarView(consoleList, projects);
   useGitStatusSchedule(sidebarView.currentConsole?.id);
   const archiveConsole = archiveScope ? consoles.get(archiveScope.console) : undefined;
@@ -103,9 +103,9 @@ export function App(): React.ReactElement {
   });
 
   // Every click that could resume or create a session is guarded against its own double-click: two
-  // fast clicks on the Hub row otherwise create two hub sessions (only one of which the tree can
-  // ever show again, since hub sessions belong to no project node), and two fast clicks on a
-  // dormant session fire two `resume_session` calls.
+  // fast clicks on the console session row otherwise create two console sessions (only one of which
+  // the tree can ever show again, since console sessions belong to no project node), and two fast
+  // clicks on a dormant session fire two `resume_session` calls.
   const inFlightRef = useRef<Set<string>>(new Set());
 
   /** Runs `action` unless one with the same `key` is in flight; says whether it went through. A
@@ -137,26 +137,27 @@ export function App(): React.ReactElement {
    * that could not start is not replayed later (`TerminalController.armWake`). */
   const resumeSession = async (sessionId: string): Promise<boolean> => {
     const session = sessions.get(sessionId);
-    // The daemon refuses to resume a hub while its console has another live one
-    // (`hub_reopen_blocked`), so check first and say what the user has to do instead of waiting for
-    // the refusal; the session itself stays selected, showing its last output.
-    const liveHubExists =
-      session?.role === "hub" &&
+    // The daemon refuses to resume a console session while its console has another live one
+    // (`console_session_reopen_blocked`), so check first and say what the user has to do instead of
+    // waiting for the refusal; the session itself stays selected, showing its last output.
+    const liveConsoleSessionExists =
+      session?.role === "console" &&
       sessionList.some(
         (other) =>
           other.console_id === session.console_id &&
-          other.role === "hub" &&
+          other.role === "console" &&
           other.id !== session.id &&
           isLive(other.status),
       );
-    if (liveHubExists) {
-      toastError(t("app.hubAlreadyLive"), sessionId);
+    if (liveConsoleSessionExists) {
+      toastError(t("app.consoleSessionAlreadyLive"), sessionId);
       return false;
     }
-    // `hub_reopen_blocked` (one of `ALREADY_RUNNING_CODES`) also reaches here should a race get past
-    // the check above — unlike the plain double-click this guard exists for, suppressing it would
-    // make the click look like it did nothing, so a hub resume lets the error through instead.
-    const suppressAlreadyRunning = session?.role !== "hub";
+    // `console_session_reopen_blocked` (one of `ALREADY_RUNNING_CODES`) also reaches here should a
+    // race get past the check above — unlike the plain double-click this guard exists for,
+    // suppressing it would make the click look like it did nothing, so a console session resume lets
+    // the error through instead.
+    const suppressAlreadyRunning = session?.role !== "console";
     return runOnce(
       `resume:${sessionId}`,
       async () => {
@@ -175,8 +176,8 @@ export function App(): React.ReactElement {
     );
   };
 
-  const openHub = (console_: Console) =>
-    void runOnce(`hub:${console_.id}`, async () => {
+  const openConsoleSession = (console_: Console) =>
+    void runOnce(`console-session:${console_.id}`, async () => {
       const reply = await request({ type: "open_session", console_id: console_.id });
       if (reply.type === "session_opened") showOpenedSession(reply.session.id);
     });
@@ -237,7 +238,7 @@ export function App(): React.ReactElement {
     if (panes.sidebarOpen) panes.closeSidebar();
   };
 
-  // ⇧⌘F: into the selected session's project's focus mode, or back out of it. A hub session
+  // ⇧⌘F: into the selected session's project's focus mode, or back out of it. A console session
   // belongs to no project, so with one selected there is nothing to enter.
   useFocusShortcut(() => {
     if (sidebarView.focusProject) sidebarView.focusProjectId(undefined);
@@ -306,7 +307,7 @@ export function App(): React.ReactElement {
           archiveOpen && archiveConsole
             ? archiveProject
               ? [archiveConsole.name, archiveProject.name, t("archive.heading.project")]
-              : [archiveConsole.name, t("archive.heading.hubs")]
+              : [archiveConsole.name, t("archive.heading.consoleSessions")]
             : undefined
         }
         terminalProblem={terminalProblem}
@@ -329,7 +330,7 @@ export function App(): React.ReactElement {
           currentConsole={sidebarView.currentConsole}
           focusProject={sidebarView.focusProject}
           onSelectSession={selectSession}
-          onOpenHub={openHub}
+          onOpenConsoleSession={openConsoleSession}
           onOpenDialog={openDialog}
           onSelectConsole={sidebarView.selectConsole}
           onFocusProject={sidebarView.focusProjectId}
@@ -362,7 +363,7 @@ export function App(): React.ReactElement {
                 console={archiveConsole}
                 project={archiveProject}
                 sessions={sessionList.filter((s) =>
-                  archiveProject ? s.project_id === archiveProject.id : s.console_id === archiveConsole.id && s.role === "hub",
+                  archiveProject ? s.project_id === archiveProject.id : s.console_id === archiveConsole.id && s.role === "console",
                 )}
                 onReopen={reopenSession}
                 onOpenDialog={openDialog}
@@ -378,14 +379,15 @@ export function App(): React.ReactElement {
               onProblemChange={setTerminalProblem}
             />
           </div>
-          {/* Only the hub session's console has a report panel — it is that console's panel, not
-              the session's. Keyed on the console id so switching hubs mounts a fresh instance. */}
+          {/* Only the console session's console has a report panel — it is that console's panel,
+              not the session's. Keyed on the console id so switching console sessions mounts a
+              fresh instance. */}
           {/* The `selectedSession &&` is only for narrowing: `hasReportPanel` already implies it. */}
           {hasReportPanel && selectedSession && (
             <ReportPanel
               key={selectedSession.console_id}
               consoleId={selectedSession.console_id}
-              hubSessionId={selectedSession.id}
+              consoleSessionId={selectedSession.id}
               open={panes.reportOpen}
               reportWidth={reportWidth.width}
               peek={panes.reportDocked ? undefined : panes.reportPeek}

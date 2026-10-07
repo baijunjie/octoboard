@@ -124,8 +124,8 @@ export interface PaneToggles {
  * leaving it (or Escape) hides it again, and pressing the toggle docks it for good. The two never
  * float together: revealing one hides the other.
  *
- * `hasReportPanel` is whether the selected session has a report panel at all (only a hub session
- * does); `focusTerminal` is where keyboard focus goes when the pane holding it is hidden.
+ * `hasReportPanel` is whether the selected session has a report panel at all (only a console
+ * session does); `focusTerminal` is where keyboard focus goes when the pane holding it is hidden.
  */
 export function usePaneToggles({
   hasReportPanel,
@@ -164,7 +164,7 @@ export function usePaneToggles({
   }, [isNarrow]);
 
   // Selecting a session whose console has no report panel leaves `reportOpen` with nothing to
-  // mean: the panel stops rendering (it only exists for a hub session), but a scrim rendered on
+  // mean: the panel stops rendering (it only exists for a console session), but a scrim rendered on
   // `reportOpen` alone would still dim the whole viewport with no toggle left to close it.
   useEffect(() => {
     if (!hasReportPanel) setReportOpen(false);

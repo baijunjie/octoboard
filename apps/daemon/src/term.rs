@@ -226,12 +226,13 @@ pub fn send_message(session: &LiveSession, text: &str) -> Result<(), crate::ptyi
 /// re-deriving it from a copy of this logic; `send_message` itself needs a `LiveSession` and a PTY,
 /// which is why it is not tested directly.
 fn frame_message(text: &str) -> Vec<u8> {
-    // `text` can be model-authored (a report panel submission, a worker's report summary) and is
-    // never reviewed before it is written here. Without this, a value containing the paste-end
-    // marker (`ESC[201~`) would close the bracketed paste early, and everything the attacker put
-    // after it would be delivered to the agent's TUI as raw input — control sequences and `\r`
-    // included, i.e. arbitrary keystrokes. Stripping every Cc control character removes ESC along
-    // with it, so no embedded escape sequence can survive into the framed buffer.
+    // `text` can be model-authored (a report panel submission, a project session's report summary)
+    // and is never reviewed before it is written here. Without this, a value containing the
+    // paste-end marker (`ESC[201~`) would close the bracketed paste early, and everything the
+    // attacker put after it would be delivered to the agent's TUI as raw input — control
+    // sequences and `\r` included, i.e. arbitrary keystrokes. Stripping every Cc control character
+    // removes ESC along with it, so no embedded escape sequence can survive into the framed
+    // buffer.
     //
     // This has to run before the slash-command check below: a control character prepended to
     // `/clear` makes the raw text not start with `/`, but stripping it bare would still leave

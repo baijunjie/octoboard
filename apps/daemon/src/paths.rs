@@ -17,7 +17,7 @@ pub fn db_path() -> PathBuf {
     data_dir().join("octoboard.db")
 }
 
-/// Working directory of a console's hub session.
+/// Working directory of a console session.
 pub fn console_workdir(console_id: &str) -> PathBuf {
     data_dir().join("consoles").join(console_id)
 }

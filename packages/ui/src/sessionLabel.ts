@@ -3,7 +3,7 @@ import type { MessageKey, Translate } from "./i18n/catalog";
 import type { Console, Project, Session, SessionStatus } from "./protocol";
 
 /** Where to tell the user a session is, since the daemon's `Session` record itself only carries
- * ids. A hub session has no project, so it is named for its console instead. */
+ * ids. A console session has no project, so it is named for its console instead. */
 export function sessionLocation(
   t: Translate,
   session: Session,
@@ -12,7 +12,7 @@ export function sessionLocation(
 ): string {
   if (session.project_id) return projects.get(session.project_id)?.name ?? t("session.location.project");
   const owner = consoles.get(session.console_id);
-  return owner ? t("session.location.hub", { console: owner.name }) : t("session.location.ownHub");
+  return owner ? t("session.location.consoleSession", { console: owner.name }) : t("session.location.ownConsoleSession");
 }
 
 /** The catalog message naming each status, for the "Session statuses" table in

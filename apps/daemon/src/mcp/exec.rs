@@ -6,8 +6,8 @@
 //! may call follows from that session's role, checked here as well as in the child: the child is a
 //! separate process and its announcement is not something the daemon can rely on.
 //!
-//! Every tool goes through the same coordinator functions the control socket uses. The hub is a
-//! second client of the same operations, not a second implementation of them.
+//! Every tool goes through the same coordinator functions the control socket uses. The console
+//! session is a second client of the same operations, not a second implementation of them.
 
 use std::sync::Arc;
 
@@ -23,7 +23,7 @@ use crate::reporting::{self, Delivery, Report, ReportStatus, WhenBlocked};
 use crate::state::AppState;
 
 /// How much of a session's output `get_session` hands back. Enough to see what it is doing and how
-/// it got there, short of handing the hub a transcript to wade through.
+/// it got there, short of handing the console session a transcript to wade through.
 const OUTPUT_TAIL: usize = 8 * 1024;
 
 /// Runs one tool call. The `Err` case is what the model is shown as the reason the call failed, so
@@ -56,10 +56,10 @@ pub async fn call(
     }
 }
 
-// -- hub tools ---------------------------------------------------------------
+// -- console session tools ----------------------------------------------------
 
-fn list_projects(state: &Arc<AppState>, hub: &Session) -> Result<Value> {
-    let projects = console_projects(state, &hub.console_id)?;
+fn list_projects(state: &Arc<AppState>, console_session: &Session) -> Result<Value> {
+    let projects = console_projects(state, &console_session.console_id)?;
     let sessions = state.store.list_sessions()?;
     let entries: Vec<Value> = projects
         .iter()
@@ -87,7 +87,7 @@ fn list_projects(state: &Arc<AppState>, hub: &Session) -> Result<Value> {
 
 async fn add_project(
     state: &Arc<AppState>,
-    hub: &Session,
+    console_session: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
     let source = match required_str(arguments, "source")? {
@@ -99,7 +99,7 @@ async fn add_project(
     let added = coordinator::add_project(
         state,
         coordinator::AddProjectRequest {
-            console_id: hub.console_id.clone(),
+            console_id: console_session.console_id.clone(),
             source,
             path: optional_string(arguments, "path"),
             remote_url: optional_string(arguments, "remote_url"),
@@ -123,10 +123,14 @@ async fn add_project(
 
 async fn start_session(
     state: &Arc<AppState>,
-    hub: &Session,
+    console_session: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let project = resolve_project(state, &hub.console_id, required_str(arguments, "project")?)?;
+    let project = resolve_project(
+        state,
+        &console_session.console_id,
+        required_str(arguments, "project")?,
+    )?;
     let brief = arguments
         .get("brief")
         .and_then(Value::as_object)
@@ -147,14 +151,14 @@ async fn start_session(
     let session = coordinator::open_session(
         state,
         OpenRequest {
-            console_id: hub.console_id.clone(),
+            console_id: console_session.console_id.clone(),
             project_id: Some(project.id),
             agent: optional_agent(arguments, "agent")?,
             task: Some(task),
             // Named for the task, not the project: several sessions dispatched into one project
             // would otherwise all carry the project's name and be indistinguishable in the menu.
             title: Some(reporting::title_from_goal(goal)),
-            origin: Origin::Hub,
+            origin: Origin::Console,
             include_in_hub: true,
         },
     )
@@ -164,12 +168,12 @@ async fn start_session(
 
 async fn send_message(
     state: &Arc<AppState>,
-    hub: &Session,
+    console_session: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let target = resolve_session(state, hub, required_str(arguments, "session")?)?;
-    if target.role == Role::Hub {
-        bail!("this is the hub's own session; say it to the user instead");
+    let target = resolve_session(state, console_session, required_str(arguments, "session")?)?;
+    if target.role == Role::Console {
+        bail!("this is your own session; say it to the user instead");
     }
     let text = required_str(arguments, "text")?.to_string();
     let delivery = write_off_runtime(state, &target.id, text, WhenBlocked::Queue).await?;
@@ -177,8 +181,9 @@ async fn send_message(
         "delivered": delivery == Delivery::Written,
         "note": match delivery {
             Delivery::Written => "Delivered.",
-            // The hub is told rather than refused: queuing is the designed behaviour for a session
-            // that is waiting for the user, and nagging it is exactly what it must not do.
+            // The console session is told rather than refused: queuing is the designed behaviour
+            // for a session that is waiting for the user, and nagging it is exactly what it must
+            // not do.
             Delivery::Queued =>
                 "Queued: this session cannot take a message right now. It will be delivered as \
                  soon as it can, so do not send it again.",
@@ -202,10 +207,10 @@ async fn write_off_runtime(
 
 fn get_session(
     state: &Arc<AppState>,
-    hub: &Session,
+    console_session: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let target = resolve_session(state, hub, required_str(arguments, "session")?)?;
+    let target = resolve_session(state, console_session, required_str(arguments, "session")?)?;
     let output = state
         .live_session(&target.id)
         .map(|live| readable_output(&live.recent_output(OUTPUT_TAIL)));
@@ -222,14 +227,14 @@ fn get_session(
 
 fn archive_session(
     state: &Arc<AppState>,
-    hub: &Session,
+    console_session: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let target = resolve_session(state, hub, required_str(arguments, "session")?)?;
-    if target.role == Role::Hub {
-        // Including its own: a hub that ended itself would leave its console's project sessions
-        // reporting to nothing.
-        bail!("a hub session is not the hub's to archive");
+    let target = resolve_session(state, console_session, required_str(arguments, "session")?)?;
+    if target.role == Role::Console {
+        // Including its own: a console session that ended itself would leave its console's project
+        // sessions reporting to nothing.
+        bail!("archiving a console session is the user's to do, not yours");
     }
     coordinator::archive_session(state, &target.id)?;
     Ok(json!({ "session": target.id, "status": SessionStatus::Archived }))
@@ -237,10 +242,14 @@ fn archive_session(
 
 fn list_archived(
     state: &Arc<AppState>,
-    hub: &Session,
+    console_session: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let project = resolve_project(state, &hub.console_id, required_str(arguments, "project")?)?;
+    let project = resolve_project(
+        state,
+        &console_session.console_id,
+        required_str(arguments, "project")?,
+    )?;
     let sessions: Vec<Value> = state
         .store
         .list_sessions()?
@@ -256,10 +265,10 @@ fn list_archived(
 
 async fn reopen_session(
     state: &Arc<AppState>,
-    hub: &Session,
+    console_session: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let target = resolve_session(state, hub, required_str(arguments, "session")?)?;
+    let target = resolve_session(state, console_session, required_str(arguments, "session")?)?;
     // The instruction travels with the relaunch rather than being written after it: whichever hook
     // would release it can fire the moment the agent starts, so the queueing belongs inside the
     // launch, where a refusal also undoes it.
@@ -274,13 +283,13 @@ async fn reopen_session(
 
 fn show_page(
     state: &Arc<AppState>,
-    hub: &Session,
+    console_session: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
     let html = required_str(arguments, "html")?.to_string();
     let page = Page {
         id: Uuid::new_v4().to_string(),
-        console_id: hub.console_id.clone(),
+        console_id: console_session.console_id.clone(),
         html,
         // No agent exposes a message id to put here yet; the rewind linkage that would read it is
         // not built.
@@ -316,18 +325,18 @@ async fn report(
         })
         .unwrap_or_default();
 
-    // Recorded before delivery: the session is credited with having reported even if the hub cannot
-    // take the message yet, so its stop does not also produce a synthesised report.
+    // Recorded before delivery: the session is credited with having reported even if the console
+    // session cannot take the message yet, so its stop does not also produce a synthesised report.
     state.mark_reported(&session.id);
 
     let summary = summary.to_string();
-    let worker_id = session.id.clone();
+    let project_session_id = session.id.clone();
     let owned_state = state.clone();
-    // Delivery writes into the hub's PTY, which blocks.
+    // Delivery writes into the console session's PTY, which blocks.
     let note = tokio::task::spawn_blocking(move || {
         reporting::deliver_report(
             &owned_state,
-            &worker_id,
+            &project_session_id,
             Report {
                 summary: &summary,
                 status,
@@ -337,9 +346,9 @@ async fn report(
         )
     })
     .await?;
-    // Taken back whenever `deliver_report` failed, so the hub gets a synthesised report instead of
-    // neither. A failure after the hub already has the report would make that a duplicate, which is
-    // the better way round.
+    // Taken back whenever `deliver_report` failed, so the console session gets a synthesised report
+    // instead of neither. A failure after the console session already has the report would make
+    // that a duplicate, which is the better way round.
     let note = note.inspect_err(|_| state.clear_reported(&session.id))?;
     Ok(json!({ "note": note }))
 }
@@ -385,8 +394,8 @@ fn console_projects(state: &Arc<AppState>, console_id: &str) -> Result<Vec<Proje
         .collect())
 }
 
-/// Finds a project by id, or by name when that names exactly one. The hub works from what
-/// `list_projects` told it, which is both, and a name it half-remembers must not resolve to
+/// Finds a project by id, or by name when that names exactly one. The console session works from
+/// what `list_projects` told it, which is both, and a name it half-remembers must not resolve to
 /// whichever project happens to sort first.
 fn resolve_project(state: &Arc<AppState>, console_id: &str, wanted: &str) -> Result<Project> {
     let projects = console_projects(state, console_id)?;
@@ -407,15 +416,19 @@ fn resolve_project(state: &Arc<AppState>, console_id: &str, wanted: &str) -> Res
     }
 }
 
-/// Finds a session the hub is allowed to act on: one of its own console's. A session id from
-/// another console is refused rather than acted on, so one console's hub cannot reach into
-/// another's.
-fn resolve_session(state: &Arc<AppState>, hub: &Session, wanted: &str) -> Result<Session> {
+/// Finds a session the console session is allowed to act on: one of its own console's. A session
+/// id from another console is refused rather than acted on, so a console session cannot reach
+/// into another console's.
+fn resolve_session(
+    state: &Arc<AppState>,
+    console_session: &Session,
+    wanted: &str,
+) -> Result<Session> {
     let session = state
         .store
         .get_session(wanted)?
         .ok_or_else(|| anyhow!("there is no session `{wanted}`"))?;
-    if session.console_id != hub.console_id {
+    if session.console_id != console_session.console_id {
         bail!("session `{wanted}` belongs to another console");
     }
     Ok(session)
@@ -428,8 +441,8 @@ fn describe_session(session: &Session) -> Value {
         "agent": session.agent,
         "status": session.status,
         "project": session.project_id,
-        // Whether this session reports to the hub. A session the user opened by hand and kept out
-        // of the orchestration is theirs, not the hub's to drive.
+        // Whether this session reports to the console session. A session the user opened by hand
+        // and kept out of the orchestration is theirs, not the console session's to drive.
         "include_in_hub": session.include_in_hub,
         "started_at": session.started_at,
         "ended_at": session.ended_at,
@@ -438,7 +451,7 @@ fn describe_session(session: &Session) -> Value {
 
 /// Makes raw PTY output readable: escape sequences and the cursor-control bytes an agent's
 /// renderer emits by the thousand carry no information once the frames are gone, and left in they
-/// are most of what the hub would be reading.
+/// are most of what the console session would be reading.
 fn readable_output(bytes: &[u8]) -> String {
     let text = String::from_utf8_lossy(bytes);
     let mut out = String::with_capacity(text.len());

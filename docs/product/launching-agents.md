@@ -19,7 +19,7 @@ This is the guarantee the whole design rests on:
 
 Where Claude Code stops to ask whether to trust a folder, Octoboard does not touch a file either: it
 answers the prompt on Claude Code's own screen, with the keystrokes a person would type — for a project
-session only after the user has agreed to that in Octoboard, for a hub session in the console's own
+session only after the user has agreed to that in Octoboard, for a console session in the console's own
 working directory without asking. Claude Code then records the answer in its own configuration, as it
 does when a person answers. See "Claude Code's workspace-trust prompt" below.
 
@@ -43,8 +43,9 @@ Three things, and nothing else:
 - **Octoboard's own MCP server** — the tools described in `docs/product/hub-orchestration.md`. It is
   a child process of the agent, started fresh per session, and each session's tools are reachable
   only by that session. The agent's own and the project's own MCP servers keep working alongside it.
-- **A role description** — whether this session is a console's hub or a project worker, and the
-  reporting conventions that go with that. The same role decides which tools the session is offered.
+- **A role description** — whether this session is a console session or a project session,
+  and the reporting conventions that go with that. The same role decides which tools the session is
+  offered.
 
 The injected hooks are built to be invisible. They never steer the agent, never print anything, never fail the turn,
 and carry a short timeout (3 seconds) so a daemon that is unreachable costs a turn a fraction of a second rather than
@@ -59,20 +60,20 @@ A resume reassembles the full injection, because all three agents resolve hooks 
 arguments every time and a resume that omitted them would leave a session nobody can observe and nothing to report
 with.
 
-### The hub's instruction file
+### The console session's instruction file
 
-A hub whose agent reads an instruction file gets one generated in the console's working directory:
-`CLAUDE.md` for a Claude Code hub, `AGENTS.md` for a Codex hub. It holds the hub's role — decompose,
-dispatch, follow up, summarize, and do not modify project code itself — and how to use the
-orchestration tools. A **Grok Build hub gets no such file**, because Grok reads no instructions in a
-directory that is not a git repository and a console's working directory is not one; its whole role
-travels in a launch flag instead.
+A console session whose agent reads an instruction file gets one generated in the console's working
+directory: `CLAUDE.md` for a Claude Code console session, `AGENTS.md` for a Codex console session. It
+holds the console session's role — decompose, dispatch, follow up, summarize, and do not modify
+project code itself — and how to use the orchestration tools. A **Grok Build console session gets no
+such file**, because Grok reads no instructions in a directory that is not a git repository and a
+console's working directory is not one; its whole role travels in a launch flag instead.
 
-The file is written when the console is created, rewritten when the console's hub agent changes, and
-refreshed immediately before every hub launch — so an edit the user makes to it does not survive the
-next launch. Only the file for the console's current hub agent is kept: one left behind by a previous
-agent is removed, because every agent matches instruction filenames by exact spelling and some read
-more than one of them.
+The file is written when the console is created, rewritten when the console's console session agent
+changes, and refreshed immediately before every console session launch — so an edit the user makes to
+it does not survive the next launch. Only the file for the console's current console session agent is
+kept: one left behind by a previous agent is removed, because every agent matches instruction
+filenames by exact spelling and some read more than one of them.
 
 ## The launch environment
 
@@ -150,9 +151,9 @@ conditions are visible:
   the sandbox or the approval policy. These two lines are a standing cost, not a defect waiting to be fixed: Codex
   gates a hook behind a trust hash taken over the hook's own command, and that command is the session's own
   per-session script, so no pre-captured hash could ever match it.
-- Octoboard's own tools are pre-approved for the session, so a hub's orchestration calls raise no
-  approval dialog. This covers Octoboard's tools alone; every other tool, the sandbox and the
-  approval policy are untouched.
+- Octoboard's own tools are pre-approved for the session, so a console session's orchestration calls
+  raise no approval dialog. This covers Octoboard's tools alone; every other tool, the sandbox and
+  the approval policy are untouched.
 
 Whether Codex resolves approval requests by itself is read from `config.toml` in the Codex home that launch uses: the
 session's Codex config directory, else a `CODEX_HOME` the user's shell exports, else `~/.codex`.
@@ -177,8 +178,8 @@ persists. Octoboard does not check this when the directory is set.
 
 Grok Build additionally **requires the project to be a git repository**: it locates a project by walking up for a
 `.git` directory, and in a directory without one it loads neither the project's instructions nor the project's hooks.
-A console's working directory is not a repository, so a Grok hub session reads no instruction file from it and takes
-its role through a launch flag instead (see "The hub's instruction file" above).
+A console's working directory is not a repository, so a Grok console session reads no instruction file from it and
+takes its role through a launch flag instead (see "The console session's instruction file" above).
 
 ## Claude Code's workspace-trust prompt
 
@@ -193,7 +194,7 @@ What happens when the screen comes up depends on the session:
 
 | Session | What happens |
 |---|---|
-| Hub session | Answered at once, without a dialog and without recording anything: its working directory is the console's own, which holds nothing but the instruction file Octoboard writes there. |
+| Console session | Answered at once, without a dialog and without recording anything: its working directory is the console's own, which holds nothing but the instruction file Octoboard writes there. |
 | Project session whose project has the user's consent, or whose directory lies under a trusted folder | Answered at once, without a dialog. |
 | Any other project session | The user is asked in a dialog; nothing is sent until they agree. |
 
@@ -246,7 +247,7 @@ terminal. Once one client has answered, a go-ahead from another changes nothing.
   removes it with the association. A project starts without it.
 - **A trusted folder** covers every project whose directory is that folder or lies anywhere below it,
   in any console, including projects associated after the folder was trusted — by the user or by a
-  hub. It is set only by "Trust parent folder", is stored on its own rather than with any
+  console session. It is set only by "Trust parent folder", is stored on its own rather than with any
   project, and can be removed in Settings. Its rules are in "Trusted folders" below.
 
 **How the screen is answered.** Octoboard types a Down and then an Enter into the session's terminal,
@@ -275,8 +276,8 @@ so the same words appearing later in a session are never taken for it.
 
 **What trusting a folder grants.** A trusted folder is not limited to the projects present when it
 was trusted. Every project associated under it later is covered as well, by whatever means it was
-associated — **including repositories a hub clones or adds into that folder on its own** — and
-Octoboard answers Claude Code's trust prompt for each of them without asking. Once that prompt is
+associated — **including repositories a console session clones or adds into that folder on its own** —
+and Octoboard answers Claude Code's trust prompt for each of them without asking. Once that prompt is
 answered, Claude Code applies the permission rules and hooks in that project's own
 `.claude/settings.json` without asking either. Trusting a folder therefore means trusting whatever
 ends up inside it, for as long as the folder stays trusted.

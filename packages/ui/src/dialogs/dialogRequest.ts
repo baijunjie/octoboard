@@ -13,5 +13,6 @@ export type DialogRequest =
   | { kind: "rename-session"; session: Session }
   | { kind: "archive-session"; session: Session }
   | { kind: "delete-session"; session: Session }
-  /** Every archived session of `project`, or with none every archived hub of `console`. */
+  /** Every archived session of `project`, or with none every archived console session of
+   * `console`. */
   | { kind: "delete-archived"; console: Console; project?: Project; count: number };

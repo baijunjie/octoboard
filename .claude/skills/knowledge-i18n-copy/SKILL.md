@@ -451,17 +451,17 @@ Title Case words per language:
   with a `{placeholder}`, never fragments joined in code; markup inside a sentence goes through `<Message id params>`;
   a count-dependent message is a plural message selected by `count`. (`packages/ui/src/i18n/react.tsx`;
   `packages/ui/src/i18n/catalog.ts`)
-- **Glossary**: zh-Hans follows Apple's zh-Hans macOS terminology with the fixed terms 控制台 console, 会话 session, 枢纽
-  hub, 智能体 agent, one half-width space between Chinese and Latin text, numbers or placeholders, and full-width
-  punctuation in Chinese sentences, parentheses included (`（{detail}）`).
+- **Glossary**: zh-Hans follows Apple's zh-Hans macOS terminology with the fixed terms 控制台 console, 会话 session,
+  控制台会话 console session, 项目会话 project session, 智能体 agent, one half-width space between Chinese and Latin text,
+  numbers or placeholders, and full-width punctuation in Chinese sentences, parentheses included (`（{detail}）`).
   (`packages/ui/src/i18n/messages/zh-Hans.ts`, the catalog's doc comment)
 - **App name and other app-level facts**: the single source is `config/app.json`. Copy writes the product name as the
   global placeholder `{appName}`, which `format` and `<Message>` fill from that file without the caller passing it;
   never write the name as a literal, and never translate it. (`config/app.json`; `packages/ui/src/i18n/catalog.ts`;
   `docs/product/language.md`, "What follows the language")
-- **Exempt text**: text aimed at the agents — the hub's instructions, tool descriptions and replies, prompts injected
-  into a launch — stays English and is not UI copy; a report page is content the hub's model wrote and is not
-  localized. (`docs/product/language.md`, "What follows the language")
+- **Exempt text**: text aimed at the agents — the console session's instructions, tool descriptions and replies,
+  prompts injected into a launch — stays English and is not UI copy; a report page is content the console session's
+  model wrote and is not localized. (`docs/product/language.md`, "What follows the language")
 - **Capitalization**: the UI is a web UI and uses sentence case (Close sessions, Try again); the macOS application
   menu's items follow Apple's Title Case (Hide Others, Select All). (`packages/ui/src/i18n/messages/en.ts`)
 - **en contractions**: the en catalog uses no contractions — could not, is not, does not — overriding the default

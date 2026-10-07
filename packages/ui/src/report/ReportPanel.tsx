@@ -18,7 +18,7 @@ import {
 } from "./pageDocument";
 
 /**
- * The console's report panel: shown only for the hub session, which is what makes a console's
+ * The console's report panel: shown only for the console session, which is what makes a console's
  * pages visible at all (there is nowhere else to show them). Lists pages on mount and on every
  * snapshot — the daemon never replays a missed `page_created` on its own (see the `page_list`
  * row under "Daemon to client" in `apps/daemon/PROTOCOL.md`), so re-listing is the only way to recover
@@ -32,7 +32,7 @@ import {
  */
 export function ReportPanel({
   consoleId,
-  hubSessionId,
+  consoleSessionId,
   open,
   reportWidth,
   peek,
@@ -40,7 +40,7 @@ export function ReportPanel({
   onCycleRegion,
 }: {
   consoleId: string;
-  hubSessionId: string;
+  consoleSessionId: string;
   open: boolean;
   /** The user's chosen width (`usePaneWidth`) for the docked and the floating forms; the drawer
    * below the breakpoint ignores it. */
@@ -93,18 +93,19 @@ export function ReportPanel({
       // the user has since paged away from is caught there, not here — this just forwards it and
       // reports whatever comes back.
       //
-      // A submission is delivered to the hub session, so the hub is what the daemon's refusals are
-      // about ("This session is not running.", "This session is waiting for you."): naming it keeps
-      // the user from reading the message as being about whatever session they are looking at.
+      // A submission is delivered to the console session, so that is what the daemon's refusals
+      // are about ("This session is not running.", "This session is waiting for you."): naming it
+      // keeps the user from reading the message as being about whatever session they are looking at.
       request({ type: "submit_page", page: page.id, data }).catch((err) => {
-        toastError((err as Error).message, hubSessionId);
+        toastError((err as Error).message, consoleSessionId);
       });
     },
-    [request, toastError, hubSessionId],
+    [request, toastError, consoleSessionId],
   );
 
   // The panel keeps its place in the row while the first `list_pages` is in flight: dropping out
-  // and back would resize the terminal pane, a real SIGWINCH to the agent, on every hub switch.
+  // and back would resize the terminal pane, a real SIGWINCH to the agent, on every console
+  // session switch.
   // Below the `docked` breakpoint "its place" is a fixed overlay instead, so resizing the
   // terminal never comes up there in the first place — `open` only ever slides it on and off
   // screen, never changes whether it is mounted.

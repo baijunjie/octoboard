@@ -1,11 +1,12 @@
 //! The per-session queue for messages Octoboard writes into a running agent: a report reaching a
-//! hub, an instruction the hub sent, an instruction handed to a session being reopened.
+//! console session, an instruction the console session sent, an instruction handed to a session
+//! being reopened.
 //!
 //! Three properties, each of which something upstream depends on:
 //!
 //! - **Order-preserving.** A message that cannot be written yet does not let a later one past it.
-//!   Reports from several workers arriving at one hub, and a hub's follow-up landing after the
-//!   report it answers, both rest on this.
+//!   Reports from several project sessions arriving at one console session, and a console
+//!   session's follow-up landing after the report it answers, both rest on this.
 //! - **Nothing is dropped once accepted**, with two exceptions: a half-written message (below),
 //!   whose drain reports the loss; and a session whose process ends, which takes its queue with it.
 //!   Short of those, whoever queued a message was told not to send it again and is right.

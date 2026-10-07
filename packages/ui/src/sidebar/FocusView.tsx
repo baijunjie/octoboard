@@ -162,7 +162,7 @@ function SessionCard({
           <>
             <span aria-hidden="true">·</span>
             <Radio aria-hidden="true" className="size-3 shrink-0" />
-            <span className="truncate">{t("sidebar.focus.reportsToHub")}</span>
+            <span className="truncate">{t("sidebar.focus.reportsToConsoleSession")}</span>
           </>
         )}
       </div>

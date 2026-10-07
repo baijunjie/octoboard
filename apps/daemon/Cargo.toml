@@ -24,7 +24,7 @@ portable-pty = "0.8"
 serde = { version = "1", features = ["derive"] }
 # `preserve_order`: a report panel form's field order is the author's reading order, and
 # `render_page_submission` renders a submitted object's fields in iteration order straight into
-# the hub's prose — without this, `serde_json::Map` is a `BTreeMap` and the fields would arrive
+# the console session's prose — without this, `serde_json::Map` is a `BTreeMap` and the fields would arrive
 # alphabetised instead.
 # The exact version is the Tauri crate's: both crates are members of one Cargo workspace, and that
 # one pins `serde_json` exactly to stay within the project's Rust floor.

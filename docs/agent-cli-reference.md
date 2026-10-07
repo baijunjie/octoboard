@@ -281,7 +281,7 @@ edit of the project's or the user's files, and was exercised against the version
   `AGENTS.md`, `--append-system-prompt-file` lands it in the system prompt. Codex reads `AGENTS.md`. Grok reads
   `AGENTS.md`, `Agents.md`, `CLAUDE.md`, `Claude.md` and `CLAUDE.local.md`, and on a case-sensitive volume loads every
   matching spelling present. No agent accepts an all-lowercase name. Grok locates a project by walking up for `.git`,
-  and without one reads no project instructions and no project hooks, which is why a Grok hub's role cannot be an
+  and without one reads no project instructions and no project hooks, which is why a Grok console session's role cannot be an
   instruction file in a console's working directory and travels in `--rules` instead.
 - **Resume re-injects everything.** Hooks and the MCP server are resolved from the launch arguments every time and are
   lost on a resume that omits them, silently. The role description differs: Grok persists `--rules` into the session

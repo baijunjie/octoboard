@@ -1,5 +1,5 @@
-//! The Octoboard MCP server: the orchestration tools the hub drives Octoboard with, and the one
-//! reporting tool a project session answers through.
+//! The Octoboard MCP server: the orchestration tools the console session drives Octoboard with,
+//! and the one reporting tool a project session answers through.
 //!
 //! **Transport is a stdio child process, not an HTTP endpoint the agent connects to.** Each
 //! adapter registers `octoboardd mcp --session … --role … --port … --token …` as a `command`-type
@@ -40,11 +40,11 @@ pub struct ToolDef {
 }
 
 /// The tools a session of this role may call. Nothing else is announced to it, so a project
-/// session cannot start or archive sessions and the hub cannot report to itself.
+/// session cannot start or archive sessions and the console session cannot report to itself.
 pub fn tools_for(role: Role) -> &'static [ToolDef] {
     match role {
-        Role::Hub => HUB_TOOLS,
-        Role::Worker => WORKER_TOOLS,
+        Role::Console => CONSOLE_SESSION_TOOLS,
+        Role::Project => PROJECT_SESSION_TOOLS,
     }
 }
 
@@ -62,7 +62,7 @@ pub fn qualified_tool_name(agent: Agent, tool: &str) -> String {
     }
 }
 
-const HUB_TOOLS: &[ToolDef] = &[
+const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "list_projects",
         description: "List this console's projects: name, host, directory, and the sessions \
@@ -254,12 +254,12 @@ const HUB_TOOLS: &[ToolDef] = &[
     },
 ];
 
-const WORKER_TOOLS: &[ToolDef] = &[ToolDef {
+const PROJECT_SESSION_TOOLS: &[ToolDef] = &[ToolDef {
     name: "report",
-    description: "Report the round of work back to the hub. `summary` is natural language; \
-                  `status` and `open_items` are what the hub acts on. With `done` and no open \
-                  items the session is archived once the report is delivered; anything else \
-                  leaves it running and awaiting instructions.",
+    description: "Report the round of work back to the console session. `summary` is natural \
+                  language; `status` and `open_items` are what the console session acts on. With \
+                  `done` and no open items the session is archived once the report is delivered; \
+                  anything else leaves it running and awaiting instructions.",
     schema: || {
         object_schema(
             json!({
@@ -271,8 +271,8 @@ const WORKER_TOOLS: &[ToolDef] = &[ToolDef {
                     "type": "string",
                     "enum": ["done", "failed", "needs_decision"],
                     "description": "`done` when the task is finished, `failed` when it could not \
-                                    be, `needs_decision` when the hub has to choose before it can \
-                                    go on.",
+                                    be, `needs_decision` when the console session has to choose \
+                                    before it can go on.",
                 },
                 "open_items": {
                     "type": "array",
@@ -301,9 +301,9 @@ mod tests {
 
     #[test]
     fn each_role_sees_only_its_own_tools() {
-        assert!(tool_by_name(Role::Worker, "start_session").is_none());
-        assert!(tool_by_name(Role::Worker, "report").is_some());
-        assert!(tool_by_name(Role::Hub, "report").is_none());
+        assert!(tool_by_name(Role::Project, "start_session").is_none());
+        assert!(tool_by_name(Role::Project, "report").is_some());
+        assert!(tool_by_name(Role::Console, "report").is_none());
         for tool in [
             "list_projects",
             "start_session",
@@ -312,8 +312,8 @@ mod tests {
             "report",
         ] {
             // Every tool belongs to exactly one role, so a tool added to both lists by mistake is
-            // caught here rather than by a hub reporting to itself.
-            let roles = [Role::Hub, Role::Worker]
+            // caught here rather than by a console session reporting to itself.
+            let roles = [Role::Console, Role::Project]
                 .into_iter()
                 .filter(|role| tool_by_name(*role, tool).is_some())
                 .count();
@@ -341,7 +341,7 @@ mod tests {
 
     #[test]
     fn every_tool_announces_an_object_schema() {
-        for role in [Role::Hub, Role::Worker] {
+        for role in [Role::Console, Role::Project] {
             for tool in tools_for(role) {
                 let schema = (tool.schema)();
                 assert_eq!(schema["type"], "object", "{}", tool.name);

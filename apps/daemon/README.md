@@ -41,13 +41,13 @@ the repository root and cover both crates; `-p octoboardd` narrows either to thi
 | `src/server.rs` | The HTTP/WebSocket router described in `PROTOCOL.md`, including `POST /mcp/:token` |
 | `src/protocol.rs` | Rust types for the wire protocol; kept in sync with `PROTOCOL.md` and with `packages/ui/src/protocol.ts` by hand |
 | `src/coordinator.rs` | Coordinator role: what each control-socket request does to the stored consoles/projects/sessions/pages, and which host-role work it triggers; projects are stored with absolute, lexically normalised paths |
-| `src/reporting.rs` | The channel between a console's hub and its project sessions: the brief a task is handed over as, writing a message into a running session, a report reaching the hub, the report synthesised when a session stops without sending one, automatic archiving, and rendering a report panel form submission into the hub's message |
+| `src/reporting.rs` | The channel between a console session and its project sessions: the brief a task is handed over as, writing a message into a running session, a report reaching the console session, the report synthesised when a session stops without sending one, automatic archiving, and rendering a report panel form submission into the console session's message |
 | `src/outbox.rs` | The per-session queue every message Octoboard writes into an agent passes through: order-preserving, one drainer per session, and what happens to a message the session only partly accepted |
 | `src/store.rs` | Coordinator's SQLite storage for consoles, projects, sessions, pages, the trusted folders, the user settings and the host table |
 | `src/state.rs` | Shared daemon state: the session status transitions, and each project's live git status and check claim |
 | `src/git_status.rs` | Checks one project's git status against its remote and, with auto-sync on, fast-forwards it — see `PROTOCOL.md`'s "Daemon behaviour, per project" |
 | `src/session.rs` | One running agent process: its PTY, its output fan-out, how it is stopped |
-| `src/trust.rs` | Recognising Claude Code's workspace-trust screen in a Claude session's terminal output, deciding whether the user has consented (per project or through a trusted parent folder; hub sessions are answered without asking), asking the application through `claude_trust_prompt` / `confirm_claude_trust`, and answering the screen — the only code that types keys into a session on its own |
+| `src/trust.rs` | Recognising Claude Code's workspace-trust screen in a Claude session's terminal output, deciding whether the user has consented (per project or through a trusted parent folder; console sessions are answered without asking), asking the application through `claude_trust_prompt` / `confirm_claude_trust`, and answering the screen — the only code that types keys into a session on its own |
 | `src/term.rs` | Launching an agent in a PTY, and writing messages into a running one |
 | `src/ptyio.rs` | Non-blocking read/write on a PTY master fd (a blocking write can park forever behind a modal dialog) |
 | `src/ringbuf.rs` | Fixed-capacity ring buffer holding a session's recent terminal output, replayed to a client that attaches or reconnects |
@@ -64,16 +64,16 @@ the repository root and cover both crates; `-p octoboardd` narrows either to thi
 
 ### `src/mcp/`
 
-The Octoboard MCP server: the orchestration tools the hub drives Octoboard with, and the one reporting tool a project
+The Octoboard MCP server: the orchestration tools the console session drives Octoboard with, and the one reporting tool a project
 session answers through. The tool catalogue is shared by both sides of the stdio bridge, so the child process, the
 daemon, and the role descriptions cannot drift apart. The wire-level `POST /mcp/:token` contract is in
-`PROTOCOL.md`; "The hub's tools" and "Reporting" in `docs/product/hub-orchestration.md` list the tools and what each
+`PROTOCOL.md`; "The console session's tools" and "Reporting" in `docs/product/hub-orchestration.md` list the tools and what each
 one does.
 
 | File | Role |
 |---|---|
-| `mod.rs` | The tool catalogue, and which tools each session role (`hub` / `worker`) may see |
-| `role.rs` | The role description injected at launch, and the hub instruction file written into a console's working directory |
+| `mod.rs` | The tool catalogue, and which tools each session role (`console` / `project`) may see |
+| `role.rs` | The role description injected at launch, and the console session instruction file written into a console's working directory |
 | `exec.rs` | Runs one tool call against the real consoles, projects and sessions, through the same coordinator/reporting functions the control socket uses |
 | `stdio.rs` | `octoboardd mcp` itself: the stdio child process each adapter registers, forwarding every call to the daemon over loopback |
 

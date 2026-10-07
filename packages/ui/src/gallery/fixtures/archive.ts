@@ -14,14 +14,14 @@ const archived = Array.from({ length: 70 }, (_, i) =>
     ended_at: minutesAgo(20 + i * 400),
   }),
 );
-const hubs = Array.from({ length: 8 }, (_, i) =>
-  sessionOf(`s-h${i}`, console_.id, undefined, `Hub ${i + 1}`, "archived", { ended_at: minutesAgo(60 * (i + 1)) }),
+const consoleSessions = Array.from({ length: 8 }, (_, i) =>
+  sessionOf(`s-c${i}`, console_.id, undefined, `Hub ${i + 1}`, "archived", { ended_at: minutesAgo(60 * (i + 1)) }),
 );
 
 const state = snapshotState({
   consoles: [console_],
   projects: [project],
-  sessions: [sessionOf("s-live", console_.id, project.id, "Live session", "idle"), ...archived, ...hubs],
+  sessions: [sessionOf("s-live", console_.id, project.id, "Live session", "idle"), ...archived, ...consoleSessions],
 });
 
 export const archiveScenarios: Scenario[] = [
@@ -38,14 +38,14 @@ export const archiveScenarios: Scenario[] = [
     ],
   },
   {
-    id: "archive-hubs",
+    id: "archive-console-sessions",
     group: GROUP,
-    title: "A console's archived hubs",
+    title: "A console's archived console sessions",
     state,
     steps: [
-      (ui) => ui.press(ui.t("sidebar.hub.actions", { name: console_.name })),
-      (ui) => ui.press(ui.t("sidebar.archive.hubs")),
-      (ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: hubs.length })),
+      (ui) => ui.press(ui.t("sidebar.consoleSession.actions", { name: console_.name })),
+      (ui) => ui.press(ui.t("sidebar.archive.consoleSessions")),
+      (ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: consoleSessions.length })),
     ],
   },
 ];
