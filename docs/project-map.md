@@ -22,6 +22,14 @@ The repository root is two workspace roots at once:
 
 Per-package commands are in that package's doc.
 
+## Shared configuration
+
+- [`config/app.json`](../config/app.json) — the single source for app-level facts (`name`, `repositoryUrl`): the UI
+  fills the name into its copy as `{appName}` (`packages/ui/src/appConfig.ts`) and into the page title, and the
+  desktop and daemon crates' `build.rs` hand it to the code that words the menu, window title and the daemon's own
+  messages. The copies Tauri and Cargo require (`productName` in `tauri.conf.json`, `repository` in the root
+  `Cargo.toml`) mirror it, and the desktop crate's `build.rs` fails the build when they drift.
+
 ## Deliverables
 
 - [`apps/daemon/`](../apps/daemon/README.md) — `octoboardd`, the Rust daemon and the core of the system rather than one

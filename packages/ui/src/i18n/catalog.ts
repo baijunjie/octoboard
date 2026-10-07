@@ -1,3 +1,4 @@
+import { appConfig } from "../appConfig";
 import { en } from "./messages/en";
 import { zhHans } from "./messages/zh-Hans";
 import { FALLBACK_LANGUAGE, type Language } from "./languages";
@@ -9,7 +10,8 @@ export type PluralCategory = "zero" | "one" | "two" | "few" | "many" | "other";
  * parameter. `other` is the one category every language has. */
 export type PluralMessage = { readonly [C in PluralCategory]?: string } & { readonly other: string };
 
-/** A catalog entry. `{name}` in the text is a placeholder filled from the parameter of that name. */
+/** A catalog entry. `{name}` in the text is a placeholder filled from the parameter of that name,
+ * except the global ones (`globalParam`), which every message can use and no caller passes. */
 export type Message = string | PluralMessage;
 
 export type MessageKey = keyof typeof en;
@@ -19,7 +21,17 @@ export function isMessageKey(key: string): key is MessageKey {
   return Object.hasOwn(en, key);
 }
 
-type Placeholders<S extends string> = S extends `${string}{${infer P}}${infer Rest}` ? P | Placeholders<Rest> : never;
+/** The placeholders filled from the app config in every message, so callers never pass them. */
+const GLOBAL_PARAMS = { appName: appConfig.name } as const;
+
+type GlobalParam = keyof typeof GLOBAL_PARAMS;
+
+/** The value of a global placeholder, or `undefined` when `name` is not one. */
+export function globalParam(name: string): string | undefined {
+  return Object.hasOwn(GLOBAL_PARAMS, name) ? GLOBAL_PARAMS[name as GlobalParam] : undefined;
+}
+
+type Placeholders<S extends string> = S extends `${string}{${infer P}}${infer Rest}` ? Exclude<P, GlobalParam> | Placeholders<Rest> : never;
 
 type PlaceholdersOf<M> = M extends string
   ? Placeholders<M>
@@ -87,13 +99,13 @@ export function splitPlaceholders(text: string): string[] {
   return text.split(/\{(\w+)\}/);
 }
 
-/** The message in `language`, its placeholders filled; a number is formatted for the language. */
+/** The message in `language`, its placeholders (global ones included) filled; a number is formatted for the language. */
 export function format(language: Language, key: MessageKey, params?: Record<string, string | number>): string {
   const parts = splitPlaceholders(messageText(language, key, params));
   return parts
     .map((part, index) => {
       if (index % 2 === 0) return part;
-      const value = params?.[part];
+      const value = params?.[part] ?? globalParam(part);
       if (value === undefined) return `{${part}}`;
       return typeof value === "number" ? value.toLocaleString(language) : value;
     })

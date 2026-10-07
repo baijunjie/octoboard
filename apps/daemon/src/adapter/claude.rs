@@ -183,10 +183,13 @@ fn untrusted_workspace_notice(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> O
     match project.get("hasTrustDialogAccepted") {
         Some(serde_json::Value::Bool(false)) => Some(Notice::new(
             notice_code::CLAUDE_WORKSPACE_UNTRUSTED,
-            "Claude Code has not been trusted with this directory, so this project's own `allow` \
-             permission rules are ignored until Claude Code's trust prompt is answered — its `deny` \
-             rules still apply, so a session is only more restrictive, never less. Octoboard \
-             answers that prompt for you once you have agreed to it.",
+            format!(
+                "Claude Code has not been trusted with this directory, so this project's own `allow` \
+                 permission rules are ignored until Claude Code's trust prompt is answered — its `deny` \
+                 rules still apply, so a session is only more restrictive, never less. {} \
+                 answers that prompt for you once you have agreed to it.",
+                crate::APP_NAME
+            ),
             &[],
         )),
         _ => None,

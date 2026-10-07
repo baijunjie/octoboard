@@ -535,7 +535,8 @@ impl AppState {
                 Notice::new(
                     notice_code::QUEUED_MESSAGES_DROPPED,
                     format!(
-                        "Octoboard dropped what it had queued for this session: {}",
+                        "{} dropped what it had queued for this session: {}",
+                        crate::APP_NAME,
                         crate::term::FRAGMENT_HAZARD
                     ),
                     &[],

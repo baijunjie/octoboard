@@ -414,9 +414,10 @@ fn kill_group_after_timeout(
         format!(
             "`{shell} -l -i -c '{command}'` did not finish within {timeout:?}; a shell startup file \
              is probably blocked on something other than stdin, or it left a background process \
-             holding the shell's output open. Octoboard refuses to launch with an unknown \
+             holding the shell's output open. {app} refuses to launch with an unknown \
              environment rather than guess at one — fix or skip the slow step in the shell's rc \
-             files."
+             files.",
+            app = crate::APP_NAME
         ),
         &[
             ("shell", shell),

@@ -166,7 +166,7 @@ fn open_main_window(app: &tauri::AppHandle, startup: Result<u16, String>) -> tau
         window_state::initial_window(window_state::load(app).as_ref(), &displays, main_display);
 
     let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(url.into()))
-        .title("Octoboard")
+        .title(menu::APP_NAME)
         .inner_size(initial.size.0, initial.size.1)
         // 280 (sidebar) + 520 (the terminal pane's own floor) + 300 (the report panel's own
         // floor) = 1100: at this minimum, both panes already sit on their floors with nothing

@@ -518,7 +518,10 @@ fn answer_failed(
 }
 
 fn answer_failed_message(reason: &str) -> String {
-    format!("Octoboard could not answer Claude Code's trust screen ({reason}). Answer it in the terminal.")
+    format!(
+        "{} could not answer Claude Code's trust screen ({reason}). Answer it in the terminal.",
+        crate::APP_NAME
+    )
 }
 
 fn is_not_waiting(err: &anyhow::Error) -> bool {
@@ -598,7 +601,10 @@ pub async fn confirm(
     let Some(project_id) = &session.project_id else {
         return Err(CodedError::raised(
             error_code::HUB_TRUST_NOT_ASKED,
-            "a hub session's trust screen is answered by Octoboard without asking",
+            format!(
+                "a hub session's trust screen is answered by {} without asking",
+                crate::APP_NAME
+            ),
             &[],
         ));
     };

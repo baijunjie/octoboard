@@ -1,7 +1,7 @@
 import React, { useCallback, useSyncExternalStore } from "react";
 import { I18nProvider } from "react-aria-components";
 
-import { format, messageText, type MessageArgs, type MessageKey, splitPlaceholders, type Translate } from "./catalog";
+import { format, globalParam, messageText, type MessageArgs, type MessageKey, splitPlaceholders, type Translate } from "./catalog";
 import { currentLanguage, subscribeLanguage } from "./language";
 import type { Language } from "./languages";
 
@@ -33,7 +33,7 @@ export function Message<K extends MessageKey>({
   return (
     <>
       {parts.map((part, index) =>
-        index % 2 === 0 ? part : <React.Fragment key={index}>{fill(values?.[part], part, language)}</React.Fragment>,
+        index % 2 === 0 ? part : <React.Fragment key={index}>{fill(values?.[part] ?? globalParam(part), part, language)}</React.Fragment>,
       )}
     </>
   );

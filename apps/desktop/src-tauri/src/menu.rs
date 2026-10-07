@@ -5,6 +5,9 @@ use std::collections::HashMap;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::AppHandle;
 
+/// The product name, from `config/app.json` (see `build.rs`).
+pub const APP_NAME: &str = env!("OCTOBOARD_APP_NAME");
+
 /// The Settings item's id, which `on_menu_event` in `lib.rs` matches.
 pub const SETTINGS_ITEM_ID: &str = "settings";
 
@@ -47,9 +50,10 @@ pub fn build_menu(
     app: &AppHandle,
     labels: &Labels,
 ) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
-    let quit = MenuItemBuilder::with_id("quit", labels.get("menu.quit", "Quit Octoboard"))
-        .accelerator("CmdOrCtrl+Q")
-        .build(app)?;
+    let quit =
+        MenuItemBuilder::with_id("quit", labels.get("menu.quit", &format!("Quit {APP_NAME}")))
+            .accelerator("CmdOrCtrl+Q")
+            .build(app)?;
 
     // A plain item for the same reason as Quit: the UI owns what opening settings means.
     let settings =
@@ -58,14 +62,14 @@ pub fn build_menu(
             .build(app)?;
 
     // The submenu title is the product name, which no language translates.
-    let app_menu = SubmenuBuilder::new(app, "Octoboard")
-        .about_with_text(labels.get("menu.about", "About Octoboard"), None)
+    let app_menu = SubmenuBuilder::new(app, APP_NAME)
+        .about_with_text(labels.get("menu.about", &format!("About {APP_NAME}")), None)
         .separator()
         .item(&settings)
         .separator()
         .services_with_text(labels.get("menu.services", "Services"))
         .separator()
-        .hide_with_text(labels.get("menu.hide", "Hide Octoboard"))
+        .hide_with_text(labels.get("menu.hide", &format!("Hide {APP_NAME}")))
         .hide_others_with_text(labels.get("menu.hideOthers", "Hide Others"))
         .show_all_with_text(labels.get("menu.showAll", "Show All"))
         .separator()

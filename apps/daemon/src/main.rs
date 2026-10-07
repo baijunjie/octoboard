@@ -35,6 +35,10 @@ use clap::{Parser, Subcommand};
 use state::AppState;
 use store::Store;
 
+/// The product name, from `config/app.json` (see `build.rs`), for the wording the daemon itself
+/// puts in front of the user.
+pub(crate) const APP_NAME: &str = env!("OCTOBOARD_APP_NAME");
+
 #[derive(Parser)]
 #[command(name = "octoboardd")]
 struct Cli {

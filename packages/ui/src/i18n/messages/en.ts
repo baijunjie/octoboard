@@ -2,6 +2,8 @@
  * The English catalog: every message the UI shows, and the base every other language is translated
  * from and falls back to. A key names where the message is used (`area.what`); `{name}` is a
  * placeholder, and a message that depends on a count gives its plural forms by CLDR category.
+ * `{appName}` is the one placeholder every message can use without a caller passing it: it is
+ * filled globally from `config/app.json`.
  */
 export const en = {
   "common.add": "Add",
@@ -20,17 +22,17 @@ export const en = {
   "startup.daemonFailed": "The daemon failed to start: {error}",
   "startup.noAddress":
     "No daemon address known. The Tauri shell passes a port via {port}; for {dev} against a daemon started by hand, open the page with {port}, set {portVar}, or start the dev server with {proxyVar} to proxy to it.",
-  "error.crashed": "Octoboard hit an error it could not recover from.",
+  "error.crashed": "{appName} hit an error it could not recover from.",
   "error.tryAgain": "Try again",
 
   // The macOS application menu, handed to the shell (see `useNativeMenuLabels`).
-  "menu.about": "About Octoboard",
+  "menu.about": "About {appName}",
   "menu.settings": "Settings…",
   "menu.services": "Services",
-  "menu.hide": "Hide Octoboard",
+  "menu.hide": "Hide {appName}",
   "menu.hideOthers": "Hide Others",
   "menu.showAll": "Show All",
-  "menu.quit": "Quit Octoboard",
+  "menu.quit": "Quit {appName}",
   "menu.edit": "Edit",
   "menu.undo": "Undo",
   "menu.redo": "Redo",
@@ -50,11 +52,11 @@ export const en = {
   "app.closeSessions": "Close sessions",
   "app.closeReport": "Close report",
   "app.hubAlreadyLive": "This console already has a live hub session. Archive it before reopening this one.",
-  "app.quit.title": "Quit Octoboard",
+  "app.quit.title": "Quit {appName}",
   "app.quit.message": "Some sessions are still running. Quitting interrupts them; each stays resumable next time.",
 
   "exit.failed": "Quitting failed: {error}",
-  "exit.daemonExited": "The daemon process exited unexpectedly ({detail}). Restart Octoboard to continue.",
+  "exit.daemonExited": "The daemon process exited unexpectedly ({detail}). Restart {appName} to continue.",
 
   "connection.error.connectionClosed": "the daemon control connection closed",
   "connection.error.connectionIsClosed": "the daemon control connection is closed",
@@ -98,7 +100,7 @@ export const en = {
   "daemon.session_not_archived": "only an archived session can be deleted",
   "daemon.session_waiting_for_user": "this session is waiting for you — answer it in the terminal first",
   "daemon.queued_messages_lost":
-    "A message queued for this session could not be written in full, so it and everything queued behind it were dropped: the session's input line may be holding part of a message Octoboard could not finish writing. The next message written into the session will be run together with it, so check the session before sending anything else.",
+    "A message queued for this session could not be written in full, so it and everything queued behind it were dropped: the session's input line may be holding part of a message {appName} could not finish writing. The next message written into the session will be run together with it, so check the session before sending anything else.",
   "daemon.page_not_current": "this page is no longer current; its form can no longer be submitted",
   "daemon.trust_directory_too_broad":
     "`{path}` is too broad to trust as a whole: it is, or contains, the filesystem root or your home directory. Trust this project on its own, or move it under a narrower folder and trust that.",
@@ -106,16 +108,16 @@ export const en = {
   "daemon.trust_home_unknown": "the home directory could not be determined, so no folder can be checked against it",
   "daemon.claude_trust_not_waiting": "this session is not waiting at Claude Code's trust screen any more",
   "daemon.not_a_claude_session": "only Claude Code sessions have a trust screen",
-  "daemon.hub_trust_not_asked": "a hub session's trust screen is answered by Octoboard without asking",
+  "daemon.hub_trust_not_asked": "a hub session's trust screen is answered by {appName} without asking",
   "daemon.binary_not_found": "`{binary}` was not found on PATH in the snapshotted shell environment",
   "daemon.shell_environment_timeout":
-    "`{shell} -l -i -c '{command}'` did not finish within {timeout}; a shell startup file is probably blocked on something other than stdin, or it left a background process holding the shell's output open. Octoboard refuses to launch with an unknown environment rather than guess at one — fix or skip the slow step in the shell's rc files.",
+    "`{shell} -l -i -c '{command}'` did not finish within {timeout}; a shell startup file is probably blocked on something other than stdin, or it left a background process holding the shell's output open. {appName} refuses to launch with an unknown environment rather than guess at one — fix or skip the slow step in the shell's rc files.",
   "daemon.claude_workspace_untrusted":
-    "Claude Code has not been trusted with this directory, so this project's own `allow` permission rules are ignored until Claude Code's trust prompt is answered — its `deny` rules still apply, so a session is only more restrictive, never less. Octoboard answers that prompt for you once you have agreed to it.",
+    "Claude Code has not been trusted with this directory, so this project's own `allow` permission rules are ignored until Claude Code's trust prompt is answered — its `deny` rules still apply, so a session is only more restrictive, never less. {appName} answers that prompt for you once you have agreed to it.",
   "daemon.queued_messages_dropped":
-    "Octoboard dropped what it had queued for this session: the session's input line may be holding part of a message Octoboard could not finish writing. The next message written into the session will be run together with it, so check the session before sending anything else.",
+    "{appName} dropped what it had queued for this session: the session's input line may be holding part of a message {appName} could not finish writing. The next message written into the session will be run together with it, so check the session before sending anything else.",
   "daemon.claude_trust_answer_failed":
-    "Octoboard could not answer Claude Code's trust screen ({reason}). Answer it in the terminal.",
+    "{appName} could not answer Claude Code's trust screen ({reason}). Answer it in the terminal.",
   // What goes in place of `{reason}` above, keyed by the daemon's `reason_code`.
   "daemon.trust_reason.screen_gone": "the trust screen is no longer on the terminal",
   "daemon.trust_reason.cursor_not_on_decline": "the cursor is not on the screen's first option, or could not be found",
@@ -340,9 +342,9 @@ export const en = {
   "settings.appearance.dark": "Dark",
   "settings.appearance.system": "System",
   "settings.language.label": "Language",
-  "settings.language.description": "The language of Octoboard's interface, picked from the system's languages when Octoboard first opened.",
+  "settings.language.description": "The language of {appName}'s interface, picked from the system's languages when {appName} first opened.",
   "settings.trusted.description":
-    "Octoboard answers Claude Code's trust prompt without asking for every project under these folders, including projects added to them later. Claude Code then applies the permission rules and hooks in each project's own settings without asking either, so trust a folder only if you trust everything that ends up inside it.",
+    "{appName} answers Claude Code's trust prompt without asking for every project under these folders, including projects added to them later. Claude Code then applies the permission rules and hooks in each project's own settings without asking either, so trust a folder only if you trust everything that ends up inside it.",
   "settings.trusted.empty": "No folders are trusted. A folder is trusted from a session's trust prompt.",
   "settings.trusted.rowDescription": "Projects under this folder are trusted.",
   "settings.trusted.removeTooltip": "Stop trusting this folder. Projects' own consents and running sessions are kept.",
@@ -353,6 +355,6 @@ export const en = {
   "settings.notifications.blocked": "Blocked. Allow them in this site's settings in your browser.",
   "settings.notifications.undecided": "Not enabled yet.",
   "settings.notifications.system":
-    "Octoboard posts them directly. Turn them off in the system's notification settings.",
+    "{appName} posts them directly. Turn them off in the system's notification settings.",
   "settings.notifications.enable": "Enable",
 } as const;

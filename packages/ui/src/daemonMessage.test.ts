@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 
+import { appConfig } from "./appConfig";
 import { daemonMessage } from "./daemonMessage";
 import type { Console, Project, Session } from "./protocol";
 
@@ -20,10 +21,10 @@ it("words a known code from the catalog, showing a record by its name and an unk
 it("words a trust answer's failure from its reason code, keeping the English reason for an unknown one", () => {
   const reason = "the screen did not go away after Enter";
   expect(daemonMessage("en", "claude_trust_answer_failed", { reason, reason_code: "screen_not_dismissed" }, "x", records)).toBe(
-    `Octoboard could not answer Claude Code's trust screen (${reason}). Answer it in the terminal.`,
+    `${appConfig.name} could not answer Claude Code's trust screen (${reason}). Answer it in the terminal.`,
   );
   expect(daemonMessage("en", "claude_trust_answer_failed", { reason: "why", reason_code: "newer" }, "x", records)).toBe(
-    "Octoboard could not answer Claude Code's trust screen (why). Answer it in the terminal.",
+    `${appConfig.name} could not answer Claude Code's trust screen (why). Answer it in the terminal.`,
   );
 });
 

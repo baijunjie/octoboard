@@ -197,9 +197,12 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
 /// until the end marker, which is why a multi-line message arrives as one — so the next message
 /// Octoboard writes closes the fragment and is submitted along with it. The damage is one spoiled
 /// message, not a session that stays broken.
-pub const FRAGMENT_HAZARD: &str = "the session's input line may be holding part of a message \
-     Octoboard could not finish writing. The next message written into the session will be run \
-     together with it, so check the session before sending anything else.";
+pub const FRAGMENT_HAZARD: &str = concat!(
+    "the session's input line may be holding part of a message ",
+    env!("OCTOBOARD_APP_NAME"),
+    " could not finish writing. The next message written into the session will be run \
+     together with it, so check the session before sending anything else."
+);
 
 /// Writes a message into a running session as bracketed paste + Enter.
 ///

@@ -21,16 +21,16 @@ export const zhHans: Translation<"other"> = {
   "startup.daemonFailed": "守护进程启动失败：{error}",
   "startup.noAddress":
     "未知守护进程地址。Tauri 外壳通过 {port} 传入端口；若要让 {dev} 连接手动启动的守护进程，请用 {port} 打开页面，设置 {portVar}，或在启动开发服务器时用 {proxyVar} 代理到该进程。",
-  "error.crashed": "Octoboard 遇到了无法恢复的错误。",
+  "error.crashed": "{appName} 遇到了无法恢复的错误。",
   "error.tryAgain": "重试",
 
-  "menu.about": "关于 Octoboard",
+  "menu.about": "关于 {appName}",
   "menu.settings": "设置…",
   "menu.services": "服务",
-  "menu.hide": "隐藏 Octoboard",
+  "menu.hide": "隐藏 {appName}",
   "menu.hideOthers": "隐藏其他",
   "menu.showAll": "全部显示",
-  "menu.quit": "退出 Octoboard",
+  "menu.quit": "退出 {appName}",
   "menu.edit": "编辑",
   "menu.undo": "撤销",
   "menu.redo": "重做",
@@ -50,11 +50,11 @@ export const zhHans: Translation<"other"> = {
   "app.closeSessions": "关闭会话列表",
   "app.closeReport": "关闭报告",
   "app.hubAlreadyLive": "此控制台已有一个运行中的枢纽会话。请先将其归档，再重新打开这个会话。",
-  "app.quit.title": "退出 Octoboard",
+  "app.quit.title": "退出 {appName}",
   "app.quit.message": "仍有会话在运行。退出会中断它们；下次启动时仍可恢复。",
 
   "exit.failed": "退出失败：{error}",
-  "exit.daemonExited": "守护进程意外退出（{detail}）。请重新启动 Octoboard 以继续。",
+  "exit.daemonExited": "守护进程意外退出（{detail}）。请重新启动 {appName} 以继续。",
 
   "connection.error.connectionClosed": "守护进程控制连接已关闭",
   "connection.error.connectionIsClosed": "守护进程控制连接已关闭",
@@ -95,7 +95,7 @@ export const zhHans: Translation<"other"> = {
   "daemon.session_not_archived": "只能删除已归档的会话",
   "daemon.session_waiting_for_user": "此会话正在等你回应，请先在终端中回答",
   "daemon.queued_messages_lost":
-    "为此会话排队的一条消息未能完整写入，因此它以及排在其后的所有消息都已被丢弃：会话的输入行中可能残留了 Octoboard 未能写完的半条消息。下一条写入会话的消息会与它一起运行，所以在发送其他内容之前请先检查会话。",
+    "为此会话排队的一条消息未能完整写入，因此它以及排在其后的所有消息都已被丢弃：会话的输入行中可能残留了 {appName} 未能写完的半条消息。下一条写入会话的消息会与它一起运行，所以在发送其他内容之前请先检查会话。",
   "daemon.page_not_current": "此页面已不是最新，其表单无法再提交",
   "daemon.trust_directory_too_broad":
     "`{path}` 范围过大，无法整体信任：它就是文件系统根目录或你的家目录，或包含它们。请单独信任此项目，或将其移到范围更窄的文件夹下再信任该文件夹。",
@@ -103,15 +103,15 @@ export const zhHans: Translation<"other"> = {
   "daemon.trust_home_unknown": "无法确定家目录，因此无法据此检查任何文件夹",
   "daemon.claude_trust_not_waiting": "此会话已不再停留在 Claude Code 的信任界面",
   "daemon.not_a_claude_session": "只有 Claude Code 会话才有信任界面",
-  "daemon.hub_trust_not_asked": "枢纽会话的信任界面由 Octoboard 直接回应，无需询问",
+  "daemon.hub_trust_not_asked": "枢纽会话的信任界面由 {appName} 直接回应，无需询问",
   "daemon.binary_not_found": "在已快照的 shell 环境的 PATH 中找不到 `{binary}`",
   "daemon.shell_environment_timeout":
-    "`{shell} -l -i -c '{command}'` 未在 {timeout} 内完成；可能是某个 shell 启动文件卡在了 stdin 以外的某处，或是留下了一个占住 shell 输出的后台进程。Octoboard 不会在环境未知的情况下凭猜测启动，请修复 shell 的 rc 文件中缓慢的步骤，或跳过它。",
+    "`{shell} -l -i -c '{command}'` 未在 {timeout} 内完成；可能是某个 shell 启动文件卡在了 stdin 以外的某处，或是留下了一个占住 shell 输出的后台进程。{appName} 不会在环境未知的情况下凭猜测启动，请修复 shell 的 rc 文件中缓慢的步骤，或跳过它。",
   "daemon.claude_workspace_untrusted":
-    "Claude Code 尚未信任此目录，因此在回应 Claude Code 的信任提示之前，此项目自身的 `allow` 权限规则会被忽略；其 `deny` 规则仍然生效，所以会话只会更严格，不会更宽松。你同意之后，Octoboard 会替你回应该提示。",
+    "Claude Code 尚未信任此目录，因此在回应 Claude Code 的信任提示之前，此项目自身的 `allow` 权限规则会被忽略；其 `deny` 规则仍然生效，所以会话只会更严格，不会更宽松。你同意之后，{appName} 会替你回应该提示。",
   "daemon.queued_messages_dropped":
-    "Octoboard 丢弃了为此会话排队的内容：会话的输入行中可能残留了 Octoboard 未能写完的半条消息。下一条写入会话的消息会与它一起运行，所以在发送其他内容之前请先检查会话。",
-  "daemon.claude_trust_answer_failed": "Octoboard 无法回应 Claude Code 的信任界面（{reason}）。请在终端中回应。",
+    "{appName} 丢弃了为此会话排队的内容：会话的输入行中可能残留了 {appName} 未能写完的半条消息。下一条写入会话的消息会与它一起运行，所以在发送其他内容之前请先检查会话。",
+  "daemon.claude_trust_answer_failed": "{appName} 无法回应 Claude Code 的信任界面（{reason}）。请在终端中回应。",
   "daemon.trust_reason.screen_gone": "终端上已不再显示信任界面",
   "daemon.trust_reason.cursor_not_on_decline": "光标不在界面的第一个选项上，或找不到光标",
   "daemon.trust_reason.cursor_did_not_move": "光标没有移到“Yes, I trust this folder”，因此未发送 Enter",
@@ -325,9 +325,9 @@ export const zhHans: Translation<"other"> = {
   "settings.appearance.dark": "深色",
   "settings.appearance.system": "跟随系统",
   "settings.language.label": "语言",
-  "settings.language.description": "Octoboard 界面的语言，首次打开时按系统语言选定。",
+  "settings.language.description": "{appName} 界面的语言，首次打开时按系统语言选定。",
   "settings.trusted.description":
-    "对于这些文件夹下的每个项目（包括之后添加到其中的项目），Octoboard 会直接回应 Claude Code 的信任提示，而不再逐个询问。随后 Claude Code 也会不经询问地应用各项目自身设置中的权限规则和钩子，因此只有当你信任文件夹内最终出现的所有内容时，才应信任该文件夹。",
+    "对于这些文件夹下的每个项目（包括之后添加到其中的项目），{appName} 会直接回应 Claude Code 的信任提示，而不再逐个询问。随后 Claude Code 也会不经询问地应用各项目自身设置中的权限规则和钩子，因此只有当你信任文件夹内最终出现的所有内容时，才应信任该文件夹。",
   "settings.trusted.empty": "没有受信任的文件夹。文件夹可在会话的信任提示中设为受信任。",
   "settings.trusted.rowDescription": "此文件夹下的项目均受信任。",
   "settings.trusted.removeTooltip": "停止信任此文件夹。各项目自身的授权和运行中的会话将保留。",
@@ -337,6 +337,6 @@ export const zhHans: Translation<"other"> = {
   "settings.notifications.allowed": "已允许。",
   "settings.notifications.blocked": "已阻止。请在浏览器中此网站的设置里允许通知。",
   "settings.notifications.undecided": "尚未启用。",
-  "settings.notifications.system": "由 Octoboard 直接发出通知。请在系统的通知设置中关闭。",
+  "settings.notifications.system": "由 {appName} 直接发出通知。请在系统的通知设置中关闭。",
   "settings.notifications.enable": "启用",
 };
