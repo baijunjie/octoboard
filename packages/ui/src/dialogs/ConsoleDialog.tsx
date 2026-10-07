@@ -8,7 +8,7 @@ import { ConsoleAvatar } from "../components/ConsoleAvatar";
 import { useT } from "../i18n/react";
 import type { Agent, ConfigDirField, Console } from "../protocol";
 import { useDaemon } from "../store";
-import { Dialog, DialogError, useDialogAction } from "./Dialog";
+import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "./Dialog";
 import { OptionSelect } from "./OptionSelect";
 import { TextInput } from "./TextInput";
 
@@ -63,12 +63,13 @@ export function ConsoleDialog({
     return [field, configDirs[field].trim()] as const;
   });
 
+  // The avatar's own failure is not a field's, and stays at the foot of the dialog.
+  const { shown, attempt } = useSubmitValidation();
+  const nameError = name.trim() ? undefined : t("dialog.nameRequired");
+
   const submit = () => {
     if (decoding) return;
-    if (!name.trim()) {
-      setError(t("dialog.nameRequired"));
-      return;
-    }
+    if (!attempt(nameError)) return;
     void run(async () => {
       if (editing) {
         const changes: Partial<Record<ConfigDirField | "icon", string | null>> = {};
@@ -115,7 +116,13 @@ export function ConsoleDialog({
       busy={busy || decoding}
       onSubmit={submit}
     >
-      <TextInput label={t("common.name")} value={name} onChange={setName} autoFocus />
+      <TextInput
+        label={t("common.name")}
+        value={name}
+        onChange={setName}
+        errorMessage={shown(nameError)}
+        autoFocus
+      />
       <div role="group" aria-labelledby={avatarLabelId} className="flex flex-col gap-1.5">
         <Label id={avatarLabelId}>{t("dialog.console.avatar")}</Label>
         <div className="flex items-center gap-3">

@@ -8,7 +8,7 @@ import { useT } from "../i18n/react";
 import { tagVocabulary } from "../projectFiltering";
 import type { Agent, Project, ProjectSource } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
-import { Dialog, DialogError, useDialogAction } from "./Dialog";
+import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "./Dialog";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { OptionSelect } from "./OptionSelect";
 import { TagsInput } from "./TagsInput";
@@ -47,29 +47,22 @@ export function ProjectDialog({
     [projects, consoleId],
   );
   const [pickingDirectory, setPickingDirectory] = useState(false);
-  const { error, setError, busy, run } = useDialogAction();
+  const { error, busy, run } = useDialogAction();
+
+  // `path` is required for every source — for `github` it is the parent directory the clone lands
+  // in, not something the daemon can default — and `remote_url` additionally for `github`. Checked
+  // here so an obviously incomplete request never reaches the daemon only to come back as a raw
+  // "`path` is required" field-name error.
+  const pathError = !editing && !path.trim() ? t("dialog.project.directoryRequired") : undefined;
+  const urlError = !editing && source === "github" && !remoteUrl.trim() ? t("dialog.project.urlRequired") : undefined;
+  // `name: name || undefined` below means "blank leaves it alone" everywhere else this pattern is
+  // used (the field is genuinely optional on creation), but here blanking it out and saving would
+  // silently keep the old name instead of doing what the empty field visually suggests.
+  const nameError = editing && !name.trim() ? t("dialog.nameRequired") : undefined;
+  const { shown, attempt } = useSubmitValidation();
 
   const submit = () => {
-    if (!editing) {
-      // `path` is required for every source — for `github` it is the parent directory the clone
-      // lands in, not something the daemon can default — and `remote_url` additionally for
-      // `github`. Checked here so an obviously incomplete request never reaches the daemon only to
-      // come back as a raw "`path` is required" field-name error.
-      if (!path.trim()) {
-        setError(t("dialog.project.directoryRequired"));
-        return;
-      }
-      if (source === "github" && !remoteUrl.trim()) {
-        setError(t("dialog.project.urlRequired"));
-        return;
-      }
-    } else if (!name.trim()) {
-      // `name: name || undefined` below means "blank leaves it alone" everywhere else this pattern
-      // is used (the field is genuinely optional on creation), but here blanking it out and saving
-      // would silently keep the old name instead of doing what the empty field visually suggests.
-      setError(t("dialog.nameRequired"));
-      return;
-    }
+    if (!attempt(pathError, urlError, nameError)) return;
     void run(async () => {
       if (editing) {
         await request({
@@ -127,23 +120,23 @@ export function ProjectDialog({
             onChange={setRemoteUrl}
             dir="ltr"
             placeholder={t("dialog.project.urlExample")}
+            errorMessage={shown(urlError)}
           />
         )}
         {!editing && (
-          <div className="flex items-end gap-2">
-            <div className="min-w-0 flex-1">
-              <TextInput
-                label={source === "github" ? t("dialog.project.cloneInto") : t("dialog.project.directory")}
-                value={path}
-                onChange={setPath}
-                dir="ltr"
-                placeholder={t("dialog.project.directoryExample")}
-              />
-            </div>
-            <Button type="button" variant="secondary" onPress={() => setPickingDirectory(true)}>
-              {t("dialog.project.browse")}
-            </Button>
-          </div>
+          <TextInput
+            label={source === "github" ? t("dialog.project.cloneInto") : t("dialog.project.directory")}
+            value={path}
+            onChange={setPath}
+            dir="ltr"
+            placeholder={t("dialog.project.directoryExample")}
+            errorMessage={shown(pathError)}
+            trailing={
+              <Button type="button" variant="secondary" onPress={() => setPickingDirectory(true)}>
+                {t("dialog.project.browse")}
+              </Button>
+            }
+          />
         )}
         <TextInput
           label={editing ? t("common.name") : t("common.nameOptional")}
@@ -151,6 +144,7 @@ export function ProjectDialog({
           onChange={setName}
           placeholder={editing ? undefined : t("dialog.project.nameExample")}
           description={editing ? undefined : t("dialog.project.nameHint")}
+          errorMessage={shown(nameError)}
         />
         <TagsInput
           label={t("dialog.project.tags")}

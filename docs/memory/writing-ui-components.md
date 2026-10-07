@@ -81,6 +81,31 @@ outgoing one's soon-detached element as its focus-restore target, so focus is lo
 mounted and reset the per-item state from `resetKey` instead (`useDialogAction(resetKey)` does that for the error and
 busy state).
 
+## What is wrong with one field shows under that field, from the first submit on
+
+In a `packages/ui` dialog, a message about one field's value — empty, malformed, not allowed — belongs to that
+field: `TextInput` (`packages/ui/src/dialogs/TextInput.tsx`) takes it as `errorMessage`, which marks the field
+invalid and renders the message right under it. `useDialogAction().setError` and `DialogError` carry only the
+failure of the request itself, at the foot of the dialog, and never a verdict on a single field.
+
+Compute each field's message on every render from the current value and pass it through `useSubmitValidation`
+(`packages/ui/src/dialogs/Dialog.tsx`): `shown(message)` holds it back until `attempt(...messages)` has gated a
+submit, so no field is marked before the user has tried to submit, and from then on the message follows what is
+typed. Gate the submit on what `attempt` answers rather than re-checking the values there.
+
+Marking a field invalid yourself carries two conditions wherever that field is built — `TextInput` already meets
+both, a field assembled anywhere else has to:
+
+- Pass `validationBehavior="aria"` to the react-aria-components field. It defaults to `"native"`, which feeds a
+  controlled `isInvalid` to the browser's own constraint validation (`setCustomValidity`); the browser then refuses
+  the `<form>` submit before the dialog's `onSubmit` runs, and since the mark only ever appears from that handler,
+  the dialog locks itself out of submitting at all.
+- Put the `role="alert"` that announces the message on an element of your own inside `FieldError`, not on
+  `FieldError`. react-aria passes a component's props through `filterDOMProps`, which keeps only `id`, the
+  `aria-label` / `aria-labelledby` / `aria-describedby` / `aria-details` family, link props, `dir` / `lang` /
+  `hidden` / `inert` / `translate`, the global events and `data-*`; anything else — `role` among them — is dropped
+  without a warning, and a message that appears only on submit is then never announced at all.
+
 ## A Tailwind class name has to stand in the source as literal text
 
 Tailwind 4 reads the source as plain text and emits a utility only for a class name it can find spelled out there, so

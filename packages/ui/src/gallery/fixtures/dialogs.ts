@@ -54,6 +54,18 @@ export const dialogScenarios: Scenario[] = [
     steps: [consoleActions, (ui) => ui.press(ui.t("sidebar.console.addProject"))],
   },
   {
+    id: "dialog-add-project-invalid",
+    group: GROUP,
+    title: "Add project with nothing filled in",
+    description: "Submitting an empty form: what is required is said under the field it belongs to.",
+    state,
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.addProject")),
+      (ui) => ui.press(ui.t("common.add")),
+    ],
+  },
+  {
     id: "dialog-directory-picker",
     group: GROUP,
     title: "Directory picker",

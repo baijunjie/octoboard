@@ -68,6 +68,13 @@ failure (see "Submitting a form back to the hub" in `docs/product/report-panel.m
 the dialog for Claude Code's workspace-trust prompt, which closes and reports most failures as a
 toast (see "Claude Code's workspace-trust prompt" in `docs/product/launching-agents.md`).
 
+A dialog has two places to say what went wrong. **The failure of the dialog's own action** — what the daemon
+rejected, or an image the window could not read as an avatar — is a line at the foot of the dialog. **What is wrong
+with one field**, such as a required field left blank, is said under that field instead, and the field is marked
+invalid. A field is never marked before the user has tried to submit: the message appears on the first attempt —
+which sends nothing while any field is still wanting — and from then on follows what is typed, so it goes as soon as
+the field is corrected and comes back if the field is emptied again.
+
 ## Quitting
 
 Every way of ending the application behaves the same: the window's close button, `Cmd+Q`, the application menu's

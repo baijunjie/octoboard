@@ -5,7 +5,9 @@ import { takeMenuFocusToRestore } from "../components/ActionMenu";
 import { TitledControl } from "../components/TitledControl";
 import { useT } from "../i18n/react";
 
-/** The inline error and busy state every dialog that talks to the daemon needs. `run` clears the
+/** The inline error and busy state every dialog that talks to the daemon needs. The error is the
+ * request's own failure, shown at the foot of the dialog; what is wrong with a single field goes to
+ * that field's own `errorMessage` instead (see `useSubmitValidation`). `run` clears the
  * error, marks the dialog busy for the duration of `action`, and shows a rejection as the error
  * instead of letting it escape, so the dialog stays open for another try. A dialog reused for
  * successive subjects passes a `resetKey` naming the current one: when it changes the error and
@@ -54,7 +56,27 @@ export function useRefocusIfLost(target: () => HTMLElement | null | undefined, d
   }, deps);
 }
 
-/** A dialog's inline failure line. */
+/** Holds back what a dialog's own checks found until the user has tried to submit, so a field is
+ * not marked before it has been filled in. From then on the message follows what is typed, and
+ * correcting the field takes it away. */
+export function useSubmitValidation(): {
+  /** `message` once a submit has found something wanting, nothing before that. */
+  shown: (message: string | undefined) => string | undefined;
+  /** Records the attempt and answers whether the dialog may go ahead with it. */
+  attempt: (...messages: (string | undefined)[]) => boolean;
+} {
+  const [attempted, setAttempted] = useState(false);
+  return {
+    shown: (message) => (attempted ? message : undefined),
+    attempt: (...messages) => {
+      setAttempted(true);
+      return messages.every((message) => message === undefined);
+    },
+  };
+}
+
+/** A dialog's inline failure line, for the failure of the request itself; a field's own validation
+ * belongs under that field. */
 export function DialogError({ message }: { message: string | undefined }): React.ReactElement | null {
   return message ? (
     <p role="alert" className="text-sm text-danger">
