@@ -5,9 +5,9 @@
 > one instead of being let through to a launch failure.
 > Completion criteria: on a machine with an agent installed, a client that connects receives that agent as available
 > and receives the directory its default account resolves to — the directory the agent's variable is exported to in
-> the user's login shell, else the agent's own default. (What a screen does with either is milestones 3 and 4.)
+> the user's login shell, else the agent's own default. (What a screen does with either is milestones 6 and 7.)
 > On a machine with no agent binary on the login shell's `PATH`, no session can be opened — by
-> the user or by a hub — and every place that would open one says what to install instead. Before the first
+> the user or by a console session — and every place that would open one says what to install instead. Before the first
 > determination of a run has landed, nothing is refused for unavailability and nothing claims an agent is missing.
 > Starting the daemon creates and removes no account.
 
@@ -17,22 +17,22 @@
       the only test; the reasoning is in the overview's decisions. Availability has three states, not two:
       available, unavailable, and **not yet determined** — the state every run begins in.
 - [ ] **This milestone creates no accounts.** The default account exists for every agent by construction
-      (milestone 1) and needs nothing discovered to exist; the accounts the user has are already stored. Octoboard
+      (milestone 4) and needs nothing discovered to exist; the accounts the user has are already stored. Octoboard
       therefore never mints an account of its own at startup, and in particular never offers the agent's own default
       directory as a second, pinned account — the reason is in the overview's decisions.
 - [ ] **What the default account shows.** It pins nothing, so what it is shown as is derived, not stored: the
       directory the agent's variable is exported to in the user's login shell, else the agent's own default
-      directory. Its name is Octoboard's own and is not editable (milestone 1); only the directory is derived here.
+      directory. Its name is Octoboard's own and is not editable (milestone 4); only the directory is derived here.
 - [ ] For **Grok Build**, what is derived is the *source home* the per-session home would be built from — the
       exported `GROK_HOME`, else `~/.grok` — not the per-session home itself, which is Octoboard's and exists only
       for the duration of a process.
 - [ ] **When no agent is available at all**, opening a session is refused: the session dialog cannot be submitted,
-      the Hub row cannot start a hub, and the hub's own tool for starting a session is refused with a reason it can
-      report. The refusal names what to install. "No agent available" means availability has been determined and
-      found none, never that it has not been determined yet.
+      the console sessions section's create action cannot start one, and a console session's own tool for starting a
+      session is refused with a reason it can report. The refusal names what to install. "No agent available" means
+      availability has been determined and found none, never that it has not been determined yet.
 - [ ] **When some agents are available and others are not**, the unavailable ones appear in today's agent pickers —
       the session dialog's and the console dialog's — named, not selectable, and labelled as not installed. They are
-      shown rather than hidden so that the reason a user cannot pick them is on screen. Milestone 4 replaces those
+      shown rather than hidden so that the reason a user cannot pick them is on screen. Milestone 7 replaces those
       pickers with one grouped list and carries the same rule into it.
 - [ ] The prompt to install is a message about the machine, not about one project: it says which agents Octoboard
       supports and that one of them has to be on the user's `PATH`. It does not tell the user how to install an
@@ -66,7 +66,8 @@
       - `docs/product/consoles-and-projects.md` — the console dialog's agent rows, which can now hold an agent the
         machine does not have;
       - `docs/product/sidebar.md` — the sidebar's empty state, which is where the install prompt appears;
-      - `docs/product/hub-orchestration.md` — a hub's tool for starting a session gains a refusal it can report.
+      - `docs/product/hub-orchestration.md` — a console session's tool for starting a session gains a refusal it can
+        report.
 
 ## Notes for the developer
 
@@ -84,11 +85,11 @@
 
 - Octoboard installs nothing and writes nothing into the user's agent configuration. This milestone reads; it must
   not create a directory it did not find, and must not run an agent to find out anything.
-- A hub can start sessions through its own tools, so the refusal has to exist in the daemon and not only in the
-  dialog.
+- A console session can start sessions through its own tools, so the refusal has to exist in the daemon and not only
+  in the dialog.
 - The snapshot is taken from the user's login + interactive shell, which is deliberately not the environment the
   daemon itself runs in; an agent installed under a version manager is found only through that snapshot.
-- What the grouped picker shows while availability is not yet determined is milestone 4's to settle; this milestone
+- What the grouped picker shows while availability is not yet determined is milestone 7's to settle; this milestone
   only guarantees that nothing is refused and nothing is called missing in that window.
 
 **Reference docs**
@@ -96,5 +97,5 @@
 - `docs/product/launching-agents.md` — "The launch environment", the snapshot and its failure modes, and what each
   agent's variable is set to.
 - `docs/product/consoles-and-projects.md` — "Agent config directories", the per-agent variables and defaults.
-- `docs/product/hub-orchestration.md` — how a refusal reaches a hub.
+- `docs/product/hub-orchestration.md` — how a refusal reaches a console session.
 - `docs/memory/writing-daemon-code.md` — where derived state lives and how it reaches a client.

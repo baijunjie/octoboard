@@ -6,7 +6,8 @@
 > conversation continues; switching one that has none opens a fresh conversation under the new account; a switch
 > whose relocation or relaunch fails leaves the session as it was and says why, and a relaunch that does not come up
 > is reported as a failed switch rather than as a success. The menu entry is present exactly when the session's agent
-> has more than one account, for a hub as well as a project session, and is translated in every offered language.
+> has more than one account, for a console session as well as a project session, and is translated in every offered
+> language.
 > The product docs no longer claim that a session keeps the directory it was opened with, that the user's own agent
 > configuration is never written to, or that Octoboard never copies an agent's conversation history.
 
@@ -19,8 +20,8 @@ What the relocation has to move, per agent, and the fact that all three support 
       accounts, the session's current account marked as current and not actionable. An account that has since been
       removed is still marked as the current one, named by the directory the session recorded. The last entry of the
       submenu opens Settings at the Agent accounts section.
-- [ ] **A hub is switched the same way**, from the Hub row's menu, which is where a hub's own actions live; its
-      accounts are those of the console's hub agent.
+- [ ] **A console session is switched the same way**, from its own row's menu, which is where a console session's
+      own actions live; its accounts are those of the console's console-session agent.
 - [ ] **When the entry appears**: only when the session's agent has more than one account. With one account the
       entry is hidden rather than shown and disabled — there is nothing the user could do with it.
 - [ ] **What a switch does**, in order: end the session's process the way archiving does, relocate the session's
@@ -30,12 +31,12 @@ What the relocation has to move, per agent, and the fact that all three support 
       being launched or resumed at that moment. Nothing is recorded by a refused switch and the session stays on the
       account it had. A target directory that does not exist is not itself a refusal: it is created as part of
       relocating the conversation into it. A Grok target that is not an initialized Grok home is refused by the
-      launch rule milestone 1 added.
+      launch rule milestone 4 added.
 - [ ] A session with no conversation on the agent's side has nothing to relocate; the switch records the new account
       and relaunches, which opens a fresh conversation, exactly as a resume of such a session does today.
 - [ ] **The default account is a switch target like any other**, and counts towards the more-than-one test. Since it
       pins nothing, the directory its conversation is relocated into is the one it resolves to at that moment
-      (milestone 2); resolve it once for the switch and use that same value for both the copy and the relaunch, so
+      (milestone 5); resolve it once for the switch and use that same value for both the copy and the relaunch, so
       the two cannot disagree.
 - [ ] The relocation copies rather than moves: the conversation stays in the account it came from as well. A switch
       that fails halfway therefore leaves the original intact, and switching back needs no second copy.
@@ -72,7 +73,7 @@ What the relocation has to move, per agent, and the fact that all three support 
       that a switch carries the session into the target account's whole setup rather than only its login: a setting
       the user keeps in one account's directory does not follow the session into another's.
 - [ ] Update `docs/product/sidebar.md`: it lists what a session row's action menu offers — Pin or Unpin, Rename,
-      Archive — and this milestone adds an entry to it, and to the Hub row's menu.
+      Archive — and this milestone adds an entry to it, and to a console session's own row's menu.
 - [ ] Write the per-agent relocation facts into `docs/agent-cli-reference.md`, in the form that doc already uses,
       extending its version header to the versions measured.
 

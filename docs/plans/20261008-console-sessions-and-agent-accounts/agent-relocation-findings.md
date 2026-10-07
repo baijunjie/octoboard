@@ -1,7 +1,7 @@
 # Conversation relocation: what was measured
 
-Reference for milestone 5, not a milestone of its own: the measurement is done, and
-[05 — Switching a session's account](05-switching-a-sessions-account.md) is what acts on it.
+Reference for milestone 8, not a milestone of its own: the measurement is done, and
+[08 — Switching a session's account](08-switching-a-sessions-account.md) is what acts on it.
 
 Measured on macOS against **Claude Code 2.1.289**, **Codex 0.160.0** and **Grok Build 1.0.46**. Each result carried
 a control in the same run, named below. All three agents rewrite their on-disk layout on upgrade, so re-measure
@@ -68,7 +68,7 @@ Two Grok-specific findings:
 A config directory holds the agent's **global configuration**, not only its login. Measured: the same Codex thread
 resumed in a fresh home came up with that home's own defaults — `reasoning effort: none` where the original had
 `medium` — because `config.toml` lives in the home. Claude Code's `settings.json` and Grok's `config.toml` are in the
-same position. Milestone 5 is where this gets written into the product docs.
+same position. Milestone 8 is where this gets written into the product docs.
 
 ## Why a second config directory really is a second account
 

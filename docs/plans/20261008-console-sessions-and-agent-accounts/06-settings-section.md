@@ -20,7 +20,7 @@
       usable; one whose availability is not yet determined is headed plainly, with no claim either way.
 - [ ] Within a group, the agent's default account comes first, said to be the setup the session runs under when
       nothing is pinned, with the directory it resolves to shown. Nothing about it is editable and it cannot be
-      removed — its name is Octoboard's own and it stores no path (milestone 1). The accounts the user owns follow.
+      removed — its name is Octoboard's own and it stores no path (milestone 4). The accounts the user owns follow.
 - [ ] An entry shows the account's name and its directory. A path too long for the row is cut from its start, the
       way a trusted folder's path is, so the directory's own name stays visible, with the full path as the tooltip.
 - [ ] Adding an account asks for the agent, a name and a directory. Editing one offers the name and the directory;
@@ -40,7 +40,7 @@
 
 - [ ] Register the section in the dialog's section list, after Git and before Trusted folders.
 - [ ] Build the section from the account list in the settings record and the per-agent availability the daemon
-      derives, and act through the account requests from milestone 1.
+      derives, and act through the account requests from milestone 4.
 - [ ] Report a path that is not absolute in the add and edit forms, in place. Do not check whether the directory
       exists.
 - [ ] Bring `docs/product/settings.md` along: its list of sections is General, Git, Trusted folders, Notifications,
@@ -62,10 +62,10 @@
 **Development notes**
 
 - Settings in SQLite reach the UI through the settings record; UI-only preferences live in local storage instead.
-  An account is the former, while per-agent availability is derived state that arrives separately (milestone 2).
+  An account is the former, while per-agent availability is derived state that arrives separately (milestone 5).
 - Section order and the dialog's own keyboard behaviour are fixed by the product doc; do not invent new behaviour
   for this section.
-- Milestone 5's switch submenu ends in an entry that opens Settings here, so the dialog has to be openable at a
+- Milestone 8's switch submenu ends in an entry that opens Settings here, so the dialog has to be openable at a
   named section rather than only at the one it opens on.
 
 **Reference docs**
