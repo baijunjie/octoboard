@@ -93,7 +93,7 @@ export function ReportPanel({
       // reports whatever comes back.
       //
       // A submission is delivered to the hub session, so the hub is what the daemon's refusals are
-      // about ("this session is not running", "this session is waiting for you"): naming it keeps
+      // about ("This session is not running.", "This session is waiting for you."): naming it keeps
       // the user from reading the message as being about whatever session they are looking at.
       request({ type: "submit_page", page: page.id, data }).catch((err) => {
         toastError((err as Error).message, hubSessionId);

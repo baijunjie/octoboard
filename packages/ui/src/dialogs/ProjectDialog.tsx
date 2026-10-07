@@ -114,7 +114,7 @@ export function ProjectDialog({
             value={remoteUrl}
             onChange={setRemoteUrl}
             dir="ltr"
-            placeholder="https://github.com/owner/repo"
+            placeholder={t("dialog.project.urlExample")}
           />
         )}
         {!editing && (
@@ -125,7 +125,7 @@ export function ProjectDialog({
                 value={path}
                 onChange={setPath}
                 dir="ltr"
-                placeholder="~/code"
+                placeholder={t("dialog.project.directoryExample")}
               />
             </div>
             <Button type="button" variant="secondary" onPress={() => setPickingDirectory(true)}>
@@ -137,7 +137,8 @@ export function ProjectDialog({
           label={editing ? t("common.name") : t("common.nameOptional")}
           value={name}
           onChange={setName}
-          placeholder={editing ? undefined : t("dialog.project.nameDerived")}
+          placeholder={editing ? undefined : t("dialog.project.nameExample")}
+          description={editing ? undefined : t("dialog.project.nameHint")}
         />
         <OptionSelect
           label={t("dialog.project.defaultAgent")}

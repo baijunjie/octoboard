@@ -6,9 +6,9 @@ import type { Language } from "./languages";
 import { en } from "./messages/en";
 
 it("fills placeholders, selects the plural form and falls back to English", () => {
-  expect(format("en", "titleBar.waiting", { count: 1 })).toBe("1 session is waiting for you. Go to the next one");
+  expect(format("en", "titleBar.waiting", { count: 1 })).toBe("1 session is waiting for you. Go to the next one.");
   expect(format("en", "menu.about")).toBe(`About ${appConfig.name}`);
-  expect(format("de", "titleBar.waiting", { count: 2 })).toBe("2 sessions are waiting for you. Go to the next one");
+  expect(format("de", "titleBar.waiting", { count: 2 })).toBe("2 sessions are waiting for you. Go to the next one.");
 });
 
 const translated = Object.entries(CATALOGS).filter(([language]) => language !== "en") as [
