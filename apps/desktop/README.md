@@ -77,6 +77,15 @@ built and opened locally on the same machine has none, and passes trivially rega
 it is actually signed. To test for real, move the built `.dmg` through something that quarantines it (another
 machine, a browser download, `xattr -w com.apple.quarantine ...`) before running `spctl` on what comes out of it.
 
+To build the app only to check a change in it, run `pnpm build:app` (`scripts/build-app.mjs`; extra arguments go to
+`tauri build`, e.g. `pnpm build:app --bundles app` to skip the `.dmg`). It runs the same `tauri build` with every
+`APPLE_*` variable removed from the child's environment, then fails if the `.app` it produced carries a Developer ID
+authority, so it cannot sign or notarize whatever the calling shell exports. The arguments known to move the output
+out of `target/release/bundle` are refused up front; anything else that moves it is caught after the build, when the
+bundle's age shows it is a leftover rather than one this build produced. Three accidental Developer ID-signed,
+notarization-submitted builds came from a shell that happened to carry the credentials, which is why this path strips
+them itself instead of asking the reader to remember.
+
 ## External interfaces
 
 `src-tauri/` (the Rust side) defines exactly three of its own Tauri IPC commands: two bare exit-flow signals with no
@@ -159,4 +168,6 @@ any IPC call for it. The system's preferred languages travel the same way (`&lan
 | `src-tauri/capabilities/default.json` | Allowlists the three IPC commands above plus the notification, Dock-badge, window-theme, window-reveal and window-drag/zoom commands |
 | `src-tauri/tauri.conf.json` | Where the window's UI comes from (`frontendDist` is `packages/ui/dist`; `devUrl` and `beforeDevCommand` are that package's dev server), the `octoboardd` `externalBin`, and the bundle targets; its `productName` mirrors `config/app.json`'s `name`, which `build.rs` checks |
 | `scripts/build-daemon.mjs` | Builds `octoboardd` in release mode and copies it into `src-tauri/binaries/` under the target-triple name Tauri's `externalBin` requires |
+| `scripts/build-app.mjs` | Builds the app for local verification with every `APPLE_*` variable stripped, and fails if the result carries a Developer ID authority; see "Release builds" above |
+| `scripts/bundle.mjs` | Where `tauri build` puts its output, and the lookup for the bundle file a build produced; shared by the build scripts |
 | `scripts/release.mjs` | Builds the release `.app`/`.dmg` and verifies the result; see "Release builds" above |

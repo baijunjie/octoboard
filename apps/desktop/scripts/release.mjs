@@ -11,16 +11,8 @@
 // It also *verifies* the result rather than trusting that signing/notarization happened just
 // because the right variables were set: see `verify()` below.
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
-
-const appDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const repoRoot = path.dirname(path.dirname(appDir));
-// The Tauri crate is a member of the root Cargo workspace, so its bundle lands in the workspace's
-// own build directory at the repository root, not under `src-tauri/`.
-const bundleDir = path.join(repoRoot, "target", "release", "bundle");
-const tauriBin = path.join(appDir, "node_modules", ".bin", "tauri");
+import { appDir, bundleDir, findBundle, tauriBin } from "./bundle.mjs";
 
 // Three states, in increasing order of what Gatekeeper will accept:
 //
@@ -149,23 +141,4 @@ function runReporting(command, args) {
     // Non-zero exit already printed its own diagnostic (codesign writes to stderr even when it
     // is only reporting "not signed at all"); nothing more to add.
   }
-}
-
-// Tauri's bundle output directory holds one file per target's extension, but the `.dmg` one is
-// named with the product version — after a version bump without a clean rebuild, both the old and
-// the new disk image can be sitting there together, and this would silently pick whichever
-// `readdirSync` happens to return first.
-function findBundle(dir, extension) {
-  if (!existsSync(dir)) {
-    throw new Error(`${dir} does not exist — did \`tauri build\` run its "${extension}" target?`);
-  }
-  const matches = readdirSync(dir).filter((name) => name.endsWith(extension));
-  if (matches.length === 0) throw new Error(`no ${extension} file found in ${dir}`);
-  if (matches.length > 1) {
-    throw new Error(
-      `found ${matches.length} "${extension}" files in ${dir} (${matches.join(", ")}) — clean ` +
-        "the workspace's target/release/bundle and rebuild so only the current version's is there."
-    );
-  }
-  return path.join(dir, matches[0]);
 }

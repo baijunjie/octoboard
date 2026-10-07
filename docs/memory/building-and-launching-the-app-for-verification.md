@@ -33,21 +33,27 @@ print the daemon's `octoboardd listening on 127.0.0.1:<port>` line again with it
 to whatever port that line on the sidecar's stdout names. This relies on the build being unsigned, as the swap breaks
 a signed bundle's signature.
 
-## Build the bundle a verification runs against with `pnpm tauri build`, never a bare `cargo build`
+## Build the bundle a verification runs against with `pnpm build:app`, never a bare `cargo build`
 
 The frontend bundle the window loads (`packages/ui/dist`, which `apps/desktop/src-tauri/tauri.conf.json` names as
 `frontendDist`) and the `octoboardd` sidecar under `src-tauri/binaries/` are both produced by that file's
-`beforeBuildCommand`, and only the Tauri CLI runs it. A `cargo build` in `src-tauri/` embeds whatever happens to be
-sitting in those two places — nothing at all, or the previous build's output — so the window comes up blank, or on
-code that is not the code under test. Blank is the dangerous one: it is indistinguishable from a webview that threw
-while mounting, so a build mistake reads as a defect in the change and gets chased through the frontend instead.
+`beforeBuildCommand`, and only the Tauri CLI runs it (`pnpm build:app`, run in `apps/desktop`, is that `tauri build`;
+`--bundles app` passes through, the arguments known to move the output out of `target/release/bundle` are refused up
+front, and anything else that moves it is caught after the build, by the bundle's age). A `cargo build` in
+`src-tauri/` embeds whatever happens to be sitting in those two places — nothing at all, or the previous build's
+output — so the window comes up blank, or on code that is not the code under test. Blank is the dangerous one: it is
+indistinguishable from a webview that threw while mounting, so a build mistake reads as a defect in the change and
+gets chased through the frontend instead.
 
-Run that build with every `APPLE_*` variable unset (`env | grep '^APPLE_'` shows what the shell carries; drop each
-with `env -u <name>` on the build command). The Tauri CLI reads them straight from the environment (see the "Release
-builds" section of `apps/desktop/README.md`), and a shell set up to release this app has them exported, so a
-verification build otherwise gets Developer ID-signed and uploaded to Apple's notary service with nothing in the
-command or its output to warn of it — unreleased code sent to Apple, minutes added to the build, and a signed bundle
-that the wrapped-sidecar swap above breaks.
+`pnpm build:app` also strips every `APPLE_*` variable from the build's environment and fails if the `.app` comes out
+Developer ID-signed, so there is nothing to remember to unset. The reason it exists: the Tauri CLI reads `APPLE_*`
+straight from the environment (see the "Release builds" section of `apps/desktop/README.md`), and while the shell
+exported them, a plain verification build was Developer ID-signed and submitted to Apple's notary service three
+separate times, with nothing in the command or its output to warn of it — unreleased code sent to Apple, minutes added
+to the build, and a signed bundle that the wrapped-sidecar swap above breaks. One of the three came from an agent
+stripping the variables with `UNSET=$(...)` and `env $UNSET ...`, which does nothing in zsh because zsh does not
+word-split an unquoted parameter. Do not run a bare `pnpm tauri build` for a verification: a shell that carries
+`APPLE_*` would sign it again.
 
 ## Launch a built app with `open`, never by exec'ing its binary
 

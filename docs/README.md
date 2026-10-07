@@ -78,10 +78,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   isolated daemon so the real one does not launch instead.
 - [Building and launching the app for verification](memory/building-and-launching-the-app-for-verification.md) —
   how to build, launch and isolate the app for a verification: when to launch the real window, building the daemon and
-  confirming the running sidecar's binary, `pnpm tauri build` without `APPLE_*`, `open` rather than exec'ing the
-  binary, a throwaway `HOME` and `TMPDIR` and the webview profile they still share (and running under other system
-  languages for one launch), reading the wire through a wrapped sidecar, sharing the machine with other worktrees'
-  dev apps (fixed port, stopping by PID only), and fully reloading a dev window before judging a defect in it.
+  confirming the running sidecar's binary, `pnpm build:app` (a `tauri build` that cannot sign), `open` rather than
+  exec'ing the binary, a throwaway `HOME` and `TMPDIR` and the webview profile they still share (and running under
+  other system languages for one launch), reading the wire through a wrapped sidecar, sharing the machine with other
+  worktrees' dev apps (fixed port, stopping by PID only), and fully reloading a dev window before judging a defect in
+  it.
 - [Verifying the desktop UI](memory/verifying-the-desktop-ui.md) — how to verify terminal and UI behaviour in the real
   app: why a verification stays as narrow as the change, checking in WebKit with real pointer input and with long and
   CJK text, ruling out a locked screen before trusting a capture, getting an error out of a blank window, bisecting a
