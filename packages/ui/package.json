@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "gallery": "vite --port 5175 --open /gallery.html",
     "build": "tsc --noEmit && vitest run src/i18n && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

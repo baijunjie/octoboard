@@ -18,6 +18,7 @@ the scripts from this directory.
 
 - `pnpm dev` — the Vite dev server on port 5174, which is also what `pnpm tauri dev` in `apps/desktop/` starts and
   opens its window on.
+- `pnpm gallery` — the same dev server on port 5175, opening the UI state gallery (below) in the browser.
 - `pnpm typecheck` — `tsc --noEmit`.
 - `pnpm test` — `vitest run`: the unit tests beside the code (`*.test.ts`), for the pure modules.
 - `pnpm build` — typechecks, runs the catalog check (`vitest run src/i18n`), then writes `dist/` with relative asset
@@ -26,14 +27,17 @@ the scripts from this directory.
 
 ### The UI state gallery
 
-`pnpm dev` also serves a dev-only gallery of states that are hard to reach against a live daemon, at
-`http://localhost:5174/gallery.html` (no daemon needed). Pick a scenario from the list; light/dark, any offered
-language (`ar` is the right-to-left one) and the window width are controls above the window, and all of them are in the
-URL, so a link reproduces a view. The window is an iframe, so its width decides the `docked` breakpoint (1100px) for
-real. The real `App` renders over a fixture daemon (`src/gallery/fixtureDaemon.ts`). A scenario's page writes its
-`octoboard.*` and `heroui-theme` entries into `localStorage` on every load, which this origin shares
-with the dev app itself, so the dev app's own preferences are reset by opening it. A scenario's page sets
-`data-gallery-ready` on `<html>` once its steps have run, which is what automation waits on before capturing. Neither gallery page is part of the bundle `pnpm build` writes, but `src/gallery/` is still type-checked by it, so a broken fixture fails the build.
+The dev server serves a dev-only gallery of states that are hard to reach against a live daemon at `/gallery.html` (no
+daemon needed): `pnpm gallery` serves it on port 5175 and opens it, and under `pnpm dev` it is at
+`http://localhost:5174/gallery.html`. Pick a scenario from the list; light/dark, any offered language (`ar` is the
+right-to-left one) and the window width are controls above the window, and all of them are in the URL, so a link
+reproduces a view. The window is an iframe, so its width decides the `docked` breakpoint (1100px) for real. The real
+`App` renders over a fixture daemon (`src/gallery/fixtureDaemon.ts`). A scenario's page writes its `octoboard.*` and
+`heroui-theme` entries into `localStorage` on every load; on port 5174 that origin is the dev app's own, so opening the
+gallery there resets the dev app's preferences, which `pnpm gallery`'s port avoids. A scenario's page sets
+`data-gallery-ready` on `<html>` once its steps have run, which is what automation waits on before capturing. Neither
+gallery page is part of the bundle `pnpm build` writes, but `src/gallery/` is still type-checked by it, so a broken
+fixture fails the build.
 
 To add a scenario, add an entry to a group's file in `src/gallery/fixtures/` (or a new file, listed in `index.ts`): its
 `state` is built with `snapshotState` from the helpers in `builders.ts`, so a protocol change breaks it at typecheck.
