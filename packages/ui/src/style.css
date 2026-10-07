@@ -13,6 +13,13 @@
 }
 
 :root {
+  /* A tooltip is a label: it closes the instant the pointer leaves its trigger, where HeroUI's
+     default (0.5s) lingers and keeps it hoverable. `Tooltip` reads this as its default close
+     delay, so it holds for every tooltip, those added later included. HeroUI reads the token once,
+     at the first tooltip's first render, so a stylesheet loaded any later than this one would
+     silently put the 0.5s back for the whole session. */
+  --tooltip-close-delay: 0s;
+
   /* The top bar across the whole window (`TitleBar.tsx`). On macOS the shell centres the traffic
      lights in it (`TRAFFIC_LIGHT_Y` in `apps/desktop/src-tauri/src/lib.rs`), so the two move
      together; a fixed pixel size, since the lights' position is fixed too. */

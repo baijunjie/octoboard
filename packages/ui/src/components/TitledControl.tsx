@@ -7,7 +7,13 @@ import React from "react";
  * `Modal.CloseTrigger`); any other child silently gets no tooltip. Such a control picks the
  * tooltip's trigger behaviour up from context, so no element is added around it, which keeps a
  * mouse press from taking focus (`preventFocusOnPress` still holds) and leaves layout alone.
- * `Tooltip.Trigger` is deliberately not used: it renders a focusable `role="button"` wrapper. */
+ * `Tooltip.Trigger` is deliberately not used: it renders a focusable `role="button"` wrapper.
+ *
+ * A tooltip is a label, not a surface to interact with: it closes the instant the pointer leaves
+ * the trigger (`--tooltip-close-delay: 0s` in `style.css`, where HeroUI's default lingers), and it
+ * is `pointer-events-none` (which has no token, so it is set here and on `ConnectionIcon`'s
+ * tooltip), because react-aria's tooltip otherwise stays open while it is hovered and would
+ * swallow clicks aimed at what lies beneath it. Nothing relies on a hoverable tooltip. */
 export function TitledControl({
   title,
   children,
@@ -19,7 +25,7 @@ export function TitledControl({
   return (
     <Tooltip>
       {children}
-      <Tooltip.Content>{title}</Tooltip.Content>
+      <Tooltip.Content className="pointer-events-none">{title}</Tooltip.Content>
     </Tooltip>
   );
 }

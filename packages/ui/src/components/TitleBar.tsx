@@ -190,7 +190,7 @@ function ConnectionIcon({ label, color }: { label: string; color: "warning" | "d
         />
         <span className="sr-only">{label}</span>
       </Tooltip.Trigger>
-      <Tooltip.Content>{label}</Tooltip.Content>
+      <Tooltip.Content className="pointer-events-none">{label}</Tooltip.Content>
     </Tooltip>
   );
 }
