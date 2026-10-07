@@ -53,10 +53,27 @@
   --muted: oklch(0.52 0.0138 285.94);
 }
 
+/* The window is an application shell, not a document: the root is exactly the viewport and never
+   scrolls itself, every pane scrolls inside its own region. `overscroll-behavior: none` on `html`
+   (the one element it acts on: it is not inherited, and only a scroll container takes it) stops
+   the elastic bounce of the whole frame when dragging on the window, including panes with nothing
+   to scroll, and the chaining of an inner pane's overscroll into the page. `overflow: hidden` is
+   the belt: the page can never scroll whatever the engine does with the former. Whether the
+   rubber-band is really gone in the WKWebView window has not been confirmed yet. A screen whose
+   content can outgrow the window scrolls in its own container (`StartupScreen.tsx`). */
+html {
+  overscroll-behavior: none;
+}
+
 html,
 body,
 #root {
   height: 100%;
+}
+
+html,
+body {
+  overflow: hidden;
 }
 
 body {
