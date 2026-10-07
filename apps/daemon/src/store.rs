@@ -20,8 +20,8 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::protocol::{
-    Agent, Console, ConsoleSessionColour, Host, HostKind, Origin, Page, Project, ProjectSource,
-    Role, Session, SessionStatus, Settings,
+    error_code, now_millis, Account, Agent, CodedError, Console, ConsoleSessionColour, Host,
+    HostKind, Origin, Page, Project, ProjectSource, Role, Session, SessionStatus, Settings,
 };
 
 /// The single local host record every project and session points at. There is no other host yet,
@@ -57,15 +57,35 @@ impl Store {
                 kind        TEXT NOT NULL,
                 ssh_config  TEXT
             );
+            CREATE TABLE IF NOT EXISTS accounts (
+                id         TEXT PRIMARY KEY,
+                agent      TEXT NOT NULL,
+                name       TEXT NOT NULL,
+                config_dir TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+            -- Backstop for "a name is required and unique within its agent" (the topic README's
+            -- own words): `coordinator` checks this before every write that can affect a name, but
+            -- the invariant belongs on the table it protects, not only on the callers that happen
+            -- to remember to check it. `LOWER` matches `coordinator::account_name_key`'s
+            -- case-insensitive comparison; it is ASCII-only in SQLite, which is a narrower fold
+            -- than `str::to_lowercase`, so this index is a backstop and not a full substitute for
+            -- that check. A write that trips it surfaces through `Store::account_write_error` as
+            -- the protocol's own `account_name_taken` rather than a raw SQLite error.
+            CREATE UNIQUE INDEX IF NOT EXISTS accounts_agent_name_unique
+                ON accounts (agent, LOWER(name));
             CREATE TABLE IF NOT EXISTS consoles (
                 id            TEXT PRIMARY KEY,
                 name          TEXT NOT NULL,
                 workdir       TEXT NOT NULL,
                 console_session_agent TEXT NOT NULL,
                 default_agent TEXT NOT NULL,
-                claude_config_dir TEXT,
-                codex_config_dir  TEXT,
-                grok_config_dir   TEXT,
+                -- The account each agent's sessions here read, by id; NULL means that agent's
+                -- default account. No `REFERENCES`: `Store::delete_account` clears these itself,
+                -- in the same locked step as the row's removal, rather than relying on a cascade.
+                claude_account_id TEXT,
+                codex_account_id  TEXT,
+                grok_account_id   TEXT,
                 icon          TEXT,
                 -- The ordinal a console session created in this console is given next, one past
                 -- the highest ever used here. Kept on the console rather than derived from the
@@ -107,6 +127,10 @@ impl Store {
                 -- Set only for a console session (`role = 'console'`); NULL for a project session.
                 colour           TEXT,
                 ordinal          INTEGER,
+                -- The account this session's own agent reads, by id; NULL means the default
+                -- account. Fixed at creation, like `config_dir` below, which is that account's
+                -- directory at the time — see `Session::account_id`.
+                account_id       TEXT,
                 config_dir       TEXT,
                 pinned           INTEGER NOT NULL DEFAULT 0,
                 started_at       INTEGER NOT NULL,
@@ -188,8 +212,8 @@ impl Store {
 
     pub fn insert_console(&self, console: &Console) -> Result<()> {
         self.lock().execute(
-            "INSERT INTO consoles (id, name, workdir, console_session_agent, default_agent, claude_config_dir,
-                                   codex_config_dir, grok_config_dir, icon, created_at)
+            "INSERT INTO consoles (id, name, workdir, console_session_agent, default_agent, claude_account_id,
+                                   codex_account_id, grok_account_id, icon, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 console.id,
@@ -197,9 +221,9 @@ impl Store {
                 console.workdir,
                 enum_to_text(&console.console_session_agent),
                 enum_to_text(&console.default_agent),
-                console.claude_config_dir,
-                console.codex_config_dir,
-                console.grok_config_dir,
+                console.claude_account_id,
+                console.codex_account_id,
+                console.grok_account_id,
                 console.icon,
                 console.created_at,
             ],
@@ -210,17 +234,17 @@ impl Store {
     pub fn update_console(&self, console: &Console) -> Result<()> {
         self.lock().execute(
             "UPDATE consoles SET name = ?2, console_session_agent = ?3, default_agent = ?4,
-                                 claude_config_dir = ?5, codex_config_dir = ?6,
-                                 grok_config_dir = ?7, icon = ?8
+                                 claude_account_id = ?5, codex_account_id = ?6,
+                                 grok_account_id = ?7, icon = ?8
              WHERE id = ?1",
             params![
                 console.id,
                 console.name,
                 enum_to_text(&console.console_session_agent),
                 enum_to_text(&console.default_agent),
-                console.claude_config_dir,
-                console.codex_config_dir,
-                console.grok_config_dir,
+                console.claude_account_id,
+                console.codex_account_id,
+                console.grok_account_id,
                 console.icon,
             ],
         )?;
@@ -235,29 +259,102 @@ impl Store {
 
     pub fn get_console(&self, id: &str) -> Result<Option<Console>> {
         let conn = self.lock();
-        let console = conn
+        let Some(mut console) = conn
             .query_row(
-                "SELECT id, name, workdir, console_session_agent, default_agent, claude_config_dir,
-                        codex_config_dir, grok_config_dir, icon, created_at
-                 FROM consoles WHERE id = ?1",
+                &format!("SELECT {CONSOLE_COLUMNS} FROM consoles WHERE id = ?1"),
                 params![id],
                 read_console,
             )
-            .optional()?;
-        Ok(console)
+            .optional()?
+        else {
+            return Ok(None);
+        };
+        resolve_console_dirs(&conn, &mut console)?;
+        Ok(Some(console))
     }
 
     pub fn list_consoles(&self) -> Result<Vec<Console>> {
         let conn = self.lock();
-        let mut stmt = conn.prepare(
-            "SELECT id, name, workdir, console_session_agent, default_agent, claude_config_dir,
-                    codex_config_dir, grok_config_dir, icon, created_at
-             FROM consoles ORDER BY created_at",
-        )?;
-        let rows = stmt
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {CONSOLE_COLUMNS} FROM consoles ORDER BY created_at"
+        ))?;
+        let mut consoles = stmt
             .query_map([], read_console)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
+        for console in &mut consoles {
+            resolve_console_dirs(&conn, console)?;
+        }
+        Ok(consoles)
+    }
+
+    // -- accounts --------------------------------------------------------------
+
+    pub fn insert_account(&self, account: &Account) -> Result<()> {
+        self.lock()
+            .execute(
+                "INSERT INTO accounts (id, agent, name, config_dir, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    account.id,
+                    enum_to_text(&account.agent),
+                    account.name,
+                    account.config_dir,
+                    now_millis(),
+                ],
+            )
+            .map_err(|err| account_write_error(err, account))?;
+        Ok(())
+    }
+
+    /// Renames the account, repoints it, or both — whatever the caller already decided to write;
+    /// this does not itself check the name for a collision, which is `coordinator`'s business. The
+    /// table's own `accounts_agent_name_unique` index is the backstop for that check, not a
+    /// replacement for it.
+    pub fn update_account(&self, account: &Account) -> Result<()> {
+        self.lock()
+            .execute(
+                "UPDATE accounts SET name = ?2, config_dir = ?3 WHERE id = ?1",
+                params![account.id, account.name, account.config_dir],
+            )
+            .map_err(|err| account_write_error(err, account))?;
+        Ok(())
+    }
+
+    pub fn get_account(&self, id: &str) -> Result<Option<Account>> {
+        let account = self
+            .lock()
+            .query_row(
+                "SELECT id, agent, name, config_dir FROM accounts WHERE id = ?1",
+                params![id],
+                read_account,
+            )
+            .optional()?;
+        Ok(account)
+    }
+
+    /// Every account of every agent, oldest first.
+    pub fn list_accounts(&self) -> Result<Vec<Account>> {
+        let conn = self.lock();
+        let mut stmt =
+            conn.prepare("SELECT id, agent, name, config_dir FROM accounts ORDER BY created_at")?;
+        let rows = stmt
+            .query_map([], read_account)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(rows)
+    }
+
+    /// Removes the account, after clearing it from every console that refers to it — which puts
+    /// each one back on its agent's default account — in the same locked step, so no reader ever
+    /// sees a console still pointing at an id the `accounts` table no longer has.
+    pub fn delete_account(&self, id: &str) -> Result<()> {
+        let conn = self.lock();
+        for column in ["claude_account_id", "codex_account_id", "grok_account_id"] {
+            conn.execute(
+                &format!("UPDATE consoles SET {column} = NULL WHERE {column} = ?1"),
+                params![id],
+            )?;
+        }
+        conn.execute("DELETE FROM accounts WHERE id = ?1", params![id])?;
+        Ok(())
     }
 
     // -- projects ------------------------------------------------------------
@@ -397,6 +494,7 @@ impl Store {
         )?;
         Ok(Settings {
             auto_sync_repositories,
+            accounts: self.list_accounts()?,
         })
     }
 
@@ -553,7 +651,9 @@ impl Store {
 
     /// Writes back the fields that change over a session's life. Identity and placement
     /// (`console_id`, `project_id`, `role`, `origin`, `bound_to`, `colour`, `ordinal`) never change,
-    /// and neither does `config_dir`, so they are not touched. `pinned` is the user's own statement
+    /// and neither does `account_id` or `config_dir` — both are written once, at creation, and the
+    /// write path that lets a running session move to another account is milestone 8 of the
+    /// accounts plan — so none of those are touched here. `pinned` is the user's own statement
     /// ([`Self::set_session_pinned`]), which a record read earlier must not overwrite.
     /// Returns whether a row was written: `false` means the session is gone (deleted meanwhile).
     pub fn update_session(&self, session: &Session) -> Result<bool> {
@@ -682,10 +782,12 @@ fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
 /// `Store::open`'s own `CREATE TABLE IF NOT EXISTS` always lands on either an empty file or one
 /// already in the current shape, and runs no migration of its own. "Before this schema" is
 /// detected cheaply and specifically, rather than by letting a later query fail deep in a request
-/// path: a `sessions` table that predates the binding this milestone added has no `bound_to`
-/// column, and every build that has ever carried `bound_to` carries the rest of the shape with
-/// it, so that column alone tells the two apart. A `sessions` table that does not exist at all is
-/// not outdated — it is what `CREATE TABLE IF NOT EXISTS` is about to create fresh.
+/// path: a `sessions` table that predates the binding milestone 2 added has no `bound_to` column,
+/// and one that predates the accounts milestone (4) has no `account_id` column — every build that
+/// has ever carried one of those also carries the rest of the shape as of its own milestone, so
+/// the two columns together tell an outdated table apart from a current one. A `sessions` table
+/// that does not exist at all is not outdated — it is what `CREATE TABLE IF NOT EXISTS` is about
+/// to create fresh.
 ///
 /// The old file is renamed rather than deleted, so a user who needs what was in it still has it on
 /// disk; see "the files Octoboard keeps under `~/.octoboard`" in
@@ -698,7 +800,9 @@ fn supersede_if_outdated(path: &Path) -> Result<()> {
             [],
             |row| row.get(0),
         )?;
-        let current = sessions_exists == 0 || column_exists(&conn, "sessions", "bound_to")?;
+        let current = sessions_exists == 0
+            || (column_exists(&conn, "sessions", "bound_to")?
+                && column_exists(&conn, "sessions", "account_id")?);
         if current {
             return Ok(());
         }
@@ -735,7 +839,11 @@ const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agen
 
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
                                role, origin, title, status, has_conversation, bound_to, colour,
-                               ordinal, config_dir, pinned, started_at, ended_at";
+                               ordinal, account_id, config_dir, pinned, started_at, ended_at";
+
+const CONSOLE_COLUMNS: &str = "id, name, workdir, console_session_agent, default_agent,
+                               claude_account_id, codex_account_id, grok_account_id, icon,
+                               created_at";
 
 /// Shared by [`Store::insert_session`] and [`Store::insert_console_session`], which differ only in
 /// how `colour`, `ordinal` and `title` are decided before this runs.
@@ -743,9 +851,9 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
     conn.execute(
         "INSERT INTO sessions
             (id, agent, agent_session_id, console_id, project_id, host_id, role, origin, title,
-             status, has_conversation, bound_to, colour, ordinal, config_dir, pinned,
+             status, has_conversation, bound_to, colour, ordinal, account_id, config_dir, pinned,
              started_at, ended_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
         params![
             session.id,
             enum_to_text(&session.agent),
@@ -761,6 +869,7 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             session.bound_to,
             session.colour.as_ref().map(enum_to_text),
             session.ordinal,
+            session.account_id,
             session.config_dir,
             session.pinned,
             session.started_at,
@@ -770,6 +879,24 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
     Ok(())
 }
 
+/// Reads a console's own stored row; the account id fields are its real columns, but
+/// `claude_config_dir` and friends are left at their default (`None`) here and filled in by
+/// [`resolve_console_dirs`] afterwards, which needs a connection `query_map`'s row mapper does not
+/// have access to.
+///
+/// **Rule for every caller**: never broadcast a `Console` built from this function alone. The
+/// three `*_config_dir` fields are derived state the daemon re-reads from the `accounts` table,
+/// not columns of their own — the kind of field `docs/memory/writing-daemon-code.md` says to keep
+/// off a stored record — and they are only on `Console` at all because the console dialog still
+/// shows and saves a path per agent (see `Console`'s own doc comment). Every path that broadcasts
+/// a `Console` today goes through [`Store::get_console`] or [`Store::list_consoles`], which call
+/// [`resolve_console_dirs`] first; a future path that broadcasts one it already holds in memory
+/// instead would blank the dialog's path field for every connected client.
+///
+/// TODO(docs/plans/20261008-console-sessions-and-agent-accounts/07-account-pickers.md): remove the
+/// three `*_config_dir` fields from `Console` once the console dialog
+/// (`packages/ui/src/dialogs/ConsoleDialog.tsx`) is replaced by the account picker and no longer
+/// reads them, which removes this whole rule along with `resolve_console_dirs`.
 fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
     Ok(Console {
         id: row.get(0)?,
@@ -777,11 +904,75 @@ fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
         workdir: row.get(2)?,
         console_session_agent: enum_from_row(row, 3)?,
         default_agent: enum_from_row(row, 4)?,
-        claude_config_dir: row.get(5)?,
-        codex_config_dir: row.get(6)?,
-        grok_config_dir: row.get(7)?,
+        claude_account_id: row.get(5)?,
+        codex_account_id: row.get(6)?,
+        grok_account_id: row.get(7)?,
+        claude_config_dir: None,
+        codex_config_dir: None,
+        grok_config_dir: None,
         icon: row.get(8)?,
         created_at: row.get(9)?,
+    })
+}
+
+/// Fills in a console's three derived `*_config_dir` fields from the accounts its three
+/// `*_account_id` fields name — `None` (the default account) resolves to `None`, matching the
+/// shape a console's pinned directory already had before accounts existed. Kept for the console
+/// dialog, which still shows and saves a path per agent; see `Console`'s own doc comment.
+fn resolve_console_dirs(conn: &Connection, console: &mut Console) -> Result<()> {
+    console.claude_config_dir = account_config_dir(conn, console.claude_account_id.as_deref())?;
+    console.codex_config_dir = account_config_dir(conn, console.codex_account_id.as_deref())?;
+    console.grok_config_dir = account_config_dir(conn, console.grok_account_id.as_deref())?;
+    Ok(())
+}
+
+/// The directory of the account named `id`, or `None` for no id and for an id that no longer
+/// names an account — which should not happen once an account is removed (`Store::delete_account`
+/// clears every reference to it first), but a stale reference is read as the default account
+/// rather than failing the whole read.
+fn account_config_dir(conn: &Connection, id: Option<&str>) -> Result<Option<String>> {
+    let Some(id) = id else { return Ok(None) };
+    let dir = conn
+        .query_row(
+            "SELECT config_dir FROM accounts WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(dir)
+}
+
+/// Turns the `accounts_agent_name_unique` index tripping into the protocol's own
+/// `account_name_taken` refusal, so an insert or update that reaches this far surfaces the same
+/// way as the collision check `coordinator` already runs beforehand — this only fires when the
+/// two disagree, which is the fallback name in `coordinator::mint_account_for_dir` colliding after
+/// that function's own check already passed. Any other error is passed through unchanged.
+fn account_write_error(err: rusqlite::Error, account: &Account) -> anyhow::Error {
+    let is_name_collision = matches!(
+        &err,
+        rusqlite::Error::SqliteFailure(sqlite_err, _)
+            if sqlite_err.code == rusqlite::ErrorCode::ConstraintViolation
+    );
+    if is_name_collision {
+        return CodedError::raised(
+            error_code::ACCOUNT_NAME_TAKEN,
+            format!(
+                "the name `{}` is already used for {}",
+                account.name,
+                account.agent.label()
+            ),
+            &[("agent", account.agent.label()), ("name", &account.name)],
+        );
+    }
+    err.into()
+}
+
+fn read_account(row: &Row<'_>) -> rusqlite::Result<Account> {
+    Ok(Account {
+        id: row.get(0)?,
+        agent: enum_from_row(row, 1)?,
+        name: row.get(2)?,
+        config_dir: row.get(3)?,
     })
 }
 
@@ -829,10 +1020,11 @@ fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         bound_to: row.get(11)?,
         colour: enum_from_row_opt::<ConsoleSessionColour>(row, 12)?,
         ordinal: row.get(13)?,
-        config_dir: row.get(14)?,
-        pinned: row.get(15)?,
-        started_at: row.get(16)?,
-        ended_at: row.get(17)?,
+        account_id: row.get(14)?,
+        config_dir: row.get(15)?,
+        pinned: row.get(16)?,
+        started_at: row.get(17)?,
+        ended_at: row.get(18)?,
     })
 }
 
@@ -908,11 +1100,23 @@ mod tests {
             workdir: "/tmp/console-1".to_string(),
             console_session_agent: Agent::Claude,
             default_agent: Agent::Claude,
-            claude_config_dir: claude.map(str::to_string),
-            codex_config_dir: codex.map(str::to_string),
-            grok_config_dir: grok.map(str::to_string),
+            claude_account_id: claude.map(str::to_string),
+            codex_account_id: codex.map(str::to_string),
+            grok_account_id: grok.map(str::to_string),
+            claude_config_dir: None,
+            codex_config_dir: None,
+            grok_config_dir: None,
             icon: None,
             created_at: 0,
+        }
+    }
+
+    fn account(id: &str, agent: Agent, config_dir: &str) -> Account {
+        Account {
+            id: id.to_string(),
+            agent,
+            name: format!("{id}-name"),
+            config_dir: config_dir.to_string(),
         }
     }
 
@@ -932,6 +1136,7 @@ mod tests {
             bound_to: None,
             colour: None,
             ordinal: None,
+            account_id: None,
             config_dir: config_dir.map(str::to_string),
             pinned: false,
             started_at: 0,
@@ -1191,16 +1396,32 @@ mod tests {
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
+    /// A console's reference resolves to its account's directory on read, and a session keeps its
+    /// own copy of that directory fixed at creation, regardless of what the console's reference
+    /// resolves to afterwards.
     #[test]
-    fn the_config_dirs_round_trip_and_a_session_keeps_its_own() {
+    fn a_consoles_account_reference_resolves_to_its_directory_and_a_session_keeps_its_own() {
         let path = temp_db("round-trip");
         let store = Store::open(&path).expect("store");
 
         store
+            .insert_account(&account(
+                "claude-acct",
+                Agent::Claude,
+                "/home/u/.claude-alt",
+            ))
+            .expect("account");
+        store
+            .insert_account(&account("codex-acct", Agent::Codex, "/home/u/.codex-alt"))
+            .expect("account");
+        store
+            .insert_account(&account("grok-acct", Agent::Grok, "/home/u/.grok-alt"))
+            .expect("account");
+        store
             .insert_console(&console(
-                Some("/home/u/.claude-alt"),
-                Some("/home/u/.codex-alt"),
-                Some("/home/u/.grok-alt"),
+                Some("claude-acct"),
+                Some("codex-acct"),
+                Some("grok-acct"),
             ))
             .expect("insert");
         let stored = store.get_console("console-1").unwrap().unwrap();
@@ -1214,53 +1435,115 @@ mod tests {
         );
         assert_eq!(stored.grok_config_dir.as_deref(), Some("/home/u/.grok-alt"));
 
-        store
-            .insert_session(&session(Some("/home/u/.claude-alt")))
-            .expect("insert");
+        let mut opened = session(Some("/home/u/.claude-alt"));
+        opened.account_id = Some("claude-acct".to_string());
+        store.insert_session(&opened).expect("insert");
 
-        // Updating the session's mutable fields leaves the directory it was started with alone.
+        // Updating the session's mutable fields leaves the account and directory it was started
+        // with alone — neither is in `update_session`'s write set.
         let mut live = store.get_session("session-1").unwrap().unwrap();
+        live.account_id = Some("elsewhere".to_string());
         live.config_dir = Some("/elsewhere".to_string());
         live.title = "Renamed".to_string();
         store.update_session(&live).expect("update");
         let after = store.get_session("session-1").unwrap().unwrap();
         assert_eq!(after.title, "Renamed");
+        assert_eq!(after.account_id.as_deref(), Some("claude-acct"));
         assert_eq!(after.config_dir.as_deref(), Some("/home/u/.claude-alt"));
 
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
     #[test]
-    fn updating_a_console_persists_each_agents_config_dir() {
+    fn updating_a_console_persists_each_agents_account_reference() {
         let path = temp_db("update-console");
         let store = Store::open(&path).expect("store");
+        store
+            .insert_account(&account("alt", Agent::Claude, "/home/u/.alt"))
+            .expect("account");
+        store
+            .insert_account(&account("other", Agent::Claude, "/home/u/other"))
+            .expect("account");
         let mut stored = console(None, None, None);
         store.insert_console(&stored).expect("insert");
         let read = |store: &Store| {
             let console = store.get_console("console-1").unwrap().unwrap();
-            (
-                console.claude_config_dir,
-                console.codex_config_dir,
-                console.grok_config_dir,
-            )
+            (console.claude_account_id, console.claude_config_dir)
         };
-        assert_eq!(read(&store), (None, None, None));
+        assert_eq!(read(&store), (None, None));
 
-        for next in [Some("/home/u/.alt"), Some("/home/u/other"), None] {
-            stored.claude_config_dir = next.map(str::to_string);
-            stored.codex_config_dir = next.map(|dir| format!("{dir}-codex"));
-            stored.grok_config_dir = next.map(|dir| format!("{dir}-grok"));
+        for (account_id, dir) in [
+            (Some("alt"), Some("/home/u/.alt")),
+            (Some("other"), Some("/home/u/other")),
+            (None, None),
+        ] {
+            stored.claude_account_id = account_id.map(str::to_string);
             store.update_console(&stored).expect("update");
             assert_eq!(
                 read(&store),
-                (
-                    next.map(str::to_string),
-                    next.map(|dir| format!("{dir}-codex")),
-                    next.map(|dir| format!("{dir}-grok")),
-                )
+                (account_id.map(str::to_string), dir.map(str::to_string))
             );
         }
 
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    /// Removing an account clears every console's reference to it, in the same step, so no reader
+    /// is ever left pointing at an id the `accounts` table no longer has.
+    #[test]
+    fn deleting_an_account_clears_every_consoles_reference_to_it() {
+        let path = temp_db("delete-account");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_account(&account(
+                "claude-acct",
+                Agent::Claude,
+                "/home/u/.claude-alt",
+            ))
+            .expect("account");
+        store
+            .insert_console(&console(Some("claude-acct"), None, None))
+            .expect("insert");
+        let mut other = console(Some("claude-acct"), None, None);
+        other.id = "console-2".to_string();
+        store.insert_console(&other).expect("insert");
+
+        store.delete_account("claude-acct").expect("deleted");
+        assert!(store.get_account("claude-acct").unwrap().is_none());
+        for id in ["console-1", "console-2"] {
+            let console = store.get_console(id).unwrap().unwrap();
+            assert_eq!(console.claude_account_id, None);
+            assert_eq!(console.claude_config_dir, None);
+        }
+
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    /// An account's name and directory round-trip, and `update_account` can change either
+    /// independently of the other.
+    #[test]
+    fn an_accounts_name_and_directory_round_trip_and_update_independently() {
+        let path = temp_db("account-round-trip");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_account(&account("acct-1", Agent::Codex, "/home/u/.codex-alt"))
+            .expect("account");
+
+        let mut renamed = store.get_account("acct-1").unwrap().unwrap();
+        renamed.name = "Work".to_string();
+        store.update_account(&renamed).expect("renamed");
+        let after_rename = store.get_account("acct-1").unwrap().unwrap();
+        assert_eq!(after_rename.name, "Work");
+        assert_eq!(after_rename.config_dir, "/home/u/.codex-alt");
+
+        let mut repointed = after_rename;
+        repointed.config_dir = "/home/u/.codex-work".to_string();
+        store.update_account(&repointed).expect("repointed");
+        let after_repoint = store.get_account("acct-1").unwrap().unwrap();
+        assert_eq!(after_repoint.name, "Work");
+        assert_eq!(after_repoint.config_dir, "/home/u/.codex-work");
+
+        assert_eq!(store.list_accounts().unwrap(), [after_repoint]);
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 

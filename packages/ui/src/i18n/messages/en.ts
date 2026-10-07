@@ -92,9 +92,10 @@ export const en = {
   "daemon.repository_name_missing": "“{url}” does not contain a repository name.",
   "daemon.git_clone_failed": "git clone failed: {detail}",
   "daemon.config_dir_not_absolute": "The {agent} config directory must be an absolute path, or start with “~/”.",
-  "daemon.config_dir_not_a_directory": "The {agent} config directory “{path}” is not a directory.",
   "daemon.config_dir_unreachable":
-    "The {agent} config directory “{path}” is not a directory the daemon can reach. Recreate it, or clear it in the console settings so new sessions start without it.",
+    "The {agent} config directory “{path}” is not a directory the daemon can reach. Recreate it, or point the account at a different directory.",
+  "daemon.grok_home_not_initialized":
+    "“{path}” is not a Grok home yet. Run Grok against it directly at least once so it has a session history, before pointing an account at it.",
   "daemon.icon_not_an_image": "The console avatar must be an image.",
   "daemon.icon_too_large": "The console avatar is larger than {limit_kib} KiB.",
   "daemon.session_already_running": "This session is already running.",

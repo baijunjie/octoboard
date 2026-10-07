@@ -105,7 +105,7 @@ const initialState: State = {
   trustPrompts: [],
   trustedDirectories: [],
   gitStatuses: new Map(),
-  settings: { auto_sync_repositories: false },
+  settings: { auto_sync_repositories: false, accounts: [] },
 };
 
 /** A store holding the empty state with `initial` laid over it. */

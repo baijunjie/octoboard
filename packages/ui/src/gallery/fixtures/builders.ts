@@ -106,7 +106,7 @@ export function snapshotState(parts: {
     trustPrompts: parts.trustPrompts ?? [],
     trustedDirectories: parts.trustedDirectories ?? [],
     gitStatuses: new Map((parts.gitStatuses ?? []).map((g) => [g.project, g])),
-    settings: parts.settings ?? { auto_sync_repositories: false },
+    settings: parts.settings ?? { auto_sync_repositories: false, accounts: [] },
   };
 }
 

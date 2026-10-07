@@ -9,6 +9,19 @@
 > named wherever its agent's name is already written. The controls are usable by keyboard alone and translated in
 > every offered language, and `docs/product/sessions.md`'s account of opening a session matches the new control.
 
+## Handoff
+
+From milestone 04, accounts: storage and protocol:
+
+- **`Console`'s three derived `*_config_dir` fields are a bridge this milestone removes.** They are state
+  the daemon derives held as fields on a stored record, which `docs/memory/writing-daemon-code.md` rules
+  out, and they are safe today only because every `ConsoleUpserted` broadcast re-reads through
+  `get_console` / `list_consoles` — an invariant written next to `read_console` in
+  `apps/daemon/src/store.rs` and unenforced by anything. The first path that broadcasts a `Console` it
+  already holds in memory blanks the dialog's path field. Once this milestone's picker reads the account
+  list out of the settings record, the fields, `resolve_console_dirs`, the re-reads and
+  `republish_consoles_referencing` all go. The `TODO` in the store names this milestone.
+
 ## Technical design
 
 - [ ] **The console dialog.** Where it shows a directory input for each currently selected agent, it shows a picker

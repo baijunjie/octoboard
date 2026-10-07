@@ -80,9 +80,10 @@ export const zhHans: Translation<"other"> = {
   "daemon.repository_name_missing": "“{url}”中没有仓库名称。",
   "daemon.git_clone_failed": "git clone 失败：{detail}",
   "daemon.config_dir_not_absolute": "{agent} 配置目录必须是绝对路径，或以 ~/ 开头。",
-  "daemon.config_dir_not_a_directory": "{agent} 配置目录“{path}”不是目录。",
   "daemon.config_dir_unreachable":
-    "{agent} 配置目录“{path}”不是守护进程能够访问的目录。请重新创建它，或在控制台设置中将其清除，以便新会话不使用该目录启动。",
+    "{agent} 配置目录“{path}”不是守护进程能够访问的目录。请重新创建它，或将账户指向另一个目录。",
+  "daemon.grok_home_not_initialized":
+    "“{path}”还不是 Grok 主目录。请先直接对它运行一次 Grok，使其具有会话记录，再将账户指向它。",
   "daemon.icon_not_an_image": "控制台头像必须是图片。",
   "daemon.icon_too_large": "控制台头像大于 {limit_kib} KiB。",
   "daemon.session_already_running": "此会话已在运行。",

@@ -45,11 +45,17 @@ export interface Console {
   workdir: string;
   console_session_agent: Agent;
   default_agent: Agent;
-  /** Absolute path of each agent's own config directory, one setting per agent. A session opened in
-   * this console reads only its agent's: Claude Code is launched with it as `CLAUDE_CONFIG_DIR`,
-   * Codex as `CODEX_HOME`, and for Grok it replaces `~/.grok` as the directory its per-session home
-   * is built from — over any value in the user's shell environment. Unset leaves that environment
-   * as it is. */
+  /** The account each agent's sessions opened in this console read, by id; absent means that
+   * agent's default account — the state of pinning nothing. Not yet consulted by anything in this
+   * client; the account picker that reads it is milestone 7 of the accounts plan. */
+  claude_account_id?: string | null;
+  codex_account_id?: string | null;
+  grok_account_id?: string | null;
+  /** The referenced account's directory, derived for display: absent for the default account.
+   * This is what the console dialog still shows and saves per agent, until milestone 7 replaces
+   * it with a picker — Claude Code is launched with it as `CLAUDE_CONFIG_DIR`, Codex as
+   * `CODEX_HOME`, and for Grok it replaces `~/.grok` as the directory its per-session home is
+   * built from. */
   claude_config_dir?: string | null;
   codex_config_dir?: string | null;
   grok_config_dir?: string | null;
@@ -60,6 +66,19 @@ export interface Console {
 
 /** The three per-agent config directory fields of a console, as named on the wire. */
 export type ConfigDirField = "claude_config_dir" | "codex_config_dir" | "grok_config_dir";
+
+/** A named config directory of one agent, kept once for the whole application. The default
+ * account of each agent is not one of these — it is the state of pinning nothing, and what it is
+ * shown as is derived elsewhere (milestone 5 of the accounts plan), not sent as a record. */
+export interface Account {
+  id: string;
+  agent: Agent;
+  /** Required, unique within this account's agent (trimmed, case-insensitive); not compared
+   * across agents. */
+  name: string;
+  /** Absolute, lexically normalised. Existence is not checked when this is set. */
+  config_dir: string;
+}
 
 export interface Project {
   id: string;
@@ -105,8 +124,11 @@ export interface Session {
    * there, so a title is never reused after a console session is archived or deleted — and what
    * gives it its default title ("Hub `<ordinal>`"). Absent for a project session. */
   ordinal?: number | null;
+  /** The account this session's own agent reads, by id, fixed at creation; absent means the
+   * default account. Written only when the session is opened. */
+  account_id?: string | null;
   /** The config directory of this session's own agent that it was started with, fixed at creation
-   * so a resume finds its transcript even after the console's setting changes. */
+   * so a resume finds its transcript even after the account's own directory changes. */
   config_dir?: string | null;
   /** The user pinned this session to the top of its list; survives archiving and resuming. */
   pinned: boolean;
@@ -163,6 +185,9 @@ export interface Settings {
    * but nothing in the repository changes. On: a branch that is behind and can fast-forward is
    * also fast-forwarded. Never pushes and never merges a non-fast-forward either way. */
   auto_sync_repositories: boolean;
+  /** Every account of every agent, application-wide. The default account of each agent is not
+   * among these — it is the state of pinning nothing, not a row. */
+  accounts: Account[];
 }
 
 /**
@@ -266,6 +291,17 @@ export type RequestBody =
    * is already in flight is not started again, so a client polling faster than the checks finish,
    * or several clients watching the same console, cannot pile work up. */
   | { type: "refresh_git_status"; console: string }
+  /** Both fields are required: an account always has a name and a directory. Broadcasts
+   * `settings_updated`. */
+  | { type: "create_account"; agent: Agent; name: string; config_dir: string }
+  /** Renames the account, repoints it, or both, independently; either field absent leaves it
+   * alone. Broadcasts `settings_updated`, and a `console_upserted` for every console that refers
+   * to it. */
+  | { type: "update_account"; account: string; name?: string; config_dir?: string }
+  /** Clears the reference of every console that refers to this account, putting each back on its
+   * agent's default account, then removes the account. Broadcasts `settings_updated`, and a
+   * `console_upserted` for every console whose reference was cleared. */
+  | { type: "delete_account"; account: string }
   | { type: "shutdown" };
 
 /** A client request as sent on the wire: the body's fields plus an optional correlation id. */

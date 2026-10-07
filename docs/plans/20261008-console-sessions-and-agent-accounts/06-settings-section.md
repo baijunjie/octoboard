@@ -9,6 +9,19 @@
 > reachable by keyboard alone and is translated in every language the application offers. The section is listed in
 > `docs/product/settings.md`.
 
+## Handoff
+
+From milestone 04, accounts: storage and protocol:
+
+- **The default account's name takes part in the uniqueness comparison, and the daemon can only do half of
+  it.** The comparison is the daemon's, but the default account's name is Octoboard's own word for it and is
+  translated, and the daemon carries no message catalogue. Milestone 04 therefore compares against a fixed
+  English key (`DEFAULT_ACCOUNT_NAME` in `apps/daemon/src/protocol.rs`), documented as a comparison key and
+  not for display. **This section's add and edit forms have to compare a typed name against the translated
+  default-account name of the current language as well**, and report the collision in place the way they
+  report a collision with a stored account — otherwise a user whose language calls it something other than
+  "Default" can create an account the picker shows twice over.
+
 ## Technical design
 
 - [ ] A new Settings section, Agent accounts, in the dialog's list of sections.

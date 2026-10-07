@@ -82,10 +82,11 @@ they have agreed — for that project, or for a folder its directory lies under 
 see "Claude Code's workspace-trust prompt" in `docs/product/launching-agents.md`.
 
 If the launch itself fails — the directory cannot be reached, the agent binary is not on the user's `PATH`, the
-user's shell environment could not be captured (see "The launch environment" in
-`docs/product/launching-agents.md`), the config directory the session would hold for its agent no longer exists (see
-"Agent config directories" in `docs/product/consoles-and-projects.md`) — no session appears in the sidebar and the
-failure is reported.
+user's shell environment could not be captured (see "The launch environment" in `docs/product/launching-agents.md`),
+or, for Grok Build only, the account the session would hold pins a directory that is not an initialized Grok home
+(see "Agent config directories" in `docs/product/consoles-and-projects.md`) — no session appears in the sidebar and
+the failure is reported. A missing config directory does not fail a brand new session for the other two agents: it
+has no conversation to lose, so the agent is left to create the directory itself.
 
 ### Which agent a session uses
 
@@ -269,9 +270,10 @@ Octoboard injects.
   conversation in its place, in the same project and under the same session.
 - A resume carries no opening prompt, so the session comes up at the agent's prompt; an archived session reopened by
   typing into its terminal is then handed what was typed (see "The terminal" below).
-- A session relaunches with the config directory it was opened with for its agent, not the console's current setting,
-  and is refused if that directory no longer exists (see "Agent config directories" in
-  `docs/product/consoles-and-projects.md`).
+- A session relaunches with the account and the config directory it was opened with for its agent, not the
+  console's current reference, and is refused if that directory no longer exists — but only when the session has a
+  conversation to resume; one that was opened and never typed into launches into the missing directory instead (see
+  "Agent config directories" in `docs/product/consoles-and-projects.md`).
 - Resuming a session whose process is already running is refused. The refusal a double-click produces is not surfaced
   to the user.
 

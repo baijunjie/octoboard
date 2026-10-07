@@ -41,3 +41,10 @@ is left beyond this milestone.
       `pnpm gallery` opens an interactive dev server — so every count a scenario asserts has only been
       re-derived by hand against the fixtures. `archive-many` and `archive-console-sessions` are the two this
       topic perturbed.
+
+## From milestone 04 — accounts: storage and protocol
+
+- [ ] The **console dialog still works unchanged** for a user, round-tripped through a live daemon: creating
+      and editing a console's per-agent directory field, and a session actually launching with what was
+      saved. Covered at the protocol and unit level only. The dialog becomes a picker in milestone 07, so
+      this is worth confirming before that replaces it.

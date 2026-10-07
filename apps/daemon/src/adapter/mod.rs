@@ -105,22 +105,29 @@ pub fn mcp_server_command(spec: &LaunchSpec<'_>) -> (String, Vec<String>) {
     )
 }
 
-/// The session's pinned configuration directory, refused when it has gone. Checked here rather than
-/// left to the agent, which would quietly create the missing directory and start the session
-/// logged out, without the conversation it is meant to resume.
+/// The session's pinned configuration directory, refused when it has gone and this launch is
+/// resuming a conversation the agent actually has — `spec.resume_agent_session_id` is set only
+/// then (see `protocol::Session::has_conversation` and `coordinator::resume_session`), never for a
+/// fresh launch or for resuming a session that never had a turn. Those two launch into the missing
+/// directory instead, which is what lets the agent create it, same as an unpinned launch would.
+///
+/// Checked here rather than left to the agent, which would quietly create the missing directory
+/// and come up logged out, without the conversation the resume was meant to continue — an outcome
+/// that looks like success.
 pub fn pinned_config_dir<'a>(spec: &LaunchSpec<'a>, agent: Agent) -> Result<Option<&'a Path>> {
     match spec.config_dir {
-        Some(dir) if !dir.is_dir() => Err(CodedError::raised(
-            error_code::CONFIG_DIR_UNREACHABLE,
-            format!(
-                "the {} config directory `{}` is not a directory the daemon can reach; \
-                 recreate it, or clear it in the console's settings so new sessions \
-                 start without it",
-                agent.label(),
-                dir.display()
-            ),
-            &[("agent", agent.label()), ("path", &dir.to_string_lossy())],
-        )),
+        Some(dir) if !dir.is_dir() && spec.resume_agent_session_id.is_some() => {
+            Err(CodedError::raised(
+                error_code::CONFIG_DIR_UNREACHABLE,
+                format!(
+                    "the {} config directory `{}` is not a directory the daemon can reach; \
+                     recreate it, or point the account at a different directory",
+                    agent.label(),
+                    dir.display()
+                ),
+                &[("agent", agent.label()), ("path", &dir.to_string_lossy())],
+            ))
+        }
         dir => Ok(dir),
     }
 }

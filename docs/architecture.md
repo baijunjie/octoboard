@@ -188,7 +188,7 @@ Each has an established solution unless noted; two are not yet confirmed by hand
 
 ## Data model
 
-Entities: console, host, project, session, report, report-panel page, and the trusted folders. The shapes are in
+Entities: console, host, project, session, account, report, report-panel page, and the trusted folders. The shapes are in
 `apps/daemon/src/store.rs`; what is worth knowing is the reasoning behind a few fields.
 
 - `Session.id` is Octoboard's own and `agent_session_id` the agent's. They are separate because some agents cannot
@@ -205,9 +205,13 @@ Entities: console, host, project, session, report, report-panel page, and the tr
   let a later one reuse it.
 - `Project.path` is stored absolute and lexically normalized (a relative path is refused), because trusted-folder
   entries are compared with it component by component.
-- A console holds an optional config directory per agent, and `Session.config_dir` is the one of the session's own
-  agent. The console's value is copied onto a session when it is opened and never changes, because the agent keeps its
-  transcripts there and a resume must find them.
+- `Account` is a named config directory of one agent, kept once for the whole application. A console refers to one
+  account per agent by id (`claude_account_id` and its two siblings), rather than holding a path directly; `None`
+  means that agent's default account, the state of pinning nothing. `Session.account_id` is the account the
+  session's own agent reads, and `Session.config_dir` is that account's directory at the moment the session was
+  opened (`None` for the default account) — both copied onto the session when it is opened and fixed afterwards,
+  because the agent keeps its transcripts there and a resume must find them (see
+  `docs/plans/20261008-console-sessions-and-agent-accounts/04-accounts-storage.md`).
 - Every project and session carries a `host_id` while the host table holds a single local record, so going remote needs
   no data migration. Trusted-folder entries ignore `host_id`, which is harmless while every host is local.
 - `Page.anchor_message_id` records the conversation position a page was pushed at. It is stored and never read; a

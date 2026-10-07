@@ -128,21 +128,61 @@ pub struct Console {
     pub workdir: String,
     pub console_session_agent: Agent,
     pub default_agent: Agent,
-    /// Where each agent's sessions opened in this console keep their configuration, login and
-    /// transcripts, as an absolute path; one setting per agent, and a session reads only its own
-    /// agent's. Claude Code gets it as `CLAUDE_CONFIG_DIR`, Codex as `CODEX_HOME`, and for Grok it
-    /// is the directory its per-session home is built from instead of `~/.grok`. Set over whatever
-    /// the user's shell environment exports; unset leaves that as it is.
+    /// The account each agent's sessions opened in this console read, by id; one setting per
+    /// agent, and a session reads only its own agent's. `None` means that agent's default account
+    /// — the state of pinning nothing (see "Agent accounts" in
+    /// `docs/plans/20261008-console-sessions-and-agent-accounts/README.md`). What a referenced
+    /// account resolves to at launch is `Account.config_dir`, read through `crate::store`, not
+    /// carried here.
+    pub claude_account_id: Option<String>,
+    /// Codex's own reference; see `claude_account_id`.
+    pub codex_account_id: Option<String>,
+    /// Grok's own reference; see `claude_account_id`.
+    pub grok_account_id: Option<String>,
+    /// The referenced account's directory, derived for display and never stored: `None` for the
+    /// default account. Carried here only so the console dialog can keep showing and saving a path
+    /// per agent unchanged until milestone 7 of the accounts plan replaces it with a picker — see
+    /// "Keep the console dialog working unchanged" in `04-accounts-storage.md`. Resolved by
+    /// `crate::store::Store::get_console` / `list_consoles`, not settable directly.
     pub claude_config_dir: Option<String>,
-    /// Codex's own directory; see `claude_config_dir`.
+    /// Codex's own derived directory; see `claude_config_dir`.
     pub codex_config_dir: Option<String>,
-    /// Grok's own directory; see `claude_config_dir`.
+    /// Grok's own derived directory; see `claude_config_dir`.
     pub grok_config_dir: Option<String>,
     /// A custom avatar as an `image/*` `data:` URL of at most 256 KiB; unset shows the default
     /// glyph.
     pub icon: Option<String>,
     pub created_at: i64,
 }
+
+/// A named config directory of one agent, kept once for the whole application and referred to by
+/// id wherever a config directory is referred to — a console's per-agent setting, a session's own
+/// copy of it. Every agent also has a *default* account, which is not a row here: it is the state
+/// of pinning nothing, its name is Octoboard's own untranslatable-here word for it (derived where
+/// it is shown, not stored), and it cannot be created, renamed or removed. See "Every agent has a
+/// default account" in `docs/plans/20261008-console-sessions-and-agent-accounts/README.md`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Account {
+    pub id: String,
+    pub agent: Agent,
+    /// Required, and unique within this account's agent compared trimmed and case-insensitively —
+    /// the default account's own name takes part in that comparison, which is why it is compared
+    /// against [`DEFAULT_ACCOUNT_NAME`] rather than left unchecked. Names are not compared across
+    /// agents.
+    pub name: String,
+    /// Absolute, lexically normalised, exactly as a console's pinned directory is stored today.
+    /// Existence is not checked when this is set — see "An account's directory is not checked for
+    /// existence" in the topic README — so this may name a directory that does not exist yet.
+    pub config_dir: String,
+}
+
+/// The comparison key the daemon uses for the default account's name when checking a requested
+/// account name for a collision — in English, since the daemon carries no locale and what the
+/// default account is actually *shown* as is a client-side, per-locale concern derived later (see
+/// `Account`'s doc comment and milestone 5 of the accounts plan). Not sent to a client and not
+/// meant to be displayed; it exists only so `claude_account_id: None` has something to compare a
+/// new name against.
+pub const DEFAULT_ACCOUNT_NAME: &str = "Default";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
@@ -200,12 +240,16 @@ pub struct Session {
     /// used there, so a title is never reused after a console session is archived or deleted — and
     /// what gives it its default title ("Hub `<ordinal>`"). `None` for a project session.
     pub ordinal: Option<i64>,
+    /// The account this session's own agent reads, by id, fixed at creation: the console's
+    /// reference for that agent at the time. `None` means the default account. Written only when
+    /// the session is opened — the write path that lets a running session change account belongs
+    /// to milestone 8 of the accounts plan.
+    pub account_id: Option<String>,
     /// The configuration directory of this session's own agent that it was started with, fixed at
-    /// creation: the console's setting for that agent at the time. An agent keeps a conversation's
-    /// transcript under that directory, so a resume finds it only when relaunched with the same one
-    /// — which is why this is the session's own copy and a later edit of the console's setting never
-    /// reaches a session that already exists. Unset for a session started with no directory
-    /// pinned; such a session resumes under whatever the shell exports at that moment.
+    /// creation: `account_id`'s directory at the time, or unset when it names the default account.
+    /// An agent keeps a conversation's transcript under that directory, so a resume finds it only
+    /// when relaunched with the same one — which is why this is the session's own copy and a later
+    /// edit of the account's directory never reaches a session that already exists.
     pub config_dir: Option<String>,
     /// The user pinned this session to the top of its list. Only `set_session_pinned` changes it,
     /// and a pinned session stays pinned across archiving and resuming.
@@ -271,11 +315,15 @@ pub struct GitStatus {
     pub error: Option<String>,
 }
 
-/// The app-wide user settings the daemon stores. One field for now; a record rather than a bare
-/// bool so it can grow without a new request shape for every setting added.
+/// The app-wide user settings the daemon stores, and the account list alongside them: a record
+/// that already grows without a new request shape or a new event for every addition, which is
+/// where the accounts belong too (see "Reusable capabilities" in `04-accounts-storage.md`).
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Settings {
     pub auto_sync_repositories: bool,
+    /// Every account of every agent, application-wide. The default account of each agent is not
+    /// among these — it is the state of pinning nothing, not a row (see `Account`).
+    pub accounts: Vec<Account>,
 }
 
 /// One control-socket frame from the client: an optional request id the daemon echoes back, plus
@@ -437,6 +485,28 @@ pub enum RequestBody {
     /// something actually changed, as `remove_trusted_directory` does.
     UpdateSettings {
         auto_sync_repositories: Option<bool>,
+    },
+    /// Both fields are required: an account always has a name and a directory, unlike a console's
+    /// field, which may clear to the default. Broadcasts `settings_updated`.
+    CreateAccount {
+        agent: Agent,
+        name: String,
+        config_dir: String,
+    },
+    /// Renames the account, repoints it, or both, independently; either field absent leaves it
+    /// alone. Broadcasts `settings_updated`, and a `console_upserted` for every console that
+    /// refers to it, since a repoint changes what its dialog would show.
+    UpdateAccount {
+        account: String,
+        name: Option<String>,
+        config_dir: Option<String>,
+    },
+    /// Clears the reference of every console that refers to this account, which puts each one back
+    /// on its agent's default account, then removes the account. A session holding it is left
+    /// alone — it already carries its own copy of the directory it launches with. Broadcasts
+    /// `settings_updated`, and a `console_upserted` for every console whose reference was cleared.
+    DeleteAccount {
+        account: String,
     },
     /// Checks every project of this console's current git status against its remote, concurrently.
     /// Answered with `ack` at once; the statuses follow as `project_git_status` broadcasts, one per
@@ -692,6 +762,14 @@ impl CodedError {
             &[("session", id)],
         )
     }
+
+    pub fn unknown_account(id: &str) -> anyhow::Error {
+        Self::raised(
+            error_code::UNKNOWN_ACCOUNT,
+            format!("unknown account {id}"),
+            &[("account", id)],
+        )
+    }
 }
 
 impl std::fmt::Display for CodedError {
@@ -763,10 +841,16 @@ pub mod error_code {
     pub const ALL_PROJECTS_ALREADY_ADDED: &str = "all_projects_already_added";
     pub const REPOSITORY_NAME_MISSING: &str = "repository_name_missing";
     pub const GIT_CLONE_FAILED: &str = "git_clone_failed";
+    /// Also used for an account's directory, which goes through the same normalisation minus the
+    /// existence check below.
     pub const CONFIG_DIR_NOT_ABSOLUTE: &str = "config_dir_not_absolute";
-    pub const CONFIG_DIR_NOT_A_DIRECTORY: &str = "config_dir_not_a_directory";
-    /// A session's pinned configuration directory has gone, which refuses the launch.
+    /// A session's pinned configuration directory has gone, which refuses the launch — narrowed to
+    /// a session that has a conversation on the agent's side; see `crate::adapter::pinned_config_dir`.
     pub const CONFIG_DIR_UNREACHABLE: &str = "config_dir_unreachable";
+    /// A Grok Build session's pinned source home exists but Grok has never been run against it, so
+    /// it carries no login and no session history for the per-session home to link. `params` names
+    /// `path`.
+    pub const GROK_HOME_NOT_INITIALIZED: &str = "grok_home_not_initialized";
     pub const ICON_NOT_AN_IMAGE: &str = "icon_not_an_image";
     pub const ICON_TOO_LARGE: &str = "icon_too_large";
     pub const SESSION_NOT_RUNNING: &str = "session_not_running";
@@ -778,6 +862,11 @@ pub mod error_code {
     pub const CONSOLE_SESSION_MISSING: &str = "console_session_missing";
     pub const BINARY_NOT_FOUND: &str = "binary_not_found";
     pub const SHELL_ENVIRONMENT_TIMEOUT: &str = "shell_environment_timeout";
+    pub const UNKNOWN_ACCOUNT: &str = "unknown_account";
+    /// A requested account name collides with an existing one of the same agent, trimmed and
+    /// compared ignoring letter case — the default account's name takes part. `params` names
+    /// `agent` and the `name` of the account it collides with.
+    pub const ACCOUNT_NAME_TAKEN: &str = "account_name_taken";
 }
 
 /// The `reason_code` param of a failed answer to a trust screen, in the `error` and in the

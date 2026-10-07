@@ -174,7 +174,10 @@ Two of its files are **copies** taken at launch rather than links, with conseque
 A Grok Build config directory must **already be a Grok home, one Grok has been run against**. Only entries
 that already exist in the source home are linked; for an empty directory, Grok creates its login and session records
 inside the per-session home, which is discarded with the session's process, so neither the login nor the conversation
-persists. Octoboard does not check this when the directory is set.
+persists. Octoboard does not check this when the directory is set — a user pointing it at a directory they are about
+to create should not be stopped. It is checked at **launch** instead, and a Grok Build session pinned to a directory
+that is not an initialized Grok home is refused there, naming the directory and what is wrong with it; a session on
+the default account is never held to this, since that directory is the user's own existing setup.
 
 Grok Build additionally **requires the project to be a git repository**: it locates a project by walking up for a
 `.git` directory, and in a directory without one it loads neither the project's instructions nor the project's hooks.

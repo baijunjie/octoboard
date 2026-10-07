@@ -34,9 +34,14 @@ fields, an avatar that was not touched is left as it is when the console is save
 
 ### Agent config directories
 
-A console can hold up to three optional directories, one per agent. Each is the directory that agent keeps its own
-configuration, login state and conversation history in — for a user who keeps a second setup of an agent beside the
-default one, such as `~/.claude-alt`:
+Underneath, a console refers to one **account** per agent — a named config directory kept once for the whole
+application rather than typed into each console. This is a transitional state: the console dialog below is, for now,
+the only place an account comes into existence, and there is no screen anywhere for editing or removing one directly
+— an account is application-wide, and removing it is an explicit action the user takes, which no screen currently
+offers. One consequence follows from that: an account the dialog mints for a directory, left behind when the field
+that pointed at it is later cleared or repointed elsewhere, stays stored with nothing referring to it and nothing on
+screen to remove it.
+Each agent's config directory is where that agent keeps its own configuration, login state and conversation history:
 
 | Agent | What the directory is | The agent's usual default |
 |---|---|---|
@@ -47,61 +52,74 @@ default one, such as `~/.claude-alt`:
 How each agent is pointed at its directory is in "The launch environment" and "Per-agent specifics a user will notice"
 in `docs/product/launching-agents.md`.
 
-The console dialog shows one input for each agent currently selected as the console's console session agent or
+The console dialog still shows one input for each agent currently selected as the console's console session agent or
 default agent — one row or two, in the order Claude Code, Codex, Grok Build — labelled with that agent's name and
-marked optional, with the agent's usual default as its placeholder. A directory can therefore be entered only for an
-agent selected in one of those two fields. A directory already stored for an agent that is not currently selected is
-kept as it is: it is neither shown nor saved by the dialog, and it still applies to that agent's sessions, such as
-those of a project whose own default agent it is. To see or clear it, select that agent as the console session or
-default agent again.
+marked optional, with the agent's usual default as its placeholder, exactly as before accounts existed. A directory
+can therefore be entered only for an agent selected in one of those two fields. A directory already stored for an
+agent that is not currently selected is kept as it is: it is neither shown nor saved by the dialog, and it still
+applies to that agent's sessions, such as those of a project whose own default agent it is. To see or clear it,
+select that agent as the console session or default agent again.
 
-- **Left blank**, it is unset: that agent's sessions use whatever the user's login shell exports for the agent's
-  variable, and the agent's own default when it exports none.
-- **When set**, it applies to every session of that agent opened in the console afterwards — the console session and
-  project sessions alike, including a session whose agent was chosen for that session alone — and takes precedence over the
-  value in the user's shell environment (see "The launch environment" in `docs/product/launching-agents.md`). A session
-  reads only its own agent's directory; sessions of the other agents are unaffected.
+- **Left blank**, the console is on that agent's **default account** — the state of pinning nothing: that agent's
+  sessions use whatever the user's login shell exports for the agent's variable, and the agent's own default when it
+  exports none.
+- **When set**, saving the dialog either repoints the console's current account to the new directory, or — when that
+  account is shared with another console, or the console was on the default account — creates a fresh account for
+  it instead, named after the directory's last path component (or the whole directory, if that name is already
+  taken). Either way the directory then applies to every session of that agent opened in the console afterwards —
+  the console session and project sessions alike, including a session whose agent was chosen for that session alone
+  — and takes precedence over the value in the user's shell environment (see "The launch environment" in
+  `docs/product/launching-agents.md`). A session reads only its own agent's account; sessions of the other agents
+  are unaffected.
 
 For Claude Code, entering `~/.claude` is not the same as leaving the field blank: whenever a directory is set, Claude
-Code reads its global config file from `.claude.json` inside that directory instead of from `~/.claude.json`.
+Code reads its global config file from `.claude.json` inside that directory instead of from `~/.claude.json`. For
+this reason the default account is never offered as a second, pinned account of its own — it already covers it.
 
-For Grok Build, the directory must already be a Grok home that Grok has been run against; Octoboard does not check
-this. Why, and what happens otherwise, is under "Grok Build" in "Per-agent specifics a user will notice" in
-`docs/product/launching-agents.md`.
+For Grok Build, the directory does not have to already be a Grok home when it is set; whether it is one is checked
+later, at launch, rather than here. What happens then is under "Grok Build" in "Per-agent specifics a user will
+notice" in `docs/product/launching-agents.md`.
 
-Each value is checked when the console is saved, by the same rules for all three agents, and a failure is shown in the
-dialog, naming the agent, with nothing saved:
+A directory typed into the dialog is checked when the console is saved, and a failure is shown in the dialog, naming
+the agent, with nothing saved:
 
-- surrounding whitespace is trimmed, and a blank value means unset;
+- surrounding whitespace is trimmed, and a blank value means the default account;
 - a leading `~` or `~/` is expanded to the home directory of the host the daemon runs on;
 - the result must be an absolute path;
 - it is normalized lexically — a trailing `/`, `.` components and `..` components are resolved; a symlink is kept as
-  typed;
-- it must exist and be a directory. Octoboard never creates it.
+  typed.
 
-What is stored, and shown when the console is edited, is the expanded absolute path.
+Existence is **not** checked: a directory that does not exist yet is accepted, since the agent (Grok Build excepted)
+creates it on first run. What is stored, and shown when the console is edited, is the account's expanded absolute
+path.
 
-**A session keeps the directory it was opened with.** A session takes the console's value for its own agent when it is
-opened and keeps it for its lifetime; resuming or reopening it relaunches with that same directory, because the agent
-keeps the conversation inside it. A session opened while its agent's setting was unset holds no directory and resumes
-under whatever the user's shell exports at that moment.
+**A session keeps the account and the directory it was opened with.** A session takes the console's reference for its
+own agent when it is opened and keeps it for its lifetime; resuming or reopening it relaunches with that same
+directory, because the agent keeps the conversation inside it. A session opened on the default account holds no
+directory and resumes under whatever the user's shell exports at that moment.
 
-If a session's directory no longer exists when it is launched or resumed, the launch is refused rather than started —
-the agent would otherwise come up logged out, without the conversation a resume is meant to continue. This holds for
-all three agents, and the message names the agent and the directory and says to recreate it or to clear it in the
-console's settings. For sessions opened afterwards, correcting or clearing the console's setting resolves it; an
-existing session can be resumed again only once the directory exists at that path again.
+If a session's directory no longer exists when it is launched or resumed, the launch is refused rather than
+started — but only for a session that has a conversation on the agent's side to resume. A new session, and one that
+was opened but never had a turn, launches into the missing directory instead, which is what lets the agent create
+it. This narrower refusal holds for all three agents, and the message names the agent and the directory and says to
+recreate it or to point the account at a different one. Grok Build is refused on this same path whenever its pinned
+directory is not an initialized Grok home — one Grok has actually been run against — whether or not there is a
+conversation to resume, since it cannot safely create one the way the other two agents can; see "Grok Build" in
+`docs/product/launching-agents.md`.
 
 ### Editing a console
 
 The name, the console session agent, the default agent and the config directories the dialog shows can be changed,
-and a config directory can be cleared. Changing an agent or a config directory affects sessions opened afterwards; a
-session that already exists keeps the agent and the config directory it was started with. For the console session,
-the change therefore takes effect once the existing console session is archived and a fresh one is started
-from the console sessions section (see "Console sessions and project sessions" in `docs/product/sessions.md`).
+and a config directory can be cleared, back to the default account. Changing an agent or a config directory affects
+sessions opened afterwards; a session that already exists keeps the agent and the account and directory it was
+started with. For the console session, the change therefore takes effect once the existing console session is
+archived and a fresh one is started from the console sessions section (see "Console sessions and project sessions" in
+`docs/product/sessions.md`).
 
-A config directory is checked only when it is changed: saving a console with that field untouched succeeds even if the
-stored directory has since disappeared.
+A config directory is checked only when it is changed: saving a console with that field untouched succeeds
+regardless of what has happened to the account it refers to since. Editing one console's field never changes what
+another console shows, even when both happened to be on the same account before the edit — see "Agent config
+directories" above.
 
 ### Deleting a console
 

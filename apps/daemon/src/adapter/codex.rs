@@ -436,14 +436,25 @@ mod tests {
     }
 
     #[test]
-    fn a_pinned_codex_home_that_has_gone_refuses_the_launch() {
+    fn a_pinned_codex_home_that_has_gone_refuses_resuming_a_conversation() {
         let mut fixture = spec_fixture();
         fixture.config_dir = Some(fixture.scratch.join("missing"));
-        let err = CodexAdapter.plan(&fixture.spec()).err().expect("refused");
+        let mut spec = fixture.spec();
+        spec.resume_agent_session_id = Some("agent-side-id");
+        let err = CodexAdapter.plan(&spec).err().expect("refused");
         let message = err.to_string();
         assert!(message.contains("Codex"), "{message}");
         assert!(message.contains("missing"), "{message}");
         assert!(!message.contains("  "), "stray spaces in: {message}");
+    }
+
+    /// A fresh session, and one that never had a turn, launch into a vanished pinned directory
+    /// rather than being refused — that is what lets the agent create it.
+    #[test]
+    fn a_pinned_codex_home_that_has_gone_is_fine_with_no_conversation_to_resume() {
+        let mut fixture = spec_fixture();
+        fixture.config_dir = Some(fixture.scratch.join("missing"));
+        CodexAdapter.plan(&fixture.spec()).expect("not refused");
     }
 
     #[test]

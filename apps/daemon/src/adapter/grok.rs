@@ -52,7 +52,7 @@ use serde_json::json;
 
 use super::{AgentAdapter, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS};
 use crate::mcp;
-use crate::protocol::Agent;
+use crate::protocol::{error_code, Agent, CodedError};
 
 /// The events Octoboard's session states are derived from. All three stop events are registered
 /// because they are mutually exclusive, and `Notification` is the backstop: some turns (bash mode,
@@ -91,6 +91,16 @@ impl AgentAdapter for GrokAdapter {
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan> {
         let pinned = super::pinned_config_dir(spec, Agent::Grok)?;
+        // Unlike the other two agents, an account Grok has never been run against cannot simply be
+        // created on first use: the per-session home only links what already exists in the source,
+        // so an empty one would have Grok write its login and conversation into the throw-away
+        // farm instead, discarded with the process — the exact silent failure a switch must not
+        // produce (see "Grok Build is the exception" in the topic README). Checked only for a
+        // *pinned* source home: the default's own (the shell's `GROK_HOME`, or `~/.grok`) is the
+        // user's existing setup, which this milestone has no business second-guessing.
+        if let Some(dir) = pinned {
+            require_initialized_grok_home(dir)?;
+        }
         let grok_home = build_grok_home(spec, pinned)?;
 
         let mut args = Vec::new();
@@ -128,6 +138,28 @@ impl AgentAdapter for GrokAdapter {
             ..LaunchPlan::default()
         })
     }
+}
+
+/// Refuses a pinned source home Grok has never been run against: it carries no `sessions/`
+/// directory for the per-session farm to link, so a conversation Grok writes during the session
+/// goes into the farm instead and is discarded with the process — the exact silent failure this
+/// check exists to prevent. Whether the home also holds a login (`auth.json`) says nothing either
+/// way: an API-key user's legitimate home has `sessions/` with no `auth.json`, and that is not
+/// Octoboard's business to check (see the topic README's "An agent is available when its binary
+/// resolves" decision).
+fn require_initialized_grok_home(dir: &Path) -> Result<()> {
+    if dir.join("sessions").is_dir() {
+        return Ok(());
+    }
+    Err(CodedError::raised(
+        error_code::GROK_HOME_NOT_INITIALIZED,
+        format!(
+            "`{}` is not a Grok home yet: run `grok` against it directly at least once so it has \
+             a session history, before pointing an account at it",
+            dir.display()
+        ),
+        &[("path", &dir.to_string_lossy())],
+    ))
 }
 
 /// Builds the session's `GROK_HOME` and returns its path.
@@ -331,14 +363,67 @@ mod tests {
     }
 
     #[test]
-    fn a_pinned_grok_home_that_has_gone_refuses_the_launch() {
+    fn a_pinned_grok_home_that_has_gone_refuses_resuming_a_conversation() {
         let mut fixture = spec_fixture();
         fixture.config_dir = Some(fixture.scratch.join("missing"));
-        let err = GrokAdapter.plan(&fixture.spec()).err().expect("refused");
+        let mut spec = fixture.spec();
+        spec.resume_agent_session_id = Some("agent-side-id");
+        let err = GrokAdapter.plan(&spec).err().expect("refused");
         let message = err.to_string();
         assert!(message.contains("Grok"), "{message}");
         assert!(message.contains("missing"), "{message}");
         assert!(!message.contains("  "), "stray spaces in: {message}");
+    }
+
+    /// Unlike Claude Code and Codex, a fresh Grok session pinned to a directory that does not exist
+    /// is refused too, not only a resumed one: Grok cannot safely create a home the way the other
+    /// two can, so there is no "let the agent create it" case for a missing pinned source home —
+    /// it fails `require_initialized_grok_home` instead of the generic vanished-directory check.
+    #[test]
+    fn a_pinned_grok_home_that_has_gone_refuses_a_fresh_launch_too() {
+        let mut fixture = spec_fixture();
+        fixture.config_dir = Some(fixture.scratch.join("missing"));
+        let err = GrokAdapter.plan(&fixture.spec()).err().expect("refused");
+        assert_eq!(
+            err.downcast_ref::<crate::protocol::CodedError>()
+                .expect("coded")
+                .code,
+            crate::protocol::error_code::GROK_HOME_NOT_INITIALIZED
+        );
+    }
+
+    /// A pinned directory that exists but Grok has never been run against carries no login and no
+    /// session history for the per-session farm to link, so it is refused rather than silently
+    /// handed to Grok, which would write a login and a conversation into the throw-away farm and
+    /// lose both.
+    #[test]
+    fn a_pinned_grok_home_that_was_never_initialized_refuses_the_launch() {
+        let mut fixture = spec_fixture();
+        let empty = fixture.scratch.join("never-run");
+        std::fs::create_dir_all(&empty).expect("empty directory");
+        fixture.config_dir = Some(empty.clone());
+        let err = GrokAdapter.plan(&fixture.spec()).err().expect("refused");
+        let message = err.to_string();
+        assert!(message.contains("never-run"), "{message}");
+        assert!(!message.contains("  "), "stray spaces in: {message}");
+    }
+
+    /// The default home is never held to the same requirement: it is the user's own existing
+    /// setup, not an account Octoboard is minting, so an uninitialized one is still left to Grok.
+    /// Unlike `with_default_home`, the home here is stripped to an empty directory — no
+    /// `sessions/`, no `auth.json` — so the check is actually exercised rather than skipped by
+    /// construction, and the test stays off the machine's real `~/.grok`: leaving `GROK_HOME`
+    /// unset would fall through to `default_grok_home`'s `home_dir().join(".grok")`, which this
+    /// test does not own and cannot assume either way about.
+    #[test]
+    fn the_default_home_is_not_checked_for_initialization() {
+        let mut fixture = spec_fixture();
+        let home = fixture.scratch.join("user-grok-home");
+        std::fs::create_dir_all(&home).expect("empty home directory");
+        fixture
+            .shell_env
+            .insert("GROK_HOME".to_string(), home.to_string_lossy().into_owned());
+        GrokAdapter.plan(&fixture.spec()).expect("not refused");
     }
 
     #[test]

@@ -286,14 +286,25 @@ mod tests {
     }
 
     #[test]
-    fn a_pinned_config_dir_that_has_gone_refuses_the_launch() {
+    fn a_pinned_config_dir_that_has_gone_refuses_resuming_a_conversation() {
         let mut fixture = spec_fixture();
         fixture.config_dir = Some(fixture.scratch.join("missing"));
-        let err = ClaudeAdapter.plan(&fixture.spec()).err().expect("refused");
+        let mut spec = fixture.spec();
+        spec.resume_agent_session_id = Some("agent-side-id");
+        let err = ClaudeAdapter.plan(&spec).err().expect("refused");
         let message = err.to_string();
         assert!(message.contains("Claude"), "{message}");
         assert!(message.contains("missing"), "{message}");
         assert!(!message.contains("  "), "stray spaces in: {message}");
+    }
+
+    /// A fresh session, and one that never had a turn (no `resume_agent_session_id`), launch into a
+    /// vanished pinned directory rather than being refused — that is what lets the agent create it.
+    #[test]
+    fn a_pinned_config_dir_that_has_gone_is_fine_with_no_conversation_to_resume() {
+        let mut fixture = spec_fixture();
+        fixture.config_dir = Some(fixture.scratch.join("missing"));
+        ClaudeAdapter.plan(&fixture.spec()).expect("not refused");
     }
 
     /// The trust state lives in the config file Claude Code will actually read, which moves into the

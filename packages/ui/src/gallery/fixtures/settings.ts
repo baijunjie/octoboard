@@ -31,7 +31,7 @@ export const settingsScenarios: Scenario[] = [
     id: "settings-git-auto-sync",
     group: GROUP,
     title: "Git, automatic sync on",
-    state: { ...state, settings: { auto_sync_repositories: true } },
+    state: { ...state, settings: { auto_sync_repositories: true, accounts: [] } },
     steps: [(ui) => ui.press(ui.t("titleBar.settings")), (ui) => ui.press(ui.t("settings.section.git"))],
   },
   {

@@ -11,8 +11,10 @@ describe("snapshotState", () => {
   it("defaults to an empty git statuses map and auto-sync off, and threads a given settings object through", () => {
     const empty = snapshotState({});
     expect(empty.gitStatuses).toEqual(new Map());
-    expect(empty.settings).toEqual({ auto_sync_repositories: false });
+    expect(empty.settings).toEqual({ auto_sync_repositories: false, accounts: [] });
 
-    expect(snapshotState({ settings: { auto_sync_repositories: true } }).settings).toEqual({ auto_sync_repositories: true });
+    expect(
+      snapshotState({ settings: { auto_sync_repositories: true, accounts: [] } }).settings,
+    ).toEqual({ auto_sync_repositories: true, accounts: [] });
   });
 });
