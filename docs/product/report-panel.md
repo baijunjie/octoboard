@@ -129,6 +129,12 @@ newest or the console session's process is not running. A failed submission chan
 message names which console session the submission was meant for, so that it cannot be
 read as being about whichever session the user happens to be looking at.
 
+A page still belongs to the console as a whole rather than to one console session, so with more
+than one live, a submission currently goes to the one with a process running, and the newest of
+those if several qualify — not necessarily the console session whose page the user is looking at.
+This is transitional: it is a consequence of the page record carrying only the console's id, and is
+resolved by giving a page the id of the console session it belongs to.
+
 ## Escape and F6 inside a page
 
 Pressing Escape while focus is inside a page also tells the window so, on a history page too. The

@@ -18,7 +18,7 @@ import { useRegionCycle } from "./layout/useRegionCycle";
 import { useAppExit } from "./lifecycle/useAppExit";
 import { useGitStatusSchedule } from "./lifecycle/useGitStatusSchedule";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
-import { ALREADY_RUNNING_CODES, isLive, type Console, type Project, type Session } from "./protocol";
+import { ALREADY_RUNNING_CODES, type Console, type Project, type Session } from "./protocol";
 import { ReportPanel } from "./report/ReportPanel";
 import { SettingsDialog } from "./settings/SettingsDialog";
 import { useSettingsDialog } from "./settings/useSettingsDialog";
@@ -134,47 +134,22 @@ export function App(): React.ReactElement {
   };
 
   /** Resumes a session; resolves to whether the daemon accepted it, so input held for a session
-   * that could not start is not replayed later (`TerminalController.armWake`). */
-  const resumeSession = async (sessionId: string): Promise<boolean> => {
-    const session = sessions.get(sessionId);
-    // The daemon refuses to resume a console session while its console has another live one
-    // (`console_session_reopen_blocked`), so check first and say what the user has to do instead of
-    // waiting for the refusal; the session itself stays selected, showing its last output.
-    const liveConsoleSessionExists =
-      session?.role === "console" &&
-      sessionList.some(
-        (other) =>
-          other.console_id === session.console_id &&
-          other.role === "console" &&
-          other.id !== session.id &&
-          isLive(other.status),
-      );
-    if (liveConsoleSessionExists) {
-      toastError(t("app.consoleSessionAlreadyLive"), sessionId);
-      return false;
-    }
-    // `console_session_reopen_blocked` (one of `ALREADY_RUNNING_CODES`) also reaches here should a
-    // race get past the check above — unlike the plain double-click this guard exists for,
-    // suppressing it would make the click look like it did nothing, so a console session resume lets
-    // the error through instead.
-    const suppressAlreadyRunning = session?.role !== "console";
-    return runOnce(
-      `resume:${sessionId}`,
-      async () => {
-        setResumingIds((ids) => new Set(ids).add(sessionId));
-        try {
-          await request({ type: "resume_session", session: sessionId });
-        } finally {
-          setResumingIds((ids) => {
-            const next = new Set(ids);
-            next.delete(sessionId);
-            return next;
-          });
-        }
-      },
-      suppressAlreadyRunning,
-    );
-  };
+   * that could not start is not replayed later (`TerminalController.armWake`). A console may now
+   * hold any number of live console sessions, so there is nothing to pre-emptively refuse here —
+   * selecting, resuming or reopening one simply works, whatever else is running in the console. */
+  const resumeSession = async (sessionId: string): Promise<boolean> =>
+    runOnce(`resume:${sessionId}`, async () => {
+      setResumingIds((ids) => new Set(ids).add(sessionId));
+      try {
+        await request({ type: "resume_session", session: sessionId });
+      } finally {
+        setResumingIds((ids) => {
+          const next = new Set(ids);
+          next.delete(sessionId);
+          return next;
+        });
+      }
+    });
 
   const openConsoleSession = (console_: Console) =>
     void runOnce(`console-session:${console_.id}`, async () => {

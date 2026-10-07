@@ -237,7 +237,7 @@ milestone 1 settles. Nothing it adds says "hub".
 ## Milestones
 
 1. 01 Terminology: console sessions and project sessions (closed)
-2. [The binding, and the end of the one-live rule](02-binding-data-model.md)
+2. 02 The binding, and the end of the one-live rule (closed)
 3. [The sidebar's console sessions](03-sidebar.md)
 4. [Accounts: storage and protocol](04-accounts-storage.md)
 5. [Agent availability and the default account](05-availability-and-the-default-account.md)
@@ -249,6 +249,7 @@ milestone 1 settles. Nothing it adds says "hub".
 11. [Archiving, reopening and deleting along the binding](11-archive-cascade.md)
 12. [Choosing a binding when a session is created](12-binding-selector.md)
 13. [The two focus modes](13-focus-modes.md)
+14. [Final confirmation](14-final-confirmation.md)
 
 [The relocation findings](agent-relocation-findings.md) are a reference rather than a milestone: they are already
 measured, and milestone 8 is what acts on them.

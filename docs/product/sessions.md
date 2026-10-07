@@ -12,15 +12,11 @@ own binary and shows it as it is. What it adds to each launch, and what it guara
 | Console session | the console's working directory | the console session row |
 | Project session | the project's directory | under that project |
 
-**A console has at most one console session whose process is running**, enforced by the daemon:
-opening a console session, or reopening an interrupted or archived one, while another console session
-of the console is running is refused, and the refusal names the running console session (shown by
-its title). The application does not send a request it knows will be refused: selecting an
-interrupted console session, typing into an archived console session's terminal, or pressing "Resume"
-or "Reopen" for either, while another console session of the same console is running leaves that
-console session selected, not running, and shows an error toast, titled with where the console session
-is, saying that the console already has a live console session, which has to be archived before this
-one is reopened.
+**A console may hold any number of console sessions running at once.** Opening, resuming or reopening
+one never checks what else is running in the console. (The sidebar still shows only one console
+session row per console, described next; a second live console session is still reachable, as an
+ordinary session row below it, until the sidebar is reworked to give each its own — see
+`docs/product/sidebar.md`.)
 
 **The console session row** holds the console's newest console session that is not archived, whether
 running or interrupted. Clicking it starts a new console session when the row is empty and selects the
@@ -34,13 +30,21 @@ holds a console session or the console has an archived console session, offers:
 - **Archive** — only while the row holds a console session. It asks for confirmation, then archives
   the console session as described in "Archiving, interruption and resuming" below.
 
-There is no Rename on the console session row; its label is always "Console session". The console
-session cannot archive itself (see "The console session's tools" in `docs/product/hub-orchestration.md`),
-so the user archives it from this menu. Archiving the console session moves it among the console's
-archived console sessions and leaves the console session row empty, so the next click on the row
-starts a fresh console session. That fresh console session is opened with the console's current
-console session agent and agent config directory, whereas resuming or reopening a console session
-keeps the ones it was opened with (see "Agent config directories" in `docs/product/consoles-and-projects.md`).
+A console session's title is renameable, like a project session's, and defaults to its ordinal
+("Hub 1", "Hub 2", …) — the same title the sidebar's extra console session rows (below) carry, with
+the ordinary session row's Rename entry. The one console session row described above is the
+exception: it carries no Rename, a stand-in until the sidebar is reworked to give every console
+session a row of its own (see `docs/product/sidebar.md`), at which point this row, and the gap it
+leaves in renaming, both go away.
+
+The console session cannot archive itself (see "The console session's tools" in
+`docs/product/hub-orchestration.md`), so the user archives it from this menu. Archiving the console
+session moves it among the console's archived console sessions; with another console session still
+live, the row falls back to showing that one instead, and the next click on the row selects it, as
+clicking any interrupted session does. Only once none remain does the next click start a fresh
+console session, opened with the console's current console session agent and agent config
+directory — whereas resuming or reopening a console session keeps the ones it was opened with (see
+"Agent config directories" in `docs/product/consoles-and-projects.md`).
 
 A console session carries no project; it runs in the console's working directory. It is given
 Octoboard's orchestration tools and dispatches work to sessions in the console's projects — see
@@ -63,11 +67,14 @@ in, pinning, focus mode, the archive view and how selecting a session works — 
 A session is opened under a project with:
 
 - **Agent** — defaulted as below, overridable for this session only.
-- **Title** (optional) — defaults to the project's name. A console session's title defaults to "Hub".
-- **Report to console session** (a checkbox, off by default) — makes this session report its results
-  to the console session instead of staying outside the orchestration. The choice is fixed
-  for the session's lifetime. A session the console session itself starts always reports to it; see
-  "Which sessions the console session drives" in `docs/product/hub-orchestration.md`.
+- **Title** (optional) — defaults to the project's name. A console session's title defaults to
+  "Hub `<ordinal>`", where the ordinal is one past the highest ever used in its console, so a title
+  is not reused after a console session is archived or deleted.
+- **Report to console session** (a checkbox, off by default) — binds this session to the console's
+  console session, so its reports go there instead of it staying outside the orchestration. The
+  binding is fixed for the session's lifetime once set. A session the console session itself starts
+  is always bound to it; see "Which sessions the console session drives" in
+  `docs/product/hub-orchestration.md`.
 
 The dialog takes no task: a session the user opens by hand starts in *awaiting instructions*, sitting at the agent's
 prompt, and is given its work by typing into its terminal. Only a session the console session starts is handed an

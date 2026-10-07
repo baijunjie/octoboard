@@ -269,7 +269,7 @@ pub async fn handle(
             agent,
             task,
             title,
-            include_in_hub,
+            bound_to,
         } => {
             let session = open_session(
                 state,
@@ -280,7 +280,7 @@ pub async fn handle(
                     task,
                     title,
                     origin: Origin::User,
-                    include_in_hub,
+                    bound_to,
                 },
             )
             .await?;
@@ -533,6 +533,31 @@ pub async fn add_project(
     Ok(added)
 }
 
+/// What a new session should be bound to: always `None` for a console session, which is never
+/// bound; for a project session, whatever `requested` names, which must be a console session of
+/// `console_id` or the request is refused with `unknown_session` — a binding is fixed for the
+/// session's lifetime once set, so naming one that does not exist, or belongs to another console,
+/// must not be let through to be discovered later.
+fn resolve_bound_to(
+    state: &Arc<AppState>,
+    console_id: &str,
+    role: Role,
+    requested: Option<String>,
+) -> Result<Option<String>> {
+    if role == Role::Console {
+        return Ok(None);
+    }
+    let Some(target_id) = requested else {
+        return Ok(None);
+    };
+    let target = state
+        .store
+        .get_session(&target_id)?
+        .filter(|target| target.console_id == console_id && target.role == Role::Console)
+        .ok_or_else(|| CodedError::unknown_session(&target_id))?;
+    Ok(Some(target.id))
+}
+
 /// One session to open. A struct rather than a parameter list because the two callers differ in
 /// more than one field — the user opening a session by hand, and the console session dispatching
 /// one — and the fields that differ are all optional strings that would otherwise be positional.
@@ -543,7 +568,9 @@ pub struct OpenRequest {
     pub task: Option<String>,
     pub title: Option<String>,
     pub origin: Origin,
-    pub include_in_hub: bool,
+    /// The console session this (project) session should report to, or `None` for one outside the
+    /// orchestration. Ignored when a console session itself is being opened, which is never bound.
+    pub bound_to: Option<String>,
 }
 
 pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result<Session> {
@@ -554,16 +581,13 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         task,
         title,
         origin,
-        include_in_hub,
+        bound_to,
     } = request;
     let console = state
         .store
         .get_console(&console_id)?
         .ok_or_else(|| CodedError::unknown_console(&console_id))?;
 
-    // Held for the rest of this function where a console session is involved, so the one-live-
-    // console-session check and the insert that follows it cannot interleave with another open.
-    let _console_session_claim;
     let (role, cwd, project, default_title) = match &project_id {
         Some(project_id) => {
             let project = state
@@ -572,39 +596,23 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
                 .ok_or_else(|| CodedError::unknown_project(project_id))?;
             let cwd = PathBuf::from(&project.path);
             let title = project.name.clone();
-            _console_session_claim = None;
             (Role::Project, cwd, Some(project), title)
         }
         None => {
-            // One live console session per console. Reports route to the console's console session
-            // by lookup, and the menu has one console session row, so a second live console session
-            // would be both unreachable and able to swallow reports meant for the first. The UI
-            // guards against it too, but the rule belongs here: the application is only a client.
-            // The claim is what makes the check mean anything — every request runs in its own task,
-            // so reading the store and then inserting would otherwise let two concurrent opens both
-            // through.
-            _console_session_claim = Some(state.claim_console_session(&console_id)?);
-            if let Some(existing) = state.store.list_sessions()?.into_iter().find(|session| {
-                session.console_id == console_id
-                    && session.role == Role::Console
-                    && !session.status.is_dormant()
-            }) {
-                return Err(CodedError::raised(
-                    error_code::CONSOLE_SESSION_ALREADY_RUNNING,
-                    format!(
-                        "this console already has a console session ({})",
-                        existing.id
-                    ),
-                    &[("session", &existing.id)],
-                ));
-            }
             let workdir = PathBuf::from(&console.workdir);
             // Refreshed right before the console session launches, so the file it reads is the one
-            // for the agent this console currently uses whatever happened to it since.
+            // for the agent this console currently uses whatever happened to it since. A console
+            // may now hold any number of live console sessions, so nothing here checks for one
+            // already running — see "The one-live-console-session rule is deleted" in
+            // `docs/plans/20261008-console-sessions-and-agent-accounts/02-binding-data-model.md`.
             mcp::role::write_console_session_instructions(&console)?;
-            (Role::Console, workdir, None, "Hub".to_string())
+            // Overwritten by `Store::insert_console_session` below, which decides the real default
+            // ("Hub <ordinal>") once it knows the ordinal; nothing here reads this value.
+            (Role::Console, workdir, None, String::new())
         }
     };
+
+    let bound_to = resolve_bound_to(state, &console_id, role, bound_to)?;
 
     // Agent selection, in descending priority: what this launch asked for, the project's default,
     // then the console's. A console session uses the console's console session agent instead.
@@ -623,7 +631,7 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         host_id: LOCAL_HOST_ID.to_string(),
         role,
         origin,
-        title: title.unwrap_or(default_title),
+        title: title.clone().unwrap_or_else(|| default_title.clone()),
         // A session opened without a task is sitting at its prompt, not working. This also
         // matters for Codex specifically: its `SessionStart` hook does not fire until the first
         // prompt submission, so an optimistic `working` here would stay until the user typed.
@@ -636,13 +644,21 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         // Taken from the console now and kept: a resume must find the transcript where the first
         // launch put it, whatever the console's setting says by then.
         config_dir: session_config_dir(agent, &console),
-        // A console session is the recipient of reports, never a sender of them.
-        include_in_hub: role == Role::Project && (origin == Origin::Console || include_in_hub),
+        bound_to,
+        // Assigned by `insert_console_session` below for a console session; a project session
+        // carries no colour or ordinal of its own.
+        colour: None,
+        ordinal: None,
         pinned: false,
         started_at: now_millis(),
         ended_at: None,
     };
-    state.store.insert_session(&session)?;
+    let session = if role == Role::Console {
+        state.store.insert_console_session(session, title)?
+    } else {
+        state.store.insert_session(&session)?;
+        session
+    };
     let claim = state.begin_launch(&session.id)?;
 
     match start_process(state, claim, &session, &cwd, task.as_deref(), None).await {
@@ -685,30 +701,6 @@ pub async fn resume_session(
             &[("session", id)],
         ));
     }
-
-    // Same claim as `open_session`: reading the store and then relaunching is two steps.
-    let _console_session_claim = if session.role == Role::Console {
-        let claim = state.claim_console_session(&session.console_id)?;
-        if let Some(existing) = state.store.list_sessions()?.into_iter().find(|other| {
-            other.console_id == session.console_id
-                && other.role == Role::Console
-                && other.id != session.id
-                && !other.status.is_dormant()
-        }) {
-            return Err(CodedError::raised(
-                error_code::CONSOLE_SESSION_REOPEN_BLOCKED,
-                format!(
-                    "this console already has a console session ({}); archive it before reopening \
-                     this one",
-                    existing.id
-                ),
-                &[("session", &existing.id)],
-            ));
-        }
-        Some(claim)
-    } else {
-        None
-    };
 
     let previous_status = session.status;
     let cwd = session_cwd(state, &session)?;
@@ -884,14 +876,13 @@ async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Val
             &[],
         ));
     }
-    let console_session =
-        reporting::console_session_of(state, &page.console_id)?.ok_or_else(|| {
-            CodedError::raised(
-                error_code::CONSOLE_SESSION_MISSING,
-                "this console has no console session, so there is nobody to submit to",
-                &[],
-            )
-        })?;
+    let console_session = newest_console_session(state, &page.console_id)?.ok_or_else(|| {
+        CodedError::raised(
+            error_code::CONSOLE_SESSION_MISSING,
+            "this console has no console session, so there is nobody to submit to",
+            &[],
+        )
+    })?;
 
     let message = reporting::render_page_submission(&page.id, &data);
     let owned_state = state.clone();
@@ -907,6 +898,25 @@ async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Val
     })
     .await??;
     Ok(())
+}
+
+/// One console session to address a report-panel submission to, preferring one with a process
+/// behind it: a console may now hold several, but a page still belongs to the console as a whole
+/// rather than to one of them (the report panel is not scoped to a console session until milestone
+/// 9 of `docs/plans/20261008-console-sessions-and-agent-accounts/`, which is also what removes this
+/// guess in favour of a page simply carrying its own console session's id).
+///
+/// TODO(docs/plans/20261008-console-sessions-and-agent-accounts/09-report-panel-scope.md): remove
+/// this once a page carries the id of the console session it belongs to.
+fn newest_console_session(state: &Arc<AppState>, console_id: &str) -> Result<Option<Session>> {
+    let mut candidates: Vec<Session> = state
+        .store
+        .list_sessions()?
+        .into_iter()
+        .filter(|session| session.console_id == console_id && session.role == Role::Console)
+        .collect();
+    candidates.sort_by_key(|session| (session.status.is_dormant(), -session.started_at));
+    Ok(candidates.into_iter().next())
 }
 
 /// The directory a new session is pinned to: the console's setting for the session's own agent.
@@ -1190,7 +1200,9 @@ mod tests {
                     title: id.to_string(),
                     status,
                     has_conversation: false,
-                    include_in_hub: false,
+                    bound_to: None,
+                    colour: None,
+                    ordinal: None,
                     config_dir: None,
                     pinned: false,
                     started_at: 0,
@@ -1300,7 +1312,9 @@ mod tests {
                 title: "Project".to_string(),
                 status: SessionStatus::Archived,
                 has_conversation: false,
-                include_in_hub: false,
+                bound_to: None,
+                colour: None,
+                ordinal: None,
                 config_dir: None,
                 pinned: false,
                 started_at: 0,
@@ -1382,5 +1396,147 @@ mod tests {
         let err = absolute_path("work/project").expect_err("relative");
         assert!(err.to_string().contains("not an absolute path"), "{err}");
         assert!(absolute_path("").is_err());
+    }
+
+    fn bare_session(id: &str, role: Role) -> Session {
+        Session {
+            id: id.to_string(),
+            agent: Agent::Claude,
+            agent_session_id: None,
+            console_id: "console-1".to_string(),
+            project_id: None,
+            host_id: LOCAL_HOST_ID.to_string(),
+            role,
+            origin: Origin::User,
+            title: "Session".to_string(),
+            status: SessionStatus::Idle,
+            has_conversation: false,
+            bound_to: None,
+            colour: None,
+            ordinal: None,
+            config_dir: None,
+            pinned: false,
+            started_at: 0,
+            ended_at: None,
+        }
+    }
+
+    /// A console session is never bound, whatever the request named — `resolve_bound_to` does not
+    /// even look at `requested` for one.
+    #[test]
+    fn a_console_session_is_never_bound() {
+        let state = Arc::new(crate::state::tests::app_state("resolve-bound-to-console"));
+        let bound = resolve_bound_to(&state, "console-1", Role::Console, Some("anything".into()))
+            .expect("resolved");
+        assert_eq!(bound, None);
+    }
+
+    /// With nothing named, a project session opens unbound — the ordinary case for one the user
+    /// starts by hand without checking a box.
+    #[test]
+    fn a_project_session_named_nothing_to_bind_to_opens_unbound() {
+        let state = Arc::new(crate::state::tests::app_state("resolve-bound-to-none"));
+        let bound = resolve_bound_to(&state, "console-1", Role::Project, None).expect("resolved");
+        assert_eq!(bound, None);
+    }
+
+    /// Naming a real console session of the same console is honoured.
+    #[test]
+    fn a_project_session_binds_to_the_console_session_it_names() {
+        let state = Arc::new(crate::state::tests::app_state("resolve-bound-to-valid"));
+        state
+            .store
+            .insert_console(&console(Agent::Claude, Path::new("/tmp/unused")))
+            .unwrap();
+        state
+            .store
+            .insert_session(&bare_session("console-session-1", Role::Console))
+            .unwrap();
+
+        let bound = resolve_bound_to(
+            &state,
+            "console-1",
+            Role::Project,
+            Some("console-session-1".to_string()),
+        )
+        .expect("resolved");
+        assert_eq!(bound, Some("console-session-1".to_string()));
+    }
+
+    /// A binding is fixed for the session's lifetime once set, so naming one that turns out not to
+    /// exist, to belong to another console, or to be a project session rather than a console
+    /// session must be refused outright rather than silently dropped or discovered later.
+    #[test]
+    fn binding_to_an_invalid_target_is_refused() {
+        let state = Arc::new(crate::state::tests::app_state("resolve-bound-to-invalid"));
+        state
+            .store
+            .insert_console(&console(Agent::Claude, Path::new("/tmp/unused")))
+            .unwrap();
+        let mut other_console = console(Agent::Claude, Path::new("/tmp/unused"));
+        other_console.id = "console-2".to_string();
+        state.store.insert_console(&other_console).unwrap();
+
+        let mut elsewhere = bare_session("console-session-elsewhere", Role::Console);
+        elsewhere.console_id = "console-2".to_string();
+        state.store.insert_session(&elsewhere).unwrap();
+        state
+            .store
+            .insert_session(&bare_session("project-session-1", Role::Project))
+            .unwrap();
+
+        // (requested target, why it is not a valid binding)
+        let cases = [
+            ("does-not-exist", "no such session at all"),
+            (
+                "console-session-elsewhere",
+                "a console session of another console",
+            ),
+            ("project-session-1", "not a console session at all"),
+        ];
+        for (target, why) in cases {
+            let err =
+                resolve_bound_to(&state, "console-1", Role::Project, Some(target.to_string()))
+                    .expect_err(why);
+            let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+            assert_eq!(coded.code, error_code::UNKNOWN_SESSION, "{why}");
+        }
+    }
+
+    /// Two console sessions of the same console coexist on record and both come back from
+    /// `list_sessions` — the storage layer that `Store::insert_console_session` and listing sit on
+    /// never treated a second one as a conflict (that refusal lived in `open_session`, not here).
+    ///
+    /// This does not cover the actual removal of the one-live-console-session rule: that refusal
+    /// used to sit in `open_session`, ahead of launching the agent process, and exercising its
+    /// absence means actually launching a second agent for the same console, which needs a real
+    /// agent binary and is impractical to do here. Nothing in this test suite currently covers that
+    /// seam; `open_session`'s own refusal path is gone and read rather than tested at the daemon
+    /// level.
+    #[test]
+    fn a_consoles_several_console_sessions_both_come_back_from_listing() {
+        let state = Arc::new(crate::state::tests::app_state("several-console-sessions"));
+        state
+            .store
+            .insert_console(&console(Agent::Claude, Path::new("/tmp/unused")))
+            .unwrap();
+        let first = state
+            .store
+            .insert_console_session(bare_session("session-0", Role::Console), None)
+            .expect("first console session");
+        let second = state
+            .store
+            .insert_console_session(bare_session("session-1", Role::Console), None)
+            .expect("second console session");
+
+        let live_console_sessions: Vec<String> = state
+            .store
+            .list_sessions()
+            .unwrap()
+            .into_iter()
+            .filter(|s| s.role == Role::Console && !s.status.is_dormant())
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(live_console_sessions, [first.id, second.id]);
     }
 }

@@ -807,11 +807,9 @@ fn wait_for(timeout: Duration, mut done: impl FnMut() -> bool) -> bool {
 mod tests {
     use std::path::{Path, PathBuf};
 
-    use portable_pty::{native_pty_system, CommandBuilder, PtySize};
-
     use super::*;
     use crate::protocol::{Console, Origin, ProjectSource, SessionStatus};
-    use crate::session::{spawn_reader_thread, NewSession};
+    use crate::session::spawn_reader_thread;
     use crate::store::{Store, LOCAL_HOST_ID};
 
     // What Claude Code 2.1.289 actually printed, captured from a real PTY in a directory it had
@@ -1042,7 +1040,9 @@ mod tests {
             title: "Session".to_string(),
             status: SessionStatus::Idle,
             has_conversation: false,
-            include_in_hub: false,
+            bound_to: None,
+            colour: None,
+            ordinal: None,
             config_dir: None,
             pinned: false,
             started_at: 0,
@@ -1087,31 +1087,14 @@ mod tests {
     /// A stand-in for Claude Code on a real PTY: prints what the script says to and records every
     /// byte it is sent, so a test sees exactly what reached the terminal.
     fn fake_claude(id: &str, agent: Agent, script: &str) -> Arc<LiveSession> {
-        let pty = native_pty_system()
-            .openpty(PtySize {
-                rows: 32,
-                cols: 120,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .expect("a PTY");
-        let mut cmd = CommandBuilder::new("/bin/sh");
         // Raw first, so the fixtures reach the terminal as captured and the keys are read as sent.
-        cmd.args(["-c", &format!("stty raw -echo; {script}")]);
-        let child = pty.slave.spawn_command(cmd).expect("the stand-in");
-        let pid = child.process_id().expect("a pid");
-        let fd = pty.master.as_raw_fd().expect("a descriptor");
-        crate::ptyio::set_nonblocking(fd).expect("non-blocking");
-        let live = Arc::new(LiveSession::new(NewSession {
-            id: id.to_string(),
+        let live = crate::state::tests::fake_live_session(
+            id,
             agent,
-            pid,
-            fd,
-            master: pty.master,
-            child,
-            scratch_dir: None,
-            resolves_approvals_itself: false,
-        }));
+            120,
+            32,
+            &format!("stty raw -echo; {script}"),
+        );
         spawn_reader_thread(live.clone(), 8 * 1024);
         live
     }

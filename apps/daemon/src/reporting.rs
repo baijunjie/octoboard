@@ -16,10 +16,10 @@
 
 use std::sync::Arc;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 
 use crate::outbox::Drain;
-use crate::protocol::{error_code, Agent, CodedError, Role, Session, SessionStatus};
+use crate::protocol::{error_code, Agent, CodedError, Session, SessionStatus};
 use crate::state::AppState;
 use crate::{coordinator, hooks, term};
 
@@ -199,12 +199,9 @@ pub fn deliver_report(
     report: Report<'_>,
 ) -> Result<String> {
     let session = state.session_record(session_id)?;
-    if !session.include_in_hub {
-        bail!(
-            "this session is not part of the console session's orchestration, so there is nobody \
-             to report to"
-        );
-    }
+    let Some(bound_to) = &session.bound_to else {
+        bail!("this session is unbound, so there is nobody to report to");
+    };
     // A session that reported `done` is archived by the time a second report could arrive, and its
     // process is on its way out. Refusing is what keeps that race from delivering the same round of
     // work to the console session twice.
@@ -212,9 +209,13 @@ pub fn deliver_report(
         bail!("this session has already been wrapped up; there is nothing further to report");
     }
 
-    let console_session = console_session_of(state, &session.console_id)?.ok_or_else(|| {
-        anyhow!("this console has no console session, so there is nobody to report to")
-    })?;
+    // The binding names the console session directly, so this is a plain lookup by id rather than
+    // a search for "the" console session of the console — a console may now hold any number of
+    // them, each with its own sessions.
+    let console_session = state
+        .store
+        .get_session(bound_to)?
+        .ok_or_else(|| anyhow::anyhow!("this session's console session is no longer on record"))?;
 
     let project = match &session.project_id {
         Some(id) => state.store.get_project(id)?.map(|project| project.name),
@@ -253,9 +254,9 @@ pub fn deliver_report(
 /// **Blocks** on writing into the console session.
 pub fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::TurnEnd) {
     match state.store.get_session(session_id) {
-        Ok(Some(session)) if session.include_in_hub => {}
-        // A session outside the orchestration has nobody to report to, and a record that is gone is
-        // nothing to report about.
+        Ok(Some(session)) if session.bound_to.is_some() => {}
+        // An unbound session has nobody to report to, and a record that is gone is nothing to
+        // report about.
         _ => return,
     }
 
@@ -277,22 +278,6 @@ pub fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::T
     if let Err(err) = deliver_report(state, session_id, report) {
         tracing::debug!(session = %session_id, %err, "delivering a synthesised report failed");
     }
-}
-
-/// The console's console session, preferring one with a process behind it. A console has at most
-/// one console session that is not archived, but an older archived one may still be on record.
-pub(crate) fn console_session_of(
-    state: &Arc<AppState>,
-    console_id: &str,
-) -> Result<Option<Session>> {
-    let mut candidates: Vec<Session> = state
-        .store
-        .list_sessions()?
-        .into_iter()
-        .filter(|session| session.console_id == console_id && session.role == Role::Console)
-        .collect();
-    candidates.sort_by_key(|session| (session.status.is_dormant(), -session.started_at));
-    Ok(candidates.into_iter().next())
 }
 
 /// The report as it is written into the console session. Plain prose with the structured fields
@@ -378,8 +363,10 @@ pub fn title_from_goal(goal: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::*;
-    use crate::protocol::{Origin, SessionStatus};
+    use crate::protocol::{Origin, Role, SessionStatus};
 
     fn project_session(title: &str) -> Session {
         Session {
@@ -394,7 +381,9 @@ mod tests {
             title: title.to_string(),
             status: SessionStatus::Idle,
             has_conversation: true,
-            include_in_hub: true,
+            bound_to: Some("console-session-1".to_string()),
+            colour: None,
+            ordinal: None,
             config_dir: None,
             pinned: false,
             started_at: 0,
@@ -545,6 +534,161 @@ mod tests {
         );
         assert_eq!(ReportStatus::parse("Done"), None);
         assert_eq!(ReportStatus::parse("finished"), None);
+    }
+
+    fn done_report() -> Report<'static> {
+        Report {
+            summary: "all good",
+            status: ReportStatus::Done,
+            open_items: &[],
+            synthesised: false,
+        }
+    }
+
+    /// A session's `console_id` is a foreign key, so every test below needs this on record first.
+    fn console() -> crate::protocol::Console {
+        crate::protocol::Console {
+            id: "console-1".to_string(),
+            name: "Console".to_string(),
+            workdir: "/tmp/console-1".to_string(),
+            console_session_agent: Agent::Claude,
+            default_agent: Agent::Claude,
+            claude_config_dir: None,
+            codex_config_dir: None,
+            grok_config_dir: None,
+            icon: None,
+            created_at: 0,
+        }
+    }
+
+    /// Reporting fails, and leaves the session exactly as it was, when the reporting session is
+    /// unbound — there is nobody its binding names to report to.
+    #[test]
+    fn reporting_fails_for_an_unbound_session() {
+        let state = Arc::new(crate::state::tests::app_state("report-unbound"));
+        state.store.insert_console(&console()).unwrap();
+        let mut unbound = project_session("worker");
+        unbound.bound_to = None;
+        state.store.insert_session(&unbound).unwrap();
+
+        let err = deliver_report(&state, &unbound.id, done_report()).expect_err("unbound");
+        assert!(err.to_string().contains("unbound"), "{err}");
+        // Left exactly as it was: still idle, not archived by a report that never went anywhere.
+        assert_eq!(
+            state
+                .store
+                .get_session(&unbound.id)
+                .unwrap()
+                .unwrap()
+                .status,
+            SessionStatus::Idle
+        );
+    }
+
+    /// Reporting fails when the session's own binding names a console session that is no longer
+    /// on record — deleted along with its console, say.
+    #[test]
+    fn reporting_fails_when_the_bound_console_session_is_gone() {
+        let state = Arc::new(crate::state::tests::app_state("report-owner-gone"));
+        state.store.insert_console(&console()).unwrap();
+        let mut orphaned = project_session("worker");
+        orphaned.bound_to = Some("no-such-session".to_string());
+        state.store.insert_session(&orphaned).unwrap();
+
+        let err = deliver_report(&state, &orphaned.id, done_report()).expect_err("owner gone");
+        assert!(err.to_string().contains("no longer on record"), "{err}");
+    }
+
+    /// Reporting fails for a session that has already been wrapped up: a `done` report with no
+    /// open items archives the session, and a second report from the same turn must not be
+    /// delivered again.
+    #[test]
+    fn reporting_fails_for_a_session_already_wrapped_up() {
+        let state = Arc::new(crate::state::tests::app_state("report-wrapped-up"));
+        state.store.insert_console(&console()).unwrap();
+        let mut done = project_session("worker");
+        done.status = SessionStatus::Archived;
+        state.store.insert_session(&done).unwrap();
+
+        let err = deliver_report(&state, &done.id, done_report()).expect_err("already archived");
+        assert!(err.to_string().contains("wrapped up"), "{err}");
+    }
+
+    /// A stand-in live session with no real agent behind it — enough for `write_message` to have
+    /// something to write into and read back from.
+    fn fake_live(id: &str) -> Arc<crate::session::LiveSession> {
+        crate::state::tests::fake_live_session(id, Agent::Claude, 80, 24, "sleep 30")
+    }
+
+    /// A project session bound to one console session has its report delivered to that one, and
+    /// not to another live console session in the same console — the completion criterion in
+    /// "Technical design" of `docs/plans/20261008-console-sessions-and-agent-accounts/02-binding-data-model.md`.
+    #[test]
+    fn a_report_reaches_only_the_console_session_it_is_bound_to() {
+        let state = Arc::new(crate::state::tests::app_state("report-routes-by-binding"));
+        state.store.insert_console(&console()).unwrap();
+
+        let owner = |id: &str| Session {
+            id: id.to_string(),
+            agent: Agent::Claude,
+            agent_session_id: None,
+            console_id: "console-1".to_string(),
+            project_id: None,
+            host_id: "local".to_string(),
+            role: Role::Console,
+            origin: Origin::User,
+            title: id.to_string(),
+            status: SessionStatus::Idle,
+            has_conversation: false,
+            bound_to: None,
+            colour: None,
+            ordinal: None,
+            config_dir: None,
+            pinned: false,
+            started_at: 0,
+            ended_at: None,
+        };
+        state.store.insert_session(&owner("owner-a")).unwrap();
+        state.store.insert_session(&owner("owner-b")).unwrap();
+        let live_a = fake_live("owner-a");
+        let live_b = fake_live("owner-b");
+        state.register_live(live_a.clone());
+        state.register_live(live_b.clone());
+        // What actually fills each session's output ring buffer from its PTY — `register_live`
+        // alone does not start that pump, see `term::launch`.
+        crate::session::spawn_reader_thread(live_a.clone(), 8 * 1024);
+        crate::session::spawn_reader_thread(live_b.clone(), 8 * 1024);
+
+        let mut worker = project_session("worker");
+        worker.bound_to = Some("owner-a".to_string());
+        state.store.insert_session(&worker).unwrap();
+
+        deliver_report(&state, &worker.id, done_report()).expect("delivered");
+
+        let wait_for_output = |live: &crate::session::LiveSession| -> Vec<u8> {
+            let deadline = std::time::Instant::now() + Duration::from_millis(500);
+            loop {
+                let output = live.recent_output(8 * 1024);
+                if !output.is_empty() || std::time::Instant::now() >= deadline {
+                    return output;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        };
+        let a_output = String::from_utf8_lossy(&wait_for_output(&live_a)).into_owned();
+        assert!(
+            a_output.contains(&worker.id),
+            "owner-a should see the report: {a_output}"
+        );
+        // Read once, right after owner-a's report has landed, rather than waiting out the full
+        // deadline again: the pump has had exactly as long to deliver to owner-b as it had to
+        // deliver to owner-a, so an empty read here already distinguishes "nothing was delivered"
+        // from "the pump produced nothing yet" — waiting longer would not change which is true.
+        let b_output = String::from_utf8_lossy(&live_b.recent_output(8 * 1024)).into_owned();
+        assert!(
+            !b_output.contains(&worker.id),
+            "owner-b must not see a report bound to owner-a: {b_output}"
+        );
     }
 
     /// Several sessions in one project have to be told apart in the menu, and the goal is the only

@@ -50,8 +50,8 @@ the request id as if it were a record id.
 | `update_project` | `project`, `name?`, `default_agent?`, `pinned?`, `tags?` | An absent `default_agent` leaves it alone; an explicit `null` clears it, so the project inherits the console's default again. An absent `pinned` leaves the pin alone. An absent `tags` leaves the tags alone; a present array, even an empty one, replaces them wholesale; an explicit `null` is the same as absent |
 | `delete_project` | `project`, `stop_sessions?` | Removes the association and the project's session records, archived ones included; never touches the directory. Refused with `project_has_running_sessions` while the project has live sessions, unless `stop_sessions` (absent means false) is true: the running ones are then ended first, exactly as `archive_session` ends one, and the project goes with them. A session being launched or resumed at that moment is not stoppable, so it refuses either way |
 | `list_dir` | `path` | Answered with `dir_listing` on the asking socket |
-| `open_session` | `console_id`, `project_id?`, `agent?`, `task?`, `title?`, `include_in_hub?` | Omit `project_id` for the console session; a console has at most one that is not archived, so a second is refused with `console_session_already_running` (`console_session_already_starting` while one is still being launched). `agent` follows the priority in the "Which agent a session uses" section of `docs/product/sessions.md` when omitted. `include_in_hub` defaults to false: a session the user opens by hand stays outside the console session's orchestration and sends it no reports unless this is set |
-| `resume_session` | `session` | Relaunches an `interrupted` or `archived` session through the agent's own resume mechanism, re-injecting everything. Reopening an archived console session while the console's console session is already running is refused with `console_session_reopen_blocked` (`console_session_already_starting` while a console session is being launched) |
+| `open_session` | `console_id`, `project_id?`, `agent?`, `task?`, `title?`, `bound_to?` | Omit `project_id` for a console session; a console may hold any number of them at once. `agent` follows the priority in the "Which agent a session uses" section of `docs/product/sessions.md` when omitted. `bound_to` names the console session this (project) session should report to; absent means none. Ignored for a console session, which is never bound. A `bound_to` that does not name a console session of `console_id` is refused with `unknown_session` |
+| `resume_session` | `session` | Relaunches an `interrupted` or `archived` session through the agent's own resume mechanism, re-injecting everything |
 | `archive_session` | `session` | Ends the process and archives the session |
 | `delete_session` | `session` | Removes Octoboard's record of one archived session and broadcasts `session_deleted`. Refused with `session_not_archived` unless the session is archived. An archived session whose process is still ending can be deleted; one being resumed right now cannot. Only Octoboard's own record goes: the agent's transcript and the project's directory are never touched |
 | `delete_archived_sessions` | `console`, `project?` | With `project` (which must belong to `console`), deletes every archived session of that project; without it, every archived console session of the console. Broadcasts `session_deleted` for each. A session that stopped being archived meanwhile (a resume got there first) is skipped, not an error |
@@ -102,11 +102,8 @@ with the text as its `detail`.
 
 A client also branches on some codes, instead of only showing them:
 
-- `session_already_running`, `session_already_starting`, `console_session_already_running`,
-  `console_session_reopen_blocked` and `console_session_already_starting` all mean a launch was refused because the
-  session or the console's console session is already running or being started. A client's own double click produces
-  them and is not worth showing; a refused second console session is, so a client branches on what it asked for
-  rather than on the code alone.
+- `session_already_running` and `session_already_starting` both mean a launch was refused because the session is
+  already running or being started. A client's own double click produces them and is not worth showing.
 - `trust_directory_too_broad`, `trust_path_not_absolute` and `trust_home_unknown` all mean no parent directory can be
   offered to trust: nothing was answered and the dialog stays open.
 - `claude_trust_not_waiting` means nothing is wrong: the screen is no longer waiting, and a client shows nothing.
@@ -137,10 +134,7 @@ A client also branches on some codes, instead of only showing them:
 | `icon_too_large` | `limit_kib` | A console's icon is longer than the limit, 256 KiB |
 | `session_already_running` | `session` | The session is running already, or is not interrupted or archived |
 | `session_already_starting` | `session` | The session is being started already |
-| `console_session_already_running` | `session` | The console has a live console session (`session`) |
-| `console_session_reopen_blocked` | `session` | The console has another live console session (`session`), which has to be archived first |
-| `console_session_already_starting` | `console` | The console's console session is being started already |
-| `console_session_missing` | — | The console has no console session to submit to |
+| `console_session_missing` | — | The console has no console session to submit a report-panel form to |
 | `session_not_archived` | `session` | Only an archived session can be deleted (also: one being resumed right now cannot) |
 | `session_not_running` | `session` | A message or a go-ahead for a session with no running process |
 | `session_waiting_for_user` | `session` | The session waits at a prompt only the user can answer, so a message is refused |
@@ -190,7 +184,8 @@ Project { id, console_id, host_id, name, path, default_agent?, source, remote_ur
 Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
           role: "console"|"project", origin: "console"|"user", title,
           status: "working"|"waiting_user"|"idle"|"interrupted"|"archived",
-          has_conversation, include_in_hub, config_dir?, pinned, started_at, ended_at? }
+          has_conversation, bound_to?, colour?: "olive"|"jade"|"teal"|"azure"|"violet"|"rose", ordinal?,
+          config_dir?, pinned, started_at, ended_at? }
 Page    { id, console_id, html, anchor_message_id?, created_at }
 Settings  { auto_sync_repositories }
 GitStatus { project, repository, branch?, detached, upstream?, ahead, behind,
@@ -206,6 +201,15 @@ it is (for Grok, the source falls back to the shell's `GROK_HOME`). For Claude C
 global config from `<dir>/.claude.json` whenever the variable is set and from `~/.claude.json` otherwise.
 `Console.icon` is the console's custom avatar, a `data:image/...` URL of at most 256 KiB (the UI sends a 128x128
 WebP or PNG); unset means the default glyph.
+`Session.bound_to` is the id of the console session this session reports to, or unset outside the orchestration. Set
+when the session is created and never changed afterwards; always unset for a console session itself, which is never
+bound. `report` and the synthesised report both deliver to this session; see "Reporting" in
+`docs/product/hub-orchestration.md`.
+`Session.colour` is a console session's badge colour, one of a fixed palette — `olive`, `jade`, `teal`, `azure`,
+`violet`, `rose` — assigned on creation and fixed afterwards; unset for a project session. `Session.ordinal` is a
+console session's place in its console's history —
+one past the highest ever used there — which gives it its default title ("Hub `<ordinal>`"); unset for a project
+session. See "Key design decisions" in `docs/plans/20261008-console-sessions-and-agent-accounts/README.md`.
 `Session.config_dir` is the directory of that session's own agent that it was started with, copied from its console
 when the session is opened and never changed afterwards: each agent keeps a conversation's transcript inside it, so
 `resume_session` relaunches with this value and not the console's current one. It is unset for sessions started with no

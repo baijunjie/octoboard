@@ -193,8 +193,16 @@ Entities: console, host, project, session, report, report-panel page, and the tr
 
 - `Session.id` is Octoboard's own and `agent_session_id` the agent's. They are separate because some agents cannot
   pre-allocate an id.
-- `Session.include_in_hub` says whether a session reports to its console session. It is always set for a
-  console-session-started session, and fixed for the session's lifetime.
+- `Session.bound_to` is the id of the console session a session reports to, or unset. It is always set to the
+  starting console session for a console-session-started session, and fixed for the session's lifetime; a console
+  session itself is never bound. Reports are routed by this field rather than by a lookup for "the" console session
+  of a console, because a console may hold several at once (see
+  `docs/plans/20261008-console-sessions-and-agent-accounts/02-binding-data-model.md`).
+- `Session.colour` and `Session.ordinal` are set only for a console session: a badge colour from a fixed palette,
+  assigned on creation and never reused while still in use among the console's other console sessions, and a
+  per-console ordinal that is one past the highest ever handed out there — kept on the console record itself
+  (`consoles.next_console_session_ordinal`) so deleting the console session that held the highest ordinal does not
+  let a later one reuse it.
 - `Project.path` is stored absolute and lexically normalized (a relative path is refused), because trusted-folder
   entries are compared with it component by component.
 - A console holds an optional config directory per agent, and `Session.config_dir` is the one of the session's own

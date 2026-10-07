@@ -60,6 +60,27 @@ export function archivedSessions(sessions: Session[]): Session[] {
     .sort((a, b) => (b.ended_at ?? b.started_at) - (a.ended_at ?? a.started_at));
 }
 
+/** A console's live console sessions (not archived), newest first. Several may exist at once; the
+ * sidebar's console session row shows only the first until milestone 3 of
+ * `docs/plans/20261008-console-sessions-and-agent-accounts/` gives each its own row, and the rest
+ * are its `extraConsoleSessions`. */
+export function liveConsoleSessions(sessions: Session[], consoleId: string): Session[] {
+  return sessions
+    .filter((s) => s.console_id === consoleId && s.role === "console" && s.status !== "archived")
+    .sort((a, b) => b.started_at - a.started_at);
+}
+
+/** The console session shown in a console's console session row: the newest of `liveConsoleSessions`,
+ * or `undefined` with none. This is also what the session dialog's "report to console session" box
+ * binds to, as a stand-in for a real choice until milestone 12 of that plan replaces the box with
+ * one.
+ *
+ * TODO(docs/plans/20261008-console-sessions-and-agent-accounts/12-binding-selector.md): once the
+ * dialog offers a real choice of console session, this is no longer what it binds to by default. */
+export function newestConsoleSession(sessions: Session[], consoleId: string): Session | undefined {
+  return liveConsoleSessions(sessions, consoleId)[0];
+}
+
 /** What a console in the switcher or a project row shows: the most pressing activity among its sessions. */
 export type Activity = "waiting" | "working" | "running" | undefined;
 

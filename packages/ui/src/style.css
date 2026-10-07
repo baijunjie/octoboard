@@ -35,6 +35,40 @@
      runs along an edge that ends there, ends this far above the window bottom rather than at it,
      so the banner's Retry stays reachable whatever is open. */
   --bottom-chrome-height: var(--connection-banner-height, 0px);
+
+  /* The console session colour palette (`ConsoleSessionColour` in `protocol.ts`), light variant:
+     one token per entry, assigned to a console session on creation (see "Key design decisions" in
+     `docs/plans/20261008-console-sessions-and-agent-accounts/README.md`) and not yet drawn by any
+     component — the badge itself is milestone 3's. The six hues are spaced as far as they fall from
+     HeroUI's own `--accent`, `--success`, `--warning` and `--danger` (253.83°, 150.81°, 72.33° and
+     25.74° respectively), so a console session's badge never echoes a status colour's meaning by
+     coincidence. One lightness for the whole palette, picked against the badge's 3:1 bar for a
+     non-text graphic (WCAG 1.4.11) on the two surfaces a row sits on, `--background` (L 0.9702) and
+     `--default` (L 0.94): measured 4.05 / 3.70 olive, 3.93 / 3.59 jade, 3.55 / 3.24 teal,
+     3.58 / 3.28 azure, 4.40 / 4.03 violet, 4.55 / 4.16 rose. Teal and azure are the floor, which is
+     what fixes the lightness; a lighter palette puts them under the bar. */
+  --console-session-olive: oklch(0.57 0.15 98);
+  --console-session-jade: oklch(0.57 0.15 125);
+  --console-session-teal: oklch(0.57 0.15 185);
+  --console-session-azure: oklch(0.57 0.17 220);
+  --console-session-violet: oklch(0.57 0.17 298);
+  --console-session-rose: oklch(0.57 0.19 342);
+}
+
+/* The same palette, dark variant: lighter than the light theme's so each still shows up against
+   the near-black `--background` dark resolves to, the way HeroUI's own `--warning` and `--danger`
+   are each given their own brighter dark-theme value rather than reusing the light one. Measured
+   against dark's `--background` (L 0.12) and `--default` (L 0.274), the same two surfaces: every
+   entry is between 10.81 / 7.93 (azure, the lightest against both) and 9.21 / 6.76 (rose, the
+   darkest), so the whole palette clears the 3:1 bar with room to spare. */
+.dark,
+[data-theme="dark"] {
+  --console-session-olive: oklch(0.78 0.14 98);
+  --console-session-jade: oklch(0.78 0.14 125);
+  --console-session-teal: oklch(0.78 0.14 185);
+  --console-session-azure: oklch(0.78 0.16 220);
+  --console-session-violet: oklch(0.78 0.16 298);
+  --console-session-rose: oklch(0.78 0.18 342);
 }
 
 /* HeroUI's toast region sits 1rem above the window bottom; lifted by the bottom chrome, it floats

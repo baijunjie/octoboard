@@ -106,6 +106,7 @@ export function RequestedDialog({
         <SessionDialog
           console={dialog.console}
           project={dialog.project}
+          sessions={Array.from(sessions.values())}
           onClose={onClose}
           onOpened={onSessionOpened}
         />

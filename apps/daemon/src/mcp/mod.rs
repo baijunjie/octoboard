@@ -66,8 +66,10 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "list_projects",
         description: "List this console's projects: name, host, directory, and the sessions \
-                      currently running in each. A session with `include_in_hub: false` is one the \
-                      user opened themselves and kept outside the orchestration — leave it alone.",
+                      currently running in each. A session with `include_in_hub: false` is not \
+                      this caller's to drive — the user opened it themselves and kept it outside \
+                      the orchestration, or it reports to a different console session — leave it \
+                      alone.",
         schema: || object_schema(json!({}), &[]),
     },
     ToolDef {
@@ -166,7 +168,9 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
         name: "get_session",
         description: "The session's status, plus a tail of what it has printed. Use it to follow \
                       up; a session that is waiting for the user must be left alone until they \
-                      have answered, and so must one with `include_in_hub: false`.",
+                      have answered, and so must one with `include_in_hub: false` — it is not \
+                      this caller's to drive, whether the user kept it outside the orchestration \
+                      or it reports to a different console session.",
         schema: || {
             object_schema(
                 json!({

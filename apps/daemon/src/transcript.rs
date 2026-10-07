@@ -302,11 +302,9 @@ pub fn watch_for_rejection(state: &Arc<AppState>, session_id: &str, transcript_p
 mod tests {
     use std::io::Write;
 
-    use portable_pty::{native_pty_system, CommandBuilder, PtySize};
-
     use super::*;
     use crate::protocol::{Agent, Console, Origin, Role, Session};
-    use crate::session::{LiveSession, NewSession};
+    use crate::session::LiveSession;
     use crate::store::Store;
 
     /// A real rejection record, trimmed to the two lines that carry the markers, captured from a
@@ -549,7 +547,9 @@ mod tests {
             title: "Session".to_string(),
             status: SessionStatus::WaitingUser,
             has_conversation: true,
-            include_in_hub: false,
+            bound_to: None,
+            colour: None,
+            ordinal: None,
             config_dir: None,
             pinned: false,
             started_at: 0,
@@ -560,30 +560,7 @@ mod tests {
     /// A stand-in live session with no real agent behind it — just something that stays alive on a
     /// PTY until dropped, which is all `watch_for_rejection` ever asks of `AppState::live_session`.
     fn fake_live(id: &str) -> Arc<LiveSession> {
-        let pty = native_pty_system()
-            .openpty(PtySize {
-                rows: 24,
-                cols: 80,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .expect("a PTY");
-        let mut cmd = CommandBuilder::new("/bin/sh");
-        cmd.args(["-c", "sleep 30"]);
-        let child = pty.slave.spawn_command(cmd).expect("the stand-in");
-        let pid = child.process_id().expect("a pid");
-        let fd = pty.master.as_raw_fd().expect("a descriptor");
-        crate::ptyio::set_nonblocking(fd).expect("non-blocking");
-        Arc::new(LiveSession::new(NewSession {
-            id: id.to_string(),
-            agent: Agent::Claude,
-            pid,
-            fd,
-            master: pty.master,
-            child,
-            scratch_dir: None,
-            resolves_approvals_itself: false,
-        }))
+        crate::state::tests::fake_live_session(id, Agent::Claude, 80, 24, "sleep 30")
     }
 
     /// Starting a second watch for the same session must retire the first: entering `WaitingUser`

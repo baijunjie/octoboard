@@ -50,6 +50,36 @@ pub enum Origin {
     User,
 }
 
+/// A console session's badge colour, assigned once on creation from this fixed palette and never
+/// changed afterwards (see `Session.colour`). The daemon only ever hands the label around; each
+/// variant's light and dark CSS values live in the UI's own colour system
+/// (`packages/ui/src/style.css`), not here — "Reusable capabilities" in
+/// `docs/plans/20261008-console-sessions-and-agent-accounts/02-binding-data-model.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConsoleSessionColour {
+    Olive,
+    Jade,
+    Teal,
+    Azure,
+    Violet,
+    Rose,
+}
+
+impl ConsoleSessionColour {
+    /// The palette, in assignment order. A new console session takes the first entry not already
+    /// in use among its console's other non-archived console sessions, wrapping back to the start
+    /// only once every entry is taken — see `Store::insert_console_session`.
+    pub const PALETTE: [ConsoleSessionColour; 6] = [
+        ConsoleSessionColour::Olive,
+        ConsoleSessionColour::Jade,
+        ConsoleSessionColour::Teal,
+        ConsoleSessionColour::Azure,
+        ConsoleSessionColour::Violet,
+        ConsoleSessionColour::Rose,
+    ];
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionStatus {
@@ -155,10 +185,21 @@ pub struct Session {
     /// found", and a session the user opened and never typed into is the common case of that. A
     /// resume therefore starts a fresh conversation rather than failing.
     pub has_conversation: bool,
-    /// Whether this session's reports go to its console session. Always true for a session the
-    /// console session started; a session the user opened by hand is outside the orchestration
-    /// unless they asked for it to be included.
-    pub include_in_hub: bool,
+    /// The console session this session is bound to, or `None` for one outside the orchestration.
+    /// Set when the session is created and never changed afterwards (see "Technical design" in
+    /// `docs/plans/20261008-console-sessions-and-agent-accounts/02-binding-data-model.md`); a
+    /// console session is never bound, so this is always `None` for one of those. Reports are
+    /// routed by this field (`crate::reporting::deliver_report`), which replaced the
+    /// `include_in_hub` membership flag: a binding names who to report to directly, rather than
+    /// asking whether the console happens to have one console session to find by lookup.
+    pub bound_to: Option<String>,
+    /// A console session's badge colour, assigned on creation and fixed afterwards (see
+    /// `ConsoleSessionColour`). `None` for a project session, which carries no colour of its own.
+    pub colour: Option<ConsoleSessionColour>,
+    /// A console session's place in its console's history — one past the highest ordinal ever
+    /// used there, so a title is never reused after a console session is archived or deleted — and
+    /// what gives it its default title ("Hub `<ordinal>`"). `None` for a project session.
+    pub ordinal: Option<i64>,
     /// The configuration directory of this session's own agent that it was started with, fixed at
     /// creation: the console's setting for that agent at the time. An agent keeps a conversation's
     /// transcript under that directory, so a resume finds it only when relaunched with the same one
@@ -330,11 +371,12 @@ pub enum RequestBody {
         agent: Option<Agent>,
         task: Option<String>,
         title: Option<String>,
-        /// Whether the session reports to its console session. Absent is false: a session the user
-        /// opens by hand stays outside the orchestration unless they check "Report to console
-        /// session".
+        /// The console session this (project) session should report to. Absent means none: a
+        /// session the user opens by hand stays outside the orchestration unless they choose one.
+        /// Ignored for the console session itself, which is never bound. Must name a console
+        /// session of `console_id`, or the request is refused with `unknown_session`.
         #[serde(default)]
-        include_in_hub: bool,
+        bound_to: Option<String>,
     },
     ResumeSession {
         session: String,
@@ -668,18 +710,10 @@ pub mod error_code {
     // -- what a client acts on, rather than just shows ---------------------------------------
 
     /// A launch was asked for while one was already running or already starting for that session.
-    /// The client's own double click is the ordinary cause, so it is shown as nothing at all. The
-    /// console session variants below mean the same for a console session.
+    /// The client's own double click is the ordinary cause, so it is shown as nothing at all.
     pub const SESSION_ALREADY_RUNNING: &str = "session_already_running";
     /// [`SESSION_ALREADY_RUNNING`], where the launch had begun but not yet registered.
     pub const SESSION_ALREADY_STARTING: &str = "session_already_starting";
-    /// [`SESSION_ALREADY_RUNNING`], for opening a console session while the console has a live one.
-    pub const CONSOLE_SESSION_ALREADY_RUNNING: &str = "console_session_already_running";
-    /// [`SESSION_ALREADY_RUNNING`], for reopening a console session while the console has another
-    /// live one.
-    pub const CONSOLE_SESSION_REOPEN_BLOCKED: &str = "console_session_reopen_blocked";
-    /// [`SESSION_ALREADY_RUNNING`], for a console whose console session is already being started.
-    pub const CONSOLE_SESSION_ALREADY_STARTING: &str = "console_session_already_starting";
     /// A directory to trust as a whole cannot be offered: it is the filesystem root, the user's home
     /// directory or one that contains it. Nothing was answered. The dialog the request came from
     /// stays open, because the user can still choose another way to answer, and so it does for the

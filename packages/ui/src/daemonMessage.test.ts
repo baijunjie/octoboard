@@ -11,9 +11,7 @@ const records = {
 };
 
 it("words a known code from the catalog, showing a record by its name and an unknown record by its id", () => {
-  expect(daemonMessage("en", "console_session_already_running", { session: "s1" }, "x", records)).toBe(
-    "This console already has a console session (Hub).",
-  );
+  expect(daemonMessage("en", "unknown_session", { session: "s1" }, "x", records)).toBe("Unknown session Hub.");
   expect(daemonMessage("en", "unknown_project", { project: "p9" }, "x", records)).toBe("Unknown project p9.");
   expect(daemonMessage("en", "path_not_found", { path: "/a/b" }, "x", records)).toBe("“/a/b” does not exist.");
 });

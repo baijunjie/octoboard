@@ -11,6 +11,12 @@ export type SessionStatus = "working" | "waiting_user" | "idle" | "interrupted" 
 export type HostKind = "local" | "ssh";
 export type ProjectSource = "local" | "parent" | "github";
 
+/** A console session's badge colour (`Session.colour`), assigned once on creation from this fixed
+ * palette and never changed afterwards. Each entry's light and dark CSS values live in the UI's
+ * own colour system (`style.css`), not here — see "Reusable capabilities" in
+ * `docs/plans/20261008-console-sessions-and-agent-accounts/02-binding-data-model.md`. */
+export type ConsoleSessionColour = "olive" | "jade" | "teal" | "azure" | "violet" | "rose";
+
 /** Statuses meaning the session has a running process. The complement of `DORMANT_STATUSES`. */
 export const LIVE_STATUSES: ReadonlySet<SessionStatus> = new Set(["working", "waiting_user", "idle"]);
 
@@ -87,9 +93,18 @@ export interface Session {
   title: string;
   status: SessionStatus;
   has_conversation: boolean;
-  /** Whether this session's reports go to its console session. Always true for a console-session-
-   * started session; for one the user opened by hand, only when they asked for it. */
-  include_in_hub: boolean;
+  /** The console session this session is bound to, or absent for one outside the orchestration.
+   * Set when the session is created and never changed afterwards; a console session is never
+   * bound, so this is always absent for one of those. Reports are routed by this field, which
+   * replaced the `include_in_hub` membership flag. */
+  bound_to?: string | null;
+  /** A console session's badge colour, assigned on creation and fixed afterwards. Absent for a
+   * project session, which carries no colour of its own. */
+  colour?: ConsoleSessionColour | null;
+  /** A console session's place in its console's history — one past the highest ordinal ever used
+   * there, so a title is never reused after a console session is archived or deleted — and what
+   * gives it its default title ("Hub `<ordinal>`"). Absent for a project session. */
+  ordinal?: number | null;
   /** The config directory of this session's own agent that it was started with, fixed at creation
    * so a resume finds its transcript even after the console's setting changes. */
   config_dir?: string | null;
@@ -215,9 +230,10 @@ export type RequestBody =
       agent?: Agent;
       task?: string;
       title?: string;
-      /** Defaults to false: a session opened by hand stays outside the console session's
-       * orchestration and sends it no reports unless this is set. */
-      include_in_hub?: boolean;
+      /** The console session this (project) session should report to. Absent means none: a
+       * session the user opens by hand stays outside the orchestration unless they choose one.
+       * Ignored for the console session itself, which is never bound. */
+      bound_to?: string;
     }
   | { type: "resume_session"; session: string }
   | { type: "archive_session"; session: string }
@@ -322,16 +338,9 @@ export type Event =
  * ids, which `daemonMessage` shows as the record's name; the rest is text to show as is. */
 export type MessageParams = Record<string, string>;
 
-/** Codes meaning a launch was refused because the session, or the console's console session, is
- * already running or being started. A double click produces them and is not worth showing; a
- * refused second console session is. */
-export const ALREADY_RUNNING_CODES: readonly string[] = [
-  "session_already_running",
-  "session_already_starting",
-  "console_session_already_running",
-  "console_session_reopen_blocked",
-  "console_session_already_starting",
-];
+/** Codes meaning a launch was refused because the session was already running or already being
+ * started. A double click produces them and is not worth showing. */
+export const ALREADY_RUNNING_CODES: readonly string[] = ["session_already_running", "session_already_starting"];
 
 /** Codes meaning no parent directory can be offered to trust: nothing was answered, and the dialog
  * stays open. */

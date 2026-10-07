@@ -11,11 +11,13 @@ session gets one tool back the other way. **Which tools a session sees follows f
 so a project session cannot start or archive sessions, and the console session cannot report to
 itself.
 
-## One live console session per console
+## Several console sessions per console
 
-A console runs at most one console session at a time. The rule, how a console session is archived to
-make room for a fresh one, and where archived console sessions are listed are in "Console sessions and
-project sessions" in `docs/product/sessions.md`.
+A console may run any number of console sessions at once, each with its own sessions reporting to it
+(see "Reporting" below): a session reports to the console session that is named in its own binding,
+not to "the" console session of its console. How a console session is archived, and where archived
+console sessions are listed, are in "Console sessions and project sessions" in
+`docs/product/sessions.md`.
 
 ## The console session's tools
 
@@ -85,15 +87,16 @@ A project session reports a round of work with `report`:
 | `status` | yes | One of `done`, `failed`, `needs_decision`. No other value is accepted. |
 | `open_items` | no | Strings naming what is left unfinished. Empty when nothing is. |
 
-The report is written into the console session as a user message naming the reporting
-session's id, its title and project, the status, the open items, and then the summary. The reporting
-session is told either that it was delivered or that it was accepted and will reach the console
-session as soon as the console session can take a message.
+The report is written into the console session the reporting session is **bound to** — the one named
+by its own binding, not "the" console session of its console, since a console may hold several — as
+a user message naming the reporting session's id, its title and project, the status, the open items,
+and then the summary. The reporting session is told either that it was delivered or that it was
+accepted and will reach its console session as soon as that console session can take a message.
 
 Reporting fails, and leaves the session exactly as it was, when:
 
-- the session is outside the console session's orchestration, so there is nobody to report to;
-- the console has no console session on record;
+- the session is unbound, so there is nobody to report to;
+- the console session it is bound to is no longer on record;
 - the session has already been wrapped up — a session archived by its own `done` report cannot
   report a second time.
 
@@ -125,10 +128,11 @@ instructions, for the console session to continue with `send_message` or to arch
 
 ## Which sessions the console session drives
 
-A session the console session started always reports to it. A session **the user opens by hand does
-not**, unless they check "Report to console session" in the session dialog; the box is unchecked by
-default and the choice is fixed for that session's lifetime. Every session record the console session
-reads carries that flag, and a session outside the orchestration is the user's — the console session
+A session the console session started is always bound to it, so it always reports to it. A session
+**the user opens by hand is not**, unless they check "Report to console session" in the session
+dialog; the box is unchecked by default and the binding is fixed for that session's lifetime once
+set. Every session record the console session reads carries its binding, and a session that is
+unbound, or bound to a different console session, is not this one's to drive — the console session
 is told to leave it alone.
 
 A console session itself never reports anywhere.

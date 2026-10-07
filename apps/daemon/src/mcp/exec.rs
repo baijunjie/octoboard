@@ -70,7 +70,7 @@ fn list_projects(state: &Arc<AppState>, console_session: &Session) -> Result<Val
                     session.project_id.as_deref() == Some(&project.id)
                         && !session.status.is_dormant()
                 })
-                .map(describe_session)
+                .map(|session| describe_session(session, console_session))
                 .collect();
             json!({
                 "project": project.id,
@@ -159,7 +159,8 @@ async fn start_session(
             // would otherwise all carry the project's name and be indistinguishable in the menu.
             title: Some(reporting::title_from_goal(goal)),
             origin: Origin::Console,
-            include_in_hub: true,
+            // A session the console session starts always reports to it.
+            bound_to: Some(console_session.id.clone()),
         },
     )
     .await?;
@@ -214,7 +215,7 @@ fn get_session(
     let output = state
         .live_session(&target.id)
         .map(|live| readable_output(&live.recent_output(OUTPUT_TAIL)));
-    let mut description = describe_session(&target);
+    let mut description = describe_session(&target, console_session);
     description["recent_output"] = json!(output);
     if target.status == SessionStatus::WaitingUser {
         description["note"] = json!(
@@ -258,7 +259,7 @@ fn list_archived(
             session.project_id.as_deref() == Some(&project.id)
                 && session.status == SessionStatus::Archived
         })
-        .map(describe_session)
+        .map(|session| describe_session(session, console_session))
         .collect();
     Ok(json!({ "sessions": sessions }))
 }
@@ -434,16 +435,22 @@ fn resolve_session(
     Ok(session)
 }
 
-fn describe_session(session: &Session) -> Value {
+/// `caller` is the console session asking — what `include_in_hub` reports is relative to it, not
+/// an absolute fact about `session`: a console may now hold several console sessions, and a
+/// session bound to a different one reads the same as an unbound one here. Telling the two apart
+/// by naming the actual owner is the tool surface's to widen, not this milestone's — see
+/// `docs/plans/20261008-console-sessions-and-agent-accounts/10-tool-surface.md`.
+fn describe_session(session: &Session, caller: &Session) -> Value {
     json!({
         "session": session.id,
         "title": session.title,
         "agent": session.agent,
         "status": session.status,
         "project": session.project_id,
-        // Whether this session reports to the console session. A session the user opened by hand
-        // and kept out of the orchestration is theirs, not the console session's to drive.
-        "include_in_hub": session.include_in_hub,
+        // Whether this session reports to the console session asking. A session the user opened
+        // by hand and kept out of the orchestration, or bound to some other console session, is
+        // not this caller's to drive.
+        "include_in_hub": session.bound_to.as_deref() == Some(caller.id.as_str()),
         "started_at": session.started_at,
         "ended_at": session.ended_at,
     })

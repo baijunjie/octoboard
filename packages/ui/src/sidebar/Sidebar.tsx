@@ -41,7 +41,15 @@ import { FocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
 import { type FilterUpdate, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterTag, ProjectFilterTags } from "./ProjectFilter";
 import { archiveSubmenu, projectMenu, sessionMenu } from "./menus";
-import { archivedSessions, consoleActivity, isInactiveProject, liveSessions, sortProjects, type Activity } from "./order";
+import {
+  archivedSessions,
+  consoleActivity,
+  isInactiveProject,
+  liveConsoleSessions,
+  liveSessions,
+  sortProjects,
+  type Activity,
+} from "./order";
 import { RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
 import type { SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
@@ -499,15 +507,16 @@ function ConsoleSessionRows({
   selectedSessionId?: string;
 }): React.ReactElement {
   const t = useT();
-  // The daemon refuses to create or resume a second live console session, so there should only
-  // ever be one — but the sidebar stays total regardless: sorting by `started_at` and keeping only
-  // the newest in the console session row means a second one (were it ever to exist) still gets a
-  // row, as an ordinary session, rather than disappearing.
-  const liveConsoleSessions = sessions
-    .filter((s) => s.role === "console" && s.status !== "archived")
-    .sort((a, b) => b.started_at - a.started_at);
-  const consoleSession = liveConsoleSessions[0];
-  const extraConsoleSessions = liveConsoleSessions.slice(1);
+  // A console may now hold any number of console sessions at once (the one-live rule is gone —
+  // see `docs/plans/20261008-console-sessions-and-agent-accounts/02-binding-data-model.md`), but
+  // this row still shows only the newest: keeping only the first of `liveConsoleSessions` means
+  // every other one still gets a row of its own, as an ordinary session, rather than disappearing.
+  //
+  // TODO(docs/plans/20261008-console-sessions-and-agent-accounts/03-sidebar.md): give each console
+  // session its own row instead of folding every one past the newest into `extraConsoleSessions`.
+  const liveOnes = liveConsoleSessions(sessions, thisConsole.id);
+  const consoleSession = liveOnes[0];
+  const extraConsoleSessions = liveOnes.slice(1);
   const archivedConsoleSessions = archivedSessions(sessions.filter((s) => s.role === "console"));
   const activateConsoleSession = () =>
     consoleSession ? handlers.onSelectSession(consoleSession) : handlers.onOpenConsoleSession(thisConsole);

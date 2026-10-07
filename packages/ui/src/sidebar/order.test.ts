@@ -14,7 +14,7 @@ const session = (id: string, status: SessionStatus, started_at: number, pinned =
   title: id,
   status,
   has_conversation: false,
-  include_in_hub: false,
+  bound_to: undefined,
   started_at,
   pinned,
 });

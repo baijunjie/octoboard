@@ -158,7 +158,7 @@ function SessionCard({
         <span className="truncate">{AGENT_LABEL[session.agent]}</span>
         <span aria-hidden="true">·</span>
         <span className="shrink-0">{formatRelativeTime(language, session.started_at)}</span>
-        {session.include_in_hub && (
+        {session.bound_to !== undefined && session.bound_to !== null && (
           <>
             <span aria-hidden="true">·</span>
             <Radio aria-hidden="true" className="size-3 shrink-0" />

@@ -3,7 +3,8 @@ import React, { useState } from "react";
 
 import { AGENT_ICON_OPTIONS } from "../components/AgentIcon";
 import { useT } from "../i18n/react";
-import type { Agent, Console, Project } from "../protocol";
+import type { Agent, Console, Project, Session } from "../protocol";
+import { newestConsoleSession } from "../sidebar/order";
 import { useDaemon } from "../store";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
 import { OptionSelect } from "./OptionSelect";
@@ -17,15 +18,27 @@ import { TextInput } from "./TextInput";
  * `open_session` answers with `session_opened`, which names the session it started — the broadcast
  * that puts it in the tree carries no request id, so this reply is the only way to tell which of
  * the sessions appearing there is ours to select.
+ *
+ * The checkbox below still offers only a yes/no choice, binding to the console's console session
+ * row (`newestConsoleSession`) when checked — a stand-in for choosing among several, which
+ * milestone 12 of `docs/plans/20261008-console-sessions-and-agent-accounts/` replaces this with.
+ * The binding is immutable once the session opens, so with nothing to bind to the checkbox is
+ * disabled rather than left to send an unbound session silently: `newestConsoleSession` is
+ * `undefined` until a console session is live, and there is no way back from that choice.
+ *
+ * TODO(docs/plans/20261008-console-sessions-and-agent-accounts/12-binding-selector.md): replace
+ * the checkbox with a real choice of console session.
  */
 export function SessionDialog({
   console: parentConsole,
   project,
+  sessions,
   onClose,
   onOpened,
 }: {
   console: Console;
   project: Project;
+  sessions: Session[];
   onClose: () => void;
   onOpened: (sessionId: string) => void;
 }): React.ReactElement {
@@ -36,15 +49,20 @@ export function SessionDialog({
   const [reportToConsoleSession, setReportToConsoleSession] = useState(false);
   const { error, busy, run } = useDialogAction();
 
+  // Nothing to bind to until a console session is live; `boundTo` would silently fall back to
+  // unbound, and the binding cannot be changed afterwards, so the checkbox must not be checkable.
+  const consoleSession = newestConsoleSession(sessions, parentConsole.id);
+
   const submit = () =>
     void run(async () => {
+      const boundTo = reportToConsoleSession ? consoleSession?.id : undefined;
       const reply = await request({
         type: "open_session",
         console_id: parentConsole.id,
         project_id: project.id,
         agent,
         title: title || undefined,
-        include_in_hub: reportToConsoleSession || undefined,
+        bound_to: boundTo,
       });
       if (reply.type === "session_opened") onOpened(reply.session.id);
       onClose();
@@ -62,7 +80,12 @@ export function SessionDialog({
       <TextInput label={t("dialog.session.titleOptional")} value={title} onChange={setTitle} />
       {/* HeroUI's variant for a control on a surface (the dialog), whose unselected box the default
           variant would leave to blend into it. */}
-      <Checkbox variant="secondary" isSelected={reportToConsoleSession} onChange={setReportToConsoleSession}>
+      <Checkbox
+        variant="secondary"
+        isSelected={reportToConsoleSession}
+        onChange={setReportToConsoleSession}
+        isDisabled={consoleSession === undefined}
+      >
         {/* `Checkbox.Content` is the pressable part, so the box goes inside it with the label;
             the description is the field's, a sibling of it. */}
         <Checkbox.Content>
@@ -71,7 +94,13 @@ export function SessionDialog({
           </Checkbox.Control>
           <Label>{t("dialog.session.reportToConsoleSession")}</Label>
         </Checkbox.Content>
-        <Description>{t("dialog.session.reportToConsoleSessionDescription")}</Description>
+        <Description>
+          {t(
+            consoleSession === undefined
+              ? "dialog.session.reportToConsoleSessionUnavailable"
+              : "dialog.session.reportToConsoleSessionDescription",
+          )}
+        </Description>
       </Checkbox>
       <DialogError message={error} />
     </Dialog>

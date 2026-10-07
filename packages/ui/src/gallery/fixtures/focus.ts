@@ -16,13 +16,22 @@ export const focusScenarios: Scenario[] = [
       consoles: [console_],
       projects: [project, other],
       sessions: [
-        sessionOf("s-console", console_.id, undefined, "Hub", "idle"),
-        sessionOf("s-1", console_.id, project.id, "Add idempotency keys", "working", { pinned: true }),
-        sessionOf("s-2", console_.id, project.id, "Fix the rounding of partial results", "waiting_user"),
-        sessionOf("s-3", console_.id, project.id, "Write the migration", "idle", { include_in_hub: false }),
-        sessionOf("s-4", console_.id, project.id, "Older investigation", "archived", { ended_at: minutesAgo(60 * 5) }),
-        sessionOf("s-5", console_.id, project.id, "Last week's spike", "archived", { ended_at: minutesAgo(60 * 24 * 6) }),
-        sessionOf("s-6", console_.id, other.id, "Unrelated work", "working"),
+        sessionOf("s-console", console_.id, undefined, "Hub 1", "idle"),
+        sessionOf("s-1", console_.id, project.id, "Add idempotency keys", "working", { pinned: true, bound_to: "s-console" }),
+        sessionOf("s-2", console_.id, project.id, "Fix the rounding of partial results", "waiting_user", {
+          bound_to: "s-console",
+        }),
+        // Not bound to the console session — the contrast case, left as the builder's default.
+        sessionOf("s-3", console_.id, project.id, "Write the migration", "idle"),
+        sessionOf("s-4", console_.id, project.id, "Older investigation", "archived", {
+          ended_at: minutesAgo(60 * 5),
+          bound_to: "s-console",
+        }),
+        sessionOf("s-5", console_.id, project.id, "Last week's spike", "archived", {
+          ended_at: minutesAgo(60 * 24 * 6),
+          bound_to: "s-console",
+        }),
+        sessionOf("s-6", console_.id, other.id, "Unrelated work", "working", { bound_to: "s-console" }),
       ],
     }),
     steps: [(ui) => ui.press(ui.session("Add idempotency keys"))],

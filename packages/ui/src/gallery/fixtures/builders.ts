@@ -56,7 +56,6 @@ export function sessionOf(
     title,
     status,
     has_conversation: true,
-    include_in_hub: true,
     pinned: false,
     started_at: minutesAgo(90),
     ...(status === "archived" ? { ended_at: minutesAgo(30) } : {}),

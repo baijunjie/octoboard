@@ -1,6 +1,6 @@
 //! The daemon's shared state: the session records and their status transitions, the live sessions
-//! and the claims that keep two launches of one thing from racing, the per-session MCP tokens, the
-//! turn bookkeeping a synthesised report rests on, a facade over the write queue in
+//! and the claim that keeps two launches of the same session from racing, the per-session MCP
+//! tokens, the turn bookkeeping a synthesised report rests on, a facade over the write queue in
 //! `crate::outbox`, and each project's live git status together with the claim that keeps two
 //! checks of one project from racing and the timestamp that keeps them from piling up across
 //! several clients.
@@ -42,10 +42,6 @@ pub struct AppState {
     /// correlating turn ids. Entries are added on a turn start and removed when the session's
     /// process goes away.
     turns: Mutex<HashMap<String, TurnState>>,
-    /// The consoles a console session is being opened or reopened for. Checking the store and
-    /// then inserting is two steps, and every request runs in its own task, so without a claim two
-    /// concurrent opens both pass the one-live-console-session check.
-    console_session_claims: Mutex<HashSet<String>>,
     /// The generation each session's transcript watch (`crate::transcript`) is currently on.
     /// Starting a watch records a fresh value here; the watch keeps polling only while its own
     /// value is still the one recorded, which is what lets a newer watch for the same session
@@ -121,7 +117,6 @@ impl AppState {
             live: RwLock::new(LiveSessions::default()),
             mcp_tokens: RwLock::new(HashMap::new()),
             turns: Mutex::new(HashMap::new()),
-            console_session_claims: Mutex::new(HashSet::new()),
             transcript_watch_generations: Mutex::new(HashMap::new()),
             next_transcript_watch_generation: std::sync::atomic::AtomicU64::new(0),
             outbox: Outbox::default(),
@@ -488,37 +483,6 @@ impl AppState {
         }
     }
 
-    /// Claims the right to open or reopen this console's console session. Released when the
-    /// returned guard is dropped.
-    pub fn claim_console_session(
-        self: &Arc<Self>,
-        console_id: &str,
-    ) -> Result<ConsoleSessionClaim> {
-        if !self
-            .console_session_claims
-            .lock()
-            .expect("console session claim lock poisoned")
-            .insert(console_id.to_string())
-        {
-            return Err(CodedError::raised(
-                error_code::CONSOLE_SESSION_ALREADY_STARTING,
-                "this console's console session is already being started",
-                &[("console", console_id)],
-            ));
-        }
-        Ok(ConsoleSessionClaim {
-            state: self.clone(),
-            console_id: console_id.to_string(),
-        })
-    }
-
-    fn release_console_session_claim(&self, console_id: &str) {
-        self.console_session_claims
-            .lock()
-            .expect("console session claim lock poisoned")
-            .remove(console_id);
-    }
-
     // -- the write queue -----------------------------------------------------
 
     /// Accepts a message for a session, to be written as soon as it can take one. Queued rather
@@ -805,20 +769,6 @@ struct LiveSessions {
     launching: HashSet<String>,
 }
 
-/// The right to open or reopen one console's console session, released on drop. A console has at
-/// most one live console session, and the check for that reads the store before inserting — two
-/// steps that this keeps from interleaving.
-pub struct ConsoleSessionClaim {
-    state: Arc<AppState>,
-    console_id: String,
-}
-
-impl Drop for ConsoleSessionClaim {
-    fn drop(&mut self) {
-        self.state.release_console_session_claim(&self.console_id);
-    }
-}
-
 /// The right to start a process for one session, released on drop. Taken before the launch and
 /// surrendered by `register_live` once the session is in the live map.
 pub struct LaunchClaim {
@@ -908,6 +858,45 @@ pub(crate) mod tests {
         AppState::new(store, 1234, "/opt/octoboardd".to_string())
     }
 
+    /// A stand-in live session on a real PTY, with `/bin/sh` running `script` behind it instead of
+    /// a real agent: enough for whatever the caller needs a `LiveSession` to write into, read from,
+    /// or just stay alive on until dropped. Shared by `transcript.rs`, `reporting.rs` and
+    /// `trust.rs`'s tests, which used to each keep a near-identical copy of this.
+    pub(crate) fn fake_live_session(
+        id: &str,
+        agent: crate::protocol::Agent,
+        cols: u16,
+        rows: u16,
+        script: &str,
+    ) -> Arc<LiveSession> {
+        use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+
+        let pty = native_pty_system()
+            .openpty(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("a PTY");
+        let mut cmd = CommandBuilder::new("/bin/sh");
+        cmd.args(["-c", script]);
+        let child = pty.slave.spawn_command(cmd).expect("the stand-in");
+        let pid = child.process_id().expect("a pid");
+        let fd = pty.master.as_raw_fd().expect("a descriptor");
+        crate::ptyio::set_nonblocking(fd).expect("non-blocking");
+        Arc::new(LiveSession::new(crate::session::NewSession {
+            id: id.to_string(),
+            agent,
+            pid,
+            fd,
+            master: pty.master,
+            child,
+            scratch_dir: None,
+            resolves_approvals_itself: false,
+        }))
+    }
+
     /// Only one report may come out of one turn, and only when the session did not report for
     /// itself. The repeat case is not hypothetical: Grok fires its `idle_prompt` backstop about a
     /// minute after every turn, whether or not a `Stop` already reported it.
@@ -984,23 +973,6 @@ pub(crate) mod tests {
         state.mark_reported("s");
         state.clear_reported("s");
         assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
-    }
-
-    /// Two concurrent opens for one console would both pass a check that reads the store and then
-    /// inserts, so the claim is what actually enforces one live console session.
-    #[test]
-    fn only_one_console_session_may_be_opened_for_a_console_at_a_time() {
-        let state = Arc::new(app_state("console-session-claim"));
-        let claim = state
-            .claim_console_session("console-1")
-            .expect("the first claim");
-        assert!(state.claim_console_session("console-1").is_err());
-        // A different console is unaffected.
-        let _other = state
-            .claim_console_session("console-2")
-            .expect("another console");
-        drop(claim);
-        assert!(state.claim_console_session("console-1").is_ok());
     }
 
     /// A cancelled turn owes no report, but leaving it open is what lets a later backstop invent

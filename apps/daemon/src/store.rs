@@ -20,8 +20,8 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::protocol::{
-    Agent, Console, Host, HostKind, Origin, Page, Project, ProjectSource, Role, Session,
-    SessionStatus, Settings,
+    Agent, Console, ConsoleSessionColour, Host, HostKind, Origin, Page, Project, ProjectSource,
+    Role, Session, SessionStatus, Settings,
 };
 
 /// The single local host record every project and session points at. There is no other host yet,
@@ -44,6 +44,9 @@ impl Store {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("creating {}", parent.display()))?;
         }
+        if path.exists() {
+            supersede_if_outdated(path)?;
+        }
         let conn = Connection::open(path).with_context(|| format!("opening {}", path.display()))?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         conn.execute_batch(
@@ -64,6 +67,11 @@ impl Store {
                 codex_config_dir  TEXT,
                 grok_config_dir   TEXT,
                 icon          TEXT,
+                -- The ordinal a console session created in this console is given next, one past
+                -- the highest ever used here. Kept on the console rather than derived from the
+                -- sessions in it, because a console session that is later deleted must not free its
+                -- number for reuse (see `Store::insert_console_session`).
+                next_console_session_ordinal INTEGER NOT NULL DEFAULT 1,
                 created_at    INTEGER NOT NULL
             );
             CREATE TABLE IF NOT EXISTS projects (
@@ -91,7 +99,14 @@ impl Store {
                 title            TEXT NOT NULL,
                 status           TEXT NOT NULL,
                 has_conversation INTEGER NOT NULL DEFAULT 0,
-                include_in_hub   INTEGER NOT NULL DEFAULT 0,
+                -- The console session this (project) session reports to, or NULL outside the
+                -- orchestration. Always NULL for a console session itself. No `REFERENCES`: what
+                -- happens to a bound session when its console session is archived or deleted is not
+                -- decided until milestone 11 of the console-sessions-and-agent-accounts plan.
+                bound_to         TEXT,
+                -- Set only for a console session (`role = 'console'`); NULL for a project session.
+                colour           TEXT,
+                ordinal          INTEGER,
                 config_dir       TEXT,
                 pinned           INTEGER NOT NULL DEFAULT 0,
                 started_at       INTEGER NOT NULL,
@@ -113,68 +128,11 @@ impl Store {
             );
             "#,
         )?;
-        // `CREATE TABLE IF NOT EXISTS` leaves a database written by an older version alone, so a
-        // column added since is added here separately. Existing rows read back as `NULL`, which
-        // for the config directory columns is the right history: no directory was pinned for those
-        // sessions.
-        add_column_if_missing(
-            &conn,
-            "sessions",
-            "include_in_hub",
-            "INTEGER NOT NULL DEFAULT 0",
-        )?;
-        add_column_if_missing(&conn, "consoles", "claude_config_dir", "TEXT")?;
-        add_column_if_missing(&conn, "consoles", "codex_config_dir", "TEXT")?;
-        add_column_if_missing(&conn, "consoles", "grok_config_dir", "TEXT")?;
-        add_column_if_missing(&conn, "consoles", "icon", "TEXT")?;
-        // The session's pinned directory began as a Claude-only column. Renamed rather than copied,
-        // so a session that already pinned one keeps it: every such session is a Claude Code one.
-        if column_exists(&conn, "sessions", "claude_config_dir")? {
-            conn.execute(
-                "ALTER TABLE sessions RENAME COLUMN claude_config_dir TO config_dir",
-                [],
-            )
-            .context("renaming sessions.claude_config_dir")?;
-        }
-        add_column_if_missing(&conn, "sessions", "config_dir", "TEXT")?;
-        // `hub_agent` predates the console-session rename; renamed rather than copied, so an
-        // existing console keeps the agent it already set.
-        if column_exists(&conn, "consoles", "hub_agent")? {
-            conn.execute(
-                "ALTER TABLE consoles RENAME COLUMN hub_agent TO console_session_agent",
-                [],
-            )
-            .context("renaming consoles.hub_agent")?;
-        }
-        // The role and origin values were renamed from "hub"/"worker" to "console"/"project" in the
-        // same rename; existing rows keep their meaning under the new spelling. Unconditional and
-        // idempotent, like the column renames above: with nothing left to rename, each `UPDATE`
-        // matches no row.
-        conn.execute(
-            "UPDATE sessions SET role = 'console' WHERE role = 'hub'",
-            [],
-        )?;
-        conn.execute(
-            "UPDATE sessions SET role = 'project' WHERE role = 'worker'",
-            [],
-        )?;
-        conn.execute(
-            "UPDATE sessions SET origin = 'console' WHERE origin = 'hub'",
-            [],
-        )?;
-        // Existing projects read back as not consented, which is the right history: nobody was ever
-        // asked.
-        add_column_if_missing(
-            &conn,
-            "projects",
-            "claude_trust_consent",
-            "INTEGER NOT NULL DEFAULT 0",
-        )?;
-        // Nothing was pinned before pinning existed.
-        add_column_if_missing(&conn, "projects", "pinned", "INTEGER NOT NULL DEFAULT 0")?;
-        add_column_if_missing(&conn, "sessions", "pinned", "INTEGER NOT NULL DEFAULT 0")?;
-        // Projects from before the column read back as having no tags.
-        add_column_if_missing(&conn, "projects", "tags", "TEXT NOT NULL DEFAULT '[]'")?;
+        // No migration runs here: the application has not shipped, so a database whose schema is
+        // not this one has already been moved aside by `supersede_if_outdated`, above, rather than
+        // upgraded in place. `CREATE TABLE IF NOT EXISTS` therefore only ever meets either a brand
+        // new file or one already in this shape (see "The database is rewritten rather than
+        // migrated" in `docs/plans/20261008-console-sessions-and-agent-accounts/README.md`).
         let store = Self {
             conn: Mutex::new(conn),
         };
@@ -199,8 +157,7 @@ impl Store {
         Ok(())
     }
 
-    /// The settings row, at its defaults, for a database that has never had one: freshly created,
-    /// or migrated from before the table existed.
+    /// The settings row, at its defaults, for a freshly created database.
     fn ensure_settings_row(&self) -> Result<()> {
         self.lock().execute(
             "INSERT OR IGNORE INTO settings (id, auto_sync_repositories) VALUES (?1, 0)",
@@ -522,37 +479,81 @@ impl Store {
 
     // -- sessions ------------------------------------------------------------
 
+    /// Inserts a session that is not a console session, or a console session whose colour and
+    /// ordinal are already decided (a test fixture; the daemon itself always creates a console
+    /// session through [`Self::insert_console_session`] instead, which decides them).
     pub fn insert_session(&self, session: &Session) -> Result<()> {
-        self.lock().execute(
-            "INSERT INTO sessions (id, agent, agent_session_id, console_id, project_id, host_id,
-                                   role, origin, title, status, has_conversation, include_in_hub,
-                                   config_dir, pinned, started_at, ended_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
-            params![
-                session.id,
-                enum_to_text(&session.agent),
-                session.agent_session_id,
-                session.console_id,
-                session.project_id,
-                session.host_id,
-                enum_to_text(&session.role),
-                enum_to_text(&session.origin),
-                session.title,
-                enum_to_text(&session.status),
-                session.has_conversation,
-                session.include_in_hub,
-                session.config_dir,
-                session.pinned,
-                session.started_at,
-                session.ended_at,
-            ],
+        insert_session_row(&self.lock(), session)
+    }
+
+    /// Inserts a freshly-opened console session, assigning its colour and its ordinal — and, with
+    /// no `title` given, the default title that ordinal spells out ("Hub `<ordinal>`") — in the same
+    /// locked step as the row insert itself.
+    ///
+    /// Fused into one critical section because both assignments are a read followed by a decision
+    /// that the insert must not be allowed to go stale between: the colour is the first palette
+    /// entry not already held by one of the console's other non-archived console sessions, and the
+    /// ordinal is a read-then-increment counter kept on the console record. Two concurrent opens
+    /// for the same console must not both read the same snapshot and pick the same colour, or both
+    /// consume the same ordinal — the shape of race the deleted one-live-console-session claim used
+    /// to guard against by a different means (see "Development notes" in
+    /// `docs/plans/20261008-console-sessions-and-agent-accounts/02-binding-data-model.md`).
+    ///
+    /// `session.colour`, `session.ordinal` and `session.title` (when `title` is `None`) are
+    /// overwritten; every other field of `session` is inserted as given.
+    ///
+    /// The ordinal is consumed here, before the caller has launched the agent process, and is not
+    /// given back if that launch then fails: a console whose agent binary is missing hands out
+    /// "Hub 2" to its next successful open after a failed one at "Hub 1", with a gap in between.
+    /// This is the intended reading of "one past the highest ever used" (see "Technical design" in
+    /// `docs/plans/20261008-console-sessions-and-agent-accounts/02-binding-data-model.md`), not a
+    /// bug to fix by moving the increment into the same transaction as the launch: a title is
+    /// never reused once handed out, whether or not the session behind it ever came up.
+    pub fn insert_console_session(
+        &self,
+        mut session: Session,
+        title: Option<String>,
+    ) -> Result<Session> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
+            "SELECT colour FROM sessions
+             WHERE console_id = ?1 AND role = ?2 AND status != ?3 AND colour IS NOT NULL",
         )?;
-        Ok(())
+        let used_colours: Vec<String> = stmt
+            .query_map(
+                params![
+                    session.console_id,
+                    enum_to_text(&Role::Console),
+                    enum_to_text(&SessionStatus::Archived),
+                ],
+                |row| row.get(0),
+            )?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        drop(stmt);
+        let colour = ConsoleSessionColour::PALETTE
+            .iter()
+            .find(|candidate| !used_colours.contains(&enum_to_text(*candidate)))
+            .copied()
+            // Every entry is already in use: wrap back to the start rather than refuse, since the
+            // badge is a convenience, not a uniqueness guarantee the user was ever promised.
+            .unwrap_or(ConsoleSessionColour::PALETTE[0]);
+        let ordinal: i64 = conn.query_row(
+            "UPDATE consoles SET next_console_session_ordinal = next_console_session_ordinal + 1
+             WHERE id = ?1
+             RETURNING next_console_session_ordinal - 1",
+            params![session.console_id],
+            |row| row.get(0),
+        )?;
+        session.colour = Some(colour);
+        session.ordinal = Some(ordinal);
+        session.title = title.unwrap_or_else(|| format!("Hub {ordinal}"));
+        insert_session_row(&conn, &session)?;
+        Ok(session)
     }
 
     /// Writes back the fields that change over a session's life. Identity and placement
-    /// (`console_id`, `project_id`, `role`, `origin`, `include_in_hub`) never change, and neither does
-    /// `config_dir`, so they are not touched. `pinned` is the user's own statement
+    /// (`console_id`, `project_id`, `role`, `origin`, `bound_to`, `colour`, `ordinal`) never change,
+    /// and neither does `config_dir`, so they are not touched. `pinned` is the user's own statement
     /// ([`Self::set_session_pinned`]), which a record read earlier must not overwrite.
     /// Returns whether a row was written: `false` means the session is gone (deleted meanwhile).
     pub fn update_session(&self, session: &Session) -> Result<bool> {
@@ -677,23 +678,55 @@ fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
     Ok(found > 0)
 }
 
-/// Adds a column to a table that may predate it. SQLite has no "add it if it is missing", so the
-/// duplicate-column error is the signal that it is already there.
-fn add_column_if_missing(
-    conn: &Connection,
-    table: &str,
-    column: &str,
-    definition: &str,
-) -> Result<()> {
-    if let Err(err) = conn.execute(
-        &format!("ALTER TABLE {table} ADD COLUMN {column} {definition}"),
-        [],
-    ) {
-        let duplicate = err.to_string().contains("duplicate column name");
-        if !duplicate {
-            return Err(err).with_context(|| format!("adding the {table}.{column} column"));
+/// Moves `path` aside and out of the way when it is a database from before this schema, so that
+/// `Store::open`'s own `CREATE TABLE IF NOT EXISTS` always lands on either an empty file or one
+/// already in the current shape, and runs no migration of its own. "Before this schema" is
+/// detected cheaply and specifically, rather than by letting a later query fail deep in a request
+/// path: a `sessions` table that predates the binding this milestone added has no `bound_to`
+/// column, and every build that has ever carried `bound_to` carries the rest of the shape with
+/// it, so that column alone tells the two apart. A `sessions` table that does not exist at all is
+/// not outdated — it is what `CREATE TABLE IF NOT EXISTS` is about to create fresh.
+///
+/// The old file is renamed rather than deleted, so a user who needs what was in it still has it on
+/// disk; see "the files Octoboard keeps under `~/.octoboard`" in
+/// `docs/product/application-lifecycle.md`.
+fn supersede_if_outdated(path: &Path) -> Result<()> {
+    {
+        let conn = Connection::open(path).with_context(|| format!("opening {}", path.display()))?;
+        let sessions_exists: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sessions'",
+            [],
+            |row| row.get(0),
+        )?;
+        let current = sessions_exists == 0 || column_exists(&conn, "sessions", "bound_to")?;
+        if current {
+            return Ok(());
         }
     }
+
+    let moved_aside = path.with_file_name(format!(
+        "{}.superseded-{}",
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("octoboard.db"),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+    ));
+    std::fs::rename(path, &moved_aside).with_context(|| {
+        format!(
+            "moving the outdated database {} aside to {}",
+            path.display(),
+            moved_aside.display()
+        )
+    })?;
+    tracing::warn!(
+        old = %moved_aside.display(),
+        new = %path.display(),
+        "the database at this path predates the current schema and has no migration to it; \
+         moved it aside and starting a fresh one in its place"
+    );
     Ok(())
 }
 
@@ -701,8 +734,41 @@ const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agen
                                remote_url, claude_trust_consent, pinned, tags";
 
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
-                               role, origin, title, status, has_conversation, include_in_hub,
-                               config_dir, pinned, started_at, ended_at";
+                               role, origin, title, status, has_conversation, bound_to, colour,
+                               ordinal, config_dir, pinned, started_at, ended_at";
+
+/// Shared by [`Store::insert_session`] and [`Store::insert_console_session`], which differ only in
+/// how `colour`, `ordinal` and `title` are decided before this runs.
+fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
+    conn.execute(
+        "INSERT INTO sessions
+            (id, agent, agent_session_id, console_id, project_id, host_id, role, origin, title,
+             status, has_conversation, bound_to, colour, ordinal, config_dir, pinned,
+             started_at, ended_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+        params![
+            session.id,
+            enum_to_text(&session.agent),
+            session.agent_session_id,
+            session.console_id,
+            session.project_id,
+            session.host_id,
+            enum_to_text(&session.role),
+            enum_to_text(&session.origin),
+            session.title,
+            enum_to_text(&session.status),
+            session.has_conversation,
+            session.bound_to,
+            session.colour.as_ref().map(enum_to_text),
+            session.ordinal,
+            session.config_dir,
+            session.pinned,
+            session.started_at,
+            session.ended_at,
+        ],
+    )?;
+    Ok(())
+}
 
 fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
     Ok(Console {
@@ -760,11 +826,13 @@ fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         title: row.get(8)?,
         status: enum_from_row::<SessionStatus>(row, 9)?,
         has_conversation: row.get(10)?,
-        include_in_hub: row.get(11)?,
-        config_dir: row.get(12)?,
-        pinned: row.get(13)?,
-        started_at: row.get(14)?,
-        ended_at: row.get(15)?,
+        bound_to: row.get(11)?,
+        colour: enum_from_row_opt::<ConsoleSessionColour>(row, 12)?,
+        ordinal: row.get(13)?,
+        config_dir: row.get(14)?,
+        pinned: row.get(15)?,
+        started_at: row.get(16)?,
+        ended_at: row.get(17)?,
     })
 }
 
@@ -861,12 +929,68 @@ mod tests {
             title: "Hub".to_string(),
             status: SessionStatus::Idle,
             has_conversation: false,
-            include_in_hub: false,
+            bound_to: None,
+            colour: None,
+            ordinal: None,
             config_dir: config_dir.map(str::to_string),
             pinned: false,
             started_at: 0,
             ended_at: None,
         }
+    }
+
+    /// A database written by a build before the binding (one that still has `sessions` rows but
+    /// no `bound_to` column, as every build before this milestone does) is moved aside rather than
+    /// opened in place: the file gains a `.superseded-<timestamp>` sibling holding the old bytes,
+    /// and the daemon comes up on an empty database at the original path instead of failing deep
+    /// in a later query with "no such column: bound_to".
+    #[test]
+    fn an_old_shape_database_is_moved_aside_and_the_daemon_comes_up_on_an_empty_one() {
+        let path = temp_db("old-shape");
+        {
+            let conn = Connection::open(&path).expect("old database");
+            conn.execute_batch(
+                r#"
+                CREATE TABLE consoles (
+                    id TEXT PRIMARY KEY, name TEXT NOT NULL, workdir TEXT NOT NULL,
+                    console_session_agent TEXT NOT NULL, default_agent TEXT NOT NULL,
+                    created_at INTEGER NOT NULL
+                );
+                INSERT INTO consoles VALUES ('console-1', 'Old', '/tmp/old', 'claude', 'claude', 5);
+                CREATE TABLE sessions (
+                    id TEXT PRIMARY KEY, agent TEXT NOT NULL, agent_session_id TEXT,
+                    console_id TEXT NOT NULL, project_id TEXT, host_id TEXT NOT NULL,
+                    role TEXT NOT NULL, origin TEXT NOT NULL, title TEXT NOT NULL,
+                    status TEXT NOT NULL, has_conversation INTEGER NOT NULL DEFAULT 0,
+                    include_in_hub INTEGER NOT NULL DEFAULT 0, pinned INTEGER NOT NULL DEFAULT 0,
+                    started_at INTEGER NOT NULL, ended_at INTEGER
+                );
+                INSERT INTO sessions VALUES ('session-1', 'claude', 'agent-1', 'console-1', NULL,
+                    'local', 'console', 'user', 'Hub', 'idle', 1, 0, 0, 6, NULL);
+                "#,
+            )
+            .expect("old schema");
+        }
+
+        let store = Store::open(&path).expect("opens a fresh database in its place");
+        assert!(store.list_sessions().unwrap().is_empty());
+        assert!(store.get_console("console-1").unwrap().is_none());
+
+        let siblings: Vec<_> = path
+            .parent()
+            .unwrap()
+            .read_dir()
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert!(
+            siblings
+                .iter()
+                .any(|name| name.starts_with("octoboard.db.superseded-")),
+            "the old file should have been moved aside, not deleted: found {siblings:?}"
+        );
+
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
     /// A reporter whose conclusion only holds while the session has not moved on writes through
@@ -917,126 +1041,6 @@ mod tests {
             .is_none());
     }
 
-    const OLD_SESSIONS: &str = r#"
-        CREATE TABLE sessions (
-            id TEXT PRIMARY KEY, agent TEXT NOT NULL, agent_session_id TEXT,
-            console_id TEXT NOT NULL, project_id TEXT, host_id TEXT NOT NULL,
-            role TEXT NOT NULL, origin TEXT NOT NULL, title TEXT NOT NULL,
-            status TEXT NOT NULL, has_conversation INTEGER NOT NULL DEFAULT 0,
-            include_in_hub INTEGER NOT NULL DEFAULT 0, %COLUMN%started_at INTEGER NOT NULL,
-            ended_at INTEGER
-        );
-    "#;
-
-    /// A database written before the config directories existed is opened in place: its consoles
-    /// and sessions read back with the setting unset — which is what they were started with — and
-    /// opening it again is a no-op.
-    ///
-    /// The same fixture pins the `role`/`origin` rename: one row per old value that normalizes to a
-    /// new one (`hub`→`console` and `worker`→`project` for `role`, `hub`→`console` for `origin`),
-    /// plus a row already on the new spelling to confirm the rename is idempotent rather than
-    /// matching everything.
-    #[test]
-    fn a_database_from_before_the_config_dirs_is_migrated_in_place() {
-        let path = temp_db("migration");
-        {
-            let conn = Connection::open(&path).expect("old database");
-            conn.execute_batch(
-                r#"
-                CREATE TABLE consoles (
-                    id TEXT PRIMARY KEY, name TEXT NOT NULL, workdir TEXT NOT NULL,
-                    hub_agent TEXT NOT NULL, default_agent TEXT NOT NULL, created_at INTEGER NOT NULL
-                );
-                INSERT INTO consoles VALUES ('console-1', 'Old', '/tmp/old', 'claude', 'claude', 5);
-                "#,
-            )
-            .expect("old schema");
-            conn.execute_batch(&OLD_SESSIONS.replace("%COLUMN%", ""))
-                .expect("old sessions");
-            conn.execute_batch(
-                "INSERT INTO sessions VALUES ('session-1', 'claude', 'agent-1', 'console-1', NULL,
-                    'local', 'hub', 'user', 'Hub', 'archived', 1, 0, 6, 7);
-                 INSERT INTO sessions VALUES ('session-2', 'claude', 'agent-2', 'console-1', NULL,
-                    'local', 'worker', 'user', 'Worker', 'archived', 1, 0, 6, 7);
-                 INSERT INTO sessions VALUES ('session-3', 'claude', 'agent-3', 'console-1', NULL,
-                    'local', 'worker', 'hub', 'Dispatched', 'archived', 1, 0, 6, 7);
-                 INSERT INTO sessions VALUES ('session-4', 'claude', 'agent-4', 'console-1', NULL,
-                    'local', 'console', 'console', 'Already new', 'archived', 1, 0, 6, 7);",
-            )
-            .expect("old session");
-        }
-
-        let store = Store::open(&path).expect("migrates");
-        let consoles = store.list_consoles().expect("consoles");
-        assert_eq!(consoles.len(), 1);
-        assert_eq!(consoles[0].claude_config_dir, None);
-        assert_eq!(consoles[0].codex_config_dir, None);
-        assert_eq!(consoles[0].grok_config_dir, None);
-        let migrated = store.get_session("session-1").expect("read").expect("kept");
-        assert_eq!(migrated.config_dir, None);
-
-        // (session id, expected role, expected origin) — one row per rename rule, plus session-4
-        // which was already on the new spelling and must come through unchanged.
-        let expected = [
-            ("session-1", Role::Console, Origin::User),
-            ("session-2", Role::Project, Origin::User),
-            ("session-3", Role::Project, Origin::Console),
-            ("session-4", Role::Console, Origin::Console),
-        ];
-        for (id, role, origin) in expected {
-            let session = store.get_session(id).expect("read").expect("kept");
-            assert_eq!(session.role, role, "role for {id}");
-            assert_eq!(session.origin, origin, "origin for {id}");
-        }
-        drop(store);
-
-        Store::open(&path).expect("opens again");
-        std::fs::remove_dir_all(path.parent().unwrap()).ok();
-    }
-
-    /// The previous schema had the Claude-only columns. A session that pinned a directory keeps it
-    /// under the generic name, and the console's Claude setting is kept as it was.
-    #[test]
-    fn a_database_with_the_claude_only_columns_keeps_what_they_held() {
-        let path = temp_db("claude-only-migration");
-        {
-            let conn = Connection::open(&path).expect("old database");
-            conn.execute_batch(
-                r#"
-                CREATE TABLE consoles (
-                    id TEXT PRIMARY KEY, name TEXT NOT NULL, workdir TEXT NOT NULL,
-                    hub_agent TEXT NOT NULL, default_agent TEXT NOT NULL,
-                    claude_config_dir TEXT, created_at INTEGER NOT NULL
-                );
-                INSERT INTO consoles VALUES ('console-1', 'Old', '/tmp/old', 'claude', 'claude',
-                    '/home/u/.claude-alt', 5);
-                "#,
-            )
-            .expect("old schema");
-            conn.execute_batch(&OLD_SESSIONS.replace("%COLUMN%", "claude_config_dir TEXT, "))
-                .expect("old sessions");
-            conn.execute_batch(
-                "INSERT INTO sessions VALUES ('session-1', 'claude', 'agent-1', 'console-1', NULL,
-                    'local', 'hub', 'user', 'Hub', 'archived', 1, 0, '/home/u/.claude-alt', 6, 7);",
-            )
-            .expect("old session");
-        }
-
-        let store = Store::open(&path).expect("migrates");
-        let console = store.get_console("console-1").unwrap().unwrap();
-        assert_eq!(
-            console.claude_config_dir.as_deref(),
-            Some("/home/u/.claude-alt")
-        );
-        assert_eq!(console.codex_config_dir, None);
-        let migrated = store.get_session("session-1").unwrap().unwrap();
-        assert_eq!(migrated.config_dir.as_deref(), Some("/home/u/.claude-alt"));
-        drop(store);
-
-        Store::open(&path).expect("opens again");
-        std::fs::remove_dir_all(path.parent().unwrap()).ok();
-    }
-
     fn project(consent: bool) -> Project {
         Project {
             id: "project-1".to_string(),
@@ -1053,103 +1057,22 @@ mod tests {
         }
     }
 
-    /// A database written before the trust consent existed is opened in place, and its projects
-    /// read back as not consented: nobody was ever asked. Opening it again is a no-op.
+    /// A project's pinned flag starts unset and round-trips through an update.
     #[test]
-    fn a_database_from_before_the_trust_consent_reads_every_project_as_not_consented() {
-        let path = temp_db("trust-migration");
-        {
-            let conn = Connection::open(&path).expect("old database");
-            conn.execute_batch(
-                r#"
-                CREATE TABLE consoles (
-                    id TEXT PRIMARY KEY, name TEXT NOT NULL, workdir TEXT NOT NULL,
-                    hub_agent TEXT NOT NULL, default_agent TEXT NOT NULL, created_at INTEGER NOT NULL
-                );
-                INSERT INTO consoles VALUES ('console-1', 'Old', '/tmp/old', 'claude', 'claude', 5);
-                CREATE TABLE projects (
-                    id TEXT PRIMARY KEY, console_id TEXT NOT NULL, host_id TEXT NOT NULL,
-                    name TEXT NOT NULL, path TEXT NOT NULL, default_agent TEXT,
-                    source TEXT NOT NULL, remote_url TEXT
-                );
-                INSERT INTO projects VALUES ('project-1', 'console-1', 'local', 'Old', '/tmp/p',
-                    NULL, 'local', NULL);
-                "#,
-            )
-            .expect("old schema");
-        }
-
-        let store = Store::open(&path).expect("migrates");
-        let migrated = store.get_project("project-1").unwrap().expect("kept");
-        assert!(!migrated.claude_trust_consent);
-        drop(store);
-
-        Store::open(&path).expect("opens again");
-        std::fs::remove_dir_all(path.parent().unwrap()).ok();
-    }
-
-    /// A database written before pinning existed is opened in place, and nothing in it is pinned.
-    /// A pin then round-trips on a project and a session.
-    #[test]
-    fn a_database_from_before_pinning_reads_nothing_as_pinned() {
-        let path = temp_db("pinned-migration");
-        {
-            let conn = Connection::open(&path).expect("old database");
-            conn.execute_batch(
-                r#"
-                CREATE TABLE consoles (
-                    id TEXT PRIMARY KEY, name TEXT NOT NULL, workdir TEXT NOT NULL,
-                    hub_agent TEXT NOT NULL, default_agent TEXT NOT NULL, created_at INTEGER NOT NULL
-                );
-                INSERT INTO consoles VALUES ('console-1', 'Old', '/tmp/old', 'claude', 'claude', 5);
-                CREATE TABLE projects (
-                    id TEXT PRIMARY KEY, console_id TEXT NOT NULL, host_id TEXT NOT NULL,
-                    name TEXT NOT NULL, path TEXT NOT NULL, default_agent TEXT,
-                    source TEXT NOT NULL, remote_url TEXT, claude_trust_consent INTEGER NOT NULL DEFAULT 0
-                );
-                INSERT INTO projects VALUES ('project-1', 'console-1', 'local', 'Old', '/tmp/p',
-                    NULL, 'local', NULL, 0);
-                CREATE TABLE sessions (
-                    id TEXT PRIMARY KEY, agent TEXT NOT NULL, agent_session_id TEXT,
-                    console_id TEXT NOT NULL, project_id TEXT, host_id TEXT NOT NULL,
-                    role TEXT NOT NULL, origin TEXT NOT NULL, title TEXT NOT NULL,
-                    status TEXT NOT NULL, has_conversation INTEGER NOT NULL DEFAULT 0,
-                    include_in_hub INTEGER NOT NULL DEFAULT 0, config_dir TEXT,
-                    started_at INTEGER NOT NULL, ended_at INTEGER
-                );
-                INSERT INTO sessions VALUES ('session-1', 'claude', NULL, 'console-1', NULL, 'local',
-                    'hub', 'user', 'Old', 'idle', 0, 0, NULL, 1, NULL);
-                "#,
-            )
-            .expect("old schema");
-        }
-
-        let store = Store::open(&path).expect("migrates");
-        assert!(
-            !store
-                .get_project("project-1")
-                .unwrap()
-                .expect("kept")
-                .pinned
-        );
-        assert!(
-            !store
-                .get_session("session-1")
-                .unwrap()
-                .expect("kept")
-                .pinned
-        );
+    fn a_projects_pinned_flag_round_trips() {
+        let path = temp_db("project-pinned");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        store.insert_project(&project(false)).expect("project");
+        assert!(!store.get_project("project-1").unwrap().unwrap().pinned);
 
         let mut pinned = store.get_project("project-1").unwrap().expect("kept");
         pinned.pinned = true;
         store.update_project(&pinned).unwrap();
         assert!(store.get_project("project-1").unwrap().unwrap().pinned);
 
-        store.set_session_pinned("session-1", true).unwrap();
-        assert!(store.get_session("session-1").unwrap().unwrap().pinned);
-        drop(store);
-
-        Store::open(&path).expect("opens again");
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
@@ -1243,22 +1166,12 @@ mod tests {
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
-    /// A database from before the trusted directories opens in place with none, and what is written
-    /// survives opening it again.
+    /// A fresh database starts with no trusted directories, and what is added survives opening it
+    /// again.
     #[test]
-    fn the_trusted_directories_start_empty_after_a_migration_and_round_trip() {
+    fn the_trusted_directories_start_empty_and_round_trip() {
         let path = temp_db("trusted-directories");
-        {
-            let conn = Connection::open(&path).expect("old database");
-            conn.execute_batch(
-                "CREATE TABLE consoles (
-                    id TEXT PRIMARY KEY, name TEXT NOT NULL, workdir TEXT NOT NULL,
-                    hub_agent TEXT NOT NULL, default_agent TEXT NOT NULL, created_at INTEGER NOT NULL
-                );",
-            )
-            .expect("old schema");
-        }
-        let store = Store::open(&path).expect("migrates");
+        let store = Store::open(&path).expect("store");
         assert!(store.trusted_directories().unwrap().is_empty());
 
         assert!(store.add_trusted_directory("/work").unwrap());
@@ -1351,43 +1264,20 @@ mod tests {
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
-    /// A database written before tags existed is opened in place, and no project in it has any.
-    /// Tags then round-trip.
+    /// A freshly created project has no tags, and tags round-trip through an update.
     #[test]
-    fn a_database_from_before_tags_reads_every_project_as_untagged() {
-        let path = temp_db("tags-migration");
-        {
-            let conn = Connection::open(&path).expect("old database");
-            conn.execute_batch(
-                r#"
-                CREATE TABLE consoles (
-                    id TEXT PRIMARY KEY, name TEXT NOT NULL, workdir TEXT NOT NULL,
-                    hub_agent TEXT NOT NULL, default_agent TEXT NOT NULL, created_at INTEGER NOT NULL
-                );
-                INSERT INTO consoles VALUES ('console-1', 'Old', '/tmp/old', 'claude', 'claude', 5);
-                CREATE TABLE projects (
-                    id TEXT PRIMARY KEY, console_id TEXT NOT NULL, host_id TEXT NOT NULL,
-                    name TEXT NOT NULL, path TEXT NOT NULL, default_agent TEXT,
-                    source TEXT NOT NULL, remote_url TEXT,
-                    claude_trust_consent INTEGER NOT NULL DEFAULT 0,
-                    pinned INTEGER NOT NULL DEFAULT 0
-                );
-                INSERT INTO projects VALUES ('project-1', 'console-1', 'local', 'Old', '/tmp/p',
-                    NULL, 'local', NULL, 0, 0);
-                "#,
-            )
-            .expect("old schema");
-        }
+    fn a_projects_tags_round_trip() {
+        let path = temp_db("project-tags");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        store.insert_project(&project(false)).expect("project");
+        let mut project = store.get_project("project-1").unwrap().expect("kept");
+        assert!(project.tags.is_empty());
 
-        let store = Store::open(&path).expect("migrates");
-        let mut migrated = store.get_project("project-1").unwrap().expect("kept");
-        assert!(migrated.tags.is_empty());
-
-        migrated.tags = vec!["backend".to_string(), "Rust".to_string()];
-        store.update_project(&migrated).unwrap();
-        drop(store);
-
-        let store = Store::open(&path).expect("opens again");
+        project.tags = vec!["backend".to_string(), "Rust".to_string()];
+        store.update_project(&project).unwrap();
         assert_eq!(
             store.get_project("project-1").unwrap().unwrap().tags,
             ["backend", "Rust"]
@@ -1400,23 +1290,12 @@ mod tests {
         assert!(tags_from_text("project-1", "not json").is_empty());
     }
 
-    /// A database from before the settings table existed is opened in place, with the setting at
-    /// its default; the setting then round-trips and a repeat write reports no change.
+    /// A fresh database's settings start at their default, round-trip, and a repeat write reports
+    /// no change.
     #[test]
-    fn the_settings_table_starts_at_its_default_after_a_migration_and_round_trips() {
-        let path = temp_db("settings-migration");
-        {
-            let conn = Connection::open(&path).expect("old database");
-            conn.execute_batch(
-                "CREATE TABLE consoles (
-                    id TEXT PRIMARY KEY, name TEXT NOT NULL, workdir TEXT NOT NULL,
-                    hub_agent TEXT NOT NULL, default_agent TEXT NOT NULL, created_at INTEGER NOT NULL
-                );",
-            )
-            .expect("old schema");
-        }
-
-        let store = Store::open(&path).expect("migrates");
+    fn the_settings_round_trip_and_a_repeat_write_changes_nothing() {
+        let path = temp_db("settings");
+        let store = Store::open(&path).expect("store");
         assert!(!store.get_settings().unwrap().auto_sync_repositories);
 
         assert!(store.set_auto_sync_repositories(true).unwrap());
@@ -1425,10 +1304,144 @@ mod tests {
             "a repeat write changes nothing"
         );
         assert!(store.get_settings().unwrap().auto_sync_repositories);
-        drop(store);
-
-        let store = Store::open(&path).expect("opens again");
-        assert!(store.get_settings().unwrap().auto_sync_repositories);
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    /// A console session to feed [`Store::insert_console_session`]: a plain `role: Console` record
+    /// whose colour, ordinal and title that call is going to overwrite, distinguished only by `id`.
+    fn console_session(id: &str) -> Session {
+        let mut built = session(None);
+        built.id = id.to_string();
+        built
+    }
+
+    /// Each of a console's console sessions takes the first palette entry none of the others
+    /// already holds, in palette order — so with none yet live, six opens in a row take the whole
+    /// palette in sequence.
+    #[test]
+    fn a_console_sessions_colour_is_the_first_palette_entry_not_already_held() {
+        let store = Store::open(&temp_db("colour-assignment")).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+
+        let assigned: Vec<ConsoleSessionColour> = (0..ConsoleSessionColour::PALETTE.len())
+            .map(|i| {
+                store
+                    .insert_console_session(console_session(&format!("session-{i}")), None)
+                    .expect("inserted")
+                    .colour
+                    .expect("a console session always gets a colour")
+            })
+            .collect();
+        assert_eq!(assigned, ConsoleSessionColour::PALETTE);
+    }
+
+    /// Once every palette entry is already held by a live console session, assignment wraps back
+    /// to the first entry rather than refusing — the badge is a convenience, not a promise of
+    /// uniqueness once the console runs more console sessions at once than the palette has room for.
+    #[test]
+    fn a_console_sessions_colour_wraps_back_to_the_start_once_every_entry_is_taken() {
+        let store = Store::open(&temp_db("colour-wrap")).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        for i in 0..ConsoleSessionColour::PALETTE.len() {
+            store
+                .insert_console_session(console_session(&format!("session-{i}")), None)
+                .expect("inserted");
+        }
+
+        let wrapped = store
+            .insert_console_session(console_session("session-overflow"), None)
+            .expect("inserted");
+        assert_eq!(wrapped.colour, Some(ConsoleSessionColour::PALETTE[0]));
+    }
+
+    /// Archiving a console session frees its colour for reuse — only a *non-archived* console
+    /// session's colour counts as held, since the badge only ever needs to tell apart the console
+    /// sessions currently showing side by side.
+    #[test]
+    fn an_archived_console_sessions_colour_is_free_for_reuse() {
+        let store = Store::open(&temp_db("colour-archive-frees")).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        let first = store
+            .insert_console_session(console_session("session-0"), None)
+            .expect("inserted");
+        assert_eq!(first.colour, Some(ConsoleSessionColour::PALETTE[0]));
+
+        let mut archived = first.clone();
+        archived.status = SessionStatus::Archived;
+        store.update_session(&archived).expect("archived");
+
+        let next = store
+            .insert_console_session(console_session("session-1"), None)
+            .expect("inserted");
+        assert_eq!(
+            next.colour,
+            Some(ConsoleSessionColour::PALETTE[0]),
+            "the archived console session's colour is free again, and is the first in palette order"
+        );
+    }
+
+    /// The ordinal is one past the highest ever handed out in this console, kept on the console
+    /// record itself — not derived from which console sessions still exist — so deleting the one
+    /// that held the highest ordinal does not let a later console session reuse it.
+    #[test]
+    fn a_console_sessions_ordinal_is_never_reused_even_after_its_session_is_deleted() {
+        let store = Store::open(&temp_db("ordinal-high-water-mark")).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+
+        let first = store
+            .insert_console_session(console_session("session-0"), None)
+            .expect("inserted");
+        let second = store
+            .insert_console_session(console_session("session-1"), None)
+            .expect("inserted");
+        assert_eq!(first.ordinal, Some(1));
+        assert_eq!(second.ordinal, Some(2));
+
+        let mut archived = second;
+        archived.status = SessionStatus::Archived;
+        store.update_session(&archived).expect("archived");
+        assert!(store
+            .delete_session_if_archived(&archived.id)
+            .expect("delete"));
+
+        let third = store
+            .insert_console_session(console_session("session-2"), None)
+            .expect("inserted");
+        assert_eq!(
+            third.ordinal,
+            Some(3),
+            "ordinal 2 was used and must not be handed out again, even though session-1 is gone"
+        );
+    }
+
+    /// With no title given, a console session's default title spells out its ordinal; an explicit
+    /// title is kept instead.
+    #[test]
+    fn a_console_sessions_default_title_names_its_ordinal() {
+        let store = Store::open(&temp_db("console-session-title")).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+
+        let defaulted = store
+            .insert_console_session(console_session("session-0"), None)
+            .expect("inserted");
+        assert_eq!(defaulted.title, "Hub 1");
+
+        let named = store
+            .insert_console_session(
+                console_session("session-1"),
+                Some("Investigate the outage".to_string()),
+            )
+            .expect("inserted");
+        assert_eq!(named.title, "Investigate the outage");
     }
 }
