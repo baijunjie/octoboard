@@ -2,6 +2,7 @@ import type { Scenario } from "../scenario";
 import { archiveScenarios } from "./archive";
 import { busyScenarios } from "./busy";
 import { connectionScenarios } from "./connection";
+import { consoleSessionsScenarios } from "./consoleSessions";
 import { dialogScenarios } from "./dialogs";
 import { emptyScenarios } from "./empty";
 import { filterScenarios } from "./filter";
@@ -20,6 +21,7 @@ export const SCENARIOS: Scenario[] = [
   ...busyScenarios,
   ...statusScenarios,
   ...focusScenarios,
+  ...consoleSessionsScenarios,
   ...gitScenarios,
   ...filterScenarios,
   ...connectionScenarios,

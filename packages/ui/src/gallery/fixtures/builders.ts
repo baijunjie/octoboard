@@ -116,7 +116,7 @@ export const SAMPLE = (() => {
   const console_ = consoleOf("c-main", "Main");
   const web = projectOf("p-web", console_.id, "Website");
   const api = projectOf("p-api", console_.id, "Search API");
-  const consoleSession = sessionOf("s-console", console_.id, undefined, "Hub", "idle");
+  const consoleSession = sessionOf("s-console", console_.id, undefined, "Hub", "idle", { colour: "teal" });
   const sessions = [
     consoleSession,
     sessionOf("s-web-1", console_.id, web.id, "Fix the summary layout", "working"),

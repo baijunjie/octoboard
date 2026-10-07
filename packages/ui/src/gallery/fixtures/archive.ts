@@ -4,7 +4,7 @@ import { consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./bu
 
 const GROUP = "Archive view";
 
-const console_ = consoleOf("c-1", "Main");
+export const console_ = consoleOf("c-1", "Main");
 const project = projectOf("p-1", console_.id, "Search API");
 const AGENTS: Agent[] = ["claude", "codex", "grok"];
 
@@ -22,6 +22,30 @@ const state = snapshotState({
   consoles: [console_],
   projects: [project],
   sessions: [sessionOf("s-live", console_.id, project.id, "Live session", "idle"), ...archived, ...consoleSessions],
+});
+
+// A live console session with some of its own bound sessions since archived, among other sessions
+// not bound to it, kept out of `state` above: nothing in the sidebar opens this scope yet (see the
+// TODO on `ArchiveScope` in `sidebar/types.ts`), so there is no scenario driving the app to it, and
+// mixing it into the shared project archive would perturb the counts the scenarios above assert.
+// Exported for `ArchiveView.test.tsx`, which renders the view on these directly.
+export const boundConsoleSession = sessionOf("s-bound-console", console_.id, undefined, "Hub 1", "idle", { colour: "teal" });
+export const boundArchived = Array.from({ length: 3 }, (_, i) =>
+  sessionOf(`s-bound${i}`, console_.id, project.id, `Bound archived session ${i}`, "archived", {
+    bound_to: boundConsoleSession.id,
+    ended_at: minutesAgo(5 + i * 5),
+  }),
+);
+// A second owner, an archived session bound to it instead of `boundConsoleSession`, and an
+// archived session with no owner at all — so `ArchiveView.test.tsx` can tell a real filter from
+// one that happens to pass everything through.
+export const otherConsoleSession = sessionOf("s-other-console", console_.id, undefined, "Hub 2", "idle", { colour: "jade" });
+export const otherOwnerArchived = sessionOf("s-other-bound", console_.id, project.id, "Archived session bound elsewhere", "archived", {
+  bound_to: otherConsoleSession.id,
+  ended_at: minutesAgo(5),
+});
+export const unboundArchived = sessionOf("s-unbound-archived", console_.id, project.id, "Unbound archived session", "archived", {
+  ended_at: minutesAgo(5),
 });
 
 export const archiveScenarios: Scenario[] = [
@@ -43,7 +67,7 @@ export const archiveScenarios: Scenario[] = [
     title: "A console's archived console sessions",
     state,
     steps: [
-      (ui) => ui.press(ui.t("sidebar.consoleSession.actions", { name: console_.name })),
+      (ui) => ui.press(ui.t("sidebar.consoleSessions.actions", { name: console_.name })),
       (ui) => ui.press(ui.t("sidebar.archive.consoleSessions")),
       (ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: consoleSessions.length })),
     ],

@@ -23,3 +23,21 @@ is left beyond this milestone.
       an agent reading a truncated file. The write is atomic by construction (write to a temporary
       file in the same directory, then rename); what is unverified is the behaviour under real
       concurrent opens.
+
+## From milestone 03 — the sidebar's console sessions
+
+- [ ] A console with three console sessions **lists all three**, and a new one can be **created, selected and
+      renamed** from the section, end to end against a real daemon. Covered at the unit and gallery level only.
+- [ ] Each console session's **colour** reads as distinct on screen, in both light and dark, and the six
+      palette entries hold their measured 3:1 against the surfaces a row sits on. The ratios are computed, not
+      observed.
+- [ ] The binding badge's **tooltip** appears on pointer hover and names the owner. It has no keyboard route — a
+      known, kept gap for a sighted keyboard-only user, recorded in a comment on `BindingBadge.tsx` — so this
+      confirms the hover case only, not a keyboard one.
+- [ ] **Keyboard navigation** through the new console sessions section: reaching the section, its rows, its
+      create action and its menu, with focus visible throughout.
+- [ ] The section's **empty state** reads correctly in a console with no console session.
+- [ ] The **gallery scenarios** run clean in a browser. There is no scenario runner in the repository —
+      `pnpm gallery` opens an interactive dev server — so every count a scenario asserts has only been
+      re-derived by hand against the fixtures. `archive-many` and `archive-console-sessions` are the two this
+      topic perturbed.

@@ -189,11 +189,10 @@ export const zhHans: Translation<"other"> = {
   "sidebar.console.addProject": "添加项目",
   "sidebar.console.edit": "编辑控制台",
   "sidebar.console.delete": "删除控制台",
-  "sidebar.consoleSession.name": "控制台会话",
-  "sidebar.consoleSession.ariaLabel": "控制台会话，{agent}，{status}",
-  "sidebar.consoleSession.start": "启动控制台会话",
-  "sidebar.consoleSession.startHint": "尚未启动",
-  "sidebar.consoleSession.actions": "{name} 的控制台会话的操作",
+  "sidebar.consoleSessions.heading": "控制台会话",
+  "sidebar.consoleSessions.new": "新建控制台会话",
+  "sidebar.consoleSessions.actions": "{name} 的控制台会话的操作",
+  "sidebar.consoleSessions.empty": "还没有控制台会话",
   "sidebar.archive.consoleSessions": "已归档的控制台会话",
   "sidebar.archive.empty": "没有已归档的会话",
   "sidebar.archive.viewAll": {
@@ -209,6 +208,7 @@ export const zhHans: Translation<"other"> = {
   "sidebar.project.remove": "移除项目",
   "sidebar.session.ariaLabel": "会话 {title}，{agent}，{status}",
   "sidebar.session.ariaLabelPinned": "会话 {title}，{agent}，{status}，已置顶",
+  "sidebar.session.boundTo": "绑定到 {name}",
   "sidebar.session.actions": "会话 {title} 的操作",
   "sidebar.session.reopen": "重新打开",
   "sidebar.session.rename": "重命名",
@@ -217,7 +217,6 @@ export const zhHans: Translation<"other"> = {
   "sidebar.focus.exit": "退出专注模式",
   "sidebar.focus.sessions": "会话（{count}）",
   "sidebar.focus.archived": "已归档（{count}）",
-  "sidebar.focus.reportsToConsoleSession": "向控制台会话汇报",
 
   "sidebar.git.branch": "分支 {branch}",
   "sidebar.git.detachedBranch": "分离头指针位于 {branch}",
@@ -236,8 +235,10 @@ export const zhHans: Translation<"other"> = {
 
   "archive.heading.project": "已归档会话",
   "archive.heading.consoleSessions": "已归档的控制台会话",
+  "archive.heading.boundSessions": "已归档的绑定会话",
   "archive.title.project": "{name} 的已归档会话",
   "archive.title.consoleSessions": "{name} 的已归档控制台会话",
+  "archive.title.boundSessions": "绑定到 {name} 的已归档会话",
   "archive.count": {
     other: "{count} 个已归档会话",
   },

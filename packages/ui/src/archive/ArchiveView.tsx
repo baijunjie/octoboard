@@ -11,21 +11,22 @@ import type { DialogRequest } from "../dialogs/dialogRequest";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
-import { archivedSessions } from "../sidebar/order";
+import { archivedSessions, boundArchivedSessions } from "../sidebar/order";
 
 /** How many rows the list adds each time its end scrolls into view. */
 const PAGE = 30;
 
 /**
- * Every archived session of a project, or every archived console session of a console, newest
- * first: the full archive the sidebar's menus and focus mode lead to ("The archive view" in
- * docs/product/sidebar.md). It covers the terminal while open, which stays mounted beneath it. The
- * list is rendered a page at a time, adding the next page as its end scrolls into view; the records
- * themselves are all in the daemon's snapshot already.
+ * Every archived session of a project, every archived console session of a console, or a console
+ * session's own archived bound sessions, newest first: the full archive the sidebar's menus and
+ * focus mode lead to ("The archive view" in docs/product/sidebar.md). It covers the terminal while
+ * open, which stays mounted beneath it. The list is rendered a page at a time, adding the next page
+ * as its end scrolls into view; the records themselves are all in the daemon's snapshot already.
  */
 export function ArchiveView({
   console: owner,
   project,
+  boundTo,
   sessions,
   onReopen,
   onOpenDialog,
@@ -34,7 +35,14 @@ export function ArchiveView({
 }: {
   console: Console;
   project?: Project;
-  /** The scope's sessions; only the archived ones are listed. */
+  /** The console session whose own archived bound sessions this lists, instead of a project's or
+   * the console's. Never set together with `project`.
+   *
+   * TODO(docs/plans/20261008-console-sessions-and-agent-accounts/13-focus-modes.md): nothing
+   * passes this yet — a console session's focus mode is what will. */
+  boundTo?: Session;
+  /** The scope's sessions; only the archived ones are listed, or, with `boundTo`, only the ones
+   * archived and bound to it. */
   sessions: Session[];
   onReopen: (session: Session) => void;
   onOpenDialog: (dialog: DialogRequest) => void;
@@ -44,7 +52,7 @@ export function ArchiveView({
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
-  const archived = archivedSessions(sessions);
+  const archived = boundTo ? boundArchivedSessions(sessions, boundTo.id) : archivedSessions(sessions);
   const [shown, setShown] = useState(PAGE);
   const sentinelRef = useRef<HTMLLIElement>(null);
   const rootRef = useRef<HTMLElement>(null);
@@ -78,7 +86,16 @@ export function ArchiveView({
     return () => clearTimeout(timer);
   }, [archived.length, dialogOpen]);
 
-  const heading = project ? t("archive.title.project", { name: project.name }) : t("archive.title.consoleSessions", { name: owner.name });
+  const heading = project
+    ? t("archive.title.project", { name: project.name })
+    : boundTo
+      ? t("archive.title.boundSessions", { name: boundTo.title })
+      : t("archive.title.consoleSessions", { name: owner.name });
+  // `delete-archived` and the `delete_archived_sessions` request behind it only know a project's
+  // scope or the console's; neither names a console session's own archive. So "Delete all" does not
+  // render under `boundTo` below — passing it through regardless would, once some milestone reaches
+  // this scope, open the dialog with `project: undefined` and delete the console's own archived
+  // console sessions instead of the bound sessions the heading and the count are about.
   const deleteAll = () =>
     onOpenDialog({ kind: "delete-archived", console: owner, project, count: archived.length });
 
@@ -102,9 +119,11 @@ export function ArchiveView({
       <header className="flex h-14 shrink-0 items-center gap-1 border-b border-separator px-2 ps-4">
         <div className="min-w-0 flex-1">
           <div className="truncate text-xs text-muted">{t("archive.count", { count: archived.length })}</div>
-          <h2 className="truncate text-sm font-semibold">{t(project ? "archive.heading.project" : "archive.heading.consoleSessions")}</h2>
+          <h2 className="truncate text-sm font-semibold">
+            {t(project ? "archive.heading.project" : boundTo ? "archive.heading.boundSessions" : "archive.heading.consoleSessions")}
+          </h2>
         </div>
-        {archived.length > 0 && (
+        {archived.length > 0 && !boundTo && (
           <Button size="sm" variant="danger-soft" preventFocusOnPress onPress={deleteAll}>
             <Trash2 aria-hidden="true" className="size-4" />
             {t("archive.deleteAll")}

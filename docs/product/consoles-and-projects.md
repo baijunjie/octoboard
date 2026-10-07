@@ -98,7 +98,7 @@ The name, the console session agent, the default agent and the config directorie
 and a config directory can be cleared. Changing an agent or a config directory affects sessions opened afterwards; a
 session that already exists keeps the agent and the config directory it was started with. For the console session,
 the change therefore takes effect once the existing console session is archived and a fresh one is started
-from the console session row (see "Console sessions and project sessions" in `docs/product/sessions.md`).
+from the console sessions section (see "Console sessions and project sessions" in `docs/product/sessions.md`).
 
 A config directory is checked only when it is changed: saving a console with that field untouched succeeds even if the
 stored directory has since disappeared.

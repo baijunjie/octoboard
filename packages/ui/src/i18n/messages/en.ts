@@ -204,11 +204,10 @@ export const en = {
   "sidebar.console.addProject": "Add project",
   "sidebar.console.edit": "Edit console",
   "sidebar.console.delete": "Delete console",
-  "sidebar.consoleSession.name": "Console session",
-  "sidebar.consoleSession.ariaLabel": "Console session, {agent}, {status}",
-  "sidebar.consoleSession.start": "Start console session",
-  "sidebar.consoleSession.startHint": "Not started",
-  "sidebar.consoleSession.actions": "Actions for the console session of {name}",
+  "sidebar.consoleSessions.heading": "Console sessions",
+  "sidebar.consoleSessions.new": "New console session",
+  "sidebar.consoleSessions.actions": "Actions for console sessions of {name}",
+  "sidebar.consoleSessions.empty": "No console sessions yet",
   "sidebar.archive.consoleSessions": "Archived console sessions",
   "sidebar.archive.empty": "No archived sessions",
   "sidebar.archive.viewAll": {
@@ -225,6 +224,7 @@ export const en = {
   "sidebar.project.remove": "Remove project",
   "sidebar.session.ariaLabel": "{title} session, {agent}, {status}",
   "sidebar.session.ariaLabelPinned": "{title} session, {agent}, {status}, pinned",
+  "sidebar.session.boundTo": "Bound to {name}",
   "sidebar.session.actions": "Actions for session {title}",
   "sidebar.session.reopen": "Reopen",
   "sidebar.session.rename": "Rename",
@@ -233,7 +233,6 @@ export const en = {
   "sidebar.focus.exit": "Leave focus mode",
   "sidebar.focus.sessions": "Sessions ({count})",
   "sidebar.focus.archived": "Archived ({count})",
-  "sidebar.focus.reportsToConsoleSession": "Reports to console session",
 
   "sidebar.git.branch": "Branch {branch}",
   "sidebar.git.detachedBranch": "Detached at {branch}",
@@ -257,8 +256,10 @@ export const en = {
 
   "archive.heading.project": "Archived sessions",
   "archive.heading.consoleSessions": "Archived console sessions",
+  "archive.heading.boundSessions": "Archived bound sessions",
   "archive.title.project": "Archived sessions of {name}",
   "archive.title.consoleSessions": "Archived console sessions of {name}",
+  "archive.title.boundSessions": "Archived sessions bound to {name}",
   "archive.count": {
     one: "{count} archived session",
     other: "{count} archived sessions",

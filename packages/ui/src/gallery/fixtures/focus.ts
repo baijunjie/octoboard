@@ -16,7 +16,7 @@ export const focusScenarios: Scenario[] = [
       consoles: [console_],
       projects: [project, other],
       sessions: [
-        sessionOf("s-console", console_.id, undefined, "Hub 1", "idle"),
+        sessionOf("s-console", console_.id, undefined, "Hub 1", "idle", { colour: "teal" }),
         sessionOf("s-1", console_.id, project.id, "Add idempotency keys", "working", { pinned: true, bound_to: "s-console" }),
         sessionOf("s-2", console_.id, project.id, "Fix the rounding of partial results", "waiting_user", {
           bound_to: "s-console",

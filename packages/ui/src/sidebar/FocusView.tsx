@@ -1,5 +1,5 @@
 import { Button, ScrollShadow } from "@heroui/react";
-import { Archive, ArrowLeft, List, MessageSquarePlus, Pin, Plus, Radio } from "lucide-react";
+import { Archive, ArrowLeft, List, MessageSquarePlus, Pin, Plus } from "lucide-react";
 import React from "react";
 
 import { AGENT_LABEL } from "../agents";
@@ -13,6 +13,7 @@ import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
 import { sessionAriaLabel, statusLabel } from "../sessionLabel";
 import { useDaemonStore } from "../store";
+import { BindingBadge } from "./BindingBadge";
 import { GitBadge } from "./GitBadge";
 import { projectMenu, sessionMenu } from "./menus";
 import { archivedSessions, liveSessions } from "./order";
@@ -30,12 +31,16 @@ export function FocusView({
   console: parentConsole,
   project,
   sessions,
+  owners,
   selectedSessionId,
 }: {
   handlers: SidebarHandlers;
   console: Console;
   project: Project;
   sessions: Session[];
+  /** This console's console sessions, by id — a bound session's card names and colours its owner
+   * by looking it up here. */
+  owners: Map<string, Session>;
   selectedSessionId?: string;
 }): React.ReactElement {
   const t = useT();
@@ -95,7 +100,12 @@ export function FocusView({
           <div ref={listRef} className="relative flex flex-col gap-2">
             {live.map((session) => (
               <div key={session.id} data-flip={session.id}>
-                <SessionCard handlers={handlers} session={session} selected={session.id === selectedSessionId} />
+                <SessionCard
+                  handlers={handlers}
+                  session={session}
+                  owner={session.bound_to ? owners.get(session.bound_to) : undefined}
+                  selected={session.id === selectedSessionId}
+                />
               </div>
             ))}
           </div>
@@ -121,22 +131,24 @@ export function FocusView({
   );
 }
 
-/** A session in focus mode: its status put into words, its agent, its title over two lines, and
- * when it started. */
+/** A session in focus mode: its status put into words, its agent, its title over two lines, when
+ * it started, and — for a bound session — its binding badge and its owner's name. */
 function SessionCard({
   handlers,
   session,
+  owner,
   selected,
 }: {
   handlers: SidebarHandlers;
   session: Session;
+  owner?: Session;
   selected: boolean;
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
   return (
     <TreeRow
-      ariaLabel={sessionAriaLabel(t, session)}
+      ariaLabel={sessionAriaLabel(t, language, session, owner)}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
       className="min-h-8 flex-col gap-1.5 border border-separator bg-background p-3 data-selected:border-accent"
@@ -158,11 +170,15 @@ function SessionCard({
         <span className="truncate">{AGENT_LABEL[session.agent]}</span>
         <span aria-hidden="true">·</span>
         <span className="shrink-0">{formatRelativeTime(language, session.started_at)}</span>
-        {session.bound_to !== undefined && session.bound_to !== null && (
+        {owner && (
           <>
             <span aria-hidden="true">·</span>
-            <Radio aria-hidden="true" className="size-3 shrink-0" />
-            <span className="truncate">{t("sidebar.focus.reportsToConsoleSession")}</span>
+            {/* The owner's name sits right beside the dot, so a tooltip repeating it would add
+                nothing; see `decorative`'s own comment on `BindingBadge`. */}
+            <BindingBadge owner={owner} decorative />
+            <span dir="auto" className="truncate">
+              {owner.title}
+            </span>
           </>
         )}
       </div>
@@ -183,7 +199,7 @@ function ArchivedRow({
   const language = useCurrentLanguage();
   return (
     <TreeRow
-      ariaLabel={sessionAriaLabel(t, session)}
+      ariaLabel={sessionAriaLabel(t, language, session)}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
     >

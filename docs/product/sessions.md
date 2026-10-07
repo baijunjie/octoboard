@@ -9,58 +9,51 @@ own binary and shows it as it is. What it adds to each launch, and what it guara
 
 | | Working directory | Where it appears |
 |---|---|---|
-| Console session | the console's working directory | the console session row |
+| Console session | the console's working directory | the console sessions section |
 | Project session | the project's directory | under that project |
 
 **A console may hold any number of console sessions running at once.** Opening, resuming or reopening
-one never checks what else is running in the console. (The sidebar still shows only one console
-session row per console, described next; a second live console session is still reachable, as an
-ordinary session row below it, until the sidebar is reworked to give each its own — see
-`docs/product/sidebar.md`.)
+one never checks what else is running in the console, and the sidebar lists every one of them that is
+not archived, each as its own row, in the console sessions section above the project list (see "The
+console sessions section and the project list" in `docs/product/sidebar.md`).
 
-**The console session row** holds the console's newest console session that is not archived, whether
-running or interrupted. Clicking it starts a new console session when the row is empty and selects the
-console session in it otherwise, which resumes an interrupted console session as selecting any
-interrupted session does; the row's menu has no Resume item. Its action menu, shown while the row
-holds a console session or the console has an archived console session, offers:
-
-- **Archived console sessions** — a submenu of the console's newest archived console sessions, each of
-  which can be selected, and the way to the archive view of all of them (see "The console session row
-  and the project list" and "The archive view" in `docs/product/sidebar.md`).
-- **Archive** — only while the row holds a console session. It asks for confirmation, then archives
-  the console session as described in "Archiving, interruption and resuming" below.
-
-A console session's title is renameable, like a project session's, and defaults to its ordinal
-("Hub 1", "Hub 2", …) — the same title the sidebar's extra console session rows (below) carry, with
-the ordinary session row's Rename entry. The one console session row described above is the
-exception: it carries no Rename, a stand-in until the sidebar is reworked to give every console
-session a row of its own (see `docs/product/sidebar.md`), at which point this row, and the gap it
-leaves in renaming, both go away.
+A console session's row follows a session row exactly — the same status glyph, its agent's icon, its
+title, a pin glyph when pinned, and selecting it resumes it when it is interrupted, as selecting any
+interrupted session does. Its action menu offers **Pin**/**Unpin**, **Rename** and **Archive**; there
+is no Resume item, for the same reason. A console session's title is renameable, like a project
+session's, and defaults to its ordinal ("Hub 1", "Hub 2", …).
 
 The console session cannot archive itself (see "The console session's tools" in
-`docs/product/hub-orchestration.md`), so the user archives it from this menu. Archiving the console
-session moves it among the console's archived console sessions; with another console session still
-live, the row falls back to showing that one instead, and the next click on the row selects it, as
-clicking any interrupted session does. Only once none remain does the next click start a fresh
-console session, opened with the console's current console session agent and agent config
-directory — whereas resuming or reopening a console session keeps the ones it was opened with (see
-"Agent config directories" in `docs/product/consoles-and-projects.md`).
+`docs/product/hub-orchestration.md`), so the user archives it from its own row's menu, as any session
+is archived. Archiving it moves it among the console's archived console sessions; these are not reached
+from any one row, but from the console sessions section's own menu, which offers **Archived console
+sessions** — a submenu of the console's newest archived console sessions, each of which can be
+selected, and the way to the archive view of all of them (see "The archive view" in
+`docs/product/sidebar.md`). The section's own **New console session** button opens one with the
+console's current console session agent and agent config directory — whereas resuming or reopening a
+console session keeps the ones it was opened with (see "Agent config directories" in
+`docs/product/consoles-and-projects.md`).
 
 A console session carries no project; it runs in the console's working directory. It is given
 Octoboard's orchestration tools and dispatches work to sessions in the console's projects — see
 `docs/product/hub-orchestration.md`. Because it belongs to no project, archived console sessions
-belong to the console rather than to any project, and are reached from the console session row's menu.
+belong to the console rather than to any project.
+
+A project session opened bound to a console session carries that console session's **binding badge**
+wherever it is listed, and the console session's own row shows the same colour (see "The binding
+badge" in `docs/product/sidebar.md`).
 
 Selecting a console session also shows its console's **report panel** beside the terminal, described
 in `docs/product/report-panel.md`; a project session's terminal has the pane to itself.
 
 ## Where sessions are listed
 
-Sessions are listed in the sidebar, one console at a time: the console session in its console session
-row, a project session under its project. Archived sessions are not listed among the others;
-they are reached from their project's or the console session row's action menu and from the archive
-view. Everything about the sidebar — its rows and menus, the order sessions are listed
-in, pinning, focus mode, the archive view and how selecting a session works — is in `docs/product/sidebar.md`.
+Sessions are listed in the sidebar, one console at a time: its console sessions in the console
+sessions section, a project session under its project. Archived sessions are not listed among the
+others; they are reached from their project's or, for a console session, the section's own action
+menu, and from the archive view. Everything about the sidebar — its rows and menus, the order sessions
+are listed in, pinning, focus mode, the archive view and how selecting a session works — is in
+`docs/product/sidebar.md`.
 
 ## Opening a session
 
@@ -114,8 +107,8 @@ session records belong to a specific agent and cannot be moved across agents.
 | Working | `working` | an accent-coloured dot pulsing a fading copy of itself outward | The agent is executing a turn. |
 | Waiting for the user | `waiting_user` | a raised hand that waves now and then | The agent is waiting on a permission decision or has asked the user a question through its own ask-the-user tool. |
 | Awaiting instructions | `idle` | a green speech bubble | The process is running and sitting at its prompt. |
-| Interrupted | `interrupted` | a power-off sign | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in its console session row) and can be resumed. |
-| Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming"). No longer listed among its project's sessions (a console session, no longer in the console session row); reached through the archive (see "Archived sessions" below) and can be reopened. |
+| Interrupted | `interrupted` | a power-off sign | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
+| Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming"). No longer listed among its project's sessions (a console session, no longer in the console sessions section); reached through the archive (see "Archived sessions" below) and can be reopened. |
 
 The first three mean a process is running; the last two mean none is, and both can be resumed.
 
@@ -255,9 +248,9 @@ can observe by itself tells that apart from a user who simply has not answered y
 **Archiving** ends the agent's process and keeps the session and its record. The agent is asked to
 exit first and is killed only if it does not; a kill takes the agent's tool subprocesses with it.
 Archiving is available for any session that is not already archived, including an interrupted one;
-for the console session it is on the console session row's menu (see "Console sessions and project
-sessions" above). The user archives a session from its row's menu, and is asked to confirm first. An
-archived session keeps its pin, if it had one (see "Order of projects and sessions" in
+a console session is archived from its own row's menu, like any other (see "Console sessions and
+project sessions" above). The user archives a session from its row's menu, and is asked to confirm
+first. An archived session keeps its pin, if it had one (see "Order of projects and sessions" in
 `docs/product/sidebar.md`).
 
 Besides the user, two things archive a session: the console session, explicitly, and a project
@@ -290,8 +283,8 @@ there, where it is listed, and that selecting an archived one does not relaunch 
 A project's archived sessions, and a console's archived console sessions, stay until the user deletes them, the
 project is removed or the console is deleted. They are listed most recently archived first, and reached:
 
-- from the project's "View archive" submenu, or for console sessions the console session row's "Archived console
-  sessions" submenu, with the newest five;
+- from the project's "View archive" submenu, or for console sessions the console sessions section's
+  "Archived console sessions" submenu, with the newest five;
 - from the project's focus mode, with the newest ten;
 - from the archive view, with all of them.
 

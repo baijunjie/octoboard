@@ -1,25 +1,7 @@
 import type { Translate } from "./i18n/catalog";
+import { joinPhrases } from "./i18n/joinPhrases";
 import type { Language } from "./i18n/languages";
 import type { GitStatus } from "./protocol";
-
-// Cached per language, as `relativeTime.ts`'s `formats` and `catalog.ts`'s `pluralRules` are: this
-// is built twice per project row on every render, and `Intl.ListFormat`'s own constructor is the
-// expensive part of formatting, not the `format` call.
-const listFormats = new Map<Language, Intl.ListFormat>();
-
-/** Joins independent phrases into one sentence, correctly punctuated for `language` —
- * `Intl.ListFormat` rather than a hardcoded separator, since the right punctuation between list
- * items differs by language (a plain ASCII comma reads wrong in a Chinese sentence, for one).
- * `narrow` drops the joining word before the last item ("and" / "、"), since these are independent
- * facts read off a status, not items in a conjunction. */
-function joinPhrases(language: Language, phrases: string[]): string {
-  let format = listFormats.get(language);
-  if (!format) {
-    format = new Intl.ListFormat(language, { style: "narrow", type: "conjunction" });
-    listFormats.set(language, format);
-  }
-  return format.format(phrases);
-}
 
 /** Which phrase names the branch itself, chosen by `activity` and whether `branch` is known —
  * independent of `ahead`/`behind`, which `gitBadgeAriaLabel` appends as their own phrases.

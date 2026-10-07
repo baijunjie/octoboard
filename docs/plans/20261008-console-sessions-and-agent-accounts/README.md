@@ -238,7 +238,7 @@ milestone 1 settles. Nothing it adds says "hub".
 
 1. 01 Terminology: console sessions and project sessions (closed)
 2. 02 The binding, and the end of the one-live rule (closed)
-3. [The sidebar's console sessions](03-sidebar.md)
+3. 03 The sidebar's console sessions (closed)
 4. [Accounts: storage and protocol](04-accounts-storage.md)
 5. [Agent availability and the default account](05-availability-and-the-default-account.md)
 6. [The Agent accounts section in Settings](06-settings-section.md)

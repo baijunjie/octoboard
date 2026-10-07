@@ -7,7 +7,7 @@ const GROUP = "Report panel";
 const console_ = consoleOf("c-1", "Main");
 const project = projectOf("p-1", console_.id, "Search API");
 const sessions = [
-  sessionOf("s-console", console_.id, undefined, "Hub", "idle"),
+  sessionOf("s-console", console_.id, undefined, "Hub", "idle", { colour: "teal" }),
   sessionOf("s-1", console_.id, project.id, "Add idempotency keys", "working"),
 ];
 
@@ -45,7 +45,7 @@ export const reportScenarios: Scenario[] = [
     group: GROUP,
     title: "No pages yet",
     state: withPages([]),
-    steps: [(ui) => ui.press(ui.consoleSession())],
+    steps: [(ui) => ui.press(ui.session("Hub"))],
   },
   {
     id: "report-pages",
@@ -53,7 +53,7 @@ export const reportScenarios: Scenario[] = [
     title: "Several pages, a form on the newest",
     description: "The newest page is a form, which can be submitted (the fixture accepts it).",
     state: withPages(pages),
-    steps: [(ui) => ui.press(ui.consoleSession()), (ui) => ui.wait(500)],
+    steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500)],
   },
   {
     id: "report-history",
@@ -61,13 +61,13 @@ export const reportScenarios: Scenario[] = [
     title: "A history page, read-only",
     description: "Paged back one page: the read-only badge, with the page's controls disabled.",
     state: withPages(pages),
-    steps: [(ui) => ui.press(ui.consoleSession()), (ui) => ui.press(ui.t("report.previous")), (ui) => ui.wait(500)],
+    steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.press(ui.t("report.previous")), (ui) => ui.wait(500)],
   },
   {
     id: "report-one-old-page",
     group: GROUP,
     title: "One page, a day old",
     state: withPages([{ ...pages[0], created_at: minutesAgo(60 * 30) }]),
-    steps: [(ui) => ui.press(ui.consoleSession()), (ui) => ui.wait(500)],
+    steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500)],
   },
 ];

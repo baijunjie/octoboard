@@ -15,7 +15,7 @@ export const layoutScenarios: Scenario[] = [
     description: "Sidebar, terminal and the report panel docked side by side.",
     width: 1440,
     state,
-    steps: [(ui) => ui.press(ui.consoleSession()), (ui) => ui.wait(500)],
+    steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500)],
   },
   {
     id: "layout-sidebar-hidden",
@@ -34,7 +34,7 @@ export const layoutScenarios: Scenario[] = [
     width: 1440,
     preferences: { reportVisible: false },
     state,
-    steps: [(ui) => ui.press(ui.consoleSession())],
+    steps: [(ui) => ui.press(ui.session("Hub"))],
   },
   {
     id: "layout-wide-panes",
@@ -43,7 +43,7 @@ export const layoutScenarios: Scenario[] = [
     width: 1440,
     preferences: { sidebarWidth: 480, reportWidth: 720 },
     state,
-    steps: [(ui) => ui.press(ui.consoleSession()), (ui) => ui.wait(500)],
+    steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500)],
   },
   {
     id: "layout-narrow-sidebar",
@@ -59,6 +59,6 @@ export const layoutScenarios: Scenario[] = [
     title: "Narrow window, report drawer open",
     width: 800,
     state,
-    steps: [(ui) => ui.press(ui.t("titleBar.sidebar.show")), (ui) => ui.press(ui.consoleSession()), (ui) => ui.press(ui.t("titleBar.report.show")), (ui) => ui.wait(500)],
+    steps: [(ui) => ui.press(ui.t("titleBar.sidebar.show")), (ui) => ui.press(ui.session("Hub")), (ui) => ui.press(ui.t("titleBar.report.show")), (ui) => ui.wait(500)],
   },
 ];

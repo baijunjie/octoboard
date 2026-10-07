@@ -60,9 +60,17 @@ export function App(): React.ReactElement {
   const sidebarView = useSidebarView(consoleList, projects);
   useGitStatusSchedule(sidebarView.currentConsole?.id);
   const archiveConsole = archiveScope ? consoles.get(archiveScope.console) : undefined;
-  const archiveProject = archiveScope?.project ? projects.get(archiveScope.project) : undefined;
+  const archiveProjectId = archiveScope && "project" in archiveScope ? archiveScope.project : undefined;
+  const archiveProject = archiveProjectId ? projects.get(archiveProjectId) : undefined;
+  // Nothing in this milestone sets `consoleSession`; see the TODO on `ArchiveScope` in
+  // `sidebar/types.ts`. Resolved here anyway, so the view is ready once something does.
+  const archiveConsoleSessionId = archiveScope && "consoleSession" in archiveScope ? archiveScope.consoleSession : undefined;
+  const archiveBoundTo = archiveConsoleSessionId ? sessions.get(archiveConsoleSessionId) : undefined;
   // The archive view closes by itself once what it lists is gone.
-  const archiveOpen = archiveConsole !== undefined && (archiveScope?.project === undefined || archiveProject !== undefined);
+  const archiveOpen =
+    archiveConsole !== undefined &&
+    (archiveProjectId === undefined || archiveProject !== undefined) &&
+    (archiveConsoleSessionId === undefined || archiveBoundTo !== undefined);
 
   const panes = usePaneToggles({ hasReportPanel, focusTerminal });
 
@@ -103,9 +111,8 @@ export function App(): React.ReactElement {
   });
 
   // Every click that could resume or create a session is guarded against its own double-click: two
-  // fast clicks on the console session row otherwise create two console sessions (only one of which
-  // the tree can ever show again, since console sessions belong to no project node), and two fast
-  // clicks on a dormant session fire two `resume_session` calls.
+  // fast clicks on the console sessions section's "New console session" button otherwise create two
+  // console sessions, and two fast clicks on a dormant session fire two `resume_session` calls.
   const inFlightRef = useRef<Set<string>>(new Set());
 
   /** Runs `action` unless one with the same `key` is in flight; says whether it went through. A
@@ -334,12 +341,17 @@ export function App(): React.ReactElement {
           <div className="relative flex min-h-0 min-w-[382px] flex-[1_1_382px] docked:min-w-[520px] docked:flex-[1_1_520px]">
             {archiveOpen && archiveConsole && (
               <ArchiveView
-                key={`${archiveScope?.console}:${archiveScope?.project ?? ""}`}
+                key={`${archiveScope?.console}:${archiveProjectId ?? ""}:${archiveConsoleSessionId ?? ""}`}
                 console={archiveConsole}
                 project={archiveProject}
-                sessions={sessionList.filter((s) =>
-                  archiveProject ? s.project_id === archiveProject.id : s.console_id === archiveConsole.id && s.role === "console",
-                )}
+                boundTo={archiveBoundTo}
+                sessions={
+                  archiveProject
+                    ? sessionList.filter((s) => s.project_id === archiveProject.id)
+                    : archiveBoundTo
+                      ? sessionList
+                      : sessionList.filter((s) => s.console_id === archiveConsole.id && s.role === "console")
+                }
                 onReopen={reopenSession}
                 onOpenDialog={openDialog}
                 dialogOpen={dialogRequest !== undefined}

@@ -1,12 +1,17 @@
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import type { Console, Project, Session } from "../protocol";
 
-/** Which archive the archive view lists: a project's archived sessions, or with no `project` the
- * console's archived console sessions. */
-export interface ArchiveScope {
-  console: string;
-  project?: string;
-}
+/** Which archive the archive view lists: a project's archived sessions, a console session's own
+ * archived bound sessions, or with neither `project` nor `consoleSession` the console's archived
+ * console sessions. A discriminated union rather than two optional fields, so `project` and
+ * `consoleSession` being mutually exclusive is enforced by the type rather than left to prose: a
+ * value naming both does not type-check, and narrowing one in by `"project" in scope` (or the
+ * reverse) rules the other out too.
+ *
+ * TODO(docs/plans/20261008-console-sessions-and-agent-accounts/13-focus-modes.md): nothing opens
+ * this scope with `consoleSession` set yet — a console session's focus mode is where milestone 13
+ * reaches it. */
+export type ArchiveScope = { console: string } & ({ project: string } | { consoleSession: string } | {});
 
 /** The callbacks the sidebar triggers. Kept as one object, passed down by reference rather than
  * spread, so a child's prop list says exactly what data it narrows instead of inheriting whatever

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import type { Project, Session, SessionStatus } from "../protocol";
-import { liveSessions, sortProjects } from "./order";
+import { boundArchivedSessions, liveSessions, sortProjects } from "./order";
 
-const session = (id: string, status: SessionStatus, started_at: number, pinned = false): Session => ({
+const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to?: string): Session => ({
   id,
   agent: "claude",
   console_id: "c",
@@ -14,7 +14,7 @@ const session = (id: string, status: SessionStatus, started_at: number, pinned =
   title: id,
   status,
   has_conversation: false,
-  bound_to: undefined,
+  bound_to,
   started_at,
   pinned,
 });
@@ -43,6 +43,18 @@ describe("liveSessions", () => {
       session("pinned", "interrupted", 0, true),
     ]);
     expect(ordered.map((s) => s.id)).toEqual(["pinned", "waiting", "working", "new-idle", "old-idle", "interrupted"]);
+  });
+});
+
+describe("boundArchivedSessions", () => {
+  it("keeps only the archived sessions bound to the given console session", () => {
+    const sessions = [
+      session("bound-archived", "archived", 1, false, "s-console"),
+      session("bound-live", "idle", 2, false, "s-console"),
+      session("unbound-archived", "archived", 3),
+      session("other-owner-archived", "archived", 4, false, "s-other"),
+    ];
+    expect(boundArchivedSessions(sessions, "s-console").map((s) => s.id)).toEqual(["bound-archived"]);
   });
 });
 

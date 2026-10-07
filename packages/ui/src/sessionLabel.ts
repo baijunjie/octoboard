@@ -1,5 +1,7 @@
 import { AGENT_LABEL } from "./agents";
 import type { MessageKey, Translate } from "./i18n/catalog";
+import { joinPhrases } from "./i18n/joinPhrases";
+import type { Language } from "./i18n/languages";
 import type { Console, Project, Session, SessionStatus } from "./protocol";
 
 /** Where to tell the user a session is, since the daemon's `Session` record itself only carries
@@ -31,11 +33,15 @@ export function statusLabel(t: Translate, status: SessionStatus): string {
 }
 
 /** A session row's accessible name: the row is one button, so its icons are not announced, and
- * the title, agent, status and pin all have to be in this. */
-export function sessionAriaLabel(t: Translate, session: Session): string {
-  return t(session.pinned ? "sidebar.session.ariaLabelPinned" : "sidebar.session.ariaLabel", {
+ * the title, agent, status and pin all have to be in this. `owner`, the console session this
+ * (project) session is bound to, folds in the fact the binding badge shows visually — the badge
+ * carries no information its tooltip does not, so it carries none the row's own label does not
+ * either. */
+export function sessionAriaLabel(t: Translate, language: Language, session: Session, owner?: Session): string {
+  const base = t(session.pinned ? "sidebar.session.ariaLabelPinned" : "sidebar.session.ariaLabel", {
     title: session.title,
     agent: AGENT_LABEL[session.agent],
     status: statusLabel(t, session.status),
   });
+  return owner ? joinPhrases(language, [base, t("sidebar.session.boundTo", { name: owner.title })]) : base;
 }

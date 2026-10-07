@@ -38,15 +38,15 @@
 
   /* The console session colour palette (`ConsoleSessionColour` in `protocol.ts`), light variant:
      one token per entry, assigned to a console session on creation (see "Key design decisions" in
-     `docs/plans/20261008-console-sessions-and-agent-accounts/README.md`) and not yet drawn by any
-     component — the badge itself is milestone 3's. The six hues are spaced as far as they fall from
-     HeroUI's own `--accent`, `--success`, `--warning` and `--danger` (253.83°, 150.81°, 72.33° and
-     25.74° respectively), so a console session's badge never echoes a status colour's meaning by
-     coincidence. One lightness for the whole palette, picked against the badge's 3:1 bar for a
-     non-text graphic (WCAG 1.4.11) on the two surfaces a row sits on, `--background` (L 0.9702) and
-     `--default` (L 0.94): measured 4.05 / 3.70 olive, 3.93 / 3.59 jade, 3.55 / 3.24 teal,
-     3.58 / 3.28 azure, 4.40 / 4.03 violet, 4.55 / 4.16 rose. Teal and azure are the floor, which is
-     what fixes the lightness; a lighter palette puts them under the bar. */
+     `docs/plans/20261008-console-sessions-and-agent-accounts/README.md`) and drawn by
+     `BindingBadge` (`packages/ui/src/sidebar/BindingBadge.tsx`). The six hues are spaced as far as
+     they fall from HeroUI's own `--accent`, `--success`, `--warning` and `--danger` (253.83°,
+     150.81°, 72.33° and 25.74° respectively), so a console session's badge never echoes a status
+     colour's meaning by coincidence. One lightness for the whole palette, picked against the
+     badge's 3:1 bar for a non-text graphic (WCAG 1.4.11) on the two surfaces a row sits on,
+     `--background` (L 0.9702) and `--default` (L 0.94): measured 4.05 / 3.70 olive, 3.93 / 3.59
+     jade, 3.55 / 3.24 teal, 3.58 / 3.28 azure, 4.40 / 4.03 violet, 4.55 / 4.16 rose. Teal and azure
+     are the floor, which is what fixes the lightness; a lighter palette puts them under the bar. */
   --console-session-olive: oklch(0.57 0.15 98);
   --console-session-jade: oklch(0.57 0.15 125);
   --console-session-teal: oklch(0.57 0.15 185);

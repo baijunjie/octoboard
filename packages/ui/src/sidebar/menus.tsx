@@ -64,7 +64,14 @@ export function projectMenu(
 
 /** A session's actions: pin, rename and archive; an archived session (listed in focus mode) offers
  * deleting instead. Resuming or reopening is no item: selecting an interrupted session resumes it,
- * and an archived one is reopened by typing to it or from the archive view. */
+ * and an archived one is reopened by typing to it or from the archive view. Shared by a project
+ * session's row and a console session's row (`ConsoleSessionsSection` in `Sidebar.tsx`) — a console
+ * session cannot archive itself (see "The console session's tools" in
+ * `docs/product/hub-orchestration.md`), so this is the only way to archive one.
+ *
+ * TODO(docs/plans/20261008-console-sessions-and-agent-accounts/13-focus-modes.md): a console
+ * session's row still owes its "Enter focus mode" entry, left out of this menu because the
+ * behaviour it would open is that milestone's; see its Handoff. */
 export function sessionMenu(t: Translate, handlers: SidebarHandlers, session: Session): ActionMenuEntry[] {
   const archived = session.status === "archived";
   return [

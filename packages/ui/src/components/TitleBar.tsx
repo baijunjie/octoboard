@@ -233,13 +233,12 @@ function ConnectionStatus({
 }
 
 /** Console › Project › session title, with the session's status icon beside it; a console session
- * has no project and is the console's "Console session" as in the tree. The trail fades at its
- * end edge when too long, the icon always stays. */
+ * has no project, so its trail is just the console and its own title. The trail fades at its end
+ * edge when too long, the icon always stays. */
 function Breadcrumb({ session }: { session: Session }): React.ReactElement {
-  const t = useT();
   const consoleName = useDaemonStore((s) => s.consoles.get(session.console_id)?.name);
   const projectName = useDaemonStore((s) => (session.project_id ? s.projects.get(session.project_id)?.name : undefined));
-  const trail = session.role === "console" ? [consoleName, t("sidebar.consoleSession.name")] : [consoleName, projectName, session.title];
+  const trail = session.role === "console" ? [consoleName, session.title] : [consoleName, projectName, session.title];
   return (
     <Trail names={trail.map((part) => part ?? "…")}>
       <StatusIcon status={session.status} />

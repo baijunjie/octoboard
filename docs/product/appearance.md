@@ -15,6 +15,10 @@ Everything the window shows follows the chosen appearance, including:
 - **The terminal.** Each appearance has its own full palette — background, foreground, cursor, selection
   and all sixteen ANSI colours — so ordinary coloured agent output stays readable on a light background as
   well as a dark one.
+- **A console session's colour**, shown in its own sidebar row and as the binding badge on every project
+  session bound to it (see "The console sessions section and the project list" in `docs/product/sidebar.md`).
+  Each colour in the fixed palette a console session is assigned from has its own light and dark value, so
+  the badge clears the same contrast bar against the sidebar's background in either appearance.
 - **The top bar**, which in the macOS application stands in for the window's titlebar (see "The top bar" in
   `docs/product/window-layout.md`).
 - **The native window's own appearance** in the macOS application — the window's close, minimise and zoom buttons

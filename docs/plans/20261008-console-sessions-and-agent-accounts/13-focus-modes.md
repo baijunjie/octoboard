@@ -7,6 +7,21 @@
 > project's unbound sessions and says how many others are running in the project and whose they are, with that line
 > leading to the console session; the keyboard shortcut enters and leaves both. Static checks and the test suite pass.
 
+## Handoff
+
+From milestone 03, the sidebar's console sessions:
+
+- **A console session's row has no "Enter focus mode" entry.** Milestone 03's scope names one, but the
+  behaviour it would open is this milestone's, so the entry was left out rather than half-built. Add it to the
+  row menu milestone 03 built, alongside Rename and Archive.
+- **The archive view can already be scoped to a console session's archived bound sessions, and nothing reaches
+  it.** Milestone 03 built the scope — `ArchiveScope.consoleSession` in `packages/ui/src/sidebar/types.ts`, the
+  `boundArchivedSessions` filter in `packages/ui/src/sidebar/order.ts` and the view's own branch and titles — and
+  left a `TODO` naming this milestone as what reaches it. This milestone's console-session focus view is the way
+  in, through its archived list and its archive view.
+- **`delete_archived_sessions` has no scope for a console session's own archive.** The archive view's
+  "delete all" dialog is still project-scoped. Widen it with the entry point, or say why it stays out.
+
 ## Technical design
 
 - [ ] Focus mode's target becomes either a project or a console session, instead of a project only. It is still

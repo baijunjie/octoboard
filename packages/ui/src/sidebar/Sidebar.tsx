@@ -1,6 +1,5 @@
 import { ScrollShadow } from "@heroui/react";
 import {
-  Archive,
   ChevronDown,
   ChevronRight,
   ChevronsUpDown,
@@ -11,17 +10,14 @@ import {
   MessageSquarePlus,
   Pencil,
   Pin,
-  Play,
   Plus,
   SearchX,
   Trash2,
   UnfoldVertical,
-  Waypoints,
 } from "lucide-react";
 import { setInteractionModality } from "react-aria";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { AGENT_LABEL } from "../agents";
 import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
 import { AgentIcon } from "../components/AgentIcon";
 import { ConsoleAvatar } from "../components/ConsoleAvatar";
@@ -35,21 +31,14 @@ import type { PaneWidth } from "../layout/paneWidth";
 import type { PanePeek } from "../layout/usePaneToggles";
 import { effectiveTags, matchesFilter, tagVocabulary, withoutTags } from "../projectFiltering";
 import type { Console, Project, Session } from "../protocol";
-import { sessionAriaLabel, statusLabel } from "../sessionLabel";
+import { sessionAriaLabel } from "../sessionLabel";
 import { useDaemonStore } from "../store";
+import { BindingBadge } from "./BindingBadge";
 import { FocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
 import { type FilterUpdate, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterTag, ProjectFilterTags } from "./ProjectFilter";
 import { archiveSubmenu, projectMenu, sessionMenu } from "./menus";
-import {
-  archivedSessions,
-  consoleActivity,
-  isInactiveProject,
-  liveConsoleSessions,
-  liveSessions,
-  sortProjects,
-  type Activity,
-} from "./order";
+import { archivedSessions, consoleActivity, isInactiveProject, liveSessions, sortProjects, type Activity } from "./order";
 import { RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
 import type { SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
@@ -77,7 +66,7 @@ interface SidebarProps extends SidebarHandlers {
 }
 
 /** The sidebar: one console at a time, picked from the switcher at its top (see
- * docs/product/sidebar.md), with its console session and projects — or, in a project's focus mode,
+ * docs/product/sidebar.md), with its console sessions and projects — or, in a project's focus mode,
  * that project alone. Expand/collapse state is purely local UI state; the daemon has no notion of
  * it. */
 export function Sidebar({
@@ -151,6 +140,9 @@ export function Sidebar({
     : drawerClass("start", "drawer", open);
 
   const consoleSessions = currentConsole ? sessions.filter((s) => s.console_id === currentConsole.id) : [];
+  // Every project session's binding badge names the console session it is bound to (`bound_to`) by
+  // looking it up here, once, rather than each row searching the console's sessions itself.
+  const owners = new Map(consoleSessions.filter((s) => s.role === "console").map((s) => [s.id, s]));
 
   // What the sidebar is showing, and how it arrived there: going down into a project's focus mode
   // slides the new view in from the end, coming back up slides it in from the start, and switching
@@ -190,6 +182,7 @@ export function Sidebar({
         console={currentConsole}
         project={focusProject}
         sessions={consoleSessions.filter((s) => s.project_id === focusProject.id)}
+        owners={owners}
         selectedSessionId={selectedSessionId}
       />
     );
@@ -203,6 +196,7 @@ export function Sidebar({
             console={currentConsole}
             projects={projects.filter((p) => p.console_id === currentConsole.id)}
             sessions={consoleSessions}
+            owners={owners}
             selectedSessionId={selectedSessionId}
             collapsed={collapsed}
             toggle={toggle}
@@ -353,6 +347,7 @@ function ConsoleBody({
   console: thisConsole,
   projects,
   sessions,
+  owners,
   selectedSessionId,
   collapsed,
   toggle,
@@ -364,6 +359,9 @@ function ConsoleBody({
   console: Console;
   projects: Project[];
   sessions: Session[];
+  /** Every console session of this console, by id — a project session's binding badge is looked up
+   * here by its `bound_to`. */
+  owners: Map<string, Session>;
   selectedSessionId?: string;
   collapsed: Set<string>;
   toggle: (id: string) => void;
@@ -400,7 +398,7 @@ function ConsoleBody({
 
   return (
     <>
-      <ConsoleSessionRows handlers={handlers} console={thisConsole} sessions={sessions} selectedSessionId={selectedSessionId} />
+      <ConsoleSessionsSection handlers={handlers} console={thisConsole} sessions={sessions} selectedSessionId={selectedSessionId} />
       <SectionHeading
         after={
           // Only while the filter button is there (below): the chip hands focus to it when removed.
@@ -481,6 +479,7 @@ function ConsoleBody({
                 project={project}
                 parentConsole={thisConsole}
                 sessions={sessionsOf(project)}
+                owners={owners}
                 selectedSessionId={selectedSessionId}
                 isCollapsed={collapsed.has(project.id)}
                 onToggle={() => toggle(project.id)}
@@ -493,9 +492,11 @@ function ConsoleBody({
   );
 }
 
-/** The console session row, and below it any further console session that is not archived (should
- * one ever exist). Archived console sessions are reached from the row's menu. */
-function ConsoleSessionRows({
+/** The console's console sessions, listed above the project list: every one that is not archived,
+ * ordered the way a project's own sessions are (`liveSessions`), with an action to start a new one
+ * and, reached from the section rather than from any one row, the console's archived console
+ * sessions (see "The console sessions section and the project list" in `docs/product/sidebar.md`). */
+function ConsoleSessionsSection({
   handlers,
   console: thisConsole,
   sessions,
@@ -507,60 +508,44 @@ function ConsoleSessionRows({
   selectedSessionId?: string;
 }): React.ReactElement {
   const t = useT();
-  // A console may now hold any number of console sessions at once (the one-live rule is gone —
-  // see `docs/plans/20261008-console-sessions-and-agent-accounts/02-binding-data-model.md`), but
-  // this row still shows only the newest: keeping only the first of `liveConsoleSessions` means
-  // every other one still gets a row of its own, as an ordinary session, rather than disappearing.
-  //
-  // TODO(docs/plans/20261008-console-sessions-and-agent-accounts/03-sidebar.md): give each console
-  // session its own row instead of folding every one past the newest into `extraConsoleSessions`.
-  const liveOnes = liveConsoleSessions(sessions, thisConsole.id);
-  const consoleSession = liveOnes[0];
-  const extraConsoleSessions = liveOnes.slice(1);
-  const archivedConsoleSessions = archivedSessions(sessions.filter((s) => s.role === "console"));
-  const activateConsoleSession = () =>
-    consoleSession ? handlers.onSelectSession(consoleSession) : handlers.onOpenConsoleSession(thisConsole);
+  const consoleSessions = sessions.filter((s) => s.role === "console");
+  const live = liveSessions(consoleSessions);
+  const archivedConsoleSessions = archivedSessions(consoleSessions);
+  const openNew = () => handlers.onOpenConsoleSession(thisConsole);
+  const listRef = useFlip<HTMLDivElement>();
 
   const menu: ActionMenuEntry[] = [
     archiveSubmenu(t, t("sidebar.archive.consoleSessions"), archivedConsoleSessions, handlers.onSelectSession, () =>
       handlers.onOpenArchive({ console: thisConsole.id }),
     ),
-    // The only way to archive the console session: it cannot archive itself, and while it sits in
-    // this row (running or interrupted), archiving it is what lets the row open a fresh one.
-    ...(consoleSession
-      ? (["separator", { label: t("sidebar.session.archive"), icon: Archive, onClick: () => handlers.onOpenDialog({ kind: "archive-session", session: consoleSession }) }] as ActionMenuEntry[])
-      : []),
   ];
 
   return (
-    <div className="flex flex-col gap-0.5 pt-2">
-      <TreeRow
-        ariaLabel={
-          consoleSession
-            ? t("sidebar.consoleSession.ariaLabel", { agent: AGENT_LABEL[consoleSession.agent], status: statusLabel(t, consoleSession.status) })
-            : t("sidebar.consoleSession.start")
+    <>
+      <SectionHeading
+        action={
+          <>
+            <RowIconButton icon={Plus} label={t("sidebar.consoleSessions.new")} onPress={openNew} />
+            {archivedConsoleSessions.length > 0 && (
+              <ActionMenu label={t("sidebar.consoleSessions.actions", { name: thisConsole.name })} items={menu} />
+            )}
+          </>
         }
-        selected={consoleSession !== undefined && consoleSession.id === selectedSessionId}
-        onActivate={activateConsoleSession}
       >
-        <span className="flex size-4 shrink-0 items-center justify-center">
-          {consoleSession ? <StatusIcon status={consoleSession.status} decorative /> : <Play aria-hidden="true" className="size-3.5 text-muted" />}
-        </span>
-        {consoleSession ? <AgentIcon agent={consoleSession.agent} /> : <Waypoints aria-hidden="true" className="size-4 shrink-0 text-muted" />}
-        <RowLabel title={t("sidebar.consoleSession.name")}>
-          <span className="font-medium">{t("sidebar.consoleSession.name")}</span>
-          {!consoleSession && <span className="ms-2 text-muted">{t("sidebar.consoleSession.startHint")}</span>}
-        </RowLabel>
-        <RowControls>
-          {(consoleSession || archivedConsoleSessions.length > 0) && (
-            <ActionMenu label={t("sidebar.consoleSession.actions", { name: thisConsole.name })} items={menu} />
-          )}
-        </RowControls>
-      </TreeRow>
-      {extraConsoleSessions.map((session) => (
-        <SessionRow key={session.id} handlers={handlers} session={session} selectedSessionId={selectedSessionId} />
-      ))}
-    </div>
+        {t("sidebar.consoleSessions.heading")}
+      </SectionHeading>
+      {live.length === 0 ? (
+        <EmptyPanel compact icon={MessageSquarePlus} message={t("sidebar.consoleSessions.empty")} />
+      ) : (
+        <div ref={listRef} className="relative flex flex-col gap-0.5">
+          {live.map((session) => (
+            <div key={session.id} data-flip={session.id}>
+              <SessionRow handlers={handlers} session={session} selectedSessionId={selectedSessionId} />
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -569,6 +554,7 @@ function ProjectNode({
   project,
   parentConsole,
   sessions,
+  owners,
   selectedSessionId,
   isCollapsed,
   onToggle,
@@ -577,6 +563,7 @@ function ProjectNode({
   project: Project;
   parentConsole: Console;
   sessions: Session[];
+  owners: Map<string, Session>;
   selectedSessionId?: string;
   isCollapsed: boolean;
   onToggle: () => void;
@@ -649,7 +636,12 @@ function ProjectNode({
             <div ref={listRef} className="relative flex flex-col gap-0.5">
               {live.map((session) => (
                 <div key={session.id} data-flip={session.id}>
-                  <SessionRow handlers={handlers} session={session} selectedSessionId={selectedSessionId} />
+                  <SessionRow
+                    handlers={handlers}
+                    session={session}
+                    owner={session.bound_to ? owners.get(session.bound_to) : undefined}
+                    selectedSessionId={selectedSessionId}
+                  />
                 </div>
               ))}
             </div>
@@ -660,25 +652,40 @@ function ProjectNode({
   );
 }
 
+/** A session row: a project session's own, or one of the console's console sessions
+ * (`ConsoleSessionsSection`), which share the row and its menu — pin, rename, archive, no resume —
+ * since both are ordinary sessions once the row stops being a console session's sole, special one.
+ * `owner`, given only for a bound project session, is the console session it reports to, drawn as
+ * the binding badge in its colour. */
 function SessionRow({
   handlers,
   session,
+  owner,
   selectedSessionId,
 }: {
   handlers: SidebarHandlers;
   session: Session;
+  owner?: Session;
   selectedSessionId?: string;
 }): React.ReactElement {
   const t = useT();
+  const language = useCurrentLanguage();
   return (
     <TreeRow
-      ariaLabel={sessionAriaLabel(t, session)}
+      ariaLabel={sessionAriaLabel(t, language, session, owner)}
       selected={session.id === selectedSessionId}
       onActivate={() => handlers.onSelectSession(session)}
     >
       <StatusIcon status={session.status} decorative />
       <AgentIcon agent={session.agent} />
       <RowLabel title={session.title}>{session.title}</RowLabel>
+      {/* A console session shows its own colour, decorative here since the row's own label already
+          names it; a bound project session's badge names its owner in its tooltip instead. */}
+      {session.role === "console" && session.colour ? (
+        <BindingBadge owner={session} decorative />
+      ) : (
+        owner && <BindingBadge owner={owner} />
+      )}
       {session.pinned && <Pin aria-hidden="true" className="size-3 shrink-0 text-muted" />}
       <RowControls>
         <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session)} />
