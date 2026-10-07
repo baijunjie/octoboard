@@ -177,6 +177,8 @@ export const zhHans: Translation<"other"> = {
   "sidebar.filter.noTags": "还没有项目带有标签。可在项目设置中添加。",
   "sidebar.filter.removeTag": "移除标签 {tag}",
   "sidebar.filter.removeKeyword": "移除关键词 {keyword}",
+  "sidebar.expandAll": "展开全部项目",
+  "sidebar.collapseAll": "收起全部项目",
   "sidebar.pin": "置顶",
   "sidebar.unpin": "取消置顶",
   "sidebar.activity.waiting": "{name}，有会话在等你",

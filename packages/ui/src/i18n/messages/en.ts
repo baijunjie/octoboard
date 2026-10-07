@@ -192,6 +192,8 @@ export const en = {
   "sidebar.filter.noTags": "No project has a tag yet. Add tags in a project's settings.",
   "sidebar.filter.removeTag": "Remove tag {tag}",
   "sidebar.filter.removeKeyword": "Remove keyword {keyword}",
+  "sidebar.expandAll": "Expand all projects",
+  "sidebar.collapseAll": "Collapse all projects",
   "sidebar.pin": "Pin",
   "sidebar.unpin": "Unpin",
   "sidebar.activity.waiting": "{name}, a session is waiting for you",

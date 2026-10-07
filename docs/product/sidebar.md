@@ -60,7 +60,8 @@ their place.
 
 ### Filtering the project list
 
-While the console has projects, a filter button, **Filter projects**, sits at the end of the Projects heading. It opens
+While the console has projects, a filter button, **Filter projects**, sits among the controls at the end of the
+Projects heading (see "Expanding and collapsing the listed projects" below for the order they run in). It opens
 a small popover with two controls. A search field filters the project list as it is typed: a project stays listed when
 its name contains the keyword, ignoring case and the keyword's surrounding spaces. Below it, the tags in use (see "Tags"
 in `docs/product/consoles-and-projects.md`) are shown as toggles, and picking one narrows the list to the projects
@@ -75,8 +76,8 @@ alone. Opening and closing it with the mouse leaves keyboard focus where it was.
   under the heading, each with a small remove button that drops just that tag from the filter; clicking a tag, the
   keyword's remove button or a tag's remove button with the mouse leaves keyboard focus where it was, and removing the
   keyword, or the last tag, with the keyboard moves focus to the filter button. A **Clear filter** button appears just
-  before the filter button at the heading's end and clears the keyword and the picked tags together; the search field's
-  own clear button clears only the keyword.
+  before the filter button and clears the keyword and the picked tags together; the search field's own clear button
+  clears only the keyword.
 - The tags offered are the distinct tags of the console's projects, in alphabetical order, so a tag that no project
   carries any more disappears from the choices, and from the filter if it was picked, without emptying the list. The
   pick is only hidden, not forgotten: if a project carries that tag again, it filters again.
@@ -85,6 +86,24 @@ alone. Opening and closing it with the mouse leaves keyboard focus where it was.
 - Each console has its own filter: switching to another console shows that console's own, and switching back, or
   entering and leaving focus mode, keeps it. Filters are not stored, so reloading the window shows every list
   unfiltered.
+
+### Expanding and collapsing the listed projects
+
+Two icon-only buttons, **Expand all projects** and **Collapse all projects**, follow the filter button, so the
+controls at the end of the Projects heading run: Clear filter (only while a filter is in force), Filter projects,
+Expand all projects, Collapse all projects.
+
+- They show while the console has projects **and** the list shows at least one of them. With a filter matching no
+  project they are not there — there is nothing to act on — while the filter button beside them stays, as the way
+  back.
+- Each acts on the projects the list shows and on those alone, so with a filter in force the projects it hides keep
+  whatever expanded or collapsed state they had. What they change is the same state a project row's own chevron
+  changes (see "Project rows" below).
+- Pressing one while every listed project is already expanded, or already collapsed, changes nothing.
+- Pressing either with the mouse leaves keyboard focus where it was, as the sidebar's other controls do. The one
+  exception: Collapse all projects takes away what the projects it collapses hold below them, so when keyboard focus
+  is standing anywhere in there it is handed to the Collapse all projects button, its focus ring showing, rather than
+  dropped. The project rows themselves stay, so focus on one of them is left where it is.
 
 ## Project rows
 

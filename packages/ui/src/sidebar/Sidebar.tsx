@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronsUpDown,
+  FoldVertical,
   FolderOpen,
   FolderPlus,
   LayoutDashboard,
@@ -14,6 +15,7 @@ import {
   Plus,
   SearchX,
   Trash2,
+  UnfoldVertical,
   Waypoints,
 } from "lucide-react";
 import { setInteractionModality } from "react-aria";
@@ -24,6 +26,7 @@ import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
 import { AgentIcon } from "../components/AgentIcon";
 import { ConsoleAvatar } from "../components/ConsoleAvatar";
 import { EmptyPanel } from "../components/EmptyPanel";
+import { handFocusOff } from "../components/handFocusOff";
 import { ActivityMarker, StatusIcon } from "../components/StatusIcon";
 import { withGitBadge } from "../gitStatusLabel";
 import { useCurrentLanguage, useT } from "../i18n/react";
@@ -92,6 +95,20 @@ export function Sidebar({
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
+    });
+
+  // Collapse or expand a whole list of projects at once. It is given the ids rather than reading
+  // the console's projects itself, so a filtered list only moves the projects it shows; the ones
+  // the filter hides keep the state they had. Pressing it again once they are all there is an
+  // ordinary thing to do, so an unchanged set is returned as it was and the tree is left alone.
+  const setCollapsedFor = (ids: string[], value: boolean) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (value) next.add(id);
+        else next.delete(id);
+      }
+      return next.size === prev.size ? prev : next;
     });
 
   // Entering or leaving focus mode swaps the sidebar's content, which unmounts the control that
@@ -180,6 +197,7 @@ export function Sidebar({
             selectedSessionId={selectedSessionId}
             collapsed={collapsed}
             toggle={toggle}
+            setCollapsedFor={setCollapsedFor}
             filter={filters.get(currentConsole.id) ?? NO_FILTER}
             setFilter={(update) =>
               setFilters((prev) => new Map(prev).set(currentConsole.id, update(prev.get(currentConsole.id) ?? NO_FILTER)))
@@ -329,6 +347,7 @@ function ConsoleBody({
   selectedSessionId,
   collapsed,
   toggle,
+  setCollapsedFor,
   filter: stored,
   setFilter,
 }: {
@@ -339,12 +358,14 @@ function ConsoleBody({
   selectedSessionId?: string;
   collapsed: Set<string>;
   toggle: (id: string) => void;
+  setCollapsedFor: (ids: string[], value: boolean) => void;
   filter: ProjectFilter;
   setFilter: (update: FilterUpdate) => void;
 }): React.ReactElement {
   const t = useT();
   const listRef = useFlip<HTMLDivElement>();
   const filterButton = useRef<HTMLDivElement>(null);
+  const collapseButton = useRef<HTMLSpanElement>(null);
   const sessionsOf = (project: Project) => sessions.filter((s) => s.project_id === project.id);
   // The tags to pick from are the ones the console's projects carry now; a picked tag none of them
   // carries any more is dropped here, so it neither filters nor shows, yet it stays in the stored
@@ -355,6 +376,18 @@ function ConsoleBody({
     projects.filter((p) => matchesFilter(p, filter.keyword, filter.tags)),
     sessionsOf,
   );
+  const orderedIds = ordered.map((p) => p.id);
+
+  // Collapsing takes away what a project row holds below it (`data-sessions`), and a keyboard user
+  // may be standing in there: a mouse press leaves focus where it is (`preventFocusOnPress`), so
+  // focus would drop to `<body>` with no blur event and the terminal would stop receiving
+  // keystrokes. It is handed to the button that did it, with its ring showing, since whoever was
+  // down there got there from the keyboard. The project rows themselves stay, so focus on one of
+  // them, or on its controls, is left where it is.
+  const collapseAll = () => {
+    handFocusOff(document.activeElement?.closest("[data-sessions]"), collapseButton.current, true);
+    setCollapsedFor(orderedIds, true);
+  };
 
   return (
     <>
@@ -373,12 +406,24 @@ function ConsoleBody({
         }
         action={
           projects.length > 0 && (
-            <ProjectFilterButton
-              filter={filter}
-              vocabulary={vocabulary}
-              onChange={setFilter}
-              holderRef={filterButton}
-            />
+            <>
+              <ProjectFilterButton
+                filter={filter}
+                vocabulary={vocabulary}
+                onChange={setFilter}
+                holderRef={filterButton}
+              />
+              {/* Only with something listed: a filter matching nothing leaves them nothing to act
+                  on, while the filter button beside them stays, as the way back. */}
+              {ordered.length > 0 && (
+                <>
+                  <RowIconButton icon={UnfoldVertical} label={t("sidebar.expandAll")} onPress={() => setCollapsedFor(orderedIds, false)} />
+                  <span ref={collapseButton} className="flex">
+                    <RowIconButton icon={FoldVertical} label={t("sidebar.collapseAll")} onPress={collapseAll} />
+                  </span>
+                </>
+              )}
+            </>
           )
         }
       >
@@ -573,7 +618,9 @@ function ProjectNode({
         </RowControls>
       </TreeRow>
       {!isCollapsed && (
-        <div className="ms-3 mt-0.5 border-s border-separator ps-1">
+        // Marked so collapsing every project at once can tell whether keyboard focus is standing in
+        // a part about to go away (see `collapseAll`).
+        <div data-sessions className="ms-3 mt-0.5 border-s border-separator ps-1">
           {live.length === 0 ? (
             <EmptyPanel
               compact

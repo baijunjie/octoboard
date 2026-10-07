@@ -49,4 +49,21 @@ export const filterScenarios: Scenario[] = [
       (ui) => ui.key("Escape"),
     ],
   },
+  {
+    id: "filter-collapse-all",
+    group: GROUP,
+    title: "Collapse all, with a filter in force",
+    description:
+      "Collapse all projects acts on the projects the list shows and on those alone, so the ones the filter hides keep the state they had; dropping the filter brings them back expanded.",
+    state,
+    steps: [
+      openFilter,
+      (ui) => ui.press("frontend"),
+      (ui) => ui.key("Escape"),
+      (ui) => ui.press(ui.t("sidebar.collapseAll")),
+      (ui) => ui.press(ui.t("sidebar.filter.clear")),
+      // The rows the filter brings back are still animating into place.
+      (ui) => ui.wait(500),
+    ],
+  },
 ];

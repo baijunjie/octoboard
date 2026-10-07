@@ -312,7 +312,8 @@ buttons below. These are:
   focus mode. Its tooltip is a short "More actions", while the name announced for it also names what it belongs to
   ("Actions for session …" and the like), so that each ⋮ can be told apart;
 - the sidebar's other icon buttons — a project's **+** (New session), wherever it appears, the Projects heading's
-  Filter projects and the Clear filter beside it, and focus mode's Leave focus mode;
+  Filter projects, the Clear filter beside it and the Expand all projects / Collapse all projects pair, and focus
+  mode's Leave focus mode;
 - the archive view's Close button and each of its rows' Delete button, whose tooltip names the session;
 - the three options of Settings' Appearance row — Light, Dark and System (see "Appearance" in
   `docs/product/settings.md`);

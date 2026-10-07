@@ -8,9 +8,10 @@ import {
   TagGroup,
 } from "@heroui/react";
 import { BrushCleaning, Check, ListFilter } from "lucide-react";
-import { type Key, setInteractionModality } from "react-aria";
+import type { Key } from "react-aria";
 import React, { type RefObject, useRef, useState } from "react";
 
+import { handFocusOff } from "../components/handFocusOff";
 import { TitledControl } from "../components/TitledControl";
 import { usePointerFocusReturn } from "../components/usePointerFocusReturn";
 import { useT } from "../i18n/react";
@@ -28,23 +29,6 @@ export interface ProjectFilter {
 export type FilterUpdate = (stored: ProjectFilter) => ProjectFilter;
 
 export const NO_FILTER: ProjectFilter = { keyword: "", tags: [] };
-
-/** Hands keyboard focus from `from` to the button inside `holder` (the element around the filter
- * button) when `from` holds it: a control about to unmount would otherwise drop focus to
- * `<body>`, and the terminal would stop receiving keystrokes. The filter button renders whenever
- * the project list is not empty, and everything that calls this goes away with it, so `holder`
- * is there whenever `from` is. `showRing` sets the interaction modality to keyboard first, so the
- * destination shows its focus ring; the removals leave it as the interaction set it, so the ring
- * follows how the press came. */
-function handFocusOff(
-  from: Element | null | undefined,
-  holder: HTMLElement | null | undefined,
-  showRing: boolean,
-): void {
-  if (!from?.contains(document.activeElement)) return;
-  if (showRing) setInteractionModality("keyboard");
-  holder?.querySelector("button")?.focus();
-}
 
 /** Whether `filter` is narrowing the list at all. */
 function isFiltering(filter: ProjectFilter): boolean {
@@ -108,8 +92,10 @@ export function ProjectFilterButton({
     onChange(() => NO_FILTER);
   };
 
+  // No wrapper of its own: `SectionHeading` already lays its action controls out in a row and
+  // spaces them, so these two sit directly among the buttons that follow them.
   return (
-    <div className="flex items-center gap-0.5">
+    <>
       {isFiltering(filter) && (
         <span ref={clearHolder} className="flex">
           <RowIconButton
@@ -181,7 +167,7 @@ export function ProjectFilterButton({
           </Popover.Content>
         </Popover>
       </div>
-    </div>
+    </>
   );
 }
 

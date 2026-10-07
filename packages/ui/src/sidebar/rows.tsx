@@ -134,7 +134,8 @@ export function RowIconButton({
 }
 
 /** A heading over a group of rows: what follows the label (a filter in force) sits right after it,
- * and `action` at the row's end. */
+ * and `action` at the row's end — several controls there are spaced by the heading, so a caller
+ * hands them over as a fragment rather than wrapping them itself. */
 export function SectionHeading({
   children,
   after,
@@ -149,7 +150,7 @@ export function SectionHeading({
       <h3 className="shrink-0 text-xs font-medium text-muted">{children}</h3>
       {/* What follows the label gives way first when the row is short; the controls never do. */}
       <div className="flex min-w-0 flex-1">{after}</div>
-      {action && <div className="flex shrink-0 items-center">{action}</div>}
+      {action && <div className="flex shrink-0 items-center gap-0.5">{action}</div>}
     </div>
   );
 }

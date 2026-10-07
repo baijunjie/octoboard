@@ -10,7 +10,10 @@ import { useEffect, useRef } from "react";
  * to the top bar's first control when there is no terminal to take it.
  *
  * The caller must stay mounted while the control goes away (render `null`, not unmount): the check
- * runs in the caller's own effect. */
+ * runs in the caller's own effect.
+ *
+ * This is the post-hoc half of the pair. Where the code taking the control away can name where
+ * focus should go instead, `handFocusOff` moves it before anything is removed. */
 export function useFocusHandoff(focusTerminal: () => void): {
   onFocus: (event: React.FocusEvent) => void;
   onBlur: (event: React.FocusEvent) => void;
