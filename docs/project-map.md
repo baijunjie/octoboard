@@ -29,6 +29,11 @@ Per-package commands are in that package's doc.
   desktop and daemon crates' `build.rs` hand it to the code that words the menu, window title and the daemon's own
   messages. The copies Tauri and Cargo require (`productName` in `tauri.conf.json`, `repository` in the root
   `Cargo.toml`) mirror it, and the desktop crate's `build.rs` fails the build when they drift.
+- [`.env`](../.env), [`.env.secret.example`](../.env.secret.example) and [`scripts/env.mjs`](../scripts/env.mjs) — the
+  env files and the small reader they share. `.env` (committed) holds non-secret configuration, read by the UI's dev
+  server, with a gitignored `.env.local` overriding it; `.env.secret` (gitignored, template `.env.secret.example`) holds
+  the release credentials, read by `apps/desktop/scripts/release.mjs` alone.
+  Root `scripts/` holds the helpers the build scripts share.
 
 ## Deliverables
 

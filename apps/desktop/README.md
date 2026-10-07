@@ -49,19 +49,24 @@ The bundle is arm64-only: `scripts/build-daemon.mjs` builds the daemon for the h
 `scripts/release.mjs` passes no `--target` to `tauri build` either, so `pnpm release` only ever produces a bundle
 for the architecture it runs on. There is no universal-binary build.
 
-Signing and notarization are both driven by environment variables the bundled Tauri CLI reads directly; this script
-does not forward anything to it, it only checks ahead of time that what is set is enough to produce something
-Gatekeeper will actually accept, and otherwise fails before spending the minutes a full build takes:
+Signing and notarization are both driven by environment variables the bundled Tauri CLI reads directly (`pnpm release`
+loads them from the gitignored repo-root `.env.secret`, see `.env.secret.example`; a variable already in the
+environment wins, and `pnpm build:app` never reads the file); this script does not forward anything to it, it only
+checks ahead of time that what is set is enough to produce something Gatekeeper will actually accept, and otherwise
+fails before spending the minutes a full build takes. An App Store Connect API key is the only notarization route this
+project supports, so it also refuses to start while `APPLE_ID` or `APPLE_PASSWORD` is in the environment (even empty
+and with no signing identity): the Tauri CLI reads those as a second credential set, and the `.app` and the `.dmg`
+could be notarized under different identities.
 
 - Nothing set: builds unsigned. This is the only mode that runs on a machine with no Apple Developer ID
   certificate installed, and is announced as such — the signing-dependent verification steps are skipped, not
   silently assumed to have passed.
 - `APPLE_SIGNING_IDENTITY` set (a **"Developer ID Application"** certificate's identity — *not* "Apple Development",
-  which Gatekeeper does not accept for distribution outside the App Store) plus either `APPLE_ID` + `APPLE_PASSWORD`
-  + `APPLE_TEAM_ID` (the 10-character Team ID, from the Developer account's membership page) or `APPLE_API_KEY` +
-  `APPLE_API_ISSUER` + `APPLE_API_KEY_PATH`: signed, notarized, and stapled — the actual release artifact.
-- `APPLE_SIGNING_IDENTITY` set without a complete notarization credential trio: refused outright. A signed-but-not-
-  notarized `.dmg` still trips Gatekeeper on a downloaded copy, so this is not a state worth building in.
+  which Gatekeeper does not accept for distribution outside the App Store) plus an App Store Connect API key,
+  `APPLE_API_KEY` + `APPLE_API_ISSUER` + `APPLE_API_KEY_PATH`: signed, notarized, and stapled — the actual release
+  artifact.
+- `APPLE_SIGNING_IDENTITY` set without a complete API key trio: refused outright. A signed-but-not-notarized `.dmg`
+  still trips Gatekeeper on a downloaded copy, so this is not a state worth building in.
 
 Obtaining that **"Developer ID Application"** certificate is a web-only task: `POST /v1/certificates` with
 `DEVELOPER_ID_APPLICATION_G2` answers `403 FORBIDDEN_ERROR`, "This operation can only be performed by the Account

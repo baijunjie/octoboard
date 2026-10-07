@@ -33,6 +33,11 @@ from `$TMPDIR/octoboardd.port`. Then either:
 - run `OCTOBOARD_DAEMON_PORT=<port> pnpm dev` and open the plain URL, which reaches the daemon through a same-origin
   `/ws` proxy (`vite.config.ts`).
 
+Both variables can also be set in the committed repo-root `.env` (commented out there) or a gitignored `.env.local`;
+a variable in the shell wins over them. The dev server reads those files and a `vite build` never does. Prefer them to
+a `packages/ui/.env`: that directory is vite's own `envDir`, so a `vite build` reads it too and a `VITE_DAEMON_PORT`
+there goes into a release bundle, and vite expands `$VAR` in it where the root files are read literally.
+
 With none of these the page shows a "no daemon address" screen. A daemon started by hand for development should get an
 isolated `HOME` and `TMPDIR`: its instance lock (`daemon.lock`) and database live under `$HOME/.octoboard`, and the
 port file under the temp directory, so the defaults would touch the real data and collide with a running instance.

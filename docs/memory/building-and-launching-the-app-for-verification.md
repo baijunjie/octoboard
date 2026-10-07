@@ -52,8 +52,10 @@ exported them, a plain verification build was Developer ID-signed and submitted 
 separate times, with nothing in the command or its output to warn of it — unreleased code sent to Apple, minutes added
 to the build, and a signed bundle that the wrapped-sidecar swap above breaks. One of the three came from an agent
 stripping the variables with `UNSET=$(...)` and `env $UNSET ...`, which does nothing in zsh because zsh does not
-word-split an unquoted parameter. Do not run a bare `pnpm tauri build` for a verification: a shell that carries
-`APPLE_*` would sign it again.
+word-split an unquoted parameter. Do not run a bare `pnpm tauri build` or `pnpm release` for a verification: the
+first signs with whatever `APPLE_*` the calling shell carries, and the second loads the credentials from the gitignored
+repo-root `.env.secret` itself, so wherever that file is filled in, a shell carrying no `APPLE_*` is not a build that
+cannot sign.
 
 ## Launch a built app with `open`, never by exec'ing its binary
 

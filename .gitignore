@@ -17,10 +17,10 @@ coverage/
 # The one Cargo build directory of the root workspace
 /target/
 
-# Env & logs
-.env
-.env.*
-!.env.example
+# Env & logs: `.env` and `.env.secret.example` are committed; credentials live in `.env.secret`
+.env.secret*
+!.env.secret.example
+.env*.local
 *.log
 
 # Claude Code local
