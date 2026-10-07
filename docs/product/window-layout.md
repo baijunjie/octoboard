@@ -1,13 +1,13 @@
 # Window layout
 
 The window has a **top bar** across its whole width and, under it, up to three panes, left to right (right to left
-under a right-to-left language, see "Right-to-left layout" below): the
-**sidebar**, showing one console's hub, projects and sessions (see `docs/product/sidebar.md`), the selected session's
-**terminal**, which the archive view covers while it is open (see "The archive view" in `docs/product/sidebar.md`),
-and — only while the selected session is a hub session — that console's **report panel** (see
-`docs/product/report-panel.md`). The connection banner, while the
-daemon connection is down, sits between the top bar and the panes (see "Losing the daemon connection" in
-`docs/product/application-lifecycle.md`). Toasts float over the bottom right (see "Toasts" below).
+under a right-to-left language, see "Right-to-left layout" below): the **sidebar**, showing one console's hub,
+projects and sessions (see `docs/product/sidebar.md`), the selected session's **terminal**, which the archive view
+covers while it is open (see "The archive view" in `docs/product/sidebar.md`), and — only while the selected session is
+a hub session — that console's **report panel** (see `docs/product/report-panel.md`). The connection banner, while the
+daemon connection is down, is a full-width strip along the window's bottom edge, under the panes (see "Losing the
+daemon connection" in `docs/product/application-lifecycle.md`). Toasts float over the bottom right, above the banner
+while it is shown (see "Toasts" below).
 
 How the three panes are arranged depends on one width, **1100 px**. At that width and above they sit side by
 side in a row, the layout the macOS window is always in; a pane the user has hidden there can still float in over
@@ -36,8 +36,9 @@ It has three parts:
   `docs/product/sidebar.md`) the breadcrumb shows where that is instead, with no status icon: *console › project ›
   Archived sessions*, or *console › Archived hubs*.
 - **Right**, left to right:
-  - the **waiting count**, a raised hand and the number of sessions waiting for the user, shown only while at least
-    one is; pressing it goes to the next waiting session (see "The raised hand" in `docs/product/sessions.md`);
+  - the **waiting count**, a raised hand with the number of sessions waiting for the user in a badge on its corner,
+    shown only while at least one is (99+ beyond 99); pressing it goes to the next waiting session (see "The raised
+    hand" in `docs/product/sessions.md`);
   - the **connection status**, described below;
   - **Turn on notifications**, a bell with a small dot on it, shown only in a browser whose answer to notifications is
     still undecided; pressing it asks the browser (see "Notifications" in `docs/product/settings.md`);
@@ -67,10 +68,10 @@ Opened in a plain browser, the bar has none of this: it starts at the left edge 
 ### The connection status
 
 One indicator covers both the connection to the daemon and the selected session's terminal connection. **While both
-are healthy it shows nothing.** On trouble it shows a labelled chip, amber while things are still being retried and
-red once they are not:
+are healthy it shows nothing.** On trouble it shows an icon, an amber turning arrow while things are still being retried
+and a red unplugged cord once they are not; the label below is its tooltip and accessible name:
 
-| Situation | Chip |
+| Situation | Label |
 |---|---|
 | The daemon connection is being established | Connecting… |
 | The daemon connection dropped and is being retried | Reconnecting… |
@@ -83,6 +84,9 @@ only while its session's process is running — a session that is not running ha
 connection still in progress is not trouble until an attempt has failed. How the terminal reconnects is in "The
 terminal" in `docs/product/sessions.md`; the daemon connection's own banner and its Retry are in "Losing the daemon
 connection" in `docs/product/application-lifecycle.md`.
+
+The indicator is a Tab stop that shows its label as a tooltip while it has focus. When it disappears while it holds
+focus, because the connection came back, focus goes to the terminal.
 
 ## The window's minimum size
 
@@ -146,8 +150,8 @@ resizes the agent's terminal (see "The terminal" in `docs/product/sessions.md`).
 
 Each pane has a resize handle on its inner edge: the sidebar's on its right edge, the report panel's on its left. The
 sidebar's handle runs the full height of the window, from the window's top through the top bar's left segment, where
-pressing it resizes rather than moving the window; the report panel's starts below the top bar (and the connection
-banner, while it is shown).
+pressing it resizes rather than moving the window; the report panel's starts below the top bar. Both end above the
+connection banner, while it is shown.
 
 - **Dragging** the handle sets the pane's width, within its range in the table above.
 - **Double-clicking** it returns the pane to its default width.
@@ -185,8 +189,8 @@ At 1100 px and wider, a hidden pane can be brought up for a moment without showi
 pane**:
 
 - **What brings it up**: the mouse reaching the window's edge on the pane's side — an 8 px strip along the left edge
-  for the sidebar, a 4 px strip along the right edge for the report panel, both from below the top bar (and the
-  connection banner) down — or the mouse resting on the pane's toggle in the top bar. Touch and pen do neither.
+  for the sidebar, a 4 px strip along the right edge for the report panel, both from below the top bar to
+  above the connection banner — or the mouse resting on the pane's toggle in the top bar. Touch and pen do neither.
 - **How it shows**: it slides in over the terminal in 200 ms (at once where the system asks for reduced motion), at
   the pane's chosen width — the report panel at most 92% of the window's width — with a shadow and no dimming behind
   it. It overlays the terminal, so **the terminal is not resized** and the agent is sent no size change.
@@ -207,8 +211,8 @@ Below 1100 px wide, the terminal is the only pane in the row and fills the width
 report panel each become an **overlay drawer** over it, **closed by default**:
 
 - The sidebar drawer slides in from the left and is 280 px wide; the report panel's drawer slides in from
-  the right and is 420 px wide, or 92% of the viewport where that is narrower. Both start below the top bar (and the
-  connection banner, when it is shown), so the bar stays usable while a drawer is open.
+  the right and is 420 px wide, or 92% of the viewport where that is narrower. Both run from below the top bar to
+  above the connection banner (when it is shown), so the bar and the banner's Retry stay usable while a drawer is open.
 - Each is opened and closed with the same top bar toggle that hides and shows it at 1100 px and wider — the sidebar
   toggle on the left, the report toggle on the right. The report toggle is there only while the selected session is a
   hub session, since no other session has a panel.
@@ -239,7 +243,8 @@ order:
 3. the archive view, only while it is open (see "The archive view" in `docs/product/sidebar.md`);
 4. the terminal;
 5. the report panel;
-6. the toasts, only while at least one toast is shown.
+6. the connection banner, only while it is shown;
+7. the toasts, only while at least one toast is shown.
 
 It works wherever focus is, the terminal included: there `Tab` and `Shift+Tab` still go to the agent, and `F6` and
 `Shift+F6` never do. It works from inside a report page too (see "Escape and F6 inside a page" in
@@ -260,7 +265,11 @@ Where focus lands in each region:
 | Archive view | its first control |
 | Terminal | the terminal, so typing reaches the agent |
 | Report panel | the pager's first enabled button, else the report page itself |
+| Connection banner | its Retry button; it has none while the banner only says it is reconnecting, and F6 then skips it |
 | Toasts | the newest toast |
+
+Pressing Retry from the keyboard works as with the mouse, and when the banner goes away while Retry holds focus, focus
+goes to the terminal.
 
 The control focus lands on shows its focus ring, even when the last input before `F6` was the mouse.
 
@@ -273,7 +282,8 @@ are about, is in "Losing the daemon connection" in `docs/product/application-lif
 
 - **Always at the window's bottom right** (bottom left under a right-to-left language), floating over whatever is there,
   on the main screen and on the screen shown while connecting to the daemon alike, whether or not Settings or another
-  dialog is open. They never move the layout. The newest is at the front.
+  dialog is open. They never move the layout; the stack rides above the connection banner while that is shown. The
+  newest is at the front.
 - A toast about a particular session is titled with where that session is — the project it runs in, or the console
   whose hub it is — with the message under it; any other toast is just the message. An error is marked as one; a
   notice is not.
@@ -296,7 +306,8 @@ keyboard focus. The tooltip's text is the same name assistive technology announc
 buttons below. These are:
 
 - the top bar's icon buttons — the sidebar and report toggles, whose tooltip follows their "Show …" / "Hide …"
-  label, New console, Turn on notifications and Settings;
+  label, New console, the waiting count, whose tooltip says how many sessions are waiting and that pressing it goes
+  to the next one, Turn on notifications and Settings;
 - the ⋮ button that opens an action menu — a row's, the console's beside the console switcher, and the project's in
   focus mode. Its tooltip is a short "More actions", while the name announced for it also names what it belongs to
   ("Actions for session …" and the like), so that each ⋮ can be told apart;
@@ -308,9 +319,8 @@ buttons below. These are:
 - the report panel's previous-page and next-page buttons;
 - the close button of every dialog, of Settings and of each toast ("Close").
 
-The top bar's buttons with text get a tooltip of the same kind, matching their accessible name: the waiting count's
-says how many sessions are waiting and that pressing it goes to the next one, and the terminal's Reconnect button's
-says that it reconnects the terminal.
+The top bar's one button with text, the terminal's Reconnect, gets a tooltip of the same kind, matching its
+accessible name: it says that it reconnects the terminal.
 
 ## Names too long for their space
 

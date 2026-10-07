@@ -74,9 +74,9 @@ Tailwind 4 reads the source as plain text and emits a utility only for a class n
 a name assembled at runtime — `` `${side}-0` ``, a suffix appended to a prefix, anything concatenated — compiles to no
 CSS at all and the element silently loses that property. Write each variant out in full and branch between them.
 
-Nothing on the way past catches it: `packages/ui` has no linter, and its tests (`vitest`) cover only pure modules, so `tsc --noEmit` is
-the only automated gate on a component, and a class whose utility was never emitted is valid TypeScript, builds clean and reads fine in a
-diff. After adding or changing a utility class, grep the built `packages/ui/dist/assets/*.css` for it.
+Nothing on the way past catches it: `packages/ui` has no linter, and its tests (`vitest`) cover pure modules and a hook
+or two, not rendered components, so `tsc --noEmit` is the only automated gate on a component, and a class whose utility
+was never emitted is valid TypeScript, builds clean and reads fine in a diff. After adding or changing a utility class, grep the built `packages/ui/dist/assets/*.css` for it.
 
 ## Dim a region with a veil, not `opacity` on it
 

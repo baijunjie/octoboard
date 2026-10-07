@@ -12,22 +12,21 @@ const KEY_STEP_SHIFT = 64;
  * direction, along the reading direction, that the handle moves in when the pane gets wider: toward
  * the end for the sidebar, whose edge is its end one, toward the start for the report panel. The
  * pointer and the arrow keys work in physical directions, so `physicalGrow` turns it into
- * +1 (right) or -1 (left) for the direction in force. `span` is
- * how far up it runs: the sidebar's edge continues up through the top bar's start segment, so its
- * handle starts at the window top, and while the connection banner shows it also crosses the
- * banner, which has no border there; the report panel's edge starts below the top chrome, and so
- * does its handle. */
+ * +1 (right) or -1 (left) for the direction in force. `span` is how far it runs, top and bottom:
+ * the sidebar's edge continues up through the top bar's start segment, so its handle starts at the
+ * window top; the report panel's edge starts below the top bar, and so does its handle. Both end
+ * above the connection banner, which has no pane edge. */
 const SIDES = {
   sidebar: {
     label: "pane.resizeSidebar",
     edge: "insetInlineStart",
-    span: "inset-y-0",
+    span: "top-0 bottom-(--bottom-chrome-height)",
     grow: 1,
   },
   report: {
     label: "pane.resizeReport",
     edge: "insetInlineEnd",
-    span: "top-(--top-chrome-height) bottom-0",
+    span: "top-(--top-chrome-height) bottom-(--bottom-chrome-height)",
     grow: -1,
   },
 } as const;
@@ -43,14 +42,13 @@ function physicalGrow(element: HTMLElement, grow: 1 | -1): 1 | -1 {
  * 2px stripe that, in the light theme, is under the 3:1 against the border pixel it replaces that
  * WCAG 2.2 SC 1.4.11 asks of a focus indicator, and smaller than SC 2.4.13 Focus Appearance (AAA)
  * suggests (an area at least that of a 2px perimeter around the control). It runs as far up as its
- * pane's edge does (see `span` above), so the line covers that border, plus the connection banner's
- * height for the sidebar while the banner shows. It is rendered right after its pane, so Tab
- * reaches it next to the pane, but it is positioned against the window: the nearest positioned
- * ancestor must be the app root, as tall as the window, and no element between them may be
- * positioned. `App.tsx` renders it only while its pane is docked and shown. Hidden below the
- * `docked` breakpoint, where the panes are fixed-width drawers. In the macOS app the top bar is a
- * window drag region, but pressing the sidebar's handle where it crosses the bar resizes instead of
- * dragging the window: Tauri's drag script walks the event's composed path looking for
+ * pane's edge does (see `span` above), so the line covers that border. It is rendered right after
+ * its pane, so Tab reaches it next to the pane, but it is positioned against the window: the
+ * nearest positioned ancestor must be the app root, as tall as the window, and no element between
+ * them may be positioned. `App.tsx` renders it only while its pane is docked and shown. Hidden
+ * below the `docked` breakpoint, where the panes are fixed-width drawers. In the macOS app the top
+ * bar is a window drag region, but pressing the sidebar's handle where it crosses the bar resizes
+ * instead of dragging the window: Tauri's drag script walks the event's composed path looking for
  * `data-tauri-drag-region`, and none of the handle's ancestors carries it, since the handle is not
  * inside the bar. It is a `separator` that is also a focusable value control: the arrow keys (Shift
  * for larger steps), Home and End adjust it from the keyboard, and a double-click resets it.

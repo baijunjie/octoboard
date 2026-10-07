@@ -73,6 +73,7 @@ export function App(): React.ReactElement {
       archive: archiveOpen,
       terminal: selectedSession !== undefined && !archiveOpen,
       report: hasReportPanel && panes.reportShown,
+      banner: connectionState === "reconnecting" || connectionState === "closed",
     },
     focusTerminal,
   });
@@ -274,10 +275,15 @@ export function App(): React.ReactElement {
       <div className="flex h-full flex-col">
         <BareTitleBar />
         <Toasts focusTerminal={focusTerminal} />
-        {connectionState === "closed" && <ConnectionBanner state={connectionState} onRetry={reconnect} />}
         <div className="flex flex-1 items-center justify-center text-muted">
           {connectionState === "closed" ? t("app.daemonNotAnswering") : t("app.connecting")}
         </div>
+        {/* Mounted only while closed, unlike the main screen's always-mounted banner, so its focus
+            hand-off does not run as it goes; nothing is lost, as this screen has no terminal and an
+            empty bar to hand focus to. */}
+        {connectionState === "closed" && (
+          <ConnectionBanner state={connectionState} onRetry={reconnect} focusTerminal={focusTerminal} />
+        )}
       </div>
     );
   }
@@ -311,7 +317,6 @@ export function App(): React.ReactElement {
         onReportToggleLeave={panes.reportPeek.leave}
         focusTerminal={focusTerminal}
       />
-      <ConnectionBanner state={connectionState} onRetry={reconnect} />
       <div className="flex min-h-0 flex-1">
         {panes.sidebarOpen && <Scrim label={t("app.closeSessions")} onClose={panes.closeSidebar} />}
         <Sidebar
@@ -390,6 +395,7 @@ export function App(): React.ReactElement {
         {hasReportPanel && panes.reportDocked && <PaneResizeHandle side="report" paneWidth={reportWidth} />}
         {panes.reportOpen && <Scrim label={t("app.closeReport")} onClose={panes.closeReport} />}
       </div>
+      <ConnectionBanner state={connectionState} onRetry={reconnect} focusTerminal={focusTerminal} />
       {settingsOpen && <SettingsDialog onClose={closeSettings} />}
       {dialogRequest && (
         <RequestedDialog

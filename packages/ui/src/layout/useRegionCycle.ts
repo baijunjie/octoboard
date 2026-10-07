@@ -5,12 +5,13 @@ import { useEffect, useRef } from "react";
  * toast stack comes last and is a stop only while a toast is on screen; unlike the others it is not
  * for the caller to say: the stack is in the DOM while it holds a toast, and one that is closing
  * (kept mounted for its exit animation, `data-exiting`) is not a landing place. */
-const REGIONS = ["topbar", "sidebar", "archive", "terminal", "report", "toast"] as const;
+const REGIONS = ["topbar", "sidebar", "archive", "terminal", "report", "banner", "toast"] as const;
 export type Region = (typeof REGIONS)[number];
 type ShownRegion = Exclude<Region, "toast">;
 
 /** What a region's focus lands on, beyond the terminal's own method: its first control a keyboard
- * can reach. The report page's own frame counts, as the last thing in the panel. */
+ * can reach. The report page's own frame counts, as the last thing in the panel; the connection
+ * banner's is its Retry, and it has none while it only says it is reconnecting. */
 const FOCUSABLE =
   'a[href], button:not([disabled]), iframe, [tabindex]:not([tabindex="-1"]):not([aria-disabled="true"])';
 
@@ -55,7 +56,8 @@ function focusRegion(region: Region, focusTerminal: () => void): boolean {
  * the terminal takes Tab and Shift+Tab for the agent, so without this a keyboard user could never
  * leave it (WCAG 2.2 SC 2.1.2). `shown` says which regions are on screen right now; the others,
  * including a floating pane that is merely able to slide in, are skipped, as is a region with
- * nothing to focus. The toast stack joins the cycle, after the report panel, while a toast is shown.
+ * nothing to focus. The connection banner is a stop, after the report panel, while it is mounted. The
+ * toast stack joins the cycle, last, while a toast is shown.
  *
  * Registered on the window's capture phase so the key never reaches xterm.js, which would write
  * it to the agent, nor react-aria's own landmark navigation, which would move focus out from under

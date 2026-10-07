@@ -159,6 +159,7 @@ export const en = {
     one: "{count} session is waiting for you. Go to the next one.",
     other: "{count} sessions are waiting for you. Go to the next one.",
   },
+  "titleBar.waitingBadgeOverflow": "99+",
   "titleBar.daemon.connecting": "Connecting…",
   "titleBar.daemon.reconnecting": "Reconnecting…",
   "titleBar.daemon.disconnected": "Disconnected",

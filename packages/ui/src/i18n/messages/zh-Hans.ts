@@ -144,6 +144,7 @@ export const zhHans: Translation<"other"> = {
   "titleBar.waiting": {
     other: "有 {count} 个会话在等你。前往下一个。",
   },
+  "titleBar.waitingBadgeOverflow": "99+",
   "titleBar.daemon.connecting": "正在连接…",
   "titleBar.daemon.reconnecting": "正在重新连接…",
   "titleBar.daemon.disconnected": "已断开连接",

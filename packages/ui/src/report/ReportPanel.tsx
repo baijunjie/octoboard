@@ -109,9 +109,10 @@ export function ReportPanel({
   // terminal never comes up there in the first place — `open` only ever slides it on and off
   // screen, never changes whether it is mounted.
   //
-  // `drawerClass` starts the drawer below `--top-chrome-height`, leaving the top bar (and its
-  // report toggle) visible while it is open, and puts it back as a plain row sibling at or above
-  // the breakpoint — see that function's own comment for the geometry.
+  // `drawerClass` fits the drawer between `--top-chrome-height` and `--bottom-chrome-height`,
+  // leaving the top bar (and its report toggle) and the connection banner visible while it is open,
+  // and puts it back as a plain row sibling at or above the breakpoint — see that function's own
+  // comment for the geometry.
   //
   // The drawer below the breakpoint is a fixed 420px, capped at 92vw. The docked panel is
   // `flex: 0 1` at `--report-width`, the chosen width already held back to what the row affords;

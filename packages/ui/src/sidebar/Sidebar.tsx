@@ -192,7 +192,8 @@ export function Sidebar({
         // where it always was, a plain row sibling, regardless of `open`. With the sidebar hidden
         // from the top bar's toggle, `drawerClass` instead keeps it a fixed overlay at the docked
         // width that floats in while `peek` is active. Starting below `--top-chrome-height` leaves
-        // the top bar, and with it the sidebar toggle, visible while this is open.
+        // the top bar, and with it the sidebar toggle, visible while this is open; ending above
+        // `--bottom-chrome-height` does the same for the connection banner.
         //
         // `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener
         // closes a drawer for. `data-pane` is how it finds this element to see whether it holds

@@ -18,12 +18,23 @@
      together; a fixed pixel size, since the lights' position is fixed too. */
   --title-bar-height: 40px;
 
-  /* Where the content area below the top chrome starts: the top bar plus the connection banner (0
-     when it is not mounted, see `ConnectionBanner.tsx`). Anything that overlays the content area,
-     or runs along an edge that starts there, starts at this offset rather than at the window top,
-     so the bar's controls and the banner's Retry stay reachable whatever is open. One definition,
-     rather than copies of the same `calc()` that must happen to agree. */
-  --top-chrome-height: calc(var(--title-bar-height) + var(--connection-banner-height, 0px));
+  /* Where the content area starts: right below the top bar. Anything that overlays the content
+     area, or runs along an edge that starts there, starts at this offset rather than at the window
+     top, so the bar's controls stay reachable whatever is open. */
+  --top-chrome-height: var(--title-bar-height);
+
+  /* How much of the window's bottom edge the chrome takes: the connection banner's height (0 when
+     it is not mounted, see `ConnectionBanner.tsx`). Anything that overlays the content area, or
+     runs along an edge that ends there, ends this far above the window bottom rather than at it,
+     so the banner's Retry stays reachable whatever is open. */
+  --bottom-chrome-height: var(--connection-banner-height, 0px);
+}
+
+/* HeroUI's toast region sits 1rem above the window bottom; lifted by the bottom chrome, it floats
+   over the content above the connection banner instead of over the banner. Unlayered, so it wins
+   over HeroUI's layered rule. */
+.toast-region--bottom-end {
+  bottom: calc(1rem + var(--bottom-chrome-height));
 }
 
 /* HeroUI's light `--muted` (L 0.5517) is secondary text everywhere, but it reaches 4.5:1 only on
@@ -82,6 +93,10 @@ html.pane-resizing * {
 }
 
 @theme {
+  /* The refresh arrow of a reconnecting indicator (`ConnectionBanner.tsx`, `TitleBar.tsx`): the
+     stock spin, slower. Defined as a whole animation because `animate-spin` is a shorthand that
+     resets any duration set beside it. */
+  --animate-spin-slow: spin 2s linear infinite;
   --animate-status-wave: status-wave 2.4s ease-in-out infinite;
 }
 

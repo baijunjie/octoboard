@@ -20,9 +20,10 @@ const shownToasts = new Map<string, string>();
 
 /**
  * Surfaces the daemon's errors and notices, and what callers hand to `toastError`, in HeroUI's own
- * toast stack (`Toast.Provider` over its queue), floating over the bottom end corner so it does not move
- * the layout. An error is the danger variant; a notice, which is something the user has to know
- * rather than something that went wrong, is the accent one. The stack dismisses toasts by itself
+ * toast stack (`Toast.Provider` over its queue), floating over the bottom end corner (above the
+ * connection banner while that is shown, see `style.css`) so it does not move the layout. An error
+ * is the danger variant; a notice, which is something the user has to know rather than something
+ * that went wrong, is the accent one. The stack dismisses toasts by itself
  * after a few seconds and pauses while the pointer is over it or focus is inside it, which is what
  * WCAG 2.2.1 (timing adjustable) asks for. The stack's own Alt+T hotkey is off (`hotkey={[]}`): it
  * would swallow Option+T typed into the terminal and pull focus into the stack. The region is
@@ -55,10 +56,11 @@ const shownToasts = new Map<string, string>();
  * to `<body>`, so its toast-layer z-index is not capped by a stacking context somewhere in the
  * app's tree; react-aria already keeps it out of the set made inert while a dialog or menu is open.
  *
- * The stack always sits at the bottom end corner, so it never moves with what is open. The top of the
- * window is where the controls are — the top bar, the report panel's pager, the settings dialog's
- * end column and its close button — while the bottom end corner is terminal or page content, or the
- * settings dialog's empty padding; the smaller dialogs are centred, well clear of it.
+ * The stack always sits at the bottom end corner, so it never moves with what is open; only the
+ * connection banner lifts it, riding above the banner while that is shown (`style.css`). The top of
+ * the window is where the controls are — the top bar, the report panel's pager, the settings
+ * dialog's end column and its close button — while the bottom end corner is terminal or page
+ * content, or the settings dialog's empty padding; the smaller dialogs are centred, well clear of it.
  */
 export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.ReactElement {
   const { store, onToast } = useDaemon();

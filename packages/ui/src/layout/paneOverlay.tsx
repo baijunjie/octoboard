@@ -34,7 +34,8 @@ const SIDE_CLASSES = {
 
 /**
  * The geometry shared by the sidebar's and the report panel's overlay forms (`Sidebar.tsx`,
- * `ReportPanel.tsx`): fixed below `style.css`'s `--top-chrome-height`, sliding in from `side`.
+ * `ReportPanel.tsx`): fixed between `style.css`'s `--top-chrome-height` and
+ * `--bottom-chrome-height`, sliding in from `side`.
  * `open` is whether the drawer is open below the breakpoint. Callers add their own
  * width/flex/border classes on top of this string; the slide direction and what "closed" means on
  * either side are this function's job, not theirs.
@@ -66,15 +67,15 @@ export function drawerClass(side: PaneEdge, mode: PaneMode, open: boolean, peeki
     mode === "drawer"
       ? "transition-transform docked:static docked:z-auto docked:translate-none docked:rtl:translate-none docked:transition-none"
       : `transition-[translate,visibility] ${peeking ? "docked:translate-x-0 docked:rtl:translate-x-0 docked:shadow-xl" : floatingAway}`;
-  const base = "fixed bottom-0 top-(--top-chrome-height) z-40 duration-200 motion-reduce:transition-none";
+  const base = "fixed bottom-(--bottom-chrome-height) top-(--top-chrome-height) z-40 duration-200 motion-reduce:transition-none";
   return `${base} ${anchor} ${open ? "translate-x-0" : closed} ${form}`;
 }
 
 /**
  * The strip along a window edge that floats a hidden docked pane in when a mouse pointer reaches
  * it; rendered by the pane itself, only while it is hidden and not already out. It starts under
- * the top bar so the bar's own controls stay clear, and reacts to a mouse only, as the toggles
- * in the bar do.
+ * the top bar and ends above the connection banner, so their controls stay clear, and reacts to a
+ * mouse only, as the toggles in the bar do.
  *
  * It is a bare element because it is not a control: it is `aria-hidden`, a mouse-only hover target
  * with no HeroUI equivalent.
@@ -97,8 +98,8 @@ export function PeekHotZone({
       aria-hidden="true"
       className={
         side === "start"
-          ? "fixed bottom-0 start-0 top-(--top-chrome-height) z-30 hidden w-2 rtl:w-1 docked:block"
-          : "fixed bottom-0 end-0 top-(--top-chrome-height) z-30 hidden w-1 rtl:w-2 docked:block"
+          ? "fixed bottom-(--bottom-chrome-height) start-0 top-(--top-chrome-height) z-30 hidden w-2 rtl:w-1 docked:block"
+          : "fixed bottom-(--bottom-chrome-height) end-0 top-(--top-chrome-height) z-30 hidden w-1 rtl:w-2 docked:block"
       }
       onPointerEnter={(event) => event.pointerType === "mouse" && peek.reveal(true)}
     />
