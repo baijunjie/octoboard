@@ -1008,6 +1008,7 @@ mod tests {
             claude_config_dir: None,
             codex_config_dir: None,
             grok_config_dir: None,
+            icon: None,
             created_at: 0,
         }
     }

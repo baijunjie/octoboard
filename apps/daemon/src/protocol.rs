@@ -108,6 +108,9 @@ pub struct Console {
     pub codex_config_dir: Option<String>,
     /// Grok's own directory; see `claude_config_dir`.
     pub grok_config_dir: Option<String>,
+    /// A custom avatar as an `image/*` `data:` URL of at most 256 KiB; unset shows the default
+    /// glyph.
+    pub icon: Option<String>,
     pub created_at: i64,
 }
 
@@ -217,6 +220,8 @@ pub enum RequestBody {
         codex_config_dir: Option<String>,
         #[serde(default)]
         grok_config_dir: Option<String>,
+        #[serde(default)]
+        icon: Option<String>,
     },
     UpdateConsole {
         console: String,
@@ -231,6 +236,10 @@ pub enum RequestBody {
         codex_config_dir: Option<Option<String>>,
         #[serde(default, deserialize_with = "present_option")]
         grok_config_dir: Option<Option<String>>,
+        /// Absent leaves the avatar alone; an explicit `null` (or a blank string) clears it back
+        /// to the default glyph.
+        #[serde(default, deserialize_with = "present_option")]
+        icon: Option<Option<String>>,
     },
     DeleteConsole {
         console: String,
@@ -644,6 +653,8 @@ pub mod error_code {
     pub const CONFIG_DIR_NOT_A_DIRECTORY: &str = "config_dir_not_a_directory";
     /// A session's pinned configuration directory has gone, which refuses the launch.
     pub const CONFIG_DIR_UNREACHABLE: &str = "config_dir_unreachable";
+    pub const ICON_NOT_AN_IMAGE: &str = "icon_not_an_image";
+    pub const ICON_TOO_LARGE: &str = "icon_too_large";
     pub const SESSION_NOT_RUNNING: &str = "session_not_running";
     /// Only an archived session can be deleted.
     pub const SESSION_NOT_ARCHIVED: &str = "session_not_archived";
@@ -825,6 +836,24 @@ mod tests {
         assert_eq!(
             parse(r#"{"type":"update_console","console":"c","grok_config_dir":"~/.grok-alt"}"#),
             (None, None, Some(Some("~/.grok-alt".to_string())))
+        );
+    }
+
+    /// The avatar is cleared the same way as a config directory: an explicit `null`.
+    #[test]
+    fn clearing_a_consoles_icon_is_distinguishable_from_leaving_it() {
+        let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::UpdateConsole { icon, .. } => icon,
+            _ => panic!("parses as update_console"),
+        };
+        assert_eq!(parse(r#"{"type":"update_console","console":"c"}"#), None);
+        assert_eq!(
+            parse(r#"{"type":"update_console","console":"c","icon":null}"#),
+            Some(None)
+        );
+        assert_eq!(
+            parse(r#"{"type":"update_console","console":"c","icon":"data:image/png;base64,AA"}"#),
+            Some(Some("data:image/png;base64,AA".to_string()))
         );
     }
 

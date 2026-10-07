@@ -15,12 +15,22 @@ A console carries:
 | Hub agent | the user | The agent the console's own hub session runs. |
 | Default agent | the user | The fallback agent for sessions opened under this console's projects. |
 | Agent config directories | the user, optional | One per agent: where that agent's sessions in this console keep their configuration; see "Agent config directories" below. |
+| Avatar | the user, optional | A custom image shown in place of the default glyph, in a circle; see "Avatar" below. |
 | Working directory | Octoboard | `~/.octoboard/consoles/<console id>/`, created when the console is created. Not settable and not changeable. |
 
 Both agent fields take one of the three supported agents (Claude Code, Codex, Grok Build) and default to Claude Code
 in the creation form.
 
 Multiple consoles can exist side by side and are independent of each other.
+
+### Avatar
+
+A console is drawn as a round avatar in the sidebar's switcher and in its list of consoles. Without a
+custom image it is the default glyph on the accent colour. The console dialog's **Avatar** field shows the current
+avatar, with **Choose image** to pick an image file from disk and **Remove image** to go back to the default. A chosen
+image is cropped to its centred square and scaled to 128 x 128 pixels in the window before it is saved, so any
+size or shape of picture is accepted; a file that is not a readable image is refused in the dialog. As with the other
+fields, an avatar that was not touched is left as it is when the console is saved.
 
 ### Agent config directories
 

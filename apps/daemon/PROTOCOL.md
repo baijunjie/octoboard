@@ -43,8 +43,8 @@ the request id as if it were a record id.
 
 | `type` | Fields | Meaning |
 |---|---|---|
-| `create_console` | `name`, `hub_agent`, `default_agent`, `claude_config_dir?`, `codex_config_dir?`, `grok_config_dir?` | The daemon creates the console's working directory under `~/.octoboard/consoles/<id>/`. Each config directory is validated first, by the same rules: it is trimmed, a leading `~` is expanded, the result is normalised lexically and must be an absolute path to an existing directory, and a blank value means unset; a failure is answered with `error` naming the agent, and nothing is created |
-| `update_console` | `console`, `name?`, `hub_agent?`, `default_agent?`, `claude_config_dir?`, `codex_config_dir?`, `grok_config_dir?` | For each config directory independently: absent leaves it alone; an explicit `null` or a blank string clears it. A value is validated as in `create_console`. Only sessions opened afterwards take a changed value (see `Session.config_dir`) |
+| `create_console` | `name`, `hub_agent`, `default_agent`, `claude_config_dir?`, `codex_config_dir?`, `grok_config_dir?`, `icon?` | The daemon creates the console's working directory under `~/.octoboard/consoles/<id>/`. `icon` is validated first, as in the "Records" notes below: a failure is answered with `icon_not_an_image` or `icon_too_large`, and a blank value means unset. Each config directory is validated first, by the same rules: it is trimmed, a leading `~` is expanded, the result is normalised lexically and must be an absolute path to an existing directory, and a blank value means unset; a failure is answered with `error` naming the agent, and nothing is created |
+| `update_console` | `console`, `name?`, `hub_agent?`, `default_agent?`, `claude_config_dir?`, `codex_config_dir?`, `grok_config_dir?`, `icon?` | For each config directory independently: absent leaves it alone; an explicit `null` or a blank string clears it. A value is validated as in `create_console`. `icon` follows the same absent / `null` / blank rule, clearing back to the default glyph. Only sessions opened afterwards take a changed value (see `Session.config_dir`) |
 | `delete_console` | `console` | Takes its projects and all their session records with it. Refused while any of them is still running |
 | `add_project` | `console_id`, `source` (`local`\|`parent`\|`github`), `path?`, `remote_url?`, `name?`, `default_agent?` | `local` associates one directory; `parent` associates every git repository directly beneath `path`; `github` clones `remote_url` into `path` (used as the parent directory) and associates the clone. A `path` must be absolute or start with `~/`, and is stored lexically normalised (`.` and `..` folded, no trailing slash); a relative one is refused, because the trusted directories compare project paths and a relative path means nothing to them |
 | `update_project` | `project`, `name?`, `default_agent?`, `pinned?` | An absent `default_agent` leaves it alone; an explicit `null` clears it, so the project inherits the console's default again. An absent `pinned` leaves the pin alone |
@@ -128,6 +128,8 @@ A client also branches on some codes, instead of only showing them:
 | `config_dir_not_absolute` | `agent` | A console's config directory is neither absolute nor `~`-relative; `agent` is the agent's name |
 | `config_dir_not_a_directory` | `agent`, `path` | A console's config directory is not a directory |
 | `config_dir_unreachable` | `agent`, `path` | A session's pinned config directory has gone, which refuses the launch |
+| `icon_not_an_image` | — | A console's icon is not a `data:image/` URL |
+| `icon_too_large` | `limit_kib` | A console's icon is longer than the limit, 256 KiB |
 | `session_already_running` | `session` | The session is running already, or is not interrupted or archived |
 | `session_already_starting` | `session` | The session is being started already |
 | `hub_already_running` | `session` | The console has a live hub (`session`) |
@@ -177,7 +179,7 @@ one it does not know:
 ```
 Host    { id, name, kind: "local"|"ssh", ssh_config? }
 Console { id, name, workdir, hub_agent, default_agent, claude_config_dir?, codex_config_dir?,
-          grok_config_dir?, created_at }
+          grok_config_dir?, icon?, created_at }
 Project { id, console_id, host_id, name, path, default_agent?, source, remote_url?,
           claude_trust_consent, pinned }
 Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
@@ -194,6 +196,8 @@ the shell's `GROK_HOME`) as the directory the session's private home is built fr
 store and session records come from it; Grok itself still runs against that private home. Unset leaves the environment as
 it is (for Grok, the source falls back to the shell's `GROK_HOME`). For Claude Code, pointing it at `~/.claude` is not the same as leaving it unset, because Claude Code reads its
 global config from `<dir>/.claude.json` whenever the variable is set and from `~/.claude.json` otherwise.
+`Console.icon` is the console's custom avatar, a `data:image/...` URL of at most 256 KiB (the UI sends a 128x128
+WebP or PNG); unset means the default glyph.
 `Session.config_dir` is the directory of that session's own agent that it was started with, copied from its console
 when the session is opened and never changed afterwards: each agent keeps a conversation's transcript inside it, so
 `resume_session` relaunches with this value and not the console's current one. It is unset for sessions started with no

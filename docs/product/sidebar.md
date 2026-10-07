@@ -20,6 +20,8 @@ view fading in (see "Focus mode" below for how the sidebar's view changes are an
 console created from this window, by either button, is shown as soon as it appears; one created from another client is
 only added to the list.
 
+Each console is shown by its avatar (see "Avatar" in `docs/product/consoles-and-projects.md`), here and in the list.
+
 Every console in the list carries a marker of what is going on in it, taken from all its sessions, the hub included:
 
 | Marker | Shown when |

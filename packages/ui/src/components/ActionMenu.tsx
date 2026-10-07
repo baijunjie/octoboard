@@ -28,7 +28,7 @@ export function isActionMenuOpen(): boolean {
 
 export interface ActionMenuItem {
   label: string;
-  /** A lucide glyph, or any element drawn at the same size (an agent's mark). */
+  /** A lucide glyph, or any element of about the same size (an agent's mark, a console's avatar). */
   icon: LucideIcon | React.ReactElement;
   onClick: () => void;
   destructive?: boolean;
@@ -179,8 +179,11 @@ export function ActionMenu({
   };
 
   return (
+    // Always a flex container, so the trigger is a flex item and not an inline box in a line: left
+    // inline it sits on the baseline of a line box taller than itself, a pixel above the centre of
+    // its row.
     <div
-      className={className}
+      className={`flex ${className}`}
       onClick={(e) => e.stopPropagation()}
       onPointerDownCapture={pointerFocus.onPointerDownCapture}
     >

@@ -40,6 +40,7 @@ pub async fn handle(
             claude_config_dir,
             codex_config_dir,
             grok_config_dir,
+            icon,
         } => {
             // Validated before anything is created, so a refused request leaves no working
             // directory behind.
@@ -47,6 +48,7 @@ pub async fn handle(
                 normalize_config_dir(Agent::Claude, claude_config_dir.as_deref())?;
             let codex_config_dir = normalize_config_dir(Agent::Codex, codex_config_dir.as_deref())?;
             let grok_config_dir = normalize_config_dir(Agent::Grok, grok_config_dir.as_deref())?;
+            let icon = normalize_icon(icon.as_deref())?;
             let id = Uuid::new_v4().to_string();
             let workdir = paths::console_workdir(&id);
             std::fs::create_dir_all(&workdir)?;
@@ -59,6 +61,7 @@ pub async fn handle(
                 claude_config_dir,
                 codex_config_dir,
                 grok_config_dir,
+                icon,
                 created_at: now_millis(),
             };
             mcp::role::write_hub_instructions(&console)?;
@@ -75,6 +78,7 @@ pub async fn handle(
             claude_config_dir,
             codex_config_dir,
             grok_config_dir,
+            icon,
         } => {
             let mut console = state
                 .store
@@ -99,6 +103,9 @@ pub async fn handle(
             }
             if let Some(dir) = grok_config_dir {
                 console.grok_config_dir = normalize_config_dir(Agent::Grok, dir.as_deref())?;
+            }
+            if let Some(icon) = icon {
+                console.icon = normalize_icon(icon.as_deref())?;
             }
             // Rewritten rather than left alone: the file is named for the hub's agent, so a
             // console that changed agents would otherwise keep reading the old one's.
@@ -873,6 +880,36 @@ fn normalize_config_dir(agent: Agent, text: Option<&str>) -> Result<Option<Strin
     Ok(Some(dir.to_string_lossy().into_owned()))
 }
 
+/// The longest avatar `data:` URL a console may carry. The UI sends a 128x128 image, which is
+/// far smaller; the bound is there because the value goes to every client with each console.
+const MAX_ICON_BYTES: usize = 256 * 1024;
+
+/// A console's avatar as it is stored. Blank means unset. Checked lightly: it has to be an image
+/// `data:` URL and not too long; whether it decodes is left to the client that draws it.
+fn normalize_icon(text: Option<&str>) -> Result<Option<String>> {
+    let Some(text) = text.map(str::trim).filter(|text| !text.is_empty()) else {
+        return Ok(None);
+    };
+    if !text.starts_with("data:image/") {
+        return Err(CodedError::raised(
+            error_code::ICON_NOT_AN_IMAGE,
+            "the console avatar must be an image `data:` URL",
+            &[],
+        ));
+    }
+    if text.len() > MAX_ICON_BYTES {
+        return Err(CodedError::raised(
+            error_code::ICON_TOO_LARGE,
+            format!(
+                "the console avatar is larger than {} KiB",
+                MAX_ICON_BYTES / 1024
+            ),
+            &[("limit_kib", &(MAX_ICON_BYTES / 1024).to_string())],
+        ));
+    }
+    Ok(Some(text.to_string()))
+}
+
 fn session_cwd(state: &Arc<AppState>, session: &Session) -> Result<PathBuf> {
     match &session.project_id {
         Some(project_id) => {
@@ -907,6 +944,7 @@ mod tests {
             claude_config_dir: None,
             codex_config_dir: None,
             grok_config_dir: None,
+            icon: None,
             created_at: 0,
         }
     }
@@ -1153,6 +1191,20 @@ mod tests {
             normalize_config_dir(Agent::Grok, Some("~")).unwrap(),
             Some(home.to_string_lossy().into_owned())
         );
+    }
+
+    #[test]
+    fn a_console_icon_is_an_image_data_url_of_bounded_size() {
+        assert_eq!(normalize_icon(None).unwrap(), None);
+        assert_eq!(normalize_icon(Some("  ")).unwrap(), None);
+        assert_eq!(
+            normalize_icon(Some(" data:image/webp;base64,AAAA ")).unwrap(),
+            Some("data:image/webp;base64,AAAA".to_string())
+        );
+        assert!(normalize_icon(Some("https://example.com/a.png")).is_err());
+        assert!(normalize_icon(Some("data:text/html;base64,AAAA")).is_err());
+        let huge = format!("data:image/png;base64,{}", "A".repeat(MAX_ICON_BYTES));
+        assert!(normalize_icon(Some(&huge)).is_err());
     }
 
     #[test]

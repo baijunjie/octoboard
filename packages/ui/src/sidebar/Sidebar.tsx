@@ -22,6 +22,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AGENT_LABEL } from "../agents";
 import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
 import { AgentIcon } from "../components/AgentIcon";
+import { ConsoleAvatar } from "../components/ConsoleAvatar";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { ActivityMarker, StatusIcon } from "../components/StatusIcon";
 import { useT } from "../i18n/react";
@@ -272,7 +273,7 @@ function ConsoleSwitcher({
       return {
         label: c.name,
         ariaLabel: activityKey ? t(activityKey, { name: c.name }) : undefined,
-        icon: LayoutDashboard,
+        icon: <ConsoleAvatar icon={c.icon} className="size-5" />,
         end: <ActivityMarker activity={activities.get(c.id)} />,
         selected: c.id === current.id,
         onClick: () => handlers.onSelectConsole(c.id),
@@ -299,9 +300,7 @@ function ConsoleSwitcher({
         triggerClassName="flex h-9 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-start text-sm hover:bg-default aria-expanded:bg-default"
         trigger={
           <>
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground">
-              <LayoutDashboard aria-hidden="true" className="size-3.5" />
-            </span>
+            <ConsoleAvatar icon={current.icon} />
             <RowLabel title={current.name}>
               <span className="font-semibold">{current.name}</span>
             </RowLabel>

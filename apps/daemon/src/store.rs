@@ -54,6 +54,7 @@ impl Store {
                 claude_config_dir TEXT,
                 codex_config_dir  TEXT,
                 grok_config_dir   TEXT,
+                icon          TEXT,
                 created_at    INTEGER NOT NULL
             );
             CREATE TABLE IF NOT EXISTS projects (
@@ -111,6 +112,7 @@ impl Store {
         add_column_if_missing(&conn, "consoles", "claude_config_dir", "TEXT")?;
         add_column_if_missing(&conn, "consoles", "codex_config_dir", "TEXT")?;
         add_column_if_missing(&conn, "consoles", "grok_config_dir", "TEXT")?;
+        add_column_if_missing(&conn, "consoles", "icon", "TEXT")?;
         // The session's pinned directory began as a Claude-only column. Renamed rather than copied,
         // so a session that already pinned one keeps it: every such session is a Claude Code one.
         if column_exists(&conn, "sessions", "claude_config_dir")? {
@@ -178,8 +180,8 @@ impl Store {
     pub fn insert_console(&self, console: &Console) -> Result<()> {
         self.lock().execute(
             "INSERT INTO consoles (id, name, workdir, hub_agent, default_agent, claude_config_dir,
-                                   codex_config_dir, grok_config_dir, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                                   codex_config_dir, grok_config_dir, icon, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 console.id,
                 console.name,
@@ -189,6 +191,7 @@ impl Store {
                 console.claude_config_dir,
                 console.codex_config_dir,
                 console.grok_config_dir,
+                console.icon,
                 console.created_at,
             ],
         )?;
@@ -199,7 +202,7 @@ impl Store {
         self.lock().execute(
             "UPDATE consoles SET name = ?2, hub_agent = ?3, default_agent = ?4,
                                  claude_config_dir = ?5, codex_config_dir = ?6,
-                                 grok_config_dir = ?7
+                                 grok_config_dir = ?7, icon = ?8
              WHERE id = ?1",
             params![
                 console.id,
@@ -209,6 +212,7 @@ impl Store {
                 console.claude_config_dir,
                 console.codex_config_dir,
                 console.grok_config_dir,
+                console.icon,
             ],
         )?;
         Ok(())
@@ -225,7 +229,7 @@ impl Store {
         let console = conn
             .query_row(
                 "SELECT id, name, workdir, hub_agent, default_agent, claude_config_dir,
-                        codex_config_dir, grok_config_dir, created_at
+                        codex_config_dir, grok_config_dir, icon, created_at
                  FROM consoles WHERE id = ?1",
                 params![id],
                 read_console,
@@ -238,7 +242,7 @@ impl Store {
         let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT id, name, workdir, hub_agent, default_agent, claude_config_dir,
-                    codex_config_dir, grok_config_dir, created_at
+                    codex_config_dir, grok_config_dir, icon, created_at
              FROM consoles ORDER BY created_at",
         )?;
         let rows = stmt
@@ -624,7 +628,8 @@ fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
         claude_config_dir: row.get(5)?,
         codex_config_dir: row.get(6)?,
         grok_config_dir: row.get(7)?,
-        created_at: row.get(8)?,
+        icon: row.get(8)?,
+        created_at: row.get(9)?,
     })
 }
 
@@ -736,6 +741,7 @@ mod tests {
             claude_config_dir: claude.map(str::to_string),
             codex_config_dir: codex.map(str::to_string),
             grok_config_dir: grok.map(str::to_string),
+            icon: None,
             created_at: 0,
         }
     }

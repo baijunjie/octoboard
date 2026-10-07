@@ -47,6 +47,8 @@ export interface Console {
   claude_config_dir?: string | null;
   codex_config_dir?: string | null;
   grok_config_dir?: string | null;
+  /** A custom avatar as an `image/*` `data:` URL of at most 256 KiB; unset shows the default glyph. */
+  icon?: string | null;
   created_at: number;
 }
 
@@ -124,6 +126,7 @@ export type RequestBody =
       claude_config_dir?: string;
       codex_config_dir?: string;
       grok_config_dir?: string;
+      icon?: string;
     }
   | {
       type: "update_console";
@@ -136,6 +139,8 @@ export type RequestBody =
       claude_config_dir?: string | null;
       codex_config_dir?: string | null;
       grok_config_dir?: string | null;
+      /** Absent leaves the avatar alone; an explicit `null` clears it back to the default glyph. */
+      icon?: string | null;
     }
   | { type: "delete_console"; console: string }
   | {

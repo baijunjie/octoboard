@@ -1,7 +1,10 @@
-import React, { useState } from "react";
+import { Button, Label } from "@heroui/react";
+import React, { useId, useRef, useState } from "react";
 
 import { AGENT_CONFIG_DIR, AGENT_LABEL, AGENT_OPTIONS } from "../agents";
+import { imageToAvatar } from "../avatarImage";
 import { AGENT_ICON_OPTIONS } from "../components/AgentIcon";
+import { ConsoleAvatar } from "../components/ConsoleAvatar";
 import { useT } from "../i18n/react";
 import type { Agent, ConfigDirField, Console } from "../protocol";
 import { useDaemon } from "../store";
@@ -27,7 +30,26 @@ export function ConsoleDialog({
     codex_config_dir: editing?.codex_config_dir ?? "",
     grok_config_dir: editing?.grok_config_dir ?? "",
   });
+  const [icon, setIcon] = useState<string | null>(editing?.icon ?? null);
   const { error, setError, busy, run } = useDialogAction();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const avatarLabelId = useId();
+
+  // While a picked image is being read, saving would send the old avatar.
+  const [decoding, setDecoding] = useState(false);
+
+  const chooseImage = async (file: File | undefined) => {
+    if (!file) return;
+    setError(undefined);
+    setDecoding(true);
+    try {
+      setIcon(await imageToAvatar(file));
+    } catch {
+      setError(t("dialog.console.avatarUnreadable"));
+    } finally {
+      setDecoding(false);
+    }
+  };
 
   // One row per agent the dialog currently selects, in a fixed order. An agent that is not selected
   // keeps whatever is stored for it: its row is neither shown nor sent.
@@ -42,13 +64,14 @@ export function ConsoleDialog({
   });
 
   const submit = () => {
+    if (decoding) return;
     if (!name.trim()) {
       setError(t("dialog.nameRequired"));
       return;
     }
     void run(async () => {
       if (editing) {
-        const changes: Partial<Record<ConfigDirField, string | null>> = {};
+        const changes: Partial<Record<ConfigDirField | "icon", string | null>> = {};
         for (const [field, typed] of typedDirs) {
           // Sent only when the input changed, so saving something else (a rename, say) never
           // re-validates a directory that has since vanished. A change to blank is an explicit
@@ -56,6 +79,8 @@ export function ConsoleDialog({
           // place while the emptied input says otherwise.
           if (typed !== (editing[field] ?? "")) changes[field] = typed || null;
         }
+        // Same for the avatar: a removal is an explicit `null`, an unchanged one is left out.
+        if (icon !== (editing.icon ?? null)) changes.icon = icon;
         await request({
           type: "update_console",
           console: editing.id,
@@ -74,6 +99,7 @@ export function ConsoleDialog({
           name,
           hub_agent: hubAgent,
           default_agent: defaultAgent,
+          ...(icon && { icon }),
           ...dirs,
         });
       }
@@ -86,10 +112,33 @@ export function ConsoleDialog({
       title={editing ? t("dialog.console.edit") : t("dialog.console.new")}
       onClose={onClose}
       submitLabel={editing ? t("common.save") : t("common.create")}
-      busy={busy}
+      busy={busy || decoding}
       onSubmit={submit}
     >
       <TextInput label={t("common.name")} value={name} onChange={setName} autoFocus />
+      <div role="group" aria-labelledby={avatarLabelId} className="flex flex-col gap-1.5">
+        <Label id={avatarLabelId}>{t("dialog.console.avatar")}</Label>
+        <div className="flex items-center gap-3">
+          <ConsoleAvatar icon={icon} className="size-12" />
+          <Button type="button" variant="secondary" onPress={() => fileInput.current?.click()} isDisabled={busy || decoding}>
+            {t("dialog.console.avatarChoose")}
+          </Button>
+          <Button type="button" variant="secondary" onPress={() => setIcon(null)} isDisabled={busy || decoding || !icon}>
+            {t("dialog.console.avatarRemove")}
+          </Button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              void chooseImage(e.target.files?.[0]);
+              // Cleared so choosing the same file again still counts as a change.
+              e.target.value = "";
+            }}
+          />
+        </div>
+      </div>
       <OptionSelect label={t("dialog.console.hubAgent")} options={AGENT_ICON_OPTIONS} value={hubAgent} onChange={setHubAgent} />
       <OptionSelect label={t("dialog.console.defaultAgent")} options={AGENT_ICON_OPTIONS} value={defaultAgent} onChange={setDefaultAgent} />
       {shownAgents.map((agent) => {
