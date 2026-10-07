@@ -12,22 +12,64 @@
 //! handling and mouse reporting. `SNAPSHOT_ONLY_VARS` is dropped from the snapshot and the PTY
 //! command sets its own `TERM` instead.
 //!
-//! The snapshot is taken per launch rather than cached: a node-version manager's `PATH` entry can
-//! point at a per-shell-instance directory, and a long-running daemon would otherwise never pick
-//! up an edit the user makes to their shell configuration. Agent launches are human-paced, so the
-//! extra `fork+exec` is immaterial.
+//! `snapshot()` itself is taken per call rather than cached: a node-version manager's `PATH` entry
+//! can point at a per-shell-instance directory, and a long-running daemon would otherwise never
+//! pick up an edit the user makes to their shell configuration. Agent launches are human-paced, so
+//! the extra `fork+exec` is immaterial there. A caller driven on someone else's schedule instead —
+//! the git-status sweep `refresh_git_status` runs every five minutes for as long as a console
+//! stays shown — goes through `cached_snapshot` below, which reuses one snapshot for a while
+//! rather than re-forking the login shell on every call.
 
 use std::collections::HashMap;
 use std::io::{self, Read};
 use std::os::unix::process::CommandExt;
-use std::process::{Child, Command, ExitStatus, Stdio};
-use std::sync::mpsc;
+use std::process::{Child, Command, ExitStatus, Output, Stdio};
+use std::sync::{mpsc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 
 use crate::protocol::{error_code, CodedError};
+
+/// How long [`cached_snapshot`] reuses a snapshot before retaking it. An hour picks up a `PATH`
+/// edit within the hour instead of never, while still amortising the fork across many sweeps of
+/// whatever is calling it on its own schedule — the daemon itself owns no timer that would call
+/// for a shorter or longer number here.
+const CACHED_SNAPSHOT_TTL: Duration = Duration::from_secs(60 * 60);
+
+/// A cached attempt at [`snapshot`]: both its outcome and when it was made. A failed or timed-out
+/// attempt is cached exactly like a successful one — see [`cached_snapshot`] for why.
+struct CachedSnapshot {
+    outcome: Result<HashMap<String, String>, String>,
+    attempted_at: Instant,
+}
+
+static SNAPSHOT_CACHE: Mutex<Option<CachedSnapshot>> = Mutex::new(None);
+
+/// [`snapshot`], reused across calls for [`CACHED_SNAPSHOT_TTL`] instead of re-forking the login
+/// shell every time. For a caller paced by a human (an agent launch), that fork is immaterial and
+/// `snapshot()` itself is the right call — see the module doc. For one paced by something else,
+/// such as a periodic sweep, re-forking on every call would not be: ten projects in one sweep
+/// hitting a slow or wedged rc file would otherwise serialize behind this module's own one-shell-
+/// at-a-time nature for ten attempts' worth of [`SNAPSHOT_TIMEOUT`] instead of one, which is why a
+/// *failed* attempt is cached too, for the same TTL, rather than retried on every call.
+pub fn cached_snapshot() -> Result<HashMap<String, String>> {
+    let mut cache = SNAPSHOT_CACHE
+        .lock()
+        .expect("shell env cache lock poisoned");
+    if let Some(cached) = cache.as_ref() {
+        if cached.attempted_at.elapsed() < CACHED_SNAPSHOT_TTL {
+            return cached.outcome.clone().map_err(|err| anyhow::anyhow!(err));
+        }
+    }
+    let outcome = snapshot().map_err(|err| format!("{err:#}"));
+    *cache = Some(CachedSnapshot {
+        outcome: outcome.clone(),
+        attempted_at: Instant::now(),
+    });
+    outcome.map_err(|err| anyhow::anyhow!(err))
+}
 
 /// Upper bound on how long the login-shell snapshot may run. An rc file waiting on a version
 /// manager or a network call is routinely a second or two; this leaves a wide margin above that
@@ -244,17 +286,19 @@ enum DrainOutcome {
 /// Appends every chunk currently waiting on `rx` to `buf`, without blocking for more to arrive,
 /// and reports whether the channel is still open. Surfaces a reader thread's io error instead of
 /// discarding the bytes already appended ahead of it — unlike `read_to_end`, which on error still
-/// leaves its partial buffer looking complete to the caller.
+/// leaves its partial buffer looking complete to the caller. `subject` names what `rx` is reading
+/// from (e.g. "the snapshot shell"), since this drains the pipes of any bounded subprocess, not
+/// only the snapshot shell — it is the caller's job to say which one so the error reads true.
 fn drain_available(
     rx: &mpsc::Receiver<io::Result<Vec<u8>>>,
     buf: &mut Vec<u8>,
     which: &str,
+    subject: &str,
 ) -> Result<DrainOutcome> {
     loop {
         match rx.try_recv() {
             Ok(chunk) => {
-                let bytes =
-                    chunk.with_context(|| format!("reading {which} from the snapshot shell"))?;
+                let bytes = chunk.with_context(|| format!("reading {which} from {subject}"))?;
                 buf.extend_from_slice(&bytes);
             }
             Err(mpsc::TryRecvError::Empty) => return Ok(DrainOutcome::Open),
@@ -264,10 +308,15 @@ fn drain_available(
 }
 
 /// Drains whatever has arrived on `rx` into `buf`, discarding a read error instead of surfacing
-/// it. Stderr is read only for its contents (the non-zero-exit error message in `snapshot_with`),
-/// never awaited for completeness, so an io error on it must not cost a good launch its result.
-fn drain_stderr_best_effort(rx: &mpsc::Receiver<io::Result<Vec<u8>>>, buf: &mut Vec<u8>) {
-    let _ = drain_available(rx, buf, "stderr");
+/// it. Stderr is read only for its contents (the non-zero-exit error message of a bounded
+/// subprocess), never awaited for completeness, so an io error on it must not cost a good launch
+/// its result. `subject` is forwarded to `drain_available` unchanged.
+fn drain_stderr_best_effort(
+    rx: &mpsc::Receiver<io::Result<Vec<u8>>>,
+    buf: &mut Vec<u8>,
+    subject: &str,
+) {
+    let _ = drain_available(rx, buf, "stderr", subject);
 }
 
 /// Byte offset where `marker` begins in `haystack`, or `None` if it has not arrived (in full) yet.
@@ -319,8 +368,8 @@ fn wait_with_timeout(
     let mut stderr = Vec::new();
 
     let status = loop {
-        drain_available(&stdout_rx, &mut stdout, "stdout")?;
-        drain_stderr_best_effort(&stderr_rx, &mut stderr);
+        drain_available(&stdout_rx, &mut stdout, "stdout", "the snapshot shell")?;
+        drain_stderr_best_effort(&stderr_rx, &mut stderr, "the snapshot shell");
         if let Some(status) = child.try_wait()? {
             break status;
         }
@@ -338,11 +387,11 @@ fn wait_with_timeout(
     // settle rather than one non-blocking grab, so a diagnostic longer than a single chunk does
     // not reach the user cut off at a chunk boundary.
     if !status.success() {
-        let _ = drain_available(&stdout_rx, &mut stdout, "stdout");
+        let _ = drain_available(&stdout_rx, &mut stdout, "stdout", "the snapshot shell");
         let settle = Instant::now() + REAP_GRACE;
         while Instant::now() < settle {
             if matches!(
-                drain_available(&stderr_rx, &mut stderr, "stderr"),
+                drain_available(&stderr_rx, &mut stderr, "stderr", "the snapshot shell"),
                 Ok(DrainOutcome::Disconnected) | Err(_)
             ) {
                 break;
@@ -354,8 +403,9 @@ fn wait_with_timeout(
 
     let marker = marker.as_bytes();
     loop {
-        let stdout_state = drain_available(&stdout_rx, &mut stdout, "stdout")?;
-        drain_stderr_best_effort(&stderr_rx, &mut stderr);
+        let stdout_state =
+            drain_available(&stdout_rx, &mut stdout, "stdout", "the snapshot shell")?;
+        drain_stderr_best_effort(&stderr_rx, &mut stderr, "the snapshot shell");
         if let Some(end) = find_marker(&stdout, marker) {
             stdout.truncate(end);
             break;
@@ -425,6 +475,91 @@ fn kill_group_after_timeout(
             ("timeout", &format!("{timeout:?}")),
         ],
     )
+}
+
+/// Kills the whole process group behind `child` and waits, bounded by `REAP_GRACE`, for it to be
+/// reaped — the two steps `run_with_timeout`'s timeout path and its drain-error path both need,
+/// pulled out so neither one can apply only the first and leave the child running unreaped.
+fn kill_process_group(child: &mut Child) {
+    let pid = child.id();
+    // SAFETY: a plain signal to a process group number. Both call sites reach here only while
+    // `child` is still known to be running (the timeout path just checked with `try_wait`, and
+    // the drain-error path has not seen it exit yet), the same condition `kill_group_after_timeout`
+    // relies on for `-pid` to stay valid.
+    unsafe {
+        libc::kill(-(pid as i32), libc::SIGKILL);
+    }
+    let reap_deadline = Instant::now() + REAP_GRACE;
+    while Instant::now() < reap_deadline {
+        match child.try_wait() {
+            Ok(Some(_)) | Err(_) => break,
+            Ok(None) => thread::sleep(Duration::from_millis(20)),
+        }
+    }
+}
+
+/// Runs an already-configured `command` to completion, killing its whole process group and
+/// returning a timeout error if it is still running after `timeout`. The shape mirrors
+/// `wait_with_timeout` above — poll `try_wait` rather than block on it, so the deadline can act
+/// without a second thread, and kill the group rather than only the direct child, so anything it
+/// forked (`ssh`, an askpass helper) goes with it — but completion itself is simpler: the caller
+/// here is one subprocess the daemon spawned directly, never a login shell that can leave a
+/// background process of its own holding a pipe open, so ordinary EOF on both pipes is a safe
+/// signal and there is no marker to hunt for.
+pub fn run_with_timeout(command: &mut Command, timeout: Duration) -> Result<Output> {
+    command.process_group(0);
+    command.stdin(Stdio::null());
+    command.stdout(Stdio::piped());
+    command.stderr(Stdio::piped());
+    let mut child = command.spawn().context("spawning the bounded command")?;
+
+    let mut stdout_pipe = child.stdout.take().expect("stdout was piped");
+    let mut stderr_pipe = child.stderr.take().expect("stderr was piped");
+    let (stdout_tx, stdout_rx) = mpsc::channel();
+    let (stderr_tx, stderr_rx) = mpsc::channel();
+    thread::spawn(move || pipe_reader(&mut stdout_pipe, &stdout_tx));
+    thread::spawn(move || pipe_reader(&mut stderr_pipe, &stderr_tx));
+
+    let deadline = Instant::now() + timeout;
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let status = loop {
+        // A pipe io error returns early, same as the timeout below — the child is not yet known
+        // to have exited, so leaving it be would leak it running and unreaped, same as a wedged
+        // deadline would.
+        if let Err(err) = drain_available(&stdout_rx, &mut stdout, "stdout", "the subprocess") {
+            kill_process_group(&mut child);
+            return Err(err);
+        }
+        drain_stderr_best_effort(&stderr_rx, &mut stderr, "the subprocess");
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            kill_process_group(&mut child);
+            bail!("did not finish within {timeout:?}");
+        }
+        thread::sleep(Duration::from_millis(20));
+    };
+
+    // The process has exited, so both pipes close on their own; drain whatever is left, bounded by
+    // `REAP_GRACE` rather than waited on unconditionally, in case something unrelated still holds
+    // one open.
+    let drain_deadline = Instant::now() + REAP_GRACE;
+    loop {
+        let stdout_state = drain_available(&stdout_rx, &mut stdout, "stdout", "the subprocess")?;
+        drain_stderr_best_effort(&stderr_rx, &mut stderr, "the subprocess");
+        if matches!(stdout_state, DrainOutcome::Disconnected) || Instant::now() >= drain_deadline {
+            break;
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
+
+    Ok(Output {
+        status,
+        stdout,
+        stderr,
+    })
 }
 
 /// Resolves a bare binary name to an absolute path by searching the snapshot's `PATH`, mirroring
@@ -846,8 +981,8 @@ mod tests {
         // read before the error — but the error itself has to surface rather than be swallowed:
         // silently dropping it would leave `buf` holding only the partial data with nothing to
         // say it stopped short of a complete snapshot.
-        let err =
-            drain_available(&rx, &mut buf, "stdout").expect_err("a mid-read error must surface");
+        let err = drain_available(&rx, &mut buf, "stdout", "the snapshot shell")
+            .expect_err("a mid-read error must surface");
         // `{:#}` rather than `to_string()`: anyhow's default `Display` prints only the
         // outermost context message, and the `boom` io error is its source.
         assert!(format!("{err:#}").contains("boom"));

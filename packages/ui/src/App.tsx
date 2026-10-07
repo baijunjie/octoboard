@@ -16,6 +16,7 @@ import { usePaneWidth } from "./layout/paneWidth";
 import { usePaneToggles } from "./layout/usePaneToggles";
 import { useRegionCycle } from "./layout/useRegionCycle";
 import { useAppExit } from "./lifecycle/useAppExit";
+import { useGitStatusSchedule } from "./lifecycle/useGitStatusSchedule";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
 import { ALREADY_RUNNING_CODES, isLive, type Console, type Project, type Session } from "./protocol";
 import { ReportPanel } from "./report/ReportPanel";
@@ -57,6 +58,7 @@ export function App(): React.ReactElement {
   // consumed below) because the pane toggles and the panes' width clamps need it too.
   const hasReportPanel = selectedSession?.role === "hub";
   const sidebarView = useSidebarView(consoleList, projects);
+  useGitStatusSchedule(sidebarView.currentConsole?.id);
   const archiveConsole = archiveScope ? consoles.get(archiveScope.console) : undefined;
   const archiveProject = archiveScope?.project ? projects.get(archiveScope.project) : undefined;
   // The archive view closes by itself once what it lists is gone.

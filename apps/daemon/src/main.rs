@@ -7,6 +7,7 @@ mod access;
 mod adapter;
 mod coordinator;
 mod env_shell;
+mod git_status;
 mod hook_mode;
 mod hooks;
 mod hostfs;

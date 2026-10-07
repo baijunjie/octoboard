@@ -6,6 +6,7 @@ import { dialogScenarios } from "./dialogs";
 import { emptyScenarios } from "./empty";
 import { filterScenarios } from "./filter";
 import { focusScenarios } from "./focus";
+import { gitScenarios } from "./git";
 import { layoutScenarios } from "./layout";
 import { noticeScenarios } from "./notices";
 import { reportScenarios } from "./report";
@@ -19,6 +20,7 @@ export const SCENARIOS: Scenario[] = [
   ...busyScenarios,
   ...statusScenarios,
   ...focusScenarios,
+  ...gitScenarios,
   ...filterScenarios,
   ...connectionScenarios,
   ...noticeScenarios,

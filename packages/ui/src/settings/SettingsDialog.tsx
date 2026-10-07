@@ -1,17 +1,19 @@
 import { Modal, Tabs } from "@heroui/react";
-import { Bell, FolderCheck, Settings2, type LucideIcon } from "lucide-react";
+import { Bell, FolderCheck, GitBranch, Settings2, type LucideIcon } from "lucide-react";
 import React, { useCallback, useRef, useState } from "react";
 
 import { TitledControl } from "../components/TitledControl";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
 import { GeneralSection } from "./GeneralSection";
+import { GitSection } from "./GitSection";
 import { NotificationsSection } from "./NotificationsSection";
 import { SettingsFocusContext } from "./useSectionRefocus";
 import { TrustedFoldersSection } from "./TrustedFoldersSection";
 
 const SECTIONS: { id: string; label: PlainMessageKey; Icon: LucideIcon; Content: () => React.ReactElement }[] = [
   { id: "general", label: "settings.section.general", Icon: Settings2, Content: GeneralSection },
+  { id: "git", label: "settings.section.git", Icon: GitBranch, Content: GitSection },
   { id: "trusted-folders", label: "settings.section.trustedFolders", Icon: FolderCheck, Content: TrustedFoldersSection },
   { id: "notifications", label: "settings.section.notifications", Icon: Bell, Content: NotificationsSection },
 ];

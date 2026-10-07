@@ -13,6 +13,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use uuid::Uuid;
 
+use crate::git_status;
 use crate::hostfs;
 use crate::mcp;
 use crate::paths;
@@ -128,7 +129,21 @@ pub async fn handle(
                     &[],
                 ));
             }
+            // Read before the delete below: `projects.console_id` is `ON DELETE CASCADE`, so the
+            // store drops this console's projects with it, and nothing else would ever clean up
+            // their git statuses afterwards — the daemon keeps no timer of its own that would
+            // notice they are gone.
+            let project_ids: Vec<String> = state
+                .store
+                .list_projects()?
+                .into_iter()
+                .filter(|project| project.console_id == id)
+                .map(|project| project.id)
+                .collect();
             state.store.delete_console(&id)?;
+            for project_id in &project_ids {
+                state.remove_git_status(project_id);
+            }
             // The working directory is Octoboard's own, under `~/.octoboard/consoles/`; no project
             // directory is ever touched by this.
             if let Err(err) = std::fs::remove_dir_all(&console.workdir) {
@@ -233,6 +248,7 @@ pub async fn handle(
             }
             // Only the association goes away. The directory is the user's.
             state.store.delete_project(&id)?;
+            state.remove_git_status(&id);
             state.broadcast(Event::ProjectDeleted { project: id });
             Ok(None)
         }
@@ -347,6 +363,18 @@ pub async fn handle(
 
         RequestBody::RemoveTrustedDirectory { path } => {
             trust::remove_trusted_directory(state, &path)?;
+            Ok(None)
+        }
+
+        RequestBody::UpdateSettings {
+            auto_sync_repositories,
+        } => {
+            update_settings(state, auto_sync_repositories)?;
+            Ok(None)
+        }
+
+        RequestBody::RefreshGitStatus { console } => {
+            refresh_git_status(state, &console)?;
             Ok(None)
         }
 
@@ -947,6 +975,43 @@ fn normalize_icon(text: Option<&str>) -> Result<Option<String>> {
         ));
     }
     Ok(Some(text.to_string()))
+}
+
+/// Applies the settable fields of `update_settings`: absent means "leave it alone", as in
+/// `update_project`. Broadcasts `settings_updated` only when something actually changed, the
+/// trusted-directories pattern.
+fn update_settings(state: &Arc<AppState>, auto_sync_repositories: Option<bool>) -> Result<()> {
+    let Some(auto_sync_repositories) = auto_sync_repositories else {
+        return Ok(());
+    };
+    if !state
+        .store
+        .set_auto_sync_repositories(auto_sync_repositories)?
+    {
+        return Ok(());
+    }
+    state.broadcast(Event::SettingsUpdated {
+        settings: state.store.get_settings()?,
+    });
+    Ok(())
+}
+
+/// Starts a git-status check of every project of `console_id`, concurrently; a project already
+/// being checked is left alone. The statuses follow as `project_git_status` broadcasts, so this
+/// returns as soon as the checks are started rather than waiting for them.
+fn refresh_git_status(state: &Arc<AppState>, console_id: &str) -> Result<()> {
+    state
+        .store
+        .get_console(console_id)?
+        .ok_or_else(|| CodedError::unknown_console(console_id))?;
+    let projects: Vec<Project> = state
+        .store
+        .list_projects()?
+        .into_iter()
+        .filter(|project| project.console_id == console_id)
+        .collect();
+    git_status::refresh(state, projects);
+    Ok(())
 }
 
 fn session_cwd(state: &Arc<AppState>, session: &Session) -> Result<PathBuf> {

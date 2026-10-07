@@ -1,0 +1,524 @@
+//! Checking a project's git status against its remote, on request — the daemon keeps no timer of
+//! its own; the client drives the schedule and asks with `refresh_git_status` (see
+//! `apps/daemon/PROTOCOL.md`'s "Daemon behaviour, per project"). Each project is checked at most
+//! once at a time, concurrently with the others of its console, and at most once every
+//! `GIT_CHECK_MIN_INTERVAL`.
+
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use anyhow::Context;
+
+use crate::env_shell;
+use crate::hostfs;
+use crate::protocol::{GitActivity, GitStatus, Project};
+use crate::state::AppState;
+
+/// Upper bound on one `git` subprocess (`fetch`, `status`, `merge`). `GIT_TERMINAL_PROMPT=0` and
+/// `ssh -oBatchMode=yes` (see `run_git_output`) turn a missing credential or an unknown host key
+/// into an immediate failure rather than a prompt neither of them ever shows on a headless daemon,
+/// but a slow network can still legitimately take tens of seconds on a fetch; two minutes leaves a
+/// wide margin above that while still turning a wedged step into a reported error within one sweep
+/// instead of leaking a blocking-pool thread, and leaving its project excluded from every later
+/// sweep, for the rest of the daemon's life.
+const GIT_COMMAND_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// The floor between the end of one check of a project and the start of its next, on top of the
+/// in-flight guard above — a guard that does nothing here, since the daemon owns no timer and each
+/// client drives its own 5-minute `refresh_git_status` interval on its own phase. Several windows
+/// open on the same console therefore do not overlap their sweeps, they interleave them, and
+/// without this floor N clients turn one `git fetch` per project every 5 minutes into up to N. 60
+/// seconds is short enough that the check a console switch asks for still reflects the remote from
+/// within the last minute even when another client's sweep just finished the same project, so the
+/// switch-triggered check `PROTOCOL.md` promises is not defeated, and long enough that no number of
+/// 5-minute pollers can multiply the work.
+const GIT_CHECK_MIN_INTERVAL: Duration = Duration::from_secs(60);
+
+/// Checks every one of `projects`' git status, concurrently; a project already being checked, or
+/// one whose last check completed less than `GIT_CHECK_MIN_INTERVAL` ago, is skipped. Fire-and-
+/// forget: each check reports itself through `AppState::publish_git_status` as it progresses, and
+/// there is nothing here for a caller to wait on.
+pub fn refresh(state: &Arc<AppState>, projects: Vec<Project>) {
+    for project in projects {
+        spawn_check(state, project);
+    }
+}
+
+/// Claims the project's check, or does nothing if one is already running or the minimum interval
+/// has not elapsed since the last one completed, then runs it on a blocking thread: every step
+/// below shells out to `git`, which blocks. The claim is held by the closure itself and released on
+/// drop, panic included, so a step that panics still frees the project for the next sweep instead of
+/// excluding it forever.
+fn spawn_check(state: &Arc<AppState>, project: Project) {
+    if !due_for_check(
+        state.git_check_completed_at(&project.id),
+        Instant::now(),
+        GIT_CHECK_MIN_INTERVAL,
+    ) {
+        return;
+    }
+    let Some(claim) = state.claim_git_check(&project.id) else {
+        return;
+    };
+    let state = state.clone();
+    tokio::task::spawn_blocking(move || {
+        let _claim = claim;
+        check_project(&state, &project);
+    });
+}
+
+/// Whether a project last completed at `last_completed` is due for another check at `now`, given
+/// the minimum interval `floor` — a pure function over the three so the decision is unit-tested
+/// without a clock or a real repository. A project never checked before (`None`) is always due.
+fn due_for_check(last_completed: Option<Instant>, now: Instant, floor: Duration) -> bool {
+    match last_completed {
+        None => true,
+        Some(last) => now.saturating_duration_since(last) >= floor,
+    }
+}
+
+/// One project's check, steps 1-6 of the daemon behaviour described in `PROTOCOL.md`. Never fails
+/// outright: every step that can fail records its message on `GitStatus.error` and the check
+/// continues, so a transient fetch failure still leaves the branch name and last known numbers
+/// showing.
+fn check_project(state: &AppState, project: &Project) {
+    let path = PathBuf::from(&project.path);
+
+    // Checked before the first publish, not after it: publishing `repository: true` and only then
+    // discovering the directory is not a repository would have every plain project blink through
+    // an in-flight icon it can never actually earn, twice a sweep.
+    if !hostfs::is_git_repo(&path) {
+        // Recorded before the publish below, not after: if the project was removed mid-check,
+        // that publish takes `remove_git_status`'s path and clears this same entry — recording it
+        // afterwards would resurrect a completion timestamp for a project that no longer exists,
+        // with nothing left to ever remove it again.
+        state.record_git_check_completed(&project.id);
+        state.publish_git_status(GitStatus {
+            project: project.id.clone(),
+            repository: false,
+            branch: None,
+            detached: false,
+            upstream: None,
+            ahead: 0,
+            behind: 0,
+            activity: GitActivity::Idle,
+            error: None,
+        });
+        return;
+    }
+
+    let mut status = GitStatus {
+        project: project.id.clone(),
+        repository: true,
+        branch: None,
+        detached: false,
+        upstream: None,
+        ahead: 0,
+        behind: 0,
+        activity: GitActivity::Checking,
+        error: None,
+    };
+    state.publish_git_status(status.clone());
+
+    let remotes = list_remotes(&path);
+    if !remotes.is_empty() {
+        let upstream_remote = upstream_remote(&path);
+        let remote = fetch_remote(&remotes, upstream_remote.as_deref());
+        let mut args = vec!["fetch", "--quiet"];
+        if let Some(remote) = &remote {
+            args.push(remote);
+        }
+        if let Err(err) = run_git(&path, &args) {
+            tracing::debug!(%err, "fetching the remote failed");
+            status.error = Some(err);
+        }
+    }
+    read_branch_header(&path, &mut status);
+
+    let auto_sync = state
+        .store
+        .get_settings()
+        .map(|settings| settings.auto_sync_repositories)
+        .unwrap_or(false);
+    if auto_sync && status.upstream.is_some() && status.behind > 0 && status.ahead == 0 {
+        status.activity = GitActivity::Syncing;
+        state.publish_git_status(status.clone());
+        // `upstream` was just checked to be `Some`.
+        let upstream = status.upstream.clone().expect("upstream is set");
+        if let Err(err) = run_git(&path, &["merge", "--ff-only", &upstream]) {
+            tracing::debug!(%err, "fast-forwarding the branch failed");
+            status.error = Some(err);
+        }
+        read_branch_header(&path, &mut status);
+    }
+
+    status.activity = GitActivity::Idle;
+    // Recorded before this final publish, not after, for the same reason as the non-repository
+    // early return above: a project removed mid-check must not have its completion timestamp
+    // reinserted right after `publish_git_status` just cleared it.
+    state.record_git_check_completed(&project.id);
+    state.publish_git_status(status);
+}
+
+/// The repository's configured remotes, in the order `git remote` prints them, or empty when it
+/// has none at all — not one of the steps whose failure is reported on `GitStatus`: a repository
+/// with no remote is the ordinary case this exists to tell apart from one the fetch below should
+/// actually attempt, not a failure of its own.
+fn list_remotes(path: &Path) -> Vec<String> {
+    run_git_output(path, &["remote"])
+        .map(|output| {
+            output
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The branch's upstream remote, e.g. `origin` for an upstream of `origin/main` — `None` when the
+/// branch has no upstream, which is the ordinary case for a fresh branch and not reported as a
+/// failure.
+fn upstream_remote(path: &Path) -> Option<String> {
+    let output = run_git_output(
+        path,
+        &[
+            "rev-parse",
+            "--abbrev-ref",
+            "--symbolic-full-name",
+            "@{upstream}",
+        ],
+    )
+    .ok()?;
+    remote_from_upstream_ref(&output).map(str::to_string)
+}
+
+/// The remote name from an `@{upstream}` ref such as `origin/main` — a pure function over the text
+/// so the split is unit-tested with literal strings rather than a real repository.
+fn remote_from_upstream_ref(ref_text: &str) -> Option<&str> {
+    ref_text.trim().split_once('/').map(|(remote, _)| remote)
+}
+
+/// Which remote name, if any, to pass to `git fetch` — a pure function over the repository's
+/// remotes and its upstream's remote (when it has one), so the derivation is unit-tested with
+/// literal strings. `None` means a bare `git fetch`, which lets `git` fall back to the current
+/// branch's upstream remote or `origin` on its own; that fallback is trusted only when there is
+/// exactly one remote to begin with — a bare fetch on a repository with several and no upstream can
+/// fail against a remote named something other than `origin` (a fork workflow's `upstream`) even
+/// though fetching is in no way actually broken.
+fn fetch_remote(remotes: &[String], upstream_remote: Option<&str>) -> Option<String> {
+    if let Some(remote) = upstream_remote {
+        return Some(remote.to_string());
+    }
+    if let [only] = remotes {
+        return Some(only.clone());
+    }
+    None
+}
+
+/// Runs `git status --porcelain=v2 --branch --untracked-files=no` and applies what it says to
+/// `status`; a failure to run it records `status.error` and leaves the branch fields at `status`'s
+/// defaults — `None` branch, no upstream, zero ahead and behind — the same empty reading a
+/// brand-new `GitStatus` starts from, since a fresh one is all this is ever called with.
+/// `--untracked-files=no` skips enumerating the worktree's files, which `parse_branch_header`
+/// below never reads anyway (it only takes the `# branch.*` header lines, which this flag does not
+/// change) — on a large repository that enumeration is otherwise the dominant cost of the whole
+/// check, repeated every project every sweep. Keep the flag even once a feature wants a dirty
+/// worktree indicator; that reads `git status`'s file-status entries, which call for their own,
+/// separate invocation rather than reviving this one's enumeration for every sweep that does not
+/// need it.
+fn read_branch_header(path: &Path, status: &mut GitStatus) {
+    match run_git_output(
+        path,
+        &[
+            "status",
+            "--porcelain=v2",
+            "--branch",
+            "--untracked-files=no",
+        ],
+    ) {
+        Ok(output) => {
+            let header = parse_branch_header(&output);
+            status.branch = header.branch;
+            status.detached = header.detached;
+            status.upstream = header.upstream;
+            status.ahead = header.ahead;
+            status.behind = header.behind;
+        }
+        Err(err) => {
+            tracing::debug!(%err, "reading the local branch state failed");
+            status.error = Some(err);
+        }
+    }
+}
+
+/// Runs `git` with `args` in `path` and discards its stdout, for a step whose only interesting
+/// output is whether it succeeded.
+fn run_git(path: &Path, args: &[&str]) -> Result<(), String> {
+    run_git_output(path, args).map(|_| ())
+}
+
+/// Runs `git` with `args` in `path`, using the cached shell environment and resolved binary, and
+/// returns its stdout as UTF-8. The error is the verbatim stderr of a failed `git`, the operating-
+/// system message of a failure to even start it, or a timeout past `GIT_COMMAND_TIMEOUT` —
+/// `GitStatus` carries it as is, untranslated.
+fn run_git_output(path: &Path, args: &[&str]) -> Result<String, String> {
+    let env = env_shell::cached_snapshot().map_err(|err| format!("{err:#}"))?;
+    let git = env_shell::resolve_binary("git", &env).map_err(|err| format!("{err:#}"))?;
+    let mut command = std::process::Command::new(git);
+    // Mirrors `hostfs::clone_repo`'s subprocess pattern: `git` runs with the user's shell
+    // environment, the same one agents are launched with, rather than the daemon's own minimal one.
+    command.env_clear();
+    command.envs(&env);
+    // `git` and `ssh` read a missing credential, an unknown host key or a passphrase-protected key
+    // with no agent from the controlling terminal, not stdin — a null stdin (which `run_with_timeout`
+    // sets below) does nothing to stop that prompt. This is what turns all three into an immediate
+    // failure instead of a daemon launched from a terminal blocking forever on them.
+    command.env("GIT_TERMINAL_PROMPT", "0");
+    command.env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes");
+    command.env_remove("GIT_ASKPASS");
+    command.env_remove("SSH_ASKPASS");
+    command.current_dir(path);
+    command.args(args);
+    // `run_with_timeout` is generic over whatever bounded subprocess it is given, so neither its
+    // pipe-read errors nor its timeout message name `git` on their own — this is where that
+    // subject is added.
+    let output = env_shell::run_with_timeout(&mut command, GIT_COMMAND_TIMEOUT)
+        .context("running git")
+        .map_err(|err| format!("{err:#}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// What `git status --porcelain=v2 --branch --untracked-files=no`'s `# branch.*` header lines say
+/// about the local branch and its upstream — everything `GitStatus` needs beyond `repository`,
+/// `activity` and `error`, which the caller fills in around this.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct BranchHeader {
+    branch: Option<String>,
+    detached: bool,
+    upstream: Option<String>,
+    ahead: u32,
+    behind: u32,
+}
+
+/// Parses the `# branch.*` header lines of `git status --porcelain=v2 --branch --untracked-files=no`'s
+/// output; every other line (the file-status entries this command also prints) is ignored, which is also what
+/// makes an unrecognised `# branch.*` line harmless. A pure function over the text, so it is
+/// unit-tested with literal strings rather than a real repository fixture.
+fn parse_branch_header(output: &str) -> BranchHeader {
+    let mut oid = None;
+    let mut initial = false;
+    let mut head = None;
+    let mut detached = false;
+    let mut upstream = None;
+    let mut ahead = 0;
+    let mut behind = 0;
+
+    for line in output.lines() {
+        let Some(rest) = line.strip_prefix("# branch.") else {
+            continue;
+        };
+        if let Some(value) = rest.strip_prefix("oid ") {
+            if value == "(initial)" {
+                initial = true;
+            } else {
+                oid = Some(value);
+            }
+        } else if let Some(value) = rest.strip_prefix("head ") {
+            if value == "(detached)" {
+                detached = true;
+            } else {
+                head = Some(value);
+            }
+        } else if let Some(value) = rest.strip_prefix("upstream ") {
+            upstream = Some(value.to_string());
+        } else if let Some(value) = rest.strip_prefix("ab ") {
+            (ahead, behind) = parse_ab(value);
+        }
+    }
+
+    // No commit yet means nothing to read a branch name off, whatever `branch.head` says — Git
+    // still reports the branch a first commit would land on.
+    let branch = if initial {
+        None
+    } else if detached {
+        oid.map(|oid| oid.chars().take(7).collect())
+    } else {
+        head.map(str::to_string)
+    };
+    // Meaningless without an upstream, whatever the `ab` line (which should not appear without
+    // one) said.
+    if upstream.is_none() {
+        ahead = 0;
+        behind = 0;
+    }
+
+    BranchHeader {
+        branch,
+        detached,
+        upstream,
+        ahead,
+        behind,
+    }
+}
+
+/// Parses `+<ahead> -<behind>` as printed after `# branch.ab `; a part that does not match reads
+/// as no movement rather than panicking on output this command has no business producing.
+fn parse_ab(text: &str) -> (u32, u32) {
+    let mut ahead = 0;
+    let mut behind = 0;
+    for part in text.split_whitespace() {
+        if let Some(value) = part.strip_prefix('+') {
+            ahead = value.parse().unwrap_or(0);
+        } else if let Some(value) = part.strip_prefix('-') {
+            behind = value.parse().unwrap_or(0);
+        }
+    }
+    (ahead, behind)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_normal_branch_with_an_upstream_and_no_movement() {
+        let header = parse_branch_header(
+            "# branch.oid abcdef0123456789\n\
+             # branch.head main\n\
+             # branch.upstream origin/main\n\
+             # branch.ab +0 -0\n",
+        );
+        assert_eq!(
+            header,
+            BranchHeader {
+                branch: Some("main".to_string()),
+                detached: false,
+                upstream: Some("origin/main".to_string()),
+                ahead: 0,
+                behind: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn ahead_and_behind_are_read_from_the_ab_line() {
+        let header = parse_branch_header(
+            "# branch.oid abcdef0123456789\n\
+             # branch.head main\n\
+             # branch.upstream origin/main\n\
+             # branch.ab +3 -5\n",
+        );
+        assert_eq!((header.ahead, header.behind), (3, 5));
+    }
+
+    #[test]
+    fn no_upstream_means_no_ahead_or_behind() {
+        let header = parse_branch_header("# branch.oid abcdef0123456789\n# branch.head main\n");
+        assert_eq!(header.upstream, None);
+        assert_eq!((header.ahead, header.behind), (0, 0));
+    }
+
+    #[test]
+    fn a_detached_head_reads_the_short_oid_as_the_branch() {
+        let header =
+            parse_branch_header("# branch.oid abcdef0123456789\n# branch.head (detached)\n");
+        assert!(header.detached);
+        assert_eq!(header.branch.as_deref(), Some("abcdef0"));
+    }
+
+    #[test]
+    fn an_empty_initial_repository_has_no_branch() {
+        let header = parse_branch_header("# branch.oid (initial)\n# branch.head main\n");
+        assert_eq!(header.branch, None);
+        assert!(!header.detached);
+        assert_eq!(header.upstream, None);
+    }
+
+    #[test]
+    fn an_unrecognised_branch_line_and_a_file_status_entry_are_both_ignored() {
+        let header = parse_branch_header(
+            "# branch.oid abcdef0123456789\n\
+             # branch.head main\n\
+             # branch.something-new value\n\
+             1 .M N... 100644 100644 100644 aaaa bbbb file.txt\n",
+        );
+        assert_eq!(header.branch.as_deref(), Some("main"));
+    }
+
+    #[test]
+    fn the_remote_name_splits_off_the_first_path_segment_of_an_upstream_ref() {
+        assert_eq!(remote_from_upstream_ref("origin/main"), Some("origin"));
+        // A branch name containing a slash of its own still yields the remote alone: a remote
+        // name never contains one.
+        assert_eq!(
+            remote_from_upstream_ref("upstream/feature/thing"),
+            Some("upstream")
+        );
+        assert_eq!(remote_from_upstream_ref("origin"), None);
+    }
+
+    #[test]
+    fn fetch_remote_prefers_the_upstreams_remote() {
+        let remotes = vec!["origin".to_string(), "upstream".to_string()];
+        assert_eq!(
+            fetch_remote(&remotes, Some("upstream")),
+            Some("upstream".to_string())
+        );
+    }
+
+    #[test]
+    fn fetch_remote_falls_back_to_the_lone_remote_with_no_upstream() {
+        let remotes = vec!["upstream".to_string()];
+        assert_eq!(fetch_remote(&remotes, None), Some("upstream".to_string()));
+    }
+
+    #[test]
+    fn fetch_remote_is_bare_with_several_remotes_and_no_upstream() {
+        let remotes = vec!["origin".to_string(), "upstream".to_string()];
+        assert_eq!(fetch_remote(&remotes, None), None);
+    }
+
+    #[test]
+    fn a_project_never_checked_before_is_always_due() {
+        assert!(due_for_check(None, Instant::now(), GIT_CHECK_MIN_INTERVAL));
+    }
+
+    #[test]
+    fn a_project_checked_within_the_floor_is_not_due() {
+        let now = Instant::now();
+        let last_completed = now - Duration::from_secs(1);
+        assert!(!due_for_check(
+            Some(last_completed),
+            now,
+            GIT_CHECK_MIN_INTERVAL
+        ));
+    }
+
+    #[test]
+    fn a_project_checked_exactly_at_the_floor_is_due() {
+        let now = Instant::now();
+        let last_completed = now - GIT_CHECK_MIN_INTERVAL;
+        assert!(due_for_check(
+            Some(last_completed),
+            now,
+            GIT_CHECK_MIN_INTERVAL
+        ));
+    }
+
+    #[test]
+    fn a_project_checked_past_the_floor_is_due() {
+        let now = Instant::now();
+        let last_completed = now - GIT_CHECK_MIN_INTERVAL - Duration::from_secs(1);
+        assert!(due_for_check(
+            Some(last_completed),
+            now,
+            GIT_CHECK_MIN_INTERVAL
+        ));
+    }
+}

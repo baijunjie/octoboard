@@ -119,12 +119,19 @@ pub fn discover_repos(parent: &Path) -> Result<Vec<PathBuf>> {
     Ok(repos)
 }
 
+/// How long a clone may run before it is given up on. Generous — a large repository over a slow
+/// connection legitimately takes minutes — but bounded, so a stalled transfer cannot hold a
+/// blocking thread for the rest of the daemon's life.
+const CLONE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+
 /// Clones `remote_url` into a new directory under `parent` and returns that directory. Blocking:
 /// the caller runs it off the runtime.
 ///
 /// `git` runs with the user's shell environment, the same one agents are launched with, rather than
 /// the daemon's own: a daemon started from Finder has a minimal `PATH` with no `git` on it, and its
-/// own environment may carry the agent-session markers that environment exists to filter out.
+/// own environment may carry the agent-session markers that environment exists to filter out. It is
+/// made non-interactive and given a deadline for the reasons in `git_status::run_git_output`; the
+/// deadline is far longer here because a clone legitimately runs for minutes.
 pub fn clone_repo(remote_url: &str, parent: &Path) -> Result<PathBuf> {
     let name = repo_name(remote_url).ok_or_else(|| {
         CodedError::raised(
@@ -148,11 +155,12 @@ pub fn clone_repo(remote_url: &str, parent: &Path) -> Result<PathBuf> {
     let mut command = std::process::Command::new(git);
     command.env_clear();
     command.envs(&shell_env);
-    let output = command
-        .arg("clone")
-        .arg(remote_url)
-        .arg(&target)
-        .output()
+    command.env("GIT_TERMINAL_PROMPT", "0");
+    command.env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes");
+    command.env_remove("GIT_ASKPASS");
+    command.env_remove("SSH_ASKPASS");
+    command.arg("clone").arg(remote_url).arg(&target);
+    let output = crate::env_shell::run_with_timeout(&mut command, CLONE_TIMEOUT)
         .context("running `git clone`")?;
     if !output.status.success() {
         let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();

@@ -237,6 +237,26 @@ export const en = {
   "sidebar.focus.archived": "Archived ({count})",
   "sidebar.focus.reportsToHub": "Reports to hub",
 
+  "sidebar.git.branch": "Branch {branch}",
+  "sidebar.git.detachedBranch": "Detached at {branch}",
+  "sidebar.git.noCommitsYet": "No commits yet",
+  // No ellipsis, unlike this project's other in-progress wording: these four are only ever an
+  // accessible name (`gitBadgeAriaLabel` in `gitStatusLabel.ts`), never visible text, and a screen
+  // reader voicing a trailing "…" is worse than silence.
+  "sidebar.git.checking": "Checking branch {branch}",
+  "sidebar.git.checkingUnknown": "Checking the branch",
+  "sidebar.git.syncing": "Fast-forwarding branch {branch}",
+  "sidebar.git.syncingUnknown": "Fast-forwarding the branch",
+  "sidebar.git.ahead": {
+    one: "{count} commit ahead",
+    other: "{count} commits ahead",
+  },
+  "sidebar.git.behind": {
+    one: "{count} commit behind",
+    other: "{count} commits behind",
+  },
+  "sidebar.git.error": "Git error: {error}",
+
   "archive.heading.project": "Archived sessions",
   "archive.heading.hubs": "Archived hubs",
   "archive.title.project": "Archived sessions of {name}",
@@ -358,6 +378,7 @@ export const en = {
   "settings.title": "Settings",
   "settings.sections": "Settings sections",
   "settings.section.general": "General",
+  "settings.section.git": "Git",
   "settings.section.trustedFolders": "Trusted folders",
   "settings.section.notifications": "Notifications",
   "settings.appearance.label": "Appearance",
@@ -368,6 +389,9 @@ export const en = {
   "settings.language.label": "Language",
   "settings.language.description":
     "The language of {appName}'s interface. It is picked from the system's languages the first time {appName} opens.",
+  "settings.git.autoSync.label": "Automatically sync repositories",
+  "settings.git.autoSync.description":
+    "Fast-forwards a project's branch when it is behind its upstream and can be. It never pushes, and it leaves a branch that has commits of its own alone. The remote is checked every few minutes whichever way this is set, so the branch always shows how far ahead or behind it is.",
   "settings.trusted.description":
     "{appName} answers Claude Code's trust prompt without asking for every project under these folders, including projects added to them later. Claude Code then applies the permission rules and hooks in each project's own settings without asking either, so trust a folder only if you trust everything that ends up inside it.",
   "settings.trusted.empty": "No folders are trusted. Trust a folder from a session's trust prompt.",

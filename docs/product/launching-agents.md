@@ -7,8 +7,12 @@ Every session is a native agent CLI process. Octoboard supports three agents —
 
 This is the guarantee the whole design rests on:
 
-- **No file inside a project is written, changed or deleted.** Not an instruction file, not a settings file, not a
-  hook. Removing a project removes an association, never a directory.
+- **Octoboard installs nothing into a project.** It writes no instruction file, no settings file and no hook of its
+  own, and changes none of the project's. What the session's agent itself writes while it works is the point of the
+  whole thing and is not Octoboard's doing. Removing a project removes an association, never a directory. The one
+  thing Octoboard does to a project directory on its own account, the user has to turn on first: with
+  **Automatically sync repositories** on, a project's branch is fast-forwarded when it is behind its upstream, which
+  moves its working tree (see "Automatically syncing repositories" in `docs/product/project-git-status.md`).
 - **The user's own agent configuration is never written to.** Octoboard does not edit `~/.claude.json`,
   `~/.codex/`, `~/.grok/`, a directory chosen as one of a console's agent config directories, or anything else the
   agent reads as the user's global setup, and it never writes a trust decision into any of them.

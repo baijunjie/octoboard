@@ -3,7 +3,7 @@
 Settings is a large dialog over the whole window. A list of sections runs down its left side and the selected
 section's settings fill the right, one row per setting: its name and a line saying what it does on the left, its
 control on the right; under a right-to-left language the sides swap (see "Right-to-left layout" in
-`docs/product/window-layout.md`). The sections, in order, are **General**, **Trusted folders** and
+`docs/product/window-layout.md`). The sections, in order, are **General**, **Git**, **Trusted folders** and
 **Notifications**; the dialog opens on General.
 
 ## Moving between sections
@@ -44,6 +44,13 @@ which one is the default and where the choice is kept are in `docs/product/appea
 The language of the UI, chosen from a drop-down of the offered languages, each named in its own language. What the
 options are, how the first launch picks a language, what follows the choice and where it is kept are in
 `docs/product/language.md`.
+
+## Git
+
+One row, **Automatically sync repositories**, a switch, off to begin with: whether a project's branch is
+fast-forwarded on its own when it is behind its upstream, rather than only reported as behind. What it does, what it
+never does and where the value is kept are in "Automatically syncing repositories" in
+`docs/product/project-git-status.md`.
 
 ## Trusted folders
 

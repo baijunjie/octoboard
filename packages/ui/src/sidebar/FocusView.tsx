@@ -12,6 +12,8 @@ import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
 import { sessionAriaLabel, statusLabel } from "../sessionLabel";
+import { useDaemonStore } from "../store";
+import { GitBadge } from "./GitBadge";
 import { projectMenu, sessionMenu } from "./menus";
 import { archivedSessions, liveSessions } from "./order";
 import { RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
@@ -37,6 +39,10 @@ export function FocusView({
   selectedSessionId?: string;
 }): React.ReactElement {
   const t = useT();
+  // Read directly rather than taking it as a prop threaded through `Sidebar.tsx`: this project's
+  // own entry, which keeps the same `GitStatus` reference until that entry itself changes, so no
+  // `useShallow` is needed.
+  const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
   const live = liveSessions(sessions);
   const archived = archivedSessions(sessions);
   const listRef = useFlip<HTMLDivElement>();
@@ -59,7 +65,10 @@ export function FocusView({
             <ArrowLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
           </Button>
         </TitledControl>
-        <div className="min-w-0 flex-1 px-1">
+        {/* `min-w-16` is the floor itself: this is the flex item (`flex-1`'s basis is 0%, so a
+            floor on the `RowLabel` child below would clamp nothing), leaving `GitBadge`'s own
+            `min-w-0` as the one that keeps giving way once this is reached. */}
+        <div className="min-w-16 flex-1 px-1">
           <div className="truncate text-xs text-muted" dir="auto">
             {parentConsole.name}
           </div>
@@ -67,6 +76,7 @@ export function FocusView({
             <span className="text-sm font-semibold">{project.name}</span>
           </RowLabel>
         </div>
+        <GitBadge status={gitStatus} />
         <RowIconButton icon={Plus} label={t("sidebar.project.openSession")} onPress={openSession} />
         <ActionMenu
           label={t("sidebar.project.actions", { name: project.name })}

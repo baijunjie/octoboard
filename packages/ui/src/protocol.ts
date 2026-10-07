@@ -117,6 +117,39 @@ export interface DirEntry {
   is_git_repo: boolean;
 }
 
+/** `checking` while the remote is being contacted and the status read; `syncing` while the branch
+ * is being fast-forwarded. A tri-state rather than a boolean so the two in-flight phases are told
+ * apart in the UI's wording. */
+export type GitActivity = "idle" | "checking" | "syncing";
+
+/** A project's live git state: derived, never stored in SQLite, and held in memory by the daemon.
+ * `repository` false means the project's directory is not a git repository, and every field below
+ * is then at its empty value. `branch` is the branch name, the short commit id when `detached`, or
+ * null when it cannot be read (an empty repository with no commit yet, or a failed read).
+ * `upstream` null means the branch has none, which is also when `ahead` and `behind` are
+ * meaningless and both zero. `error` is the verbatim, untranslatable message from the last failed
+ * step, cleared by a step that succeeds — a failed fetch does not stop the local read, so a status
+ * can carry both an error and usable numbers. */
+export interface GitStatus {
+  project: string;
+  repository: boolean;
+  branch?: string | null;
+  detached: boolean;
+  upstream?: string | null;
+  ahead: number;
+  behind: number;
+  activity: GitActivity;
+  error?: string | null;
+}
+
+/** The app-wide settings the daemon stores. One field for now; it is a record so it can grow. */
+export interface Settings {
+  /** Off (the default): the periodic check still runs `git fetch` so ahead/behind stays accurate,
+   * but nothing in the repository changes. On: a branch that is behind and can fast-forward is
+   * also fast-forwarded. Never pushes and never merges a non-fast-forward either way. */
+  auto_sync_repositories: boolean;
+}
+
 /**
  * The body of a client request, without the envelope's `id`. One variant per `RequestBody` case
  * in `protocol.rs`, tagged the same way (`type`, snake_case).
@@ -208,6 +241,15 @@ export type RequestBody =
   | { type: "confirm_claude_trust"; session: string; remember: boolean; trust_parent_dir?: boolean }
   /** Stops trusting a directory; projects' own consents are untouched. */
   | { type: "remove_trusted_directory"; path: string }
+  /** Each settable field is optional: absent means leave it as it is. Answered with `ack`;
+   * broadcasts `settings_updated` only when something actually changed (the trusted-folders
+   * pattern). */
+  | { type: "update_settings"; auto_sync_repositories?: boolean }
+  /** Answered with `ack` at once; the statuses arrive as `project_git_status` broadcasts as each
+   * project finishes. Every project of `console` is checked, concurrently. A project whose check
+   * is already in flight is not started again, so a client polling faster than the checks finish,
+   * or several clients watching the same console, cannot pile work up. */
+  | { type: "refresh_git_status"; console: string }
   | { type: "shutdown" };
 
 /** A client request as sent on the wire: the body's fields plus an optional correlation id. */
@@ -222,6 +264,10 @@ export type Event =
       sessions: Session[];
       /** Directories whose projects Octoboard answers Claude Code's trust prompt for. */
       trusted_directories: string[];
+      settings: Settings;
+      /** Every status the daemon currently holds; empty on a fresh start. Keeps a reconnecting
+       * client from having to re-ask. */
+      git_statuses: GitStatus[];
     }
   /** The whole list of trusted directories, sent when it changes. */
   | { type: "trusted_directories_updated"; trusted_directories: string[] }
@@ -229,6 +275,11 @@ export type Event =
   | { type: "console_deleted"; console: string }
   | { type: "project_upserted"; project: Project }
   | { type: "project_deleted"; project: string }
+  /** Broadcast whenever a project's `GitStatus` changes, including each transition of `activity`,
+   * so the animated icon has something to follow. When a project is removed, no deletion event is
+   * sent; the client drops the status with the project. */
+  | { type: "project_git_status"; status: GitStatus }
+  | { type: "settings_updated"; settings: Settings }
   | { type: "session_upserted"; session: Session }
   | { type: "session_deleted"; session: string }
   /** Something about a session the user has to be told that no status field carries — an injected

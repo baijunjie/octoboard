@@ -21,6 +21,20 @@ export const settingsScenarios: Scenario[] = [
     steps: [(ui) => ui.press(ui.t("titleBar.settings"))],
   },
   {
+    id: "settings-git",
+    group: GROUP,
+    title: "Git",
+    state,
+    steps: [(ui) => ui.press(ui.t("titleBar.settings")), (ui) => ui.press(ui.t("settings.section.git"))],
+  },
+  {
+    id: "settings-git-auto-sync",
+    group: GROUP,
+    title: "Git, automatic sync on",
+    state: { ...state, settings: { auto_sync_repositories: true } },
+    steps: [(ui) => ui.press(ui.t("titleBar.settings")), (ui) => ui.press(ui.t("settings.section.git"))],
+  },
+  {
     id: "settings-trusted-folders",
     group: GROUP,
     title: "Trusted folders",

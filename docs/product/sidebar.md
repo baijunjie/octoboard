@@ -94,6 +94,10 @@ per window and is not stored. The chevron always shows while the project is coll
 hovered or focused while it is expanded, and while hidden it takes no room, so a long name runs as far as it would in
 a session row and ends sooner when the chevron appears.
 
+After the name, before the activity marker below and the row's controls, comes the project's **branch badge** — its
+current branch and how far it is from its upstream, when its directory is a git repository (see "The branch badge" in
+`docs/product/project-git-status.md`).
+
 A collapsed project shows the same activity marker as the console switcher's list (see "The console switcher" above),
 taken from its sessions that are not archived, so a waiting session can be found with its project collapsed.
 
@@ -137,8 +141,8 @@ that. Its action menu offers:
   activated with Enter or Space.
 - Each row tells assistive technology what its icons show: a session row its title, agent (Claude Code, Codex or Grok
   Build), status and whether it is pinned; the Hub row the hub's agent and status; a project row whether it is pinned
-  and, while it carries an activity marker, what that marker means. A project row also tells it whether it is
-  expanded or collapsed.
+  and, while it carries an activity marker, what that marker means, plus its branch badge's facts (see "The branch
+  badge" in `docs/product/project-git-status.md`). A project row also tells it whether it is expanded or collapsed.
 
 ## Order of projects and sessions
 
@@ -194,7 +198,8 @@ Choosing **Focus mode** from a project's action menu replaces the whole sidebar 
 list — with that project alone:
 
 - **The header**: a back button, **Leave focus mode**, which returns to the full sidebar; the console's name above the
-  project's name; a **+** button for a new session; and the project's action menu, without its Focus mode item.
+  project's name; the project's branch badge (see "The branch badge" in `docs/product/project-git-status.md`); a **+**
+  button for a new session; and the project's action menu, without its Focus mode item.
 - **Sessions (n)**: the project's sessions that are not archived, as cards, in the order of "Order of projects and
   sessions" above. A card shows the session's status glyph with the status in words, a pin glyph when it is pinned,
   its action menu (always shown), its title over up to two lines, its agent's icon and name, how long ago it was

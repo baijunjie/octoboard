@@ -3,7 +3,7 @@
 A headless Rust binary that plays two roles in one process:
 
 - **Host role**: owns PTYs and agent processes, receives hook callbacks, lists directories, finds the git repositories
-  under a parent directory, and clones a repository.
+  under a parent directory, clones a repository, and checks a project's git status against its remote.
 - **Coordinator role**: stores consoles, projects, sessions and report panel pages in SQLite, and routes requests to
   the host role.
 
@@ -43,15 +43,16 @@ the repository root and cover both crates; `-p octoboardd` narrows either to thi
 | `src/coordinator.rs` | Coordinator role: what each control-socket request does to the stored consoles/projects/sessions/pages, and which host-role work it triggers; projects are stored with absolute, lexically normalised paths |
 | `src/reporting.rs` | The channel between a console's hub and its project sessions: the brief a task is handed over as, writing a message into a running session, a report reaching the hub, the report synthesised when a session stops without sending one, automatic archiving, and rendering a report panel form submission into the hub's message |
 | `src/outbox.rs` | The per-session queue every message Octoboard writes into an agent passes through: order-preserving, one drainer per session, and what happens to a message the session only partly accepted |
-| `src/store.rs` | Coordinator's SQLite storage for consoles, projects, sessions, pages, the trusted folders and the host table |
-| `src/state.rs` | Shared daemon state and the session status transitions |
+| `src/store.rs` | Coordinator's SQLite storage for consoles, projects, sessions, pages, the trusted folders, the user settings and the host table |
+| `src/state.rs` | Shared daemon state: the session status transitions, and each project's live git status and check claim |
+| `src/git_status.rs` | Checks one project's git status against its remote and, with auto-sync on, fast-forwards it — see `PROTOCOL.md`'s "Daemon behaviour, per project" |
 | `src/session.rs` | One running agent process: its PTY, its output fan-out, how it is stopped |
 | `src/trust.rs` | Recognising Claude Code's workspace-trust screen in a Claude session's terminal output, deciding whether the user has consented (per project or through a trusted parent folder; hub sessions are answered without asking), asking the application through `claude_trust_prompt` / `confirm_claude_trust`, and answering the screen — the only code that types keys into a session on its own |
 | `src/term.rs` | Launching an agent in a PTY, and writing messages into a running one |
 | `src/ptyio.rs` | Non-blocking read/write on a PTY master fd (a blocking write can park forever behind a modal dialog) |
 | `src/ringbuf.rs` | Fixed-capacity ring buffer holding a session's recent terminal output, replayed to a client that attaches or reconnects |
 | `src/hostfs.rs` | Host role's filesystem work: browsing directories, finding git repositories under a parent directory, cloning one, lexical path normalisation |
-| `src/env_shell.rs` | Captures the user's real shell environment (`$SHELL -l -i -c 'env -0 && printf <marker>'`) that every agent is launched with |
+| `src/env_shell.rs` | Captures the user's real shell environment (`$SHELL -l -i -c 'env -0 && printf <marker>'`) that every agent is launched with; also a cached variant for a caller on its own repeating schedule (`cached_snapshot`) and a generic timeout-bounded subprocess runner (`run_with_timeout`), both used by `git_status.rs` |
 | `src/hooks.rs` | Turns one agent's hook event payload into a session status; each agent's events and payload shape differ |
 | `src/transcript.rs` | Watches a Claude Code session's own transcript JSONL for the one status change its hooks never report — a declined permission prompt or `AskUserQuestion` — and lowers the raised hand when found; the only place a session's status comes from something other than a hook event |
 | `src/hook_mode.rs` | The `octoboardd hook` CLI mode itself |

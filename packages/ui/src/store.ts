@@ -6,7 +6,7 @@ import { DaemonClient, DaemonRequestError, type ConnectionState } from "./daemon
 import { daemonMessage } from "./daemonMessage";
 import { currentLanguage } from "./i18n/language";
 import { daemonWsUrl, type DaemonOrigin } from "./daemon";
-import { isLive, type Console, type Event, type Host, type Page, type Project, type RequestBody, type Session } from "./protocol";
+import { isLive, type Console, type Event, type GitStatus, type Host, type Page, type Project, type RequestBody, type Session, type Settings } from "./protocol";
 
 /**
  * Something to tell the user in a toast: a daemon `error` or `session_notice`, or a message with
@@ -82,6 +82,12 @@ export interface State {
   /** The directories whose projects Octoboard answers the trust prompt for, as the last `snapshot`
    * or `trusted_directories_updated` said. */
   trustedDirectories: string[];
+  /** Keyed by project id. Absent for a project the daemon has not reported on yet, or that is not
+   * a git repository at all. Dropped when its project is deleted — the daemon sends no deletion
+   * event for a `GitStatus` (see `protocol.ts`), so the client has to drop it itself. */
+  gitStatuses: Map<string, GitStatus>;
+  /** The app-wide settings the daemon stores, as the last `snapshot` or `settings_updated` said. */
+  settings: Settings;
 }
 
 type Action =
@@ -98,6 +104,8 @@ const initialState: State = {
   snapshotEpoch: 0,
   trustPrompts: [],
   trustedDirectories: [],
+  gitStatuses: new Map(),
+  settings: { auto_sync_repositories: false },
 };
 
 /** A store holding the empty state with `initial` laid over it. */
@@ -130,6 +138,8 @@ function reducer(state: State, action: Action): State {
             snapshotEpoch: state.snapshotEpoch + 1,
             trustPrompts: [],
             trustedDirectories: event.trusted_directories,
+            gitStatuses: new Map(event.git_statuses.map((s) => [s.project, s])),
+            settings: event.settings,
           };
         case "trusted_directories_updated":
           // A prompt for a project under a directory that is now trusted has nothing left to ask:
@@ -158,7 +168,12 @@ function reducer(state: State, action: Action): State {
           );
           const pages = new Map(state.pages);
           pages.delete(event.console);
-          return { ...state, consoles, projects, sessions, pages };
+          // Same cascade one level further down: a git status for a project the console took
+          // with it has nothing left to be about.
+          const gitStatuses = new Map(
+            Array.from(state.gitStatuses).filter(([projectId]) => projects.has(projectId)),
+          );
+          return { ...state, consoles, projects, sessions, pages, gitStatuses };
         }
         case "session_opened": {
           // The reply to our own `open_session`. The broadcast carries the same record, but
@@ -179,7 +194,10 @@ function reducer(state: State, action: Action): State {
           const sessions = new Map(
             Array.from(state.sessions).filter(([, s]) => s.project_id !== event.project),
           );
-          return { ...state, projects, sessions };
+          // The daemon sends no event for this; see `gitStatuses` above.
+          const gitStatuses = new Map(state.gitStatuses);
+          gitStatuses.delete(event.project);
+          return { ...state, projects, sessions, gitStatuses };
         }
         case "session_upserted": {
           const sessions = new Map(state.sessions);
@@ -232,6 +250,13 @@ function reducer(state: State, action: Action): State {
           pages.set(event.page.console_id, [...existing, event.page]);
           return { ...state, pages };
         }
+        case "project_git_status": {
+          const gitStatuses = new Map(state.gitStatuses);
+          gitStatuses.set(event.status.project, event.status);
+          return { ...state, gitStatuses };
+        }
+        case "settings_updated":
+          return { ...state, settings: event.settings };
         default:
           return state;
       }

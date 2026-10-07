@@ -136,7 +136,7 @@ after the table:
 
 | Path | Contents |
 |---|---|
-| `~/.octoboard/octoboard.db` | Consoles, projects, session records, the report panel pages of every console, and the folders trusted for Claude Code's workspace-trust prompt (see "Trusted folders" in `docs/product/launching-agents.md`). |
+| `~/.octoboard/octoboard.db` | Consoles, projects, session records, the report panel pages of every console, the folders trusted for Claude Code's workspace-trust prompt (see "Trusted folders" in `docs/product/launching-agents.md`), and the settings the daemon keeps for every client (see "Git" in `docs/product/settings.md`). |
 | `~/.octoboard/consoles/<console id>/` | A console's working directory, where its hub session runs, including the hub instruction file Octoboard generates there (see "The hub's instruction file" in `docs/product/launching-agents.md`). Removed when the console is deleted. |
 | `~/.octoboard/run/<session id>/` | Per-session scratch space for what a launch injects. Removed when the session's process is gone, and cleared wholesale on daemon start. |
 | `~/.octoboard/daemon.lock` | Enforces one daemon per data directory. |

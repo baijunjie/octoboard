@@ -25,14 +25,17 @@ import { AgentIcon } from "../components/AgentIcon";
 import { ConsoleAvatar } from "../components/ConsoleAvatar";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { ActivityMarker, StatusIcon } from "../components/StatusIcon";
-import { useT } from "../i18n/react";
+import { withGitBadge } from "../gitStatusLabel";
+import { useCurrentLanguage, useT } from "../i18n/react";
 import { drawerClass, PANE_ID, PeekHotZone } from "../layout/paneOverlay";
 import type { PaneWidth } from "../layout/paneWidth";
 import type { PanePeek } from "../layout/usePaneToggles";
 import { effectiveTags, matchesFilter, tagVocabulary, withoutTags } from "../projectFiltering";
 import type { Console, Project, Session } from "../protocol";
 import { sessionAriaLabel, statusLabel } from "../sessionLabel";
+import { useDaemonStore } from "../store";
 import { FocusView } from "./FocusView";
+import { GitBadge } from "./GitBadge";
 import { type FilterUpdate, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterTag, ProjectFilterTags } from "./ProjectFilter";
 import { archiveSubmenu, projectMenu, sessionMenu } from "./menus";
 import { archivedSessions, consoleActivity, isInactiveProject, liveSessions, sortProjects, type Activity } from "./order";
@@ -517,27 +520,36 @@ function ProjectNode({
   onToggle: () => void;
 }): React.ReactElement {
   const t = useT();
+  const language = useCurrentLanguage();
+  // Read directly rather than taking it as a prop passed down from `App.tsx`: a status change
+  // then only re-renders the one row it is about, instead of the whole tree (the selector returns
+  // the same `GitStatus` reference until this project's own entry changes, so no `useShallow` is
+  // needed).
+  const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
   const live = liveSessions(sessions);
   const archived = archivedSessions(sessions);
   const activity = consoleActivity(live);
   const listRef = useFlip<HTMLDivElement>();
   const openSession = () => handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project });
   const activityKey = activityLabelKey(activity, project.pinned);
+  const nameLabel = activityKey
+    ? t(activityKey, { name: project.name })
+    : project.pinned
+      ? t("sidebar.project.ariaLabelPinned", { name: project.name })
+      : project.name;
 
   return (
     <div>
       <TreeRow
-        ariaLabel={
-          activityKey
-            ? t(activityKey, { name: project.name })
-            : project.pinned
-              ? t("sidebar.project.ariaLabelPinned", { name: project.name })
-              : project.name
-        }
+        ariaLabel={withGitBadge(language, t, nameLabel, gitStatus)}
         onActivate={onToggle}
         expanded={!isCollapsed}
       >
-        <div className="flex min-w-0 flex-1 items-center">
+        {/* `min-w-16` is the floor itself: it has to sit on this flex item (`flex-1`'s basis is
+            0%, so it never shrinks "from" anything the floor could clamp if placed on a child
+            instead), leaving `GitBadge`'s own `min-w-0` as the one that keeps giving way once
+            this is reached. */}
+        <div className="flex min-w-16 flex-1 items-center">
           <RowLabel title={project.name} className="min-w-0 shrink">
             <span className="font-medium">{project.name}</span>
           </RowLabel>
@@ -553,6 +565,7 @@ function ProjectNode({
             <ChevronDown aria-hidden="true" className="h-3.5 w-0 shrink-0 overflow-hidden text-muted opacity-0 transition-opacity group-hover:ms-2 group-hover:w-3.5 group-hover:opacity-100 group-focus-visible:ms-2 group-focus-visible:w-3.5 group-focus-visible:opacity-100" />
           )}
         </div>
+        <GitBadge status={gitStatus} decorative />
         {isCollapsed && <ActivityMarker activity={activity} />}
         <RowControls>
           <RowIconButton icon={Plus} label={t("sidebar.project.openSession")} onPress={openSession} />

@@ -14,6 +14,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Sidebar](product/sidebar.md) — one console at a time and the switcher with its activity markers, the Hub row and the
   project list, project and session rows and their menus, keyboard focus on rows, the order of projects and sessions
   and pinning, how the sidebar follows the selected session, a project's focus mode, and the archive view.
+- [Project git status](product/project-git-status.md) — the branch badge on a project's row and in focus mode's header:
+  its glyphs for a branch, a detached `HEAD`, a check in flight and a fast-forward in flight, the ahead and behind
+  counts, the marker a failed check leaves and what it tells assistive technology; when and how often the shown
+  console's projects are checked against their remotes and what one check runs; and the Automatically sync
+  repositories switch — what it fast-forwards, what it never does, and where it is kept.
 - [Hub orchestration](product/hub-orchestration.md) — what the hub can do: its tools and a project session's `report`,
   the brief a task is handed over as, the reporting loop and what happens when a session stops without reporting,
   automatic archiving, and which sessions the hub drives.
@@ -32,19 +37,21 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   where it is chosen, what follows it (down to the terminal's palette and the native window's own appearance), where the
   choice is kept, and why a report page stays on a light surface either way.
 - [Settings](product/settings.md) — the Settings dialog: how it opens (the top bar, and the macOS menu's Settings… /
-  ⌘, and when that is ignored), how it closes and where focus goes, its General (Appearance and Language), Trusted
-  folders and Notifications sections.
+  ⌘, and when that is ignored), how it closes and where focus goes, its General (Appearance and Language), Git,
+  Trusted folders and Notifications sections.
 - [Language](product/language.md) — the 17 offered languages and why they are ordered by tag, English as the fallback,
   the default picked from the system's languages on the first launch and kept from then on, the language chosen in
   Settings, how the system's languages map onto the list, what follows the current language and what does not (report
   pages, text aimed at agents), where the choice is kept, and what is translated so far.
-- [Launching agents](product/launching-agents.md) — the guarantee that project files and the user's agent configuration
-  are never modified, the three things injected per launch and the hub's generated instruction file, the launch
+- [Launching agents](product/launching-agents.md) — the guarantee that Octoboard installs nothing into a project and
+  never writes the user's agent configuration (and the one thing it touches a project directory for, once the user
+  turns it on), the three things injected per launch and the hub's generated instruction file, the launch
   environment, Claude Code's workspace-trust prompt, how Octoboard answers it and trusted folders, and the per-agent specifics.
 - [Application lifecycle](product/application-lifecycle.md) — what Octoboard runs on and how it is distributed, startup
   and the single-instance rule, who can reach the daemon (any local program, but no web page in a browser), losing the
   daemon connection, the quit confirmation and which gestures it covers, how to quit a window that has stopped
-  responding, crash behaviour, and the files Octoboard keeps under `~/.octoboard` (and the one it keeps outside it).
+  responding, crash behaviour, and the files Octoboard keeps under `~/.octoboard` (and the one it keeps outside it),
+  including the database that also holds the settings the daemon stores.
 
 ## Reference
 
@@ -108,3 +115,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Writing automated tests](memory/writing-automated-tests.md) — how lean unit tests are kept (one case per rule,
   table-driven), then the fixture conventions this project's tests need on macOS: why an executable written fresh per test flakes only under a parallel run, and how to verify behaviour the
   daemon derives from an agent's own output by replaying a committed capture rather than staging a live session.
+- [Writing daemon code](memory/writing-daemon-code.md) — conventions for the Rust daemon: live state the daemon
+  derives held on `AppState` and published by its own event rather than as a field on a stored record, with the
+  cleanups that follow from there being no deletion event for it; why a repeating refresh is timed by the client and
+  has to be bounded in the daemon by a drop-guard claim and a completion floor, since an in-flight claim alone never
+  fires across clients polling on their own phases; and the non-interactive environment and deadline every `git`
+  subprocess needs, because `git` and `ssh` ask on a terminal the daemon does not have.

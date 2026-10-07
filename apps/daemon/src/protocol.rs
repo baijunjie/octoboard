@@ -195,6 +195,48 @@ pub struct DirEntry {
     pub is_git_repo: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GitActivity {
+    Idle,
+    Checking,
+    Syncing,
+}
+
+/// One project's live git state: its branch and how far it is from its upstream, and whether a
+/// check or a fast-forward sync is in flight right now. Derived from the project's working
+/// directory on disk, never stored in SQLite; held in memory by `AppState` and (re)built only when
+/// `refresh_git_status` asks for it — the daemon keeps no timer of its own for this (see
+/// `apps/daemon/PROTOCOL.md`'s "Daemon behaviour, per project").
+#[derive(Debug, Clone, Serialize)]
+pub struct GitStatus {
+    pub project: String,
+    /// `false` when the project's directory is not a git repository; every field below is then at
+    /// its empty value.
+    pub repository: bool,
+    /// The branch name; the short commit id when `detached`; `null` when it cannot be read (an
+    /// empty repository with no commit yet, or a failed read).
+    pub branch: Option<String>,
+    pub detached: bool,
+    /// The configured upstream ref, e.g. `origin/main`; `null` when the branch has none, which is
+    /// also when `ahead` and `behind` are meaningless and both `0`.
+    pub upstream: Option<String>,
+    pub ahead: u32,
+    pub behind: u32,
+    pub activity: GitActivity,
+    /// The verbatim, untranslatable `git` or operating-system message from the last failed step,
+    /// cleared only by that same step succeeding again — a failed fetch does not stop the local
+    /// read, so a status can carry both an error and usable numbers.
+    pub error: Option<String>,
+}
+
+/// The app-wide user settings the daemon stores. One field for now; a record rather than a bare
+/// bool so it can grow without a new request shape for every setting added.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct Settings {
+    pub auto_sync_repositories: bool,
+}
+
 /// One control-socket frame from the client: an optional request id the daemon echoes back, plus
 /// the request itself. The id lets the UI pair a reply with the request that caused it; state
 /// changes are broadcast to every client instead and carry no id.
@@ -348,6 +390,18 @@ pub enum RequestBody {
     RemoveTrustedDirectory {
         path: String,
     },
+    /// Each settable field absent means "leave it alone". Broadcasts `settings_updated` only when
+    /// something actually changed, as `remove_trusted_directory` does.
+    UpdateSettings {
+        auto_sync_repositories: Option<bool>,
+    },
+    /// Checks every project of this console's current git status against its remote, concurrently.
+    /// Answered with `ack` at once; the statuses follow as `project_git_status` broadcasts, one per
+    /// project as its check finishes. A project already being checked — by an earlier call this
+    /// client raced ahead of, or one from another client — is not checked again.
+    RefreshGitStatus {
+        console: String,
+    },
     Shutdown,
 }
 
@@ -360,11 +414,20 @@ pub enum Event {
         projects: Vec<Project>,
         sessions: Vec<Session>,
         trusted_directories: Vec<String>,
+        settings: Settings,
+        /// Every git status the daemon currently holds; empty on a fresh start. Carried here, like
+        /// the trusted directories, so a reconnecting client never has to ask for it separately.
+        git_statuses: Vec<GitStatus>,
     },
     /// The directories whose projects Octoboard answers Claude Code's trust screen for changed: the
     /// whole list, like every other upsert.
     TrustedDirectoriesUpdated {
         trusted_directories: Vec<String>,
+    },
+    /// The user settings changed, whole: the single setting today, and whatever is added to
+    /// `Settings` later.
+    SettingsUpdated {
+        settings: Settings,
     },
     ConsoleUpserted {
         console: Console,
@@ -383,6 +446,12 @@ pub enum Event {
     },
     SessionDeleted {
         session: String,
+    },
+    /// A project's `GitStatus` changed, including every transition of `activity` — the animated
+    /// icon has something to follow. Nothing is sent when a project is removed; the client drops
+    /// its status along with it.
+    ProjectGitStatus {
+        status: GitStatus,
     },
     /// Something about a session the user has to be told, which no status field carries: an
     /// injected capability that will not apply, a setting of theirs Octoboard had to work around.
@@ -780,6 +849,13 @@ mod tests {
                     _ => None,
                 },
             ),
+            (
+                r#"{"type":"refresh_git_status","id":"request-1","console":"console-7"}"#,
+                |body| match body {
+                    RequestBody::RefreshGitStatus { console } => Some(console),
+                    _ => None,
+                },
+            ),
         ];
 
         for (json, target) in cases {
@@ -951,6 +1027,8 @@ mod tests {
             projects: vec![],
             sessions: vec![],
             trusted_directories: vec!["/work".to_string()],
+            settings: super::Settings::default(),
+            git_statuses: vec![],
         })
         .unwrap();
         assert_eq!(snapshot["trusted_directories"][0], "/work");

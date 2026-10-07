@@ -1,18 +1,21 @@
 //! The daemon's shared state: the session records and their status transitions, the live sessions
 //! and the claims that keep two launches of one thing from racing, the per-session MCP tokens, the
-//! turn bookkeeping a synthesised report rests on, and a facade over the write queue in
-//! `crate::outbox`.
+//! turn bookkeeping a synthesised report rests on, a facade over the write queue in
+//! `crate::outbox`, and each project's live git status together with the claim that keeps two
+//! checks of one project from racing and the timestamp that keeps them from piling up across
+//! several clients.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use tokio::sync::broadcast;
 
 use crate::outbox::{Drain, Outbox};
 use crate::protocol::{
-    error_code, notice_code, now_millis, CodedError, Event, Notice, Session, SessionStatus,
+    error_code, notice_code, now_millis, CodedError, Event, GitStatus, Notice, Session,
+    SessionStatus,
 };
 use crate::session::LiveSession;
 use crate::store::Store;
@@ -53,6 +56,20 @@ pub struct AppState {
     /// The per-session write queues. Every message Octoboard sends into a running agent goes
     /// through them; see `crate::outbox`.
     outbox: Outbox,
+    /// Each project's live git status, broadcast as `project_git_status` on every change and
+    /// replayed in a `snapshot`. Derived, never stored in SQLite — see `GitStatus`.
+    git_statuses: RwLock<HashMap<String, GitStatus>>,
+    /// The ids of the projects whose git status is being checked right now, so
+    /// `refresh_git_status` does not start a second check for one already in flight — a client
+    /// polling faster than the checks finish, or several clients watching the same console, must
+    /// not pile up work. Claimed and released through [`AppState::claim_git_check`].
+    git_checks: Mutex<HashSet<String>>,
+    /// When each project's last check completed, for the minimum-interval floor in
+    /// `git_status::due_for_check` — a second guard next to `git_checks` above, needed because that
+    /// one only stops two checks from overlapping and does nothing about several clients each
+    /// polling on their own 5-minute phase. Entries are removed wherever the project's `GitStatus`
+    /// is, by `remove_git_status`, so a reused project id never inherits a stale timestamp.
+    git_check_completed: Mutex<HashMap<String, Instant>>,
     events: broadcast::Sender<Event>,
     shutdown: tokio::sync::Notify,
 }
@@ -108,6 +125,9 @@ impl AppState {
             transcript_watch_generations: Mutex::new(HashMap::new()),
             next_transcript_watch_generation: std::sync::atomic::AtomicU64::new(0),
             outbox: Outbox::default(),
+            git_statuses: RwLock::new(HashMap::new()),
+            git_checks: Mutex::new(HashSet::new()),
+            git_check_completed: Mutex::new(HashMap::new()),
             events,
             shutdown: tokio::sync::Notify::new(),
         }
@@ -682,6 +702,98 @@ impl AppState {
             let _ = handle.await;
         }
     }
+
+    // -- git status ------------------------------------------------------------
+
+    /// Claims the right to check this project's git status now, released when the returned guard
+    /// is dropped — including when the check panics, so a wedged step cannot leave its project
+    /// excluded from every later sweep for the rest of the daemon's life. `None` means a check for
+    /// it is already running and the caller must not start another.
+    pub fn claim_git_check(self: &Arc<Self>, project_id: &str) -> Option<GitCheckClaim> {
+        if !self
+            .git_checks
+            .lock()
+            .expect("git check lock poisoned")
+            .insert(project_id.to_string())
+        {
+            return None;
+        }
+        Some(GitCheckClaim {
+            state: self.clone(),
+            project_id: project_id.to_string(),
+        })
+    }
+
+    fn release_git_check(&self, project_id: &str) {
+        self.git_checks
+            .lock()
+            .expect("git check lock poisoned")
+            .remove(project_id);
+    }
+
+    /// Records a project's current git status and broadcasts it — unless the project is no longer
+    /// in the store, in which case the entry is dropped instead of reinserted. This is what covers
+    /// both a project removed while its check was in flight and a whole console deleted out from
+    /// under one: either way nothing resurrects a status for a project that no longer exists, and
+    /// `PROTOCOL.md` promises no `project_git_status` for one either.
+    pub fn publish_git_status(&self, status: GitStatus) {
+        match self.store.get_project(&status.project) {
+            Ok(None) => {
+                self.remove_git_status(&status.project);
+                return;
+            }
+            // A store error says nothing about whether the project is actually gone, so this
+            // fails open rather than risk dropping a status that is still perfectly valid.
+            Ok(Some(_)) | Err(_) => {}
+        }
+        self.git_statuses
+            .write()
+            .expect("git statuses lock poisoned")
+            .insert(status.project.clone(), status.clone());
+        self.broadcast(Event::ProjectGitStatus { status });
+    }
+
+    /// Every git status the daemon currently holds, for `Event::Snapshot`.
+    pub fn git_statuses(&self) -> Vec<GitStatus> {
+        self.git_statuses
+            .read()
+            .expect("git statuses lock poisoned")
+            .values()
+            .cloned()
+            .collect()
+    }
+
+    /// Drops a project's git status. Called when the project itself is removed, and when a whole
+    /// console is — nothing else ever cleans up these entries, since the daemon keeps no timer of
+    /// its own that would otherwise notice a project is gone.
+    pub fn remove_git_status(&self, project_id: &str) {
+        self.git_statuses
+            .write()
+            .expect("git statuses lock poisoned")
+            .remove(project_id);
+        self.git_check_completed
+            .lock()
+            .expect("git check completed lock poisoned")
+            .remove(project_id);
+    }
+
+    /// When this project's check last completed, for `git_status::due_for_check`. `None` means it
+    /// has never been checked, which that function always treats as due.
+    pub fn git_check_completed_at(&self, project_id: &str) -> Option<Instant> {
+        self.git_check_completed
+            .lock()
+            .expect("git check completed lock poisoned")
+            .get(project_id)
+            .copied()
+    }
+
+    /// Records that this project's check just completed, now.
+    pub fn record_git_check_completed(&self, project_id: &str) {
+        self.git_check_completed
+            .lock()
+            .expect("git check completed lock poisoned")
+            .insert(project_id.to_string(), Instant::now());
+    }
 }
 
 #[derive(Default)]
@@ -714,6 +826,20 @@ pub struct LaunchClaim {
 impl Drop for LaunchClaim {
     fn drop(&mut self) {
         self.state.release_launch(&self.id);
+    }
+}
+
+/// The right to check one project's git status right now, released on drop — including by a panic
+/// unwinding through it, which is what keeps a wedged step from excluding its project from every
+/// later sweep for the rest of the daemon's life. See `AppState::claim_git_check`.
+pub struct GitCheckClaim {
+    state: Arc<AppState>,
+    project_id: String,
+}
+
+impl Drop for GitCheckClaim {
+    fn drop(&mut self) {
+        self.state.release_git_check(&self.project_id);
     }
 }
 
@@ -911,5 +1037,69 @@ pub(crate) mod tests {
         // A relaunch that failed has nothing left that would ever release these.
         state.discard_outbox("s");
         assert_eq!(state.outbox.len("s"), 0);
+    }
+
+    /// A check that panics must still release its project's claim, or a wedged step excludes that
+    /// project from every later sweep for the rest of the daemon's life — `spawn_check` relies on
+    /// unwinding through the claim's `Drop` rather than an explicit `end_git_check` call.
+    #[test]
+    fn a_git_check_claim_is_released_even_if_the_check_panics() {
+        let state = Arc::new(app_state("git-claim-panic"));
+        let claim = state.claim_git_check("p1").expect("the first claim");
+        assert!(state.claim_git_check("p1").is_none());
+
+        let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _claim = claim;
+            panic!("simulated check failure");
+        }));
+        assert!(unwound.is_err());
+
+        // The panic unwound through the claim's `Drop`, releasing it for the next sweep.
+        assert!(state.claim_git_check("p1").is_some());
+    }
+
+    /// A status published for a project no longer in the store must be dropped rather than
+    /// reinserted — the race `DeleteProject` leaves open when its check is already in flight, and
+    /// the gap `DeleteConsole` leaves for every project of a deleted console.
+    #[test]
+    fn publishing_a_status_for_a_project_no_longer_in_the_store_drops_it() {
+        let state = app_state("git-status-missing-project");
+        state.publish_git_status(GitStatus {
+            project: "ghost".to_string(),
+            repository: true,
+            branch: Some("main".to_string()),
+            detached: false,
+            upstream: None,
+            ahead: 0,
+            behind: 0,
+            activity: crate::protocol::GitActivity::Idle,
+            error: None,
+        });
+        assert!(state.git_statuses().is_empty());
+    }
+
+    /// A completion recorded for a project, then dropped by the publish that follows it because
+    /// the project is gone, must stay dropped — `record_git_check_completed` running first (as
+    /// `git_status::check_project` does at both of its exit points) and then losing to
+    /// `remove_git_status` is the order that matters; recording it after the publish would
+    /// resurrect the very entry `remove_git_status` just cleared, with nothing left to ever remove
+    /// it again.
+    #[test]
+    fn a_completion_recorded_then_published_for_a_gone_project_leaves_no_entry() {
+        let state = app_state("git-status-missing-project-completion");
+        state.record_git_check_completed("ghost");
+        state.publish_git_status(GitStatus {
+            project: "ghost".to_string(),
+            repository: false,
+            branch: None,
+            detached: false,
+            upstream: None,
+            ahead: 0,
+            behind: 0,
+            activity: crate::protocol::GitActivity::Idle,
+            error: None,
+        });
+        assert!(state.git_statuses().is_empty());
+        assert!(state.git_check_completed_at("ghost").is_none());
     }
 }

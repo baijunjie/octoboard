@@ -117,9 +117,9 @@ html.pane-resizing * {
 }
 
 @theme {
-  /* The refresh arrow of a reconnecting indicator (`ConnectionBanner.tsx`, `TitleBar.tsx`): the
-     stock spin, slower. Defined as a whole animation because `animate-spin` is a shorthand that
-     resets any duration set beside it. */
+  /* A spinning glyph showing work in progress (`ConnectionBanner.tsx`, `TitleBar.tsx`,
+     `GitBadge.tsx`): the stock spin, slower. Defined as a whole animation because `animate-spin`
+     is a shorthand that resets any duration set beside it. */
   --animate-spin-slow: spin 2s linear infinite;
   --animate-status-wave: status-wave 2.4s ease-in-out infinite;
 }

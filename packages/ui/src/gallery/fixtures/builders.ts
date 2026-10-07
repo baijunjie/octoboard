@@ -1,4 +1,4 @@
-import type { Agent, Console, Host, Page, Project, Session, SessionStatus } from "../../protocol";
+import type { Agent, Console, GitStatus, Host, Page, Project, Session, SessionStatus, Settings } from "../../protocol";
 import type { State, TrustPrompt } from "../../store";
 
 const NOW = Date.now();
@@ -68,6 +68,21 @@ export function pageOf(id: string, consoleId: string, html: string, minutes: num
   return { id, console_id: consoleId, html, created_at: minutesAgo(minutes) };
 }
 
+export function gitStatusOf(projectId: string, extra: Partial<GitStatus> = {}): GitStatus {
+  return {
+    project: projectId,
+    repository: true,
+    branch: "main",
+    detached: false,
+    upstream: "origin/main",
+    ahead: 0,
+    behind: 0,
+    activity: "idle",
+    error: null,
+    ...extra,
+  };
+}
+
 /** A connected window's state after its first snapshot, over which a scenario lays what it differs
  * in. Only what is given is set; the rest is the empty state. */
 export function snapshotState(parts: {
@@ -78,6 +93,8 @@ export function snapshotState(parts: {
   trustPrompts?: TrustPrompt[];
   trustedDirectories?: string[];
   connectionState?: State["connectionState"];
+  gitStatuses?: GitStatus[];
+  settings?: Settings;
 }): Partial<State> {
   return {
     connectionState: parts.connectionState ?? "open",
@@ -89,6 +106,8 @@ export function snapshotState(parts: {
     snapshotEpoch: 1,
     trustPrompts: parts.trustPrompts ?? [],
     trustedDirectories: parts.trustedDirectories ?? [],
+    gitStatuses: new Map((parts.gitStatuses ?? []).map((g) => [g.project, g])),
+    settings: parts.settings ?? { auto_sync_repositories: false },
   };
 }
 

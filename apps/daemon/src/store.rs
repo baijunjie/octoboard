@@ -20,13 +20,18 @@ use serde::Serialize;
 
 use crate::protocol::{
     Agent, Console, Host, HostKind, Origin, Page, Project, ProjectSource, Role, Session,
-    SessionStatus,
+    SessionStatus, Settings,
 };
 
 /// The single local host record every project and session points at. There is no other host yet,
 /// but the column exists so that adding remote hosts needs no data migration ("Data model" in
 /// `docs/architecture.md`).
 pub const LOCAL_HOST_ID: &str = "local";
+
+/// The settings table has exactly one row, this id, rather than a column per setting with no key —
+/// `rusqlite` has no single-row table primitive, so a key lets the row be read and written with
+/// the same `WHERE` every other table uses.
+const SETTINGS_ID: &str = "singleton";
 
 pub struct Store {
     conn: Mutex<Connection>,
@@ -101,6 +106,10 @@ impl Store {
                 anchor_message_id TEXT,
                 created_at        INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS settings (
+                id                     TEXT PRIMARY KEY,
+                auto_sync_repositories INTEGER NOT NULL DEFAULT 0
+            );
             "#,
         )?;
         // `CREATE TABLE IF NOT EXISTS` leaves a database written by an older version alone, so a
@@ -144,6 +153,7 @@ impl Store {
             conn: Mutex::new(conn),
         };
         store.ensure_local_host()?;
+        store.ensure_settings_row()?;
         Ok(store)
     }
 
@@ -159,6 +169,16 @@ impl Store {
                 "This machine",
                 enum_to_text(&HostKind::Local)
             ],
+        )?;
+        Ok(())
+    }
+
+    /// The settings row, at its defaults, for a database that has never had one: freshly created,
+    /// or migrated from before the table existed.
+    fn ensure_settings_row(&self) -> Result<()> {
+        self.lock().execute(
+            "INSERT OR IGNORE INTO settings (id, auto_sync_repositories) VALUES (?1, 0)",
+            params![SETTINGS_ID],
         )?;
         Ok(())
     }
@@ -382,6 +402,37 @@ impl Store {
             params![path],
         )?;
         Ok(removed > 0)
+    }
+
+    // -- settings --------------------------------------------------------------
+
+    pub fn get_settings(&self) -> Result<Settings> {
+        let auto_sync_repositories = self.lock().query_row(
+            "SELECT auto_sync_repositories FROM settings WHERE id = ?1",
+            params![SETTINGS_ID],
+            |row| row.get(0),
+        )?;
+        Ok(Settings {
+            auto_sync_repositories,
+        })
+    }
+
+    /// Whether the setting actually changed.
+    pub fn set_auto_sync_repositories(&self, value: bool) -> Result<bool> {
+        let conn = self.lock();
+        let current: bool = conn.query_row(
+            "SELECT auto_sync_repositories FROM settings WHERE id = ?1",
+            params![SETTINGS_ID],
+            |row| row.get(0),
+        )?;
+        if current == value {
+            return Ok(false);
+        }
+        conn.execute(
+            "UPDATE settings SET auto_sync_repositories = ?2 WHERE id = ?1",
+            params![SETTINGS_ID, value],
+        )?;
+        Ok(true)
     }
 
     // -- pages ---------------------------------------------------------------
@@ -1296,5 +1347,37 @@ mod tests {
     #[test]
     fn tags_that_are_not_a_json_array_of_strings_read_as_untagged() {
         assert!(tags_from_text("project-1", "not json").is_empty());
+    }
+
+    /// A database from before the settings table existed is opened in place, with the setting at
+    /// its default; the setting then round-trips and a repeat write reports no change.
+    #[test]
+    fn the_settings_table_starts_at_its_default_after_a_migration_and_round_trips() {
+        let path = temp_db("settings-migration");
+        {
+            let conn = Connection::open(&path).expect("old database");
+            conn.execute_batch(
+                "CREATE TABLE consoles (
+                    id TEXT PRIMARY KEY, name TEXT NOT NULL, workdir TEXT NOT NULL,
+                    hub_agent TEXT NOT NULL, default_agent TEXT NOT NULL, created_at INTEGER NOT NULL
+                );",
+            )
+            .expect("old schema");
+        }
+
+        let store = Store::open(&path).expect("migrates");
+        assert!(!store.get_settings().unwrap().auto_sync_repositories);
+
+        assert!(store.set_auto_sync_repositories(true).unwrap());
+        assert!(
+            !store.set_auto_sync_repositories(true).unwrap(),
+            "a repeat write changes nothing"
+        );
+        assert!(store.get_settings().unwrap().auto_sync_repositories);
+        drop(store);
+
+        let store = Store::open(&path).expect("opens again");
+        assert!(store.get_settings().unwrap().auto_sync_repositories);
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 }

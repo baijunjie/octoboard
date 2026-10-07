@@ -221,6 +221,21 @@ export const zhHans: Translation<"other"> = {
   "sidebar.focus.archived": "已归档（{count}）",
   "sidebar.focus.reportsToHub": "向枢纽汇报",
 
+  "sidebar.git.branch": "分支 {branch}",
+  "sidebar.git.detachedBranch": "分离头指针位于 {branch}",
+  "sidebar.git.noCommitsYet": "尚无提交",
+  "sidebar.git.checking": "正在检查分支 {branch}",
+  "sidebar.git.checkingUnknown": "正在检查分支",
+  "sidebar.git.syncing": "正在快进分支 {branch}",
+  "sidebar.git.syncingUnknown": "正在快进分支",
+  "sidebar.git.ahead": {
+    other: "领先 {count} 个提交",
+  },
+  "sidebar.git.behind": {
+    other: "落后 {count} 个提交",
+  },
+  "sidebar.git.error": "Git 错误：{error}",
+
   "archive.heading.project": "已归档会话",
   "archive.heading.hubs": "已归档的枢纽",
   "archive.title.project": "{name} 的已归档会话",
@@ -337,6 +352,7 @@ export const zhHans: Translation<"other"> = {
   "settings.title": "设置",
   "settings.sections": "设置分区",
   "settings.section.general": "通用",
+  "settings.section.git": "Git",
   "settings.section.trustedFolders": "受信任的文件夹",
   "settings.section.notifications": "通知",
   "settings.appearance.label": "外观",
@@ -346,6 +362,9 @@ export const zhHans: Translation<"other"> = {
   "settings.appearance.system": "跟随系统",
   "settings.language.label": "语言",
   "settings.language.description": "{appName} 界面的语言。首次打开时按系统语言选定。",
+  "settings.git.autoSync.label": "自动同步仓库",
+  "settings.git.autoSync.description":
+    "当项目分支落后于其上游且可以快进时，将其快进。从不推送，也不会改动有本地提交的分支。无论此设置如何，都会每隔几分钟检查一次远程，因此分支始终会显示领先或落后的提交数。",
   "settings.trusted.description":
     "对于这些文件夹下的每个项目（包括之后添加到其中的项目），{appName} 会直接回应 Claude Code 的信任提示，而不再逐个询问。随后 Claude Code 也会不经询问地应用各项目自身设置中的权限规则和钩子，因此只有当你信任文件夹内最终出现的所有内容时，才应信任该文件夹。",
   "settings.trusted.empty": "没有受信任的文件夹。可在会话的信任提示中信任文件夹。",
