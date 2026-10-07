@@ -1,4 +1,4 @@
-//! The exit-confirmation flow, and the one `unsafe` subsystem in this crate.
+//! The exit-confirmation flow.
 //!
 //! Three gestures can end the process, and all three need the same answer to the same question —
 //! is there a confirmation flow to defer to, and if so, has this attempt already cleared it or

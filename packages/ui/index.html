@@ -36,10 +36,11 @@
       - `script-src`/`style-src 'unsafe-inline'`: required by the report panel, and also by this
         page's own inline bootstrap script below (the one that applies the theme class before
         paint). A `srcdoc` frame inherits its embedder's policy and enforces it on top of its
-        own, and a report page is inline script and inline style, so without `'unsafe-inline'`
-        here no page in the panel would run at all. For the same reason no nonce or hash source
-        may ever be added to these two directives: either one makes `'unsafe-inline'` inert and
-        the panel stops working.
+        own, and a report page's frame runs inline scripts (Octoboard's bridge, admitted there by
+        a per-frame nonce) and holds inline styles, so without `'unsafe-inline'` here no page in
+        the panel would render at all. For the same reason no nonce or hash source may ever be
+        added to these two directives: either one makes `'unsafe-inline'` inert and the panel
+        stops working.
       - `img-src data:`: for a report page's inline images, inherited the same way. The UI's
         own code loads no images of its own (no `<img>`, no CSS `url()`), so `'self'` is left out.
       - `connect-src`: `'self'` is the daemon when it serves this UI, and the dev server's proxy

@@ -1,11 +1,12 @@
 //! The desktop application's Rust-side shell: launch `octoboardd` as a sidecar and hand the window
 //! the port it printed (`sidecar.rs`), the native menu bar (`menu.rs`), the window's remembered
-//! size and position (`window_state.rs`), and the exit-confirmation flow including its one `unsafe`
-//! subsystem (`exit.rs`). Everything after the window loads talks to the daemon over WebSocket
-//! only, per the architectural rule in "Why the daemon is split out" in `docs/architecture.md` — no
-//! Tauri IPC command carries daemon traffic or session state, so this process reads the sidecar's
-//! stdout itself and bakes the port into the window's URL as a `?port=` query parameter *before*
-//! creating the window, instead of exposing an `invoke`-able command for it.
+//! size and position (`window_state.rs`), the exit-confirmation flow (`exit.rs`), and the webview's
+//! content rule list that keeps report pages off the web (`page_isolation.rs`, macOS). Everything
+//! after the window loads talks to the daemon over WebSocket only, per the architectural rule in
+//! "Why the daemon is split out" in `docs/architecture.md` — no Tauri IPC command carries daemon
+//! traffic or session state, so this process reads the sidecar's stdout itself and bakes the port
+//! into the window's URL as a `?port=` query parameter *before* creating the window, instead of
+//! exposing an `invoke`-able command for it.
 //!
 //! The three IPC commands this crate does expose, `frontend_exit_heartbeat` and `confirm_quit` (both
 //! in `exit.rs`) and `set_menu_labels` (in `menu.rs`), carry no daemon traffic or session data
@@ -14,6 +15,8 @@
 
 mod exit;
 mod menu;
+#[cfg(target_os = "macos")]
+mod page_isolation;
 mod sidecar;
 mod window_state;
 
@@ -69,6 +72,21 @@ pub fn run() {
             // opens either way, carrying whichever of `?port=`/`?error=` applies.
             let startup =
                 spawn_daemon_and_wait_for_port(app.handle()).map_err(|err| err.to_string());
+            // The window's webview gets its content rule list before the window exists, which
+            // `page_isolation` can only report back asynchronously, so the window is opened from
+            // its callback.
+            #[cfg(target_os = "macos")]
+            {
+                let handle = app.handle().clone();
+                let mtm = objc2::MainThreadMarker::new().expect("`setup` runs on the main thread");
+                page_isolation::with_configuration(mtm, move |configuration| {
+                    if let Err(err) = open_main_window(&handle, startup, configuration) {
+                        eprintln!("octoboard: cannot open the main window: {err}");
+                        handle.exit(1);
+                    }
+                });
+            }
+            #[cfg(not(target_os = "macos"))]
             open_main_window(app.handle(), startup)?;
             Ok(())
         })
@@ -142,7 +160,13 @@ fn preferred_languages() -> Option<String> {
     None
 }
 
-fn open_main_window(app: &tauri::AppHandle, startup: Result<u16, String>) -> tauri::Result<()> {
+fn open_main_window(
+    app: &tauri::AppHandle,
+    startup: Result<u16, String>,
+    #[cfg(target_os = "macos")] configuration: objc2::rc::Retained<
+        objc2_web_kit::WKWebViewConfiguration,
+    >,
+) -> tauri::Result<()> {
     let query = match startup {
         Ok(port) => format!("port={port}"),
         Err(message) => format!("error={}", percent_encode_query_value(&message)),
@@ -183,6 +207,9 @@ fn open_main_window(app: &tauri::AppHandle, startup: Result<u16, String>) -> tau
         Some((x, y)) => builder.position(x, y),
         None => builder,
     };
+    // The configuration `page_isolation` prepared, with its content rule list on it.
+    #[cfg(target_os = "macos")]
+    let builder = builder.with_webview_configuration(configuration);
 
     // The UI draws its own top bar across the whole window (`TitleBar` in `packages/ui`), so the
     // native titlebar's background and text go and the traffic lights float over the page.

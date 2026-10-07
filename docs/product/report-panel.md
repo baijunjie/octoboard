@@ -38,16 +38,15 @@ any page but the newest — a "Read-only" badge.
   to it.
 - A page pushed while the user is reading **history** does not move them. The view stays on the page
   they paged to, and only the total grows.
-- Paging away from a page stops it: its scripts do not keep running in the background, and paging
-  back to it starts the page over from its markup.
+- Paging away from a page discards it: paging back to it starts the page over from its markup, and whatever had
+  been typed into its form is gone.
 - A console that has never had a page pushed reads "No pages yet."
 
 ## History pages are read-only
 
 Only a console's **newest** page can be submitted from. On every older page:
 
-- the page's form controls are disabled, including controls the page's own script adds later;
-- `octoboard.submit` throws instead of sending anything;
+- the page's form controls are disabled, and submitting its form sends nothing;
 - the "Read-only" badge is shown in the panel's bar.
 
 The rule does not depend on the panel: the daemon refuses any submission naming a page that is not
@@ -55,27 +54,44 @@ the console's newest, whatever that page's own markup does.
 
 ## What a page may contain, and what it cannot do
 
-A page is a **self-contained** HTML document. Inline `<style>` and inline `<script>` run, and an
-image has to be a `data:` URL. **A page cannot load anything external**: no subresources of any kind,
-no external scripts, stylesheets or fonts — so a page has to stick to generic font families — and no
-`fetch`, `XMLHttpRequest`, WebSocket or `sendBeacon`. Native form submission does not navigate
-anywhere, and a page cannot navigate its own frame to an external URL either. The one way Octoboard
-provides for data to leave a page is `octoboard.submit`.
+A page is a **static, self-contained HTML document**. None of its own scripts run, nothing external
+loads, and the only way data leaves it is a form the user submits (see "Submitting a form back to the
+hub" below).
 
-**Known gap: a page can still reach the network through two routes** that no content security policy
-directive covers in WebKit. Both were measured in the macOS application:
+Before a page is shown, its HTML is cleaned inside the page's frame. Removed, silently — the push is
+not refused, and the rest of the page is shown without them:
 
-- **WebRTC.** `RTCPeerConnection` is available inside the page, and a page that uses it makes the
-  application send STUN Binding and TURN Allocate requests over UDP to an address the page chose.
-- **`<link rel="preconnect">`.** It opens a TCP connection to a host and port the page chose.
+- scripts of every kind: `<script>` elements, event-handler attributes (`onclick` and the like) and
+  `javascript:` URLs;
+- elements that load or embed something: `<link>`, `<iframe>`, `<frame>`, `<object>`, `<embed>`,
+  `<meta>`, `<base>`, `<audio>`, `<video>`, `<source>` and `<track>`; `<noscript>` and `<template>` go
+  as well;
+- a form's `action`, `method`, `enctype` and `target`, and a button's `formaction`; `ping`, `srcset`
+  and `sizes`;
+- any URL with a scheme — `http:`, `https:`, `mailto:`, `data:` and the like — and any scheme-relative
+  `//host` URL, wherever a URL is given (`href`, `src` and the like). The one exception is a `data:`
+  URL as an image's source.
 
-The destination is the page's to pick, so either route lets a page carry out what it computed or what
-the user typed into it, encoded in the address it contacts. Whether link-based DNS prefetching issues
-lookups as well was not observed.
+What stays: the document's structure and text, `<style>` elements and inline `style` attributes,
+inline SVG, images given as `data:` URLs (`<img>`, and `<image>` inside SVG), native form controls
+with their `required` and `pattern` validation, links to anchors within the page (`#…`), and the
+page's own `lang` and `dir`. Stylesheets and fonts cannot be loaded, so a page has to stick to generic
+font families. If what remains after cleaning still contains anything from the removed list, the
+page is not rendered at all and the panel shows an empty page.
 
-Apart from those routes the outbound channel is closed; that is not a claim that a page can do
-nothing. A page is model-authored HTML and its script runs, inside Octoboard's own window, over
-whatever the user puts into it.
+**What a page cannot do, as a consequence:** react to what the user does — no live calculation, no
+showing or hiding parts depending on input, no client-side sorting or filtering, no chart drawn by
+script (a chart has to be static, for example inline SVG) — submit by itself, or send anything but
+the flat text fields of a form. A form never navigates the frame, and a page cannot navigate its own
+frame to an external URL either.
+
+**A page has no route to the network.** No `fetch`, `XMLHttpRequest`, WebSocket, `sendBeacon` or
+WebRTC, since no script of the page's own runs, and no connection opened or name looked up ahead of
+time by `<link rel="preconnect">` or `rel="dns-prefetch"`, since no `<link>` is kept. In the macOS
+application the window adds a second barrier underneath: it blocks every `http` and `https` request
+its web view would make — the application's own window loads nothing over the web — so a link or
+load the cleaning missed still goes nowhere. If that block cannot be set up at launch, the window
+opens without it and pages rely on the cleaning alone.
 
 Each page is rendered in a sandboxed frame of its own, with no access to the application around it or
 to any other page, and on a light surface whatever the window's appearance is — see "A report page
@@ -85,36 +101,22 @@ language and writing direction whatever the UI's language is — see "What follo
 
 ## Submitting a form back to the hub
 
-A page is given exactly one bridge call:
+A page sends data back **only through a native HTML form**, and only when the user submits it —
+pressing a submit button, or pressing Enter in a field where the browser submits the form. Native
+validation runs first: a `required` field left empty or a value not matching its `pattern` stops the
+submission. Nothing on a page can submit on its own.
 
-```js
-octoboard.submit(data); // `data` is any JSON-serializable value
-```
+A submission carries the form's fields in document order, the way a browser builds a form
+submission: each field is named by its `name` attribute, so a field without one is not sent, and
+neither is a disabled field or an unchecked checkbox or radio button. The submit button the user
+pressed is included as one more field when it has a `name` and `value`, which is how a set of choices
+is offered: `<button name="choice" value="…">`. Several fields sharing one name — a group of
+checkboxes, say — become one field whose values are joined with ", ". A file field sends only the
+chosen file's name, never its contents.
 
-That call is the one thing sent on the page's behalf.
-
-Pressing Escape while focus is inside a page also tells the window so, on a history page too. The
-key never reaches the window from inside the frame, so without this it could not close the floating
-report panel or the narrow-window drawer. It closes whatever overlay is open, as Escape does
-anywhere else, and with nothing open it does nothing. An Escape pressed during an input
-method's composition, where it cancels the composition, is not relayed, and the page itself still
-receives the key either way. The page's own script can post the same signal, which is harmless
-since all it can do is close an overlay.
-
-`F6` and `Shift+F6` pressed while focus is inside a page are likewise passed to the window, on a
-history page too, and move focus to the next or previous region of the window (see "Moving focus
-between regions with F6" in `docs/product/window-layout.md`); the browser's own handling of the key
-inside the frame is cancelled. A page cannot move focus this way by itself: the signal is acted on
-only while focus is inside the page's frame. Neither this signal nor Escape's carries anything else
-from the page.
-
-Nothing gates when `submit` may be called: any call from the newest page reaches the hub, whether or not
-the user triggered it.
-
-What `submit` was called with is written into the console's hub session as a **user message**, naming
-the page it came from and then the data. An object of plain values is rendered as one `key: value`
-line per field, **in the order the page sent them** rather than sorted. Anything else — a nested
-object, an array, a bare value — is written as pretty-printed JSON instead.
+The submission is written into the console's hub session as a **user message**: a line naming the
+page it came from, then one `key: value` line per field. A form with no named fields is still
+delivered, with `{}` in place of the field lines.
 
 Delivery takes the same path as every other write into a running session (see "Messages held until a
 session can take them" in `docs/product/hub-orchestration.md`): written straight away while the hub
@@ -126,3 +128,18 @@ A submission fails, and the failure is shown to the user, when the page is no lo
 newest or the hub's process is not running. A failed submission changes nothing. The message names
 which console's hub the submission was meant for, so that it cannot be read as being about whichever
 session the user happens to be looking at.
+
+## Escape and F6 inside a page
+
+Pressing Escape while focus is inside a page also tells the window so, on a history page too. The
+key never reaches the window from inside the frame, so without this it could not close the floating
+report panel or the narrow-window drawer. It closes whatever overlay is open, as Escape does
+anywhere else, and with nothing open it does nothing. An Escape pressed during an input
+method's composition, where it cancels the composition, is not relayed. Inside the page the key keeps
+its usual effect either way, such as closing an open drop-down list.
+
+`F6` and `Shift+F6` pressed while focus is inside a page are likewise passed to the window, on a
+history page too, and move focus to the next or previous region of the window (see "Moving focus
+between regions with F6" in `docs/product/window-layout.md`); the browser's own handling of the key
+inside the frame is cancelled. The signal is acted on only while focus is inside the page's frame.
+Neither this signal nor Escape's carries anything from the page.

@@ -69,3 +69,9 @@ objc2 = "=0.6.4"
 objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSApplication", "NSResponder"] }
 # For the system's preferred languages in `lib.rs`, pinned like `objc2-app-kit` above.
 objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSArray", "NSLocale", "NSString"] }
+# For the content rule list `page_isolation.rs` puts on the window's webview, and the block its
+# compile reports back through; `WebviewWindowBuilder::with_webview_configuration` takes this
+# crate's type. Pinned like `objc2-app-kit` above, `block2` to the version already resolved
+# through `objc2-web-kit`.
+objc2-web-kit = { version = "=0.3.2", default-features = false, features = ["std", "block2", "WKContentRuleList", "WKContentRuleListStore", "WKUserContentController", "WKWebViewConfiguration"] }
+block2 = "=0.6.2"

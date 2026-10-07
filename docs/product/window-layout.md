@@ -192,7 +192,7 @@ pane**:
   it. It overlays the terminal, so **the terminal is not resized** and the agent is sent no size change.
 - **How it goes away**: it slides away 200 ms after the pointer leaves it, or leaves the toggle without moving onto
   it. `Escape` sends it away at once and **does not reach the running agent**; so does `Escape` pressed inside a
-  report page (see "Submitting a form back to the hub" in `docs/product/report-panel.md`). It stays up, whatever the
+  report page (see "Escape and F6 inside a page" in `docs/product/report-panel.md`). It stays up, whatever the
   pointer does, while it holds keyboard focus or one of its menus is open. A floating pane that holds keyboard focus
   as it goes away hands focus to the terminal.
 - **Only one at a time**: bringing one up sends the other away.
@@ -242,7 +242,7 @@ order:
 6. the toasts, only while at least one toast is shown.
 
 It works wherever focus is, the terminal included: there `Tab` and `Shift+Tab` still go to the agent, and `F6` and
-`Shift+F6` never do. It works from inside a report page too (see "Submitting a form back to the hub" in
+`Shift+F6` never do. It works from inside a report page too (see "Escape and F6 inside a page" in
 `docs/product/report-panel.md`). With focus in none of the regions, `F6` goes to the first region shown and
 `Shift+F6` to the last.
 

@@ -2639,6 +2639,7 @@ name = "octoboard"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "block2",
  "darling",
  "encoding_rs",
  "icu_collections",
@@ -2652,6 +2653,7 @@ dependencies = [
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
+ "objc2-web-kit",
  "plist",
  "serde",
  "serde_json",

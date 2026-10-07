@@ -1,6 +1,6 @@
 import { Button, Chip } from "@heroui/react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
@@ -14,6 +14,7 @@ import {
   ESCAPE_MESSAGE_SOURCE,
   REGION_MESSAGE_SOURCE,
   SUBMIT_MESSAGE_SOURCE,
+  submissionFromEntries,
 } from "./pageDocument";
 
 /**
@@ -239,10 +240,17 @@ export function ReportPanel({
   );
 }
 
+/** A fresh unguessable value for one frame's script nonce. */
+function newNonce(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
 /**
  * The sandboxed render of one page. Keyed by `page.id` at the call site so React remounts this
- * (and so the iframe) rather than mutating it across a page change — a page's script must not keep
- * running after the user pages away.
+ * (and so the iframe) rather than mutating it across a page change, which also gives each page its
+ * own script nonce.
  */
 function PageFrame({
   page,
@@ -263,15 +271,22 @@ function PageFrame({
 }): React.ReactElement {
   const t = useT();
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  // State rather than a memo: React may drop a memo's cache, and a new nonce reloads the frame,
+  // losing whatever the user has typed into the page.
+  const [nonce] = useState(newNonce);
+  const srcDoc = useMemo(
+    () => composePageDocument(page.html, isHistory, nonce),
+    [page.html, isHistory, nonce],
+  );
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      // `sandbox="allow-scripts"` without `allow-same-origin` gives the frame an opaque origin, so
+      // `sandbox="allow-scripts allow-forms"` without `allow-same-origin` gives the frame an opaque origin, so
       // its messages arrive with `event.origin === "null"` — a string every opaque frame shares,
       // not something that identifies this one. The only reliable check is that the message came
       // from this iframe's own window.
       if (event.source !== iframeRef.current?.contentWindow) return;
-      const data = event.data as { source?: unknown; data?: unknown } | null;
+      const data = event.data as { source?: unknown } | null;
       if (!data) return;
       // The relay carries nothing from the page, so a page forging it can only ask for what the
       // user's own Escape would do.
@@ -282,13 +297,13 @@ function PageFrame({
         if (document.activeElement !== iframeRef.current) return;
         return onCycleRegion((data as { backward?: unknown }).backward === true);
       }
-      // A history page's bridge already throws instead of posting (see `composePageDocument`), but
-      // a page's own script can reach the parent directly with `parent.postMessage(...)`, skipping
-      // that throw. The daemon still refuses the resulting `submit_page` (it is the enforcement
-      // point), but forwarding it at all would surface that refusal as an error toast for an
-      // action the user never took, so a history page's messages are not forwarded.
+      // A history page's bridge already posts nothing, and the daemon refuses a `submit_page` for
+      // one regardless (it is the enforcement point), but a forged message would surface that
+      // refusal as an error toast for an action the user never took, so a history page's messages
+      // are not forwarded.
       if (isHistory || data.source !== SUBMIT_MESSAGE_SOURCE) return;
-      onSubmit(page, data.data);
+      const submission = submissionFromEntries((data as { entries?: unknown }).entries);
+      if (submission) onSubmit(page, submission);
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
@@ -299,10 +314,10 @@ function PageFrame({
       ref={iframeRef}
       className="min-h-0 flex-1 border-0 bg-white"
       title={t("report.frameTitle")}
-      sandbox="allow-scripts"
+      sandbox="allow-scripts allow-forms"
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
-      srcDoc={composePageDocument(page.html, isHistory)}
+      srcDoc={srcDoc}
     />
   );
 }

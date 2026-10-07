@@ -40,9 +40,9 @@ daemon, each keep their own; a client whose storage has been cleared is back to 
 ## A report page stays on a light surface in both appearances
 
 A page in the report panel is rendered on a **light surface whatever the window's appearance is**, and its
-own unstyled form controls and canvas rendering stay light as well, regardless of the operating system's
-preference. The panel's own chrome around the page — the header bar with the paging controls — follows the
-chosen appearance like everything else.
+own unstyled form controls stay light as well, regardless of the operating system's preference. The panel's own
+chrome around the page — the header bar with the paging controls — follows the chosen appearance like everything
+else.
 
 This is a decision, not an oversight. A page is arbitrary HTML the hub's model wrote (see "What a page may
 contain, and what it cannot do" in `docs/product/report-panel.md`), and one that hard-codes dark text would
