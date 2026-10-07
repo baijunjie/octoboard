@@ -3,6 +3,11 @@
 //! `apps/daemon/PROTOCOL.md`'s "Daemon behaviour, per project"). Each project is checked at most
 //! once at a time, concurrently with the others of its console, and at most once every
 //! `GIT_CHECK_MIN_INTERVAL`.
+//!
+//! `sync_behind_projects` is the module's second entry point, driven by `update_settings` the
+//! moment **Automatically sync repositories** is turned on: it only fast-forwards branches already
+//! behind their upstream, goes nowhere near the remote, and is therefore outside the floor above —
+//! sharing the in-flight claim with the checks, but not their minimum interval.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -136,21 +141,8 @@ fn check_project(state: &AppState, project: &Project) {
     }
     read_branch_header(&path, &mut status);
 
-    let auto_sync = state
-        .store
-        .get_settings()
-        .map(|settings| settings.auto_sync_repositories)
-        .unwrap_or(false);
-    if auto_sync && status.upstream.is_some() && status.behind > 0 && status.ahead == 0 {
-        status.activity = GitActivity::Syncing;
-        state.publish_git_status(status.clone());
-        // `upstream` was just checked to be `Some`.
-        let upstream = status.upstream.clone().expect("upstream is set");
-        if let Err(err) = run_git(&path, &["merge", "--ff-only", &upstream]) {
-            tracing::debug!(%err, "fast-forwarding the branch failed");
-            status.error = Some(err);
-        }
-        read_branch_header(&path, &mut status);
+    if auto_sync_enabled(state) && syncable(&status) {
+        fast_forward(state, &path, &mut status);
     }
 
     status.activity = GitActivity::Idle;
@@ -159,6 +151,112 @@ fn check_project(state: &AppState, project: &Project) {
     // reinserted right after `publish_git_status` just cleared it.
     state.record_git_check_completed(&project.id);
     state.publish_git_status(status);
+}
+
+/// Fast-forwards every project already behind its upstream, concurrently — what turning
+/// **Automatically sync repositories** on does right away, instead of leaving the branches to wait
+/// for the client's next five-minute sweep. The statuses held in `AppState` only pick which
+/// projects are worth visiting, and nothing here goes to the remote: a fetch would duplicate the
+/// one the next sweep makes anyway, and the branch is already behind refs that were fetched
+/// earlier. A project whose check is in flight is left to that check, which reads the setting
+/// itself; a project with no status yet has never been checked, so nothing is known to
+/// fast-forward it to. Fire-and-forget, like `refresh`.
+///
+/// Only the caller has established that the setting is on — this is the one thing the daemon does
+/// inside a project's directory, so a caller that has not must not call it.
+pub fn sync_behind_projects(state: &Arc<AppState>) {
+    for status in state.git_statuses() {
+        if !syncable(&status) {
+            continue;
+        }
+        // Both an outright store error and a project that is genuinely gone mean skip: the branch
+        // below is only ever touched for a project whose path was just read back from the store,
+        // the opposite of `AppState::publish_git_status`'s fail-open choice, because that one risks
+        // a stale badge and this one risks a merge in a directory nobody vouched for.
+        let Ok(Some(project)) = state.store.get_project(&status.project) else {
+            continue;
+        };
+        let Some(claim) = state.claim_git_check(&project.id) else {
+            continue;
+        };
+        let state = state.clone();
+        tokio::task::spawn_blocking(move || {
+            let _claim = claim;
+            sync_project(&state, &project, status);
+        });
+    }
+}
+
+/// One project's immediate fast-forward. The cached `status` picked the project out, but the gate
+/// is read again from the repository before anything moves, because an arbitrary amount of time
+/// may have passed since the check that filled it: the user may have switched branch, detached
+/// `HEAD`, committed, or taken the directory out of git entirely, and `git merge --ff-only` acts on
+/// whatever `HEAD` is now rather than on the branch the cached status described. The re-read is a
+/// local `git status`, no network, so it costs nothing the next sweep would not pay anyway.
+fn sync_project(state: &AppState, project: &Project, mut status: GitStatus) {
+    let path = PathBuf::from(&project.path);
+    if !hostfs::is_git_repo(&path) {
+        // The directory has left git since its last check. Nothing is published: correcting the
+        // cached `repository: true` belongs to a real check, which is what reports that in the
+        // first place, and the next sweep does it.
+        return;
+    }
+    // Blanked before the re-read so that a `git status` which fails cannot leave the cached numbers
+    // standing as the gate: `read_branch_header` records the failure and writes nothing else, and
+    // this gate guards a merge — a locked index or a broken `.git` must fail closed.
+    status.upstream = None;
+    status.ahead = 0;
+    status.behind = 0;
+    read_branch_header(&path, &mut status);
+    if !syncable(&status) {
+        // Nothing to report, whether the branch genuinely moved on since its last check or the
+        // re-read above failed and left the gate blank: either way that check's own numbers stay
+        // on the badge until the next sweep replaces them.
+        return;
+    }
+    // Any `error` the cached status carries is left on it rather than cleared: it is the last
+    // check against the remote that failed, which is exactly what the warning triangle stands for
+    // (see "The branch badge" in `docs/product/project-git-status.md`), and a local fast-forward
+    // says nothing about whether that fetch would succeed now.
+    fast_forward(state, &path, &mut status);
+    status.activity = GitActivity::Idle;
+    // No `record_git_check_completed` here, unlike `check_project`: nothing above went to the
+    // remote, so the next sweep's own check must not be held off on this project's account.
+    state.publish_git_status(status);
+}
+
+/// Whether the **Automatically sync repositories** setting is on; a store that cannot be read
+/// counts as off, the same as the default — the fast-forward below is the one thing the daemon
+/// does inside a project's directory, so it never happens on a guess.
+fn auto_sync_enabled(state: &AppState) -> bool {
+    state
+        .store
+        .get_settings()
+        .map(|settings| settings.auto_sync_repositories)
+        .unwrap_or(false)
+}
+
+/// Whether `status` describes a branch the sync may fast-forward: one behind its upstream with no
+/// commits of its own (see "Automatically syncing repositories" in
+/// `docs/product/project-git-status.md`). Pure over the status so both callers decide alike and
+/// the rule is unit-tested without a repository.
+fn syncable(status: &GitStatus) -> bool {
+    status.upstream.is_some() && status.behind > 0 && status.ahead == 0
+}
+
+/// Fast-forwards the branch onto its upstream and reads the branch header again, reporting the
+/// fast-forward in flight on `status` while it runs. `status` must have passed `syncable`. A
+/// fast-forward `git` refuses records its message, as a failed fetch does.
+fn fast_forward(state: &AppState, path: &Path, status: &mut GitStatus) {
+    status.activity = GitActivity::Syncing;
+    state.publish_git_status(status.clone());
+    // `syncable` just checked `upstream` to be `Some`.
+    let upstream = status.upstream.clone().expect("upstream is set");
+    if let Err(err) = run_git(path, &["merge", "--ff-only", &upstream]) {
+        tracing::debug!(%err, "fast-forwarding the branch failed");
+        status.error = Some(err);
+    }
+    read_branch_header(path, status);
 }
 
 /// The repository's configured remotes, in the order `git remote` prints them, or empty when it
@@ -219,9 +317,11 @@ fn fetch_remote(remotes: &[String], upstream_remote: Option<&str>) -> Option<Str
 }
 
 /// Runs `git status --porcelain=v2 --branch --untracked-files=no` and applies what it says to
-/// `status`; a failure to run it records `status.error` and leaves the branch fields at `status`'s
-/// defaults — `None` branch, no upstream, zero ahead and behind — the same empty reading a
-/// brand-new `GitStatus` starts from, since a fresh one is all this is ever called with.
+/// `status`; a failure to run it records `status.error` and leaves every other field of `status`
+/// exactly as it was. A caller that reads a `GitStatus` it did not just build must therefore blank
+/// whatever it is about to rely on before calling this, as `sync_project` does for the fields its
+/// gate reads; on a brand-new `GitStatus` the fields left behind are already the empty reading —
+/// `None` branch, no upstream, zero ahead and behind.
 /// `--untracked-files=no` skips enumerating the worktree's files, which `parse_branch_header`
 /// below never reads anyway (it only takes the `# branch.*` header lines, which this flag does not
 /// change) — on a large repository that enumeration is otherwise the dominant cost of the whole
@@ -449,6 +549,26 @@ mod tests {
              1 .M N... 100644 100644 100644 aaaa bbbb file.txt\n",
         );
         assert_eq!(header.branch.as_deref(), Some("main"));
+    }
+
+    #[test]
+    fn only_a_branch_behind_its_upstream_with_no_commits_of_its_own_is_syncable() {
+        let status = |upstream: Option<&str>, ahead: u32, behind: u32| GitStatus {
+            project: "project-1".to_string(),
+            repository: true,
+            branch: Some("main".to_string()),
+            detached: false,
+            upstream: upstream.map(str::to_string),
+            ahead,
+            behind,
+            activity: GitActivity::Idle,
+            error: None,
+        };
+        assert!(syncable(&status(Some("origin/main"), 0, 2)));
+        // Up to date, ahead as well as behind, and no upstream at all: each left alone.
+        assert!(!syncable(&status(Some("origin/main"), 0, 0)));
+        assert!(!syncable(&status(Some("origin/main"), 1, 2)));
+        assert!(!syncable(&status(None, 0, 2)));
     }
 
     #[test]

@@ -18,7 +18,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   its glyphs for a branch, a detached `HEAD`, a check in flight and a fast-forward in flight, the ahead and behind
   counts, the marker a failed check leaves and what it tells assistive technology; when and how often the shown
   console's projects are checked against their remotes and what one check runs; and the Automatically sync
-  repositories switch — what it fast-forwards, what it never does, and where it is kept.
+  repositories switch — what it fast-forwards, what it never does, where it is kept, and the immediate
+  fast-forward pass turning it on runs.
 - [Hub orchestration](product/hub-orchestration.md) — what the hub can do: its tools and a project session's `report`,
   the brief a task is handed over as, the reporting loop and what happens when a session stops without reporting,
   automatic archiving, and which sessions the hub drives.

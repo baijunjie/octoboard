@@ -62,7 +62,7 @@ the request id as if it were a record id.
 | `submit_page` | `page`, `data` | A report panel form submission; `data` is the submitted form's fields as an object of strings, field name to value (a repeated name's values joined by `, `), in document order, including the pressed submit button's `name`/`value`. Written into the console's hub session as a user message naming the page it came from; held rather than refused while the hub is `waiting_user`, since the hub is not the one who has to answer that prompt. Refused when `page` is not the console's newest page — history pages are read-only |
 | `confirm_claude_trust` | `session`, `remember`, `trust_parent_dir?` | The user's go-ahead to a `claude_trust_prompt`: Octoboard may answer that session's Claude Code trust screen, which it does by typing at the session's terminal (a Down and an Enter) after checking that the screen is still up and where its cursor is. `remember` also records the project's consent (`Project.claude_trust_consent`) once the screen has been answered, so later sessions of that project are answered without a prompt, and broadcasts the updated `project_upserted`. `trust_parent_dir` (absent means false) records the project's parent directory as trusted instead, once the screen has been answered, and then `remember` adds nothing. Every project whose path lies under that directory is trusted with it — those already there, those added later by any means, repositories the hub clones or adds into it included — and the permissions and hooks in their `.claude/settings.json` then apply without asking. The screens already waiting under it are answered at once. The daemon derives the directory from the session's project (it is the prompt's `trust_dir`); a client never names one. A parent that is the filesystem root, the user's home directory (however it is spelled or linked) or a directory containing it is refused, before anything is answered, with `error` code `trust_directory_too_broad`; so is a project whose path is not absolute (`trust_path_not_absolute`), and so is any case where the home directory cannot be determined to check against (`trust_home_unknown`). Refused, with nothing recorded and nothing sent, unless `session` is a running Claude Code project session that is still waiting at its trust screen and has not been answered (a screen that is no longer waiting is answered with `error` code `claude_trust_not_waiting`, which a client shows nothing for); a failure to answer once it was accepted (the screen is not as expected, or something else typed into the session meanwhile) is an `error` with code `claude_trust_answer_failed` as well, records no consent, and is also broadcast as a `session_notice` so that it is seen even if the requesting dialog has closed. Octoboard never edits Claude Code's config files for this |
 | `remove_trusted_directory` | `path` | Stops trusting a directory (compared after lexical normalisation, so a trailing slash does not matter) and broadcasts `trusted_directories_updated`. Projects' own consents and sessions already running are untouched. Removing one that is not trusted does nothing. Directories are added only by `confirm_claude_trust` |
-| `update_settings` | `auto_sync_repositories?` | Each settable field absent means "leave it alone". Broadcasts `settings_updated` only when something actually changed, as `remove_trusted_directory` does |
+| `update_settings` | `auto_sync_repositories?` | Each settable field absent means "leave it alone". Broadcasts `settings_updated` only when something actually changed, as `remove_trusted_directory` does. A change that turns `auto_sync_repositories` on also starts the immediate fast-forward pass described in "Fast-forwarding when the setting is turned on" below, whose statuses follow as `project_git_status` broadcasts; an update that leaves the value as it was starts nothing. Turning it off starts nothing and undoes nothing |
 | `refresh_git_status` | `console` | Checks every project of `console` against its remote, concurrently; answered with `ack` at once, and the statuses follow as `project_git_status` broadcasts, one per project as its own check finishes. A project whose check is already running — this call raced ahead of an earlier one, or another client is watching the same console — is not started again, and nor is one whose last check completed less than a minute ago: several clients can each be polling this console on their own 5-minute interval and phase, and without this floor their sweeps would interleave into several checks per project every 5 minutes instead of one. Either way nothing is broadcast for the project that was skipped — it keeps whatever status it already had. An unknown console is `unknown_console`. See "Daemon behaviour, per project" below for what one project's check does |
 | `shutdown` | — | Terminates every session process (leaving them `interrupted`) and exits the daemon |
 
@@ -220,7 +220,8 @@ epoch milliseconds (the UI formats them).
 without a new request shape for every setting added. `auto_sync_repositories` (default `false`) governs step 5 below:
 off, the periodic check still fetches the remote and reports how far ahead or behind the branch is, but never moves
 it; on, a branch that is behind and can fast-forward is fast-forwarded. It never pushes, and it never merges
-non-fast-forward.
+non-fast-forward. Turning it on also fast-forwards straight away, without waiting for the next check — see
+"Fast-forwarding when the setting is turned on" below.
 `GitStatus` is one project's live git state, derived from its working directory on request and never stored; see
 "Daemon behaviour, per project" below for how it is built. `repository` is `false` when the project's directory is
 not a git repository, and every other field is then at its empty value. `branch` is the branch name, the short
@@ -254,6 +255,36 @@ entirely (see `refresh_git_status` above):
    failed merge records `error`; `git` itself refuses rather than clobbering local changes, which is why nothing
    here checks separately whether the worktree is clean.
 6. Set `activity` to `idle` and broadcast.
+
+### Fast-forwarding when the setting is turned on
+
+An `update_settings` that actually turns `auto_sync_repositories` on fast-forwards, concurrently and right away, every
+project already known to be behind its upstream, rather than leaving them to the next `refresh_git_status`. The
+request is acked as soon as the work is started; what each project ends up at follows as `project_git_status`
+broadcasts.
+
+- **Nothing is fetched**: no step here goes to the remote. The `GitStatus` records the daemon holds are used only to
+  pick which projects are worth visiting, so this pass is **not scoped to one console** the way
+  `refresh_git_status` is: every project the daemon currently holds a status for is visited, including projects of
+  consoles a client showed earlier in this daemon's life. A project with no status yet has never been checked and is
+  skipped — nothing is known to fast-forward it to.
+- The **one-minute floor** on checks does not apply, since nothing contacts the remote, and the pass counts as no
+  check of its own, so it never holds the next `refresh_git_status` off a project. The rule that a project is never
+  worked on twice at once still holds across both: a project whose check is already running is skipped here and
+  left to that check, which reads the setting itself (step 5), and while this pass is in a project a check of it is
+  not started either.
+- For each project visited, the gate is **re-read from the repository** before anything moves: step 4's local
+  `git status` is run again and `upstream` set, `behind > 0`, `ahead == 0` re-applied to its fresh output, and the
+  directory is confirmed to still be a git repository. A project failing any of those, and one whose re-read fails
+  at all, is left alone with no broadcast — the previous check's `repository`, numbers and `error` stay as they
+  were, for the next `refresh_git_status` to correct.
+- Otherwise `activity` goes to `syncing` and is broadcast, `git merge --ff-only <upstream>` runs, step 4 is redone,
+  and `activity` goes back to `idle` and is broadcast — as in step 5, including a refused merge recording `error`.
+  An `error` the last check left is **not** cleared: it came from a step that contacted the remote, which this pass
+  does not do.
+
+Because a status is dropped only when its project or console is deleted, an `error` this pass records for a project
+of a console no client is showing stays in the daemon's status for it until that console is refreshed again.
 
 ## `GET /ws/term/:session` — terminal stream
 

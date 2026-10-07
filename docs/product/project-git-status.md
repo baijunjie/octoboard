@@ -50,7 +50,8 @@ carries its own name. The badge is deliberately not a live region, so a check st
   for the next round.
 
 A console that is not being shown has none of its projects checked; switching to it checks them. Nothing is checked
-while no client is connected either: the schedule belongs to the application's window, not to the daemon.
+while no client is connected either: the schedule belongs to the application's window, not to the daemon. Turning
+**Automatically sync repositories** on is not a check and is not limited this way; see "Turning the switch on" below.
 
 The daemon will not start a second check of a project while one is already running, and skips a project whose last
 check finished less than a minute ago — so several open windows, each on its own interval, cannot multiply the work. A
@@ -84,9 +85,10 @@ Settings' **Git** section (see "Git" in `docs/product/settings.md`) holds one sw
 repositories**, **off** to begin with. It is stored by the daemon, so every window and every client sees the same
 value and it survives a restart.
 
-Off and on alike, the check above runs and the branch and the counts stay accurate. The switch governs only what the
-check does afterwards: with it on, a branch that is **behind its upstream and has no commits of its own** is
-fast-forwarded, and the badge shows the fast-forward in flight.
+Off and on alike, the check above runs and the branch and the counts stay accurate. The switch governs what happens
+beyond reporting: with it on, a branch that is **behind its upstream and has no commits of its own** is
+fast-forwarded — at the end of each check, and once immediately when the switch is turned on (see "Turning the switch
+on" below) — and the badge shows the fast-forward in flight.
 
 - It **never pushes**, and never merges anything that is not a fast-forward.
 - A branch that is ahead of its upstream, whether or not it is also behind, is left alone. So are a branch with no
@@ -97,3 +99,31 @@ fast-forwarded, and the badge shows the fast-forward in flight.
 
 This is the one case in which Octoboard changes anything inside a project's directory — the guarantee it qualifies is
 in "What Octoboard never modifies" in `docs/product/launching-agents.md`.
+
+### Turning the switch on
+
+Turning the switch on takes effect at once: the branches already known to be behind their upstream are fast-forwarded
+there and then, instead of waiting for the next check. Setting the switch to the value it already has does nothing.
+
+This pass **never goes to the remote** — nothing is fetched. The statuses Octoboard is already holding only pick which
+projects are worth visiting, so, unlike a check, it is **not limited to the console the sidebar is showing**: every
+project that has a status at all is visited, including projects of consoles that were shown earlier since Octoboard
+was started. A project that has never been checked is not visited — nothing is known to fast-forward it to.
+
+Before anything moves, each project's repository is read again — locally, still no network — and the same rule applied
+to what it says now, because an arbitrary amount of time may have passed since the status was filled in. So a project
+whose branch has been switched, whose `HEAD` has been detached, which has commits of its own, or whose directory is no
+longer a git repository is left alone; and so is one whose local re-read fails, since nothing is fast-forwarded on a
+rule that could not be checked.
+
+The one-minute floor between checks (see "When a project is checked" above) does not apply to this pass, which goes
+nowhere near the remote. A project whose check is in flight is skipped and left to that check, which reads the switch
+itself.
+
+The badge shows the fast-forward in flight exactly as during a check, and a fast-forward `git` refuses records its
+message for the warning triangle the same way. A warning the last check left stays on the badge: it stands for that
+check against the remote, which a local fast-forward says nothing about. An error this pass records for a project of a
+console nobody is showing therefore stays on it until that console is shown again and its projects are checked, since
+a status is dropped only when the project or its console is deleted.
+
+Turning the switch **off** undoes nothing and triggers nothing: branches already fast-forwarded stay where they are.

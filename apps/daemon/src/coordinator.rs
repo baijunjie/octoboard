@@ -993,6 +993,12 @@ fn update_settings(state: &Arc<AppState>, auto_sync_repositories: Option<bool>) 
     state.broadcast(Event::SettingsUpdated {
         settings: state.store.get_settings()?,
     });
+    // Turning the sync on takes effect at once rather than at the client's next five-minute sweep:
+    // the branches already known to be behind are fast-forwarded now (see
+    // `git_status::sync_behind_projects`).
+    if auto_sync_repositories {
+        git_status::sync_behind_projects(state);
+    }
     Ok(())
 }
 
