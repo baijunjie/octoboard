@@ -1,11 +1,12 @@
 import { Button } from "@heroui/react";
 import React, { useState } from "react";
 
-import { AGENT_ICON_OPTIONS } from "../components/AgentIcon";
+import { AGENT_LABEL } from "../agents";
+import { AGENT_ICON_OPTIONS, AgentIcon } from "../components/AgentIcon";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
 import type { Agent, Project, ProjectSource } from "../protocol";
-import { useDaemon } from "../store";
+import { useDaemon, useDaemonStore } from "../store";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { OptionSelect } from "./OptionSelect";
@@ -30,6 +31,7 @@ export function ProjectDialog({
 }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
+  const consoleAgent = useDaemonStore((s) => s.consoles.get(consoleId)?.default_agent);
   const [source, setSource] = useState<ProjectSource>(editing?.source ?? "local");
   const [path, setPath] = useState(editing?.path ?? "");
   const [remoteUrl, setRemoteUrl] = useState(editing?.remote_url ?? "");
@@ -65,7 +67,7 @@ export function ProjectDialog({
           type: "update_project",
           project: editing.id,
           name: name || undefined,
-          // "" means "use console default", which on the wire is an explicit `null` (clear),
+          // "" ("Auto") means following the console's default, which on the wire is an explicit `null` (clear),
           // never an omitted field — omitting it means "leave whatever was there alone" instead.
           default_agent: defaultAgent === "" ? null : defaultAgent,
         });
@@ -84,10 +86,15 @@ export function ProjectDialog({
     });
   };
 
-  // `""` stands for "unset" — falls back to the console's default agent per the "Which agent a
-  // session uses" section of docs/product/sessions.md.
+  // `""` is "Auto": the project sets none and follows its console's default agent (the "Which agent
+  // a session uses" section of docs/product/sessions.md); the option names that agent, its icon
+  // faded, so it says what it resolves to.
   const defaultAgentOptions: { value: Agent | ""; label: string; icon?: React.ReactNode }[] = [
-    { value: "", label: t("dialog.project.useConsoleDefault") },
+    {
+      value: "",
+      label: consoleAgent ? t("dialog.project.agentAuto", { agent: AGENT_LABEL[consoleAgent] }) : t("dialog.project.agentAutoBare"),
+      icon: consoleAgent && <AgentIcon agent={consoleAgent} className="size-4 opacity-50" />,
+    },
     ...AGENT_ICON_OPTIONS,
   ];
 

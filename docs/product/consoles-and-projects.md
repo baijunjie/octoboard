@@ -167,6 +167,11 @@ for every project a parent-directory association produces, the name is the direc
 A project may carry its own default agent, or leave it unset to inherit the console's. The selection order for a new
 session is in "Which agent a session uses" in `docs/product/sessions.md`.
 
+The project dialog, both when associating and when editing a project, offers "unset" as an "Auto" choice listed first
+and preselected for a new project; it names the agent the console's default currently resolves to, shown with that
+agent's icon dimmed, or is a bare "Auto" when the console is not known. Choosing a specific agent stores it as the
+project's own default.
+
 ### Editing a project
 
 Only the name and the default agent can be changed, besides pinning and unpinning the project. The name is changed from
