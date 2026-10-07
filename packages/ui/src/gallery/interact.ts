@@ -1,8 +1,10 @@
 import { format, type MessageArgs, type MessageKey } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
 
-/** Everything a pressable thing is looked up among. A hand-built row is a `role="button"`. */
-const PRESSABLE = "button, [role=button], [role=menuitem], [role=menuitemradio], [role=tab], [role=option], a[href]";
+/** Everything a pressable thing is looked up among. A hand-built row is a `role="button"`, and a tag
+ * in a tag group is a `role="row"`. */
+const PRESSABLE =
+  "button, [role=button], [role=menuitem], [role=menuitemradio], [role=tab], [role=option], [role=row], a[href]";
 
 /** The name a control is found by: its `aria-label`, otherwise its text. */
 function nameOf(element: Element): string {
@@ -32,8 +34,14 @@ export interface Ui {
   session: (title: string) => Matcher;
   /** The console's hub row. */
   hub: () => Matcher;
-  /** Presses the first control named `matcher`, waiting for it to appear. */
+  /** Presses the first control named `matcher`, waiting for it to appear. Mind a name that exists
+   * twice: a tag already picked in the filter is on the sidebar's heading row (earlier in the DOM)
+   * and in the filter picker, so pressing it again to unpick it would hit the sidebar row. */
   press: (matcher: Matcher) => Promise<void>;
+  /** Presses `key` on the focused control, for what a user closes or confirms with the keyboard. */
+  key: (key: string) => Promise<void>;
+  /** Types `text` into the focused field, waiting for a field to take focus, and replaces what it holds. */
+  type: (text: string) => Promise<void>;
   /** Waits for `ms`, for an animation to settle. */
   wait: (ms: number) => Promise<void>;
 }
@@ -59,6 +67,25 @@ export function createUi(doc: Document, language: Language): Ui {
       return (name) => name.startsWith(prefix);
     },
     wait,
+    async key(key) {
+      const target = doc.activeElement ?? doc.body;
+      for (const type of ["keydown", "keyup"]) {
+        target.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true, cancelable: true }));
+      }
+      await wait(300);
+    },
+    async type(text) {
+      let field = doc.activeElement;
+      for (let waited = 0; !(field instanceof HTMLInputElement) && waited < TIMEOUT_MS; waited += POLL_MS) {
+        await wait(POLL_MS);
+        field = doc.activeElement;
+      }
+      if (!(field instanceof HTMLInputElement)) throw new Error("No text field took focus to type into");
+      // React tracks the value through the element's own setter, so it is set through the prototype's.
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, text);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      await wait(150);
+    },
     async press(matcher) {
       for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {
         const element = find(matcher);

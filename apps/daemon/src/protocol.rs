@@ -132,6 +132,10 @@ pub struct Project {
     /// The user pinned this project to the top of its console's project list. Only the user's
     /// `update_project` changes it.
     pub pinned: bool,
+    /// The user's free-form labels for this project, used to filter the project list. There is no
+    /// tag registry: the tags in use are the distinct ones across projects. Stored trimmed,
+    /// non-empty and without case-insensitive duplicates, in the order the user gave them.
+    pub tags: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -251,6 +255,8 @@ pub enum RequestBody {
         remote_url: Option<String>,
         name: Option<String>,
         default_agent: Option<Agent>,
+        /// Absent means no tags.
+        tags: Option<Vec<String>>,
     },
     UpdateProject {
         project: String,
@@ -263,6 +269,8 @@ pub enum RequestBody {
         default_agent: Option<Option<Agent>>,
         /// Absent leaves the project's pin alone.
         pinned: Option<bool>,
+        /// Absent leaves the project's tags alone; a present array replaces them wholesale.
+        tags: Option<Vec<String>>,
     },
     DeleteProject {
         project: String,
@@ -807,6 +815,25 @@ mod tests {
             }
             _ => panic!("both parse as update_project"),
         }
+    }
+
+    /// An absent `tags` leaves a project's tags alone, and a present array (even an empty one) is
+    /// what replaces them.
+    #[test]
+    fn updating_a_projects_tags_is_distinguishable_from_leaving_them() {
+        let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::UpdateProject { tags, .. } => tags,
+            _ => panic!("parses as update_project"),
+        };
+        assert_eq!(parse(r#"{"type":"update_project","project":"p"}"#), None);
+        assert_eq!(
+            parse(r#"{"type":"update_project","project":"p","tags":[]}"#),
+            Some(vec![])
+        );
+        assert_eq!(
+            parse(r#"{"type":"update_project","project":"p","tags":["a","b"]}"#),
+            Some(vec!["a".to_string(), "b".to_string()])
+        );
     }
 
     /// Absent versus null is the only way a console's config directory can be cleared as well as

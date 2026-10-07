@@ -98,12 +98,15 @@ async fn add_project(
     };
     let added = coordinator::add_project(
         state,
-        hub.console_id.clone(),
-        source,
-        optional_string(arguments, "path"),
-        optional_string(arguments, "remote_url"),
-        optional_string(arguments, "name"),
-        optional_agent(arguments, "default_agent")?,
+        coordinator::AddProjectRequest {
+            console_id: hub.console_id.clone(),
+            source,
+            path: optional_string(arguments, "path"),
+            remote_url: optional_string(arguments, "remote_url"),
+            name: optional_string(arguments, "name"),
+            default_agent: optional_agent(arguments, "default_agent")?,
+            tags: None,
+        },
     )
     .await?;
     Ok(json!({

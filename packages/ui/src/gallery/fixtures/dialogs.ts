@@ -1,16 +1,27 @@
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
-import { SAMPLE, snapshotState } from "./builders";
+import { SAMPLE, projectOf, snapshotState } from "./builders";
 
 const GROUP = "Dialogs";
 
 const { console: console_, web, api, sessions } = SAMPLE;
 const state = snapshotState({ consoles: [console_], projects: [web, api], sessions });
 
+// Two projects carrying tags, so the edited one has some of its own and the field suggests the rest.
+const tagged = [
+  projectOf("p-docs", console_.id, "Docs Site", { tags: ["frontend", "customer-facing"] }),
+  projectOf("p-billing", console_.id, "Billing Service", { tags: ["backend", "payments"] }),
+];
+const taggedState = snapshotState({ consoles: [console_], projects: tagged, sessions: [] });
+
 const consoleActions = (ui: Ui) =>
   ui.press(ui.t("sidebar.console.actions", { name: console_.name }));
 const projectActions = (ui: Ui, name: string) =>
   ui.press(ui.t("sidebar.project.actions", { name }));
+const editTaggedProject = [
+  (ui: Ui) => projectActions(ui, tagged[0].name),
+  (ui: Ui) => ui.press(ui.t("sidebar.project.edit")),
+];
 
 export const dialogScenarios: Scenario[] = [
   {
@@ -78,5 +89,21 @@ export const dialogScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Fix the summary layout" })),
       (ui) => ui.press(ui.t("sidebar.session.archive")),
     ],
+  },
+  {
+    id: "dialog-edit-project-tags",
+    group: GROUP,
+    title: "Edit project with tags",
+    description: "The tags field of a project that carries tags, each removable.",
+    state: taggedState,
+    steps: editTaggedProject,
+  },
+  {
+    id: "dialog-edit-project-tag-suggestions",
+    group: GROUP,
+    title: "Tag suggestions in the project dialog",
+    description: "The field's list offers the tags the other projects carry, and none this project already has.",
+    state: taggedState,
+    steps: [...editTaggedProject, (ui) => ui.press(ui.t("dialog.project.tagsSuggestions"))],
   },
 ];

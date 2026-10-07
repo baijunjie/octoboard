@@ -6,9 +6,12 @@ In `packages/ui`, before writing a component, check whether HeroUI 3 already pro
 rather than assembling a look-alike from other HeroUI parts or plain elements. The installed package's
 `packages/ui/node_modules/@heroui/react/dist/components/` is the authoritative list for the version in use (it
 includes less obvious ones such as `toast`, `drawer`, `disclosure`, `toolbar`, `empty-state`, `kbd`, `skeleton`);
-HeroUI's own docs are the reference for how to use each. A hand-assembled stand-in looks and behaves unlike the rest
-of the UI and lacks what HeroUI's carries: the toast stack built from `Alert` + `CloseButton` with its own timers and
-stacking had none of `Toast`'s pause on hover and focus, queueing or ARIA region semantics.
+HeroUI's own docs are the reference for how to use each, but only a component's own file in that directory shows what
+it puts in the DOM — a hardcoded attribute, which child it treats as a given part, which props it drops — and a
+decision about wrapping or naming one usually turns on that, so read it rather than its typings. A hand-assembled
+stand-in looks and behaves unlike the rest of the UI and lacks what HeroUI's carries: the toast stack built from
+`Alert` + `CloseButton` with its own timers and stacking had none of `Toast`'s pause on hover and focus, queueing or
+ARIA region semantics.
 
 - Style it through its own variants, slots and the theme tokens, not by overriding it into something else. An
   override on a HeroUI component stays only for a colour fix accessibility needs or for layout and sizing (filling a
@@ -17,7 +20,11 @@ stacking had none of `Toast`'s pause on hover and focus, queueing or ARIA region
   the layout.
 - Give a compound component's layout classes to its parts themselves and never put an element of your own between
   two parts: some of HeroUI's variant styles use direct-child selectors (`.tabs--secondary > .tabs__list-container`,
-  the `switch--sm` / `switch--lg` sizes), so a wrapper `div` silently switches the variant off.
+  the `switch--sm` / `switch--lg` sizes), so a wrapper `div` silently switches the variant off. A parent may also pick
+  a part out of its children in JavaScript, and only among its *direct* ones (`Tag` scans for `Tag.RemoveButton` that
+  way), so a part wrapped in an element of yours — the project's own `TitledControl` among them — leaves the parent
+  rendering its default part beside yours. Where the parent takes a render-function child, as `Tag` does, that form
+  skips the scan and is how to wrap a part.
 - The project's existing wrappers over a HeroUI component (`Dialog` over `Modal`, `ActionMenu` over `Dropdown`) are
   that component; use the wrapper where one exists. The same goes for the shared dialogs built on them: a
   confirmation, including one where the user types a word to confirm a deletion, is `ConfirmDialog`
@@ -54,6 +61,12 @@ Reordering does it too: React reorders keyed children by moving their DOM nodes,
 blurs it to `<body>`, so a keyboard user on a row loses their place whenever a live status update re-sorts the list.
 Render any list whose order can change while one of its rows may hold focus through `useFlip`
 (`packages/ui/src/sidebar/useFlip.ts`), which puts focus back after the move, rather than beside it.
+
+A wrapper that renders nothing once its last child is gone takes focus down with it, and a library's own rescue does
+not reach that case: react-aria's `useTagGroup` focuses its container when the last tag is removed, but a container
+that unmounts in the same commit is gone before the effect runs. So either keep such a wrapper mounted and vary only
+its spacing — the tags field in `packages/ui/src/dialogs/TagsInput.tsx` does, a dialog being where focus on `<body>`
+costs Escape and Tab as well — or move focus to a named element before the removal that empties it.
 
 ## Inside a dialog, a focused control that unmounts takes Escape and Tab with it
 
@@ -93,8 +106,11 @@ Every control that shows only an icon — a HeroUI `Button` with `isIconOnly`, a
 a menu trigger — has a HeroUI tooltip in addition to its `aria-label`. The user wants tooltips short: the tooltip says
 what the control does ("More actions"), while the `aria-label` carries whatever tells it apart from its neighbours for
 assistive technology ("Actions for session <title>" on each row's menu), so the two differ wherever the accessible
-name needs that context; `ActionMenu` already does this by default. Give it one by wrapping the
-control in `TitledControl` from `packages/ui/src/components/TitledControl.tsx`, as the title bar's `BarButton` in
+name needs that context; `ActionMenu` already does this by default. The exception is a control inside a react-aria
+collection row, such as a tag's remove button, whose accessible name react-aria already composes from the button and
+the row through `aria-labelledby`: there the `aria-label` is the bare verb with no placeholder, or the row's own text
+is announced twice. Give it one by wrapping the control in `TitledControl` from
+`packages/ui/src/components/TitledControl.tsx`, as the title bar's `BarButton` in
 `packages/ui/src/components/TitleBar.tsx` does. Passing `title` to the HeroUI control itself does nothing: its
 react-aria base filters `title` out of the DOM props without a warning.
 
@@ -120,6 +136,10 @@ labels — is a message in `packages/ui/src/i18n/messages/en.ts` and in every tr
 - A sentence with a variable part is one message with a `{placeholder}`, never translated fragments joined in code,
   since word order differs between languages; markup inside a sentence goes through `<Message id params>`. Anything
   that depends on a count is a plural message selected by `count`, never `count === 1 ? … : …`.
+- A HeroUI part can carry an English string of its own that no catalog sees: `Tag.RemoveButton` renders
+  `aria-label="Remove tag"` ahead of its spread props, which both ships that literal when you pass no `aria-label` and
+  shadows the localized name react-aria would otherwise supply through the part's slot. So for every part you give no
+  visible text, read its file for a hardcoded string and pass your own message over it.
 
 Only what the user reads in Octoboard's own UI is translated; text aimed at an agent stays English (see "What follows
 the language" in `docs/product/language.md`).

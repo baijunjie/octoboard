@@ -120,8 +120,8 @@ console's own working directory under `~/.octoboard`. No project directory is to
 ## Projects
 
 A project carries a name, the directory it points at, an optional default agent, how it was associated, the remote
-URL it was cloned from (for a GitHub association), and whether the user has pinned it (see "Order of projects and
-sessions" in `docs/product/sidebar.md`). Every project is bound to a host (see "Hosts" below).
+URL it was cloned from (for a GitHub association), whether the user has pinned it (see "Order of projects and
+sessions" in `docs/product/sidebar.md`), and any number of tags. Every project is bound to a host (see "Hosts" below).
 
 A project also carries whether the user has agreed that Octoboard may answer Claude Code's workspace-trust prompt for
 its directory. A project starts without that consent, including one the hub associates; it is given only by "Trust and
@@ -132,6 +132,16 @@ that consent; a trusted folder is not stored with a project, so editing or remov
 "Trusted folders" in
 `docs/product/launching-agents.md`). The rules are in "Claude Code's workspace-trust prompt" in
 `docs/product/launching-agents.md`.
+
+### Tags
+
+A tag is a short free-form label the user puts on a project to group projects, and the sidebar's filter narrows the
+project list by them (see "Filtering the project list" in `docs/product/sidebar.md`). There is no list of tags to
+create or manage: the first time a tag is used, the user types it in a project's settings, and once that project is
+saved it is offered for other projects of the same console. The tags offered are simply the distinct ones the
+console's projects carry, so a tag no project carries any more is gone from the choices. A project can carry as many
+tags as the user likes. A tag is trimmed, an empty one is dropped, and one that matches another of the project's tags
+ignoring case is dropped, the first spelling staying.
 
 ### Associating a project
 
@@ -184,9 +194,13 @@ project's own default.
 
 ### Editing a project
 
-Only the name and the default agent can be changed, besides pinning and unpinning the project. The name is changed from
-the project's Rename or Project settings, the default agent from Project settings (see "Project rows" in
-`docs/product/sidebar.md`). The association itself — the source, the directory, the remote URL — is fixed once the
+Only the name, the default agent and the tags can be changed, besides pinning and unpinning the project. The name is
+changed from the project's Rename or Project settings, the default agent and the tags from Project settings (see
+"Project rows" in `docs/product/sidebar.md`). The tags field sits between the name and the default agent: typing in it
+offers the tags already in use that the project lacks, and Enter adds what was typed as a tag, or the highlighted
+suggestion if there is one; leaving the field adds it too. The tags the project carries are listed under the field, each
+with a remove button. The same field is in the dialog that associates a project, and the tags chosen there go on every
+project that association creates. The association itself — the source, the directory, the remote URL — is fixed once the
 project exists; a project that should point somewhere else is removed and associated again.
 
 The name cannot be cleared: saving an empty name is rejected. The default agent can be cleared, which puts the project

@@ -1025,6 +1025,7 @@ mod tests {
             remote_url: None,
             claude_trust_consent: consent,
             pinned: false,
+            tags: Vec::new(),
         }
     }
 

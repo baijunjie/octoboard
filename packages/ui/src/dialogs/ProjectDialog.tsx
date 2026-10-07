@@ -1,15 +1,17 @@
 import { Button } from "@heroui/react";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
 import { AGENT_ICON_OPTIONS, AgentIcon } from "../components/AgentIcon";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
+import { tagVocabulary } from "../projectFiltering";
 import type { Agent, Project, ProjectSource } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { OptionSelect } from "./OptionSelect";
+import { TagsInput } from "./TagsInput";
 import { TextInput } from "./TextInput";
 
 const SOURCE_OPTIONS: { value: ProjectSource; label: PlainMessageKey }[] = [
@@ -24,7 +26,7 @@ export function ProjectDialog({
   onClose,
 }: {
   consoleId: string;
-  /** Editing an existing project when set — only name and default agent can change (see
+  /** Editing an existing project when set — only name, default agent and tags can change (see
    * `apps/daemon/PROTOCOL.md`'s `update_project`); association details are immutable once added. */
   project?: Project;
   onClose: () => void;
@@ -37,6 +39,13 @@ export function ProjectDialog({
   const [remoteUrl, setRemoteUrl] = useState(editing?.remote_url ?? "");
   const [name, setName] = useState(editing?.name ?? "");
   const [defaultAgent, setDefaultAgent] = useState<Agent | "">(editing?.default_agent ?? "");
+  const [tags, setTags] = useState<string[]>(editing?.tags ?? []);
+  // The tags to offer are the ones this console's projects carry now; there is no registry of them.
+  const projects = useDaemonStore((s) => s.projects);
+  const knownTags = useMemo(
+    () => tagVocabulary([...projects.values()].filter((p) => p.console_id === consoleId)),
+    [projects, consoleId],
+  );
   const [pickingDirectory, setPickingDirectory] = useState(false);
   const { error, setError, busy, run } = useDialogAction();
 
@@ -70,6 +79,8 @@ export function ProjectDialog({
           // "" ("Auto") means following the console's default, which on the wire is an explicit `null` (clear),
           // never an omitted field — omitting it means "leave whatever was there alone" instead.
           default_agent: defaultAgent === "" ? null : defaultAgent,
+          // Always sent, the whole list: a present array replaces the tags, and the field shows them all.
+          tags,
         });
       } else {
         await request({
@@ -80,6 +91,7 @@ export function ProjectDialog({
           remote_url: source === "github" ? remoteUrl : undefined,
           name: name || undefined,
           default_agent: defaultAgent || undefined,
+          tags,
         });
       }
       onClose();
@@ -139,6 +151,14 @@ export function ProjectDialog({
           onChange={setName}
           placeholder={editing ? undefined : t("dialog.project.nameExample")}
           description={editing ? undefined : t("dialog.project.nameHint")}
+        />
+        <TagsInput
+          label={t("dialog.project.tags")}
+          value={tags}
+          onChange={setTags}
+          suggestions={knownTags}
+          placeholder={t("dialog.project.tagsExample")}
+          description={t("dialog.project.tagsHint")}
         />
         <OptionSelect
           label={t("dialog.project.defaultAgent")}

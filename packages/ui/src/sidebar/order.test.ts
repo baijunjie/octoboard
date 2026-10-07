@@ -28,6 +28,7 @@ const project = (id: string, name: string, pinned = false): Project => ({
   source: "local",
   claude_trust_consent: false,
   pinned,
+  tags: [],
 });
 
 describe("liveSessions", () => {

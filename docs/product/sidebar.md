@@ -60,18 +60,30 @@ their place.
 
 ### Filtering the project list
 
-While the console has projects, a magnifier button, **Filter projects**, sits at the end of the Projects heading. It
-opens a small popover with a search field, and what is typed filters the project list as it is typed: a project stays
-listed when its name contains the keyword, ignoring case and the keyword's surrounding spaces. Enter or `Escape`
-closes the popover and keeps the keyword. Opening and closing it with the mouse leaves keyboard focus where it was.
+While the console has projects, a filter button, **Filter projects**, sits at the end of the Projects heading. It opens
+a small popover with two controls. A search field filters the project list as it is typed: a project stays listed when
+its name contains the keyword, ignoring case and the keyword's surrounding spaces. Below it, the tags in use (see "Tags"
+in `docs/product/consoles-and-projects.md`) are shown as toggles, and picking one narrows the list to the projects
+carrying it; with several picked, a project must carry all of them, and it must match the keyword too. With no project
+carrying a tag yet, a line in place of the toggles says tags are added in a project's settings. `Escape`, from
+anywhere in the popover, and Enter in the search field close it and keep the filter; on a tag, Enter or Space picks or
+drops that tag and the popover stays open. A picked tag also shows a check mark, so it is not told apart by colour
+alone. Opening and closing it with the mouse leaves keyboard focus where it was.
 
-- While a keyword is in force it shows as a tag right after the "Projects" label, and a **Clear filter** button
-  appears just before the magnifier at the heading's end. That button clears the keyword, and so does the search
-  field's own clear button.
+- While a keyword is in force it shows as a tag right after the "Projects" label, with a small remove button that drops
+  just the keyword and leaves the picked tags. The picked tags are laid out one after another on a row of their own
+  under the heading, each with a small remove button that drops just that tag from the filter; clicking a tag, the
+  keyword's remove button or a tag's remove button with the mouse leaves keyboard focus where it was, and removing the
+  keyword, or the last tag, with the keyboard moves focus to the filter button. A **Clear filter** button appears just
+  before the filter button at the heading's end and clears the keyword and the picked tags together; the search field's
+  own clear button clears only the keyword.
+- The tags offered are the distinct tags of the console's projects, in alphabetical order, so a tag that no project
+  carries any more disappears from the choices, and from the filter if it was picked, without emptying the list. The
+  pick is only hidden, not forgotten: if a project carries that tag again, it filters again.
 - The filtered list keeps the order and the dimming of "Order of projects and sessions" below.
-- With no project matching, a single line says so; the heading's Clear filter button clears the keyword.
-- Each console has its own keyword: switching to another console shows that console's own, and switching back, or
-  entering and leaving focus mode, keeps it. Keywords are not stored, so reloading the window shows every list
+- With no project matching, a single line says so; the heading's Clear filter button clears the filter.
+- Each console has its own filter: switching to another console shows that console's own, and switching back, or
+  entering and leaving focus mode, keeps it. Filters are not stored, so reloading the window shows every list
   unfiltered.
 
 ## Project rows
@@ -79,7 +91,8 @@ closes the popover and keeps the keyword. Opening and closing it with the mouse 
 A project row shows the project's name, a pin glyph when the project is pinned, and a chevron after the name. Clicking
 the row, or Enter or Space on it, collapses or expands it. Projects start expanded; whether one is collapsed is kept
 per window and is not stored. The chevron always shows while the project is collapsed, and only while the row is
-hovered or focused while it is expanded.
+hovered or focused while it is expanded, and while hidden it takes no room, so a long name runs as far as it would in
+a session row and ends sooner when the chevron appears.
 
 A collapsed project shows the same activity marker as the console switcher's list (see "The console switcher" above),
 taken from its sessions that are not archived, so a waiting session can be found with its project collapsed.

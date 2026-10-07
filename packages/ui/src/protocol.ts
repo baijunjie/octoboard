@@ -69,6 +69,10 @@ export interface Project {
   claude_trust_consent: boolean;
   /** The user pinned this project to the top of its console's project list. */
   pinned: boolean;
+  /** The user's free-form labels for this project, used to filter the project list. There is no tag
+   * registry: the tags in use are the distinct ones across projects. Stored trimmed, non-empty and
+   * without case-insensitive duplicates, in the order the user gave them. */
+  tags: string[];
 }
 
 export interface Session {
@@ -151,6 +155,8 @@ export type RequestBody =
       remote_url?: string;
       name?: string;
       default_agent?: Agent;
+      /** Absent means no tags. */
+      tags?: string[];
     }
   | {
       type: "update_project";
@@ -162,6 +168,8 @@ export type RequestBody =
       default_agent?: Agent | null;
       /** Absent leaves the project's pin alone. */
       pinned?: boolean;
+      /** Absent leaves the project's tags alone; a present array replaces them wholesale. */
+      tags?: string[];
     }
   /** `stop_sessions` ends the project's running sessions first (as `archive_session` does) instead
    * of being refused with `project_has_running_sessions`; default false. */

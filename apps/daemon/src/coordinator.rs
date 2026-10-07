@@ -6,6 +6,7 @@
 //! automatic archiving) is `crate::reporting`'s, because the hub's tools and the hook callback reach
 //! it without going through a control-socket request at all.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -146,15 +147,19 @@ pub async fn handle(
             remote_url,
             name,
             default_agent,
+            tags,
         } => {
             add_project(
                 state,
-                console_id,
-                source,
-                path,
-                remote_url,
-                name,
-                default_agent,
+                AddProjectRequest {
+                    console_id,
+                    source,
+                    path,
+                    remote_url,
+                    name,
+                    default_agent,
+                    tags,
+                },
             )
             .await?;
             Ok(None)
@@ -165,6 +170,7 @@ pub async fn handle(
             name,
             default_agent,
             pinned,
+            tags,
         } => {
             let mut project = state
                 .store
@@ -181,6 +187,9 @@ pub async fn handle(
             }
             if let Some(pinned) = pinned {
                 project.pinned = pinned;
+            }
+            if let Some(tags) = tags {
+                project.tags = normalise_tags(tags);
             }
             state.store.update_project(&project)?;
             state.broadcast(Event::ProjectUpserted { project });
@@ -373,15 +382,42 @@ fn absolute_path(text: &str) -> Result<PathBuf> {
     Ok(hostfs::lexically_normalise(&path))
 }
 
+/// A project's tags as stored: each trimmed, the empty ones dropped, and a later tag dropped when
+/// an earlier one matches it ignoring case (the first spelling wins). The order is the user's.
+fn normalise_tags(tags: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    tags.into_iter()
+        .map(|tag| tag.trim().to_string())
+        .filter(|tag| !tag.is_empty() && seen.insert(tag.to_lowercase()))
+        .collect()
+}
+
+/// One association request. A struct rather than a parameter list because the two callers differ
+/// in more than one field — the user's control-socket request, and the hub's tool call, which has
+/// no tags — and most of the fields are optional strings that would otherwise be positional.
+pub struct AddProjectRequest {
+    pub console_id: String,
+    pub source: ProjectSource,
+    pub path: Option<String>,
+    pub remote_url: Option<String>,
+    pub name: Option<String>,
+    pub default_agent: Option<Agent>,
+    pub tags: Option<Vec<String>>,
+}
+
 pub async fn add_project(
     state: &Arc<AppState>,
-    console_id: String,
-    source: ProjectSource,
-    path: Option<String>,
-    remote_url: Option<String>,
-    name: Option<String>,
-    default_agent: Option<Agent>,
+    request: AddProjectRequest,
 ) -> Result<Vec<Project>> {
+    let AddProjectRequest {
+        console_id,
+        source,
+        path,
+        remote_url,
+        name,
+        default_agent,
+        tags,
+    } = request;
     state
         .store
         .get_console(&console_id)?
@@ -425,6 +461,8 @@ pub async fn add_project(
     // directory yields many, and each takes its own directory's name.
     let explicit_name = if directories.len() == 1 { name } else { None };
 
+    let tags = normalise_tags(tags.unwrap_or_default());
+
     let mut added = Vec::new();
     for directory in directories {
         let path_text = directory.to_string_lossy().into_owned();
@@ -448,6 +486,7 @@ pub async fn add_project(
             remote_url: remote_url.clone(),
             claude_trust_consent: false,
             pinned: false,
+            tags: tags.clone(),
         };
         state.store.insert_project(&project)?;
         state.broadcast(Event::ProjectUpserted {
@@ -934,6 +973,16 @@ mod tests {
     use super::*;
     use crate::protocol::Console;
 
+    #[test]
+    fn tags_are_trimmed_and_deduplicated_ignoring_case_keeping_the_first_spelling() {
+        let tags = |tags: &[&str]| normalise_tags(tags.iter().map(|tag| tag.to_string()).collect());
+        assert_eq!(
+            tags(&["  Rust ", "", "   ", "backend", "rust", "BACKEND", "web"]),
+            ["Rust", "backend", "web"]
+        );
+        assert!(tags(&[]).is_empty());
+    }
+
     fn console(hub_agent: Agent, workdir: &Path) -> Console {
         Console {
             id: "console-1".to_string(),
@@ -1043,6 +1092,7 @@ mod tests {
                 remote_url: None,
                 claude_trust_consent: false,
                 pinned: false,
+                tags: Vec::new(),
             })
             .unwrap();
         let add = |id: &str, console: &str, role: Role, project: Option<&str>, status| {
@@ -1141,6 +1191,7 @@ mod tests {
                 remote_url: None,
                 claude_trust_consent: false,
                 pinned: false,
+                tags: Vec::new(),
             })
             .unwrap();
         state

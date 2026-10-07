@@ -29,10 +29,11 @@ import { useT } from "../i18n/react";
 import { drawerClass, PANE_ID, PeekHotZone } from "../layout/paneOverlay";
 import type { PaneWidth } from "../layout/paneWidth";
 import type { PanePeek } from "../layout/usePaneToggles";
+import { effectiveTags, matchesFilter, tagVocabulary, withoutTags } from "../projectFiltering";
 import type { Console, Project, Session } from "../protocol";
 import { sessionAriaLabel, statusLabel } from "../sessionLabel";
 import { FocusView } from "./FocusView";
-import { matchesFilter, ProjectFilterButton, ProjectFilterTag } from "./ProjectFilter";
+import { type FilterUpdate, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterTag, ProjectFilterTags } from "./ProjectFilter";
 import { archiveSubmenu, projectMenu, sessionMenu } from "./menus";
 import { archivedSessions, consoleActivity, isInactiveProject, liveSessions, sortProjects, type Activity } from "./order";
 import { RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
@@ -78,9 +79,9 @@ export function Sidebar({
 }: SidebarProps): React.ReactElement {
   const t = useT();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  // Each console's project filter keyword, held here rather than in the project list so that focus
-  // mode, which replaces the list, and switching consoles both leave it in place.
-  const [filters, setFilters] = useState<Map<string, string>>(new Map());
+  // Each console's project filter (keyword and tags), held here rather than in the project list so
+  // that focus mode, which replaces the list, and switching consoles both leave it in place.
+  const [filters, setFilters] = useState<Map<string, ProjectFilter>>(new Map());
 
   const toggle = (id: string) =>
     setCollapsed((prev) => {
@@ -176,8 +177,10 @@ export function Sidebar({
             selectedSessionId={selectedSessionId}
             collapsed={collapsed}
             toggle={toggle}
-            keyword={filters.get(currentConsole.id) ?? ""}
-            setKeyword={(keyword) => setFilters((prev) => new Map(prev).set(currentConsole.id, keyword))}
+            filter={filters.get(currentConsole.id) ?? NO_FILTER}
+            setFilter={(update) =>
+              setFilters((prev) => new Map(prev).set(currentConsole.id, update(prev.get(currentConsole.id) ?? NO_FILTER)))
+            }
           />
         </ScrollShadow>
       </>
@@ -323,8 +326,8 @@ function ConsoleBody({
   selectedSessionId,
   collapsed,
   toggle,
-  keyword,
-  setKeyword,
+  filter: stored,
+  setFilter,
 }: {
   handlers: SidebarHandlers;
   console: Console;
@@ -333,14 +336,20 @@ function ConsoleBody({
   selectedSessionId?: string;
   collapsed: Set<string>;
   toggle: (id: string) => void;
-  keyword: string;
-  setKeyword: (keyword: string) => void;
+  filter: ProjectFilter;
+  setFilter: (update: FilterUpdate) => void;
 }): React.ReactElement {
   const t = useT();
   const listRef = useFlip<HTMLDivElement>();
+  const filterButton = useRef<HTMLDivElement>(null);
   const sessionsOf = (project: Project) => sessions.filter((s) => s.project_id === project.id);
+  // The tags to pick from are the ones the console's projects carry now; a picked tag none of them
+  // carries any more is dropped here, so it neither filters nor shows, yet it stays in the stored
+  // selection, which every change to the filter is applied to.
+  const vocabulary = tagVocabulary(projects);
+  const filter = { keyword: stored.keyword, tags: effectiveTags(stored.tags, vocabulary) };
   const ordered = sortProjects(
-    projects.filter((p) => matchesFilter(p.name, keyword)),
+    projects.filter((p) => matchesFilter(p, filter.keyword, filter.tags)),
     sessionsOf,
   );
 
@@ -348,13 +357,37 @@ function ConsoleBody({
     <>
       <HubRows handlers={handlers} console={thisConsole} sessions={sessions} selectedSessionId={selectedSessionId} />
       <SectionHeading
-        after={keyword.trim() !== "" && <ProjectFilterTag keyword={keyword.trim()} />}
+        after={
+          // Only while the filter button is there (below): the chip hands focus to it when removed.
+          projects.length > 0 &&
+          filter.keyword.trim() !== "" && (
+            <ProjectFilterTag
+              keyword={filter.keyword.trim()}
+              returnFocusTo={filterButton}
+              onRemove={() => setFilter((f) => ({ ...f, keyword: "" }))}
+            />
+          )
+        }
         action={
-          projects.length > 0 && <ProjectFilterButton keyword={keyword} onChange={setKeyword} />
+          projects.length > 0 && (
+            <ProjectFilterButton
+              filter={filter}
+              vocabulary={vocabulary}
+              onChange={setFilter}
+              holderRef={filterButton}
+            />
+          )
         }
       >
         {t("sidebar.projects")}
       </SectionHeading>
+      {filter.tags.length > 0 && (
+        <ProjectFilterTags
+          tags={filter.tags}
+          returnFocusTo={filterButton}
+          onRemove={(removed) => setFilter((f) => ({ ...f, tags: withoutTags(f.tags, removed) }))}
+        />
+      )}
       {projects.length > 0 && ordered.length === 0 ? (
         <EmptyPanel compact icon={SearchX} message={t("sidebar.filter.noMatch")} />
       ) : ordered.length === 0 ? (
@@ -504,20 +537,22 @@ function ProjectNode({
         onActivate={onToggle}
         expanded={!isCollapsed}
       >
-        <RowLabel title={project.name} className="min-w-0 shrink">
-          <span className="font-medium">{project.name}</span>
-        </RowLabel>
-        {project.pinned && <Pin aria-hidden="true" className="size-3 shrink-0 text-muted" />}
-        {/* After the name rather than before it: while expanded it shows only on hover, which a
-            leading chevron could not do without the names jumping sideways. Two glyphs rather than
-            one rotated: a rotated chevron that is already mirrored would point the wrong way under
-            right-to-left. */}
-        {isCollapsed ? (
-          <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-muted rtl:-scale-x-100" />
-        ) : (
-          <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
-        )}
-        <span className="flex-1" />
+        <div className="flex min-w-0 flex-1 items-center">
+          <RowLabel title={project.name} className="min-w-0 shrink">
+            <span className="font-medium">{project.name}</span>
+          </RowLabel>
+          {project.pinned && <Pin aria-hidden="true" className="ms-2 size-3 shrink-0 text-muted" />}
+          {/* After the name rather than before it: while expanded it shows only on hover, which a
+              leading chevron could not do without the names jumping sideways. Two glyphs rather than
+              one rotated: a rotated chevron that is already mirrored would point the wrong way under
+              right-to-left. While hidden it takes no width and no margin, like `RowControls`, so
+              the name gets the room. */}
+          {isCollapsed ? (
+            <ChevronRight aria-hidden="true" className="ms-2 size-3.5 shrink-0 text-muted rtl:-scale-x-100" />
+          ) : (
+            <ChevronDown aria-hidden="true" className="h-3.5 w-0 shrink-0 overflow-hidden text-muted opacity-0 transition-opacity group-hover:ms-2 group-hover:w-3.5 group-hover:opacity-100 group-focus-visible:ms-2 group-focus-visible:w-3.5 group-focus-visible:opacity-100" />
+          )}
+        </div>
         {isCollapsed && <ActivityMarker activity={activity} />}
         <RowControls>
           <RowIconButton icon={Plus} label={t("sidebar.project.openSession")} onPress={openSession} />

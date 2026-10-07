@@ -4,6 +4,9 @@
 //! serde (`enum_to_text` / `enum_from_text`) rather than a second hand-written mapping, so a
 //! renamed variant cannot mean one thing in the database and another on the socket.
 //!
+//! A list-valued field is one JSON text column rather than a join table: a project's tags are
+//! always read and written whole, so `read_project` stays a single-row read.
+//!
 //! `Report` is not among these tables: it is an in-flight struct passed between the worker's
 //! `report` tool and the hub's session, never stored of its own accord (see `reporting.rs`).
 
@@ -67,7 +70,8 @@ impl Store {
                 source        TEXT NOT NULL,
                 remote_url    TEXT,
                 claude_trust_consent INTEGER NOT NULL DEFAULT 0,
-                pinned        INTEGER NOT NULL DEFAULT 0
+                pinned        INTEGER NOT NULL DEFAULT 0,
+                tags          TEXT NOT NULL DEFAULT '[]'
             );
             CREATE TABLE IF NOT EXISTS sessions (
                 id               TEXT PRIMARY KEY,
@@ -134,6 +138,8 @@ impl Store {
         // Nothing was pinned before pinning existed.
         add_column_if_missing(&conn, "projects", "pinned", "INTEGER NOT NULL DEFAULT 0")?;
         add_column_if_missing(&conn, "sessions", "pinned", "INTEGER NOT NULL DEFAULT 0")?;
+        // Projects from before the column read back as having no tags.
+        add_column_if_missing(&conn, "projects", "tags", "TEXT NOT NULL DEFAULT '[]'")?;
         let store = Self {
             conn: Mutex::new(conn),
         };
@@ -256,8 +262,8 @@ impl Store {
     pub fn insert_project(&self, project: &Project) -> Result<()> {
         self.lock().execute(
             "INSERT INTO projects (id, console_id, host_id, name, path, default_agent, source,
-                                   remote_url, claude_trust_consent, pinned)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                                   remote_url, claude_trust_consent, pinned, tags)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 project.id,
                 project.console_id,
@@ -269,6 +275,7 @@ impl Store {
                 project.remote_url,
                 project.claude_trust_consent,
                 project.pinned,
+                tags_to_text(&project.tags),
             ],
         )?;
         Ok(())
@@ -287,12 +294,14 @@ impl Store {
 
     pub fn update_project(&self, project: &Project) -> Result<()> {
         self.lock().execute(
-            "UPDATE projects SET name = ?2, default_agent = ?3, pinned = ?4 WHERE id = ?1",
+            "UPDATE projects SET name = ?2, default_agent = ?3, pinned = ?4, tags = ?5
+             WHERE id = ?1",
             params![
                 project.id,
                 project.name,
                 project.default_agent.as_ref().map(enum_to_text),
                 project.pinned,
+                tags_to_text(&project.tags),
             ],
         )?;
         Ok(())
@@ -612,7 +621,7 @@ fn add_column_if_missing(
 }
 
 const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agent, source,
-                               remote_url, claude_trust_consent, pinned";
+                               remote_url, claude_trust_consent, pinned, tags";
 
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
                                role, origin, title, status, has_conversation, include_in_hub,
@@ -634,8 +643,10 @@ fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
 }
 
 fn read_project(row: &Row<'_>) -> rusqlite::Result<Project> {
+    let id: String = row.get(0)?;
+    let tags = tags_from_text(&id, &row.get::<_, String>(10)?);
     Ok(Project {
-        id: row.get(0)?,
+        id,
         console_id: row.get(1)?,
         host_id: row.get(2)?,
         name: row.get(3)?,
@@ -645,6 +656,7 @@ fn read_project(row: &Row<'_>) -> rusqlite::Result<Project> {
         remote_url: row.get(7)?,
         claude_trust_consent: row.get(8)?,
         pinned: row.get(9)?,
+        tags,
     })
 }
 
@@ -686,6 +698,19 @@ fn enum_to_text<T: Serialize>(value: &T) -> String {
         .ok()
         .and_then(|v| v.as_str().map(str::to_string))
         .expect("protocol enums serialize to a JSON string")
+}
+
+fn tags_to_text(tags: &[String]) -> String {
+    serde_json::to_string(tags).expect("a list of strings serializes to JSON")
+}
+
+/// A malformed value reads as no tags, with a warning, rather than failing the whole project read.
+/// The daemon is the only writer, so this can only mean a hand-edited database.
+fn tags_from_text(project_id: &str, text: &str) -> Vec<String> {
+    serde_json::from_str(text).unwrap_or_else(|err| {
+        tracing::warn!(project = %project_id, %err, "a project's tags are not a JSON array of strings; reading it as untagged");
+        Vec::new()
+    })
 }
 
 fn enum_from_row<T: DeserializeOwned>(row: &Row<'_>, index: usize) -> rusqlite::Result<T> {
@@ -922,6 +947,7 @@ mod tests {
             remote_url: None,
             claude_trust_consent: consent,
             pinned: false,
+            tags: Vec::new(),
         }
     }
 
@@ -1221,5 +1247,54 @@ mod tests {
         }
 
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    /// A database written before tags existed is opened in place, and no project in it has any.
+    /// Tags then round-trip.
+    #[test]
+    fn a_database_from_before_tags_reads_every_project_as_untagged() {
+        let path = temp_db("tags-migration");
+        {
+            let conn = Connection::open(&path).expect("old database");
+            conn.execute_batch(
+                r#"
+                CREATE TABLE consoles (
+                    id TEXT PRIMARY KEY, name TEXT NOT NULL, workdir TEXT NOT NULL,
+                    hub_agent TEXT NOT NULL, default_agent TEXT NOT NULL, created_at INTEGER NOT NULL
+                );
+                INSERT INTO consoles VALUES ('console-1', 'Old', '/tmp/old', 'claude', 'claude', 5);
+                CREATE TABLE projects (
+                    id TEXT PRIMARY KEY, console_id TEXT NOT NULL, host_id TEXT NOT NULL,
+                    name TEXT NOT NULL, path TEXT NOT NULL, default_agent TEXT,
+                    source TEXT NOT NULL, remote_url TEXT,
+                    claude_trust_consent INTEGER NOT NULL DEFAULT 0,
+                    pinned INTEGER NOT NULL DEFAULT 0
+                );
+                INSERT INTO projects VALUES ('project-1', 'console-1', 'local', 'Old', '/tmp/p',
+                    NULL, 'local', NULL, 0, 0);
+                "#,
+            )
+            .expect("old schema");
+        }
+
+        let store = Store::open(&path).expect("migrates");
+        let mut migrated = store.get_project("project-1").unwrap().expect("kept");
+        assert!(migrated.tags.is_empty());
+
+        migrated.tags = vec!["backend".to_string(), "Rust".to_string()];
+        store.update_project(&migrated).unwrap();
+        drop(store);
+
+        let store = Store::open(&path).expect("opens again");
+        assert_eq!(
+            store.get_project("project-1").unwrap().unwrap().tags,
+            ["backend", "Rust"]
+        );
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn tags_that_are_not_a_json_array_of_strings_read_as_untagged() {
+        assert!(tags_from_text("project-1", "not json").is_empty());
     }
 }

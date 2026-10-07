@@ -4,6 +4,7 @@ import { busyScenarios } from "./busy";
 import { connectionScenarios } from "./connection";
 import { dialogScenarios } from "./dialogs";
 import { emptyScenarios } from "./empty";
+import { filterScenarios } from "./filter";
 import { focusScenarios } from "./focus";
 import { layoutScenarios } from "./layout";
 import { noticeScenarios } from "./notices";
@@ -18,6 +19,7 @@ export const SCENARIOS: Scenario[] = [
   ...busyScenarios,
   ...statusScenarios,
   ...focusScenarios,
+  ...filterScenarios,
   ...connectionScenarios,
   ...noticeScenarios,
   ...archiveScenarios,

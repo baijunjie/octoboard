@@ -91,6 +91,7 @@ port file under the temp directory, so the defaults would touch the real data an
 | `src/focusGuard.ts` | A workaround, imported by `main.tsx` so it is registered before the first press, for react-aria throwing when a press on a `preventFocusOnPress` control takes focus out of an iframe; the file's own comment has the reasoning |
 | `src/agents.ts` | The three agents' product names (proper nouns, not in the catalog), the option list built from them, and each agent's config-directory console field and placeholder |
 | `src/sessionLabel.ts` | Where to tell the user a session is, the status labels and a session row's accessible name (`sessionAriaLabel`); all take a `Translate` |
+| `src/projectFiltering.ts` | The sidebar project filter's pure rules: the tags in use across projects, the picked tags narrowed to them, whether a project matches the keyword and tags, and adding or dropping a tag in the stored selection |
 | `src/relativeTime.ts` | `formatRelativeTime`: "5 minutes ago" for a past instant, in a given language |
 | `src/avatarImage.ts` | `imageToAvatar`: an image file as a 128 x 128 centre-cropped `data:` URL (WebP, PNG where the browser cannot encode it), the form a console's avatar is stored in |
 | `src/persistedPreference.ts` | `createPersistedPreference(key, parse, serialize)`: a user preference kept in `localStorage` (every access guarded) and shared module-wide, the store under `panelVisibility.ts`, `paneWidth.ts` and the language choice in `i18n/language.ts` |

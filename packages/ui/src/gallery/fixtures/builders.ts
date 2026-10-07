@@ -32,6 +32,7 @@ export function projectOf(id: string, consoleId: string, name: string, extra: Pa
     source: "local",
     claude_trust_consent: false,
     pinned: false,
+    tags: [],
     ...extra,
   };
 }
