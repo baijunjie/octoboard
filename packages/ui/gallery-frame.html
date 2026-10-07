@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      The page of the dev-only UI state gallery that renders one scenario (see `src/gallery/`). Not
+      part of the build: `vite build` bundles `index.html` alone.
+
+      It carries the application's own Content Security Policy, filled in from `index.html` by
+      `vite.config.ts` so the two cannot drift: a scenario must be held to what the shipped window is
+      held to.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="%APP_CSP%" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>%APP_NAME% gallery scenario</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./src/gallery/frame.tsx"></script>
+  </body>
+</html>

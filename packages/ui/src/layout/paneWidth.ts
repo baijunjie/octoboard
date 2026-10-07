@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 import { createPersistedPreference } from "../persistedPreference";
+import { PREFERENCE_KEYS } from "../preferenceKeys";
 
 /** The two panes whose docked width the user can change. */
 export type PaneSide = "sidebar" | "report";
@@ -9,8 +10,8 @@ export type PaneSide = "sidebar" | "report";
  * a double-click on its handle returns to) and the bounds of a chosen width. Below the breakpoint
  * each is a fixed-width drawer instead. */
 const PANES = {
-  sidebar: { key: "octoboard.sidebarWidth", min: 200, default: 280, max: 480 },
-  report: { key: "octoboard.reportWidth", min: 300, default: 420, max: 720 },
+  sidebar: { key: PREFERENCE_KEYS.sidebarWidth, min: 200, default: 280, max: 480 },
+  report: { key: PREFERENCE_KEYS.reportWidth, min: 300, default: 420, max: 720 },
 } satisfies Record<PaneSide, { key: string; min: number; default: number; max: number }>;
 
 /** The terminal pane's floor (the terminal's wrapper in `App.tsx`); the window's 1100px minimum is

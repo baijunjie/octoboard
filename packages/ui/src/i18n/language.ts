@@ -1,4 +1,5 @@
 import { createPersistedPreference } from "../persistedPreference";
+import { PREFERENCE_KEYS } from "../preferenceKeys";
 import { format, type MessageArgs, type MessageKey } from "./catalog";
 import { isLanguage, type Language, textDirection } from "./languages";
 import { matchLanguage } from "./matchLanguage";
@@ -18,7 +19,7 @@ function systemLanguages(): readonly string[] {
  * nothing is kept, so it is picked from the system again on every load.
  */
 const language = createPersistedPreference<Language>(
-  "octoboard.language",
+  PREFERENCE_KEYS.language,
   (raw) => (isLanguage(raw) ? raw : matchLanguage(systemLanguages())),
   (value) => value,
 );

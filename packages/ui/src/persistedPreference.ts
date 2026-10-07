@@ -15,7 +15,8 @@ export interface PersistedPreference<T> {
 }
 
 /**
- * A user preference kept in `localStorage` under `key` and shared by every caller in the page.
+ * A user preference kept in `localStorage` under `key` (one of `PREFERENCE_KEYS` in `preferenceKeys.ts`)
+ * and shared by every caller in the page.
  * `parse` turns the stored text (`null` when there is none, or storage is unavailable) into the
  * value, falling back to the default itself; `serialize` returns the text to store, or `null` to
  * remove the entry. Every storage access is guarded: without storage a choice lasts for the page

@@ -100,6 +100,11 @@ const initialState: State = {
   trustedDirectories: [],
 };
 
+/** A store holding the empty state with `initial` laid over it. */
+export function createStateStore(initial: Partial<State> = {}): StoreApi<State> {
+  return createStore<State>(() => ({ ...initialState, ...initial }));
+}
+
 function reducer(state: State, action: Action): State {
   switch (action.kind) {
     case "connection":
@@ -263,7 +268,7 @@ export interface Daemon {
 }
 
 export function createDaemon(origin: DaemonOrigin): Daemon {
-  const store = createStore<State>(() => initialState);
+  const store = createStateStore();
   const dispatch = (action: Action) => store.setState((state) => reducer(state, action));
 
   const client = new DaemonClient(daemonWsUrl(origin, "/ws/control"));

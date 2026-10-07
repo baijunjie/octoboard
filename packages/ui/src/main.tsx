@@ -4,12 +4,12 @@ import ReactDOM from "react-dom/client";
 import { App } from "./App";
 import { resolveDaemonOrigin, resolveStartupError } from "./daemon";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { LanguageProvider, Message } from "./i18n/react";
+import { LanguageProvider } from "./i18n/react";
 import { useNativeMenuLabels } from "./lifecycle/useNativeMenuLabels";
 import { useNativeWindowTheme } from "./lifecycle/useNativeWindowTheme";
 import { selectPlatform } from "./platform";
 import { PlatformProvider } from "./platform/react";
-import { StartupScreen } from "./StartupScreen";
+import { DaemonFailedMessage, NoAddressMessage, StartupScreen } from "./StartupScreen";
 import { createDaemon, DaemonProvider } from "./store";
 import { ThemeProvider } from "./theme";
 import "./focusGuard";
@@ -51,27 +51,13 @@ function screen(): React.ReactElement {
     // The daemon failed to start before the window even opened, and the shell passed the message
     // along via `?error=` instead of `?port=` — there is nothing to connect to, same as the
     // missing-address case below, just with a specific reason instead of a generic one.
-    return <StartupScreen message={<Message id="startup.daemonFailed" params={{ error: startupError }} />} />;
+    return <StartupScreen message={<DaemonFailedMessage error={startupError} />} />;
   }
   if (!daemon) {
     // No shell handed us a `?port=`, no `VITE_DAEMON_PORT` was set, and the page's own origin is
     // not one that can be the daemon — there is nothing to connect to, so say so instead of
     // guessing a port.
-    return (
-      <StartupScreen
-        message={
-          <Message
-            id="startup.noAddress"
-            params={{
-              port: <code>?port=</code>,
-              dev: <code>vite dev</code>,
-              portVar: <code>VITE_DAEMON_PORT</code>,
-              proxyVar: <code>OCTOBOARD_DAEMON_PORT</code>,
-            }}
-          />
-        }
-      />
-    );
+    return <StartupScreen message={<NoAddressMessage />} />;
   }
   return (
     <DaemonProvider value={daemon}>

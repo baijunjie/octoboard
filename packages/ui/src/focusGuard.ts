@@ -25,3 +25,5 @@ for (const type of ["focus", "blur", "focusin", "focusout"]) {
     true,
   );
 }
+
+export {};

@@ -84,7 +84,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   worktrees' dev apps (fixed port, stopping by PID only), and fully reloading a dev window before judging a defect in
   it.
 - [Verifying the desktop UI](memory/verifying-the-desktop-ui.md) — how to verify terminal and UI behaviour in the real
-  app: why a verification stays as narrow as the change, checking in WebKit with real pointer input and with long and
+  app: why a verification stays as narrow as the change, looking at a UI state in the gallery before staging it
+  through a daemon and what the gallery cannot settle, checking in WebKit with real pointer input and with long and
   CJK text, ruling out a locked screen before trusting a capture, getting an error out of a blank window, bisecting a
   symptom against the daemon, what a scripted GUI probe can and cannot prove and why its setup goes through the
   daemon's protocol (raising a session's hand with a forged hook event, seeding trusted folders), confirming Octoboard

@@ -1,16 +1,17 @@
 import { createPersistedPreference } from "../persistedPreference";
+import { PREFERENCE_KEYS } from "../preferenceKeys";
 import type { Console, Project } from "../protocol";
 
 /** The console the sidebar shows, and the project in focus mode, if any. Kept per window profile in
  * `localStorage`, like the panes' visibility: a convenience, so a stored id that no longer names a
  * record is simply ignored. */
 const consolePreference = createPersistedPreference<string | undefined>(
-  "octoboard.sidebarConsole",
+  PREFERENCE_KEYS.sidebarConsole,
   (raw) => raw ?? undefined,
   (value) => value ?? null,
 );
 const focusPreference = createPersistedPreference<string | undefined>(
-  "octoboard.sidebarFocusProject",
+  PREFERENCE_KEYS.sidebarFocusProject,
   (raw) => raw ?? undefined,
   (value) => value ?? null,
 );

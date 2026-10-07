@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
@@ -10,6 +12,20 @@ import { loadEnv } from "../../scripts/env.mjs";
 const appName: Plugin = {
   name: "octoboard-app-name",
   transformIndexHtml: (html) => html.replaceAll("%APP_NAME%", appConfig.name),
+};
+
+// Gives the dev-only gallery's scenario page (`gallery-frame.html`, see `src/gallery/`) the Content
+// Security Policy of `index.html`, read from it so the two cannot drift. Neither gallery page is part
+// of a build, which bundles `index.html` alone.
+const galleryFrameCsp: Plugin = {
+  name: "octoboard-gallery-frame-csp",
+  transformIndexHtml(html, { filename }) {
+    if (!filename.endsWith("gallery-frame.html")) return html;
+    const index = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+    const policy = /http-equiv="Content-Security-Policy"\s+content="([^"]*)"/.exec(index)?.[1];
+    if (!policy) throw new Error("index.html has no Content-Security-Policy meta tag to copy");
+    return html.replace("%APP_CSP%", policy);
+  },
 };
 
 export default defineConfig(({ command }) => {
@@ -31,7 +47,7 @@ export default defineConfig(({ command }) => {
     // Relative asset URLs, so the build loads from any static directory: a shell's bundled assets, or
     // a path the daemon serves it under.
     base: "./",
-    plugins: [react(), tailwindcss(), appName],
+    plugins: [react(), tailwindcss(), appName, galleryFrameCsp],
     define: { __OCTOBOARD_DEV_PROXY__: JSON.stringify(Boolean(daemonPort)) },
     clearScreen: false,
     server: {

@@ -6,6 +6,17 @@ The user has objected to drawn-out testing. Verify in the app only the behaviour
 targeted run — the states, languages or screens the change actually touches, not a tour of the rest or a matrix of
 every combination — and leave what a unit test or the type checker already covers to them.
 
+## Look at a UI state in the gallery before staging it through a daemon
+
+To see how the UI renders in a given state — connection loss, a session status, a dialog, the archive, report pages,
+toasts, a narrow window, a language or the right-to-left layout — open it in the UI state gallery
+(`packages/ui/README.md`, section "The UI state gallery") rather than building the state up against a running daemon;
+if the state has no scenario yet, add one and look at that. The gallery is the real `App` over a fixture daemon in
+the Vite dev server, so it settles rendering, layout and copy and nothing more: it has no real daemon timing, protocol
+round trips or agent terminal, and it is not the app's WKWebView. A pointer interaction or a WebKit rendering question
+is still checked with the gallery page loaded in Playwright's `webkit`, a paint defect still in the real window, and
+behaviour that depends on the daemon, the shell or how the window starts up still in the real app.
+
 ## Check the page in WebKit with real pointer input, and with long and CJK text
 
 The app renders in WKWebView, so a pass in Chrome says nothing: a HeroUI tag's remove button that ignored the mouse
@@ -83,7 +94,7 @@ Two further limits on macOS: driving the real app this way requires Accessibilit
 application of whatever runs the script, and native `<select>` popups cannot be driven through the accessibility tree
 at all — to make a control scriptable, build it from something other than a native `<select>`, or drive it by hand.
 
-So keep the GUI out of the setup: create the consoles, projects and sessions a verification needs by sending the
+So where a check has to run in the real app, keep the GUI out of the setup: create the consoles, projects and sessions a verification needs by sending the
 daemon's own protocol requests, and drive only the behaviour under test through the window. A session's status can be
 set up the same way, without an agent prompt or a model turn: POST `{"hook_event_name":"PermissionRequest"}` to the
 daemon's `/hook/<session>` to raise its hand, and a later `UserPromptSubmit` lowers it again. Trusted folders are the

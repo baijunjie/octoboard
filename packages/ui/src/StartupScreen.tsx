@@ -2,7 +2,7 @@ import { Button } from "@heroui/react";
 import React, { useState } from "react";
 
 import { BareTitleBar } from "./components/TitleBar";
-import { useT } from "./i18n/react";
+import { Message, useT } from "./i18n/react";
 import { useAppExit } from "./lifecycle/useAppExit";
 
 interface StartupScreenProps {
@@ -40,5 +40,25 @@ export function StartupScreen({ message, action }: StartupScreenProps): React.Re
         {quitError && <p className="text-danger">{quitError}</p>}
       </div>
     </div>
+  );
+}
+
+/** What the screen says when the shell passed the daemon's startup failure along as `?error=`. */
+export function DaemonFailedMessage({ error }: { error: string }): React.ReactElement {
+  return <Message id="startup.daemonFailed" params={{ error }} />;
+}
+
+/** What the screen says when there is no daemon address to connect to, and how to give it one. */
+export function NoAddressMessage(): React.ReactElement {
+  return (
+    <Message
+      id="startup.noAddress"
+      params={{
+        port: <code>?port=</code>,
+        dev: <code>vite dev</code>,
+        portVar: <code>VITE_DAEMON_PORT</code>,
+        proxyVar: <code>OCTOBOARD_DAEMON_PORT</code>,
+      }}
+    />
   );
 }

@@ -1,12 +1,13 @@
 import { createPersistedPreference, type PersistedPreference } from "../persistedPreference";
+import { PREFERENCE_KEYS } from "../preferenceKeys";
 
 /** The two panes the user can hide at and above the `docked` breakpoint. Below it they are
  * drawers, whose open state `usePaneToggles` holds instead. */
 export type DockedPanel = "sidebar" | "report";
 
 const visibility: Record<DockedPanel, PersistedPreference<boolean>> = {
-  sidebar: createPersistedPreference("octoboard.sidebarVisible", (raw) => raw !== "false", String),
-  report: createPersistedPreference("octoboard.reportVisible", (raw) => raw !== "false", String),
+  sidebar: createPersistedPreference(PREFERENCE_KEYS.sidebarVisible, (raw) => raw !== "false", String),
+  report: createPersistedPreference(PREFERENCE_KEYS.reportVisible, (raw) => raw !== "false", String),
 };
 
 /** Whether the docked `panel` is shown, and a setter that persists the choice. Visible unless the
