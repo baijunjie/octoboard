@@ -1,5 +1,6 @@
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import type { Console, Project, Session } from "../protocol";
+import type { SettingsSectionId } from "../settings/SettingsDialog";
 
 /** Which archive the archive view lists: a project's archived sessions, a console session's own
  * archived bound sessions, or with neither `project` nor `consoleSession` the console's archived
@@ -25,4 +26,6 @@ export interface SidebarHandlers {
   onFocusProject: (projectId: string | undefined) => void;
   onOpenArchive: (scope: ArchiveScope) => void;
   onSetPinned: (target: { project: Project } | { session: Session }, pinned: boolean) => void;
+  /** Opens Settings at a section. */
+  onOpenSettings: (section: SettingsSectionId) => void;
 }

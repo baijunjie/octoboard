@@ -258,16 +258,16 @@ pub struct Session {
     /// used there, so a title is never reused after a console session is archived or deleted — and
     /// what gives it its default title ("Hub `<ordinal>`"). `None` for a project session.
     pub ordinal: Option<i64>,
-    /// The account this session's own agent reads, by id, fixed at creation: the console's
-    /// reference for that agent at the time. `None` means the default account. Written only when
-    /// the session is opened; moving a running session to another account is a feature not yet
-    /// built.
+    /// The account this session's own agent reads, by id: the console's reference for that agent
+    /// at the time the session was opened. `None` means the default account. Written when the
+    /// session is opened and by a successful switch of its account, and by nothing else.
     pub account_id: Option<String>,
-    /// The configuration directory of this session's own agent that it was started with, fixed at
-    /// creation: `account_id`'s directory at the time, or unset when it names the default account.
-    /// An agent keeps a conversation's transcript under that directory, so a resume finds it only
-    /// when relaunched with the same one — which is why this is the session's own copy and a later
-    /// edit of the account's directory never reaches a session that already exists.
+    /// The configuration directory of this session's own agent that it launches with:
+    /// `account_id`'s directory at the time it was recorded, or unset when it names the default
+    /// account. An agent keeps a conversation's transcript under that directory, so a resume finds
+    /// it only when relaunched with the same one — which is why this is the session's own copy and
+    /// a later edit of the account's directory never reaches a session that already exists.
+    /// Written together with `account_id`, never alone.
     pub config_dir: Option<String>,
     /// The user pinned this session to the top of its list. Only `set_session_pinned` changes it,
     /// and a pinned session stays pinned across archiving and resuming.
@@ -458,6 +458,15 @@ pub enum RequestBody {
     },
     ArchiveSession {
         session: String,
+    },
+    /// Moves a session to another account of its own agent: ends its process, copies its
+    /// conversation record into the target account's directory, records the account on the
+    /// session and relaunches it as a resume does. `account` is required: an id, or an explicit
+    /// `null` for the default account. See `coordinator::switch_session_account`.
+    SwitchSessionAccount {
+        session: String,
+        #[serde(default, deserialize_with = "present_option")]
+        account: Option<Option<String>>,
     },
     /// Removes Octoboard's record of one archived session; the agent's own transcript is never
     /// touched.
@@ -904,6 +913,24 @@ pub mod error_code {
     /// `params` names `agent`.
     pub const AGENT_NOT_AVAILABLE: &str = "agent_not_available";
     pub const UNKNOWN_ACCOUNT: &str = "unknown_account";
+    /// A switch was asked to move a session to the account it is on already.
+    pub const SESSION_ALREADY_ON_ACCOUNT: &str = "session_already_on_account";
+    /// A switch was asked for an archived session. Reopening one is a resume's job, and a switch
+    /// must not do it as a side effect.
+    pub const SESSION_ARCHIVED: &str = "session_archived";
+    /// A switch found no conversation record of the session in the account it is on. `params`
+    /// names `agent` and the `path` of that account's directory.
+    pub const CONVERSATION_NOT_FOUND: &str = "conversation_not_found";
+    /// Copying the conversation into the target account's directory did not complete. `params`
+    /// names the target `path` and the `detail`.
+    pub const RELOCATION_FAILED: &str = "relocation_failed";
+    /// A switch ended the session's process and it was still not seen gone after a generous wait,
+    /// so the switch stopped there: nothing was copied or recorded, and the process may still be
+    /// running. `params` names the `session`.
+    pub const SESSION_DID_NOT_STOP: &str = "session_did_not_stop";
+    /// A switch relaunched the session and its process ended at once, so it is back on the
+    /// account it had. `params` names the `session`.
+    pub const SWITCH_DID_NOT_COME_UP: &str = "switch_did_not_come_up";
     /// A requested account name collides with an existing one of the same agent, trimmed and
     /// compared ignoring letter case — the default account's name takes part. `params` names
     /// `agent` and the `name` of the account it collides with.
@@ -982,6 +1009,13 @@ mod tests {
                 },
             ),
             (
+                r#"{"type":"switch_session_account","id":"request-1","session":"session-7","account":null}"#,
+                |body| match body {
+                    RequestBody::SwitchSessionAccount { session, .. } => Some(session),
+                    _ => None,
+                },
+            ),
+            (
                 r#"{"type":"delete_session","id":"request-1","session":"session-7"}"#,
                 |body| match body {
                     RequestBody::DeleteSession { session } => Some(session),
@@ -1031,6 +1065,27 @@ mod tests {
             let target = target(request.body).expect(json);
             assert!(target.ends_with("-7"), "{json} acted on `{target}`");
         }
+    }
+
+    /// A switch must name its target: an explicit null is the default account, and a request that
+    /// names nothing is a different request, which the coordinator refuses rather than reading as
+    /// the default.
+    #[test]
+    fn a_switch_names_the_default_account_with_an_explicit_null() {
+        let account = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::SwitchSessionAccount { account, .. } => account,
+            _ => panic!("parses as switch_session_account"),
+        };
+        let kind = r#""type":"switch_session_account","session":"s""#;
+        assert_eq!(account(&format!("{{{kind}}}")), None);
+        assert_eq!(
+            account(&format!(r#"{{{kind},"account":null}}"#)),
+            Some(None)
+        );
+        assert_eq!(
+            account(&format!(r#"{{{kind},"account":"a"}}"#)),
+            Some(Some("a".to_string()))
+        );
     }
 
     /// An absent optional field is "leave it alone" and an explicit null is "clear it", which is

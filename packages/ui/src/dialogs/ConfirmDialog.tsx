@@ -10,6 +10,8 @@ interface ConfirmDialogProps {
   /** What the dialog says: a string is one paragraph; a node lays out its own structure. */
   message: React.ReactNode;
   confirmLabel?: string;
+  /** What the confirm button reads while `onConfirm` is running, for an action that takes seconds. */
+  pendingLabel?: string;
   /** What the button that declines is called. */
   cancelLabel?: string;
   destructive?: boolean;
@@ -33,6 +35,7 @@ export function ConfirmDialog({
   title,
   message,
   confirmLabel,
+  pendingLabel,
   cancelLabel,
   extraAction,
   destructive,
@@ -61,14 +64,16 @@ export function ConfirmDialog({
           </Button>
         </TitledControl>
       )}
-      <Button type="submit" variant={destructive ? "danger" : "primary"} isDisabled={busy || !confirmed}>
-        {confirmLabel ?? t("common.confirm")}
+      {/* Pending rather than disabled while it runs: a natively disabled button drops the focus the
+          press gave it, and the dialog's Escape and Tab containment go with it. */}
+      <Button type="submit" variant={destructive ? "danger" : "primary"} isPending={busy} isDisabled={!confirmed}>
+        {busy && pendingLabel ? pendingLabel : (confirmLabel ?? t("common.confirm"))}
       </Button>
     </>
   );
 
   return (
-    <Dialog title={title} onClose={onCancel} footer={footer} resetKey={resetKey} size={size} onSubmit={() => confirmed && void run(onConfirm)} alert>
+    <Dialog title={title} onClose={busy ? () => {} : onCancel} footer={footer} resetKey={resetKey} size={size} onSubmit={() => confirmed && !busy && void run(onConfirm)} alert>
       {typeof message === "string" ? (
         <p className="text-sm">{message}</p>
       ) : (

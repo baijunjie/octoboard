@@ -50,10 +50,10 @@ With no console at all, the sidebar shows a message saying so and a **New consol
 
 Under the switcher comes the **console sessions** section: every console session of the console that is not
 archived, each as a session row (see "Session rows" below, which a console session's row otherwise follows exactly —
-pin, rename, archive). What a console session is, what selecting one does, and what its row's menu offers are in
-"Console sessions and project sessions" in `docs/product/sessions.md`. The section's own heading carries a **+**
-button, **New console session**, which opens one with the console's current console session agent and its account for
-that agent, and, while the console has an archived console session, the section's action menu, whose only entry is
+pin, rename, switch account, archive). What a console session is, what selecting one does, and what its row's menu
+offers are in "Console sessions and project sessions" in `docs/product/sessions.md`. The section's own heading carries a
+**+** button, **New console session**, which opens one with the console's current console session agent and its account
+for that agent, and, while the console has an archived console session, the section's action menu, whose only entry is
 **Archived console sessions** — a submenu of the console's newest archived console sessions, each of which can be
 selected, and the way to the archive view of all of them (see "The archive view" below). This is the one entry a
 console session's own row never carries: archived console sessions are reached from the section, not from a row.
@@ -171,6 +171,13 @@ directory it recorded (or the agent's name alone when it recorded none). Its act
 
 - **Pin** / **Unpin**.
 - **Rename** — see "Renaming a session" in `docs/product/sessions.md`.
+- **Switch account** — a submenu of the accounts of the session's agent, the default account first, with the one the
+  session is on checked and doing nothing; picking another asks for confirmation, then moves the session to it (see
+  "Switching a session's account" in `docs/product/sessions.md`). Its last entry, **Manage accounts…**, opens Settings
+  at the Agent accounts section. A session whose account has since been removed still shows it, checked and named by
+  the directory the session recorded. The entry is present for a console session's row as well as a project session's,
+  and only when the session's agent has more than one account to be on; with just the default account it is left out
+  rather than shown disabled. A session in the archive has no such entry.
 - **Archive** — it asks for confirmation, then archives the session (see "Archiving, interruption and resuming" in
   `docs/product/sessions.md`). For a console session this is the only way to archive it, since it cannot archive
   itself (see "The console session's tools" in `docs/product/hub-orchestration.md`).

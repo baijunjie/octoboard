@@ -12,6 +12,9 @@ export type DialogRequest =
   | { kind: "rename-project"; project: Project }
   | { kind: "rename-session"; session: Session }
   | { kind: "archive-session"; session: Session }
+  /** Moves `session` to `account` (`null`, the default account), named `accountName` in the
+   * dialog. */
+  | { kind: "switch-account"; session: Session; account: string | null; accountName: string }
   | { kind: "delete-session"; session: Session }
   /** Every archived session of `project`, or with none every archived console session of
    * `console`. */

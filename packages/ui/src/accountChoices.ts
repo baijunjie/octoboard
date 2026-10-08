@@ -1,5 +1,7 @@
 import { accountsByAgent, AGENT_ACCOUNT_FIELD, isAgentUnavailable, selectableAgent } from "./agents";
-import type { Account, Agent, AgentAvailability, Console, Project } from "./protocol";
+import type { Translate } from "./i18n/catalog";
+import type { Account, Agent, AgentAvailability, Console, Project, Session } from "./protocol";
+import { sessionAccountName } from "./sessionLabel";
 
 /** An account of one agent as a picker settles it; `null` is the agent's default account, the
  * state of pinning nothing. */
@@ -84,4 +86,34 @@ export function currentChoice(
 ): AccountChoice {
   const entry = picked && findEntry(groups, choiceKey(picked));
   return picked && entry?.selectable ? picked : initial;
+}
+
+/** One account a session can be moved to or is on, as the Switch account submenu lists it. */
+export interface SwitchEntry {
+  account: string | null;
+  name: string;
+  current: boolean;
+  /** `name` is the directory of an account that has been removed, not a name the user typed. */
+  isPath: boolean;
+}
+
+/** The accounts of the session's own agent, the default account first, with the one the session is
+ * on marked current. Another agent's accounts never appear: a switch stays within one agent. A
+ * session on an account that has since been removed keeps it as its current entry, named as
+ * everywhere else a session's account is (`sessionAccountName`: the directory the session
+ * recorded), so the menu still says where the session is; with no directory recorded there is
+ * nothing to name it by and it is left out. The submenu is offered only when there is somewhere to
+ * go, that is with more than one entry. */
+export function switchEntries(session: Session, accounts: Account[], t: Translate): SwitchEntry[] {
+  const owned = accountsByAgent(accounts).find((group) => group.agent === session.agent)?.accounts ?? [];
+  const entries = [
+    { account: null, name: t("settings.accounts.defaultName"), isPath: false },
+    ...owned.map((account) => ({ account: account.id, name: account.name, isPath: false })),
+  ];
+  const removed = session.account_id && !owned.some((account) => account.id === session.account_id);
+  const removedName = removed ? sessionAccountName(t, session, accounts) : undefined;
+  if (session.account_id && removedName !== undefined) {
+    entries.push({ account: session.account_id, name: removedName, isPath: true });
+  }
+  return entries.map((entry) => ({ ...entry, current: entry.account === (session.account_id ?? null) }));
 }

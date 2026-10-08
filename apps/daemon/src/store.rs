@@ -128,8 +128,9 @@ impl Store {
                 colour           TEXT,
                 ordinal          INTEGER,
                 -- The account this session's own agent reads, by id; NULL means the default
-                -- account. Fixed at creation, like `config_dir` below, which is that account's
-                -- directory at the time — see `Session::account_id`.
+                -- account. Written with `config_dir` below, which is that account's directory at
+                -- the time, when the session is opened and when its account is switched — see
+                -- `Session::account_id`.
                 account_id       TEXT,
                 config_dir       TEXT,
                 pinned           INTEGER NOT NULL DEFAULT 0,
@@ -641,9 +642,9 @@ impl Store {
 
     /// Writes back the fields that change over a session's life. Identity and placement
     /// (`console_id`, `project_id`, `role`, `origin`, `bound_to`, `colour`, `ordinal`) never change,
-    /// and neither does `account_id` or `config_dir` — both are written once, at creation, and
-    /// moving a running session to another account is a feature not yet built, so none of those
-    /// are touched here. `pinned` is the user's own statement
+    /// and `account_id` and `config_dir` change only through [`Self::set_session_account`], the
+    /// one write path a switch of the session's account uses, so a record read before a switch
+    /// can never write the old account back over it. `pinned` is the user's own statement
     /// ([`Self::set_session_pinned`]), which a record read earlier must not overwrite.
     /// Returns whether a row was written: `false` means the session is gone (deleted meanwhile).
     pub fn update_session(&self, session: &Session) -> Result<bool> {
@@ -694,6 +695,32 @@ impl Store {
             )
             .optional()?;
         Ok(session)
+    }
+
+    /// Records the account a session runs under and its directory, together and by nothing else:
+    /// the one place either is written after the session is created. Returns the record as it now
+    /// stands, or `None` when the session is gone.
+    pub fn set_session_account(
+        &self,
+        id: &str,
+        account_id: Option<&str>,
+        config_dir: Option<&str>,
+    ) -> Result<Option<Session>> {
+        let conn = self.lock();
+        let changed = conn.execute(
+            "UPDATE sessions SET account_id = ?2, config_dir = ?3 WHERE id = ?1",
+            params![id, account_id, config_dir],
+        )?;
+        if changed == 0 {
+            return Ok(None);
+        }
+        Ok(conn
+            .query_row(
+                &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1"),
+                params![id],
+                read_session,
+            )
+            .optional()?)
     }
 
     pub fn set_session_pinned(&self, id: &str, pinned: bool) -> Result<()> {
@@ -1336,8 +1363,8 @@ mod tests {
     }
 
     /// A console's references round-trip as written, and a session keeps its own copy of its
-    /// account's directory fixed at creation, regardless of what the console's reference is
-    /// afterwards.
+    /// account's directory regardless of what the console's reference is afterwards: only
+    /// `set_session_account` changes it, and always the two fields together.
     #[test]
     fn a_consoles_account_references_round_trip_and_a_session_keeps_its_own_directory() {
         let path = temp_db("round-trip");
@@ -1372,8 +1399,8 @@ mod tests {
         opened.account_id = Some("claude-acct".to_string());
         store.insert_session(&opened).expect("insert");
 
-        // Updating the session's mutable fields leaves the account and directory it was started
-        // with alone — neither is in `update_session`'s write set.
+        // Updating the session's mutable fields leaves the account and directory it has alone —
+        // neither is in `update_session`'s write set.
         let mut live = store.get_session("session-1").unwrap().unwrap();
         live.account_id = Some("elsewhere".to_string());
         live.config_dir = Some("/elsewhere".to_string());
@@ -1383,6 +1410,18 @@ mod tests {
         assert_eq!(after.title, "Renamed");
         assert_eq!(after.account_id.as_deref(), Some("claude-acct"));
         assert_eq!(after.config_dir.as_deref(), Some("/home/u/.claude-alt"));
+
+        // The switch's write path moves both together, to the default account (nothing pinned)
+        // included, and reports a session that is gone as `None`.
+        let moved = store
+            .set_session_account("session-1", None, None)
+            .unwrap()
+            .expect("the session");
+        assert_eq!((moved.account_id, moved.config_dir), (None, None));
+        assert!(store
+            .set_session_account("missing", None, None)
+            .unwrap()
+            .is_none());
 
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }

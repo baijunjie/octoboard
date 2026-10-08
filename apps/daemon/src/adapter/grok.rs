@@ -146,7 +146,7 @@ impl AgentAdapter for GrokAdapter {
 /// check exists to prevent. Whether the home also holds a login (`auth.json`) says nothing either
 /// way: an API-key user's legitimate home has `sessions/` with no `auth.json`, and that is not
 /// Octoboard's business to check.
-fn require_initialized_grok_home(dir: &Path) -> Result<()> {
+pub(super) fn require_initialized_grok_home(dir: &Path) -> Result<()> {
     if dir.join("sessions").is_dir() {
         return Ok(());
     }

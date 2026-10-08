@@ -19,6 +19,7 @@ mod outbox;
 mod paths;
 mod protocol;
 mod ptyio;
+mod relocate;
 mod reporting;
 mod ringbuf;
 mod server;
@@ -146,6 +147,21 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
         );
     }
     clear_run_dir();
+    // A switch that died with the previous daemon may have left a staging directory in an account's
+    // config directory. The default accounts' directories are not known until the shell has been
+    // read, so only the ones Octoboard has been told of are swept.
+    let known_dirs: Vec<String> = store
+        .list_accounts()?
+        .into_iter()
+        .map(|account| account.config_dir)
+        .chain(
+            store
+                .list_sessions()?
+                .into_iter()
+                .filter_map(|session| session.config_dir),
+        )
+        .collect();
+    relocate::sweep_staging(known_dirs.iter().map(std::path::Path::new));
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let port = listener.local_addr()?.port();

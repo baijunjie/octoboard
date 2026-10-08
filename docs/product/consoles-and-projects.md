@@ -92,11 +92,14 @@ with nothing saved:
 Existence is **not** checked: a directory that does not exist yet is accepted, since the agent (Grok Build excepted)
 creates it on first run. What is stored, and shown for the account, is its expanded absolute path.
 
-**A session keeps the account and the directory it was opened with.** A session takes its account when it is opened —
-the one picked for it, else the console's reference for its own agent, else the default account — and keeps it for its
-lifetime; resuming or reopening it relaunches with that same directory, because the agent keeps the conversation inside
-it. A session opened on the default account holds no directory and resumes under whatever the user's shell exports at
-that moment.
+**A session keeps the account and the directory it last recorded until the user switches it.** A session takes its
+account when it is opened — the one picked for it, else the console's reference for its own agent, else the default
+account — and nothing but the user changes it afterwards: not an edit to the console's reference, not an edit to the
+account's directory. Resuming or reopening it relaunches with that same directory, because the agent keeps the
+conversation inside it. The user can move the session to another account of its agent from its action menu; that
+copies the conversation into the target's directory and carries the session into that account's whole setup, not only
+its login (see "Switching a session's account" in `docs/product/sessions.md`). A session opened on the default account
+holds no directory and resumes under whatever the user's shell exports at that moment.
 
 If a session's directory no longer exists when it is launched or resumed, the launch is refused rather than
 started — but only for a session that has a conversation on the agent's side to resume. A new session, and one that

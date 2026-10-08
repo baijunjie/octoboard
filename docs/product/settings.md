@@ -4,7 +4,7 @@ Settings is a large dialog over the whole window. A list of sections runs down i
 section's settings fill the right, one row per setting: its name and a line saying what it does on the left, its
 control on the right; under a right-to-left language the sides swap (see "Right-to-left layout" in
 `docs/product/window-layout.md`). The sections, in order, are **General**, **Git**, **Agent accounts**, **Trusted
-folders** and **Notifications**; the dialog opens on General.
+folders** and **Notifications**; the dialog opens on General unless it was asked to open on another section.
 
 ## Moving between sections
 
@@ -22,7 +22,9 @@ Settings opens from:
 - the **Settings** button at the right end of the top bar (see "The top bar" in `docs/product/window-layout.md`);
 - in the macOS application, the application menu's **Settings…** item, shortcut `Cmd+,`. The menu item does nothing
   while the window has nothing to show yet (before the daemon's state has first arrived), while Settings is already
-  open, and while another dialog or a row's action menu is open.
+  open, and while another dialog or a row's action menu is open;
+- a session row's **Switch account** submenu, whose last entry, **Manage accounts…**, opens it on the Agent accounts
+  section instead of the first (see "Session rows" in `docs/product/sidebar.md`).
 
 Settings closes on `Escape`, on its close button, and on a press on the dimmed area around it. Closing it puts
 keyboard focus back on the selected session's terminal.

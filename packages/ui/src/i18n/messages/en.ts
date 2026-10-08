@@ -110,6 +110,16 @@ export const en = {
   "daemon.icon_too_large": "The console avatar is larger than {limit_kib} KiB.",
   "daemon.session_already_running": "This session is already running.",
   "daemon.session_already_starting": "This session is already starting.",
+  "daemon.session_already_on_account": "This session is on that account already.",
+  "daemon.session_archived": "An archived session cannot be switched to another account. Reopen it first.",
+  "daemon.conversation_not_found":
+    "No {agent} conversation of this session was found in “{path}”, so it cannot continue under another account.",
+  "daemon.relocation_failed":
+    "The conversation could not be copied into “{path}”: {detail}. The session stays on the account it had.",
+  "daemon.session_did_not_stop":
+    "{session} did not stop in time, so it was not switched. It may still be running.",
+  "daemon.switch_did_not_come_up":
+    "{session} ended as soon as it was relaunched under the new account, so it stays on the account it had.",
   "daemon.console_session_missing": "This console has no console session to submit to.",
   "daemon.session_not_running": "This session is not running.",
   "daemon.session_not_archived": "Only an archived session can be deleted.",
@@ -244,6 +254,8 @@ export const en = {
   "sidebar.session.rename": "Rename",
   "sidebar.session.archive": "Archive",
   "sidebar.session.delete": "Delete",
+  "sidebar.session.switchAccount": "Switch account",
+  "sidebar.session.manageAccounts": "Manage accounts…",
   "sidebar.focus.exit": "Leave focus mode",
   "sidebar.focus.sessions": "Sessions ({count})",
   "sidebar.focus.archived": "Archived ({count})",
@@ -359,6 +371,13 @@ export const en = {
   "dialog.removeProject.confirmRunning": "End and remove",
   "dialog.archiveSession.title": "Archive “{title}”?",
   "dialog.archiveSession.message": "Its process ends. You can reopen it later.",
+  "dialog.switchAccount.title": "Switch “{title}” to {account}?",
+  "dialog.switchAccount.message":
+    "Its process restarts under the new account and the conversation continues there. The session takes on that account's own settings, and a copy of the conversation stays in the current account.",
+  "dialog.switchAccount.messageFresh":
+    "Its process restarts under the new account with a fresh conversation, as nothing has been typed into it yet. The session takes on that account's own settings.",
+  "dialog.switchAccount.pending": "Switching account…",
+  "dialog.switchAccount.confirm": "Switch",
   "dialog.deleteSession.title": "Delete “{title}” permanently?",
   "dialog.deleteSession.message": "This deletes the session. The agent's own transcript and the project's files are kept.",
   "dialog.deleteArchived.message": {

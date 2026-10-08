@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { choiceGroups, choiceKey, consoleAccount, currentChoice, initialChoice } from "./accountChoices";
-import { consoleOf, projectOf } from "./gallery/fixtures/builders";
+import { choiceGroups, choiceKey, consoleAccount, currentChoice, initialChoice, switchEntries } from "./accountChoices";
+import { consoleOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
+import { format } from "./i18n/catalog";
+import type { Translate } from "./i18n/catalog";
 import type { Account, Agent, AgentAvailability } from "./protocol";
 
 const availability = (entries: Partial<Record<Agent, AgentAvailability["availability"]>>): Map<Agent, AgentAvailability> =>
@@ -84,4 +86,22 @@ describe("currentChoice", () => {
 
 it("gives each agent's entries keys no other agent's can share", () => {
   expect(choiceKey({ agent: "claude", account: null })).not.toBe(choiceKey({ agent: "codex", account: null }));
+});
+
+const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
+
+describe("switchEntries", () => {
+  const session = (extra = {}) => sessionOf("s", "c-1", "p-1", "Title", "idle", extra);
+  const summary = (entries: ReturnType<typeof switchEntries>) =>
+    entries.map((entry) => `${entry.name}${entry.current ? " (current)" : ""}`);
+
+  it.each([
+    ["the default account first, then the agent's stored accounts, marking the one it is on", {}, ["Default (current)", "Work"]],
+    ["a stored account as current", { account_id: "w", config_dir: "/home/w" }, ["Default", "Work (current)"]],
+    ["a removed account as current, named by the directory the session recorded", { account_id: "gone", config_dir: "/home/old" }, ["Default", "Work", "/home/old (current)"]],
+    ["a removed account that recorded no directory as nothing to name", { account_id: "gone" }, ["Default", "Work"]],
+    ["only the session's own agent's accounts", { agent: "grok" }, ["Default (current)"]],
+  ] as const)("lists %s", (_, extra, expected) => {
+    expect(summary(switchEntries(session(extra), accounts, t))).toEqual(expected);
+  });
 });

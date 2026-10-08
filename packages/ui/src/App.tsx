@@ -43,6 +43,8 @@ export function App(): React.ReactElement {
   const trustPrompt = useDaemonStore((s) => s.trustPrompts[0]);
   const [selectedSessionId, setSelectedSessionId] = useState<string>();
   const [dialogRequest, setDialogRequest] = useState<DialogRequest>();
+  const dialogRequestRef = useRef(dialogRequest);
+  dialogRequestRef.current = dialogRequest;
   const [terminalProblem, setTerminalProblem] = useState<TerminalProblem>();
   const [archiveScope, setArchiveScope] = useState<ArchiveScope>();
   // Sessions whose `resume_session` is in flight, for the terminal's loading state.
@@ -105,7 +107,7 @@ export function App(): React.ReactElement {
     toastError,
   });
 
-  const { settingsOpen, openSettings, closeSettings } = useSettingsDialog({
+  const { settingsOpen, settingsSection, openSettings, openSettingsAt, closeSettings } = useSettingsDialog({
     ready: hosts !== undefined,
     otherModalOpen: dialogRequest !== undefined || trustPrompt !== undefined || exitConfirmOpen,
     focusTerminal,
@@ -158,6 +160,27 @@ export function App(): React.ReactElement {
         });
       }
     });
+
+  /** Switches a session's account. The session counts as resuming while it runs, so its terminal
+   * says so instead of offering a Resume that would race the switch. Rejects with the daemon's
+   * reason, which the confirmation shows. */
+  const switchAccount = async (sessionId: string, account: string | null): Promise<void> => {
+    setResumingIds((ids) => new Set(ids).add(sessionId));
+    try {
+      await request({ type: "switch_session_account", session: sessionId, account });
+    } catch (err) {
+      // The confirmation shows a failure in place and cannot be dismissed while the switch runs;
+      // were it gone anyway, the reason must not be lost with it.
+      if (dialogRequestRef.current?.kind !== "switch-account") toastError((err as Error).message);
+      throw err;
+    } finally {
+      setResumingIds((ids) => {
+        const next = new Set(ids);
+        next.delete(sessionId);
+        return next;
+      });
+    }
+  };
 
   const openConsoleSession = (console_: Console) =>
     void runOnce(`console-session:${console_.id}`, async () => {
@@ -319,6 +342,7 @@ export function App(): React.ReactElement {
           onFocusProject={sidebarView.focusProjectId}
           onOpenArchive={openArchive}
           onSetPinned={setPinned}
+          onOpenSettings={openSettingsAt}
           open={panes.sidebarOpen}
           peek={panes.sidebarDocked ? undefined : panes.sidebarPeek}
           sidebarWidth={sidebarWidth}
@@ -389,12 +413,13 @@ export function App(): React.ReactElement {
         {panes.reportOpen && <Scrim label={t("app.closeReport")} onClose={panes.closeReport} />}
       </div>
       <ConnectionBanner state={connectionState} onRetry={reconnect} focusTerminal={focusTerminal} />
-      {settingsOpen && <SettingsDialog onClose={closeSettings} />}
+      {settingsOpen && <SettingsDialog initialSection={settingsSection} onClose={closeSettings} />}
       {dialogRequest && (
         <RequestedDialog
           dialog={dialogRequest}
           onClose={closeDialog}
           onSessionOpened={showOpenedSession}
+          onSwitchAccount={switchAccount}
         />
       )}
       {trustPrompt && (

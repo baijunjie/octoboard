@@ -6,13 +6,16 @@
 //! synthesis, automatic archiving) is `crate::reporting`'s, because the console session's tools and
 //! the hook callback reach it without going through a control-socket request at all.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use uuid::Uuid;
 
+use crate::adapter;
+use crate::env_shell;
 use crate::git_status;
 use crate::hostfs;
 use crate::mcp;
@@ -21,7 +24,9 @@ use crate::protocol::{
     error_code, now_millis, Account, Agent, Availability, CodedError, Console, Event, Origin,
     Project, ProjectSource, RequestBody, Role, Session, SessionStatus,
 };
+use crate::relocate;
 use crate::reporting;
+use crate::session::LiveSession;
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
 use crate::term;
@@ -315,6 +320,11 @@ pub async fn handle(
 
         RequestBody::ArchiveSession { session } => {
             archive_session(state, &session)?;
+            Ok(None)
+        }
+
+        RequestBody::SwitchSessionAccount { session, account } => {
+            switch_session_account(state, &session, account, env_shell::snapshot).await?;
             Ok(None)
         }
 
@@ -710,7 +720,7 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
     };
     let claim = state.begin_launch(&session.id)?;
 
-    match start_process(state, claim, &session, &cwd, task.as_deref(), None).await {
+    match start_process(state, &claim, &session, &cwd, task.as_deref(), None, None).await {
         Ok(()) => {
             // Re-read rather than publish the record we built: launching may have learned the
             // agent's own session id, and publishing the stale copy would tell every client the
@@ -729,6 +739,19 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
     }
 }
 
+/// The agent's id of the conversation a relaunch of this session resumes, or none when it has not
+/// got one yet. Only a session that has had a turn has something to resume: without one the agent
+/// stored no conversation, and resuming by id fails with "No conversation found" — so a launch
+/// without an id opens a fresh conversation instead, in the same project and under the same
+/// session. A switch relocates exactly the conversation a resume would ask for.
+fn resumable_agent_session_id(session: &Session) -> Option<String> {
+    if session.has_conversation {
+        session.agent_session_id.clone()
+    } else {
+        None
+    }
+}
+
 /// Relaunches a dormant session. `instruction` is written into it once it is running — queued here
 /// rather than by the caller, because whichever hook releases it can fire the moment the agent
 /// starts, so it has to be in the queue before the launch and out again if the launch never happens.
@@ -740,6 +763,23 @@ pub async fn resume_session(
     // Claimed before anything else, so two overlapping relaunches cannot both get through, and
     // before the record is read, so a delete cannot slip in between reading and launching.
     let claim = state.begin_launch(id)?;
+    relaunch_session(state, &claim, id, instruction, true, None).await
+}
+
+/// The relaunch a resume and a switch of the session's account both end in: everything Octoboard
+/// injects is reassembled and every launch refusal applies, whichever of the two asked. `claim` is
+/// the caller's, taken before it read anything and dropped by it when it is done; `reopen` says
+/// whether an archived session may be relaunched (a resume reopens one, a switch must not);
+/// `shell_env` is a snapshot the caller already resolved something from (see
+/// [`term::LaunchRequest::preresolved_shell_env`]).
+async fn relaunch_session(
+    state: &Arc<AppState>,
+    claim: &crate::state::LaunchClaim,
+    id: &str,
+    instruction: Option<&str>,
+    reopen: bool,
+    shell_env: Option<HashMap<String, String>>,
+) -> Result<()> {
     let mut session = state.session_record(id)?;
     if !session.status.is_dormant() {
         // The ordinary cause is a second click landing after the first relaunch already moved the
@@ -751,21 +791,30 @@ pub async fn resume_session(
         ));
     }
 
+    if !reopen && session.status == SessionStatus::Archived {
+        return Err(session_archived(id));
+    }
+
     let previous_status = session.status;
     let cwd = session_cwd(state, &session)?;
-    // Only a session that has had a turn has something to resume. Without one the agent stored no
-    // conversation, and resuming by id fails with "No conversation found" — so this launches a
-    // fresh conversation instead, in the same project and under the same session.
-    let resume_id = if session.has_conversation {
-        session.agent_session_id.clone()
-    } else {
-        None
-    };
+    let resume_id = resumable_agent_session_id(&session);
     // A relaunch carries no task, so the agent comes up at its prompt rather than working. On
     // Codex that is also the only correct value available: its `SessionStart` hook does not fire
     // until the first prompt submission, so an optimistic `working` would never be corrected.
     session.status = SessionStatus::Idle;
     session.ended_at = None;
+    if !reopen
+        && state
+            .store
+            .update_session_status_if(id, previous_status, SessionStatus::Idle)?
+            .is_none()
+    {
+        // Archived since it was read, which can land without the claim: an archive that landed
+        // before this point stands rather than being undone by a relaunch the user did not ask
+        // for. One landing after it is not excluded; closing that takes a claim on archiving, and
+        // a resume has always had the same gap.
+        return Err(session_archived(id));
+    }
     state.store.update_session(&session)?;
 
     // Queued with every refusal above already past, so a call that never launched leaves nothing
@@ -774,7 +823,17 @@ pub async fn resume_session(
         state.queue_message(&session.id, instruction);
     }
 
-    match start_process(state, claim, &session, &cwd, None, resume_id.as_deref()).await {
+    match start_process(
+        state,
+        claim,
+        &session,
+        &cwd,
+        None,
+        resume_id.as_deref(),
+        shell_env,
+    )
+    .await
+    {
         Ok(()) => {
             state.publish_session(&state.session_record(&session.id)?);
             reporting::release_after_relaunch(state, &session);
@@ -798,11 +857,12 @@ pub async fn resume_session(
 /// Launches the agent for an already-stored session and starts watching it.
 async fn start_process(
     state: &Arc<AppState>,
-    claim: crate::state::LaunchClaim,
+    _claim: &crate::state::LaunchClaim,
     session: &Session,
     cwd: &Path,
     task: Option<&str>,
     resume_agent_session_id: Option<&str>,
+    shell_env: Option<HashMap<String, String>>,
 ) -> Result<()> {
     let request = term::LaunchRequest {
         session_id: session.id.clone(),
@@ -812,6 +872,7 @@ async fn start_process(
         task: task.map(str::to_string),
         resume_agent_session_id: resume_agent_session_id.map(str::to_string),
         config_dir: session.config_dir.as_ref().map(PathBuf::from),
+        preresolved_shell_env: shell_env,
         daemon_port: state.port,
         self_exe: state.self_exe.clone(),
         // Issued per launch: the previous process is gone, and a token outliving it would let a
@@ -823,10 +884,9 @@ async fn start_process(
     // runtime rather than holding up the socket it was asked on.
     let launch = tokio::task::spawn_blocking(move || term::launch(request)).await??;
 
-    // Registering the session consumes the claim: from here on the live map is what says it is
-    // running.
+    // The live map now says the session is running; `claim` stays with the caller, which drops it
+    // when it is done with the launch.
     state.register_live(launch.session.clone());
-    drop(claim);
     state.watch_exit(launch.session.clone());
     trust::supervise(state, &launch.session);
     if let Some(agent_session_id) = launch.agent_session_id {
@@ -838,6 +898,8 @@ async fn start_process(
     Ok(())
 }
 
+/// Ends the session's process and archives it. What archiving means beyond ending the process
+/// belongs here and not in [`stop_process`], which a switch of the session's account shares.
 pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<()> {
     let mut session = state.session_record(id)?;
     session.status = SessionStatus::Archived;
@@ -845,9 +907,234 @@ pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<()> {
     state.save_session(&session)?;
     if let Some(live) = state.live_session(id) {
         // Ending the process waits out the graceful period, which the caller should not.
-        tokio::task::spawn_blocking(move || live.terminate());
+        stop_process(live);
     }
     Ok(())
+}
+
+/// Ends one session's process, waiting out the graceful period the agents' shutdown hooks depend
+/// on, on a blocking thread. This is the whole of "ending a process" and nothing more: it decides
+/// no status, archives nothing and reaches no other session. What archiving adds around it — the
+/// status, and whatever later follows an archived session to the sessions bound to it — is
+/// `archive_session`'s, which is why a switch of the session's account stops the process through
+/// this and not through archiving.
+fn stop_process(live: Arc<LiveSession>) -> tokio::task::JoinHandle<()> {
+    tokio::task::spawn_blocking(move || live.terminate())
+}
+
+/// How long a relaunched session has to stay up before a switch counts it as having come up. An
+/// agent that cannot find the conversation it was asked to resume says so and exits within a
+/// moment, each in its own words, which the switch does not read: its process ending is the signal,
+/// as it is everywhere else the daemon decides a session is interrupted.
+///
+/// One failing relaunch could outlive the window: Grok Build restores a session it cannot find
+/// locally from a remote registry, a network round trip. That is harmless here, because the
+/// switch's own copy means Grok finds the session locally; and if a relaunch did fail after the
+/// window, the session would be interrupted on the new account, where the copy is, and so
+/// resumable.
+const SWITCH_SETTLE: Duration = Duration::from_secs(4);
+
+/// How long a switch waits for the process it ended to be seen gone and recorded as interrupted,
+/// which the exit watcher does on its own schedule. Far above that schedule plus the graceful
+/// period: reaching it means the process would not die, which is not a state to carry on from
+/// (see [`error_code::SESSION_DID_NOT_STOP`]).
+const SWITCH_STOP_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// What a switch worked out before it ended anything.
+struct SwitchPlan {
+    /// The snapshot the default account was resolved from, handed on to the relaunch so the copy
+    /// and the launch cannot disagree about where the default account is.
+    shell_env: Option<HashMap<String, String>>,
+    /// The conversation to copy: from the source account's directory to the target's, at the
+    /// path relative to both. None for a session with no conversation on the agent's side.
+    relocation: Option<(PathBuf, PathBuf, PathBuf)>,
+}
+
+/// Everything a switch can refuse before it ends the session's process: the launch rule on the
+/// target directory, and the conversation record being where it is expected. The default account
+/// pins nothing, so each side of it resolves from one shell snapshot taken here, once, and kept
+/// for the relaunch. `source` and `target` are the pinned directories, `None` for the default
+/// account. Blocking.
+fn prepare_switch(
+    agent: Agent,
+    resume_id: Option<&str>,
+    source: Option<&str>,
+    target: Option<&str>,
+    snapshot: impl FnOnce() -> Result<HashMap<String, String>>,
+) -> Result<SwitchPlan> {
+    // Before anything is copied: the copy would create the directory's `sessions/` and so make a
+    // Grok home that was never initialized pass the same check at launch.
+    adapter::refuse_unlaunchable_account(agent, target.map(Path::new))?;
+    let shell_env = if source.is_none() || target.is_none() {
+        Some(snapshot().context("snapshotting the user's shell environment")?)
+    } else {
+        None
+    };
+    let Some(resume_id) = resume_id else {
+        return Ok(SwitchPlan {
+            shell_env,
+            relocation: None,
+        });
+    };
+    let resolve = |pinned: Option<&str>| match (pinned, &shell_env) {
+        (Some(dir), _) => PathBuf::from(dir),
+        (None, Some(shell_env)) => adapter::default_account_dir(agent, shell_env),
+        (None, None) => unreachable!("a default side takes the snapshot"),
+    };
+    let (from, to) = (resolve(source), resolve(target));
+    let relative = relocate::locate(agent, &from, resume_id)?;
+    Ok(SwitchPlan {
+        shell_env,
+        relocation: Some((from, to, relative)),
+    })
+}
+
+/// Moves a session to another account of its own agent: ends its process the way archiving does,
+/// copies its conversation into the target account's directory, records the account and the
+/// directory on the session, and relaunches it as a resume does. The user's action alone —
+/// nothing calls this on a usage signal.
+///
+/// `account` is the target by id, `None` for the default account. Refused, with nothing recorded
+/// and (where it can be told beforehand) the process left running: a launch, resume or switch of
+/// the session under way, an archived session, the account it is on already, an account that is
+/// not one of the session's agent, a Grok target that is not an initialized home, and a
+/// conversation record that is not where it is expected. Once the process has been ended, a
+/// relocation that does not complete or a relaunch that is refused or does not come up leaves
+/// the session interrupted on the account it had, with the conversation still in both
+/// directories.
+///
+/// Two windows break "always back on the account it had", neither harmful. A daemon that dies
+/// between recording the new account and the relaunch leaves the session on the new account, which
+/// already holds the copy, so the conversation resumes there. And a switch to the *default* Grok
+/// account is not checked for being an initialized home (`refuse_unlaunchable_account` is a no-op
+/// for an account that pins nothing, by design: that directory is the user's own setup), so an
+/// uninitialized `~/.grok` gets the copy and the relaunch comes up signed out or dies, which is
+/// reported as a failed switch and put back.
+///
+/// It archives nothing: the process is ended by [`stop_process`], not by [`archive_session`], and
+/// the status the session passes through is the interrupted one the exit watcher gives any
+/// process that ends without the session having been archived.
+pub async fn switch_session_account(
+    state: &Arc<AppState>,
+    id: &str,
+    account: Option<Option<String>>,
+    snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
+) -> Result<()> {
+    let account = account.ok_or_else(|| field_required("account"))?;
+    // Held until this function returns, after the come-up verdict and any revert, so nothing else
+    // can launch, resume, switch or delete the session while its process is down, while the
+    // relaunched one is being watched, or while the account is put back; refused here when one
+    // of those is under way.
+    let claim = state.begin_switch(id)?;
+    let before = state.session_record(id)?;
+    if before.status == SessionStatus::Archived {
+        return Err(session_archived(id));
+    }
+    let target_account = checked_account_reference(state, before.agent, account)?;
+    if target_account == before.account_id {
+        return Err(CodedError::raised(
+            error_code::SESSION_ALREADY_ON_ACCOUNT,
+            "this session is on that account already",
+            &[("session", id)],
+        ));
+    }
+    let target_dir = account_dir(state, &target_account)?;
+
+    let plan = {
+        let (agent, resume_id) = (before.agent, resumable_agent_session_id(&before));
+        let (source, target) = (before.config_dir.clone(), target_dir.clone());
+        tokio::task::spawn_blocking(move || {
+            prepare_switch(
+                agent,
+                resume_id.as_deref(),
+                source.as_deref(),
+                target.as_deref(),
+                snapshot,
+            )
+        })
+        .await??
+    };
+
+    if let Some(live) = state.live_session(id) {
+        stop_process(live).await?;
+    }
+    wait_until_down(state, id).await?;
+    // Archiving it meanwhile is the user's later word on the matter.
+    if state.session_record(id)?.status == SessionStatus::Archived {
+        return Err(session_archived(id));
+    }
+
+    if let Some((from, to, relative)) = plan.relocation {
+        tokio::task::spawn_blocking(move || relocate::copy(&from, &to, &relative)).await??;
+    }
+    state.set_session_account(id, target_account.as_deref(), target_dir.as_deref())?;
+    // A revert that fails is logged, never allowed to hide the reason the switch failed.
+    let back_where_it_was = || {
+        if let Err(revert) = state.set_session_account(
+            id,
+            before.account_id.as_deref(),
+            before.config_dir.as_deref(),
+        ) {
+            tracing::warn!(session = %id, %revert, "putting the session back on its account failed");
+        }
+    };
+
+    if let Err(err) = relaunch_session(state, &claim, id, None, false, plan.shell_env).await {
+        back_where_it_was();
+        return Err(err);
+    }
+    let came_up = match state.live_session(id) {
+        Some(live) => came_up(&live, SWITCH_SETTLE).await,
+        None => false,
+    };
+    if !came_up {
+        back_where_it_was();
+        return Err(CodedError::raised(
+            error_code::SWITCH_DID_NOT_COME_UP,
+            "the session ended as soon as it was relaunched, so it stays on the account it had",
+            &[("session", id)],
+        ));
+    }
+    Ok(())
+}
+
+fn session_archived(id: &str) -> anyhow::Error {
+    CodedError::raised(
+        error_code::SESSION_ARCHIVED,
+        "an archived session cannot be switched; reopen it first",
+        &[("session", id)],
+    )
+}
+
+/// Waits for the exit watcher to have seen the session's process gone and recorded the session as
+/// dormant — the state a relaunch starts from, and the one thing that must be true before the
+/// watcher can no longer write over what the relaunch records.
+async fn wait_until_down(state: &Arc<AppState>, id: &str) -> Result<()> {
+    let deadline = Instant::now() + SWITCH_STOP_TIMEOUT;
+    while state.live_session(id).is_some() || !state.session_record(id)?.status.is_dormant() {
+        if Instant::now() >= deadline {
+            // The process may still be running, with nothing recorded and nothing copied.
+            return Err(CodedError::raised(
+                error_code::SESSION_DID_NOT_STOP,
+                "the session's process did not end in time, so it was not switched",
+                &[("session", id)],
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    Ok(())
+}
+
+/// Whether the relaunched process is still running after `settle`.
+async fn came_up(live: &LiveSession, settle: Duration) -> bool {
+    let deadline = Instant::now() + settle;
+    while Instant::now() < deadline {
+        if live.poll_exit() {
+            return false;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    !live.poll_exit()
 }
 
 /// Removes Octoboard's record of one archived session. Nothing else of Octoboard's hangs off a
@@ -1004,14 +1291,20 @@ fn session_account(
         Some(choice) => checked_account_reference(state, agent, choice)?,
         None => console_account_field(console, agent).clone(),
     };
-    let config_dir = match &account_id {
+    let config_dir = account_dir(state, &account_id)?;
+    Ok((account_id, config_dir))
+}
+
+/// The directory of the stored account `account_id` names, `None` for the default account, which
+/// pins nothing.
+fn account_dir(state: &Arc<AppState>, account_id: &Option<String>) -> Result<Option<String>> {
+    Ok(match account_id {
         None => None,
         Some(id) => state
             .store
             .get_account(id)?
             .map(|account| account.config_dir),
-    };
-    Ok((account_id, config_dir))
+    })
 }
 
 /// A reference to an account of `agent` as stored, or the `unknown_account` refusal when `id`
@@ -2135,5 +2428,344 @@ mod tests {
             None,
             "a console that never referred to it is unaffected either way"
         );
+    }
+
+    /// A console and a project (whose directory does not exist, so a relaunch is refused at the
+    /// launch's first check before it writes anything), and one account of each agent whose
+    /// directory is under `dir`.
+    fn switch_fixture(name: &str) -> (Arc<AppState>, PathBuf) {
+        let state = Arc::new(crate::state::tests::app_state(name));
+        let dir = temp_dir(name);
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &dir.join("no-such-workdir")))
+            .unwrap();
+        state
+            .store
+            .insert_project(&Project {
+                id: "project-1".to_string(),
+                console_id: "console-1".to_string(),
+                host_id: LOCAL_HOST_ID.to_string(),
+                name: "Project".to_string(),
+                path: dir.join("no-such-project").to_string_lossy().into_owned(),
+                default_agent: None,
+                source: ProjectSource::Local,
+                remote_url: None,
+                claude_trust_consent: false,
+                pinned: false,
+                tags: Vec::new(),
+            })
+            .unwrap();
+        for (id, agent) in [
+            ("claude-a", Agent::Claude),
+            ("codex-a", Agent::Codex),
+            ("grok-a", Agent::Grok),
+        ] {
+            state
+                .store
+                .insert_account(&Account {
+                    id: id.to_string(),
+                    agent,
+                    name: id.to_string(),
+                    config_dir: dir.join(id).to_string_lossy().into_owned(),
+                })
+                .unwrap();
+        }
+        (state, dir)
+    }
+
+    fn project_session(id: &str, agent: Agent, status: SessionStatus) -> Session {
+        Session {
+            agent,
+            project_id: Some("project-1".to_string()),
+            role: Role::Project,
+            status,
+            ..bare_session(id, Role::Project)
+        }
+    }
+
+    fn code_of(err: &anyhow::Error) -> &'static str {
+        err.downcast_ref::<CodedError>()
+            .expect("a coded error")
+            .code
+    }
+
+    fn shell_env(dir: &Path) -> impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static {
+        let env = HashMap::from([(
+            "CLAUDE_CONFIG_DIR".to_string(),
+            dir.join("default-claude").to_string_lossy().into_owned(),
+        )]);
+        move || Ok(env)
+    }
+
+    /// Every refusal that can be told before the process is ended names its reason and records
+    /// nothing: the session keeps its account, its directory and its status, and a Grok home that
+    /// was never initialized is not given a `sessions/` directory by the refused attempt.
+    #[tokio::test]
+    async fn a_refused_switch_records_nothing() {
+        let (state, dir) = switch_fixture("switch-refused");
+        std::fs::create_dir_all(dir.join("grok-a")).unwrap();
+
+        // (what is refused, the session, the request's account, the code it is refused with)
+        let archived = project_session("s", Agent::Claude, SessionStatus::Archived);
+        let mut with_conversation = project_session("s", Agent::Claude, SessionStatus::Interrupted);
+        with_conversation.has_conversation = true;
+        with_conversation.agent_session_id = Some("agent-1".to_string());
+        let cases = [
+            (
+                "an account that does not exist",
+                project_session("s", Agent::Claude, SessionStatus::Interrupted),
+                Some(Some("nope".to_string())),
+                error_code::UNKNOWN_ACCOUNT,
+            ),
+            (
+                "another agent's account",
+                project_session("s", Agent::Claude, SessionStatus::Interrupted),
+                Some(Some("codex-a".to_string())),
+                error_code::UNKNOWN_ACCOUNT,
+            ),
+            (
+                "the account it is on",
+                project_session("s", Agent::Claude, SessionStatus::Interrupted),
+                Some(None),
+                error_code::SESSION_ALREADY_ON_ACCOUNT,
+            ),
+            (
+                "no account named at all",
+                project_session("s", Agent::Claude, SessionStatus::Interrupted),
+                None,
+                error_code::FIELD_REQUIRED,
+            ),
+            (
+                "an archived session",
+                archived,
+                Some(Some("claude-a".to_string())),
+                error_code::SESSION_ARCHIVED,
+            ),
+            (
+                "a conversation that is not in its account",
+                with_conversation,
+                Some(Some("claude-a".to_string())),
+                error_code::CONVERSATION_NOT_FOUND,
+            ),
+            (
+                "a Grok home that was never initialized",
+                project_session("s", Agent::Grok, SessionStatus::Interrupted),
+                Some(Some("grok-a".to_string())),
+                error_code::GROK_HOME_NOT_INITIALIZED,
+            ),
+        ];
+        for (why, session, account, code) in cases {
+            state.store.delete_session("s").unwrap();
+            state.store.insert_session(&session).unwrap();
+
+            let err = switch_session_account(&state, "s", account, shell_env(&dir))
+                .await
+                .expect_err(why);
+            assert_eq!(code_of(&err), code, "{why}");
+
+            let after = state.store.get_session("s").unwrap().unwrap();
+            assert_eq!(after.account_id, session.account_id, "{why}");
+            assert_eq!(after.config_dir, session.config_dir, "{why}");
+            assert_eq!(after.status, session.status, "{why}");
+        }
+        assert!(!dir.join("grok-a/sessions").exists());
+        assert!(!dir.join("claude-a").exists());
+
+        // A launch, resume or switch of the session under way refuses another switch of it.
+        state.store.delete_session("s").unwrap();
+        state
+            .store
+            .insert_session(&project_session(
+                "s",
+                Agent::Claude,
+                SessionStatus::Interrupted,
+            ))
+            .unwrap();
+        let claim = state.begin_launch("s").unwrap();
+        let err = switch_session_account(
+            &state,
+            "s",
+            Some(Some("claude-a".to_string())),
+            shell_env(&dir),
+        )
+        .await
+        .expect_err("launching");
+        assert_eq!(code_of(&err), error_code::SESSION_ALREADY_STARTING);
+        drop(claim);
+    }
+
+    /// The default account resolves from one shell snapshot, taken once, and that same snapshot is
+    /// what the relaunch is handed; an account with a directory of its own needs none. A session
+    /// with no conversation has nothing to relocate whichever side is the default.
+    #[test]
+    fn the_default_account_is_resolved_once_for_the_copy_and_the_relaunch() {
+        let dir = temp_dir("switch-prepare");
+        let default_dir = dir.join("default-claude");
+        let record = default_dir.join("projects/slug/agent-1.jsonl");
+        std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+        std::fs::write(&record, "conversation").unwrap();
+        let calls = std::sync::atomic::AtomicUsize::new(0);
+        let snapshot = || {
+            calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(HashMap::from([(
+                "CLAUDE_CONFIG_DIR".to_string(),
+                default_dir.to_string_lossy().into_owned(),
+            )]))
+        };
+        let target = dir.join("claude-a").to_string_lossy().into_owned();
+
+        let plan = prepare_switch(
+            Agent::Claude,
+            Some("agent-1"),
+            None,
+            Some(&target),
+            snapshot,
+        )
+        .unwrap();
+        let (from, to, relative) = plan.relocation.expect("a conversation to relocate");
+        assert_eq!(
+            (from, to, relative),
+            (
+                default_dir.clone(),
+                PathBuf::from(&target),
+                PathBuf::from("projects/slug/agent-1.jsonl")
+            )
+        );
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(
+            plan.shell_env.expect("kept for the relaunch")["CLAUDE_CONFIG_DIR"],
+            default_dir.to_string_lossy()
+        );
+
+        // Both sides pinned: no default to resolve, so no snapshot.
+        let plan = prepare_switch(Agent::Claude, None, Some(&target), Some(&target), || {
+            panic!("no snapshot needed")
+        })
+        .unwrap();
+        assert!(plan.shell_env.is_none() && plan.relocation.is_none());
+
+        // The default account as the target, for a session with no conversation: still one
+        // snapshot, for the launch, and nothing to copy.
+        let plan = prepare_switch(Agent::Claude, None, Some(&target), None, snapshot).unwrap();
+        assert!(plan.shell_env.is_some() && plan.relocation.is_none());
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+    }
+
+    /// A relaunch that is refused after the conversation was copied and the account recorded puts
+    /// the account back, leaves the session interrupted rather than archived, and leaves the
+    /// conversation in the account it came from as well as the one it was copied to. The
+    /// switched session here is a live console session, whose process is ended on the way: the
+    /// session bound to it is not touched, which is what keeps a switch from ever being an
+    /// archive.
+    #[tokio::test]
+    async fn a_switch_whose_relaunch_fails_is_back_on_its_account_and_archives_nothing() {
+        let (state, dir) = switch_fixture("switch-relaunch-refused");
+        let source = dir.join("default-claude");
+        let record = "projects/slug/agent-1.jsonl";
+        std::fs::create_dir_all(source.join(record).parent().unwrap()).unwrap();
+        std::fs::write(source.join(record), "conversation").unwrap();
+
+        let mut hub = bare_session("hub", Role::Console);
+        hub.has_conversation = true;
+        hub.agent_session_id = Some("agent-1".to_string());
+        hub.status = SessionStatus::Working;
+        state.store.insert_session(&hub).unwrap();
+        let mut bound = project_session("bound", Agent::Claude, SessionStatus::Interrupted);
+        bound.bound_to = Some("hub".to_string());
+        state.store.insert_session(&bound).unwrap();
+        let live = crate::state::tests::fake_live_session("hub", Agent::Claude, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        state.watch_exit(live.clone());
+
+        let err = switch_session_account(
+            &state,
+            "hub",
+            Some(Some("claude-a".into())),
+            shell_env(&dir),
+        )
+        .await
+        .expect_err("the console's working directory does not exist");
+        assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
+
+        assert!(live.poll_exit(), "its process was ended");
+        let after = state.store.get_session("hub").unwrap().unwrap();
+        assert_eq!(after.status, SessionStatus::Interrupted);
+        assert_eq!((after.account_id, after.config_dir), (None, None));
+        assert_eq!(
+            state.store.get_session("bound").unwrap().unwrap().status,
+            SessionStatus::Interrupted
+        );
+        assert!(source.join(record).exists(), "copied, not moved");
+        assert_eq!(
+            std::fs::read_to_string(dir.join("claude-a").join(record)).unwrap(),
+            "conversation"
+        );
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    /// A relaunched process that has ended by the end of the settling time did not come up; one
+    /// still running did.
+    #[tokio::test]
+    async fn a_relaunched_process_that_ends_at_once_did_not_come_up() {
+        let settle = Duration::from_millis(400);
+        let gone = crate::state::tests::fake_live_session("gone", Agent::Claude, 80, 24, "exit 1");
+        let up = crate::state::tests::fake_live_session("up", Agent::Claude, 80, 24, "sleep 30");
+
+        assert!(!came_up(&gone, settle).await);
+        assert!(came_up(&up, settle).await);
+        up.terminate();
+    }
+
+    /// The claim a switch holds outlives the relaunched process being registered as live, and it
+    /// outlives that process's exit: while the come-up verdict is pending and the account is put
+    /// back, a resume (what the terminal's Resume button asks for) and a second switch are both
+    /// refused.
+    #[tokio::test]
+    async fn a_switch_claim_is_held_after_the_relaunched_process_is_live_and_after_it_exits() {
+        let state = Arc::new(crate::state::tests::app_state("switch-claim"));
+        let claim = state.begin_switch("s").unwrap();
+        let live = crate::state::tests::fake_live_session("s", Agent::Claude, 80, 24, "exit 1");
+        state.register_live(live.clone());
+        state.watch_exit(live);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while state.live_session("s").is_some() {
+            assert!(Instant::now() < deadline, "the exit was never seen");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        for refused in [state.begin_launch("s"), state.begin_switch("s")] {
+            let err = refused.err().expect("still claimed");
+            assert_eq!(code_of(&err), error_code::SESSION_ALREADY_STARTING);
+        }
+        drop(claim);
+        assert!(state.begin_launch("s").is_ok());
+    }
+
+    /// An archive that lands before the relaunch writes anything is not undone by the switch: the
+    /// relaunch refuses an archived session unless it is a resume reopening one, and leaves it
+    /// archived.
+    #[tokio::test]
+    async fn a_relaunch_for_a_switch_never_reopens_an_archived_session() {
+        let (state, dir) = switch_fixture("switch-archived-late");
+        state
+            .store
+            .insert_session(&project_session(
+                "s",
+                Agent::Claude,
+                SessionStatus::Archived,
+            ))
+            .unwrap();
+        let claim = state.begin_switch("s").unwrap();
+
+        let err = relaunch_session(&state, &claim, "s", None, false, None)
+            .await
+            .expect_err("archived");
+        assert_eq!(code_of(&err), error_code::SESSION_ARCHIVED);
+        assert_eq!(
+            state.store.get_session("s").unwrap().unwrap().status,
+            SessionStatus::Archived
+        );
+        std::fs::remove_dir_all(dir).ok();
     }
 }

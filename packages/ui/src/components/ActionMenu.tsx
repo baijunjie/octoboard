@@ -28,6 +28,9 @@ export function isActionMenuOpen(): boolean {
 
 export interface ActionMenuItem {
   label: string;
+  /** What the item shows in place of `label` (a path that has to read left to right); `label` stays
+   * its text value for typeahead. */
+  content?: React.ReactNode;
   /** A lucide glyph, or any element of about the same size (an agent's mark, a console's avatar). */
   icon: LucideIcon | React.ReactElement;
   onClick: () => void;
@@ -46,7 +49,7 @@ export interface ActionMenuItem {
 export interface ActionMenuSubmenu {
   label: string;
   icon: LucideIcon | React.ReactElement;
-  items: ActionMenuItem[];
+  items: (ActionMenuItem | "separator")[];
 }
 
 export type ActionMenuEntry = ActionMenuItem | ActionMenuSubmenu | "separator";
@@ -80,7 +83,7 @@ function MenuItems({ entries, label }: { entries: ActionMenuEntry[]; label: stri
       isDisabled={entry.disabled}
     >
       <ItemIcon icon={entry.icon} destructive={entry.destructive} />
-      <Label className="min-w-0 flex-1 truncate">{entry.label}</Label>
+      <Label className="min-w-0 flex-1 truncate">{entry.content ?? entry.label}</Label>
       {entry.end}
       {entry.selected !== undefined && <Dropdown.ItemIndicator />}
     </Dropdown.Item>

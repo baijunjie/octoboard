@@ -132,6 +132,19 @@ pub fn pinned_config_dir<'a>(spec: &LaunchSpec<'a>, agent: Agent) -> Result<Opti
     }
 }
 
+/// Refuses an account directory this agent cannot launch against, ahead of anything being done in
+/// it: the same rule `plan` applies at launch, asked beforehand so a switch can refuse before it
+/// copies a conversation into the directory. The copy would otherwise create the directory's
+/// `sessions/` and so make a Grok home that was never initialized pass the check at launch, which
+/// is exactly the silent failure that check exists to prevent. `pinned` is the account's own
+/// directory; the default account pins nothing and is not checked.
+pub fn refuse_unlaunchable_account(agent: Agent, pinned: Option<&Path>) -> Result<()> {
+    match (agent, pinned) {
+        (Agent::Grok, Some(dir)) => grok::require_initialized_grok_home(dir),
+        _ => Ok(()),
+    }
+}
+
 /// The directory this agent's default account resolves to — what "pinning nothing" means at
 /// launch: the directory its own variable is exported to in `shell_env`, else the agent's own
 /// usual default under the home directory the snapshot carries, else the daemon's own. For

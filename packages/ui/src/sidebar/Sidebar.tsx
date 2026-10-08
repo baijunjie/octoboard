@@ -746,7 +746,7 @@ function SessionRow({
       )}
       {session.pinned && <Pin aria-hidden="true" className="size-3 shrink-0 text-muted" />}
       <RowControls>
-        <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session)} />
+        <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session, accounts)} />
       </RowControls>
     </TreeRow>
   );

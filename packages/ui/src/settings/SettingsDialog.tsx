@@ -20,7 +20,7 @@ const SECTIONS = [
   { id: "notifications", label: "settings.section.notifications", Icon: Bell, Content: NotificationsSection },
 ] as const satisfies readonly { id: string; label: PlainMessageKey; Icon: LucideIcon; Content: () => React.ReactElement }[];
 
-type SectionId = (typeof SECTIONS)[number]["id"];
+export type SettingsSectionId = (typeof SECTIONS)[number]["id"];
 
 /**
  * The settings: a large modal over the whole window, the sections as vertical tabs on the start
@@ -35,9 +35,8 @@ export function SettingsDialog({
   onClose,
 }: {
   /** The section to open on. A typo must not compile: a key that names no section renders no panel
-   * and never focuses a tab, which would lose the dialog's keyboard rules.
-   * TODO: unused until the account-switch menu's entry opens Settings at the Agent accounts section. */
-  initialSection?: SectionId;
+   * and never focuses a tab, which would lose the dialog's keyboard rules. */
+  initialSection?: SettingsSectionId;
   onClose: () => void;
 }): React.ReactElement {
   const t = useT();

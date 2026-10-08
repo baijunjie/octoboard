@@ -165,7 +165,7 @@ function SessionCard({
         <span className="flex-1" />
         {session.pinned && <Pin aria-hidden="true" className="size-3 shrink-0 text-muted" />}
         <RowControls always>
-          <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session)} />
+          <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session, accounts)} />
         </RowControls>
       </div>
       <div dir="auto" className="line-clamp-2 text-sm font-medium break-words">
@@ -224,7 +224,7 @@ function ArchivedRow({
         {formatRelativeTime(language, session.ended_at ?? session.started_at)}
       </span>
       <RowControls>
-        <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session)} />
+        <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session, accounts)} />
       </RowControls>
     </TreeRow>
   );

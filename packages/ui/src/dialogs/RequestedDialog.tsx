@@ -21,10 +21,14 @@ export function RequestedDialog({
   dialog,
   onClose,
   onSessionOpened,
+  onSwitchAccount,
 }: {
   dialog: DialogRequest;
   onClose: () => void;
   onSessionOpened: (sessionId: string) => void;
+  /** Switches a session's account (`null`, the default account); resolves once the daemon has
+   * the result, and rejects with the reason when the switch did not happen. */
+  onSwitchAccount: (sessionId: string, account: string | null) => Promise<void>;
 }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
@@ -146,6 +150,20 @@ export function RequestedDialog({
           onCancel={onClose}
           onConfirm={async () => {
             await request({ type: "archive_session", session: dialog.session.id });
+            onClose();
+          }}
+        />
+      );
+    case "switch-account":
+      return (
+        <ConfirmDialog
+          title={t("dialog.switchAccount.title", { title: dialog.session.title, account: dialog.accountName })}
+          message={t(dialog.session.has_conversation ? "dialog.switchAccount.message" : "dialog.switchAccount.messageFresh")}
+          confirmLabel={t("dialog.switchAccount.confirm")}
+          pendingLabel={t("dialog.switchAccount.pending")}
+          onCancel={onClose}
+          onConfirm={async () => {
+            await onSwitchAccount(dialog.session.id, dialog.account);
             onClose();
           }}
         />

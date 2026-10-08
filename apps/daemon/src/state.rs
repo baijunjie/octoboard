@@ -177,8 +177,9 @@ impl AppState {
     }
 
     /// Claims the right to launch a process for this session. Fails if one is already running or
-    /// already being launched; the claim is released when the returned guard is dropped, which
-    /// `register_live` does not do — the session is then in the map instead.
+    /// already being launched; the claim is released only when the returned guard is dropped, and
+    /// registering the process as live does not release it — the holder drops it once whatever it
+    /// does around the launch is done.
     pub fn begin_launch(self: &Arc<Self>, id: &str) -> Result<LaunchClaim> {
         let mut live = self.live.write().expect("live sessions lock poisoned");
         if live.sessions.contains_key(id) {
@@ -188,6 +189,29 @@ impl AppState {
                 &[("session", id)],
             ));
         }
+        if !live.launching.insert(id.to_string()) {
+            return Err(CodedError::raised(
+                error_code::SESSION_ALREADY_STARTING,
+                "this session is already being started",
+                &[("session", id)],
+            ));
+        }
+        Ok(LaunchClaim {
+            state: self.clone(),
+            id: id.to_string(),
+        })
+    }
+
+    /// Claims the right to relaunch this session for a switch of its account, which — unlike
+    /// [`Self::begin_launch`] — may be taken while its process is still running, because ending
+    /// that process is the switch's first step. It holds the same exclusion a launch does, for as
+    /// long as the guard lives: the switch keeps it from before the process is ended until after
+    /// the relaunched process has been judged to have come up or not, and any revert of the
+    /// recorded account is done, so a resume, a second switch and a delete are all refused for
+    /// that whole window — while the process is down, while it is being watched, and while the
+    /// account is put back. Fails only when a launch, a resume or another switch of it is under way.
+    pub fn begin_switch(self: &Arc<Self>, id: &str) -> Result<LaunchClaim> {
+        let mut live = self.live.write().expect("live sessions lock poisoned");
         if !live.launching.insert(id.to_string()) {
             return Err(CodedError::raised(
                 error_code::SESSION_ALREADY_STARTING,
@@ -232,8 +256,10 @@ impl AppState {
         self.has_launching_sessions_where(matches)
     }
 
-    /// Whether any session being launched or resumed right now matches. Its process is not yet
-    /// registered, so it cannot be stopped; whatever it belongs to must not be deleted under it.
+    /// Whether any session holding a launch claim right now matches: being launched, resumed or
+    /// switched, until its holder lets go. Its process may not be registered yet, or may be
+    /// registered with the holder still judging it, so it cannot be relied on to stop; whatever it
+    /// belongs to must not be deleted under it.
     pub fn has_launching_sessions_where(&self, matches: impl Fn(&Session) -> bool) -> Result<bool> {
         let launching: Vec<String> = self
             .live
@@ -256,7 +282,6 @@ impl AppState {
     pub fn register_live(&self, session: Arc<LiveSession>) {
         cleanup::register(session.clone());
         let mut live = self.live.write().expect("live sessions lock poisoned");
-        live.launching.remove(&session.id);
         live.sessions.insert(session.id.clone(), session);
     }
 
@@ -300,6 +325,20 @@ impl AppState {
     pub fn save_session(&self, session: &Session) -> Result<()> {
         if self.store.update_session(session)? {
             self.publish_session(session);
+        }
+        Ok(())
+    }
+
+    /// Records the account a session runs under and its directory, and tells every client. A
+    /// record deleted in the meantime is not written and not announced, as with [`Self::save_session`].
+    pub fn set_session_account(
+        &self,
+        id: &str,
+        account_id: Option<&str>,
+        config_dir: Option<&str>,
+    ) -> Result<()> {
+        if let Some(session) = self.store.set_session_account(id, account_id, config_dir)? {
+            self.publish_session(&session);
         }
         Ok(())
     }
@@ -833,8 +872,8 @@ struct LiveSessions {
     launching: HashSet<String>,
 }
 
-/// The right to start a process for one session, released on drop. Taken before the launch and
-/// surrendered by `register_live` once the session is in the live map.
+/// The right to start a process for one session, released on drop, and only then: it outlives
+/// `register_live`, so the holder decides how much of what follows a launch it covers.
 pub struct LaunchClaim {
     state: Arc<AppState>,
     id: String,

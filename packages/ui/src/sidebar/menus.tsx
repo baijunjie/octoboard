@@ -1,9 +1,11 @@
-import { Archive, Focus, List, Pencil, Pin, PinOff, Settings2, Trash2 } from "lucide-react";
+import { Archive, ArrowLeftRight, Focus, KeyRound, List, Pencil, Pin, PinOff, Settings2, Trash2 } from "lucide-react";
 
+import { switchEntries } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuSubmenu } from "../components/ActionMenu";
 import { AgentIcon } from "../components/AgentIcon";
+import { PathText } from "../components/PathText";
 import type { Translate } from "../i18n/catalog";
-import type { Project, Session } from "../protocol";
+import type { Account, Project, Session } from "../protocol";
 import { FocusShortcutKbd } from "./focusShortcut";
 import type { SidebarHandlers } from "./types";
 
@@ -62,21 +64,56 @@ export function projectMenu(
   ];
 }
 
-/** A session's actions: pin, rename and archive; an archived session (listed in focus mode) offers
- * deleting instead. Resuming or reopening is no item: selecting an interrupted session resumes it,
- * and an archived one is reopened by typing to it or from the archive view. Shared by a project
- * session's row and a console session's row (`ConsoleSessionsSection` in `Sidebar.tsx`) — a console
- * session cannot archive itself (see "The console session's tools" in
- * `docs/product/hub-orchestration.md`), so this is the only way to archive one.
+/** "Switch account": the session's agent's accounts, the one the session is on marked as current
+ * and doing nothing, and last a way into Settings' Agent accounts section. Absent when the agent
+ * has no other account to go to — hidden rather than disabled, as there is nothing the user could
+ * do with it. */
+function switchAccountSubmenu(
+  t: Translate,
+  handlers: SidebarHandlers,
+  session: Session,
+  accounts: Account[],
+): ActionMenuSubmenu | undefined {
+  const entries = switchEntries(session, accounts, t);
+  if (entries.length < 2) return undefined;
+  return {
+    label: t("sidebar.session.switchAccount"),
+    icon: ArrowLeftRight,
+    items: [
+      ...entries.map(({ account, name, current, isPath }) => ({
+        label: name,
+        // A directory is a path, so it reads left to right and shows its end, as it does elsewhere.
+        ...(isPath ? { content: <PathText path={name} as="span" />, ariaLabel: name } : {}),
+        icon: KeyRound,
+        selected: current,
+        onClick: current
+          ? () => {}
+          : () => handlers.onOpenDialog({ kind: "switch-account", session, account, accountName: name }),
+      })),
+      "separator" as const,
+      { label: t("sidebar.session.manageAccounts"), icon: Settings2, onClick: () => handlers.onOpenSettings("accounts") },
+    ],
+  };
+}
+
+/** A session's actions: pin, rename, switch account and archive; an archived session (listed in
+ * focus mode) offers deleting instead. Resuming or reopening is no item: selecting an interrupted
+ * session resumes it, and an archived one is reopened by typing to it or from the archive view.
+ * Shared by a project session's row and a console session's row (`ConsoleSessionsSection` in
+ * `Sidebar.tsx`) — a console session cannot archive itself (see "The console session's tools" in
+ * `docs/product/hub-orchestration.md`), so this is the only way to archive one, and the only place
+ * to switch its account.
  *
  * TODO(docs/plans/20261008-console-sessions-and-agent-accounts/13-focus-modes.md): a console
  * session's row still owes its "Enter focus mode" entry, left out of this menu because the
  * behaviour it would open is that milestone's; see its Handoff. */
-export function sessionMenu(t: Translate, handlers: SidebarHandlers, session: Session): ActionMenuEntry[] {
+export function sessionMenu(t: Translate, handlers: SidebarHandlers, session: Session, accounts: Account[]): ActionMenuEntry[] {
   const archived = session.status === "archived";
+  const switchAccount = archived ? undefined : switchAccountSubmenu(t, handlers, session, accounts);
   return [
     ...(archived ? [] : [pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned))]),
     { label: t("sidebar.session.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) },
+    ...(switchAccount ? [switchAccount] : []),
     "separator",
     archived
       ? { label: t("sidebar.session.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true }

@@ -2,12 +2,14 @@
 
 Per-agent facts about the three agent CLIs Octoboard launches: the hook events, what their payloads carry, what the
 payloads can and cannot be correlated on, what a failing hook costs, how a project's own configuration layers around an
-injected one, and the mechanism and conditions for injecting Octoboard into each.
+injected one, the mechanism and conditions for injecting Octoboard into each, and what it takes to move a session's
+conversation into another config directory.
 
 Established against **Claude Code 2.1.274**, **Codex 0.160.0** and **Grok Build 1.0.46**; what the Claude Code section
-says about a declined prompt was measured on **2.1.286** as well, and held identically on both. All three rewrite their
-hook surface, their payload fields and their configuration layering on upgrade, so check a detail here against the
-installed version before relying on it.
+says about a declined prompt was measured on **2.1.286** as well, and held identically on both. What "Moving a
+conversation to another config directory" says was measured on **Claude Code 2.1.289**, **Codex 0.160.0** and **Grok
+Build 1.0.46**. All three rewrite their hook surface, their payload fields, their configuration layering and their
+on-disk layout on upgrade, so check a detail here against the installed version before relying on it.
 
 How Octoboard's status mapping handles these traps is encoded in `apps/daemon/src/hooks.rs`; the product behavior
 built on them is in the product docs.
@@ -234,6 +236,62 @@ session's own:
 - Grok — `SubagentStart` fires in the parent and `SubagentStop` in the child, where `sessionId` equals `subagentId`;
   the resolved `subagentType` is not the one the caller asked for, so a matcher written against a requested name never
   matches; and a parent's `Stop` is no promise that its subagents have finished.
+
+## Moving a conversation to another config directory
+
+All three agents resume a conversation under a second config directory when **the session's own record alone** is
+copied into it. No index, registry or per-project entry has to travel with it, although all three keep one. Each result
+carried a control in the same run.
+
+| Agent | What to copy | Where it goes |
+|---|---|---|
+| Claude Code | `<session id>.jsonl` | `<config dir>/projects/<cwd slug>/` |
+| Codex | `rollout-<timestamp>-<thread id>.jsonl` | anywhere under `<home>/sessions/` |
+| Grok Build | the `<session id>/` directory, whole | `<home>/sessions/<url-encoded cwd>/` |
+
+**The record's path relative to the config directory is what matters**, and the source directory already holds it, so a
+copy goes from `<source>/<relative path>` to `<target>/<same relative path>` with the intermediate directories created.
+Neither Claude Code's slug rule nor Grok's encoding of a working directory has to be implemented, and neither was
+measured. For Grok Build the config directory is the **account's** directory, the source home a per-session home is
+built from, never the per-session home itself, which is discarded with the process.
+
+- **Claude Code** — the record copied alone into a project-slug directory that had never held it resumed with the
+  conversation intact. The global config file's `projects` map was empty in the target and nothing was needed there, so
+  `.claude.json` is not part of a resume's lookup. Session resolution comes **before** the login check: an
+  unauthenticated directory asked to resume a session it does not hold answers `No conversation found with session ID:
+  <id>`, and the same directory with the record copied in answers `Not logged in · Please run /login`.
+- **Codex** — a record copied into a fresh home at a date path unrelated to its own (`sessions/2099/01/01/`) resumed
+  with the conversation intact: the date directories are how Codex writes, not how it looks up, and
+  `session_index.jsonl` is not consulted. Control: a thread id with no record in the home answers `thread/resume:
+  thread/resume failed: no rollout found for thread id <id>`. Resolution precedes the login check here too.
+- **Grok Build** — the session directory copied under a different working directory's encoded name resumed with the
+  conversation intact; `sessions/session_search.sqlite` is not consulted. Two differences from the others: **the login
+  check comes first** (an unauthenticated home refuses with `Not signed in` before it looks for the session, so a
+  relocation cannot be verified without a login, and a failed switch cannot be told from a login problem by the message
+  alone), and **a session missing locally is fetched from a remote registry** (`Session "<id>" not found locally,
+  restoring conversation from remote...`, then a 404 in the control), so a switch between two homes of the same account
+  might not need a copy at all; across two different accounts the registry is the other account's and will not serve
+  the session.
+
+**The session comes up under the target directory's whole setup.** A config directory holds the agent's global
+configuration, not only its login: the same Codex thread resumed in a fresh home came up with that home's own defaults
+(`reasoning effort: none` where the original had `medium`) because `config.toml` lives in the home. Claude Code's
+`settings.json` and Grok's `config.toml` are in the same position.
+
+**A second config directory is a second login.** Claude Code keeps its credential in the macOS Keychain under a service
+name derived from the config directory, so two directories hold two independent logins: a fresh `CLAUDE_CONFIG_DIR`
+reports `Not logged in` while the default directory is logged in, and copying the logged-in directory's own account
+record into it changes nothing. Read out of the 2.1.289 executable and not measured: the service name appears to be
+`Claude Code-credentials`, with `-<first 8 hex of sha256(config directory)>` appended when `CLAUDE_CONFIG_DIR` is set.
+Codex and Grok Build keep the login in a file inside the directory (`auth.json` in both), which is inferred from the
+layout, not measured.
+
+**Not established**: whether Codex creates its home directory when pointed at one that does not exist; the measurement
+created the target by copying into it. Claude Code was measured to create it.
+
+**The trap a verification has to rule out** is an agent that resumes *successfully* into an empty conversation. None of
+the three did that here, each refusing distinctly, but a future version could introduce it and it would look like a
+successful switch.
 
 ## Injecting Octoboard into each agent
 

@@ -10,7 +10,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Sessions](product/sessions.md) — console and project sessions, agent selection, the five session statuses, their
   glyphs and their transitions, the raised hand and its notification, how a declined Claude Code prompt lowers the
   hand from the agent's own transcript and what that costs to keep working, archiving, interruption and resuming,
-  where archived sessions are kept and deleting them, and the terminal.
+  switching a session to another account of its agent, where archived sessions are kept and deleting them, and the
+  terminal.
 - [Sidebar](product/sidebar.md) — one console at a time and the switcher with its activity markers, the console
   sessions section and the project list, project and session rows and their menus, the binding badge a bound session
   carries, keyboard focus on rows, the order of projects and sessions and pinning, how the sidebar follows the
@@ -46,10 +47,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   Settings, how the system's languages map onto the list, what follows the current language and what does not (report
   pages, text aimed at agents), where the choice is kept, and what is translated so far.
 - [Launching agents](product/launching-agents.md) — the guarantee that Octoboard installs nothing into a project and
-  never writes the user's agent configuration (and the one thing it touches a project directory for, once the user
-  turns it on), the three things injected per launch and the console session's generated instruction file, the
-  launch environment, Claude Code's workspace-trust prompt, how Octoboard answers it and trusted folders, and the
-  per-agent specifics.
+  never writes the user's agent configuration (the one exception being the conversation record a switch of a session's
+  account copies), and the one thing it touches a project directory for, once the user turns it on; the three things
+  injected per launch and the console session's generated instruction file, the launch environment, Claude Code's
+  workspace-trust prompt, how Octoboard answers it and trusted folders, and the per-agent specifics.
 - [Application lifecycle](product/application-lifecycle.md) — what Octoboard runs on and how it is distributed, startup
   and the single-instance rule, who can reach the daemon (any local program, but no web page in a browser), losing the
   daemon connection, the quit confirmation and which gestures it covers, how to quit a window that has stopped
@@ -65,7 +66,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Agent CLI reference](agent-cli-reference.md) — what the three agent CLIs themselves do, against the versions the
   facts were established on: each one's hook events, the payload fields and the keys a turn can be correlated on, what
   a failing hook costs, how a project's own configuration layers around an injected one, how Octoboard is injected into
-  each agent and the conditions that come with it, and the rules for writing into a running session.
+  each agent and the conditions that come with it, the rules for writing into a running session, and where each keeps a
+  session's conversation record and what moving it to another config directory takes.
 
 ## Code
 

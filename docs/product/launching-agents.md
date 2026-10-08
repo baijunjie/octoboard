@@ -13,9 +13,14 @@ This is the guarantee the whole design rests on:
   thing Octoboard does to a project directory on its own account, the user has to turn on first: with
   **Automatically sync repositories** on, a project's branch is fast-forwarded when it is behind its upstream, which
   moves its working tree (see "Automatically syncing repositories" in `docs/product/project-git-status.md`).
-- **The user's own agent configuration is never written to.** Octoboard does not edit `~/.claude.json`,
-  `~/.codex/`, `~/.grok/`, a directory chosen as one of a console's agent config directories, or anything else the
-  agent reads as the user's global setup, and it never writes a trust decision into any of them.
+- **The user's own agent configuration is never written to, with one narrow exception.** Octoboard does not edit
+  `~/.claude.json`, `~/.codex/`, `~/.grok/`, an account's config directory, or anything else the agent reads as the
+  user's global setup, and it never writes a trust decision into any of them. The exception is switching a session to
+  another account (see "Switching a session's account" in `docs/product/sessions.md`): it copies the one conversation
+  record of that one session into the target account's directory, adding it there or replacing an earlier copy of the
+  same record. It builds the copy in a transient `.octoboard-switch` directory at the root of the target directory,
+  which it removes again, so a failure never leaves a half-written record among the agent's own. It touches no settings
+  file of the agent's, none of the other records in either directory, and it leaves the original where it was.
 
 Where Claude Code stops to ask whether to trust a folder, Octoboard does not touch a file either: it
 answers the prompt on Claude Code's own screen, with the keystrokes a person would type — for a project
@@ -351,4 +356,8 @@ again.
 ## Agent session data
 
 Conversation history and session records belong to each agent and stay wherever that agent keeps them. Octoboard
-never prunes, copies or deletes them; their retention and cleanup follow the agent's own rules.
+never prunes or deletes them; their retention and cleanup follow the agent's own rules. It copies one only when the
+user switches that session to another account of the same agent: the session's own record, and no other, is added to the
+target account's directory so the conversation can continue there. Copying leaves the record in the account it came
+from as well, so switching back needs no second copy; and a record Octoboard copied is the agent's own from then on,
+retained and cleaned up by the agent's rules like any other.

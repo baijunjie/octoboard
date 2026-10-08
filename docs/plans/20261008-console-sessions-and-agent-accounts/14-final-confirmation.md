@@ -128,3 +128,44 @@ is left beyond this milestone.
       path. Both catalogues are left-to-right today, so nothing shows this short of switching language.
 - [ ] **A clipped focus-mode card line** fades at its end, shows the full text as a tooltip, and runs its
       marquee on hover in a narrow sidebar.
+
+## From milestone 08 — switching a session's account
+
+The relocation itself is measured fact (the findings this topic carried), and the implementation is covered by
+unit tests against synthetic directories. What is missing is a real agent and a real window.
+
+**Needs an agent actually installed**
+
+- [ ] **A full switch for each of the three agents**, on a session that has had a turn: the conversation continues
+      under the target account, and the record is found where the findings say it is. Nothing has run this end to
+      end.
+- [ ] **The "did not come up" signal against real agents.** An agent that cannot find the record has to exit inside
+      the four-second settle window for a failed switch to be reported as one. Grok checks its login before it looks
+      for the session. A switch to a Claude Code or Codex account that is not logged in may stay up at a login
+      prompt and count as a success — that is expected, not a failure.
+- [ ] Whether **Codex creates its home directory** when the target does not exist yet; the findings leave this
+      unestablished.
+- [ ] **A console session's own switch**, and a switch of a session that is mid-turn.
+- [ ] **A switch back to the account it came from**, which replaces the older copy there.
+- [ ] A **Grok target that is an initialized home**, and that the launch refusal still catches one that is not.
+- [ ] **Two sessions switched into the same account in quick succession** both end up with their record in place and
+      no staging directory left — the case the per-copy staging path exists for.
+- [ ] A **failed relaunch leaves no stale staging directory**, and the directory is gone after a successful switch.
+
+**Needs a window**
+
+- [ ] **The submenu**: the current account marked and inert, the separator, and Manage accounts… opening Settings on
+      the Agent accounts section. By keyboard as well as by pointer. The entry is absent when the agent has one
+      account, and the zh-Hans wording reads naturally in place.
+- [ ] **The wait.** For the five to eight seconds a switch takes, keyboard focus stays on the Switch button, Escape
+      and Tab keep working inside the dialog, the button shows its pending state and reads "Switching account…" in
+      both languages, and Escape or a click outside does **not** dismiss the dialog.
+- [ ] **The terminal during the switch** reads "Resuming session…" throughout, with no Resume button appearing
+      between the process dying and the relaunch — the button that would otherwise invite a resume in the middle of
+      a switch.
+- [ ] **A failure** shows inline in the dialog, and only falls back to a toast if the dialog is somehow gone.
+- [ ] The **no-conversation wording** appears for a session nobody has typed into, rather than the one promising the
+      conversation continues.
+- [ ] A **removed-account entry** renders its path left-to-right with a tooltip when clipped.
+- [ ] The terminal **reattaches** to the new process across the Interrupted-to-Idle transition.
+

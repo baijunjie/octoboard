@@ -115,11 +115,11 @@ export interface Session {
    * there, so a title is never reused after a console session is archived or deleted — and what
    * gives it its default title ("Hub `<ordinal>`"). Absent for a project session. */
   ordinal?: number | null;
-  /** The account this session's own agent reads, by id, fixed at creation; absent means the
-   * default account. Written only when the session is opened. */
+  /** The account this session's own agent reads, by id; absent means the default account. Written
+   * when the session is opened and when its account is switched. */
   account_id?: string | null;
-  /** The config directory of this session's own agent that it was started with, fixed at creation
-   * so a resume finds its transcript even after the account's own directory changes. */
+  /** The config directory of this session's own agent that it launches with, recorded with the
+   * account so a resume finds its transcript even after the account's own directory changes. */
   config_dir?: string | null;
   /** The user pinned this session to the top of its list; survives archiving and resuming. */
   pinned: boolean;
@@ -279,6 +279,11 @@ export type RequestBody =
     }
   | { type: "resume_session"; session: string }
   | { type: "archive_session"; session: string }
+  /** Moves the session to another account of its own agent: its process ends, its conversation is
+   * copied into that account's directory, and it is relaunched there. `account` is the target by
+   * id, or `null` for the default account; it is always sent. Answered once the relaunched session
+   * has stayed up, or with the reason it did not. */
+  | { type: "switch_session_account"; session: string; account: string | null }
   /** Removes Octoboard's record of one archived session; refused with `session_not_archived`
    * otherwise. The agent's own transcript is never touched. */
   | { type: "delete_session"; session: string }

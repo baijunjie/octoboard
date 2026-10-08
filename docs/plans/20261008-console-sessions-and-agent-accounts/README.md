@@ -241,7 +241,7 @@ milestone 1 settles. Nothing it adds says "hub".
 5. 05 Agent availability and the default account (closed)
 6. 06 Settings section (closed)
 7. 07 Choosing an account where an agent is chosen (closed)
-8. [Switching a session's account](08-switching-a-sessions-account.md)
+8. 08 Switching a session's account (closed)
 9. [Report panel pages per console session](09-report-panel-scope.md)
 10. [What a console session may see and touch](10-tool-surface.md)
 11. [Archiving, reopening and deleting along the binding](11-archive-cascade.md)
@@ -250,7 +250,8 @@ milestone 1 settles. Nothing it adds says "hub".
 14. [Final confirmation](14-final-confirmation.md)
 
 [The relocation findings](agent-relocation-findings.md) are a reference rather than a milestone: they are already
-measured, and milestone 8 is what acts on them.
+measured, and milestone 8 acted on them. What they establish now lives in `docs/agent-cli-reference.md`, so this
+file goes with the topic directory.
 
 ### Why this order
 

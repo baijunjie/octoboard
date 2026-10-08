@@ -1,5 +1,6 @@
 //! Launching an agent in a PTY, and writing messages into a running one.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -59,6 +60,11 @@ pub struct LaunchRequest {
     /// The configuration directory of the session's own agent that it is pinned to; see
     /// `protocol::Session::config_dir`.
     pub config_dir: Option<PathBuf>,
+    /// A shell environment already snapshotted for this launch, used as it is instead of taking
+    /// another. Only a caller that has already resolved something from one passes it — a switch
+    /// to the default account, which resolved that account's directory from it to copy the
+    /// conversation there and must launch against the same value.
+    pub preresolved_shell_env: Option<HashMap<String, String>>,
     pub daemon_port: u16,
     pub self_exe: String,
     pub mcp_token: String,
@@ -76,6 +82,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         task,
         resume_agent_session_id,
         config_dir,
+        preresolved_shell_env,
         daemon_port,
         self_exe,
         mcp_token,
@@ -96,7 +103,10 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         ));
     }
 
-    let shell_env = env_shell::snapshot().context("snapshotting the user's shell environment")?;
+    let shell_env = match preresolved_shell_env {
+        Some(shell_env) => shell_env,
+        None => env_shell::snapshot().context("snapshotting the user's shell environment")?,
+    };
 
     let scratch = paths::session_scratch(session_id);
     if scratch.exists() {

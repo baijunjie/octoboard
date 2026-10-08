@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 
 import { isActionMenuOpen } from "../components/ActionMenu";
 import { usePlatform } from "../platform/react";
+import type { SettingsSectionId } from "./SettingsDialog";
 
 /**
- * Whether the settings dialog is open, and how to open and close it, including from the native
+ * Whether the settings dialog is open, and how to open it (on its first section, or at a given one
+ * with `openSettingsAt`) and close it, including from the native
  * menu's Settings item (Cmd+,). That request is ignored while anything else holds the user's
  * attention: another modal (`otherModalOpen`), an open action menu, the settings themselves, or
  * before the UI has anything to show (`ready` is false), where it would otherwise pop the dialog
@@ -19,8 +21,16 @@ export function useSettingsDialog({
   ready: boolean;
   otherModalOpen: boolean;
   focusTerminal: () => void;
-}): { settingsOpen: boolean; openSettings: () => void; closeSettings: () => void } {
+}): {
+  settingsOpen: boolean;
+  /** The section the dialog was asked to open on, none for its first. */
+  settingsSection: SettingsSectionId | undefined;
+  openSettings: () => void;
+  openSettingsAt: (section: SettingsSectionId) => void;
+  closeSettings: () => void;
+} {
   const [open, setOpen] = useState(false);
+  const [section, setSection] = useState<SettingsSectionId>();
   const { appMenu } = usePlatform();
 
   // Not on first render, and not when opening.
@@ -37,5 +47,17 @@ export function useSettingsDialog({
   };
   useEffect(() => appMenu?.onSettingsRequested(() => requestFromMenuRef.current()), [appMenu]);
 
-  return { settingsOpen: open, openSettings: () => setOpen(true), closeSettings: () => setOpen(false) };
+  return {
+    settingsOpen: open,
+    settingsSection: section,
+    openSettings: () => setOpen(true),
+    openSettingsAt: (target) => {
+      setSection(target);
+      setOpen(true);
+    },
+    closeSettings: () => {
+      setSection(undefined);
+      setOpen(false);
+    },
+  };
 }
