@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Account } from "../protocol";
-import { accountsByAgent, isAbsoluteConfigDir, nameCollision } from "./agentAccounts";
+import { isAbsoluteConfigDir, nameCollision } from "./agentAccounts";
 
 const account = (id: string, agent: Account["agent"], name: string): Account => ({
   id,
@@ -47,16 +47,5 @@ describe("nameCollision", () => {
   it("does not let the account being edited collide with itself", () => {
     expect(nameCollision("work", "claude", accounts, "Default", "a")).toBeUndefined();
     expect(nameCollision("home", "claude", accounts, "Default", "a")).toEqual({ kind: "account", name: "Home" });
-  });
-});
-
-describe("accountsByAgent", () => {
-  it("lists every agent in the usual order, each with its own accounts in stored order", () => {
-    const grouped = accountsByAgent([account("1", "grok", "G"), account("2", "claude", "B"), account("3", "claude", "A")]);
-    expect(grouped.map((g) => [g.agent, g.accounts.map((a) => a.id)])).toEqual([
-      ["claude", ["2", "3"]],
-      ["codex", []],
-      ["grok", ["1"]],
-    ]);
   });
 });

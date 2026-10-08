@@ -40,6 +40,7 @@ function renderArchiveView(): { container: HTMLElement; unmount: () => void } {
         console={console_}
         boundTo={boundConsoleSession}
         sessions={[...OTHER_SESSIONS, ...boundArchived]}
+        accounts={[]}
         onReopen={() => {}}
         onOpenDialog={() => {}}
         dialogOpen={false}

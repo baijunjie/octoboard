@@ -210,10 +210,8 @@ contributing the agent alone as it does today.
 
 **An account's name is required and unique within its agent**, compared trimmed and ignoring letter case, so that
 the grouped picker never shows two entries a user cannot tell apart. Names are not compared across agents, and the
-default account's name takes part in the comparison like any other. Where Octoboard names an account itself — the
-console dialog still saves a path, with no name field to ask with, until milestone 7 replaces it — it uses the
-directory's last path component, and when that is already taken for that agent it uses the whole directory instead,
-since a path is always distinct.
+default account's name takes part in the comparison like any other. Octoboard never names an account itself: every
+account is named by the user, in the Agent accounts section.
 
 **The Agent accounts section says nothing about which accounts are in use.** A count that changes while the dialog
 is open is noise, and nothing a user would do differently for it: an account can be removed whether or not sessions
@@ -242,7 +240,7 @@ milestone 1 settles. Nothing it adds says "hub".
 4. 04 Accounts: storage and protocol (closed)
 5. 05 Agent availability and the default account (closed)
 6. 06 Settings section (closed)
-7. [Choosing an account where an agent is chosen](07-account-pickers.md)
+7. 07 Choosing an account where an agent is chosen (closed)
 8. [Switching a session's account](08-switching-a-sessions-account.md)
 9. [Report panel pages per console session](09-report-panel-scope.md)
 10. [What a console session may see and touch](10-tool-surface.md)

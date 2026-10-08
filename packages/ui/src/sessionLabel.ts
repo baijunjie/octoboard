@@ -2,7 +2,7 @@ import { AGENT_LABEL } from "./agents";
 import type { MessageKey, Translate } from "./i18n/catalog";
 import { joinPhrases } from "./i18n/joinPhrases";
 import type { Language } from "./i18n/languages";
-import type { Console, Project, Session, SessionStatus } from "./protocol";
+import type { Account, Console, Project, Session, SessionStatus } from "./protocol";
 
 /** Where to tell the user a session is, since the daemon's `Session` record itself only carries
  * ids. A console session has no project, so it is named for its console instead. */
@@ -32,15 +32,37 @@ export function statusLabel(t: Translate, status: SessionStatus): string {
   return t(STATUS_KEY[status]);
 }
 
+/** The name a session's account is shown under: the default account's own name for a session on
+ * it, the account's name while it is stored, else the directory the session recorded — or nothing
+ * when it recorded none. */
+export function sessionAccountName(t: Translate, session: Session, accounts: Account[]): string | undefined {
+  if (!session.account_id) return t("settings.accounts.defaultName");
+  return accounts.find((account) => account.id === session.account_id)?.name ?? session.config_dir ?? undefined;
+}
+
+/** A session's agent followed by the account it runs under, as plain text: for an accessible name
+ * or a tooltip, where `AgentAccountText` is not needed. */
+export function sessionAgentLabel(t: Translate, session: Session, accounts: Account[]): string {
+  const agent = AGENT_LABEL[session.agent];
+  const account = sessionAccountName(t, session, accounts);
+  return account === undefined ? agent : t("session.agentAccount", { agent, account });
+}
+
 /** A session row's accessible name: the row is one button, so its icons are not announced, and
- * the title, agent, status and pin all have to be in this. `owner`, the console session this
+ * the title, agent and its account, status and pin all have to be in this. `owner`, the console session this
  * (project) session is bound to, folds in the fact the binding badge shows visually — the badge
  * carries no information its tooltip does not, so it carries none the row's own label does not
  * either. */
-export function sessionAriaLabel(t: Translate, language: Language, session: Session, owner?: Session): string {
+export function sessionAriaLabel(
+  t: Translate,
+  language: Language,
+  session: Session,
+  accounts: Account[],
+  owner?: Session,
+): string {
   const base = t(session.pinned ? "sidebar.session.ariaLabelPinned" : "sidebar.session.ariaLabel", {
     title: session.title,
-    agent: AGENT_LABEL[session.agent],
+    agent: sessionAgentLabel(t, session, accounts),
     status: statusLabel(t, session.status),
   });
   return owner ? joinPhrases(language, [base, t("sidebar.session.boundTo", { name: owner.title })]) : base;

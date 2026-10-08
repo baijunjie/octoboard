@@ -45,28 +45,18 @@ export interface Console {
   console_session_agent: Agent;
   default_agent: Agent;
   /** The account each agent's sessions opened in this console read, by id; absent means that
-   * agent's default account — the state of pinning nothing. Not yet consulted by anything in this
-   * client; nothing here picks an account yet. */
+   * agent's default account — the state of pinning nothing. A session resolves its own: the one
+   * chosen for it, else this, else the default. */
   claude_account_id?: string | null;
   codex_account_id?: string | null;
   grok_account_id?: string | null;
-  /** The referenced account's directory, derived for display: absent for the default account.
-   * This is what the console dialog still shows and saves per agent — Claude Code is launched
-   * with it as `CLAUDE_CONFIG_DIR`, Codex as `CODEX_HOME`, and for Grok it replaces `~/.grok` as
-   * the directory its per-session home is built from.
-   *
-   * TODO(docs/plans/20261008-console-sessions-and-agent-accounts/07-account-pickers.md): drop
-   * this once the console dialog picks an account rather than a path. */
-  claude_config_dir?: string | null;
-  codex_config_dir?: string | null;
-  grok_config_dir?: string | null;
   /** A custom avatar as an `image/*` `data:` URL of at most 256 KiB; unset shows the default glyph. */
   icon?: string | null;
   created_at: number;
 }
 
-/** The three per-agent config directory fields of a console, as named on the wire. */
-export type ConfigDirField = "claude_config_dir" | "codex_config_dir" | "grok_config_dir";
+/** The three per-agent account reference fields of a console, as named on the wire. */
+export type AccountField = "claude_account_id" | "codex_account_id" | "grok_account_id";
 
 /** A named config directory of one agent, kept once for the whole application. The default
  * account of each agent is not one of these — it is the state of pinning nothing, and what it is
@@ -222,9 +212,10 @@ export type RequestBody =
       name: string;
       console_session_agent: Agent;
       default_agent: Agent;
-      claude_config_dir?: string;
-      codex_config_dir?: string;
-      grok_config_dir?: string;
+      /** Each agent's account, by id; absent means that agent's default account. */
+      claude_account_id?: string;
+      codex_account_id?: string;
+      grok_account_id?: string;
       icon?: string;
     }
   | {
@@ -233,11 +224,11 @@ export type RequestBody =
       name?: string;
       console_session_agent?: Agent;
       default_agent?: Agent;
-      /** Each config directory: absent leaves it alone; an explicit `null` clears it, so the user's
-       * shell environment applies again. */
-      claude_config_dir?: string | null;
-      codex_config_dir?: string | null;
-      grok_config_dir?: string | null;
+      /** Each agent's account: absent leaves it alone; an explicit `null` clears it back to that
+       * agent's default account. */
+      claude_account_id?: string | null;
+      codex_account_id?: string | null;
+      grok_account_id?: string | null;
       /** Absent leaves the avatar alone; an explicit `null` clears it back to the default glyph. */
       icon?: string | null;
     }
@@ -275,6 +266,10 @@ export type RequestBody =
       console_id: string;
       project_id?: string;
       agent?: Agent;
+      /** The account this session's agent reads, by id. Absent leaves it to the console's account
+       * for that agent, else the default; an explicit `null` chooses the default account outright,
+       * whatever the console refers to. */
+      account?: string | null;
       task?: string;
       title?: string;
       /** The console session this (project) session should report to. Absent means none: a

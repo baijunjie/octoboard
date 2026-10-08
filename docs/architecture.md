@@ -198,8 +198,7 @@ Entities: console, host, project, session, account, report, report-panel page, a
 - `Session.bound_to` is the id of the console session a session reports to, or unset. It is always set to the
   starting console session for a console-session-started session, and fixed for the session's lifetime; a console
   session itself is never bound. Reports are routed by this field rather than by a lookup for "the" console session
-  of a console, because a console may hold several at once (see
-  `docs/plans/20261008-console-sessions-and-agent-accounts/02-binding-data-model.md`).
+  of a console, because a console may hold several at once.
 - `Session.colour` and `Session.ordinal` are set only for a console session: a badge colour from a fixed palette,
   assigned on creation and never reused while still in use among the console's other console sessions, and a
   per-console ordinal that is one past the highest ever handed out there — kept on the console record itself
@@ -211,9 +210,8 @@ Entities: console, host, project, session, account, report, report-panel page, a
   account per agent by id (`claude_account_id` and its two siblings), rather than holding a path directly; `None`
   means that agent's default account, the state of pinning nothing. `Session.account_id` is the account the
   session's own agent reads, and `Session.config_dir` is that account's directory at the moment the session was
-  opened (`None` for the default account) — both copied onto the session when it is opened and fixed afterwards,
-  because the agent keeps its transcripts there and a resume must find them (see
-  `docs/plans/20261008-console-sessions-and-agent-accounts/04-accounts-storage.md`).
+  opened (`None` for the default account) — both copied onto the session when it is opened, because the agent keeps
+  its transcripts there and a resume must find them.
 - Every project and session carries a `host_id` while the host table holds a single local record, so going remote needs
   no data migration. Trusted-folder entries ignore `host_id`, which is harmless while every host is local.
 - `Page.anchor_message_id` records the conversation position a page was pushed at. It is stored and never read; a

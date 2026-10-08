@@ -3,14 +3,16 @@ import { Archive, RotateCcw, Trash2, X } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
+import { AgentAccountText } from "../components/AgentAccountText";
 import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
 import type { DialogRequest } from "../dialogs/dialogRequest";
-import { useCurrentLanguage, useT } from "../i18n/react";
-import type { Console, Project, Session } from "../protocol";
+import { Message, useCurrentLanguage, useT } from "../i18n/react";
+import type { Account, Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
+import { sessionAccountName } from "../sessionLabel";
 import { archivedSessions, boundArchivedSessions } from "../sidebar/order";
 
 /** How many rows the list adds each time its end scrolls into view. */
@@ -28,6 +30,7 @@ export function ArchiveView({
   project,
   boundTo,
   sessions,
+  accounts,
   onReopen,
   onOpenDialog,
   dialogOpen,
@@ -44,6 +47,8 @@ export function ArchiveView({
   /** The scope's sessions; only the archived ones are listed, or, with `boundTo`, only the ones
    * archived and bound to it. */
   sessions: Session[];
+  /** Every stored account, to name the one each row's session ran under. */
+  accounts: Account[];
   onReopen: (session: Session) => void;
   onOpenDialog: (dialog: DialogRequest) => void;
   /** Whether a dialog is open, which a deletion's confirmation is. */
@@ -152,10 +157,13 @@ export function ArchiveView({
                     {session.title}
                   </FadeOverflow>
                   <div className="truncate text-xs text-muted">
-                    {t("archive.meta", {
-                      agent: AGENT_LABEL[session.agent],
-                      archived: formatRelativeTime(language, session.ended_at ?? session.started_at),
-                    })}
+                    <Message
+                      id="archive.meta"
+                      params={{
+                        agent: <AgentAccountText agent={AGENT_LABEL[session.agent]} account={sessionAccountName(t, session, accounts)} />,
+                        archived: formatRelativeTime(language, session.ended_at ?? session.started_at),
+                      }}
+                    />
                   </div>
                 </div>
                 {/* Shown while the row is hovered or holds focus, like the sidebar rows' controls;

@@ -4,14 +4,16 @@ import React from "react";
 
 import { AGENT_LABEL } from "../agents";
 import { ActionMenu } from "../components/ActionMenu";
+import { AgentAccountText } from "../components/AgentAccountText";
 import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
+import { FadeOverflow } from "../components/FadeOverflow";
 import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
-import { sessionAriaLabel, statusLabel } from "../sessionLabel";
+import { sessionAccountName, sessionAgentLabel, sessionAriaLabel, statusLabel } from "../sessionLabel";
 import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
 import { GitBadge } from "./GitBadge";
@@ -134,7 +136,7 @@ export function FocusView({
   );
 }
 
-/** A session in focus mode: its status put into words, its agent, its title over two lines, when
+/** A session in focus mode: its status put into words, its agent and account, its title over two lines, when
  * it started, and — for a bound session — its binding badge and its owner's name. */
 function SessionCard({
   handlers,
@@ -149,9 +151,10 @@ function SessionCard({
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
+  const accounts = useDaemonStore((s) => s.settings.accounts);
   return (
     <TreeRow
-      ariaLabel={sessionAriaLabel(t, language, session, owner)}
+      ariaLabel={sessionAriaLabel(t, language, session, accounts, owner)}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
       className="min-h-8 flex-col gap-1.5 border border-separator bg-background p-3 data-selected:border-accent"
@@ -170,7 +173,13 @@ function SessionCard({
       </div>
       <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
         <AgentIcon agent={session.agent} className="size-3.5" />
-        <span className="truncate">{AGENT_LABEL[session.agent]}</span>
+        <FadeOverflow
+          as="span"
+          className="min-w-0"
+          titleWhenClipped={sessionAgentLabel(t, session, accounts)}
+        >
+          <AgentAccountText agent={AGENT_LABEL[session.agent]} account={sessionAccountName(t, session, accounts)} />
+        </FadeOverflow>
         <span aria-hidden="true">·</span>
         <span className="shrink-0">{formatRelativeTime(language, session.started_at)}</span>
         {owner && (
@@ -200,9 +209,10 @@ function ArchivedRow({
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
+  const accounts = useDaemonStore((s) => s.settings.accounts);
   return (
     <TreeRow
-      ariaLabel={sessionAriaLabel(t, language, session)}
+      ariaLabel={sessionAriaLabel(t, language, session, accounts)}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
     >

@@ -52,8 +52,8 @@ Under the switcher comes the **console sessions** section: every console session
 archived, each as a session row (see "Session rows" below, which a console session's row otherwise follows exactly —
 pin, rename, archive). What a console session is, what selecting one does, and what its row's menu offers are in
 "Console sessions and project sessions" in `docs/product/sessions.md`. The section's own heading carries a **+**
-button, **New console session**, which opens one with the console's current console session agent and agent config
-directory, and, while the console has an archived console session, the section's action menu, whose only entry is
+button, **New console session**, which opens one with the console's current console session agent and its account for
+that agent, and, while the console has an archived console session, the section's action menu, whose only entry is
 **Archived console sessions** — a submenu of the console's newest archived console sessions, each of which can be
 selected, and the way to the archive view of all of them (see "The archive view" below). This is the one entry a
 console session's own row never carries: archived console sessions are reached from the section, not from a row.
@@ -164,7 +164,10 @@ icon, its title, and a pin glyph when it is pinned. A project session bound to a
 console session's **binding badge**: a small dot in the console session's colour, whose tooltip names it (see "The
 binding badge" below). A console session's own row carries no *binding* badge — what it shows there instead is its own
 colour (see "The console sessions section and the project list" above). Selecting a row
-resumes it when it is interrupted; no menu item does that. Its action menu offers:
+resumes it when it is interrupted; no menu item does that. The row shows its agent as an icon alone; wherever the agent
+is named in words, the account the session runs under follows it in parentheses — "Claude Code (Work)" — as the
+account's name, "Default" for the agent's default account, or, for a session whose account has since been removed, the
+directory it recorded (or the agent's name alone when it recorded none). Its action menu offers:
 
 - **Pin** / **Unpin**.
 - **Rename** — see "Renaming a session" in `docs/product/sessions.md`.
@@ -194,10 +197,10 @@ colour, decoratively, since the row's own label already names it.
 - Clicking a row deliberately does not move keyboard focus away from the terminal; a row reached with Tab can be
   activated with Enter or Space.
 - Each row tells assistive technology what its icons show: a session row its title, agent (Claude Code, Codex or Grok
-  Build), status, whether it is pinned, and, for a bound project session, the console session it reports to (the
-  binding badge's own fact); a project row whether it is pinned and, while it carries an activity marker, what that
-  marker means, plus its branch badge's facts (see "The branch badge" in `docs/product/project-git-status.md`). A
-  project row also tells it whether it is expanded or collapsed.
+  Build) and the account it runs under, status, whether it is pinned, and, for a bound project session, the console
+  session it reports to (the binding badge's own fact); a project row whether it is pinned and, while it carries an
+  activity marker, what that marker means, plus its branch badge's facts (see "The branch badge" in
+  `docs/product/project-git-status.md`). A project row also tells it whether it is expanded or collapsed.
 
 ## Order of projects and sessions
 
@@ -256,11 +259,11 @@ list — with that project alone:
   project's name; the project's branch badge (see "The branch badge" in `docs/product/project-git-status.md`); a **+**
   button for a new session; and the project's action menu, without its Focus mode item.
 - **Sessions (n)**: the project's sessions that are not archived, as cards, in the order of "Order of projects and
-  sessions" above. A card shows the session's status glyph with the status in words, a pin glyph when it is pinned,
-  its action menu (always shown), its title over up to two lines, its agent's icon and name, how long ago it was
-  started, and, for a bound session, its binding badge followed by its owning console session's name (see "The
-  binding badge" above and "Which sessions the console session drives" in `docs/product/hub-orchestration.md`).
-  Clicking a card selects the session. With no session, a message and a **New session** button take their place.
+  sessions" above. A card shows the session's status glyph with the status in words, a pin glyph when it is pinned, its
+  action menu (always shown), its title over up to two lines, its agent's icon and name with its account, how long ago
+  it was started, and, for a bound session, its binding badge followed by its owning console session's name (see "The
+  binding badge" above and "Which sessions the console session drives" in `docs/product/hub-orchestration.md`). Clicking
+  a card selects the session. With no session, a message and a **New session** button take their place.
 - **Archived (n)**: the project's ten most recently archived sessions, each showing its agent's icon, its title and how
   long ago it was archived. Clicking one selects it. Its action menu offers **Rename** and **Delete**
   (which asks for confirmation; see "Deleting archived sessions" in `docs/product/sessions.md`). Below them **View all
@@ -304,9 +307,9 @@ or every archived console session of that console.
   sessions, "Archived console sessions"), with **Delete all** while there is at least one, and a **Close** button. Which project or console
   it is for is shown in the top bar's breadcrumb (see "The top bar" in `docs/product/window-layout.md`).
 - The list is in the order the sessions were archived, most recent first. It shows 30 rows and adds 30 more each time
-  its end is scrolled into view. Each row shows the session's agent's icon, its title, and its agent's name with how
-  long ago it was archived. Its **Reopen** and **Delete** buttons show while the row is hovered or holds keyboard
-  focus, and are still reached with Tab.
+  its end is scrolled into view. Each row shows the session's agent's icon, its title, and its agent's name with its
+  account and how long ago it was archived. Its **Reopen** and **Delete** buttons show while the row is hovered or holds
+  keyboard focus, and are still reached with Tab.
 - **Reopen** resumes the session and selects it, which closes the view (see "Selecting a session" above).
 - **Delete** asks for confirmation, then deletes that session; **Delete all** asks for confirmation, naming how many,
   then deletes every archived session in the view's scope. What deleting does and does not remove is in "Deleting

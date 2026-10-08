@@ -38,6 +38,7 @@ export function App(): React.ReactElement {
   const consoles = useDaemonStore((s) => s.consoles);
   const projects = useDaemonStore((s) => s.projects);
   const sessions = useDaemonStore((s) => s.sessions);
+  const accounts = useDaemonStore((s) => s.settings.accounts);
   // One dialog at a time, oldest prompt first; answering or declining it brings up the next.
   const trustPrompt = useDaemonStore((s) => s.trustPrompts[0]);
   const [selectedSessionId, setSelectedSessionId] = useState<string>();
@@ -352,6 +353,7 @@ export function App(): React.ReactElement {
                       ? sessionList
                       : sessionList.filter((s) => s.console_id === archiveConsole.id && s.role === "console")
                 }
+                accounts={accounts}
                 onReopen={reopenSession}
                 onOpenDialog={openDialog}
                 dialogOpen={dialogRequest !== undefined}

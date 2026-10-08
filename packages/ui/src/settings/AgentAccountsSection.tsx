@@ -1,7 +1,7 @@
 import { Button } from "@heroui/react";
 import React, { useState } from "react";
 
-import { AGENT_LABEL } from "../agents";
+import { accountsByAgent, AGENT_LABEL } from "../agents";
 import { AgentIcon } from "../components/AgentIcon";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { PathText } from "../components/PathText";
@@ -10,7 +10,6 @@ import { useT } from "../i18n/react";
 import type { Account } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { AccountDialog } from "./AccountDialog";
-import { accountsByAgent } from "./agentAccounts";
 import { SettingRow } from "./SettingRow";
 import { useSectionRefocus } from "./useSectionRefocus";
 

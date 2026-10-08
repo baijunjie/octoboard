@@ -1,7 +1,7 @@
 import { Button } from "@heroui/react";
 import React, { useState } from "react";
 
-import { AGENT_CONFIG_DIR, AGENT_LABEL } from "../agents";
+import { AGENT_DEFAULT_CONFIG_DIR, AGENT_LABEL } from "../agents";
 import { agentIconPickerOptions } from "../components/AgentIcon";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "../dialogs/Dialog";
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
@@ -90,7 +90,7 @@ export function AccountDialog({
           value={configDir}
           onChange={setConfigDir}
           dir="ltr"
-          placeholder={AGENT_CONFIG_DIR[agent].placeholder}
+          placeholder={AGENT_DEFAULT_CONFIG_DIR[agent]}
           description={agent === "grok" ? t("settings.accounts.dirHintGrok") : t("settings.accounts.dirHint")}
           errorMessage={shown(dirError)}
           trailing={

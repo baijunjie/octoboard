@@ -1,12 +1,13 @@
 import { Button, Label } from "@heroui/react";
 import React, { useId, useRef, useState } from "react";
 
-import { AGENT_CONFIG_DIR, AGENT_LABEL, AGENT_OPTIONS } from "../agents";
+import { choiceGroups, choiceKey, consoleAccount, findEntry } from "../accountChoices";
+import { AGENT_ACCOUNT_FIELD, AGENT_LABEL, AGENT_OPTIONS, selectableAgent } from "../agents";
 import { imageToAvatar } from "../avatarImage";
 import { agentIconPickerOptions } from "../components/AgentIcon";
 import { ConsoleAvatar } from "../components/ConsoleAvatar";
 import { useT } from "../i18n/react";
-import type { Agent, ConfigDirField, Console } from "../protocol";
+import type { AccountField, Agent, Console } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "./Dialog";
 import { OptionSelect } from "./OptionSelect";
@@ -23,15 +24,20 @@ export function ConsoleDialog({
   const t = useT();
   const { request } = useDaemon();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
+  const accounts = useDaemonStore((s) => s.settings.accounts);
   const agentOptions = agentIconPickerOptions(t, agentAvailability);
   const [name, setName] = useState(editing?.name ?? "");
-  const [consoleSessionAgent, setConsoleSessionAgent] = useState<Agent>(editing?.console_session_agent ?? "claude");
-  const [defaultAgent, setDefaultAgent] = useState<Agent>(editing?.default_agent ?? "claude");
-  const [configDirs, setConfigDirs] = useState<Record<ConfigDirField, string>>({
-    claude_config_dir: editing?.claude_config_dir ?? "",
-    codex_config_dir: editing?.codex_config_dir ?? "",
-    grok_config_dir: editing?.grok_config_dir ?? "",
-  });
+  // A new console opens on Claude Code, or on the first agent that may be picked when that one is
+  // known to be missing, so neither agent starts on an entry the picker would refuse.
+  const initialAgent = selectableAgent(agentAvailability, "claude");
+  const [consoleSessionAgent, setConsoleSessionAgent] = useState<Agent>(editing?.console_session_agent ?? initialAgent);
+  const [defaultAgent, setDefaultAgent] = useState<Agent>(editing?.default_agent ?? initialAgent);
+  // The account picked for each agent; `null` is that agent's default account.
+  const [accountIds, setAccountIds] = useState<Record<AccountField, string | null>>(() => ({
+    claude_account_id: editing ? consoleAccount(editing, "claude", accounts) : null,
+    codex_account_id: editing ? consoleAccount(editing, "codex", accounts) : null,
+    grok_account_id: editing ? consoleAccount(editing, "grok", accounts) : null,
+  }));
   const [icon, setIcon] = useState<string | null>(editing?.icon ?? null);
   const { error, setError, busy, run } = useDialogAction();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -59,11 +65,7 @@ export function ConsoleDialog({
     (agent) => agent === consoleSessionAgent || agent === defaultAgent,
   );
 
-  // What was typed for each shown row, trimmed.
-  const typedDirs = shownAgents.map((agent) => {
-    const { field } = AGENT_CONFIG_DIR[agent];
-    return [field, configDirs[field].trim()] as const;
-  });
+  const groups = choiceGroups(accounts, agentAvailability, t("settings.accounts.defaultName"));
 
   // The avatar's own failure is not a field's, and stays at the foot of the dialog.
   const { shown, attempt } = useSubmitValidation();
@@ -74,13 +76,14 @@ export function ConsoleDialog({
     if (!attempt(nameError)) return;
     void run(async () => {
       if (editing) {
-        const changes: Partial<Record<ConfigDirField | "icon", string | null>> = {};
-        for (const [field, typed] of typedDirs) {
-          // Sent only when the input changed, so saving something else (a rename, say) never
-          // re-validates a directory that has since vanished. A change to blank is an explicit
-          // `null` (clear), never an omitted field: omitting it would leave the old directory in
-          // place while the emptied input says otherwise.
-          if (typed !== (editing[field] ?? "")) changes[field] = typed || null;
+        const changes: Partial<Record<AccountField | "icon", string | null>> = {};
+        for (const agent of shownAgents) {
+          const field = AGENT_ACCOUNT_FIELD[agent];
+          // Sent only when the picker changed, so saving something else (a rename, say) leaves a
+          // reference alone. A change to the default account is an explicit `null` (clear), never
+          // an omitted field: omitting it would leave the old account in place while the picker
+          // says otherwise.
+          if (accountIds[field] !== (editing[field] ?? null)) changes[field] = accountIds[field];
         }
         // Same for the avatar: a removal is an explicit `null`, an unchanged one is left out.
         if (icon !== (editing.icon ?? null)) changes.icon = icon;
@@ -93,9 +96,11 @@ export function ConsoleDialog({
           ...changes,
         });
       } else {
-        const dirs: Partial<Record<ConfigDirField, string>> = {};
-        for (const [field, typed] of typedDirs) {
-          if (typed) dirs[field] = typed;
+        const references: Partial<Record<AccountField, string>> = {};
+        for (const agent of shownAgents) {
+          const field = AGENT_ACCOUNT_FIELD[agent];
+          const picked = accountIds[field];
+          if (picked) references[field] = picked;
         }
         await request({
           type: "create_console",
@@ -103,7 +108,7 @@ export function ConsoleDialog({
           console_session_agent: consoleSessionAgent,
           default_agent: defaultAgent,
           ...(icon && { icon }),
-          ...dirs,
+          ...references,
         });
       }
       onClose();
@@ -151,15 +156,18 @@ export function ConsoleDialog({
       <OptionSelect label={t("dialog.console.consoleSessionAgent")} options={agentOptions} value={consoleSessionAgent} onChange={setConsoleSessionAgent} />
       <OptionSelect label={t("dialog.console.defaultAgent")} options={agentOptions} value={defaultAgent} onChange={setDefaultAgent} />
       {shownAgents.map((agent) => {
-        const { field, placeholder } = AGENT_CONFIG_DIR[agent];
+        const field = AGENT_ACCOUNT_FIELD[agent];
+        const entries = groups.find((group) => group.agent === agent)?.entries ?? [];
         return (
-          <TextInput
+          <OptionSelect
             key={agent}
-            label={t("dialog.console.configDir", { agent: AGENT_LABEL[agent] })}
-            value={configDirs[field]}
-            onChange={(value) => setConfigDirs({ ...configDirs, [field]: value })}
-            placeholder={placeholder}
-            dir="ltr"
+            label={t("dialog.console.account", { agent: AGENT_LABEL[agent] })}
+            options={entries.map((entry) => ({ value: entry.key, label: entry.name }))}
+            value={choiceKey({ agent, account: accountIds[field] })}
+            onChange={(key) => {
+              const entry = findEntry(groups, key);
+              if (entry) setAccountIds({ ...accountIds, [field]: entry.account });
+            }}
           />
         );
       })}

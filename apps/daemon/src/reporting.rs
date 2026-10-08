@@ -557,9 +557,6 @@ mod tests {
             claude_account_id: None,
             codex_account_id: None,
             grok_account_id: None,
-            claude_config_dir: None,
-            codex_config_dir: None,
-            grok_config_dir: None,
             icon: None,
             created_at: 0,
         }

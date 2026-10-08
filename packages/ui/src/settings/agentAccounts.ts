@@ -1,4 +1,3 @@
-import { AGENT_OPTIONS } from "../agents";
 import type { Account, Agent } from "../protocol";
 
 /** Whether `path` is one the daemon accepts as a config directory: absolute, or starting with
@@ -40,10 +39,4 @@ export function nameCollision(
   if (key === nameKey(DEFAULT_ACCOUNT_KEY)) return { kind: "default", name: defaultName };
   const taken = accounts.find((a) => a.agent === agent && a.id !== editing && nameKey(a.name) === key);
   return taken && { kind: "account", name: taken.name };
-}
-
-/** The accounts grouped by agent, in the order the agents are listed elsewhere, each agent present
- * even with no account of its own; within an agent the accounts keep the order they are stored in. */
-export function accountsByAgent(accounts: Account[]): { agent: Agent; accounts: Account[] }[] {
-  return AGENT_OPTIONS.map(({ value }) => ({ agent: value, accounts: accounts.filter((a) => a.agent === value) }));
 }

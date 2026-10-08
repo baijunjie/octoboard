@@ -103,3 +103,28 @@ is left beyond this milestone.
       differ.
 - [ ] A `~/…` directory and a **directory that does not exist yet** are both accepted, and the agent
       creates the directory on its first run under that account.
+
+## From milestone 07 — choosing an account where an agent is chosen
+
+- [ ] **The grouped control open**: the group headings carry the agent's icon and name, and "(not installed)"
+      where that applies; an unavailable agent's entries stay reachable by arrow keys, are announced as
+      disabled, and refuse Enter. The headings are a HeroUI `Header` that has never been seen rendered, and
+      their contrast on the popover surface is computed rather than observed.
+- [ ] **The grouped control closed**: the trigger shows the agent's icon and "Agent (Account)", and a long
+      account name truncates rather than pushing the control out of shape. The same in zh-Hans.
+- [ ] **Opening a session by keyboard alone** through the grouped control: into it, across the groups, onto an
+      entry, and submitted.
+- [ ] **On a machine where one agent is genuinely not installed**, the session dialog opens on a selectable
+      entry and the new-console dialog opens its two agent pickers on a selectable agent; a console already
+      stored against that agent still keeps it when edited.
+- [ ] **The account is the one that is actually used**: a session opened on a non-default account launches with
+      that account's directory, and one opened on the default account launches with nothing pinned — the case
+      that has to behave exactly as it did before this change.
+- [ ] **The account is named where the plan says it is**: "Claude Code (Work)" on a focus-mode session card, on
+      an archive view row, and in the description a session row gives assistive technology. After the account
+      is removed in Settings, an existing session is named by the directory it recorded.
+- [ ] **Bidi**: under a right-to-left language the "Agent (Account)" run keeps the account isolated, on the
+      focus-mode card, the archive row and the dialog's trigger — checked with a Latin-letter name and with a
+      path. Both catalogues are left-to-right today, so nothing shows this short of switching language.
+- [ ] **A clipped focus-mode card line** fades at its end, shows the full text as a tooltip, and runs its
+      marquee on hover in a narrow sidebar.

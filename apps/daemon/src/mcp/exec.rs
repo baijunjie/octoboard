@@ -154,6 +154,8 @@ async fn start_session(
             console_id: console_session.console_id.clone(),
             project_id: Some(project.id),
             agent: optional_agent(arguments, "agent")?,
+            // A session the console session starts takes the console's account for its agent.
+            account: None,
             task: Some(task),
             // Named for the task, not the project: several sessions dispatched into one project
             // would otherwise all carry the project's name and be indistinguishable in the menu.
@@ -537,9 +539,6 @@ mod tests {
             claude_account_id: None,
             codex_account_id: None,
             grok_account_id: None,
-            claude_config_dir: None,
-            codex_config_dir: None,
-            grok_config_dir: None,
             icon: None,
             created_at: 0,
         }

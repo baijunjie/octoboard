@@ -1,20 +1,22 @@
 import { Checkbox, Description, Label } from "@heroui/react";
 import React, { useState } from "react";
 
+import { choiceGroups, currentChoice, initialChoice, type AccountChoice } from "../accountChoices";
 import { noAgentAvailable } from "../agents";
-import { agentIconPickerOptions } from "../components/AgentIcon";
 import { useT } from "../i18n/react";
-import type { Agent, Console, Project, Session } from "../protocol";
+import type { Console, Project, Session } from "../protocol";
 import { newestConsoleSession } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
+import { AccountSelect } from "./AccountSelect";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
-import { OptionSelect } from "./OptionSelect";
 import { TextInput } from "./TextInput";
 
 /**
- * Opens a session manually under a project. The agent picker defaults per the "Which agent a
- * session uses" section of docs/product/sessions.md (project default, then console default) but
- * the user can override it for this one session, matching `open_session`'s own `agent` field.
+ * Opens a session manually under a project. One grouped control settles the agent and its account
+ * together. It opens on the agent per the "Which agent a session uses" section of
+ * docs/product/sessions.md (project default, then console default) with the account that agent
+ * resolves to for the console, and the user can pick any other entry for this one session; the
+ * entry goes out as `open_session`'s `agent` and `account` fields.
  *
  * `open_session` answers with `session_opened`, which names the session it started — the broadcast
  * that puts it in the tree carries no request id, so this reply is the only way to tell which of
@@ -47,10 +49,14 @@ export function SessionDialog({
   const { request } = useDaemon();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const blocked = noAgentAvailable(agentAvailability);
-  const [agent, setAgent] = useState<Agent>(project.default_agent ?? parentConsole.default_agent);
+  const accounts = useDaemonStore((s) => s.settings.accounts);
+  const [picked, setPicked] = useState<AccountChoice>();
   const [title, setTitle] = useState("");
   const [reportToConsoleSession, setReportToConsoleSession] = useState(false);
   const { error, busy, run } = useDialogAction();
+
+  const groups = choiceGroups(accounts, agentAvailability, t("settings.accounts.defaultName"));
+  const choice = currentChoice(picked, initialChoice(parentConsole, project, accounts, agentAvailability), groups);
 
   // Nothing to bind to until a console session is live; `boundTo` would silently fall back to
   // unbound, and the binding cannot be changed afterwards, so the checkbox must not be checkable.
@@ -63,7 +69,8 @@ export function SessionDialog({
         type: "open_session",
         console_id: parentConsole.id,
         project_id: project.id,
-        agent,
+        agent: choice.agent,
+        account: choice.account,
         title: title || undefined,
         bound_to: boundTo,
       });
@@ -81,7 +88,7 @@ export function SessionDialog({
       onSubmit={submit}
     >
       {blocked && <p className="text-sm text-danger">{t("agents.installPrompt")}</p>}
-      <OptionSelect label={t("dialog.session.agent")} options={agentIconPickerOptions(t, agentAvailability)} value={agent} onChange={setAgent} />
+      <AccountSelect label={t("dialog.session.agentAccount")} groups={groups} value={choice} onChange={setPicked} />
       <TextInput label={t("dialog.session.titleOptional")} value={title} onChange={setTitle} />
       {/* HeroUI's variant for a control on a surface (the dialog), whose unselected box the default
           variant would leave to blend into it. */}

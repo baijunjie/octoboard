@@ -39,28 +39,20 @@ pub async fn handle(
             name,
             console_session_agent,
             default_agent,
-            claude_config_dir,
-            codex_config_dir,
-            grok_config_dir,
+            claude_account_id,
+            codex_account_id,
+            grok_account_id,
             icon,
         } => {
-            // Every field normalised first, with nothing written yet, so a refusal on a later
-            // field is never reached after an earlier one has already minted an account — the
-            // normalising calls below are pure, and only the `resolve_console_account_dir` calls
-            // after them write anything.
+            // Every field checked first, so a refusal on a later one leaves no working directory
+            // behind.
             let icon = normalize_icon(icon.as_deref())?;
-            let claude_dir = normalize_console_account_path(Agent::Claude, claude_config_dir)?;
-            let codex_dir = normalize_console_account_path(Agent::Codex, codex_config_dir)?;
-            let grok_dir = normalize_console_account_path(Agent::Grok, grok_config_dir)?;
-            // Validated and minted before anything is created, so a refused request leaves no
-            // working directory and no stray account behind.
-            let id = Uuid::new_v4().to_string();
             let claude_account_id =
-                resolve_console_account_dir(state, Agent::Claude, None, None, claude_dir)?;
+                checked_account_reference(state, Agent::Claude, claude_account_id)?;
             let codex_account_id =
-                resolve_console_account_dir(state, Agent::Codex, None, None, codex_dir)?;
-            let grok_account_id =
-                resolve_console_account_dir(state, Agent::Grok, None, None, grok_dir)?;
+                checked_account_reference(state, Agent::Codex, codex_account_id)?;
+            let grok_account_id = checked_account_reference(state, Agent::Grok, grok_account_id)?;
+            let id = Uuid::new_v4().to_string();
             let workdir = paths::console_workdir(&id);
             std::fs::create_dir_all(&workdir)?;
             let console = Console {
@@ -72,20 +64,11 @@ pub async fn handle(
                 claude_account_id,
                 codex_account_id,
                 grok_account_id,
-                claude_config_dir: None,
-                codex_config_dir: None,
-                grok_config_dir: None,
                 icon,
                 created_at: now_millis(),
             };
             mcp::role::write_console_session_instructions(&console)?;
             state.store.insert_console(&console)?;
-            // Re-read so the broadcast carries the derived directories the dialog shows, rather
-            // than the placeholders just built above.
-            let console = state
-                .store
-                .get_console(&console.id)?
-                .expect("just inserted");
             state.broadcast(Event::ConsoleUpserted { console });
             Ok(None)
         }
@@ -95,29 +78,29 @@ pub async fn handle(
             name,
             console_session_agent,
             default_agent,
-            claude_config_dir,
-            codex_config_dir,
-            grok_config_dir,
+            claude_account_id,
+            codex_account_id,
+            grok_account_id,
             icon,
         } => {
             let mut console = state
                 .store
                 .get_console(&id)?
                 .ok_or_else(|| CodedError::unknown_console(&id))?;
-            // Every field normalised first, with nothing written yet — mirrors `CreateConsole`
-            // above, and for the same reason: a refusal on a later field must not leave an
-            // earlier one's account already minted.
+            // Every field checked first, with nothing written yet. An absent reference is not
+            // checked at all: saving a console with a field untouched succeeds whatever has
+            // happened to the account it names since.
             let icon = icon
                 .map(|icon| normalize_icon(icon.as_deref()))
                 .transpose()?;
-            let claude_dir = claude_config_dir
-                .map(|dir| normalize_console_account_path(Agent::Claude, dir))
+            let claude_account_id = claude_account_id
+                .map(|reference| checked_account_reference(state, Agent::Claude, reference))
                 .transpose()?;
-            let codex_dir = codex_config_dir
-                .map(|dir| normalize_console_account_path(Agent::Codex, dir))
+            let codex_account_id = codex_account_id
+                .map(|reference| checked_account_reference(state, Agent::Codex, reference))
                 .transpose()?;
-            let grok_dir = grok_config_dir
-                .map(|dir| normalize_console_account_path(Agent::Grok, dir))
+            let grok_account_id = grok_account_id
+                .map(|reference| checked_account_reference(state, Agent::Grok, reference))
                 .transpose()?;
             if let Some(name) = name {
                 console.name = name;
@@ -128,35 +111,16 @@ pub async fn handle(
             if let Some(default_agent) = default_agent {
                 console.default_agent = default_agent;
             }
-            // Only sessions opened afterwards take a new value; each existing one keeps the
-            // account and the directory it was started with (see `Session::account_id`). Absent
-            // leaves the reference alone; present resolves through the repoint-vs-mint rule.
-            if let Some(dir) = claude_dir {
-                console.claude_account_id = resolve_console_account_dir(
-                    state,
-                    Agent::Claude,
-                    Some(&id),
-                    console.claude_account_id.as_deref(),
-                    dir,
-                )?;
+            // Only sessions opened afterwards take a new reference; each existing one keeps the
+            // account and the directory it was started with (see `Session::account_id`).
+            if let Some(reference) = claude_account_id {
+                console.claude_account_id = reference;
             }
-            if let Some(dir) = codex_dir {
-                console.codex_account_id = resolve_console_account_dir(
-                    state,
-                    Agent::Codex,
-                    Some(&id),
-                    console.codex_account_id.as_deref(),
-                    dir,
-                )?;
+            if let Some(reference) = codex_account_id {
+                console.codex_account_id = reference;
             }
-            if let Some(dir) = grok_dir {
-                console.grok_account_id = resolve_console_account_dir(
-                    state,
-                    Agent::Grok,
-                    Some(&id),
-                    console.grok_account_id.as_deref(),
-                    dir,
-                )?;
+            if let Some(reference) = grok_account_id {
+                console.grok_account_id = reference;
             }
             if let Some(icon) = icon {
                 console.icon = icon;
@@ -165,7 +129,6 @@ pub async fn handle(
             // so a console that changed agents would otherwise keep reading the old one's.
             mcp::role::write_console_session_instructions(&console)?;
             state.store.update_console(&console)?;
-            let console = state.store.get_console(&id)?.expect("just updated");
             state.broadcast(Event::ConsoleUpserted { console });
             Ok(None)
         }
@@ -320,6 +283,7 @@ pub async fn handle(
             console_id,
             project_id,
             agent,
+            account,
             task,
             title,
             bound_to,
@@ -330,6 +294,7 @@ pub async fn handle(
                     console_id,
                     project_id,
                     agent,
+                    account,
                     task,
                     title,
                     origin: Origin::User,
@@ -641,6 +606,10 @@ pub struct OpenRequest {
     pub console_id: String,
     pub project_id: Option<String>,
     pub agent: Option<Agent>,
+    /// The account chosen for this session: `None` leaves it to the console's reference for the
+    /// session's agent, `Some(None)` chooses the default account outright. See
+    /// [`session_account`].
+    pub account: Option<Option<String>>,
     pub task: Option<String>,
     pub title: Option<String>,
     pub origin: Origin,
@@ -654,6 +623,7 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         console_id,
         project_id,
         agent,
+        account,
         task,
         title,
         origin,
@@ -698,7 +668,7 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
     });
     refuse_if_agent_unavailable(state, agent)?;
 
-    let (account_id, config_dir) = session_account(state, agent, &console)?;
+    let (account_id, config_dir) = session_account(state, agent, &console, account)?;
 
     let session = Session {
         id: Uuid::new_v4().to_string(),
@@ -719,8 +689,8 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
             SessionStatus::Idle
         },
         has_conversation: false,
-        // Taken from the console now and kept: a resume must find the transcript where the first
-        // launch put it, whatever the console's reference says by then.
+        // Resolved now and kept: a resume must find the transcript where the first launch put it,
+        // whatever the console's reference says by then.
         account_id,
         config_dir,
         bound_to,
@@ -1018,18 +988,21 @@ fn refuse_if_agent_unavailable(state: &Arc<AppState>, agent: Agent) -> Result<()
     ))
 }
 
-/// The account id and the config directory a session of this console should launch with, for the
-/// session's own agent, and that account's directory at this moment — `None` for both when the
-/// reference names the default account (the state of pinning nothing).
+/// The account id and the config directory a session of `agent` should launch with, and that
+/// account's directory at this moment — `None` for both when it is the default account (the state
+/// of pinning nothing). In descending priority: the choice made for this session (`chosen`, where
+/// `Some(None)` is a choice of the default account), the console's account for the agent, the
+/// agent's default account. Mirrors the agent chain in [`open_session`]; the project contributes
+/// the agent alone.
 fn session_account(
     state: &Arc<AppState>,
     agent: Agent,
     console: &Console,
+    chosen: Option<Option<String>>,
 ) -> Result<(Option<String>, Option<String>)> {
-    let account_id = match agent {
-        Agent::Claude => console.claude_account_id.clone(),
-        Agent::Codex => console.codex_account_id.clone(),
-        Agent::Grok => console.grok_account_id.clone(),
+    let account_id = match chosen {
+        Some(choice) => checked_account_reference(state, agent, choice)?,
+        None => console_account_field(console, agent).clone(),
     };
     let config_dir = match &account_id {
         None => None,
@@ -1041,9 +1014,24 @@ fn session_account(
     Ok((account_id, config_dir))
 }
 
+/// A reference to an account of `agent` as stored, or the `unknown_account` refusal when `id`
+/// names no account or one of another agent: an account belongs to one agent, and a reference
+/// across agents would launch it with another agent's directory.
+fn checked_account_reference(
+    state: &Arc<AppState>,
+    agent: Agent,
+    id: Option<String>,
+) -> Result<Option<String>> {
+    let Some(id) = id else { return Ok(None) };
+    match state.store.get_account(&id)? {
+        Some(account) if account.agent == agent => Ok(Some(id)),
+        _ => Err(CodedError::unknown_account(&id)),
+    }
+}
+
 /// What the user typed for one agent's config directory, as the absolute, lexically normalised
 /// path an account's own directory is stored as. Required and non-blank: an account always has a
-/// directory, unlike a console's field, which clears to the default account instead. Existence is
+/// directory. Existence is
 /// not checked: the agent creates its own config directory on first run, so a user pointing an
 /// account at a directory they are about to create should not be stopped; the agent that needs one
 /// to already exist (Grok Build, against a *pinned* source home) checks that itself, at launch.
@@ -1188,7 +1176,6 @@ fn update_account(
     }
     state.store.update_account(&account)?;
     broadcast_settings(state)?;
-    republish_consoles_referencing(state, id)?;
     Ok(())
 }
 
@@ -1224,17 +1211,6 @@ fn console_references_account(console: &Console, account_id: &str) -> bool {
     .any(|referenced| referenced.as_deref() == Some(account_id))
 }
 
-/// Re-broadcasts every console that refers to `account_id`, whose dialog would otherwise go on
-/// showing the directory the account held before it was repointed.
-fn republish_consoles_referencing(state: &Arc<AppState>, account_id: &str) -> Result<()> {
-    for console in state.store.list_consoles()? {
-        if console_references_account(&console, account_id) {
-            state.broadcast(Event::ConsoleUpserted { console });
-        }
-    }
-    Ok(())
-}
-
 /// The field of `console` that would hold a reference to an account of `agent`.
 fn console_account_field(console: &Console, agent: Agent) -> &Option<String> {
     match agent {
@@ -1242,120 +1218,6 @@ fn console_account_field(console: &Console, agent: Agent) -> &Option<String> {
         Agent::Codex => &console.codex_account_id,
         Agent::Grok => &console.grok_account_id,
     }
-}
-
-/// Mints a fresh account for a directory the console dialog saved, with no name field to ask with:
-/// named after the directory's last path component, falling back to the whole directory when that
-/// name is already taken for the agent. The fallback is checked for a collision too — a path is
-/// distinct the *first* time it is minted, but a second console saving the same directory after
-/// its last component is already taken would otherwise mint a second account under the identical
-/// fallback name with nothing to tell the two apart. (The common way to reach that is now caught
-/// one layer up, by `find_account_by_dir` reusing the existing account instead of minting at all;
-/// this collision check is what is left for the fallback name itself to coincide with an account
-/// named by hand.) If even the fallback collides there is nothing left to try automatically, so
-/// this refuses with the same `account_name_taken` the explicit account requests use.
-fn mint_account_for_dir(state: &Arc<AppState>, agent: Agent, dir: &str) -> Result<Account> {
-    let candidate = Path::new(dir)
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .filter(|name| !name.is_empty());
-    let name = match candidate {
-        Some(name) if colliding_account_name(state, agent, &name, None)?.is_none() => name,
-        _ => {
-            check_account_name_unique(state, agent, dir, None)?;
-            dir.to_string()
-        }
-    };
-    let account = Account {
-        id: Uuid::new_v4().to_string(),
-        agent,
-        name,
-        config_dir: dir.to_string(),
-    };
-    state.store.insert_account(&account)?;
-    Ok(account)
-}
-
-/// The account of `agent` already pointed at `dir`, if any. Two directories that normalise to the
-/// same stored string are one login, so the dialog's save must land on that one account rather
-/// than minting a second one for it, which would otherwise be the common way a duplicate name
-/// appears: the fallback name derived from a directory's last path component collides with
-/// itself.
-fn find_account_by_dir(state: &Arc<AppState>, agent: Agent, dir: &str) -> Result<Option<Account>> {
-    Ok(state
-        .store
-        .list_accounts()?
-        .into_iter()
-        .find(|account| account.agent == agent && account.config_dir == dir))
-}
-
-/// Normalises what the console dialog sent for one agent's directory into the stored form, or
-/// `None` for an explicit clear — pure validation, nothing created or written. Split out of
-/// `resolve_console_account_dir` so every field on a `CreateConsole` or `UpdateConsole` request is
-/// checked before any of them mints or repoints an account; see the two handlers in `handle`.
-fn normalize_console_account_path(agent: Agent, path: Option<String>) -> Result<Option<String>> {
-    // Absent (`None`) and a blank string both mean "clear it": back to the default account,
-    // nothing minted or touched. A blank string reaching here is the console dialog's own way of
-    // clearing the field — it has no separate null to send — same as `normalize_config_dir` used
-    // to read it before accounts existed.
-    let Some(path) = path.filter(|path| !path.trim().is_empty()) else {
-        return Ok(None);
-    };
-    Ok(Some(normalize_account_dir(agent, &path)?))
-}
-
-/// Resolves the account id a console should now reference for `dir` — the already-normalised
-/// directory `normalize_console_account_path` produced, or `None` for a clear back to the default
-/// account. This is the half that writes, so call it only once every field on the request has
-/// been validated.
-///
-/// Keeps the console dialog's save working the way it did before accounts existed, with one case
-/// ahead of it: a directory that already names an existing account of this agent is reused
-/// outright, before repointing or minting is even considered — two accounts holding the same
-/// directory would be the same login shown twice. Short of that: a directory saved where this
-/// console is the *only* one referring to its current account repoints that account in place;
-/// otherwise (no account yet — the console was on the default — or the account is shared with
-/// another console) a fresh one is minted and this console is pointed at that instead, so editing
-/// one console's directory can never silently change another's.
-fn resolve_console_account_dir(
-    state: &Arc<AppState>,
-    agent: Agent,
-    console_id: Option<&str>,
-    current_account_id: Option<&str>,
-    dir: Option<String>,
-) -> Result<Option<String>> {
-    let Some(dir) = dir else {
-        return Ok(None);
-    };
-    // Covers the no-change case too: an account already sitting on `dir` is found here whether it
-    // is `current_account_id` itself (the field was saved back unchanged) or another console's —
-    // either way nothing is minted or repointed, and nothing is broadcast for no reason.
-    if let Some(existing) = find_account_by_dir(state, agent, &dir)? {
-        return Ok(Some(existing.id));
-    }
-    if let Some(account_id) = current_account_id {
-        let sole_referrer = state
-            .store
-            .list_consoles()?
-            .into_iter()
-            .filter(|c| console_account_field(c, agent).as_deref() == Some(account_id))
-            .all(|c| Some(c.id.as_str()) == console_id);
-        if sole_referrer {
-            let mut account = state
-                .store
-                .get_account(account_id)?
-                .ok_or_else(|| CodedError::unknown_account(account_id))?;
-            // `find_account_by_dir` above already caught `dir` matching this account's own
-            // directory, so reaching here means it is actually changing.
-            account.config_dir = dir;
-            state.store.update_account(&account)?;
-            broadcast_settings(state)?;
-            return Ok(Some(account.id));
-        }
-    }
-    let account = mint_account_for_dir(state, agent, &dir)?;
-    broadcast_settings(state)?;
-    Ok(Some(account.id))
 }
 
 /// The longest avatar `data:` URL a console may carry. The UI sends a 128x128 image, which is
@@ -1475,9 +1337,6 @@ mod tests {
             claude_account_id: None,
             codex_account_id: None,
             grok_account_id: None,
-            claude_config_dir: None,
-            codex_config_dir: None,
-            grok_config_dir: None,
             icon: None,
             created_at: 0,
         }
@@ -1548,9 +1407,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// An account itself always requires a non-blank directory — unlike the console dialog's own
-    /// field, which reads a blank string as "clear it, back to the default account" (covered where
-    /// `resolve_console_account_dir` is exercised directly, below).
+    /// An account always requires a non-blank directory.
     #[test]
     fn an_account_directory_may_not_be_blank() {
         assert!(normalize_account_dir(Agent::Codex, "").is_err());
@@ -1764,6 +1621,7 @@ mod tests {
                 console_id: "console-1".to_string(),
                 project_id: None,
                 agent: None,
+                account: None,
                 task: None,
                 title: None,
                 origin: Origin::User,
@@ -1834,6 +1692,15 @@ mod tests {
         state
             .store
             .insert_account(&Account {
+                id: "claude-other".to_string(),
+                agent: Agent::Claude,
+                name: "Claude other".to_string(),
+                config_dir: "/home/u/.claude-other".to_string(),
+            })
+            .unwrap();
+        state
+            .store
+            .insert_account(&Account {
                 id: "codex-acct".to_string(),
                 agent: Agent::Codex,
                 name: "Codex work".to_string(),
@@ -1844,26 +1711,58 @@ mod tests {
         console.claude_account_id = Some("claude-acct".to_string());
         console.codex_account_id = Some("codex-acct".to_string());
 
-        assert_eq!(
-            session_account(&state, Agent::Claude, &console).unwrap(),
-            (
-                Some("claude-acct".to_string()),
-                Some("/home/u/.claude-alt".to_string())
+        let resolved = |agent: Agent, chosen: Option<Option<&str>>| {
+            session_account(
+                &state,
+                agent,
+                &console,
+                chosen.map(|choice| choice.map(str::to_string)),
             )
-        );
-        assert_eq!(
-            session_account(&state, Agent::Codex, &console).unwrap(),
+            .unwrap()
+        };
+        let account = |id: &str, dir: &str| (Some(id.to_string()), Some(dir.to_string()));
+
+        // (agent, the choice made for the session, what it launches under)
+        let cases = [
+            // No choice: the console's account for the session's own agent.
             (
-                Some("codex-acct".to_string()),
-                Some("/home/u/.codex-alt".to_string())
+                Agent::Claude,
+                None,
+                account("claude-acct", "/home/u/.claude-alt"),
+            ),
+            (
+                Agent::Codex,
+                None,
+                account("codex-acct", "/home/u/.codex-alt"),
+            ),
+            // Nothing referenced for Grok, and another agent's account is never borrowed for it:
+            // the default account, which pins nothing.
+            (Agent::Grok, None, (None, None)),
+            // A choice wins over the console's reference...
+            (
+                Agent::Claude,
+                Some(Some("claude-other")),
+                account("claude-other", "/home/u/.claude-other"),
+            ),
+            // ...and a choice of the default account wins over it too.
+            (Agent::Claude, Some(None), (None, None)),
+        ];
+        for (agent, chosen, expected) in cases {
+            assert_eq!(resolved(agent, chosen), expected, "{agent:?} {chosen:?}");
+        }
+
+        // A choice naming no account, or an account of another agent, is refused.
+        for chosen in ["missing", "codex-acct"] {
+            let err = session_account(
+                &state,
+                Agent::Claude,
+                &console,
+                Some(Some(chosen.to_string())),
             )
-        );
-        // Nothing is referenced for Grok, and another agent's account is never borrowed for it —
-        // it resolves to the default account, which pins nothing.
-        assert_eq!(
-            session_account(&state, Agent::Grok, &console).unwrap(),
-            (None, None)
-        );
+            .expect_err(chosen);
+            let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+            assert_eq!(coded.code, error_code::UNKNOWN_ACCOUNT, "{chosen}");
+        }
     }
 
     /// A project's path is stored absolute and written one way, so the trusted directories can be
@@ -2030,18 +1929,6 @@ mod tests {
 
     fn create_account_request(agent: Agent, name: &str, config_dir: &str) -> RequestBody {
         RequestBody::CreateAccount {
-            agent,
-            name: name.to_string(),
-            config_dir: config_dir.to_string(),
-        }
-    }
-
-    /// An account record ready to insert directly into the store, bypassing the protocol's own
-    /// checks — for tests that want an existing account on record without exercising
-    /// `create_account` a second time.
-    fn account(agent: Agent, name: &str, config_dir: &str) -> Account {
-        Account {
-            id: Uuid::new_v4().to_string(),
             agent,
             name: name.to_string(),
             config_dir: config_dir.to_string(),
@@ -2238,7 +2125,6 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(after.claude_account_id, None, "back on the default account");
-        assert_eq!(after.claude_config_dir, None);
         assert_eq!(
             state
                 .store
@@ -2248,175 +2134,6 @@ mod tests {
                 .claude_account_id,
             None,
             "a console that never referred to it is unaffected either way"
-        );
-    }
-
-    /// The console dialog's repoint-vs-mint rule, in both branches: saving a path where this
-    /// console is the only one referring to its current account repoints that account in place;
-    /// saving a path where the account is shared with another console mints a fresh one instead,
-    /// so the other console's own reference is never touched.
-    #[tokio::test]
-    async fn the_console_dialogs_save_repoints_a_sole_reference_and_mints_for_a_shared_one() {
-        let state = Arc::new(crate::state::tests::app_state(
-            "console-dialog-repoint-or-mint",
-        ));
-
-        // Starting on the default account, a save mints a fresh account — there is nothing yet to
-        // repoint.
-        let solo_id = resolve_console_account_dir(
-            &state,
-            Agent::Claude,
-            Some("console-solo"),
-            None,
-            Some("/home/u/.claude-solo".to_string()),
-        )
-        .unwrap()
-        .expect("minted");
-        let mut solo = console(Agent::Claude, Path::new("/tmp/unused"));
-        solo.id = "console-solo".to_string();
-        solo.claude_account_id = Some(solo_id.clone());
-        state.store.insert_console(&solo).unwrap();
-
-        // The only console referring to it: saving a new path repoints the same account rather
-        // than minting another.
-        let repointed_id = resolve_console_account_dir(
-            &state,
-            Agent::Claude,
-            Some("console-solo"),
-            Some(solo_id.as_str()),
-            Some("/home/u/.claude-solo-2".to_string()),
-        )
-        .unwrap()
-        .expect("still has an account");
-        assert_eq!(
-            repointed_id, solo_id,
-            "the same account, repointed in place"
-        );
-        assert_eq!(
-            state
-                .store
-                .get_account(&solo_id)
-                .unwrap()
-                .unwrap()
-                .config_dir,
-            "/home/u/.claude-solo-2"
-        );
-
-        // A second console now shares that account.
-        let mut shared = console(Agent::Claude, Path::new("/tmp/unused"));
-        shared.id = "console-shared".to_string();
-        shared.claude_account_id = Some(solo_id.clone());
-        state.store.insert_console(&shared).unwrap();
-
-        // Editing the *shared* console's field must not silently change the first console's own
-        // account: a fresh one is minted instead, and the original is left exactly as it was.
-        let minted_id = resolve_console_account_dir(
-            &state,
-            Agent::Claude,
-            Some("console-shared"),
-            Some(solo_id.as_str()),
-            Some("/home/u/.claude-shared".to_string()),
-        )
-        .unwrap()
-        .expect("minted a fresh one");
-        assert_ne!(minted_id, solo_id, "a new account, not the shared one");
-        assert_eq!(
-            state
-                .store
-                .get_account(&solo_id)
-                .unwrap()
-                .unwrap()
-                .config_dir,
-            "/home/u/.claude-solo-2",
-            "the original account the other console still holds is untouched"
-        );
-        assert_eq!(
-            state
-                .store
-                .get_account(&minted_id)
-                .unwrap()
-                .unwrap()
-                .config_dir,
-            "/home/u/.claude-shared"
-        );
-    }
-
-    /// Clearing the console dialog's field is `None`, or the dialog's own blank string for the
-    /// same thing — both must go back to the default account rather than erroring, which is what
-    /// `resolve_console_account_dir` and `normalize_console_account_path` are for: a cleared field
-    /// must save, not fail, however the console it clears was set up.
-    #[test]
-    fn clearing_the_field_goes_back_to_the_default_account() {
-        let state = Arc::new(crate::state::tests::app_state("account-clear-field"));
-        assert_eq!(
-            normalize_console_account_path(Agent::Claude, None).unwrap(),
-            None
-        );
-        assert_eq!(
-            normalize_console_account_path(Agent::Claude, Some("   ".to_string())).unwrap(),
-            None
-        );
-        assert_eq!(
-            resolve_console_account_dir(&state, Agent::Claude, Some("console-1"), None, None)
-                .unwrap(),
-            None
-        );
-        // Also with a current account on record: clearing drops the reference, the account
-        // itself is left alone.
-        let account = account(Agent::Claude, "Work", "/home/u/.claude-work");
-        state.store.insert_account(&account).unwrap();
-        assert_eq!(
-            resolve_console_account_dir(
-                &state,
-                Agent::Claude,
-                Some("console-1"),
-                Some(account.id.as_str()),
-                None,
-            )
-            .unwrap(),
-            None
-        );
-        assert_eq!(state.store.list_accounts().unwrap().len(), 1, "untouched");
-    }
-
-    /// The minted name's fallback — the whole directory — is reached when the directory's last
-    /// component collides too, and the default account's own name takes part in that collision
-    /// exactly as it does in `check_account_name_unique`.
-    #[test]
-    fn the_minted_fallback_name_is_used_when_the_last_component_is_the_default_accounts_name() {
-        let state = Arc::new(crate::state::tests::app_state(
-            "account-mint-default-collision",
-        ));
-        let account = mint_account_for_dir(&state, Agent::Claude, "/home/u/Default").unwrap();
-        assert_eq!(
-            account.name, "/home/u/Default",
-            "fell back to the whole directory, the last component alone collides with Default"
-        );
-    }
-
-    /// A directory that already names an existing account of the same agent is reused outright —
-    /// the dialog's save must not mint a second account for one directory, which is the common
-    /// route to two accounts a user cannot tell apart.
-    #[test]
-    fn saving_a_path_that_equals_another_accounts_directory_reuses_it() {
-        let state = Arc::new(crate::state::tests::app_state("account-reuse-by-dir"));
-        let other = account(Agent::Claude, "Other", "/home/u/.claude-other");
-        state.store.insert_account(&other).unwrap();
-
-        let reused = resolve_console_account_dir(
-            &state,
-            Agent::Claude,
-            Some("console-1"),
-            None,
-            Some("/home/u/.claude-other".to_string()),
-        )
-        .unwrap()
-        .expect("reused the existing account");
-        assert_eq!(reused, other.id);
-        assert_eq!(
-            state.store.list_accounts().unwrap().len(),
-            1,
-            "nothing minted for a directory that already has an account"
         );
     }
 }

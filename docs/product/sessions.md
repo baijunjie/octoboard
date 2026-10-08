@@ -30,7 +30,7 @@ from any one row, but from the console sessions section's own menu, which offers
 sessions** — a submenu of the console's newest archived console sessions, each of which can be
 selected, and the way to the archive view of all of them (see "The archive view" in
 `docs/product/sidebar.md`). The section's own **New console session** button opens one with the
-console's current console session agent and agent config directory — whereas resuming or reopening a
+console's current console session agent and its account for that agent — whereas resuming or reopening a
 console session keeps the ones it was opened with (see "Agent config directories" in
 `docs/product/consoles-and-projects.md`).
 
@@ -59,10 +59,14 @@ are listed in, pinning, focus mode, the archive view and how selecting a session
 
 A session is opened under a project with:
 
-- **Agent** — defaulted as below, overridable for this session only. The picker lists all three
-  agents every time; one Octoboard has determined unavailable (its binary does not resolve on the
-  user's login shell `PATH`) is named rather than left out, labelled as not installed, and cannot
-  be chosen.
+- **Agent and account** — one grouped list that settles both at once, so no combination that does not exist can be
+  chosen. Each group is an agent, headed by its icon and name, and lists that agent's accounts with its default account
+  first, each entry named by the account alone. It opens on the agent and account chosen as below, and any other entry
+  can be picked for this session only. All three agents are listed every time; one Octoboard has determined
+  unavailable (its binary does not resolve on the user's login shell `PATH`) keeps its group, headed as not installed,
+  with none of its entries selectable, and the list opens on a selectable entry whenever there is one. Before that
+  determination has landed every group is selectable and none is labelled as not installed. Until accounts have been
+  added an agent's group holds its default account alone.
 - **Title** (optional) — defaults to the project's name. A console session's title defaults to
   "Hub `<ordinal>`", where the ordinal is one past the highest ever used in its console, so a title
   is not reused after a console session is archived or deleted.
@@ -111,6 +115,19 @@ A console session uses the console's console session agent instead.
 
 A session's agent is fixed for its lifetime. Resuming or reopening a session always relaunches the same agent —
 session records belong to a specific agent and cannot be moved across agents.
+
+### Which account a session uses
+
+The account of the session's agent, in descending priority:
+
+1. the account chosen for this session when it was opened;
+2. the console's account for that agent;
+3. that agent's default account.
+
+The project contributes the agent alone, never an account. A session opened without touching the list therefore runs
+under what it always has: the console's account for the agent, or the default account when the console pins nothing.
+Where a session's agent is named in the sidebar, its account is named with it (see "Session rows" in
+`docs/product/sidebar.md`).
 
 ## Session statuses
 

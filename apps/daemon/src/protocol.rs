@@ -136,18 +136,6 @@ pub struct Console {
     pub codex_account_id: Option<String>,
     /// Grok's own reference; see `claude_account_id`.
     pub grok_account_id: Option<String>,
-    /// The referenced account's directory, derived for display and never stored: `None` for the
-    /// default account. Carried here only so the console dialog can keep showing and saving a path
-    /// per agent unchanged. Resolved by `crate::store::Store::get_console` / `list_consoles`, not
-    /// settable directly.
-    ///
-    /// TODO(docs/plans/20261008-console-sessions-and-agent-accounts/07-account-pickers.md): drop
-    /// this once the console dialog picks an account rather than a path.
-    pub claude_config_dir: Option<String>,
-    /// Codex's own derived directory; see `claude_config_dir`.
-    pub codex_config_dir: Option<String>,
-    /// Grok's own derived directory; see `claude_config_dir`.
-    pub grok_config_dir: Option<String>,
     /// A custom avatar as an `image/*` `data:` URL of at most 256 KiB; unset shows the default
     /// glyph.
     pub icon: Option<String>,
@@ -379,12 +367,14 @@ pub enum RequestBody {
         name: String,
         console_session_agent: Agent,
         default_agent: Agent,
+        /// Each agent's account, by id; absent means that agent's default account. A reference
+        /// that names no account of that agent is refused with `unknown_account`.
         #[serde(default)]
-        claude_config_dir: Option<String>,
+        claude_account_id: Option<String>,
         #[serde(default)]
-        codex_config_dir: Option<String>,
+        codex_account_id: Option<String>,
         #[serde(default)]
-        grok_config_dir: Option<String>,
+        grok_account_id: Option<String>,
         #[serde(default)]
         icon: Option<String>,
     },
@@ -393,14 +383,15 @@ pub enum RequestBody {
         name: Option<String>,
         console_session_agent: Option<Agent>,
         default_agent: Option<Agent>,
-        /// Each config directory: absent leaves the setting alone; an explicit `null` (or a blank
-        /// string) clears it, so the user's shell environment applies again.
+        /// Each agent's account: absent leaves the setting alone; an explicit `null` clears it
+        /// back to that agent's default account. A reference that names no account of that agent
+        /// is refused with `unknown_account`.
         #[serde(default, deserialize_with = "present_option")]
-        claude_config_dir: Option<Option<String>>,
+        claude_account_id: Option<Option<String>>,
         #[serde(default, deserialize_with = "present_option")]
-        codex_config_dir: Option<Option<String>>,
+        codex_account_id: Option<Option<String>>,
         #[serde(default, deserialize_with = "present_option")]
-        grok_config_dir: Option<Option<String>>,
+        grok_account_id: Option<Option<String>>,
         /// Absent leaves the avatar alone; an explicit `null` (or a blank string) clears it back
         /// to the default glyph.
         #[serde(default, deserialize_with = "present_option")]
@@ -447,6 +438,12 @@ pub enum RequestBody {
         console_id: String,
         project_id: Option<String>,
         agent: Option<Agent>,
+        /// The account this session's agent reads, by id. Absent leaves the choice to the
+        /// console's reference for that agent, else the default account; an explicit `null`
+        /// chooses the default account outright, whatever the console refers to. A reference
+        /// that names no account of the session's agent is refused with `unknown_account`.
+        #[serde(default, deserialize_with = "present_option")]
+        account: Option<Option<String>>,
         task: Option<String>,
         title: Option<String>,
         /// The console session this (project) session should report to. Absent means none: a
@@ -516,16 +513,15 @@ pub enum RequestBody {
     UpdateSettings {
         auto_sync_repositories: Option<bool>,
     },
-    /// Both fields are required: an account always has a name and a directory, unlike a console's
-    /// field, which may clear to the default. Broadcasts `settings_updated`.
+    /// Both fields are required: an account always has a name and a directory. Broadcasts
+    /// `settings_updated`.
     CreateAccount {
         agent: Agent,
         name: String,
         config_dir: String,
     },
     /// Renames the account, repoints it, or both, independently; either field absent leaves it
-    /// alone. Broadcasts `settings_updated`, and a `console_upserted` for every console that
-    /// refers to it, since a repoint changes what its dialog would show.
+    /// alone. Broadcasts `settings_updated`.
     UpdateAccount {
         account: String,
         name: Option<String>,
@@ -1083,17 +1079,17 @@ mod tests {
         );
     }
 
-    /// Absent versus null is the only way a console's config directory can be cleared as well as
-    /// set, and each agent's is independent of the others.
+    /// Absent versus null is the only way a console's account can be cleared as well as set, and
+    /// each agent's is independent of the others.
     #[test]
-    fn clearing_a_consoles_config_dir_is_distinguishable_from_leaving_it() {
+    fn clearing_a_consoles_account_is_distinguishable_from_leaving_it() {
         let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
             RequestBody::UpdateConsole {
-                claude_config_dir,
-                codex_config_dir,
-                grok_config_dir,
+                claude_account_id,
+                codex_account_id,
+                grok_account_id,
                 ..
-            } => (claude_config_dir, codex_config_dir, grok_config_dir),
+            } => (claude_account_id, codex_account_id, grok_account_id),
             _ => panic!("parses as update_console"),
         };
         assert_eq!(
@@ -1102,18 +1098,37 @@ mod tests {
         );
         assert_eq!(
             parse(
-                r#"{"type":"update_console","console":"c","claude_config_dir":null,
-                    "codex_config_dir":"~/.codex-alt"}"#
+                r#"{"type":"update_console","console":"c","claude_account_id":null,
+                    "codex_account_id":"acct-1"}"#
             ),
-            (Some(None), Some(Some("~/.codex-alt".to_string())), None)
+            (Some(None), Some(Some("acct-1".to_string())), None)
         );
         assert_eq!(
-            parse(r#"{"type":"update_console","console":"c","grok_config_dir":"~/.grok-alt"}"#),
-            (None, None, Some(Some("~/.grok-alt".to_string())))
+            parse(r#"{"type":"update_console","console":"c","grok_account_id":"acct-2"}"#),
+            (None, None, Some(Some("acct-2".to_string())))
         );
     }
 
-    /// The avatar is cleared the same way as a config directory: an explicit `null`.
+    /// A session's own account is chosen, or deliberately the default one, or left to the console,
+    /// by the same absent-versus-null distinction.
+    #[test]
+    fn choosing_the_default_account_for_a_session_is_distinguishable_from_choosing_none() {
+        let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::OpenSession { account, .. } => account,
+            _ => panic!("parses as open_session"),
+        };
+        assert_eq!(parse(r#"{"type":"open_session","console_id":"c"}"#), None);
+        assert_eq!(
+            parse(r#"{"type":"open_session","console_id":"c","account":null}"#),
+            Some(None)
+        );
+        assert_eq!(
+            parse(r#"{"type":"open_session","console_id":"c","account":"acct-1"}"#),
+            Some(Some("acct-1".to_string()))
+        );
+    }
+
+    /// The avatar is cleared the same way as an account: an explicit `null`.
     #[test]
     fn clearing_a_consoles_icon_is_distinguishable_from_leaving_it() {
         let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
@@ -1132,19 +1147,19 @@ mod tests {
     }
 
     #[test]
-    fn creating_a_console_needs_no_config_dir() {
+    fn creating_a_console_needs_no_account() {
         let request: Request = serde_json::from_str(
             r#"{"type":"create_console","name":"n","console_session_agent":"claude","default_agent":"codex"}"#,
         )
         .unwrap();
         match request.body {
             RequestBody::CreateConsole {
-                claude_config_dir,
-                codex_config_dir,
-                grok_config_dir,
+                claude_account_id,
+                codex_account_id,
+                grok_account_id,
                 ..
             } => assert_eq!(
-                (claude_config_dir, codex_config_dir, grok_config_dir),
+                (claude_account_id, codex_account_id, grok_account_id),
                 (None, None, None)
             ),
             _ => panic!("parses as create_console"),

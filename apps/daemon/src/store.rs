@@ -257,19 +257,15 @@ impl Store {
     }
 
     pub fn get_console(&self, id: &str) -> Result<Option<Console>> {
-        let conn = self.lock();
-        let Some(mut console) = conn
+        let console = self
+            .lock()
             .query_row(
                 &format!("SELECT {CONSOLE_COLUMNS} FROM consoles WHERE id = ?1"),
                 params![id],
                 read_console,
             )
-            .optional()?
-        else {
-            return Ok(None);
-        };
-        resolve_console_dirs(&conn, &mut console)?;
-        Ok(Some(console))
+            .optional()?;
+        Ok(console)
     }
 
     pub fn list_consoles(&self) -> Result<Vec<Console>> {
@@ -277,12 +273,9 @@ impl Store {
         let mut stmt = conn.prepare(&format!(
             "SELECT {CONSOLE_COLUMNS} FROM consoles ORDER BY created_at"
         ))?;
-        let mut consoles = stmt
+        let consoles = stmt
             .query_map([], read_console)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
-        for console in &mut consoles {
-            resolve_console_dirs(&conn, console)?;
-        }
         Ok(consoles)
     }
 
@@ -876,24 +869,6 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
     Ok(())
 }
 
-/// Reads a console's own stored row; the account id fields are its real columns, but
-/// `claude_config_dir` and friends are left at their default (`None`) here and filled in by
-/// [`resolve_console_dirs`] afterwards, which needs a connection `query_map`'s row mapper does not
-/// have access to.
-///
-/// **Rule for every caller**: never broadcast a `Console` built from this function alone. The
-/// three `*_config_dir` fields are derived state the daemon re-reads from the `accounts` table,
-/// not columns of their own — the kind of field `docs/memory/writing-daemon-code.md` says to keep
-/// off a stored record — and they are only on `Console` at all because the console dialog still
-/// shows and saves a path per agent (see `Console`'s own doc comment). Every path that broadcasts
-/// a `Console` today goes through [`Store::get_console`] or [`Store::list_consoles`], which call
-/// [`resolve_console_dirs`] first; a future path that broadcasts one it already holds in memory
-/// instead would blank the dialog's path field for every connected client.
-///
-/// TODO(docs/plans/20261008-console-sessions-and-agent-accounts/07-account-pickers.md): remove the
-/// three `*_config_dir` fields from `Console` once the console dialog
-/// (`packages/ui/src/dialogs/ConsoleDialog.tsx`) is replaced by the account picker and no longer
-/// reads them, which removes this whole rule along with `resolve_console_dirs`.
 fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
     Ok(Console {
         id: row.get(0)?,
@@ -904,46 +879,16 @@ fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
         claude_account_id: row.get(5)?,
         codex_account_id: row.get(6)?,
         grok_account_id: row.get(7)?,
-        claude_config_dir: None,
-        codex_config_dir: None,
-        grok_config_dir: None,
         icon: row.get(8)?,
         created_at: row.get(9)?,
     })
 }
 
-/// Fills in a console's three derived `*_config_dir` fields from the accounts its three
-/// `*_account_id` fields name — `None` (the default account) resolves to `None`, matching the
-/// shape a console's pinned directory already had before accounts existed. Kept for the console
-/// dialog, which still shows and saves a path per agent; see `Console`'s own doc comment.
-fn resolve_console_dirs(conn: &Connection, console: &mut Console) -> Result<()> {
-    console.claude_config_dir = account_config_dir(conn, console.claude_account_id.as_deref())?;
-    console.codex_config_dir = account_config_dir(conn, console.codex_account_id.as_deref())?;
-    console.grok_config_dir = account_config_dir(conn, console.grok_account_id.as_deref())?;
-    Ok(())
-}
-
-/// The directory of the account named `id`, or `None` for no id and for an id that no longer
-/// names an account — which should not happen once an account is removed (`Store::delete_account`
-/// clears every reference to it first), but a stale reference is read as the default account
-/// rather than failing the whole read.
-fn account_config_dir(conn: &Connection, id: Option<&str>) -> Result<Option<String>> {
-    let Some(id) = id else { return Ok(None) };
-    let dir = conn
-        .query_row(
-            "SELECT config_dir FROM accounts WHERE id = ?1",
-            params![id],
-            |row| row.get(0),
-        )
-        .optional()?;
-    Ok(dir)
-}
-
 /// Turns the `accounts_agent_name_unique` index tripping into the protocol's own
 /// `account_name_taken` refusal, so an insert or update that reaches this far surfaces the same
 /// way as the collision check `coordinator` already runs beforehand — this only fires when the
-/// two disagree, which is the fallback name in `coordinator::mint_account_for_dir` colliding after
-/// that function's own check already passed. Any other error is passed through unchanged.
+/// two disagree, which is two requests racing past that check. Any other error is passed through
+/// unchanged.
 fn account_write_error(err: rusqlite::Error, account: &Account) -> anyhow::Error {
     let is_name_collision = matches!(
         &err,
@@ -1100,9 +1045,6 @@ mod tests {
             claude_account_id: claude.map(str::to_string),
             codex_account_id: codex.map(str::to_string),
             grok_account_id: grok.map(str::to_string),
-            claude_config_dir: None,
-            codex_config_dir: None,
-            grok_config_dir: None,
             icon: None,
             created_at: 0,
         }
@@ -1393,11 +1335,11 @@ mod tests {
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
-    /// A console's reference resolves to its account's directory on read, and a session keeps its
-    /// own copy of that directory fixed at creation, regardless of what the console's reference
-    /// resolves to afterwards.
+    /// A console's references round-trip as written, and a session keeps its own copy of its
+    /// account's directory fixed at creation, regardless of what the console's reference is
+    /// afterwards.
     #[test]
-    fn a_consoles_account_reference_resolves_to_its_directory_and_a_session_keeps_its_own() {
+    fn a_consoles_account_references_round_trip_and_a_session_keeps_its_own_directory() {
         let path = temp_db("round-trip");
         let store = Store::open(&path).expect("store");
 
@@ -1422,15 +1364,9 @@ mod tests {
             ))
             .expect("insert");
         let stored = store.get_console("console-1").unwrap().unwrap();
-        assert_eq!(
-            stored.claude_config_dir.as_deref(),
-            Some("/home/u/.claude-alt")
-        );
-        assert_eq!(
-            stored.codex_config_dir.as_deref(),
-            Some("/home/u/.codex-alt")
-        );
-        assert_eq!(stored.grok_config_dir.as_deref(), Some("/home/u/.grok-alt"));
+        assert_eq!(stored.claude_account_id.as_deref(), Some("claude-acct"));
+        assert_eq!(stored.codex_account_id.as_deref(), Some("codex-acct"));
+        assert_eq!(stored.grok_account_id.as_deref(), Some("grok-acct"));
 
         let mut opened = session(Some("/home/u/.claude-alt"));
         opened.account_id = Some("claude-acct".to_string());
@@ -1464,22 +1400,18 @@ mod tests {
         let mut stored = console(None, None, None);
         store.insert_console(&stored).expect("insert");
         let read = |store: &Store| {
-            let console = store.get_console("console-1").unwrap().unwrap();
-            (console.claude_account_id, console.claude_config_dir)
+            store
+                .get_console("console-1")
+                .unwrap()
+                .unwrap()
+                .claude_account_id
         };
-        assert_eq!(read(&store), (None, None));
+        assert_eq!(read(&store), None);
 
-        for (account_id, dir) in [
-            (Some("alt"), Some("/home/u/.alt")),
-            (Some("other"), Some("/home/u/other")),
-            (None, None),
-        ] {
+        for account_id in [Some("alt"), Some("other"), None] {
             stored.claude_account_id = account_id.map(str::to_string);
             store.update_console(&stored).expect("update");
-            assert_eq!(
-                read(&store),
-                (account_id.map(str::to_string), dir.map(str::to_string))
-            );
+            assert_eq!(read(&store), account_id.map(str::to_string));
         }
 
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
@@ -1510,7 +1442,6 @@ mod tests {
         for id in ["console-1", "console-2"] {
             let console = store.get_console(id).unwrap().unwrap();
             assert_eq!(console.claude_account_id, None);
-            assert_eq!(console.claude_config_dir, None);
         }
 
         std::fs::remove_dir_all(path.parent().unwrap()).ok();

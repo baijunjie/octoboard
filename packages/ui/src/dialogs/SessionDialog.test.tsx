@@ -72,3 +72,41 @@ it("shows the install prompt when no agent is available at all", () => {
   act(() => root.unmount());
   container.remove();
 });
+
+it("opens on a selectable agent, with the console's account for it, and sends both", async () => {
+  // Claude Code, the console's default agent, is known to be missing; Codex is the first left.
+  const daemon = fakeDaemon({
+    agentAvailability: new Map<Agent, AgentAvailability>([
+      ["claude", { agent: "claude", availability: "unavailable" }],
+      ["codex", { agent: "codex", availability: "available" }],
+      ["grok", { agent: "grok", availability: "available" }],
+    ]),
+    settings: {
+      auto_sync_repositories: false,
+      accounts: [{ id: "a-1", agent: "codex", name: "Work", config_dir: "/home/me/.codex-work" }],
+    },
+  });
+  vi.mocked(daemon.request).mockResolvedValue({ type: "ack" } as never);
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  act(() =>
+    root.render(
+      <DaemonProvider value={daemon}>
+        <SessionDialog
+          console={{ ...parentConsole, codex_account_id: "a-1" }}
+          project={project}
+          sessions={[]}
+          onClose={() => {}}
+          onOpened={() => {}}
+        />
+      </DaemonProvider>,
+    ),
+  );
+  expect(document.body.textContent).toContain("Codex (Work)");
+
+  const open = Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Open");
+  await act(async () => open?.click());
+  expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type: "open_session", agent: "codex", account: "a-1" }));
+  act(() => root.unmount());
+  container.remove();
+});

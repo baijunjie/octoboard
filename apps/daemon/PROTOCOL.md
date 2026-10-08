@@ -43,14 +43,14 @@ the request id as if it were a record id.
 
 | `type` | Fields | Meaning |
 |---|---|---|
-| `create_console` | `name`, `console_session_agent`, `default_agent`, `claude_config_dir?`, `codex_config_dir?`, `grok_config_dir?`, `icon?` | The daemon creates the console's working directory under `~/.octoboard/consoles/<id>/`. `icon` is validated first, as in the "Records" notes below: a failure is answered with `icon_not_an_image` or `icon_too_large`, and a blank value means unset. Each config directory field is not stored directly: it names the directory of the account this console should reference for that agent, and the daemon mints a fresh account for it (see "Agent accounts" below), named after the directory's last path component or, when that name is already taken for the agent, the whole directory. A blank value means the agent's default account (no account minted). A directory is trimmed, a leading `~` expanded and the result normalised lexically, and must be absolute — existence is not checked. A failure is answered with `error` naming the agent, and nothing is created |
-| `update_console` | `console`, `name?`, `console_session_agent?`, `default_agent?`, `claude_config_dir?`, `codex_config_dir?`, `grok_config_dir?`, `icon?` | For each config directory field independently: absent leaves the console's account reference alone; an explicit `null` or a blank string clears it, back to the agent's default account. A present, non-blank value is validated as in `create_console` and then **repoints** the console's current account to that directory when this console is the only one referring to it, or else **mints** a fresh account and points this console at that instead — so editing one console's field can never silently change another's. Either way, `settings_updated` is also broadcast, since the account list changed. `icon` follows the same absent / `null` / blank rule, clearing back to the default glyph. Only sessions opened afterwards take a changed reference (see `Session.account_id`) |
+| `create_console` | `name`, `console_session_agent`, `default_agent`, `claude_account_id?`, `codex_account_id?`, `grok_account_id?`, `icon?` | The daemon creates the console's working directory under `~/.octoboard/consoles/<id>/`. `icon` is validated first, as in the "Records" notes below: a failure is answered with `icon_not_an_image` or `icon_too_large`, and a blank value means unset. Each account field names the account this console should reference for that agent, by id; absent means the agent's default account. An id that names no account, or an account of another agent, is answered with `unknown_account`, and nothing is created |
+| `update_console` | `console`, `name?`, `console_session_agent?`, `default_agent?`, `claude_account_id?`, `codex_account_id?`, `grok_account_id?`, `icon?` | For each account field independently: absent leaves the console's reference alone; an explicit `null` clears it, back to the agent's default account; an id is validated as in `create_console` and replaces the reference. A reference left alone is not checked again. `icon` follows the same absent / `null` / blank rule, clearing back to the default glyph. Only sessions opened afterwards take a changed reference (see `Session.account_id`) |
 | `delete_console` | `console` | Takes its projects and all their session records with it. Refused while any of them is still running |
 | `add_project` | `console_id`, `source` (`local`\|`parent`\|`github`), `path?`, `remote_url?`, `name?`, `default_agent?`, `tags?` | `local` associates one directory; `parent` associates every git repository directly beneath `path`; `github` clones `remote_url` into `path` (used as the parent directory) and associates the clone. A `path` must be absolute or start with `~/`, and is stored lexically normalised (`.` and `..` folded, no trailing slash); a relative one is refused, because the trusted directories compare project paths and a relative path means nothing to them. Absent `tags` means none, and each added project takes the same list, normalised as in the "Records" notes below |
 | `update_project` | `project`, `name?`, `default_agent?`, `pinned?`, `tags?` | An absent `default_agent` leaves it alone; an explicit `null` clears it, so the project inherits the console's default again. An absent `pinned` leaves the pin alone. An absent `tags` leaves the tags alone; a present array, even an empty one, replaces them wholesale; an explicit `null` is the same as absent |
 | `delete_project` | `project`, `stop_sessions?` | Removes the association and the project's session records, archived ones included; never touches the directory. Refused with `project_has_running_sessions` while the project has live sessions, unless `stop_sessions` (absent means false) is true: the running ones are then ended first, exactly as `archive_session` ends one, and the project goes with them. A session being launched or resumed at that moment is not stoppable, so it refuses either way |
 | `list_dir` | `path` | Answered with `dir_listing` on the asking socket |
-| `open_session` | `console_id`, `project_id?`, `agent?`, `task?`, `title?`, `bound_to?` | Omit `project_id` for a console session; a console may hold any number of them at once. `agent` follows the priority in the "Which agent a session uses" section of `docs/product/sessions.md` when omitted. `bound_to` names the console session this (project) session should report to; absent means none. Ignored for a console session, which is never bound. A `bound_to` that does not name a console session of `console_id` is refused with `unknown_session` |
+| `open_session` | `console_id`, `project_id?`, `agent?`, `account?`, `task?`, `title?`, `bound_to?` | Omit `project_id` for a console session; a console may hold any number of them at once. `agent` follows the priority in the "Which agent a session uses" section of `docs/product/sessions.md` when omitted. `account` is the account the session's agent reads, by id: absent leaves it to the console's reference for the session's agent, else the agent's default account; an explicit `null` chooses the default account outright, whatever the console refers to. An id that names no account of the session's agent is refused with `unknown_account`. `bound_to` names the console session this (project) session should report to; absent means none. Ignored for a console session, which is never bound. A `bound_to` that does not name a console session of `console_id` is refused with `unknown_session` |
 | `resume_session` | `session` | Relaunches an `interrupted` or `archived` session through the agent's own resume mechanism, re-injecting everything |
 | `archive_session` | `session` | Ends the process and archives the session |
 | `delete_session` | `session` | Removes Octoboard's record of one archived session and broadcasts `session_deleted`. Refused with `session_not_archived` unless the session is archived. An archived session whose process is still ending can be deleted; one being resumed right now cannot. Only Octoboard's own record goes: the agent's transcript and the project's directory are never touched |
@@ -64,8 +64,8 @@ the request id as if it were a record id.
 | `remove_trusted_directory` | `path` | Stops trusting a directory (compared after lexical normalisation, so a trailing slash does not matter) and broadcasts `trusted_directories_updated`. Projects' own consents and sessions already running are untouched. Removing one that is not trusted does nothing. Directories are added only by `confirm_claude_trust` |
 | `update_settings` | `auto_sync_repositories?` | Each settable field absent means "leave it alone". Broadcasts `settings_updated` only when something actually changed, as `remove_trusted_directory` does. A change that turns `auto_sync_repositories` on also starts the immediate fast-forward pass described in "Fast-forwarding when the setting is turned on" below, whose statuses follow as `project_git_status` broadcasts; an update that leaves the value as it was starts nothing. Turning it off starts nothing and undoes nothing |
 | `refresh_git_status` | `console` | Checks every project of `console` against its remote, concurrently; answered with `ack` at once, and the statuses follow as `project_git_status` broadcasts, one per project as its own check finishes. A project whose check is already running — this call raced ahead of an earlier one, or another client is watching the same console — is not started again, and nor is one whose last check completed less than a minute ago: several clients can each be polling this console on their own 5-minute interval and phase, and without this floor their sweeps would interleave into several checks per project every 5 minutes instead of one. Either way nothing is broadcast for the project that was skipped — it keeps whatever status it already had. An unknown console is `unknown_console`. See "Daemon behaviour, per project" below for what one project's check does |
-| `create_account` | `agent`, `name`, `config_dir` | Both fields are required: an account always has a name and a directory, unlike a console's field, which may clear to the default account instead. `name` is trimmed and must be non-empty and unique within `agent` (compared trimmed, case-insensitively, including against the default account's own name); a collision is `account_name_taken`, naming the account it collides with. `config_dir` is validated as a console's config directory field is (absolute, lexically normalised; existence not checked). Broadcasts `settings_updated` |
-| `update_account` | `account`, `name?`, `config_dir?` | Renames the account, repoints it, or both, independently; either field absent leaves it alone. Validated as in `create_account`. Broadcasts `settings_updated` when something actually changed, and a `console_upserted` for every console that refers to it (its dialog would otherwise show a stale directory) |
+| `create_account` | `agent`, `name`, `config_dir` | Both fields are required: an account always has a name and a directory. `name` is trimmed and must be non-empty and unique within `agent` (compared trimmed, case-insensitively, including against the default account's own name); a collision is `account_name_taken`, naming the account it collides with. `config_dir` must be absolute or start with `~/`, and is stored lexically normalised; existence is not checked. Broadcasts `settings_updated` |
+| `update_account` | `account`, `name?`, `config_dir?` | Renames the account, repoints it, or both, independently; either field absent leaves it alone. Validated as in `create_account`. Broadcasts `settings_updated` when something actually changed |
 | `delete_account` | `account` | Clears the reference of every console that refers to this account — putting each one back on its agent's default account — then removes the account. A session holding it is left alone: it already carries its own copy of the directory it launches with. Broadcasts `settings_updated`, and a `console_upserted` for every console whose reference was cleared |
 | `shutdown` | — | Terminates every session process (leaving them `interrupted`) and exits the daemon |
 
@@ -131,10 +131,10 @@ A client also branches on some codes, instead of only showing them:
 | `all_projects_already_added` | — | Every directory found is already a project of the console |
 | `repository_name_missing` | `url` | A clone URL has no repository name in it |
 | `git_clone_failed` | `detail` | `git clone` failed; `detail` is its own message |
-| `config_dir_not_absolute` | `agent` | A config directory (a console's field, or an account's directly) is neither absolute nor `~`-relative; `agent` is the agent's name |
+| `config_dir_not_absolute` | `agent` | An account's config directory is neither absolute nor `~`-relative; `agent` is the agent's name |
 | `config_dir_unreachable` | `agent`, `path` | A session's pinned config directory has gone, which refuses the launch — only a session that has a conversation on the agent's side (`Session.has_conversation`); a new session, or one that never had a turn, launches into it instead, which is what lets the agent create it |
 | `grok_home_not_initialized` | `path` | A Grok Build session's pinned source home exists but Grok has never been run against it, so it carries no login and no session history for the per-session home to link; refused at launch on the same path as `config_dir_unreachable` |
-| `unknown_account` | `account` | No account has this id |
+| `unknown_account` | `account` | No account has this id, or the account belongs to another agent than the field naming it (a console's per-agent reference, `open_session`'s `account`) |
 | `account_name_taken` | `agent`, `name` | A requested account name collides with an existing one of the same agent (trimmed, case-insensitive) — including the default account's own name; `name` is the name of the account it collides with |
 | `icon_not_an_image` | — | A console's icon is not a `data:image/` URL |
 | `icon_too_large` | `limit_kib` | A console's icon is longer than the limit, 256 KiB |
@@ -185,8 +185,7 @@ one it does not know:
 ```
 Host    { id, name, kind: "local"|"ssh", ssh_config? }
 Console { id, name, workdir, console_session_agent, default_agent,
-          claude_account_id?, codex_account_id?, grok_account_id?,
-          claude_config_dir?, codex_config_dir?, grok_config_dir?, icon?, created_at }
+          claude_account_id?, codex_account_id?, grok_account_id?, icon?, created_at }
 Account { id, agent, name, config_dir }
 Project { id, console_id, host_id, name, path, default_agent?, source, remote_url?,
           claude_trust_consent, pinned, tags: string[] }
@@ -215,17 +214,17 @@ account list travels as `Settings.accounts`, and a client is told about any chan
 pinning nothing, named by `Console.*_account_id` and `Session.account_id` being unset. It cannot be created, renamed
 or removed, and what it is shown as on screen is a client-side concern this protocol does not carry.
 
-`Console.*_account_id` is the account each agent's sessions opened in this console read, by id; unset means that
-agent's default account. `Console.*_config_dir` mirrors it for display only — the referenced account's directory, or
-unset for the default account — which is what the console dialog still shows and saves per agent (see
-`create_console` / `update_console` above) until an account picker replaces it. A session reads only its own agent's
-pair. Claude Code is launched with `CLAUDE_CONFIG_DIR` set to the resolved directory and Codex with `CODEX_HOME`,
-each over any value in the user's shell environment; unset leaves that environment as it is. For Claude Code,
-pointing it at `~/.claude` is not the same as leaving it unset, because Claude Code reads its global config from
-`<dir>/.claude.json` whenever the variable is set and from `~/.claude.json` otherwise — which is why the default
-account is never offered as a second, pinned account of its own. For Grok it replaces `~/.grok` (or the shell's
-`GROK_HOME`) as the *source* directory the session's private home is built from, so the user's config, login, trust
-store and session records come from it; Grok itself still runs against that private home.
+`Console.*_account_id` is the account each agent's sessions opened in this console read, by id; unset means that agent's
+default account. A session reads only its own agent's. The account a session opens under is resolved, in descending
+priority, from the one chosen for that session (`open_session`'s `account`), else the console's reference for the
+session's agent, else the agent's default account; the project contributes the agent alone. Claude Code is launched with
+`CLAUDE_CONFIG_DIR` set to the resolved directory and Codex with `CODEX_HOME`, each over any value in the user's shell
+environment; unset leaves that environment as it is. For Claude Code, pointing it at `~/.claude` is not the same as
+leaving it unset, because Claude Code reads its global config from `<dir>/.claude.json` whenever the variable is set and
+from `~/.claude.json` otherwise — which is why the default account is never offered as a second, pinned account of its
+own. For Grok it replaces `~/.grok` (or the shell's `GROK_HOME`) as the *source* directory the session's private home is
+built from, so the user's config, login, trust store and session records come from it; Grok itself still runs against
+that private home.
 `Console.icon` is the console's custom avatar, a `data:image/...` URL of at most 256 KiB (the UI sends a 128x128
 WebP or PNG); unset means the default glyph.
 `Session.bound_to` is the id of the console session this session reports to, or unset outside the orchestration. Set
@@ -235,9 +234,8 @@ bound. `report` and the synthesised report both deliver to this session; see "Re
 `Session.colour` is a console session's badge colour, one of a fixed palette — `olive`, `jade`, `teal`, `azure`,
 `violet`, `rose` — assigned on creation and fixed afterwards; unset for a project session. `Session.ordinal` is a
 console session's place in its console's history —
-one past the highest ever used there — which gives it its default title ("Hub `<ordinal>`"); unset for a project
-session. See "Key design decisions" in `docs/plans/20261008-console-sessions-and-agent-accounts/README.md`.
-`Session.account_id` is the account this session's own agent reads, by id, copied from its console's reference when
+one past the highest ever used there — which gives it its default title ("Hub `<ordinal>`"); unset for a project session.
+`Session.account_id` is the account this session's own agent reads, by id, resolved as above when
 the session is opened and never changed afterwards (unset means the default account) — the write path that lets a
 *running* session move to another account belongs to a later milestone. `Session.config_dir` is that account's
 directory at the same moment, kept alongside it for the same reason: each agent keeps a conversation's transcript

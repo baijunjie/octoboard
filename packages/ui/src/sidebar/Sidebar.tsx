@@ -727,9 +727,10 @@ function SessionRow({
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
+  const accounts = useDaemonStore((s) => s.settings.accounts);
   return (
     <TreeRow
-      ariaLabel={sessionAriaLabel(t, language, session, owner)}
+      ariaLabel={sessionAriaLabel(t, language, session, accounts, owner)}
       selected={session.id === selectedSessionId}
       onActivate={() => handlers.onSelectSession(session)}
     >
