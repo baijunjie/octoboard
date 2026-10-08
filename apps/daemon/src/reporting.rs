@@ -691,6 +691,41 @@ mod tests {
             !b_output.contains(&worker.id),
             "owner-b must not see a report bound to owner-a: {b_output}"
         );
+        live_a.terminate();
+        live_b.terminate();
+    }
+
+    /// A `done` report with no open items archives the reporting session and nothing else: not its
+    /// console session, which keeps running, and not a sibling bound to the same console session.
+    #[test]
+    fn a_done_report_archives_only_the_reporting_session() {
+        let state = Arc::new(crate::state::tests::app_state("report-archives-reporter"));
+        state.store.insert_console(&console()).unwrap();
+        let hub = Session {
+            id: "hub".to_string(),
+            role: Role::Console,
+            bound_to: None,
+            ..project_session("hub")
+        };
+        state.store.insert_session(&hub).unwrap();
+        let live = fake_live("hub");
+        state.register_live(live.clone());
+        for id in ["worker", "sibling"] {
+            let session = Session {
+                id: id.to_string(),
+                bound_to: Some("hub".to_string()),
+                ..project_session(id)
+            };
+            state.store.insert_session(&session).unwrap();
+        }
+
+        deliver_report(&state, "worker", done_report()).expect("delivered");
+
+        let status = |id: &str| state.store.get_session(id).unwrap().unwrap().status;
+        assert_eq!(status("worker"), SessionStatus::Archived);
+        assert_eq!(status("hub"), SessionStatus::Idle);
+        assert_eq!(status("sibling"), SessionStatus::Idle);
+        live.terminate();
     }
 
     /// Several sessions in one project have to be told apart in the menu, and the goal is the only

@@ -17,7 +17,7 @@ type RecordNames = Pick<State, "consoles" | "projects" | "sessions">;
  * when the record is unknown). A code the catalog does not have — a daemon newer than this client —
  * shows the daemon's own English `fallback`. A `reason_code` param is worded from the catalog's
  * `daemon.trust_reason.<code>` and replaces `reason`, which stays the daemon's English account for
- * a reason code the catalog lacks. */
+ * a reason code the catalog lacks. A numeric `count` param selects the message's plural form. */
 export function daemonMessage(
   language: Language,
   code: string,
@@ -27,9 +27,11 @@ export function daemonMessage(
 ): string {
   const key = `daemon.${code}`;
   if (!isMessageKey(key)) return fallback;
-  const shown: Record<string, string> = Object.fromEntries(
+  const shown: Record<string, string | number> = Object.fromEntries(
     Object.entries(params).map(([name, value]) => [name, RECORD_NAMES[name]?.(records, value) ?? value]),
   );
+  // A count arrives as text; as a number it selects the singular or plural wording.
+  if (/^\d+$/.test(params.count ?? "")) shown.count = Number(params.count);
   const reasonKey = `daemon.trust_reason.${params.reason_code}`;
   if (isMessageKey(reasonKey)) shown.reason = format(language, reasonKey, shown);
   return format(language, key, shown);

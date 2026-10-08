@@ -122,6 +122,10 @@ export const en = {
     "{session} ended as soon as it was relaunched under the new account, so it stays on the account it had.",
   "daemon.session_not_running": "This session is not running.",
   "daemon.session_not_archived": "Only an archived session can be deleted.",
+  "daemon.console_session_has_running_sessions": {
+    one: "This console session cannot be archived while {count} session bound to it is running: {sessions}. Archive that session or let it finish first.",
+    other: "This console session cannot be archived while {count} sessions bound to it are running: {sessions}. Archive those sessions or let them finish first.",
+  },
   "daemon.session_waiting_for_user": "This session is waiting for you. Answer it in the terminal first.",
   "daemon.queued_messages_lost":
     "A message queued for this session could not be written in full, so it and everything queued behind it were dropped. The session's input line may be holding part of a message {appName} could not finish writing. The next message written into the session will be run together with it, so check the session before sending anything else.",
@@ -370,6 +374,10 @@ export const en = {
   "dialog.removeProject.confirmRunning": "End and remove",
   "dialog.archiveSession.title": "Archive “{title}”?",
   "dialog.archiveSession.message": "Its process ends. You can reopen it later.",
+  "dialog.archiveSession.bound": {
+    one: "{count} session bound to it is archived with it",
+    other: "{count} sessions bound to it are archived with it",
+  },
   "dialog.switchAccount.title": "Switch “{title}” to {account}?",
   "dialog.switchAccount.message":
     "Its process restarts under the new account and the conversation continues there. The session takes on that account's own settings, and a copy of the conversation stays in the current account.",
@@ -379,9 +387,17 @@ export const en = {
   "dialog.switchAccount.confirm": "Switch",
   "dialog.deleteSession.title": "Delete “{title}” permanently?",
   "dialog.deleteSession.message": "This deletes the session. The agent's own transcript and the project's files are kept.",
+  "dialog.deleteSession.bound": {
+    one: "{count} archived session bound to it is deleted with it",
+    other: "{count} archived sessions bound to it are deleted with it",
+  },
   "dialog.deleteArchived.message": {
     one: "This deletes the archived session. The agent's own transcript and the project's files are kept.",
     other: "This deletes the archived sessions. The agents' own transcripts and the project's files are kept.",
+  },
+  "dialog.deleteArchived.bound": {
+    one: "{count} archived session bound to a console session in the view is deleted too",
+    other: "{count} archived sessions bound to console sessions in the view are deleted too",
   },
   "dialog.deleteArchived.title": {
     one: "Delete {count} archived session permanently?",

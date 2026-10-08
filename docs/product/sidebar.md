@@ -180,7 +180,9 @@ directory it recorded (or the agent's name alone when it recorded none). Its act
   rather than shown disabled. A session in the archive has no such entry.
 - **Archive** — it asks for confirmation, then archives the session (see "Archiving, interruption and resuming" in
   `docs/product/sessions.md`). For a console session this is the only way to archive it, since it cannot archive
-  itself (see "The console session's tools" in `docs/product/hub-orchestration.md`).
+  itself (see "The console session's tools" in `docs/product/hub-orchestration.md`); its confirmation lists the
+  interrupted sessions bound to it, under a warning with their number, as the ones archived with it, and the archive is
+  refused, with the sessions named, while any session bound to it has a process running.
 
 ## The binding badge
 
@@ -318,9 +320,11 @@ or every archived console session of that console.
   account and how long ago it was archived. Its **Reopen** and **Delete** buttons show while the row is hovered or holds
   keyboard focus, and are still reached with Tab.
 - **Reopen** resumes the session and selects it, which closes the view (see "Selecting a session" above).
-- **Delete** asks for confirmation, then deletes that session; **Delete all** asks for confirmation, naming how many,
-  then deletes every archived session in the view's scope. What deleting does and does not remove is in "Deleting
-  archived sessions" in `docs/product/sessions.md`.
+- **Delete** asks for confirmation, then deletes that session — for an archived console session, listing the archived
+  sessions bound to it that are deleted with it; **Delete all** asks for confirmation, naming how many, then deletes
+  every archived session in the view's scope; for a console's archived console sessions it also says how many archived
+  sessions bound to them are deleted with them. What deleting does and does not remove is in "Deleting archived
+  sessions" in `docs/product/sessions.md`.
 - With nothing archived — including after everything has been deleted — the view stays open and says there are no
   archived sessions.
 

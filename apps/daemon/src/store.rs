@@ -120,9 +120,13 @@ impl Store {
                 status           TEXT NOT NULL,
                 has_conversation INTEGER NOT NULL DEFAULT 0,
                 -- The console session this (project) session reports to, or NULL outside the
-                -- orchestration. Always NULL for a console session itself. No `REFERENCES`: what
-                -- happens to a bound session when its console session is archived or deleted is
-                -- not yet decided.
+                -- orchestration. Always NULL for a console session itself. No `REFERENCES`, because
+                -- what follows a console session is decided by the coordinator, not by the
+                -- database: archiving one archives its interrupted bound sessions, and deleting an
+                -- archived one deletes its archived bound sessions. An `ON DELETE CASCADE` would be
+                -- wrong twice over: it would take a bound session that is not archived, and it
+                -- would remove rows behind the daemon's back, so no `session_deleted` would be
+                -- broadcast and every client would keep a ghost row.
                 bound_to         TEXT,
                 -- Set only for a console session (`role = 'console'`); NULL for a project session.
                 colour           TEXT,

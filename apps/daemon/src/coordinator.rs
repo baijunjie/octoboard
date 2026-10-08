@@ -257,6 +257,9 @@ pub async fn handle(
             if stop_sessions {
                 // Archived the way the user's own archive request does it; a process still
                 // exiting when its rows are gone is tolerated by `watch_exit` and the hook paths.
+                // These are project sessions, which have nothing bound to them, so none of
+                // archiving's cascade along the binding applies; a console session belongs to no
+                // project and is not in this loop.
                 for live in state.live_sessions() {
                     if state
                         .store
@@ -755,6 +758,12 @@ fn resumable_agent_session_id(session: &Session) -> Option<String> {
 /// Relaunches a dormant session. `instruction` is written into it once it is running — queued here
 /// rather than by the caller, because whichever hook releases it can fire the moment the agent
 /// starts, so it has to be in the queue before the launch and out again if the launch never happens.
+///
+/// A session bound to an archived console session brings that console session back first, so what
+/// it reports reaches a process; if the console session cannot be relaunched the whole reopen
+/// fails and the session stays as it was. The console session stays reopened when it is the
+/// session's own relaunch that then fails. Reopening a console session reopens nothing bound to
+/// it: the group comes back one session at a time, from the one the user asked for.
 pub async fn resume_session(
     state: &Arc<AppState>,
     id: &str,
@@ -763,7 +772,29 @@ pub async fn resume_session(
     // Claimed before anything else, so two overlapping relaunches cannot both get through, and
     // before the record is read, so a delete cannot slip in between reading and launching.
     let claim = state.begin_launch(id)?;
+    if let Some(owner) = archived_owner(state, id)? {
+        // A console session is bound to nothing, so this never goes round again. Two bound
+        // sessions reopened at once are kept apart by the window, not by anything held: nothing
+        // awaits between this claim and the owner's status write, so the second reopen reads an
+        // owner that is no longer archived and skips this step. One that does land inside the
+        // window is refused on the owner's claim, and the user's next click goes through.
+        let owner_claim = state.begin_launch(&owner)?;
+        relaunch_session(state, &owner_claim, &owner, None, true, None).await?;
+    }
     relaunch_session(state, &claim, id, instruction, true, None).await
+}
+
+/// The console session a dormant session is bound to, when that console session is archived.
+fn archived_owner(state: &Arc<AppState>, id: &str) -> Result<Option<String>> {
+    let session = state.session_record(id)?;
+    let Some(owner) = session.bound_to.filter(|_| session.status.is_dormant()) else {
+        return Ok(None);
+    };
+    Ok(state
+        .store
+        .get_session(&owner)?
+        .filter(|owner| owner.status == SessionStatus::Archived)
+        .map(|owner| owner.id))
 }
 
 /// The relaunch a resume and a switch of the session's account both end in: everything Octoboard
@@ -900,7 +931,74 @@ async fn start_process(
 
 /// Ends the session's process and archives it. What archiving means beyond ending the process
 /// belongs here and not in [`stop_process`], which a switch of the session's account shares.
+///
+/// Archiving a console session is a group operation along the binding, decided by whether a
+/// process is running and not by status: refused, with nothing changed, while any session bound to
+/// it has one (working, awaiting instructions or waiting for the user alike; the refusal counts and
+/// names them), and otherwise archiving every bound session that is not archived yet, before the
+/// console session itself. Nothing bound to it is left outside the archive. The order is
+/// deliberate: bound sessions first and the console session last, so a failure part way leaves
+/// only a state the user could have produced by hand, never an archived console session with a
+/// bound session still outside the archive. A project session has nothing bound to it, so archiving
+/// one — the user's request, the console session's tool, a `done` report with no open items, a
+/// `delete_project` that stops sessions — never reaches another session.
 pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<()> {
+    let session = state.session_record(id)?;
+    if session.role == Role::Console {
+        // "Not running" is taken to mean interrupted by exclusion: a status that is neither
+        // archived nor backed by a process would be archived here without anyone having decided so.
+        // One gap is left open: `open_session` inserts the session record, `bound_to` included,
+        // before it takes the launch claim, so in between a bound session reads as neither archived
+        // nor process-backed. Nothing awaits in that gap and the UI binds only to a live console
+        // session, so it is not closed.
+        let (running, dormant): (Vec<Session>, Vec<Session>) = bound_sessions(state, id)?
+            .into_iter()
+            .filter(|bound| bound.status != SessionStatus::Archived)
+            .partition(|bound| state.has_process(&bound.id));
+        if !running.is_empty() {
+            return Err(CodedError::raised(
+                error_code::CONSOLE_SESSION_HAS_RUNNING_SESSIONS,
+                format!(
+                    "this console session cannot be archived while sessions bound to it have a \
+                     process running: {}; archive them or wait for them to finish first",
+                    quoted_titles(&running)
+                ),
+                &[
+                    ("count", &running.len().to_string()),
+                    ("sessions", &quoted_titles(&running)),
+                ],
+            ));
+        }
+        for bound in dormant {
+            archive_record(state, &bound.id)?;
+        }
+    }
+    archive_record(state, id)
+}
+
+/// The sessions bound to the console session `id`, in any status.
+fn bound_sessions(state: &Arc<AppState>, id: &str) -> Result<Vec<Session>> {
+    Ok(state
+        .store
+        .list_sessions()?
+        .into_iter()
+        .filter(|session| session.bound_to.as_deref() == Some(id))
+        .collect())
+}
+
+/// The titles of `sessions`, each in quotes, comma separated. The separator is half-width and
+/// English whatever the reading language; that is accepted, because a client with the message in
+/// its catalogue words the list itself and this serves the fallback text, which needs the titles.
+fn quoted_titles(sessions: &[Session]) -> String {
+    sessions
+        .iter()
+        .map(|session| format!("\u{201c}{}\u{201d}", session.title))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Marks one session archived and ends its process, if it has one.
+fn archive_record(state: &Arc<AppState>, id: &str) -> Result<()> {
     let mut session = state.session_record(id)?;
     session.status = SessionStatus::Archived;
     session.ended_at = Some(now_millis());
@@ -1137,13 +1235,15 @@ async fn came_up(live: &LiveSession, settle: Duration) -> bool {
     !live.poll_exit()
 }
 
-/// Removes Octoboard's record of one archived session. Nothing else of Octoboard's hangs off a
-/// session: its queue, MCP token and turn bookkeeping go when its process does, and so does its
-/// scratch directory (clearing the run directory at startup is only the fallback). The agent's own
-/// transcript and the project are never touched.
+/// Removes Octoboard's record of one archived session, and with an archived console session the
+/// archived sessions bound to it: left behind, reopening one would have no console session to come
+/// back with. Deleting an archived bound session on its own leaves its console session alone.
+/// Nothing else of Octoboard's hangs off a session: its queue, MCP token and turn bookkeeping go
+/// when its process does, and so does its scratch directory (clearing the run directory at startup
+/// is only the fallback). The agent's own transcript and the project are never touched.
 fn delete_session(state: &Arc<AppState>, id: &str) -> Result<()> {
-    state.session_record(id)?;
-    if !state.delete_if_archived(id)? {
+    let session = state.session_record(id)?;
+    if !delete_archived_group(state, &session)? {
         return Err(CodedError::raised(
             error_code::SESSION_NOT_ARCHIVED,
             "only an archived session can be deleted",
@@ -1153,8 +1253,28 @@ fn delete_session(state: &Arc<AppState>, id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Deletes `session` if it is archived and says whether it did; a console session takes the
+/// archived sessions bound to it along. Deleting the console session first means a refusal, which
+/// only that first step can give, deletes nothing. It does not make the whole atomic: if a later
+/// step is skipped (a session being launched right now) or fails, the console session is already
+/// gone. That is left, because a bound session can only be mid-launch through a resume, which
+/// reopens the console session first, so the console session was no longer archived and the
+/// delete was refused. One that stopped being archived meanwhile is skipped.
+fn delete_archived_group(state: &Arc<AppState>, session: &Session) -> Result<bool> {
+    if !state.delete_if_archived(&session.id)? {
+        return Ok(false);
+    }
+    if session.role == Role::Console {
+        for bound in bound_sessions(state, &session.id)? {
+            state.delete_if_archived(&bound.id)?;
+        }
+    }
+    Ok(true)
+}
+
 /// Deletes every archived session of `project`, or with no project every archived console session
-/// of `console`. One that stopped being archived meanwhile (a resume got there first) is skipped.
+/// of `console` along with the archived sessions bound to them. One that stopped being archived
+/// meanwhile (a resume got there first) is skipped.
 fn delete_archived_sessions(
     state: &Arc<AppState>,
     console_id: &str,
@@ -1180,7 +1300,7 @@ fn delete_archived_sessions(
                 None => session.role == Role::Console,
             };
         if in_scope {
-            state.delete_if_archived(&session.id)?;
+            delete_archived_group(state, &session)?;
         }
     }
     Ok(())
@@ -2681,6 +2801,45 @@ mod tests {
         std::fs::remove_dir_all(dir).ok();
     }
 
+    /// The other half of the seam: ending a console session's process for a switch is not refused
+    /// because sessions bound to it are running. That refusal belongs to archiving alone, so a
+    /// switch of a console session with a working bound session goes on to the relaunch, which
+    /// fails here only on the missing working directory, and leaves the bound session running.
+    #[tokio::test]
+    async fn a_switch_is_not_refused_for_a_running_bound_session() {
+        let (state, dir) = switch_fixture("switch-running-bound");
+        state
+            .store
+            .insert_session(&console_session("hub", SessionStatus::Working))
+            .unwrap();
+        state
+            .store
+            .insert_session(&bound_session("worker", SessionStatus::Working, "hub"))
+            .unwrap();
+        let hub = crate::state::tests::fake_live_session("hub", Agent::Claude, 80, 24, "sleep 30");
+        let worker =
+            crate::state::tests::fake_live_session("worker", Agent::Claude, 80, 24, "sleep 30");
+        state.register_live(hub.clone());
+        state.watch_exit(hub.clone());
+        state.register_live(worker.clone());
+
+        let err = switch_session_account(
+            &state,
+            "hub",
+            Some(Some("claude-a".into())),
+            shell_env(&dir),
+        )
+        .await
+        .expect_err("the console's working directory does not exist");
+
+        assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
+        assert!(hub.poll_exit(), "its process was ended");
+        assert!(!worker.poll_exit(), "the bound session was left running");
+        assert_eq!(status_of(&state, "worker"), Some(SessionStatus::Working));
+        worker.terminate();
+        std::fs::remove_dir_all(dir).ok();
+    }
+
     /// A relaunched process that has ended by the end of the settling time did not come up; one
     /// still running did.
     #[tokio::test]
@@ -2743,6 +2902,342 @@ mod tests {
             state.store.get_session("s").unwrap().unwrap().status,
             SessionStatus::Archived
         );
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    /// A project session bound to the console session `owner`, titled by its id so a refusal that
+    /// names it can be read back.
+    fn bound_session(id: &str, status: SessionStatus, owner: &str) -> Session {
+        Session {
+            title: id.to_string(),
+            bound_to: Some(owner.to_string()),
+            ..project_session(id, Agent::Claude, status)
+        }
+    }
+
+    fn console_session(id: &str, status: SessionStatus) -> Session {
+        Session {
+            title: id.to_string(),
+            status,
+            ..bare_session(id, Role::Console)
+        }
+    }
+
+    fn status_of(state: &Arc<AppState>, id: &str) -> Option<SessionStatus> {
+        state.store.get_session(id).unwrap().map(|s| s.status)
+    }
+
+    /// The sessions on record, sorted by id.
+    fn session_ids(state: &Arc<AppState>) -> Vec<String> {
+        let mut ids: Vec<String> = state
+            .store
+            .list_sessions()
+            .unwrap()
+            .into_iter()
+            .map(|session| session.id)
+            .collect();
+        ids.sort();
+        ids
+    }
+
+    /// The line is the process, not the status: any bound session with one refuses the archive,
+    /// working, awaiting instructions or waiting for the user alike, and so does one being
+    /// launched right now. The refusal counts them and names them, and nothing was archived.
+    #[tokio::test]
+    async fn archiving_a_console_session_is_refused_while_a_bound_process_runs() {
+        use SessionStatus::{Idle, Interrupted, WaitingUser, Working};
+        let (state, dir) = switch_fixture("archive-refused");
+        state
+            .store
+            .insert_session(&console_session("hub", Idle))
+            .unwrap();
+        state
+            .store
+            .insert_session(&bound_session("dormant", Interrupted, "hub"))
+            .unwrap();
+
+        // (what runs, the statuses of the bound sessions that have a process)
+        let cases: [(&str, &[SessionStatus]); 4] = [
+            ("working", &[Working]),
+            ("awaiting instructions", &[Idle]),
+            ("waiting for the user", &[WaitingUser]),
+            ("several", &[Working, Idle]),
+        ];
+        for (name, statuses) in cases {
+            let mut live = Vec::new();
+            let ids: Vec<String> = (0..statuses.len()).map(|n| format!("run-{n}")).collect();
+            for (id, status) in ids.iter().zip(statuses) {
+                state
+                    .store
+                    .insert_session(&bound_session(id, *status, "hub"))
+                    .unwrap();
+                let fake =
+                    crate::state::tests::fake_live_session(id, Agent::Claude, 80, 24, "sleep 30");
+                state.register_live(fake.clone());
+                live.push(fake);
+            }
+
+            let err = archive_session(&state, "hub").expect_err(name);
+            assert_eq!(
+                code_of(&err),
+                error_code::CONSOLE_SESSION_HAS_RUNNING_SESSIONS
+            );
+            let coded = err.downcast_ref::<CodedError>().unwrap();
+            assert_eq!(coded.params["count"], statuses.len().to_string(), "{name}");
+            for id in &ids {
+                assert!(coded.params["sessions"].contains(id.as_str()), "{name}");
+                assert!(coded.message.contains(id.as_str()), "{name}");
+            }
+            assert!(!coded.params["sessions"].contains("dormant"), "{name}");
+            assert_eq!(status_of(&state, "hub"), Some(Idle), "{name}");
+            assert_eq!(status_of(&state, "dormant"), Some(Interrupted), "{name}");
+
+            for (id, fake) in ids.iter().zip(&live) {
+                fake.terminate();
+                state.store.delete_session(id).unwrap();
+            }
+        }
+
+        // A bound session being launched has no registered process yet, and still counts.
+        let claim = state.begin_launch("dormant").unwrap();
+        let err = archive_session(&state, "hub").expect_err("launching");
+        assert_eq!(
+            code_of(&err),
+            error_code::CONSOLE_SESSION_HAS_RUNNING_SESSIONS
+        );
+        assert_eq!(status_of(&state, "hub"), Some(Idle));
+        drop(claim);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    /// With no bound process running, archiving a console session archives every bound session
+    /// that is not archived yet, and only those: not an unbound session, not one bound to another
+    /// console session, and an archived one keeps its own ended time.
+    #[tokio::test]
+    async fn archiving_a_console_session_archives_its_interrupted_bound_sessions() {
+        use SessionStatus::{Archived, Idle, Interrupted};
+        let (state, dir) = switch_fixture("archive-cascade");
+        for session in [
+            console_session("hub", Idle),
+            console_session("other-hub", Idle),
+            bound_session("a", Interrupted, "hub"),
+            bound_session("b", Interrupted, "hub"),
+            Session {
+                ended_at: Some(5),
+                ..bound_session("old", Archived, "hub")
+            },
+            bound_session("elsewhere", Interrupted, "other-hub"),
+            project_session("unbound", Agent::Claude, Interrupted),
+        ] {
+            state.store.insert_session(&session).unwrap();
+        }
+
+        archive_session(&state, "hub").unwrap();
+
+        let statuses: Vec<(String, SessionStatus)> = session_ids(&state)
+            .into_iter()
+            .map(|id| {
+                let status = status_of(&state, &id).unwrap();
+                (id, status)
+            })
+            .collect();
+        assert_eq!(
+            statuses,
+            [
+                ("a".to_string(), Archived),
+                ("b".to_string(), Archived),
+                ("elsewhere".to_string(), Interrupted),
+                ("hub".to_string(), Archived),
+                ("old".to_string(), Archived),
+                ("other-hub".to_string(), Idle),
+                ("unbound".to_string(), Interrupted),
+            ]
+        );
+        assert_eq!(
+            state.store.get_session("old").unwrap().unwrap().ended_at,
+            Some(5)
+        );
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    /// Archiving a project session reaches no other session: the automatic archive of a `done`
+    /// report (see `reporting.rs`) and a `delete_project` that stops sessions both end here, and
+    /// neither takes the console session the session is bound to.
+    #[tokio::test]
+    async fn archiving_a_bound_project_session_leaves_its_console_session_alone() {
+        let (state, dir) = switch_fixture("archive-bound-alone");
+        state
+            .store
+            .insert_session(&console_session("hub", SessionStatus::Idle))
+            .unwrap();
+        state
+            .store
+            .insert_session(&bound_session("worker", SessionStatus::Idle, "hub"))
+            .unwrap();
+
+        archive_session(&state, "worker").unwrap();
+
+        assert_eq!(status_of(&state, "worker"), Some(SessionStatus::Archived));
+        assert_eq!(status_of(&state, "hub"), Some(SessionStatus::Idle));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    /// Which console session a relaunch brings back first: the archived one a dormant session is
+    /// bound to, and nothing else — not an owner that is only interrupted or already running, not
+    /// for an unbound session, and never for a console session, so reopening one reopens nothing
+    /// bound to it.
+    #[test]
+    fn a_reopen_brings_back_only_an_archived_owner() {
+        use SessionStatus::{Archived, Idle, Interrupted};
+        let (state, dir) = switch_fixture("archived-owner");
+        for session in [
+            console_session("archived-hub", Archived),
+            console_session("interrupted-hub", Interrupted),
+            console_session("running-hub", Idle),
+        ] {
+            state.store.insert_session(&session).unwrap();
+        }
+        // (the session's status, what it is bound to, the owner it brings back)
+        let cases = [
+            (
+                "archived",
+                Archived,
+                Some("archived-hub"),
+                Some("archived-hub"),
+            ),
+            (
+                "interrupted",
+                Interrupted,
+                Some("archived-hub"),
+                Some("archived-hub"),
+            ),
+            ("owner interrupted", Archived, Some("interrupted-hub"), None),
+            ("owner running", Archived, Some("running-hub"), None),
+            ("owner gone", Archived, Some("no-such-hub"), None),
+            ("unbound", Archived, None, None),
+            ("not dormant", Idle, Some("archived-hub"), None),
+        ];
+        for (name, status, owner, expected) in cases {
+            let session = Session {
+                bound_to: owner.map(str::to_string),
+                ..project_session("s", Agent::Claude, status)
+            };
+            state.store.insert_session(&session).unwrap();
+            assert_eq!(
+                archived_owner(&state, "s").unwrap().as_deref(),
+                expected,
+                "{name}"
+            );
+            state.store.delete_session("s").unwrap();
+        }
+        assert_eq!(archived_owner(&state, "archived-hub").unwrap(), None);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    /// The console session is relaunched before the session asked for, and the reopen fails as a
+    /// whole when it cannot be: the session is never attempted (its ended time is untouched) and
+    /// both stay archived. The console's working directory is missing here and the project's is
+    /// not, so the failure can only be the console session's.
+    #[tokio::test]
+    async fn a_bound_session_is_not_reopened_when_its_console_session_cannot_be() {
+        let (state, dir) = switch_fixture("reopen-owner-fails");
+        std::fs::create_dir_all(dir.join("no-such-project")).unwrap();
+        state
+            .store
+            .insert_session(&console_session("hub", SessionStatus::Archived))
+            .unwrap();
+        state
+            .store
+            .insert_session(&Session {
+                ended_at: Some(5),
+                ..bound_session("worker", SessionStatus::Archived, "hub")
+            })
+            .unwrap();
+
+        let err = resume_session(&state, "worker", None)
+            .await
+            .expect_err("the console session cannot launch");
+
+        assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
+        assert_eq!(status_of(&state, "hub"), Some(SessionStatus::Archived));
+        let worker = state.store.get_session("worker").unwrap().unwrap();
+        assert_eq!(
+            (worker.status, worker.ended_at),
+            (SessionStatus::Archived, Some(5))
+        );
+        assert!(!state.has_process("hub") && !state.has_process("worker"));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    /// Deleting an archived console session takes the archived sessions bound to it and no others;
+    /// one bound session on its own leaves the console session; a console session that is not
+    /// archived is refused and takes nothing with it.
+    #[tokio::test]
+    async fn deleting_an_archived_console_session_deletes_its_archived_bound_sessions() {
+        use SessionStatus::{Archived, Idle, Interrupted};
+        let (state, dir) = switch_fixture("delete-cascade");
+        for session in [
+            console_session("hub", Archived),
+            bound_session("a", Archived, "hub"),
+            bound_session("b", Archived, "hub"),
+            bound_session("still-here", Interrupted, "hub"),
+            console_session("other-hub", Archived),
+            bound_session("c", Archived, "other-hub"),
+            project_session("unbound", Agent::Claude, Archived),
+            console_session("live-hub", Idle),
+            bound_session("d", Archived, "live-hub"),
+        ] {
+            state.store.insert_session(&session).unwrap();
+        }
+
+        delete_session(&state, "hub").unwrap();
+        assert_eq!(
+            session_ids(&state),
+            ["c", "d", "live-hub", "other-hub", "still-here", "unbound"]
+        );
+
+        delete_session(&state, "c").unwrap();
+        assert_eq!(
+            session_ids(&state),
+            ["d", "live-hub", "other-hub", "still-here", "unbound"],
+            "the bound session alone leaves its console session"
+        );
+
+        let err = delete_session(&state, "live-hub").expect_err("not archived");
+        assert_eq!(code_of(&err), error_code::SESSION_NOT_ARCHIVED);
+        assert_eq!(
+            session_ids(&state),
+            ["d", "live-hub", "other-hub", "still-here", "unbound"]
+        );
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    /// Deleting every archived console session of a console takes their archived bound sessions
+    /// too; deleting a project's archived sessions takes the bound ones among them and leaves the
+    /// console sessions.
+    #[tokio::test]
+    async fn deleting_archived_sessions_in_bulk_follows_the_binding_for_console_sessions_only() {
+        use SessionStatus::Archived;
+        let seed = |name: &str| {
+            let (state, dir) = switch_fixture(name);
+            for session in [
+                console_session("hub", Archived),
+                bound_session("a", Archived, "hub"),
+                project_session("unbound", Agent::Claude, Archived),
+            ] {
+                state.store.insert_session(&session).unwrap();
+            }
+            (state, dir)
+        };
+
+        let (state, dir) = seed("bulk-console-scope");
+        delete_archived_sessions(&state, "console-1", None).unwrap();
+        assert_eq!(session_ids(&state), ["unbound"]);
+        std::fs::remove_dir_all(dir).ok();
+
+        let (state, dir) = seed("bulk-project-scope");
+        delete_archived_sessions(&state, "console-1", Some("project-1")).unwrap();
+        assert_eq!(session_ids(&state), ["hub"]);
         std::fs::remove_dir_all(dir).ok();
     }
 

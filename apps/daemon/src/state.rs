@@ -243,6 +243,15 @@ impl AppState {
             .collect()
     }
 
+    /// Whether the session has a process right now, or is being launched, resumed or switched and
+    /// so is about to. This is the line archiving a console session draws, and it is not the
+    /// session's status: an interrupted session has none and an archived one may still be exiting
+    /// (its record says archived, so callers ask about the ones that are not).
+    pub fn has_process(&self, id: &str) -> bool {
+        let live = self.live.read().expect("live sessions lock poisoned");
+        live.sessions.contains_key(id) || live.launching.contains(id)
+    }
+
     /// Whether any session matching is running or still being launched or resumed. Deleting a
     /// console or a project in that state is refused rather than silently killing them.
     pub fn has_live_sessions_where(&self, matches: impl Fn(&Session) -> bool) -> Result<bool> {

@@ -205,3 +205,22 @@ every one of them is an instruction to a model rather than something a user sees
       nor actionable, and reads the reworded tool descriptions, the console session's instructions and the refusal
       texts as intended.
 
+## From milestone 11 — archiving, reopening and deleting along the binding
+
+The rules are covered by daemon tests. What is left is the dialogs on screen and the one step a unit test cannot
+take, which is launching a real agent.
+
+- [ ] **Archiving a console session whose bound sessions are all interrupted**: the dialog lists them under a
+      warning saying how many are archived with it, and after confirming they are all in the archive.
+- [ ] **Archiving one while a bound session is working, at its prompt, or waiting for the user**: the refusal shows
+      in place with the count and the titles, in both languages — and reads correctly with exactly one, which is the
+      case the wording was changed for.
+- [ ] **Reopening an archived bound session whose console session is archived**: the console session comes back
+      first, the session then comes up, and its next report reaches it. The last step needs a real agent. Reopening
+      the console session alone must leave its bound sessions archived.
+- [ ] **Deleting an archived console session** from the archive view: the dialog lists its archived bound sessions
+      and they go with it. "Delete all" over a console's archived console sessions shows the extra count line when
+      bound sessions exist.
+- [ ] The **`console-sessions-archive-cascade` gallery scenario** runs clean in a browser, which is also where the
+      callout's layout, its zh-Hans rendering and a long or CJK session title in it get looked at.
+

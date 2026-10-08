@@ -79,6 +79,11 @@ export function newestConsoleSession(sessions: Session[], consoleId: string): Se
   return liveConsoleSessions(sessions, consoleId)[0];
 }
 
+/** The sessions bound to the console session `consoleSessionId`, in any status, in the sidebar's order. */
+export function boundSessions(sessions: Session[], consoleSessionId: string): Session[] {
+  return sessions.filter((s) => s.bound_to === consoleSessionId).sort(compareSessions);
+}
+
 /** A console session's own archived bound sessions — the project sessions that are bound to it and
  * have since been archived. This is a third filter over the same session records the archive view
  * already serves for a project (`project_id`) and for a console's console sessions (`role`).

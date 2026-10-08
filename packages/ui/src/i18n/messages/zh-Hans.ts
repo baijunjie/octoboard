@@ -103,6 +103,9 @@ export const zhHans: Translation<"other"> = {
   "daemon.switch_did_not_come_up": "{session} 在新账户下重新启动后立即结束，因此仍在原账户上。",
   "daemon.session_not_running": "此会话未在运行。",
   "daemon.session_not_archived": "只能删除已归档的会话。",
+  "daemon.console_session_has_running_sessions": {
+    other: "无法归档此控制台会话：绑定到它的会话仍在运行，共 {count} 个（{sessions}）。请先归档运行中的会话，或等待其完成。",
+  },
   "daemon.session_waiting_for_user": "此会话正在等你回应。请先在终端中回答。",
   "daemon.queued_messages_lost":
     "为此会话排队的一条消息未能完整写入，因此它以及排在其后的所有消息都已被丢弃。会话的输入行中可能残留了 {appName} 未能写完的半条消息。下一条写入会话的消息会与它一起运行，因此在发送其他内容之前请先检查会话。",
@@ -340,6 +343,9 @@ export const zhHans: Translation<"other"> = {
   "dialog.removeProject.confirmRunning": "结束并移除",
   "dialog.archiveSession.title": "确认归档“{title}”？",
   "dialog.archiveSession.message": "会话进程将结束。之后可以重新打开。",
+  "dialog.archiveSession.bound": {
+    other: "绑定到它的 {count} 个会话将一并归档",
+  },
   "dialog.switchAccount.title": "确认将“{title}”切换到 {account}？",
   "dialog.switchAccount.message": "会话进程将在新账户下重新启动，对话会在其中继续。会话将采用该账户自己的设置，当前账户中会保留一份对话副本。",
   "dialog.switchAccount.messageFresh": "会话进程将在新账户下重新启动，并开始一段新的对话，因为尚未向它输入过内容。会话将采用该账户自己的设置。",
@@ -347,8 +353,14 @@ export const zhHans: Translation<"other"> = {
   "dialog.switchAccount.confirm": "切换",
   "dialog.deleteSession.title": "确认永久删除“{title}”？",
   "dialog.deleteSession.message": "将删除此会话。智能体自己的对话记录和项目文件会保留。",
+  "dialog.deleteSession.bound": {
+    other: "绑定到它的 {count} 个已归档会话将一并删除",
+  },
   "dialog.deleteArchived.message": {
     other: "将删除这些已归档会话。智能体自己的对话记录和项目文件会保留。",
+  },
+  "dialog.deleteArchived.bound": {
+    other: "绑定到视图中控制台会话的 {count} 个已归档会话也将被删除",
   },
   "dialog.deleteArchived.title": {
     other: "确认永久删除 {count} 个已归档会话？",

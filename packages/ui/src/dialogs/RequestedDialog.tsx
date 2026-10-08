@@ -5,8 +5,9 @@ import { AgentIcon } from "../components/AgentIcon";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { StatusIcon } from "../components/StatusIcon";
 import { useT } from "../i18n/react";
-import { isLive } from "../protocol";
-import { compareSessions } from "../sidebar/order";
+import { isLive, type Session } from "../protocol";
+import { sessionAgentLabel } from "../sessionLabel";
+import { boundArchivedSessions, boundSessions, compareSessions } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ConsoleDialog } from "./ConsoleDialog";
@@ -14,6 +15,40 @@ import type { DialogRequest } from "./dialogRequest";
 import { ProjectDialog } from "./ProjectDialog";
 import { RenameDialog } from "./RenameDialog";
 import { SessionDialog } from "./SessionDialog";
+
+/** A warning callout for what a confirmation is about to take along, over the list of sessions when
+ * there is one to show: each with its status glyph, its agent's icon and its title. HeroUI's own
+ * warning tint rather than its default surface, which is the dialog's own fill and leaves the
+ * callout unmarked. */
+function SessionCallout({ title, sessions }: { title: string; sessions?: Session[] }): React.ReactElement {
+  const t = useT();
+  const accounts = useDaemonStore((s) => s.settings.accounts);
+  return (
+    <Alert status="warning" className="bg-warning-soft shadow-none">
+      <Alert.Indicator />
+      <Alert.Content className="min-w-0">
+        <Alert.Title>{title}</Alert.Title>
+        {/* The list is a sibling of the description rather than inside it: the description is a
+            `<span>`, which cannot hold a list. */}
+        {sessions && (
+          <ul className="mt-1 flex min-w-0 flex-col gap-1 self-stretch text-sm text-foreground">
+            {sessions.map((session) => (
+              <li key={session.id} className="flex min-w-0 items-center gap-2">
+                <StatusIcon status={session.status} />
+                <AgentIcon agent={session.agent} />
+                {/* The icon is decorative, and nothing else here names the agent. */}
+                <span className="sr-only">{sessionAgentLabel(t, session, accounts)}</span>
+                <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={session.title}>
+                  {session.title}
+                </FadeOverflow>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Alert.Content>
+    </Alert>
+  );
+}
 
 /** The dialog a sidebar menu asked for. `onClose` is called once the dialog is done or dismissed;
  * `onSessionOpened` receives the session a "new session" dialog started. */
@@ -70,29 +105,7 @@ export function RequestedDialog({
           message={
             <>
               <p>{t("dialog.removeProject.message")}</p>
-              {running.length > 0 && (
-                // HeroUI's own warning tint rather than its default surface, which is the dialog's
-                // own fill and leaves the callout unmarked.
-                <Alert status="warning" className="bg-warning-soft shadow-none">
-                  <Alert.Indicator />
-                  <Alert.Content className="min-w-0">
-                    <Alert.Title>{t("dialog.removeProject.running", { count: running.length })}</Alert.Title>
-                    <Alert.Description className="min-w-0 self-stretch text-foreground">
-                      <ul className="mt-1 flex min-w-0 flex-col gap-1">
-                        {running.map((session) => (
-                          <li key={session.id} className="flex min-w-0 items-center gap-2">
-                            <StatusIcon status={session.status} />
-                            <AgentIcon agent={session.agent} />
-                            <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={session.title}>
-                              {session.title}
-                            </FadeOverflow>
-                          </li>
-                        ))}
-                      </ul>
-                    </Alert.Description>
-                  </Alert.Content>
-                </Alert>
-              )}
+              {running.length > 0 && <SessionCallout title={t("dialog.removeProject.running", { count: running.length })} sessions={running} />}
             </>
           }
           confirmLabel={t(running.length > 0 ? "dialog.removeProject.confirmRunning" : "common.remove")}
@@ -141,11 +154,20 @@ export function RequestedDialog({
           onClose={onClose}
         />
       );
-    case "archive-session":
+    case "archive-session": {
+      // The sessions bound to a console session that go into the archive with it. Read live, like
+      // the running ones above. One that has a process running is not among them: the daemon
+      // refuses the archive while there is such a session, and the dialog shows that refusal.
+      const withIt = dialog.session.role === "console" ? boundSessions(Array.from(sessions.values()), dialog.session.id).filter((s) => s.status === "interrupted") : [];
       return (
         <ConfirmDialog
           title={t("dialog.archiveSession.title", { title: dialog.session.title })}
-          message={t("dialog.archiveSession.message")}
+          message={
+            <>
+              <p>{t("dialog.archiveSession.message")}</p>
+              {withIt.length > 0 && <SessionCallout title={t("dialog.archiveSession.bound", { count: withIt.length })} sessions={withIt} />}
+            </>
+          }
           confirmLabel={t("dialog.archiveSession.confirm")}
           onCancel={onClose}
           onConfirm={async () => {
@@ -154,6 +176,7 @@ export function RequestedDialog({
           }}
         />
       );
+    }
     case "switch-account":
       return (
         <ConfirmDialog
@@ -168,11 +191,18 @@ export function RequestedDialog({
           }}
         />
       );
-    case "delete-session":
+    case "delete-session": {
+      // An archived console session takes the archived sessions bound to it along.
+      const withIt = dialog.session.role === "console" ? boundArchivedSessions(Array.from(sessions.values()), dialog.session.id) : [];
       return (
         <ConfirmDialog
           title={t("dialog.deleteSession.title", { title: dialog.session.title })}
-          message={t("dialog.deleteSession.message")}
+          message={
+            <>
+              <p>{t("dialog.deleteSession.message")}</p>
+              {withIt.length > 0 && <SessionCallout title={t("dialog.deleteSession.bound", { count: withIt.length })} sessions={withIt} />}
+            </>
+          }
           confirmLabel={t("common.delete")}
           destructive
           onCancel={onClose}
@@ -182,11 +212,23 @@ export function RequestedDialog({
           }}
         />
       );
-    case "delete-archived":
+    }
+    case "delete-archived": {
+      // All of a console's archived console sessions take their archived bound sessions with them;
+      // a project's archive does not reach any console session.
+      const consoleSessions = dialog.project
+        ? []
+        : Array.from(sessions.values()).filter((s) => s.console_id === dialog.console.id && s.role === "console" && s.status === "archived");
+      const withThem = consoleSessions.flatMap((owner) => boundArchivedSessions(Array.from(sessions.values()), owner.id)).length;
       return (
         <ConfirmDialog
           title={t("dialog.deleteArchived.title", { count: dialog.count })}
-          message={t("dialog.deleteArchived.message", { count: dialog.count })}
+          message={
+            <>
+              <p>{t("dialog.deleteArchived.message", { count: dialog.count })}</p>
+              {withThem > 0 && <SessionCallout title={t("dialog.deleteArchived.bound", { count: withThem })} />}
+            </>
+          }
           confirmLabel={t("dialog.deleteArchived.confirm")}
           destructive
           onCancel={onClose}
@@ -196,5 +238,7 @@ export function RequestedDialog({
           }}
         />
       );
+    }
   }
 }
+

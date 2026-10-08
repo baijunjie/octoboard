@@ -13,6 +13,13 @@ const hub1 = sessionOf("s-hub-1", console_.id, undefined, "Hub 1", "idle", { col
 const hub2 = sessionOf("s-hub-2", console_.id, undefined, "Hub 2", "working", { colour: "jade" });
 const hub3 = sessionOf("s-hub-3", console_.id, undefined, "Hub 3", "waiting_user", { colour: "teal" });
 
+// A console session whose bound sessions are all interrupted, so archiving it takes them along.
+const hub4 = sessionOf("s-hub-4", console_.id, undefined, "Hub 4", "idle", { colour: "azure" });
+const dormant = [
+  sessionOf("s-web-3", console_.id, web.id, "Tidy the changelog", "interrupted", { bound_to: hub4.id }),
+  sessionOf("s-api-3", console_.id, api.id, "Rename the index", "interrupted", { bound_to: hub4.id }),
+];
+
 const sessions = [
   hub1,
   hub2,
@@ -40,5 +47,16 @@ export const consoleSessionsScenarios: Scenario[] = [
     description: "The badge and the owner's name replace the old 'reports to console session' line.",
     preferences: { sidebarConsole: console_.id, sidebarFocusProject: web.id },
     state: snapshotState({ consoles: [console_], projects: [web, api], sessions }),
+  },
+  {
+    id: "console-sessions-archive-cascade",
+    group: GROUP,
+    title: "Confirm archiving a console session with bound sessions",
+    description: "The confirmation lists the interrupted sessions bound to it, which are archived with it.",
+    state: snapshotState({ consoles: [console_], projects: [web, api], sessions: [hub4, ...dormant] }),
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 4" })),
+      (ui) => ui.press(ui.t("sidebar.session.archive")),
+    ],
   },
 ];

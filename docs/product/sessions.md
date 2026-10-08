@@ -154,9 +154,12 @@ Transitions:
   *awaiting instructions*.
 - The process ending for any reason other than archiving — the agent exiting on its own, a crash, the application
   quitting — leaves the session *interrupted*.
-- Archiving leaves the session *archived*.
+- Archiving leaves the session *archived*. Archiving a console session also archives the *interrupted* sessions bound to
+  it, and is refused while any session bound to it has a process running (see "Archiving, interruption and
+  resuming").
 - Resuming an *interrupted* or *archived* session puts it in *awaiting instructions*, whichever of the two it came
-  from. A resume that fails to launch leaves the session exactly where it was, archived included.
+  from. A resume that fails to launch leaves the session exactly where it was, archived included. Resuming a session
+  bound to an *archived* console session first does the same to that console session.
 - An agent's report never moves a session out of *interrupted* or *archived*: whether a stopped session is one or the
   other is Octoboard's own record, not the agent's.
 
@@ -284,7 +287,23 @@ first. An archived session keeps its pin, if it had one (see "Order of projects 
 
 Besides the user, two things archive a session: the console session, explicitly, and a project
 session's own report saying the work is finished with nothing left open (see "Automatic archiving" in
-`docs/product/hub-orchestration.md`).
+`docs/product/hub-orchestration.md`). Both archive that one project session and nothing else.
+
+**Archiving a console session goes along its binding, and is decided by whether a process is running — not by the
+status.** An interrupted session has no process but is not archived, and a session at its prompt, at work or waiting
+for the user does have one.
+
+- **While any session bound to it has a process running, archiving the console session is refused**, whatever that
+  session's status, and nothing is changed. The refusal says how many sessions it is and names them; the user archives
+  those sessions, or waits for them to finish, and tries again. A session being launched, resumed or switched at that
+  moment counts as running.
+- **With none running, archiving the console session archives its bound sessions too** — every one that is not
+  archived yet, which can only be interrupted ones — so nothing bound to it is left outside the archive. The
+  confirmation says how many will be archived with it.
+- Sessions that are not bound to it, and sessions bound to another console session of the same console, are not
+  touched.
+- Ending a console session's process for a switch of its account is not archiving, and archives nothing (see
+  "Switching a session's account" below).
 
 **Resuming** an interrupted session happens by selecting it, or by pressing "Resume" on its terminal's card (see
 "The terminal" below). **Reopening** an archived session is the same relaunch, but selecting an archived session does
@@ -303,6 +322,13 @@ Octoboard injects.
   reference — and is refused if that directory no longer exists, but only when the session has a conversation to
   resume; one that was opened and never typed into launches into the missing directory instead (see "Agent config
   directories" in `docs/product/consoles-and-projects.md`).
+- **Reopening a session bound to an archived console session reopens that console session first**, then the session
+  itself, so what the session reports reaches a running console session. If the console session cannot be reopened, the
+  whole reopen fails with its reason and both stay as they were. A console session that is only interrupted is not
+  relaunched by this. If the console session came back and it is the session's own relaunch that then fails, the
+  console session stays reopened.
+- **Reopening a console session on its own reopens nothing bound to it.** The group comes back one session at a time,
+  from the session the user asked for.
 - Resuming a session whose process is already running is refused. The refusal a double-click produces is not surfaced
   to the user.
 
@@ -361,6 +387,12 @@ How each of those looks and behaves is in "Project rows", "Focus mode" and "The 
 
 Only an archived session can be deleted: one at a time, or at once every archived session of a project or every
 archived console session of a console. The user is asked to confirm either way.
+
+**Deleting an archived console session deletes the archived sessions bound to it.** Left behind, reopening one of them
+would have no console session to come back with, and its binding would point at nothing. The confirmation says how many
+that is before anything is deleted; deleting every archived console session of a console takes their archived bound
+sessions in the same way, and says how many. Deleting an archived bound session on its own leaves its console session
+alone, as does deleting a project's archived sessions.
 
 - **Deleting removes only Octoboard's record of the session**, for good. The session disappears from every client, and
   the console session's `list_archived` and `reopen_session` no longer find it. The agent's own record of the conversation, in the

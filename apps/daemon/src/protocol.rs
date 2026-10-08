@@ -902,6 +902,10 @@ pub mod error_code {
     pub const SESSION_NOT_RUNNING: &str = "session_not_running";
     /// Only an archived session can be deleted.
     pub const SESSION_NOT_ARCHIVED: &str = "session_not_archived";
+    /// A console session cannot be archived while a session bound to it has a process running,
+    /// whatever its status. `params` names the `count` of those sessions and their `sessions`, by
+    /// title, comma separated.
+    pub const CONSOLE_SESSION_HAS_RUNNING_SESSIONS: &str = "console_session_has_running_sessions";
     pub const SESSION_WAITING_FOR_USER: &str = "session_waiting_for_user";
     pub const QUEUED_MESSAGES_LOST: &str = "queued_messages_lost";
     pub const PAGE_NOT_CURRENT: &str = "page_not_current";

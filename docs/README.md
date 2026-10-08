@@ -10,8 +10,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Sessions](product/sessions.md) — console and project sessions, agent selection, the five session statuses, their
   glyphs and their transitions, the raised hand and its notification, how a declined Claude Code prompt lowers the
   hand from the agent's own transcript and what that costs to keep working, archiving, interruption and resuming,
-  switching a session to another account of its agent, where archived sessions are kept and deleting them, and the
-  terminal.
+  switching a session to another account of its agent, how a console session's archive, reopen and delete follow the
+  sessions bound to it, where archived sessions are kept, and the terminal.
 - [Sidebar](product/sidebar.md) — one console at a time and the switcher with its activity markers, the console
   sessions section and the project list, project and session rows and their menus, the binding badge a bound session
   carries, keyboard focus on rows, the order of projects and sessions and pinning, how the sidebar follows the

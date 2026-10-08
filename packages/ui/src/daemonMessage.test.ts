@@ -29,3 +29,11 @@ it("words a trust answer's failure from its reason code, keeping the English rea
 it("shows the daemon's own text for a code the catalog does not have", () => {
   expect(daemonMessage("en", "a_newer_code", {}, "the English text", records)).toBe("the English text");
 });
+
+it("picks the singular or plural wording from a numeric count param", () => {
+  const params = (count: string, sessions: string) => ({ count, sessions });
+  const one = daemonMessage("en", "console_session_has_running_sessions", params("1", "“A”"), "x", records);
+  const many = daemonMessage("en", "console_session_has_running_sessions", params("2", "“A”, “B”"), "x", records);
+  expect(one).toContain("1 session bound to it is running: “A”.");
+  expect(many).toContain("2 sessions bound to it are running: “A”, “B”.");
+});

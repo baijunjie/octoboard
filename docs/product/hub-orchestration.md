@@ -30,7 +30,7 @@ console sessions are listed, are in "Console sessions and project sessions" in
 | `get_session` | `session` | The session's record — status, title, agent, project, which console session owns it (or that it is unbound), whether it is a console session, whether it is the caller's, timestamps — plus a tail of what it has printed. |
 | `archive_session` | `session` | Ends the process of one of the caller's sessions and archives it. |
 | `list_archived` | `project` | The archived sessions of one project, whoever owns them, each with its owner. |
-| `reopen_session` | `session`, `text?` | Relaunches an archived or interrupted session of the caller's, continuing its conversation, and optionally hands it an instruction, delivered once the relaunched session can take one. |
+| `reopen_session` | `session`, `text?` | Relaunches an archived or interrupted session of the caller's, continuing its conversation, and optionally hands it an instruction, delivered once the relaunched session can take one. The caller is the console session the session is bound to and is running, so reopening one never brings a console session back. |
 | `show_page` | `html` | Pushes an HTML page to the calling console session's report panel, beside the console session's own terminal. Answers with the new page's id. See `docs/product/report-panel.md`. |
 
 A project is named either by its id or by its name where that name is unambiguous within the
@@ -135,6 +135,10 @@ to it.
 
 Anything else — open items, `failed`, `needs_decision` — leaves the session running and awaiting
 instructions, for the console session to continue with `send_message` or to archive explicitly.
+
+Automatic archiving archives the reporting session and nothing else. It never archives the console session the
+session is bound to, and does not touch the other sessions bound to it: archiving a console session, and what that
+takes with it, is the user's to do (see "Archiving, interruption and resuming" in `docs/product/sessions.md`).
 
 ## Which sessions the console session drives
 
