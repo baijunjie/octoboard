@@ -351,7 +351,7 @@ pub fn save(app: &AppHandle) {
     };
     // One last look, in case the final move or resize produced no event of its own; if the window
     // cannot be read any more, what the events recorded stands.
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = app.get_webview_window(crate::MAIN_WINDOW_LABEL) {
         let _ = observe(&window);
     }
     let state = tracked

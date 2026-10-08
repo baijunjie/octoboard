@@ -1,0 +1,8 @@
+# A custom permission for the app's own menu bar icon commands; see `exit-lifecycle.toml` for why an
+# app-defined command needs a file like this.
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-tray"
+description = "Allows the frontend to hand over the menu bar icon's menu and to bring a hidden window back to the front."
+commands.allow = ["set_tray_menu", "bring_to_front"]

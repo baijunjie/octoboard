@@ -28,11 +28,15 @@ export interface PlatformAdapter {
   /** The shell's native menu bar: the items that ask the UI to do something, and the labels the
    * UI gives every item. */
   readonly appMenu?: AppMenuCapability;
+  /** The shell's menu bar icon, which keeps the app reachable while its window is closed: its menu
+   * lists the sessions the UI hands it, and choosing one comes back here. */
+  readonly statusItem?: StatusItemCapability;
 }
 
 export interface ExitHandlers {
-  /** The user asked to quit by any gesture the shell reports: the window's close button, or
-   * Cmd+Q, the app menu, the Dock icon's own Quit, a system-initiated logout/restart/shutdown. */
+  /** The user asked to quit by any gesture the shell reports: Cmd+Q, the app menu, the menu bar
+   * icon's Quit, the Dock icon's own Quit, a system-initiated logout/restart/shutdown. The window's
+   * close button is not one: the shell keeps running in the background behind its menu bar icon. */
   onQuitRequested: () => void;
   /** The shell's daemon sidecar exited on its own; `detail` says how. */
   onDaemonExited: (detail: string) => void;
@@ -84,8 +88,11 @@ export interface NativeWindowCapability {
    * appearance that creating it hidden exists to avoid. Idempotent: showing an already-visible
    * window, or the shell's own timeout-driven fallback racing this call, is a no-op either way. */
   reveal(): Promise<void>;
-  /** Activates the app and brings the window to the front, restoring it first if minimized. */
+  /** Activates the app and brings the window to the front, restoring it first if minimized or
+   * hidden in the background. */
   bringToFront(): Promise<void>;
+  /** Whether the window is on screen; false while it is hidden in the background. */
+  isVisible(): Promise<boolean>;
 }
 
 export interface WindowChromeCapability {
@@ -103,6 +110,32 @@ export interface AppMenuCapability {
    * language; the shell rebuilds the menu with them, and keeps its English text for any label
    * missing. */
   setLabels(labels: Record<string, string>): Promise<void>;
+}
+
+/** The menu bar icon's menu, already in the UI's language. */
+export interface StatusItemMenu {
+  sections: StatusItemSection[];
+  open: string;
+  quit: string;
+}
+
+export interface StatusItemSection {
+  heading: string;
+  items: StatusItemEntry[];
+}
+
+export interface StatusItemEntry {
+  label: string;
+  /** Absent for a line that cannot be chosen. */
+  session?: string;
+}
+
+export interface StatusItemCapability {
+  /** Replaces the menu bar icon's menu. */
+  setMenu(menu: StatusItemMenu): Promise<void>;
+  /** Subscribes to a session being chosen in that menu, returning the function that undoes it. The
+   * shell has already brought the window to the front. */
+  onSessionChosen(handler: (sessionId: string) => void): () => void;
 }
 
 /** Picks the implementation once, at startup, from the environment the page is running in. */

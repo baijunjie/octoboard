@@ -165,9 +165,18 @@ export const en = {
   "connection.retry": "Try again",
 
   "notification.waiting.title": "Waiting for you",
-  "notification.waiting.body": "{session} — {location}",
+
+  // The menu bar icon's menu, handed to the shell (see `buildStatusItemMenu`).
+  "statusItem.section": "{status} ({count})",
+  "statusItem.more": {
+    one: "{count} more…",
+    other: "{count} more…",
+  },
+  "statusItem.noSessions": "No sessions running",
+  "statusItem.open": "Open {appName}",
 
   "session.agentAccount": "{agent} ({account})",
+  "session.withLocation": "{session} — {location}",
   "session.location.project": "a project",
   "session.location.consoleSession": "{console}'s console session",
   "session.location.ownConsoleSession": "its console's console session",

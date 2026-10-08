@@ -223,7 +223,10 @@ own row:
   was not the frontmost application; while it was frontmost, no banner was seen. A notification that
   cannot be shown is not reported as having failed — the sidebar's own marker carries the same signal.
 - The Dock badge carries how many sessions are waiting, counted across every console, and clears
-  when none is.
+  when none is. While the window is closed into the background Octoboard has no Dock icon; the count
+  is still kept and shows once it returns to the Dock (see "Closing the window" in
+  `docs/product/application-lifecycle.md`). The menu bar icon's menu lists the waiting sessions too
+  (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
 - The top bar carries the same count, as a raised hand and the number, shown only while at least one
   session is waiting. Pressing it selects the next waiting session after the selected one — console by
   console in the order the consoles were created, its console sessions before its projects' sessions,

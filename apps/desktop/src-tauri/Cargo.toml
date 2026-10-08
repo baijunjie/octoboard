@@ -20,7 +20,7 @@ tauri-build = { version = "=2.6.3", features = [] }
 serde_json = "=1.0.151"
 
 [dependencies]
-tauri = { version = "=2.11.6", features = [] }
+tauri = { version = "=2.11.6", features = ["tray-icon"] }
 tauri-plugin-shell = "=2.0.2"
 tauri-plugin-notification = "=2.4.0"
 anyhow = "1"
@@ -62,13 +62,15 @@ uuid = "=1.26.1"
 # same MSRV reason as the rest of this list — its current release requires rustc 1.89.
 notify-rust = "=4.11.7"
 # For the `applicationShouldTerminate:` override in `exit.rs` that catches the Dock icon's own Quit
-# (see the comment there). Pinned to the exact versions already resolved transitively through
-# `tauri-runtime-wry`, so promoting them to direct dependencies does not shift anything else this
-# crate depends on.
+# (see the comment there), and in `background.rs` for hiding and unhiding the app, the Dock badge,
+# the window's Cmd+H and the notification that the app became active. Pinned to the exact versions
+# already resolved transitively through `tauri-runtime-wry`, so promoting them to direct
+# dependencies does not shift anything else this crate depends on.
 objc2 = "=0.6.4"
-objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSApplication", "NSResponder"] }
-# For the system's preferred languages in `lib.rs`, pinned like `objc2-app-kit` above.
-objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSArray", "NSLocale", "NSString"] }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSApplication", "NSDockTile", "NSResponder", "NSWindow"] }
+# For the system's preferred languages in `lib.rs`, the notification observer in `background.rs`
+# and the content rule list in `page_isolation.rs`, pinned like `objc2-app-kit` above.
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "block2", "NSArray", "NSLocale", "NSNotification", "NSOperation", "NSString"] }
 # For the content rule list `page_isolation.rs` puts on the window's webview, and the block its
 # compile reports back through; `WebviewWindowBuilder::with_webview_configuration` takes this
 # crate's type. Pinned like `objc2-app-kit` above, `block2` to the version already resolved

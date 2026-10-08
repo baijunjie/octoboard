@@ -1,38 +1,48 @@
 //! The desktop application's Rust-side shell: launch `octoboardd` as a sidecar and hand the window
 //! the port it printed (`sidecar.rs`), the native menu bar (`menu.rs`), the window's remembered
-//! size and position (`window_state.rs`), the exit-confirmation flow (`exit.rs`), and the webview's
-//! content rule list that keeps report pages off the web (`page_isolation.rs`, macOS). Everything
-//! after the window loads talks to the daemon over WebSocket only, per the architectural rule in
-//! "Why the daemon is split out" in `docs/architecture.md` — no Tauri IPC command carries daemon
-//! traffic or session state, so this process reads the sidecar's stdout itself and bakes the port
-//! into the window's URL as a `?port=` query parameter *before* creating the window, instead of
-//! exposing an `invoke`-able command for it.
+//! size and position (`window_state.rs`), the exit-confirmation flow (`exit.rs`), running in the
+//! background once the window is closed (`background.rs`) behind a menu bar icon (`tray.rs`), and
+//! the webview's content rule list that keeps report pages off the web (`page_isolation.rs`,
+//! macOS). Everything after the window loads talks to the daemon over WebSocket only, per the
+//! architectural rule in "Why the daemon is split out" in `docs/architecture.md` — no Tauri IPC
+//! command carries daemon traffic, so this process reads the sidecar's stdout itself and bakes the
+//! port into the window's URL as a `?port=` query parameter *before* creating the window, instead
+//! of exposing an `invoke`-able command for it.
 //!
-//! The three IPC commands this crate does expose, `frontend_exit_heartbeat` and `confirm_quit` (both
-//! in `exit.rs`) and `set_menu_labels` (in `menu.rs`), carry no daemon traffic or session data
-//! either — the first two are bare exit-flow signals, the third is the UI's menu text, not a
-//! channel for anything the daemon knows about.
+//! The IPC commands this crate does expose carry no daemon traffic either:
+//! `frontend_exit_heartbeat` and `confirm_quit` (both in `exit.rs`) and `bring_to_front` (in
+//! `background.rs`) are bare signals, `set_menu_labels` (in `menu.rs`) is the UI's menu text, and
+//! `set_tray_menu` (in `tray.rs`) is the text of the menu bar icon's menu, with the opaque ids of
+//! the sessions it lists, which `tray-session-chosen` hands back. That is display text the UI words
+//! from the sessions it already shows, as it does the Dock badge's count; the shell never asks the
+//! daemon anything.
 
+mod background;
 mod exit;
 mod menu;
 #[cfg(target_os = "macos")]
 mod page_isolation;
 mod sidecar;
+mod tray;
 mod window_state;
 
 use std::thread;
 use std::time::Duration;
 
-use tauri::{Emitter, RunEvent, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Emitter, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 #[cfg(target_os = "macos")]
 use tauri::{LogicalPosition, TitleBarStyle};
 
+use background::BackgroundState;
 use exit::{
     confirm_quit, frontend_exit_heartbeat, install_application_should_terminate_override,
-    should_let_quit_through, ExitState,
+    request_quit, should_let_quit_through, ExitState,
 };
 use menu::{build_menu, set_menu_labels, Labels, SETTINGS_ITEM_ID, SETTINGS_REQUESTED_EVENT};
-use sidecar::spawn_daemon_and_wait_for_port;
+use sidecar::{mark_daemon_stopped, spawn_daemon_and_wait_for_port, DaemonState};
+
+/// The label of the one window the application opens.
+pub(crate) const MAIN_WINDOW_LABEL: &str = "main";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -42,26 +52,41 @@ pub fn run() {
         // shows it.
         .plugin(tauri_plugin_notification::init())
         .manage(ExitState::default())
+        .manage(BackgroundState::default())
+        .manage(DaemonState::default())
         .invoke_handler(tauri::generate_handler![
             frontend_exit_heartbeat,
             confirm_quit,
-            set_menu_labels
+            set_menu_labels,
+            tray::set_tray_menu,
+            background::bring_to_front
         ])
         .on_menu_event(|app, event| {
-            if event.id() == SETTINGS_ITEM_ID {
+            let id = event.id().as_ref();
+            if id == SETTINGS_ITEM_ID {
                 // Only a signal: the Settings dialog is the UI's to open, and it decides whether
                 // now is a good time.
                 let _ = app.emit(SETTINGS_REQUESTED_EVENT, ());
-            } else if event.id() == "quit" {
-                // `should_let_quit_through` itself emits `exit-requested` on the `false` path;
-                // nothing left to do here but act on its answer.
-                if should_let_quit_through(app) {
-                    app.exit(0);
-                }
+            } else if id == "quit" {
+                request_quit(app);
+            } else {
+                tray::handle_menu_event(app, id);
+            }
+        })
+        .on_window_event(|window, event| {
+            // Closing the window leaves the app running in the background (it quits instead when
+            // the daemon is not running; see `handle_close_request`); quitting is Cmd+Q, the app
+            // menu's or the menu bar icon's Quit. The UI registers no close listener of its own,
+            // so the close reaches this handler rather than being answered in the webview.
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                background::handle_close_request(window, api);
             }
         })
         .setup(|app| {
             app.set_menu(build_menu(app.handle(), &Labels::default())?)?;
+            tray::create(app.handle())?;
+            #[cfg(target_os = "macos")]
+            background::show_on_activation(app.handle());
             // This closure runs once the event loop (and with it, tao's `NSApplicationDelegate`)
             // is up and running — `App::run` calls it on the runtime's `Ready` event — so the
             // delegate this installs onto already exists by now. See the function's own doc
@@ -72,6 +97,9 @@ pub fn run() {
             // opens either way, carrying whichever of `?port=`/`?error=` applies.
             let startup =
                 spawn_daemon_and_wait_for_port(app.handle()).map_err(|err| err.to_string());
+            if startup.is_err() {
+                mark_daemon_stopped(app.handle());
+            }
             // The window's webview gets its content rule list before the window exists, which
             // `page_isolation` can only report back asynchronously, so the window is opened from
             // its callback.
@@ -105,6 +133,11 @@ pub fn run() {
         // Every quit path ends here: Cmd+Q and the menu's Quit through `app.exit`, the Dock's Quit
         // and a logout through AppKit's `applicationWillTerminate:`.
         RunEvent::Exit => window_state::save(app_handle),
+        // Opening the app again while it runs in the background, from the Finder, Spotlight or the
+        // Dock, brings the window back. Answered with a window still on screen too: one closed in
+        // fullscreen stays visible while it leaves fullscreen, and this cancels its pending hide.
+        #[cfg(target_os = "macos")]
+        RunEvent::Reopen { .. } => background::show_main_window(app_handle),
         _ => {}
     });
 }
@@ -189,7 +222,7 @@ fn open_main_window(
     let initial =
         window_state::initial_window(window_state::load(app).as_ref(), &displays, main_display);
 
-    let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(url.into()))
+    let builder = WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, WebviewUrl::App(url.into()))
         .title(menu::APP_NAME)
         .inner_size(initial.size.0, initial.size.1)
         // 280 (sidebar) + 520 (the terminal pane's own floor) + 300 (the report panel's own
@@ -241,9 +274,14 @@ fn open_main_window(
     // needs neither `tauri::async_runtime` nor a direct `tokio` dependency, unlike the sidecar's
     // own async wait in `sidecar.rs`, which already had to be async to read the child's stdout.
     let safety_net_window = window.clone();
+    let safety_net_app = app.clone();
     thread::spawn(move || {
         thread::sleep(REVEAL_SAFETY_NET);
-        let _ = safety_net_window.show();
+        // Not for a window the user has closed since it was revealed: it would come back without
+        // the Dock icon.
+        if !background::hidden_by_close(&safety_net_app) {
+            let _ = safety_net_window.show();
+        }
     });
 
     Ok(())

@@ -1,4 +1,4 @@
-import { isLive, type Project, type Session, type SessionStatus } from "../protocol";
+import { isLive, type Console, type Project, type Session, type SessionStatus } from "../protocol";
 
 /** How urgently a status asks for the user's attention: a raised hand first, then a session at
  * work, then one sitting at its prompt, then one with no process. Archived sessions are listed
@@ -136,4 +136,26 @@ export function consoleActivity(sessions: Session[]): Activity {
   if (sessions.some((s) => s.status === "working")) return "working";
   if (sessions.some((s) => s.status === "idle")) return "running";
   return undefined;
+}
+
+/** The sessions `include` picks, in the order the sidebar tree lists them: console by console, its
+ * console sessions first (in the console sessions section's own order), then its projects'
+ * sessions in the sidebar's own order. */
+export function sessionsInTreeOrder(
+  consoles: Console[],
+  projects: Project[],
+  sessions: Session[],
+  include: (session: Session) => boolean,
+): Session[] {
+  const picked = sessions.filter(include);
+  return consoles.flatMap((console) => {
+    const mine = picked.filter((s) => s.console_id === console.id);
+    return [
+      ...mine.filter((s) => s.role === "console").sort(compareSessions),
+      ...sortProjects(
+        projects.filter((p) => p.console_id === console.id),
+        (project) => sessions.filter((s) => s.project_id === project.id),
+      ).flatMap((project) => mine.filter((s) => s.role !== "console" && s.project_id === project.id).sort(compareSessions)),
+    ];
+  });
 }

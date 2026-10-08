@@ -32,7 +32,7 @@ interface UseAppExitResult {
   closeExitConfirm: () => void;
   /** Call when the user confirms the dialog above. */
   confirmExit: () => Promise<void>;
-  /** The same entry point the window's close button, Cmd+Q and the app menu all funnel through —
+  /** The same entry point Cmd+Q, the app menu and the menu bar icon's Quit all funnel through —
    * exposed so a plain "Quit" affordance (the daemon-failed-to-start screen has one) can use it too.
    * Does nothing where `canQuit` is false. */
   requestQuit: () => Promise<void>;
@@ -46,13 +46,13 @@ interface UseAppExitResult {
  * Owns the whole quit sequence: registering this webview as the one handling the exit flow (and
  * re-pinging that same registration on every gesture handled thereafter, which is what keeps the
  * Rust side's force-quit debounce from arming against a webview that is actually still alive),
- * listening for the window's close button and for an `exit-requested` event (fired for every other
- * way to quit — Cmd+Q, the app menu, the Dock icon's own Quit, and a system-initiated
- * logout/restart/shutdown — that the Rust side cannot itself ask the user about), asking for
- * confirmation when a session is still live (bringing the window to the front to do so), and the
- * `shutdown`-then-`confirm_quit` sequence that actually ends the process. With `getSessions` and
- * `requestShutdown` omitted it quits straight away, which is what a screen with no daemon behind it
- * needs.
+ * listening for an `exit-requested` event (fired for every way to quit — Cmd+Q, the app menu, the
+ * menu bar icon's Quit, the Dock icon's own Quit, and a system-initiated logout/restart/shutdown —
+ * that the Rust side cannot itself ask the user about; the window's close button is not one, it
+ * hides the window), asking for confirmation when a session is still live (bringing the window to
+ * the front to do so), and the `shutdown`-then-`confirm_quit` sequence that actually ends the
+ * process. With `getSessions` and `requestShutdown` omitted it quits straight away, which is what a
+ * screen with no daemon behind it needs.
  */
 export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
   const { exit, nativeWindow } = usePlatform();
@@ -63,10 +63,14 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
+  // Set from the moment a quit starts shutting the daemon down, which exits on purpose then.
+  const quittingRef = useRef(false);
+
   const doQuit = async (): Promise<void> => {
     // Without a shell that owns the process there is no quit, and a daemon this page merely
     // connects to must not be shut down by it.
     if (!exit) return;
+    quittingRef.current = true;
     const requestShutdown = optionsRef.current.requestShutdown;
     if (requestShutdown) {
       await Promise.race([
@@ -79,6 +83,7 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
     } catch (err) {
       // Quitting must not depend on this succeeding, but a quit that silently does nothing is
       // worse than one that says why, so the failure is surfaced rather than swallowed.
+      quittingRef.current = false;
       optionsRef.current.toastError?.(t("exit.failed", { error: (err as Error).message }));
     }
   };
@@ -95,9 +100,9 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
     const liveSessions = (optionsRef.current.getSessions?.() ?? []).filter((s) => isLive(s.status));
     if (liveSessions.length > 0) {
       setExitConfirmOpen(true);
-      // A quit from outside the window (the Dock icon's own Quit) leaves it wherever it was, often
-      // behind another app, where the dialog would go unseen. Best effort: the dialog opens
-      // whether or not the window can be raised.
+      // A quit from outside the window (the Dock icon's own Quit, the menu bar icon's) leaves it
+      // wherever it was, hidden in the background or behind another app, where the dialog would go
+      // unseen. Best effort: the dialog opens whether or not the window can be raised.
       await nativeWindow?.bringToFront().catch(() => {});
       return;
     }
@@ -116,7 +121,15 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
       exit?.register({
         onQuitRequested: () => void requestQuit(),
         onDaemonExited: (detail) => {
+          // The daemon going away is the quit's own doing, which needs neither a notice nor the
+          // window.
+          if (quittingRef.current) return;
           optionsRef.current.toastError?.(t("exit.daemonExited", { detail }));
+          // A window hidden in the background would leave the notice unseen; a visible one is left
+          // where it is, so a crash does not take the focus from whatever the user is doing.
+          void (async () => {
+            if (nativeWindow && !(await nativeWindow.isVisible())) await nativeWindow.bringToFront();
+          })().catch(() => {});
         },
       }),
     // Registration happens once; `requestQuit`/`doQuit` read live state through `optionsRef`.

@@ -56,9 +56,13 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   workspace-trust prompt, how Octoboard answers it and trusted folders, and the per-agent specifics.
 - [Application lifecycle](product/application-lifecycle.md) — what Octoboard runs on and how it is distributed, startup
   and the single-instance rule, who can reach the daemon (any local program, but no web page in a browser), losing the
-  daemon connection, the quit confirmation and which gestures it covers, how to quit a window that has stopped
+  daemon connection, closing the window into the background (out of the Dock, everything kept running) and every way
+  the window comes back, the quit confirmation and which gestures it covers, how to quit a window that has stopped
   responding, crash behaviour, and the files Octoboard keeps under `~/.octoboard` (and the one it keeps outside it),
   including the database that also holds the settings the daemon stores.
+- [Menu bar icon](product/menu-bar-icon.md) — the macOS menu bar icon: what a left and a right click do, its menu
+  (running sessions grouped by status in sidebar order, at most 10 per group with an "N more…" line, "No sessions
+  running", Open, Quit), choosing a session from it, and its Quit.
 
 ## Reference
 

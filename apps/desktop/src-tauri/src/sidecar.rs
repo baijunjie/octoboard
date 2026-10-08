@@ -1,9 +1,10 @@
 //! Spawning the `octoboardd` sidecar and parsing its startup output.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::time::Duration;
 
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 
@@ -11,6 +12,23 @@ use tauri_plugin_shell::ShellExt;
 /// cold process start (including, on first launch, SQLite schema setup), not a steady-state
 /// operation.
 const SIDECAR_STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Whether the daemon is gone: it failed to start or has exited. With no session left to keep
+/// running, the window's close button quits and a quit needs no confirmation.
+#[derive(Default)]
+pub struct DaemonState {
+    stopped: AtomicBool,
+}
+
+pub fn daemon_stopped(app: &AppHandle) -> bool {
+    app.state::<DaemonState>().stopped.load(Ordering::SeqCst)
+}
+
+pub fn mark_daemon_stopped(app: &AppHandle) {
+    app.state::<DaemonState>()
+        .stopped
+        .store(true, Ordering::SeqCst);
+}
 
 /// Spawns the `octoboardd` sidecar with `--parent-pid` set to this process, so the daemon's own
 /// watchdog exits it when this app does — a backstop for a crash, not the normal quit path (that
@@ -55,6 +73,7 @@ pub fn spawn_daemon_and_wait_for_port(app: &AppHandle) -> anyhow::Result<u16> {
                     eprintln!("octoboardd: {}", text.trim_end());
                 }
                 CommandEvent::Terminated(payload) => {
+                    mark_daemon_stopped(&app_handle);
                     if !port_sent {
                         let _ = tx.send(Err(format!(
                             "the daemon stopped with {} before reporting its port. {stderr}",

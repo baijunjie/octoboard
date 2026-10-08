@@ -41,7 +41,7 @@ pub fn set_menu_labels(app: AppHandle, labels: HashMap<String, String>) -> Resul
 /// `PredefinedMenuItem::quit`. The predefined one sends the native `terminate:` selector straight
 /// to the app, which ends the process through no `RunEvent` any confirmation flow can intercept; a
 /// plain menu item instead reaches `on_menu_event` in `lib.rs`, which routes it into the same
-/// `exit-requested` path as Cmd+Q and the window's close button.
+/// `exit-requested` path as Cmd+Q and the menu bar icon's Quit.
 ///
 /// The Dock icon's own Quit sends that same native `terminate:` straight to the process, with no
 /// menu item of this crate's own in the way — `exit::install_application_should_terminate_override`

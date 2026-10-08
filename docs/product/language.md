@@ -86,6 +86,10 @@ What follows the current language:
   is never translated. At launch the menu is English until the window's UI has loaded. The items macOS adds to
   these menus by itself — AutoFill, Start Dictation…, Emoji & Symbols, Close All — are not Octoboard's and do not
   follow the language; they are currently shown in English;
+- in the macOS application, the menu bar icon's menu: its group headings, its session lines' wording, Open and Quit
+  (see "The icon's menu" in `docs/product/menu-bar-icon.md`). Like the application menu, it is relabelled at once on a
+  change of language and is English until the window's UI has loaded; the product name, and the icon's tooltip, which
+  is the product name alone, are never translated;
 - the document's language and writing direction. Arabic (`ar`) is the one right-to-left language, and choosing it
   mirrors the window (see "Right-to-left layout" in `docs/product/window-layout.md`).
 
@@ -111,8 +115,8 @@ picks the language from the system, and a choice in Settings lasts until the pag
 ## What is translated so far
 
 **English and Simplified Chinese (`zh-Hans`) are complete**: under either, all the text listed in "What follows the
-language" above — the UI's own text, the notifications it composes, the daemon's errors and notices and the macOS
-application menu — is in that language.
+language" above — the UI's own text, the notifications it composes, the daemon's errors and notices, the macOS
+application menu and the menu bar icon's menu — is in that language.
 
 **The other 15 languages have no translations yet.** Choosing one, or the first launch picking one, shows that text in
 English, while the numbers and dates the UI formats, the document's language and the writing direction still follow the

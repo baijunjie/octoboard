@@ -17,6 +17,18 @@ export function sessionLocation(
   return owner ? t("session.location.consoleSession", { console: owner.name }) : t("session.location.ownConsoleSession");
 }
 
+/** A session's title with where it is, for a line naming it outside the sidebar. A session titled
+ * after its project would name it twice, so it reads as the title alone. */
+export function sessionWithLocation(
+  t: Translate,
+  session: Session,
+  consoles: Map<string, Console>,
+  projects: Map<string, Project>,
+): string {
+  const location = sessionLocation(t, session, consoles, projects);
+  return location === session.title ? session.title : t("session.withLocation", { session: session.title, location });
+}
+
 /** The catalog message naming each status, for the "Session statuses" table in
  * docs/product/sessions.md. A row's own `aria-label` wins over one on an element nested inside it,
  * so the wire enum must never be the only place a status is put into words. */

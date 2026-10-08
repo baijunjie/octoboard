@@ -17,6 +17,7 @@ import { usePaneToggles } from "./layout/usePaneToggles";
 import { useRegionCycle } from "./layout/useRegionCycle";
 import { useAppExit } from "./lifecycle/useAppExit";
 import { useGitStatusSchedule } from "./lifecycle/useGitStatusSchedule";
+import { useStatusItemMenu } from "./lifecycle/useStatusItemMenu";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
 import { ALREADY_RUNNING_CODES, type Console, type Project, type Session } from "./protocol";
 import { ReportPanel } from "./report/ReportPanel";
@@ -95,6 +96,18 @@ export function App(): React.ReactElement {
   const reportWidth = usePaneWidth("report", dockedPanes);
 
   useWaitingNotifications(sessionList, consoles, projects, hosts !== undefined);
+  useStatusItemMenu({
+    consoles: consoleList,
+    projects: projectList,
+    sessions: sessionList,
+    consoleMap: consoles,
+    projectMap: projects,
+    ready: hosts !== undefined,
+    onSessionChosen: (session) => {
+      selectSession(session);
+      focusTerminal();
+    },
+  });
 
   // The exit flow's frontend owner: it registers with the shell on mount, which is what makes the
   // window quittable. Only its confirmation is needed here: the main app has no separate "Quit"

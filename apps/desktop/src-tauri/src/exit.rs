@@ -7,18 +7,19 @@
 //! below, installed onto AppKit's own delegate), and `RunEvent::ExitRequested` (also handled in
 //! `lib.rs`) — which in practice only ever serves `confirm_quit`'s own self-raised `app.exit(0)`, or
 //! a window torn down before the frontend got as far as registering with `frontend_exit_heartbeat`.
-//! The window's close button does *not* reach this module: Tauri prevents the close purely from
-//! Rust-side registry state (whether a JS listener is registered for it) before any handler here
-//! ever sees it, so it is the frontend's own `onCloseRequested` in `useAppExit.ts` that answers for
-//! it instead, by funnelling into the same `requestQuit` that `exit-requested` does. This module
-//! owns the one decision the gestures that do reach it share (`should_let_quit_through`), so those
-//! call sites share it instead of each carrying their own slowly diverging copy.
+//! The menu bar icon's Quit (`tray.rs`) takes the same path as the app menu's. The window's close
+//! button is not a quit at all: it hides the window (`background.rs`), unless the daemon is not
+//! running, when it quits without asking. This module owns the one decision the quit gestures share
+//! (`should_let_quit_through`), so those call sites share it instead of each carrying their own
+//! slowly diverging copy.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager};
+
+use crate::sidecar::daemon_stopped;
 
 /// How soon a second prevented exit must follow the first for it to be let through unconditionally
 /// — the escape hatch in `should_let_quit_through` below for a frontend that registered for the
@@ -82,6 +83,15 @@ pub fn confirm_quit(app: AppHandle, state: tauri::State<ExitState>) {
     app.exit(0);
 }
 
+/// What a quit gesture that reaches `on_menu_event` in `lib.rs` does: exits unless a confirmation
+/// flow has taken the attempt over. `should_let_quit_through` itself emits `exit-requested` on the
+/// `false` path, so there is nothing left to do here but act on its answer.
+pub fn request_quit(app: &AppHandle) {
+    if should_let_quit_through(app) {
+        app.exit(0);
+    }
+}
+
 /// The one decision all three quit gestures share. Returns `true` when the caller should let the
 /// quit proceed unconditionally; `false` means a confirmation flow exists and has not yet cleared
 /// this attempt, so the caller should defer to it instead of exiting — which this function has
@@ -91,6 +101,10 @@ pub fn confirm_quit(app: AppHandle, state: tauri::State<ExitState>) {
 /// Also records the deferral: the next call's `FORCE_QUIT_WINDOW` check depends on
 /// `last_prevented_at` having been set here.
 pub fn should_let_quit_through(app: &AppHandle) -> bool {
+    if daemon_stopped(app) {
+        // No session can be live, so there is nothing to ask about.
+        return true;
+    }
     let state = app.state::<ExitState>();
     if state.confirmed.swap(false, Ordering::SeqCst) {
         // Already confirmed by `confirm_quit` above — this is that call's own self-raised attempt,

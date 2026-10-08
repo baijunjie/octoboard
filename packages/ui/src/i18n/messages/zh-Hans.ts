@@ -143,9 +143,16 @@ export const zhHans: Translation<"other"> = {
   "connection.retry": "重试",
 
   "notification.waiting.title": "等你回应",
-  "notification.waiting.body": "{session}，{location}",
+
+  "statusItem.section": "{status}（{count}）",
+  "statusItem.more": {
+    other: "还有 {count} 个…",
+  },
+  "statusItem.noSessions": "没有正在运行的会话",
+  "statusItem.open": "打开 {appName}",
 
   "session.agentAccount": "{agent}（{account}）",
+  "session.withLocation": "{session}，{location}",
   "session.location.project": "某个项目",
   "session.location.consoleSession": "{console} 的控制台会话",
   "session.location.ownConsoleSession": "所属控制台的控制台会话",

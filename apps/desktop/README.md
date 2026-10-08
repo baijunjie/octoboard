@@ -1,13 +1,14 @@
 # Octoboard desktop application
 
-The Tauri 2 shell of the macOS desktop application: the native window and menu bar, the `octoboardd` sidecar, and the
-exit flow. It contains no UI of its own: the window loads the UI in [`../../packages/ui/`](../../packages/ui/README.md),
+The Tauri 2 shell of the macOS desktop application: the native window and menu bar, the `octoboardd` sidecar, the
+exit flow, and keeping the application running in the background behind a menu bar icon once its window is closed. It contains no UI of its own: the window loads the UI in [`../../packages/ui/`](../../packages/ui/README.md),
 bundled into the application at build time (not served by the daemon), which provides the console/project/session
 menu, the `xterm.js` terminal, console and project management, the report panel and the exit-flow screens.
 
 The UI talks to `octoboardd` (see [`../daemon/`](../daemon/README.md)) only over the WebSocket/HTTP protocol in
-[`../daemon/PROTOCOL.md`](../daemon/PROTOCOL.md) — no Tauri IPC command carries daemon traffic or session state. This
-is an architectural rule, not an implementation detail: the already-decided remote-host feature depends on the UI
+[`../daemon/PROTOCOL.md`](../daemon/PROTOCOL.md) — no Tauri IPC command carries daemon traffic, and the shell never asks
+the daemon anything. IPC carries only bare signals and display text or opaque ids that the UI words from what it already
+shows (the Dock badge's count, the menu bar icon's menu). This is an architectural rule, not an implementation detail: the already-decided remote-host feature depends on the UI
 never distinguishing a local daemon from a remote one, which only holds if the daemon is reachable exclusively through
 that one protocol.
 
@@ -93,8 +94,8 @@ them itself instead of asking the reader to remember.
 
 ## External interfaces
 
-`src-tauri/` (the Rust side) defines exactly three of its own Tauri IPC commands: two bare exit-flow signals with no
-daemon traffic or session data in them, and one carrying the menu's text:
+`src-tauri/` (the Rust side) defines exactly five of its own Tauri IPC commands: three bare signals, and two carrying
+the text of a menu:
 
 - `frontend_exit_heartbeat` — marks the webview as the one handling the exit flow, so a quit is no longer let through
   unconfirmed; also doubles as a liveness ping, re-invoked on every quit gesture
@@ -105,10 +106,27 @@ daemon traffic or session data in them, and one carrying the menu's text:
   from the UI (keyed by its `menu.*` message keys, in the language the UI renders) and rebuilds the menu bar with
   them; a label it is not given keeps its English default, which is also what the menu built at startup shows. It
   carries only that text.
+- `set_tray_menu` (`src-tauri/src/tray.rs`, permitted by `permissions/tray.toml`) — takes the menu bar icon's menu from
+  the UI: sections of lines under headings, each line a label with, for one that can be chosen, the opaque id of the
+  session it stands for, plus the Open and Quit labels; all already worded in the UI's language.
+- `bring_to_front` (`src-tauri/src/background.rs`, permitted by `permissions/tray.toml`) — a bare signal that shows the
+  window again if it was hidden by the close button, restores it if minimized, and activates the app.
 
-Beyond those, the shell emits one event to the webview, `settings-requested`, when the application menu's
+Beyond those, the shell emits two events to the webview. `settings-requested` fires when the application menu's
 **Settings…** item (Cmd+,) is chosen; it carries no payload, and `packages/ui/src/platform/tauri.ts` exposes it as the
-platform adapter's `appMenu` capability (whose `setLabels` is the other direction). The window has no native titlebar
+platform adapter's `appMenu` capability (whose `setLabels` is the other direction). `tray-session-chosen` fires when a
+session line of the menu bar icon's menu is chosen, after the shell has brought the window back, with that session's id
+as its payload; the platform adapter exposes it, with `set_tray_menu`, as the `statusItem` capability. The menu bar
+icon's other items (Open, Quit) and a left click on the icon are answered in the shell: Open and the click show the
+window, and Quit takes the same exit flow as Cmd+Q.
+
+The window's close button is answered in the shell too (`src-tauri/src/background.rs`): the UI registers no close
+listener. It hides the window and takes the application out of the Dock, leaving it reachable through the menu bar
+icon, the Dock icon, a reopen from the Finder or Spotlight, or activation by a system notification. When the daemon is
+not running (it failed to start or has exited, tracked by `DaemonState` in `src-tauri/src/sidecar.rs`) there is
+nothing to keep in the background, so the close button quits, and a quit gesture needs no confirmation.
+
+The window has no native titlebar
 background or title text: it is created with an overlay titlebar and a hidden title on macOS, and the traffic lights
 float over the UI's own top bar (`TitleBar` in `packages/ui`), centred in it by `TRAFFIC_LIGHT_X` /
 `TRAFFIC_LIGHT_Y` in `src-tauri/src/lib.rs`.
@@ -124,8 +142,8 @@ architectural rule above: they carry no daemon traffic or session state — only
 frontend has already derived or chosen, or no theme at all meaning follow the OS, or a bare reveal with no payload
 at all, or the bare start-of-drag and zoom of the top bar's drag region (`core:window:allow-start-dragging` and
 `core:window:allow-internal-toggle-maximize`), or the bare raise that brings the window to the front before the exit
-confirmation asks (`core:window:allow-unminimize` and `core:window:allow-set-focus`, used by
-`packages/ui/src/lifecycle/useAppExit.ts` through `nativeWindow.bringToFront`).
+confirmation asks or when the daemon's exit needs to be seen (`bring_to_front`, called through
+`nativeWindow.bringToFront` by `packages/ui/src/lifecycle/useAppExit.ts`).
 
 The window remembers its size, position and maximized state across launches (`src-tauri/src/window_state.rs`; the
 frontend never calls it, so it needs no capability). What is stored is the window's *normal* frame —
@@ -166,13 +184,17 @@ any IPC call for it. The system's preferred languages travel the same way (`&lan
 | Path | Role |
 |---|---|
 | `src-tauri/build.rs` | Exposes the app name from the repo-root `config/app.json` as `OCTOBOARD_APP_NAME` (read by `menu.rs`), and fails the build when `productName` in `tauri.conf.json` or the workspace `repository` in the root `Cargo.toml` no longer matches that file |
-| `src-tauri/src/lib.rs` | `run()`: builds the Tauri app, wires the menu/exit-flow entry points to `exit`/`menu`, opens the main window; window-creation helpers |
-| `src-tauri/src/exit.rs` | The exit-confirmation flow: `ExitState`, the two exit-flow IPC commands above, the decision all three quit gestures share, and the `applicationShouldTerminate:` override onto AppKit's own delegate — `unsafe`, for catching the Dock icon's own Quit (and a system-initiated logout/restart/shutdown, which arrives the same way) |
+| `src-tauri/src/lib.rs` | `run()`: builds the Tauri app, wires the menu/exit-flow entry points to `exit`/`menu`/`tray`, the window's close request and the reopen event to `background`, opens the main window; window-creation helpers; `MAIN_WINDOW_LABEL` |
+| `src-tauri/src/exit.rs` | The exit-confirmation flow: `ExitState`, the two exit-flow IPC commands above, `request_quit` (what a quit menu item does), the decision all the quit gestures share, and the `applicationShouldTerminate:` override onto AppKit's own delegate — `unsafe`, for catching the Dock icon's own Quit (and a system-initiated logout/restart/shutdown, which arrives the same way) |
 | `src-tauri/src/page_isolation.rs` | macOS only: the window's `WKWebViewConfiguration` carrying a `WKContentRuleList` that blocks every `http(s)` request the webview would make, so a report page that got past the UI's sanitizer still cannot load from the web or preconnect / `dns-prefetch` (WebRTC is backed up by the page's nonce-only `script-src` instead); built by `lib.rs` before the window is created |
-| `src-tauri/src/sidecar.rs` | Spawns `octoboardd`, parses its startup port line, reports how it terminated |
+| `src-tauri/src/sidecar.rs` | Spawns `octoboardd`, parses its startup port line, reports how it terminated, and keeps `DaemonState` (whether the daemon is gone), which `exit.rs` and `background.rs` consult |
+| `src-tauri/src/background.rs` | Running in the background: the window's close button hides it and leaves the Dock (or quits when the daemon is gone), `show_main_window` and the `bring_to_front` command bring it back, and the Dock badge, the app's activation and `hidden_by_close` state that go with it |
+| `src-tauri/src/tray.rs` | The menu bar icon: its menu (rebuilt from the UI's `set_tray_menu`; Open, Quit and the session lines), a left click that shows the window, and the `tray-session-chosen` event |
 | `src-tauri/src/menu.rs` | Builds the native macOS menu bar from the labels the UI sends (`set_menu_labels`), including the Settings… item that `lib.rs` turns into the `settings-requested` event |
 | `src-tauri/src/window_state.rs` | Remembers the window's frame and maximized state: decides the initial frame from the saved one and the connected displays, follows it from window events, saves it on exit |
-| `src-tauri/capabilities/default.json` | Allowlists the three IPC commands above plus the notification, Dock-badge, window-theme, window-reveal, window-raise and window-drag/zoom commands |
+| `src-tauri/capabilities/default.json` | Allowlists the IPC commands above (through `permissions/*.toml`) plus the notification, Dock-badge, window-theme, window-reveal and window-drag/zoom commands |
+| `src-tauri/permissions/` | The app-defined permissions the capability names: `exit-lifecycle.toml`, `menu-labels.toml`, and `tray.toml` (`set_tray_menu` and `bring_to_front`) |
+| `src-tauri/icons/tray-template.png` | The menu bar icon's monochrome template image, derived by hand from the app icon's silhouette with the eyes cut out; no script regenerates it |
 | `src-tauri/tauri.conf.json` | Where the window's UI comes from (`frontendDist` is `packages/ui/dist`; `devUrl` and `beforeDevCommand` are that package's dev server), the `octoboardd` `externalBin`, and the bundle targets; its `productName` mirrors `config/app.json`'s `name`, which `build.rs` checks |
 | `scripts/build-daemon.mjs` | Builds `octoboardd` in release mode and copies it into `src-tauri/binaries/` under the target-triple name Tauri's `externalBin` requires |
 | `scripts/build-app.mjs` | Builds the app for local verification with every `APPLE_*` variable stripped, and fails if the result carries a Developer ID authority; see "Release builds" above |

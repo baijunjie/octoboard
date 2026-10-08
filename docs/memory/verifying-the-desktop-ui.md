@@ -126,10 +126,9 @@ app, ask the user to turn on System Settings → Accessibility → Display → R
 
 ## `SIGSTOP` on the WebContent process simulates a hung page, but only roughly
 
-`kill -STOP` on the app's WebContent process freezes the page without a debug build, and the window's close button then
-does nothing, as with a real hang. It is not the same state, though: a double `Cmd+Q` did not escape it, while
-scripted AppleEvent quits did. Do not read a `Cmd+Q` that fails to quit under `SIGSTOP` as a verdict on the
-wedged-window escape hatch.
+`kill -STOP` on the app's WebContent process freezes the page without a debug build. It is not the same state as a
+real hang, though: a double `Cmd+Q` did not escape it, while scripted AppleEvent quits did. Do not read a `Cmd+Q`
+that fails to quit under `SIGSTOP` as a verdict on the wedged-window escape hatch.
 
 Every WebKit application's page process has the same name (`com.apple.WebKit.WebContent`), so find Octoboard's own
 from `launchctl print pid/<app pid>`, never by name — stopping the wrong one freezes the user's browser.

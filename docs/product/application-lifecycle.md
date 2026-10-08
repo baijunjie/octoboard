@@ -1,7 +1,8 @@
 # Application lifecycle
 
 Octoboard is a macOS desktop application. The agent processes are owned by a background daemon that starts and stops
-with it; nothing keeps running once the application is gone.
+with it; nothing keeps running once the application is gone. Closing the window does not end the application: it keeps
+running in the background, sessions included (see "Closing the window" below).
 
 ## System requirements and distribution
 
@@ -27,7 +28,8 @@ Two things happen on every daemon start:
 **One Octoboard at a time.** A second daemon running against the same `~/.octoboard` would own a second set of agent
 processes while sharing one database, so it refuses to start. The application then opens its window anyway, on a
 screen that states why the daemon could not start and offers to quit — a failed start never leaves a window with no
-explanation, and never leaves a window that cannot be closed.
+explanation. With no daemon running, the window's close button quits too, rather than keeping the application in the
+background (see "Closing the window" below).
 
 If the daemon starts but dies later, the application says so and asks the user to restart Octoboard; it does not
 silently keep showing a stale session list.
@@ -37,7 +39,7 @@ appearance (see "Light, dark and follow the system" in `docs/product/appearance.
 operating system's own appearance first. The window therefore appears a fraction of a second later than it otherwise
 would — measured at 140-220 ms after it is created. Should the UI never get that far at all — its bundle failing to
 load, say — the shell shows the window regardless **4 seconds** after creating it, so a failed start never leaves a
-running application with no window on screen.
+running application with no window on screen. A window the user has already closed by then stays closed.
 
 ## Who can reach the daemon
 
@@ -75,25 +77,85 @@ invalid. A field is never marked before the user has tried to submit: the messag
 which sends nothing while any field is still wanting — and from then on follows what is typed, so it goes as soon as
 the field is corrected and comes back if the field is emptied again.
 
+## Closing the window
+
+**Closing the window does not quit.** The window's close button, `Cmd+W` and the Window menu's Close Window all close
+it into the background: the window is hidden, Octoboard leaves the Dock, and the focus passes to the application used
+before it. The daemon, every session and its agent process keep running, and so does the UI behind the hidden window:
+a session that raises its hand still notifies (see "The raised hand" in `docs/product/sessions.md`), the Dock badge's
+count is kept up to date for when Octoboard returns to the Dock, and the menu bar icon's menu keeps following the
+sessions (see `docs/product/menu-bar-icon.md`).
+
+- **In native fullscreen** the window first leaves fullscreen and is hidden once that is done, about 0.8 seconds later,
+  so no empty fullscreen space is left behind. Brought back within that time, it is not hidden.
+- **When the daemon is not running** — it failed to start, or has exited — there is nothing to keep running, so the
+  close button quits at once and asks nothing.
+- Hide Octoboard (`Cmd+H`) is not a close: it hides the application as macOS always does, and Octoboard stays in the
+  Dock.
+
+**Bringing the window back.** Any of these brings the window back where it was, at the size and position it had:
+
+- a left click on the menu bar icon, or its menu's Open Octoboard or one of its sessions (see "Clicking the icon" and
+  "The icon's menu" in `docs/product/menu-bar-icon.md`);
+- opening Octoboard again while it runs — from the Finder, Spotlight or `open`;
+- anything else that activates Octoboard, such as clicking one of its notifications;
+- a quit that has to ask for confirmation (see "Quitting" below);
+- the daemon exiting unexpectedly: the window comes back showing the notice that it exited (see "Losing the daemon
+  connection" above). A daemon that exits while the window is shown only shows the notice, and does not take the
+  focus from whatever the user is doing.
+
+Octoboard then returns to the Dock, comes to the front, and its Dock badge shows the current waiting count again.
+
+**Observed** in the packaged application:
+
+- the close button and `Cmd+W` closing the window into the background, with the application that was frontmost before
+  frontmost again and Octoboard inactive;
+- a close from native fullscreen hiding the window with no empty fullscreen space left behind, and the window staying
+  on screen when brought back during that transition, by the menu bar icon's Open Octoboard or by opening Octoboard
+  again;
+- closing the window again within a second of bringing it back, with the Dock icon ending right and never duplicated;
+- `Cmd+H` working after a close and a return;
+- the window coming back by opening Octoboard again while it ran (for the menu bar icon, see "What has been tried by
+  hand" in `docs/product/menu-bar-icon.md`), at the same size and position, and opening Octoboard again while the
+  window was on screen only bringing it to the front;
+- activating Octoboard while the window was closed bringing back the window, the Dock icon and the badge — tried by
+  activating the application directly — while a notification firing meanwhile did not bring the window back;
+- the page behind the hidden window staying live, and the Dock badge coming back with the right count, including a
+  count that changed while the window was closed;
+- the daemon killed while the window was closed bringing it back with the notice within about 0.2 seconds, and killed
+  while the window was shown and another application frontmost showing the notice only, with the focus left where it
+  was;
+- the close button quitting within about 0.2 seconds, asking nothing, with the daemon gone.
+
+**Not yet tried by hand:** a real click on one of Octoboard's notifications bringing the window back.
+
 ## Quitting
 
-Every way of ending the application behaves the same: the window's close button, `Cmd+Q`, the application menu's
-Quit, the Dock icon's own Quit, and a system-initiated termination — logging out, restarting or shutting down the
-machine. The window's close button, `Cmd+Q` and the application menu's Quit were each seen to ask, and Cancel left
-everything running. The Dock icon's own Quit and a system logout were not tried by hand; an AppleEvent quit, which goes
-through the same `applicationShouldTerminate:` path, was, and asked the same way.
+Every way of ending the application behaves the same: `Cmd+Q`, the application menu's Quit, the menu bar icon's Quit
+Octoboard (see "Quit Octoboard" in `docs/product/menu-bar-icon.md`), the Dock icon's own Quit, and a system-initiated
+termination — logging out, restarting or shutting down the machine. The window's close button is not one of them (see
+"Closing the window" above). `Cmd+Q` and the application menu's Quit were each seen to ask, and Cancel left everything
+running; the menu bar icon's Quit was seen to ask too. The Dock icon's own Quit and a system logout were not tried by
+hand; an AppleEvent quit, which goes through the same `applicationShouldTerminate:` path, was, and asked the same way.
 
 - **While any session has a running process, quitting asks for confirmation.** The message says that quitting
   interrupts those sessions and that each stays resumable next time. Asking brings Octoboard to the front first,
-  restoring its window if it was minimized, so a quit from outside the window — the Dock icon's own Quit while another
-  application covers it — does not leave the question unseen behind that application. Not yet tried by hand.
+  restoring its window if it was minimized and bringing it back if it was closed into the background, so a quit from
+  outside the window — the Dock icon's own Quit while another application covers it, the menu bar icon's Quit or a
+  logout while the window is closed — does not leave the question unseen. The menu bar icon's Quit with the window
+  closed was seen to bring it back and ask; the other cases were not yet tried by hand.
 - Once confirmed, every session process is ended and every one of those sessions is left **interrupted**, never
   archived. Clicking one next time resumes it (see "Archiving, interruption and resuming" in
   `docs/product/sessions.md`).
-- With no session running, quitting is immediate and asks nothing.
+- With no session running, quitting is immediate and asks nothing, and a window closed into the background is not
+  brought back for it; seen with the menu bar icon's Quit.
+- While the daemon is not running — it failed to start, or has exited — every quit is immediate and asks nothing.
+- The daemon stopping as part of a quit is not reported as the daemon exiting: no notice is shown and a closed window
+  is not brought back for it. Seen with the menu bar icon's Quit while the window was closed and no session was
+  running: the application exited with no window, Dock icon or notice appearing.
 - Quitting does not depend on the daemon answering: if it does not, the application exits anyway after a short wait.
 - Until the window has loaded far enough to be able to ask, a quit is never held back — a window that never gets as
-  far as showing the confirmation can still be closed.
+  far as showing the confirmation can still be quit.
 
 Because a logout, restart or shutdown is answered exactly like any other quit, **Octoboard can hold up a logout,
 restart or shutdown until the user answers the confirmation dialog.** That is deliberate, not an oversight.
@@ -109,9 +171,9 @@ A window that is still answering resets that 2-second window every time it handl
 `Cmd+Q` twice in quick succession on a working Octoboard does **not** skip the confirmation. The escape hatch opens
 only when nothing answered the first gesture.
 
-The window's close button is the one exception: the window itself answers it, so a window that has stopped responding
-ignores that button entirely. `Cmd+Q`, the application menu's Quit or the Dock icon's Quit — twice — is the way out of
-that state.
+The window's close button plays no part here: it closes the window into the background rather than quitting (see
+"Closing the window" above). `Cmd+Q`, the application menu's Quit, the menu bar icon's Quit or the Dock icon's Quit —
+twice — is the way out of that state.
 
 **Observed, unexplained caveat:** with the page frozen by `SIGSTOP` on the application's WebContent process, two
 scripted quits back to back (AppleEvent, or the menu item through System Events) quit without asking, as described, but

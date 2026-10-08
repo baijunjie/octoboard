@@ -5,6 +5,7 @@ import type {
   NativeWindowCapability,
   NotificationCapability,
   PlatformAdapter,
+  StatusItemCapability,
   WindowChromeCapability,
 } from "./index";
 
@@ -20,6 +21,7 @@ export function tauriPlatform(): PlatformAdapter {
     nativeWindow: tauriNativeWindow(),
     windowChrome: tauriWindowChrome(),
     appMenu: tauriAppMenu(),
+    statusItem: tauriStatusItem(),
   };
 }
 
@@ -93,6 +95,22 @@ function tauriAppMenu(): AppMenuCapability {
   };
 }
 
+function tauriStatusItem(): StatusItemCapability {
+  return {
+    async setMenu(menu) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("set_tray_menu", { menu });
+    },
+    onSessionChosen(handler) {
+      const { track, undo } = unlistenTracker();
+      void import("@tauri-apps/api/event").then(async ({ listen }) => {
+        track(await listen<string>("tray-session-chosen", (event) => handler(event.payload)));
+      });
+      return undo;
+    },
+  };
+}
+
 function tauriExit(): ExitCapability {
   return {
     register({ onQuitRequested, onDaemonExited }) {
@@ -108,15 +126,9 @@ function tauriExit(): ExitCapability {
         // debounce (see `frontend_exit_heartbeat` in `apps/desktop/src-tauri/src/exit.rs`).
         await invoke("frontend_exit_heartbeat");
 
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        // No close listener: the shell answers the window's close button itself, by hiding the
+        // window, which a listener here would stop it from doing.
         const { listen } = await import("@tauri-apps/api/event");
-        const win = getCurrentWindow();
-        track(
-          await win.onCloseRequested((event) => {
-            event.preventDefault();
-            onQuitRequested();
-          }),
-        );
         track(await listen("exit-requested", () => onQuitRequested()));
         track(await listen<string>("daemon-exited", (event) => onDaemonExited(event.payload)));
       })();
@@ -185,13 +197,14 @@ function tauriNativeWindow(): NativeWindowCapability {
       await getCurrentWindow().show();
     },
     async bringToFront() {
+      // The shell's own command rather than the window API, since a window hidden in the
+      // background also needs the app put back in the Dock.
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("bring_to_front");
+    },
+    async isVisible() {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      const win = getCurrentWindow();
-      // `setFocus` only activates the app for a window that is visible and not minimized, so
-      // those two come first.
-      await win.unminimize();
-      await win.show();
-      await win.setFocus();
+      return getCurrentWindow().isVisible();
     },
   };
 }
