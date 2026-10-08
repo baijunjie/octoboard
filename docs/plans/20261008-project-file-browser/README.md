@@ -2,102 +2,111 @@
 
 ## Problem
 
-The project's right sidebar should default to a code tree for its current branch. Opening a file shows its
-contents in a read-only modal viewer. The viewer handles common source-code files and images, and offers previous
-and next controls bound to the left and right arrow keys, following the directory tree's top-to-bottom file order.
+A project needs a file browser and Git review surface that remain useful without a running session. Its right
+pane defaults to a file tree. Opening a file shows source code or an image in a read-only modal; previous/next
+controls and left/right arrow keys move through the tree's file order without closing the viewer.
 
-The same project panel supports Git review: comparing any local branch with any other local branch, and inspecting
-uncommitted files in staged and unstaged groups. Linked worktrees can be selected to inspect their own uncommitted
-files. The panel belongs to the project, not to an individual session.
+The same project surface shows staged and unstaged changes in a selected local worktree and compares any two local
+branches. Project browsing and console-session reports have separate ownership, even when they occupy the same
+right-pane space.
 
-## Settled requirements
+## Design decisions
 
-- File browsing is the default panel content.
-- The file viewer is a modal, supports code and images, and provides no editing capability.
-- Previous and next navigation follows the tree's file order and is available through buttons and left/right keys.
-- Local branch comparisons accept arbitrary local branches as both endpoints.
-- Uncommitted changes distinguish staged from unstaged files.
-- Each linked worktree's uncommitted files can be inspected separately.
-- Project browser context is independent of session ownership.
+### Sources and scope
 
-## Plan outline
+- The default tree shows live files, including uncommitted content, under the project's registered directory.
+  Reading only committed `HEAD` content would hide the work the user is inspecting while an agent runs.
+- The default Git worktree is the checkout containing that directory. It is not whichever checkout happens to
+  hold a branch named `main` or `master`, and it may itself be a linked worktree.
+- A non-Git project still has file browsing; Git controls show that Git review is unavailable.
+- A project associated with a repository subdirectory keeps that scope for both browsing and Git review. The
+  daemon discovers the containing repository and records the project's relative directory within it. Selecting
+  another worktree for changes maps that same relative scope; it never silently broadens to the whole repository.
+- The worktree selector chooses the source of uncommitted changes. It does not check out a branch, change a
+  session's working directory or redirect the default Files tree away from the registered project directory.
+- Branch comparison means the left branch tip versus the right branch tip, with left as old and right as new.
+  Both branches can be selected independently. Merge-base comparison is outside the first version.
 
-The viewer and its navigation can be verified with supplied file content and an ordered file list before panel
-routing or the default tree source is settled. Worktree changes can likewise be verified for an explicitly selected
-worktree. The remaining integration milestones need the decisions below before their completion criteria can be
-written. These pending milestones are deliberately not specified yet.
+### Context and navigation
 
-1. [Read-only code and image viewer](01-read-only-viewer.md).
-2. [Previous and next file navigation](02-file-navigation.md).
-3. [Uncommitted changes for a selected worktree](03-worktree-changes.md).
-4. Pending: project-owned right-pane integration and the default code tree.
-5. Pending: local branch comparison and its viewer integration.
+- Files and Git share an explicit project context. A project can be opened for browsing without creating or
+  selecting a session. Browsing state belongs to that project in the client, not to any session or binding.
+- Selecting a project session activates its project's browser context. Selecting a console session activates its
+  report context. Explicitly opening a project can activate Files/Git while leaving the selected terminal alone;
+  the pane identifies its project so the two contexts cannot be confused.
+- Report history and form delivery remain separate from browser state. This feature does not move report ownership
+  into the project or make the report iframe a file viewer.
+- Files is the initial project mode. Viewer navigation consumes the tree's currently visible file rows in
+  top-to-bottom order, excluding descendants of collapsed directories. The viewer does not independently sort or
+  recursively enumerate the repository. First/last controls are disabled; navigation does not wrap.
+- Code and images use the same read-only modal. Unknown text remains inspectable as plain text; unsupported binary
+  content gets an explicit presentation. There are no edit/save, stage/unstage, commit or checkout actions.
 
-## Decisions needed before the remaining milestones
+### Reading and rendering
 
-- **Default uncommitted source:** does "main branch" mean the project's main working directory, regardless of the
-  branch checked out there, or the worktree that has `main` / `master` checked out? Uncommitted changes belong to a
-  worktree, and a branch without a checkout has none to display.
-- **Default code-tree source:** live files, including uncommitted changes, or only the files committed at the current
-  branch's `HEAD`? This also determines which file contents the modal opens by default.
-- **Right-pane routing:** does the right pane offer Files / Git / Report modes, follow project versus console context,
-  or replace the existing report pane? Define how a project is opened when it has no session, and what identifies the
-  displayed project when a console session is selected.
-- **Branch comparison meaning:** compare the two branch tips directly, or compare their merge base with the target
-  branch? These can produce different changed-file sets.
+- The daemon owns filesystem and Git access for browser and desktop clients. Source identity, version information
+  and bounded reads are established before the tree and diff surfaces are integrated.
+- A file path alone is not an identity: project/repository/worktree, content source and comparison side also matter.
+  An accepted diff must not combine a patch from one revision with file bodies from another.
+- File bodies and patches are requested on demand, not included in shared reconnect snapshots. Reading, transport,
+  parsing and rendering each have limits; UI virtualization cannot substitute for bounded daemon output.
+- The application owns a renderer adapter. A short browser and packaged-WebView verification chooses the library
+  before the full browser is built, without letting library-specific types define the daemon protocol.
+
+## Milestones
+
+1. [Source identities and bounded read contracts](01-source-contracts.md) — establish roots, source versions,
+   errors and resource budgets, with independently testable daemon foundations.
+2. [Validate the read-only renderers](02-renderer-validation.md) — verify file, image and diff adapters against
+   the real packaged environment before committing to a rendering dependency.
+3. [Project file browsing and navigation](03-project-file-browser.md) — ship a real project entry point, tree,
+   daemon reads, modal and previous/next navigation together.
+4. [Uncommitted changes across worktrees](04-worktree-changes.md) — add scoped worktree selection and staged,
+   unstaged and untracked inspection to the usable project pane.
+5. [Local branch comparison](05-branch-comparison.md) — compare selected branch tips through the same bounded,
+   source-aware review surface.
+
+Each milestone is independently verifiable and mergeable after its dependencies. Milestone 02 can be verified with
+fixtures; milestone 03 must work with real project files. Milestones 04 and 05 extend that working surface rather
+than deferring panel integration until after Git review is built.
 
 ## Open
 
-These details can be settled while developing the independent milestones; they do not alter their goals.
+These choices do not block the milestone split, but must be resolved before the named milestone is complete:
 
-- Which code-viewing library to select after checking its compatibility with the packaged WebView.
-- Which image formats the first version guarantees, and whether zoom/pan is needed beyond fitting an image in the viewer.
-- Whether previous/next includes files in collapsed directories, and the exact tree sorting convention. The navigation
-  milestone consumes the ordered list provided by the tree rather than inventing another order.
-- Behavior at the first/last file, and whether navigation wraps.
-- Diff presentation (unified or split), handling image changes and unsupported binary files, and navigation across
-  staged/unstaged groups when one path appears in both.
-- Refresh cadence, retained per-project view preferences, ignored-file visibility, and large-file limits.
+- **01:** numerical budgets for directory/change entries, file and patch bytes, subprocess output, in-flight reads
+  and cached content. Bounds and explicit limit outcomes are mandatory; values need representative measurements.
+- **02:** renderer and pinned dependency version, guaranteed image formats, unified/split default, image-change
+  presentation and renderer-specific limits. Zoom/pan can be deferred without blocking fit-to-view images.
+- **03:** exact tree sorting convention, ignored-file visibility, refresh cadence and which per-project preferences
+  persist across client restarts. Collapsed-directory exclusion and non-wrapping navigation are already fixed.
+- **04:** whether diff navigation crosses staged/unstaged groups. A path in both groups always has two distinct
+  change identities, regardless of that interaction choice.
 
 ## Notes for the developer
 
 **Library candidates**
 
-- [`@pierre/diffs`](https://diffs.com/docs) provides React `File` for ordinary source files and `FileDiff` /
-  `PatchDiff` for changes, with Shiki highlighting and virtualization. It is the leading candidate for sharing a
-  renderer between file browsing and Git review. Editing support is optional and is outside this requirement.
-- [Shiki](https://shiki.style/guide/) is a mature syntax highlighter for mainstream programming languages, with
-  lazy-loaded grammars and light/dark themes. It is an alternative highlighting layer, not a complete modal or file
-  navigator. Unknown languages can fall back to [plain text](https://shiki.style/languages).
-- [`react-diff-view`](https://github.com/otakustay/react-diff-view) remains a candidate for Git patch rendering if
-  Pierre does not fit the application. It does not supply the ordinary-file and image viewer together.
-- Image rendering is separate from code highlighting. Evaluate additional image-viewer dependencies only if the
-  eventual image interactions need them.
+- [`@pierre/diffs`](https://github.com/pierrecomputer/pierre/tree/main/packages/diffs) is the first candidate to
+  evaluate because it renders both ordinary files and diffs. Optional editing features are outside this plan.
+- [Shiki](https://shiki.style/guide/) is an alternative highlighting layer, not a complete viewer or navigator.
+- [`react-diff-view`](https://github.com/otakustay/react-diff-view) is a fallback patch-rendering candidate if the
+  shared renderer does not meet the packaged environment's requirements. Image rendering remains separate.
 
 **Development notes**
 
-- The UI reaches filesystem and Git capabilities through the daemon protocol, in both browser and desktop clients.
-  Use project/worktree identifiers and source-aware reads; do not introduce direct Tauri filesystem access.
-- Keep file bodies and patches out of shared reconnect snapshots. Existing request/reply correlation and snapshot
-  epochs are available for on-demand reads and reconnect invalidation.
-- Current image CSP admits `data:` only; workers, WASM, blob URLs and language chunks need verification with the
-  bundled build. Avoid assuming remote CDN assets or widening report-page isolation to accommodate a viewer.
-- Projects may be non-Git directories or be registered from a linked worktree. The project's directory is not
-  necessarily Git's primary checkout. Define the root and default worktree explicitly at integration time.
-- Bound reads and rendering; preserve filenames and binary content without lossy text conversion. Validate paths
-  against the selected project/worktree, including symlinks. Render file content as data, without executing repository
-  HTML, scripts or embedded SVG markup in the application document.
-- Keep existing report ownership and history separate from the project-owned browser. A concurrent plan changes
-  report ownership to console-session scope; inspect current implementation before integrating instead of assuming
-  either state has shipped.
-- Follow existing UI conventions for HeroUI, localization, RTL, keyboard access, focus restoration and narrow panes.
-- Each shipped milestone includes its affected checks and product/module documentation updates. This temporary plan
-  is not registered in the long-lived documentation index.
+- The existing right pane is conditional on a selected console session. Generalize the pane's context through its
+  layout, visibility and focus mechanisms, not just by adding tabs inside the report component.
+- Report ownership is being changed separately to console-session scope. Inspect the implementation when integrating;
+  reuse its then-current ownership and form-routing rules rather than duplicating that migration here.
+- The current directory picker lists directories only; it is not a file-tree or file-content API. Likewise, the Git
+  badge API supplies branch/upstream metadata, not a changed-file list.
+- Keep HeroUI, localization, RTL, keyboard access, focus restoration and narrow-pane behavior consistent with the
+  existing UI. Every shipped milestone includes its affected checks and product/module documentation updates.
+- This directory is a temporary development plan and is not registered in the long-lived documentation index.
 
 **Reference docs**
 
 - `docs/product/window-layout.md`, `docs/product/report-panel.md`, `docs/product/sidebar.md`
 - `docs/product/consoles-and-projects.md`, `docs/product/project-git-status.md`
 - `packages/ui/README.md`, `apps/daemon/README.md`, `apps/daemon/PROTOCOL.md`
-- `docs/memory/writing-ui-components.md`, `docs/memory/writing-daemon-code.md`
-- [Git diff semantics](https://git-scm.com/docs/git-diff), [Git worktrees](https://git-scm.com/docs/git-worktree)
