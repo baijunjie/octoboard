@@ -595,24 +595,34 @@ mod tests {
     use std::sync::OnceLock;
 
     use super::*;
-    use crate::test_support::{ScratchDir, ScratchFile};
+    use crate::test_support::{ScratchDir, ScratchFile, PATIENCE};
 
-    /// Polls for `path` to exist and parse as the pid it is expected to hold, rather than
-    /// asserting it is already there: the fixture shell writes it concurrently, and reading too
-    /// early is this suite's one real wall-clock race. Panics with a message naming that race
-    /// specifically, instead of the generic message a bare `.expect()` on a missing file would
-    /// give, if `deadline` passes first.
-    fn read_pid_file_when_ready(path: &std::path::Path, deadline: Instant) -> i32 {
+    /// The elapsed time above which a test treats a snapshot as having waited out a `sleep 300`
+    /// instead of returning. It only rules that wait out, so it sits well beyond any exec stall.
+    const NOT_THE_SLEEP: Duration = Duration::from_secs(60);
+
+    /// The pid `path` holds, if the fixture shell has written one. Read once, without waiting:
+    /// the shell writes it within moments of starting, and the tests that read it do so after a
+    /// timeout of seconds.
+    fn read_pid_file(path: &std::path::Path) -> Option<i32> {
+        std::fs::read_to_string(path).ok()?.trim().parse().ok()
+    }
+
+    /// Runs `attempt` until it returns a value, for up to [`PATIENCE`]. An attempt returns `None`
+    /// when its fixture shell was killed by the timeout under test before it got as far as
+    /// recording the pids the test checks: when an exec stalls for longer than that timeout, as it
+    /// can on a machine running endpoint-security software, nothing was tested, so the scenario is
+    /// run again from scratch instead.
+    fn until_the_shell_ran<T>(mut attempt: impl FnMut() -> Option<T>) -> T {
+        let deadline = Instant::now() + PATIENCE;
         loop {
-            if let Ok(text) = std::fs::read_to_string(path) {
-                if let Ok(pid) = text.trim().parse() {
-                    return pid;
-                }
+            if let Some(done) = attempt() {
+                return done;
             }
-            if Instant::now() >= deadline {
-                panic!("{path:?} was not written with a pid before the test's own deadline");
-            }
-            thread::sleep(Duration::from_millis(20));
+            assert!(
+                Instant::now() < deadline,
+                "the fixture shell was killed before it recorded its pids, again and again"
+            );
         }
     }
 
@@ -644,7 +654,7 @@ mod tests {
     /// timeout before its own simulated behaviour ever ran. A `FakeShell` therefore never writes
     /// a fresh executable: it is a symlink to this one already-validated binary (symlink creation
     /// and resolution carry none of that cost), and the per-test behaviour lives in a plain,
-    /// non-executable companion file next to the symlink that this dispatcher `eval`s.
+    /// non-executable companion file next to the symlink that this dispatcher sources.
     ///
     /// `snapshot_with` bakes a fresh completion marker into the `-c` argument it passes
     /// (`env -0 && printf '<marker>'`); this dispatcher pulls that marker back out of `$4` and
@@ -657,20 +667,23 @@ mod tests {
             // One fixed name rather than a per-run unique one: nothing removes this file (the
             // `OnceLock` holds a path, not a guard, and a `FakeShell` only cleans up its own
             // symlink and companion), so a unique name would leave one behind per test-binary
-            // invocation. The content is byte-identical every time, which makes a second test
-            // binary writing it concurrently harmless.
+            // invocation. Another test binary may be running it while this one writes it, so the
+            // write goes to a file of its own and is renamed into place: a plain overwrite
+            // truncates the file first, and a shell started in that moment reads half a script.
             let path = std::env::temp_dir().join("octoboardd-env-shell-test-shell-dispatcher");
+            let staging = path.with_extension(format!("{}", std::process::id()));
             std::fs::write(
-                &path,
+                &staging,
                 "#!/bin/sh\n\
                  marker=${4%\\'}\n\
                  export OCTOBOARD_TEST_MARKER=${marker##*\\'}\n\
-                 eval \"$(cat \"$0.body\")\"\n",
+                 . \"$0.body\"\n",
             )
             .expect("write fake shell dispatcher");
-            let mut perms = std::fs::metadata(&path).unwrap().permissions();
+            let mut perms = std::fs::metadata(&staging).unwrap().permissions();
             std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o700);
-            std::fs::set_permissions(&path, perms).expect("chmod fake shell dispatcher");
+            std::fs::set_permissions(&staging, perms).expect("chmod fake shell dispatcher");
+            std::fs::rename(&staging, &path).expect("install fake shell dispatcher");
             path
         })
     }
@@ -704,7 +717,7 @@ mod tests {
         let shell = FakeShell::new(
             "printf 'FOO=bar\\0TERM=dumb\\0CLAUDE_PID=1\\0'\nprintf '%s' \"$OCTOBOARD_TEST_MARKER\"",
         );
-        let env = snapshot_with(shell.path(), Duration::from_secs(5)).expect("snapshot");
+        let env = snapshot_with(shell.path(), PATIENCE).expect("snapshot");
         assert_eq!(env.get("FOO"), Some(&"bar".to_string()));
         // `TERM` is snapshot-only and `CLAUDE_PID` marks the daemon's own session; both must be
         // stripped before the caller ever sees them.
@@ -715,8 +728,7 @@ mod tests {
     #[test]
     fn a_shell_exiting_nonzero_is_reported_with_its_stderr() {
         let shell = FakeShell::new("echo 'boom' >&2; exit 7");
-        let err = snapshot_with(shell.path(), Duration::from_secs(5))
-            .expect_err("nonzero exit must fail");
+        let err = snapshot_with(shell.path(), PATIENCE).expect_err("nonzero exit must fail");
         let message = err.to_string();
         assert!(message.contains("boom"));
         assert!(
@@ -736,7 +748,7 @@ mod tests {
             "i=0\nwhile [ \"$i\" -lt 20000 ]; do\n  printf 'K%d=v%d\\0' \"$i\" \"$i\"\n  \
              i=$((i+1))\ndone\nprintf '%s' \"$OCTOBOARD_TEST_MARKER\"",
         );
-        let env = snapshot_with(shell.path(), Duration::from_secs(5)).expect("snapshot");
+        let env = snapshot_with(shell.path(), PATIENCE).expect("snapshot");
         assert_eq!(env.get("K0"), Some(&"v0".to_string()));
         assert_eq!(env.get("K19999"), Some(&"v19999".to_string()));
     }
@@ -753,16 +765,14 @@ mod tests {
         let shell = FakeShell::new(
             "sleep 300 & printf 'BGPID=%s\\0FOO=bar\\0' \"$!\"\nprintf '%s' \"$OCTOBOARD_TEST_MARKER\"",
         );
-        let timeout = Duration::from_secs(1);
         let started = Instant::now();
-        let env = snapshot_with(shell.path(), timeout)
+        let env = snapshot_with(shell.path(), PATIENCE)
             .expect("a pipe held open by a backgrounded process must not fail a complete snapshot");
         assert_eq!(env.get("FOO"), Some(&"bar".to_string()));
-        // A generous margin over `timeout` for scheduling jitter — nowhere near the `sleep 300`
-        // waiting out the backgrounded process would take.
+        // Only rules out waiting on the backgrounded `sleep 300`.
         assert!(
-            started.elapsed() < Duration::from_secs(5),
-            "snapshot_with took {:?}, far longer than its {timeout:?} timeout",
+            started.elapsed() < NOT_THE_SLEEP,
+            "snapshot_with took {:?}, far longer than the snapshot needs",
             started.elapsed(),
         );
         // A successful snapshot has no reason to touch the process group, so the backgrounded
@@ -770,7 +780,7 @@ mod tests {
         // 300s.
         let bg_pid: i32 = env.get("BGPID").expect("BGPID").parse().expect("bg pid");
         unsafe { libc::kill(bg_pid, libc::SIGKILL) };
-        assert_gone_by(bg_pid, Instant::now() + Duration::from_secs(2));
+        assert_gone_by(bg_pid, Instant::now() + PATIENCE);
     }
 
     #[test]
@@ -783,16 +793,15 @@ mod tests {
         let shell = FakeShell::new(
             "sleep 300 >/dev/null & printf 'BGPID=%s\\0FOO=bar\\0' \"$!\"\nprintf '%s' \"$OCTOBOARD_TEST_MARKER\"",
         );
-        let timeout = Duration::from_secs(1);
         let started = Instant::now();
-        let env = snapshot_with(shell.path(), timeout).expect(
+        let env = snapshot_with(shell.path(), PATIENCE).expect(
             "a backgrounded process holding only stderr open must not fail a complete snapshot",
         );
         assert_eq!(env.get("FOO"), Some(&"bar".to_string()));
-        assert!(started.elapsed() < Duration::from_secs(5));
+        assert!(started.elapsed() < NOT_THE_SLEEP);
         let bg_pid: i32 = env.get("BGPID").expect("BGPID").parse().expect("bg pid");
         unsafe { libc::kill(bg_pid, libc::SIGKILL) };
-        assert_gone_by(bg_pid, Instant::now() + Duration::from_secs(2));
+        assert_gone_by(bg_pid, Instant::now() + PATIENCE);
     }
 
     #[test]
@@ -805,28 +814,29 @@ mod tests {
         // `a_shell_exiting_cleanly_without_a_complete_snapshot_and_nothing_holding_the_pipes_fails_fast`
         // below, and from the exit-timeout path
         // `a_shell_that_hangs_is_killed_along_with_its_backgrounded_child` exercises.
-        let child_pid_path = ScratchFile::new("env-shell-test-drain-timeout-bg-pid", "pid");
-        let shell = FakeShell::new(&format!(
-            "sleep 300 & echo $! > '{path}'\nprintf 'FOO=ba'",
-            path = child_pid_path.display(),
-        ));
         let timeout = Duration::from_secs(1);
-        let started = Instant::now();
-        let err = snapshot_with(shell.path(), timeout)
-            .expect_err("an incomplete snapshot behind a held-open pipe must still time out");
-        assert!(err.to_string().contains("did not finish within"));
-        assert!(
-            started.elapsed() < Duration::from_secs(5),
-            "snapshot_with took {:?}, far longer than its {timeout:?} timeout",
-            started.elapsed(),
-        );
+        let bg_pid = until_the_shell_ran(|| {
+            let child_pid_path = ScratchFile::new("env-shell-test-drain-timeout-bg-pid", "pid");
+            let shell = FakeShell::new(&format!(
+                "sleep 300 & echo $! > '{path}'\nprintf 'FOO=ba'",
+                path = child_pid_path.display(),
+            ));
+            let started = Instant::now();
+            let err = snapshot_with(shell.path(), timeout)
+                .expect_err("an incomplete snapshot behind a held-open pipe must still time out");
+            assert!(err.to_string().contains("did not finish within"));
+            assert!(
+                started.elapsed() < NOT_THE_SLEEP,
+                "snapshot_with took {:?}, far longer than its {timeout:?} timeout",
+                started.elapsed(),
+            );
+            read_pid_file(&child_pid_path)
+        });
 
         // Confirms the drain-timeout branch's group kill reached the backgrounded process too —
         // this is exactly the path whose `-pid` validity is subtlest (the group is diagnosed as
         // still populated by this very process holding the pipe open).
-        let bg_pid =
-            read_pid_file_when_ready(&child_pid_path, Instant::now() + Duration::from_secs(2));
-        assert_gone_by(bg_pid, Instant::now() + Duration::from_secs(2));
+        assert_gone_by(bg_pid, Instant::now() + PATIENCE);
     }
 
     #[test]
@@ -839,16 +849,10 @@ mod tests {
         // process-group id that may already have been recycled for something unrelated — so it
         // must be reported, fast, without going anywhere near the kill.
         let shell = FakeShell::new("printf 'FOO=ba'");
-        let timeout = Duration::from_secs(5);
-        let started = Instant::now();
-        let err = snapshot_with(shell.path(), timeout).expect_err(
+        // No wall-clock check: an exec stall would trip any bound short of the timeout. Failing
+        // fast shows as the error not being the timeout's.
+        let err = snapshot_with(shell.path(), PATIENCE).expect_err(
             "an incomplete snapshot with nothing left holding the pipe open must fail fast",
-        );
-        assert!(
-            started.elapsed() < Duration::from_millis(500),
-            "should fail as soon as the disconnected reader is noticed, not wait out the \
-             {timeout:?} deadline: took {:?}",
-            started.elapsed(),
         );
         assert!(
             !err.to_string().contains("did not finish within"),
@@ -866,7 +870,7 @@ mod tests {
         let shell = FakeShell::new(
             "printf 'FOO=bar\\0'\nsleep 1\nprintf 'BAZ=qux\\0'\nprintf '%s' \"$OCTOBOARD_TEST_MARKER\"",
         );
-        let env = snapshot_with(shell.path(), Duration::from_secs(5)).expect("snapshot");
+        let env = snapshot_with(shell.path(), PATIENCE).expect("snapshot");
         assert_eq!(env.get("FOO"), Some(&"bar".to_string()));
         assert_eq!(env.get("BAZ"), Some(&"qux".to_string()));
     }
@@ -877,33 +881,30 @@ mod tests {
         // test can confirm after the timeout that killing the shell did not leave the
         // backgrounded process behind — the exact failure mode the process-group kill exists to
         // prevent.
-        let shell_pid_path = ScratchFile::new("env-shell-test-shell-pid", "pid");
-        let child_pid_path = ScratchFile::new("env-shell-test-child-pid", "pid");
-        let shell = FakeShell::new(&format!(
-            "echo $$ > '{shell_pid}'\nsleep 300 &\necho $! > '{child_pid}'\nwait",
-            shell_pid = shell_pid_path.display(),
-            child_pid = child_pid_path.display(),
-        ));
-
-        // Generous enough for the shell to reliably write both pid files before the timeout
-        // fires even under a loaded, fully parallel `cargo test` run (the point of this test is
-        // the kill reaching the whole group, not how fast it fires), yet far shorter than the
-        // `sleep 300` a bug that ignores the timeout would leave this test hanging on.
+        //
+        // Short, far below the `sleep 300` a bug that ignores the timeout would leave this test
+        // hanging on; a shell too slow to write both pid files first is retried.
         let timeout = Duration::from_secs(2);
-        let err = snapshot_with(shell.path(), timeout)
-            .expect_err("a wedged shell must be reported, not waited out");
-        assert!(err.to_string().contains("did not finish within"));
+        let (shell_pid, child_pid) = until_the_shell_ran(|| {
+            let shell_pid_path = ScratchFile::new("env-shell-test-shell-pid", "pid");
+            let child_pid_path = ScratchFile::new("env-shell-test-child-pid", "pid");
+            let shell = FakeShell::new(&format!(
+                "echo $$ > '{shell_pid}'\nsleep 300 &\necho $! > '{child_pid}'\nwait",
+                shell_pid = shell_pid_path.display(),
+                child_pid = child_pid_path.display(),
+            ));
+            let err = snapshot_with(shell.path(), timeout)
+                .expect_err("a wedged shell must be reported, not waited out");
+            assert!(err.to_string().contains("did not finish within"));
+            Some((
+                read_pid_file(&shell_pid_path)?,
+                read_pid_file(&child_pid_path)?,
+            ))
+        });
 
-        // Polled rather than read once: the files are written concurrently with the timeout
-        // above firing, and an unflushed file on a loaded machine is this suite's one real
-        // wall-clock race.
-        let poll_deadline = Instant::now() + timeout;
-        let shell_pid = read_pid_file_when_ready(&shell_pid_path, poll_deadline);
-        let child_pid = read_pid_file_when_ready(&child_pid_path, poll_deadline);
-
-        // SIGKILL is near-instant; this is a generous margin on a loaded CI box, not evidence the
-        // kill is slow.
-        let kill_deadline = Instant::now() + Duration::from_secs(2);
+        // SIGKILL is near-instant, but a process stuck in an exec stall cannot die until the
+        // stall ends, so the wait is as long as a stall can be, not evidence the kill is slow.
+        let kill_deadline = Instant::now() + PATIENCE;
         assert_gone_by(shell_pid, kill_deadline);
         assert_gone_by(child_pid, kill_deadline);
     }

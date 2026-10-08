@@ -811,7 +811,7 @@ mod tests {
     use crate::protocol::{Console, Origin, ProjectSource, SessionStatus};
     use crate::session::spawn_reader_thread;
     use crate::store::LOCAL_HOST_ID;
-    use crate::test_support::{fake_live_session, ScratchDir, StandIn};
+    use crate::test_support::{fake_live_session, ScratchDir, StandIn, PATIENCE};
 
     // What Claude Code 2.1.289 actually printed, captured from a real PTY in a directory it had
     // never seen; only the directory's name and the account's plan were replaced. The screen as
@@ -819,6 +819,19 @@ mod tests {
     const SCREEN: &[u8] = include_bytes!("../testdata/claude_trust_screen.bin");
     const AFTER_DOWN: &[u8] = include_bytes!("../testdata/claude_trust_after_down.bin");
     const DISMISSED: &[u8] = include_bytes!("../testdata/claude_trust_dismissed.bin");
+
+    /// What an answered screen is sent: the Down, then the Enter.
+    fn answer_keys() -> Vec<u8> {
+        [DOWN, ENTER].concat()
+    }
+
+    /// The stand-ins cannot tell a carriage return from a newline (see [`take`]), so the keys are
+    /// pinned here instead.
+    #[test]
+    fn the_keys_are_the_bytes_the_screen_expects() {
+        assert_eq!(DOWN, b"\x1b[B");
+        assert_eq!(ENTER, b"\r");
+    }
 
     /// A fixture's path as a shell script names it, quoted.
     fn fixture(name: &str) -> String {
@@ -828,6 +841,42 @@ mod tests {
     /// A path as a shell script names it, quoted.
     fn quoted(path: &Path) -> String {
         format!("'{}'", path.display())
+    }
+
+    /// The start of a stand-in script: reads the three captures into `$SCREEN`, `$AFTER_DOWN` and
+    /// `$DISMISSED`, so that the rest of the conversation can use shell builtins alone. Every
+    /// exec of the stand-in's shell is a chance for endpoint-security software to stall it for
+    /// seconds, and a stall in the middle of the conversation lands inside `answer`'s own
+    /// timeouts, which a test cannot stretch; a stall here only delays the start, which the
+    /// tests' waits absorb. `read -d ''` takes a whole file (the captures hold no NUL), keeping its
+    /// final newlines.
+    fn load_captures() -> String {
+        [
+            ("SCREEN", "claude_trust_screen.bin"),
+            ("AFTER_DOWN", "claude_trust_after_down.bin"),
+            ("DISMISSED", "claude_trust_dismissed.bin"),
+        ]
+        .map(|(var, file)| format!("IFS= read -r -d '' {var} < {}", fixture(file)))
+        .join("; ")
+    }
+
+    /// Prints one of the captures [`load_captures`] read.
+    fn show(var: &str) -> String {
+        format!("printf '%s' \"${var}\"")
+    }
+
+    /// Reads `count` bytes of what the stand-in is sent and appends them to `received`. `read -n`
+    /// is the builtin that takes bytes rather than a line; it is bash's, which is what `/bin/sh`
+    /// is on macOS. While it reads, bash turns the terminal's `ICRNL`, `ISIG` and `IEXTEN` on,
+    /// so a carriage return arrives as a newline and the two cannot be told apart: the newline
+    /// is turned back into a `\r`, and that `DOWN` and `ENTER` are the bytes they should be is
+    /// pinned by `the_keys_are_the_bytes_the_screen_expects`. For the same reason the tests must
+    /// send no control character the terminal would act on (^C, ^Z, ^Y, ^T, ^V, ^O).
+    fn take(count: usize, received: &str) -> String {
+        format!(
+            "IFS= read -r -n {count} -d '' key; key=${{key//$'\\n'/$'\\r'}}; \
+             printf '%s' \"$key\" >> {received}"
+        )
     }
 
     #[test]
@@ -1095,14 +1144,33 @@ mod tests {
     /// Enter, the main screen, and then one more read, so that anything sent after the Enter shows
     /// up in what was received.
     fn full_script(received: &Path) -> String {
-        format!(
-            "cat {}; dd bs=1 count=3 2>/dev/null >> {r}; cat {}; dd bs=1 count=1 2>/dev/null >> {r}; \
-             cat {}; dd bs=1 count=1 2>/dev/null >> {r}; sleep 30",
-            fixture("claude_trust_screen.bin"),
-            fixture("claude_trust_after_down.bin"),
-            fixture("claude_trust_dismissed.bin"),
-            r = quoted(received)
-        )
+        conversation(received, 0)
+    }
+
+    /// [`full_script`] with a read of `held` bytes between the Down and the redraw. The stand-in
+    /// does not redraw until it has them, so a test that writes them once it sees the Down arrive
+    /// puts them between the Down and the Enter: the cursor cannot move, and the Enter cannot
+    /// follow, before they are in. The test still has to write them within `MOVE_TIMEOUT`, after
+    /// which the answer gives up waiting for the cursor.
+    fn conversation(received: &Path, held: usize) -> String {
+        let r = quoted(received);
+        let held_read = if held == 0 {
+            ":".to_string()
+        } else {
+            take(held, &r)
+        };
+        [
+            load_captures(),
+            show("SCREEN"),
+            take(3, &r),
+            held_read,
+            show("AFTER_DOWN"),
+            take(1, &r),
+            show("DISMISSED"),
+            take(1, &r),
+            "sleep 30".to_string(),
+        ]
+        .join("; ")
     }
 
     #[test]
@@ -1111,15 +1179,13 @@ mod tests {
         let received = dir.join("received");
         let live = fake_claude("s", Agent::Claude, &full_script(&received));
         let mut sightings = live.trust.take_sightings().expect("receiver");
-        assert!(wait_for(Duration::from_secs(5), || sightings
-            .try_recv()
-            .is_ok()));
+        assert!(wait_for(PATIENCE, || sightings.try_recv().is_ok()));
 
         answer(&live).expect("answered");
 
         // The stand-in is still reading, so a stray byte after the Enter would land in the file.
         std::thread::sleep(Duration::from_millis(500));
-        assert_eq!(sent(&received), b"\x1b[B\r");
+        assert_eq!(sent(&received), answer_keys());
     }
 
     /// With the cursor already on "Yes", a Down would wrap to "No, exit" and the Enter after it
@@ -1128,17 +1194,17 @@ mod tests {
     fn nothing_is_sent_when_the_cursor_is_not_on_the_first_option() {
         let dir = scratch("cursor-on-yes");
         let received = dir.join("received");
-        let script = format!(
-            "cat {}; cat {}; dd bs=1 count=1 2>/dev/null >> {}; sleep 30",
-            fixture("claude_trust_screen.bin"),
-            fixture("claude_trust_after_down.bin"),
-            quoted(&received)
-        );
+        let script = [
+            load_captures(),
+            show("SCREEN"),
+            show("AFTER_DOWN"),
+            take(1, &quoted(&received)),
+            "sleep 30".to_string(),
+        ]
+        .join("; ");
         let live = fake_claude("s", Agent::Claude, &script);
         let mut sightings = live.trust.take_sightings().expect("receiver");
-        assert!(wait_for(Duration::from_secs(5), || sightings
-            .try_recv()
-            .is_ok()));
+        assert!(wait_for(PATIENCE, || sightings.try_recv().is_ok()));
 
         let err = answer(&live).expect_err("refused");
         assert!(err.to_string().contains("first option"), "{err}");
@@ -1151,17 +1217,18 @@ mod tests {
     fn enter_is_withheld_when_the_cursor_does_not_move() {
         let dir = scratch("no-move");
         let received = dir.join("received");
-        let script = format!(
-            "cat {}; dd bs=1 count=3 2>/dev/null >> {r}; dd bs=1 count=1 2>/dev/null >> {r}; \
-             sleep 30",
-            fixture("claude_trust_screen.bin"),
-            r = quoted(&received)
-        );
+        let r = quoted(&received);
+        let script = [
+            load_captures(),
+            show("SCREEN"),
+            take(3, &r),
+            take(1, &r),
+            "sleep 30".to_string(),
+        ]
+        .join("; ");
         let live = fake_claude("s", Agent::Claude, &script);
         let mut sightings = live.trust.take_sightings().expect("receiver");
-        assert!(wait_for(Duration::from_secs(5), || sightings
-            .try_recv()
-            .is_ok()));
+        assert!(wait_for(PATIENCE, || sightings.try_recv().is_ok()));
 
         let err = answer(&live).expect_err("not confirmed");
         assert!(err.to_string().contains("did not move"), "{err}");
@@ -1172,7 +1239,7 @@ mod tests {
             trust_reason::CURSOR_DID_NOT_MOVE
         );
 
-        assert_eq!(sent(&received), b"\x1b[B");
+        assert_eq!(sent(&received), DOWN);
     }
 
     /// An attached terminal reports focus and answers the agent's queries on its own, which says
@@ -1182,26 +1249,23 @@ mod tests {
         let dir = scratch("terminal-traffic");
         let received = dir.join("received");
         let chatter: &[u8] = b"\x1b[I\x1b[O\x1b[?1;2c";
-        // The stand-in's read of the Enter also takes the chatter that arrives before it.
-        let script =
-            full_script(&received).replacen("count=1", &format!("count={}", chatter.len() + 1), 1);
+        // The stand-in holds its redraw until the chatter is in.
+        let script = conversation(&received, chatter.len());
         let live = fake_claude("s", Agent::Claude, &script);
         let mut sightings = live.trust.take_sightings().expect("receiver");
-        assert!(wait_for(Duration::from_secs(5), || sightings
-            .try_recv()
-            .is_ok()));
+        assert!(wait_for(PATIENCE, || sightings.try_recv().is_ok()));
 
         let answering = {
             let live = live.clone();
             std::thread::spawn(move || answer(&live))
         };
         // After the Down, before the Enter: where a counted write would stop the answer.
-        assert!(wait_for(Duration::from_secs(5), || sent(&received) == b"\x1b[B"));
+        assert!(wait_for(PATIENCE, || sent(&received) == DOWN));
         live.write_input(chatter).expect("the terminal's traffic");
         answering.join().unwrap().expect("answered");
 
         std::thread::sleep(Duration::from_millis(500));
-        assert_eq!(sent(&received), [&b"\x1b[B"[..], chatter, b"\r"].concat());
+        assert_eq!(sent(&received), [DOWN, chatter, ENTER].concat());
     }
 
     /// The count of foreign writes and the refusal that rests on it: a terminal's own traffic is not
@@ -1211,13 +1275,10 @@ mod tests {
     fn a_key_is_written_only_while_nothing_else_has_written() {
         let dir = scratch("if-untouched");
         let received = dir.join("received");
-        let script = format!(
-            "printf ready; dd bs=1 count=5 2>/dev/null >> {}; sleep 30",
-            quoted(&received)
-        );
+        let script = format!("printf ready; {}; sleep 30", take(5, &quoted(&received)));
         let live = fake_claude("s", Agent::Claude, &script);
         // Input written before the stand-in has set its terminal up would be thrown away.
-        assert!(wait_for(Duration::from_secs(5), || live
+        assert!(wait_for(PATIENCE, || live
             .recent_output(64)
             .starts_with(b"ready")));
 
@@ -1236,7 +1297,7 @@ mod tests {
             .unwrap());
 
         // The focus report, the typed byte and the key — not the key that was refused.
-        assert!(wait_for(Duration::from_secs(5), || sent(&received).len() >= 5));
+        assert!(wait_for(PATIENCE, || sent(&received).len() >= 5));
         std::thread::sleep(Duration::from_millis(200));
         assert_eq!(sent(&received), b"\x1b[Ix\r");
     }
@@ -1248,31 +1309,23 @@ mod tests {
     fn enter_is_withheld_when_something_else_writes_into_the_session_meanwhile() {
         let dir = scratch("foreign-write");
         let received = dir.join("received");
-        // The stand-in stops after the redraw, so the stray byte is all it is sent next.
-        let script = format!(
-            "cat {}; dd bs=1 count=3 2>/dev/null >> {r}; cat {}; dd bs=1 count=1 2>/dev/null >> {r}; \
-             sleep 30",
-            fixture("claude_trust_screen.bin"),
-            fixture("claude_trust_after_down.bin"),
-            r = quoted(&received)
-        );
+        // The stand-in holds its redraw until the stray byte is in.
+        let script = conversation(&received, 1);
         let live = fake_claude("s", Agent::Claude, &script);
         let mut sightings = live.trust.take_sightings().expect("receiver");
-        assert!(wait_for(Duration::from_secs(5), || sightings
-            .try_recv()
-            .is_ok()));
+        assert!(wait_for(PATIENCE, || sightings.try_recv().is_ok()));
 
         let answering = {
             let live = live.clone();
             std::thread::spawn(move || answer(&live))
         };
-        assert!(wait_for(Duration::from_secs(5), || sent(&received) == b"\x1b[B"));
+        assert!(wait_for(PATIENCE, || sent(&received) == DOWN));
         live.write_input(b"x").expect("the foreign write");
 
         let err = answering.join().unwrap().expect_err("withheld");
         assert!(err.to_string().contains("something else wrote"), "{err}");
         std::thread::sleep(Duration::from_millis(300));
-        assert_eq!(sent(&received), b"\x1b[Bx", "no Enter was sent");
+        assert_eq!(sent(&received), [DOWN, b"x"].concat(), "no Enter was sent");
     }
 
     /// A session that never showed the screen, or another agent's, is never typed at.
@@ -1280,10 +1333,7 @@ mod tests {
     fn nothing_is_sent_to_a_session_that_never_showed_the_screen_or_to_another_agent() {
         let dir = scratch("never");
         let received = dir.join("received");
-        let script = format!(
-            "echo hello; dd bs=1 count=1 2>/dev/null >> {}; sleep 30",
-            quoted(&received)
-        );
+        let script = format!("echo hello; {}; sleep 30", take(1, &quoted(&received)));
         let claude = fake_claude("a", Agent::Claude, &script);
         assert!(answer(&claude).is_err());
 
@@ -1293,6 +1343,18 @@ mod tests {
 
         std::thread::sleep(Duration::from_millis(300));
         assert!(sent(&received).is_empty());
+    }
+
+    /// A stand-in that shows the screen and takes the Down but never redraws, so the cursor never
+    /// moves. For [`start`], which fills in where it records what it is sent.
+    fn never_moves_script() -> String {
+        [
+            load_captures(),
+            show("SCREEN"),
+            take(3, "'%RECEIVED%'"),
+            "sleep 30".to_string(),
+        ]
+        .join("; ")
     }
 
     fn state_with_project(name: &str) -> (Arc<AppState>, ScratchDir) {
@@ -1324,6 +1386,39 @@ mod tests {
         (live, received)
     }
 
+    /// Waits until the stand-in has printed the trust screen. Feeding the screen to `live.trust`
+    /// only makes the session look like it is waiting; `answer` reads the screen from what the
+    /// stand-in printed, and starts looking `SETTLE` after it is called, which a stand-in whose
+    /// shell is slow to start can miss.
+    async fn screen_printed(live: &StandIn) {
+        let seen = Arc::clone(live);
+        assert!(
+            tokio::task::spawn_blocking(move || wait_for(PATIENCE, || {
+                is_trust_screen(&seen.recent_output(WINDOW))
+            }))
+            .await
+            .unwrap(),
+            "the stand-in never printed the trust screen"
+        );
+    }
+
+    /// Waits until the stand-in has been sent the Down and the Enter and has printed the screen
+    /// that replaces the trust screen. A test that ended at the Enter would drop the stand-in
+    /// while an answer running in the background was still waiting for that screen, and the
+    /// runtime would then wait out the answer's `DISMISS_TIMEOUT`.
+    async fn answered(live: &StandIn, received: &Path) {
+        let seen = Arc::clone(live);
+        let received = received.to_path_buf();
+        assert!(
+            tokio::task::spawn_blocking(move || wait_for(PATIENCE, || {
+                sent(&received) == answer_keys() && seen.recent_output(DISMISSED.len()) == DISMISSED
+            }))
+            .await
+            .unwrap(),
+            "the keys must have been sent and the screen dismissed"
+        );
+    }
+
     #[tokio::test]
     async fn a_console_sessions_screen_is_answered_without_asking() {
         let (state, dir) = state_with_project("console-session");
@@ -1332,15 +1427,7 @@ mod tests {
         let (live, received) = start(&state, &dir, record, &full_script(Path::new("%RECEIVED%")));
         supervise(&state, &live);
 
-        assert!(
-            tokio::task::spawn_blocking({
-                let received = received.clone();
-                move || wait_for(Duration::from_secs(10), || sent(&received) == b"\x1b[B\r")
-            })
-            .await
-            .unwrap(),
-            "the keys must have been sent"
-        );
+        answered(&live, &received).await;
         while let Ok(event) = events.try_recv() {
             assert!(
                 !matches!(event, Event::ClaudeTrustPrompt { .. }),
@@ -1362,7 +1449,7 @@ mod tests {
         let (live, received) = start(&state, &dir, record, &full_script(Path::new("%RECEIVED%")));
         supervise(&state, &live);
 
-        let prompt = tokio::time::timeout(Duration::from_secs(10), async {
+        let prompt = tokio::time::timeout(PATIENCE, async {
             loop {
                 if let Event::ClaudeTrustPrompt {
                     session,
@@ -1395,7 +1482,7 @@ mod tests {
             .await
             .expect("confirmed");
 
-        assert_eq!(sent(&received), b"\x1b[B\r");
+        assert_eq!(sent(&received), answer_keys());
         assert!(
             state
                 .store
@@ -1434,12 +1521,7 @@ mod tests {
         let (live, received) = start(&state, &dir, record, &full_script(Path::new("%RECEIVED%")));
         supervise(&state, &live);
 
-        assert!(tokio::task::spawn_blocking({
-            let received = received.clone();
-            move || wait_for(Duration::from_secs(10), || sent(&received) == b"\x1b[B\r")
-        })
-        .await
-        .unwrap());
+        answered(&live, &received).await;
         while let Ok(event) = events.try_recv() {
             assert!(!matches!(event, Event::ClaudeTrustPrompt { .. }));
         }
@@ -1520,11 +1602,12 @@ mod tests {
         );
         let (live, received) = start(&state, &dir, record, &full_script(Path::new("%RECEIVED%")));
         live.trust.feed(SCREEN);
+        screen_printed(&live).await;
 
         confirm(&state, "project-session-1", false, false)
             .await
             .expect("confirmed");
-        assert_eq!(sent(&received), b"\x1b[B\r");
+        assert_eq!(sent(&received), answer_keys());
         assert!(!consented_in_store(&state));
     }
 
@@ -1535,10 +1618,7 @@ mod tests {
         let (state, dir) = state_with_project("failed-confirm");
         let mut events = state.subscribe();
         // The stand-in never moves its cursor.
-        let script = format!(
-            "cat {}; dd bs=1 count=3 2>/dev/null >> '%RECEIVED%'; sleep 30",
-            fixture("claude_trust_screen.bin")
-        );
+        let script = never_moves_script();
         let record = session(
             "project-session-1",
             Agent::Claude,
@@ -1547,15 +1627,7 @@ mod tests {
         );
         let (live, _) = start(&state, &dir, record, &script);
         live.trust.feed(SCREEN);
-        // The stand-in's own output is what the answer reads, so wait for it to be printed.
-        let seen = live.clone();
-        tokio::task::spawn_blocking(move || {
-            wait_for(Duration::from_secs(5), || {
-                is_trust_screen(&seen.recent_output(WINDOW))
-            })
-        })
-        .await
-        .unwrap();
+        screen_printed(&live).await;
 
         let err = confirm(&state, "project-session-1", true, false)
             .await
@@ -1575,15 +1647,12 @@ mod tests {
     async fn an_automatic_answer_that_fails_leaves_a_notice() {
         let (state, dir) = state_with_project("failed-auto");
         let mut events = state.subscribe();
-        let script = format!(
-            "cat {}; dd bs=1 count=3 2>/dev/null >> '%RECEIVED%'; sleep 30",
-            fixture("claude_trust_screen.bin")
-        );
+        let script = never_moves_script();
         let record = session("console-session-1", Agent::Claude, Role::Console, None);
         let (live, _) = start(&state, &dir, record, &script);
         supervise(&state, &live);
 
-        let notice = tokio::time::timeout(Duration::from_secs(10), async {
+        let notice = tokio::time::timeout(PATIENCE, async {
             loop {
                 if let Event::SessionNotice {
                     session, message, ..
@@ -1726,11 +1795,12 @@ mod tests {
         );
         let (live, received) = start(&state, &dir, record, &full_script(Path::new("%RECEIVED%")));
         live.trust.feed(SCREEN);
+        screen_printed(&live).await;
 
         confirm(&state, "project-session-1", false, true)
             .await
             .expect("confirmed");
-        assert_eq!(sent(&received), b"\x1b[B\r");
+        assert_eq!(sent(&received), answer_keys());
         assert_eq!(trusted_in_store(&state), ["/work"]);
         assert!(
             !consented_in_store(&state),
@@ -1748,10 +1818,7 @@ mod tests {
     async fn nothing_is_trusted_when_the_answer_fails_or_is_refused() {
         let (state, dir) = state_with_project("confirm-parent-refused");
         // The stand-in never moves its cursor.
-        let script = format!(
-            "cat {}; dd bs=1 count=3 2>/dev/null >> '%RECEIVED%'; sleep 30",
-            fixture("claude_trust_screen.bin")
-        );
+        let script = never_moves_script();
         let record = session(
             "project-session-1",
             Agent::Claude,
@@ -1760,14 +1827,7 @@ mod tests {
         );
         let (live, _) = start(&state, &dir, record, &script);
         live.trust.feed(SCREEN);
-        let seen = live.clone();
-        tokio::task::spawn_blocking(move || {
-            wait_for(Duration::from_secs(5), || {
-                is_trust_screen(&seen.recent_output(WINDOW))
-            })
-        })
-        .await
-        .unwrap();
+        screen_printed(&live).await;
         assert!(confirm(&state, "project-session-1", false, true)
             .await
             .is_err());
@@ -1806,6 +1866,7 @@ mod tests {
         );
         let (live, received) = start(&state, &dir, record, &full_script(Path::new("%RECEIVED%")));
         live.trust.feed(SCREEN);
+        screen_printed(&live).await;
 
         let err = confirm(&state, "project-session-1", false, true)
             .await
@@ -1866,7 +1927,7 @@ mod tests {
             start(&state, &dir, beside, &full_script(Path::new("%RECEIVED%")));
         supervise(&state, &beside_live);
         let mut asked = 0;
-        tokio::time::timeout(Duration::from_secs(10), async {
+        tokio::time::timeout(PATIENCE, async {
             while asked < 2 {
                 if let Event::ClaudeTrustPrompt { .. } = events.recv().await.expect("event") {
                     asked += 1;
@@ -1877,15 +1938,7 @@ mod tests {
         .expect("both are asked about");
 
         add_trusted_directory(&state, Path::new("/work")).expect("trusted");
-        assert!(
-            tokio::task::spawn_blocking({
-                let received = under_received.clone();
-                move || wait_for(Duration::from_secs(10), || sent(&received) == b"\x1b[B\r")
-            })
-            .await
-            .unwrap(),
-            "the screen under the directory is answered"
-        );
+        answered(&under_live, &under_received).await;
         tokio::time::sleep(Duration::from_millis(600)).await;
         assert!(
             sent(&beside_received).is_empty(),
@@ -1898,12 +1951,7 @@ mod tests {
         let (later_live, later_received) =
             start(&state, &dir, later, &full_script(Path::new("%RECEIVED%")));
         supervise(&state, &later_live);
-        assert!(tokio::task::spawn_blocking({
-            let received = later_received.clone();
-            move || wait_for(Duration::from_secs(10), || sent(&received) == b"\x1b[B\r")
-        })
-        .await
-        .unwrap());
+        answered(&later_live, &later_received).await;
     }
 
     /// Whether the refusal is one of the codes that leave the dialog open.
@@ -2059,9 +2107,11 @@ mod tests {
         let a = session("a-1", Agent::Claude, Role::Project, Some("project-1"));
         let (a_live, a_received) = start(&state, &dir, a, &full_script(Path::new("%RECEIVED%")));
         a_live.trust.feed(SCREEN);
+        screen_printed(&a_live).await;
         let b = session("b-1", Agent::Claude, Role::Project, Some("project-1"));
         let (b_live, b_received) = start(&state, &dir, b, &full_script(Path::new("%RECEIVED%")));
         b_live.trust.feed(SCREEN);
+        screen_printed(&b_live).await;
         let console_session = session("console-session-1", Agent::Claude, Role::Console, None);
         let (console_session_live, console_session_received) = start(
             &state,
@@ -2070,24 +2120,18 @@ mod tests {
             &full_script(Path::new("%RECEIVED%")),
         );
         console_session_live.trust.feed(SCREEN);
+        screen_printed(&console_session_live).await;
         let codex = session("codex-1", Agent::Codex, Role::Project, Some("project-1"));
         let (codex_live, codex_received) =
             start(&state, &dir, codex, &full_script(Path::new("%RECEIVED%")));
         codex_live.trust.feed(SCREEN);
+        screen_printed(&codex_live).await;
 
         confirm(&state, "a-1", false, true)
             .await
             .expect("confirmed");
-        assert_eq!(sent(&a_received), b"\x1b[B\r");
-        assert!(
-            tokio::task::spawn_blocking({
-                let received = b_received.clone();
-                move || wait_for(Duration::from_secs(10), || sent(&received) == b"\x1b[B\r")
-            })
-            .await
-            .unwrap(),
-            "the other screen under the directory is answered"
-        );
+        assert_eq!(sent(&a_received), answer_keys());
+        answered(&b_live, &b_received).await;
         tokio::time::sleep(Duration::from_millis(600)).await;
         assert!(
             sent(&console_session_received).is_empty(),
@@ -2099,6 +2143,7 @@ mod tests {
         let c = session("c-1", Agent::Claude, Role::Project, Some("project-1"));
         let (c_live, c_received) = start(&state, &dir, c, &full_script(Path::new("%RECEIVED%")));
         c_live.trust.feed(SCREEN);
+        screen_printed(&c_live).await;
         add_trusted_directory(&state, Path::new("/work")).expect("a repeat");
         tokio::time::sleep(Duration::from_millis(800)).await;
         assert!(sent(&c_received).is_empty());

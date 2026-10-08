@@ -8,11 +8,19 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::protocol::Agent;
 use crate::session::{LiveSession, NewSession};
 use crate::state::AppState;
 use crate::store::Store;
+
+/// How long a test waits for something a spawned shell does: a snapshot it should produce, a file
+/// it should write, a process it should end. Not a measure of speed: on a machine whose
+/// endpoint-security software stalls every `exec` for seconds at a time under a parallel burst, a
+/// shell can take well over ten seconds to start, and a wait returns as soon as its condition
+/// holds, so a generous value costs a passing test nothing.
+pub(crate) const PATIENCE: Duration = Duration::from_secs(30);
 
 /// A scratch directory for one test, removed when whatever holds it is dropped. Dereferences to
 /// the path, so it is passed as one.
