@@ -32,7 +32,7 @@ export const settingsScenarios: Scenario[] = [
     id: "settings-git-auto-sync",
     group: GROUP,
     title: "Git, automatic sync on",
-    state: { ...state, settings: { auto_sync_repositories: true, accounts: [] } },
+    state: { ...state, settings: { auto_sync_repositories: true, default_clone_dir: "/Users/dev/Projects", accounts: [] } },
     steps: [(ui) => ui.press(ui.t("titleBar.settings")), (ui) => ui.press(ui.t("settings.section.git"))],
   },
   {
@@ -44,6 +44,7 @@ export const settingsScenarios: Scenario[] = [
       ...state,
       settings: {
         auto_sync_repositories: false,
+        default_clone_dir: "/Users/dev/Projects",
         accounts: [
           { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
           {

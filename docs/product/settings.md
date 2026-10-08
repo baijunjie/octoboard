@@ -33,7 +33,7 @@ While Settings is open everything under it stays as it was, the terminal include
 
 ## General
 
-The settings that shape the whole window rather than one feature: an **Appearance** row, then a **Language** row.
+Small app-wide settings: an **Appearance** row, a **Language** row, then a **Default clone directory** row.
 
 ### Appearance
 
@@ -46,6 +46,18 @@ which one is the default and where the choice is kept are in `docs/product/appea
 The language of the UI, chosen from a drop-down of the offered languages, each named in its own language. What the
 options are, how the first launch picks a language, what follows the choice and where it is kept are in
 `docs/product/language.md`.
+
+### Default clone directory
+
+A text field with a **Browse** button (the directory browser, see "Browsing directories" in
+`docs/product/consoles-and-projects.md`), showing the directory a repository is cloned into when a
+project is added from a git URL and no other directory is named. It is `~/Projects`, shown expanded, until the user sets
+one. The value is sent when the field loses focus or Enter is pressed, and at once when a directory is picked; once it
+is answered the field shows the directory as stored, expanded and without a trailing slash. A value that is neither
+absolute nor starts with `~/` is refused with a toast and the field returns to the stored one, and a blank value goes
+back to `~/Projects`. The browser opens on the nearest existing ancestor when the directory does not exist yet (see
+"Browsing directories" in `docs/product/consoles-and-projects.md`). Where the directory applies is in "Associating a
+project" in the same document.
 
 ## Git
 

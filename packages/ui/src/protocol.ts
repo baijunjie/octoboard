@@ -9,7 +9,7 @@ export type Role = "console" | "project";
 export type Origin = "console" | "user";
 export type SessionStatus = "working" | "waiting_user" | "idle" | "interrupted" | "archived";
 export type HostKind = "local" | "ssh";
-export type ProjectSource = "local" | "parent" | "github";
+export type ProjectSource = "local" | "parent" | "git";
 
 /** A console session's badge colour (`Session.colour`), assigned once on creation from this fixed
  * palette and never changed afterwards. Each entry's light and dark CSS values live in the UI's
@@ -190,12 +190,15 @@ export interface AgentAvailability {
   default_account_dir?: string | null;
 }
 
-/** The app-wide settings the daemon stores. One field for now; it is a record so it can grow. */
+/** The app-wide settings the daemon stores; it is a record so it can grow. */
 export interface Settings {
   /** Off (the default): the periodic check still runs `git fetch` so ahead/behind stays accurate,
    * but nothing in the repository changes. On: a branch that is behind and can fast-forward is
    * also fast-forwarded. Never pushes and never merges a non-fast-forward either way. */
   auto_sync_repositories: boolean;
+  /** Where a `git` association clones into when no directory is named: the one the user set, or
+   * `~/Projects` expanded while none is. Always an absolute path. */
+  default_clone_dir: string;
   /** Every account of every agent, application-wide. The default account of each agent is not
    * among these — it is the state of pinning nothing, not a row. */
   accounts: Account[];
@@ -236,6 +239,7 @@ export type RequestBody =
       type: "add_project";
       console_id: string;
       source: ProjectSource;
+      /** Required for `local` and `parent`; for `git`, absent clones into the default clone directory. */
       path?: string;
       remote_url?: string;
       name?: string;
@@ -308,7 +312,7 @@ export type RequestBody =
   /** Each settable field is optional: absent means leave it as it is. Answered with `ack`;
    * broadcasts `settings_updated` only when something actually changed (the trusted-folders
    * pattern). */
-  | { type: "update_settings"; auto_sync_repositories?: boolean }
+  | { type: "update_settings"; auto_sync_repositories?: boolean; default_clone_dir?: string }
   /** Answered with `ack` at once; the statuses arrive as `project_git_status` broadcasts as each
    * project finishes. Every project of `console` is checked, concurrently. A project whose check
    * is already in flight is not started again, so a client polling faster than the checks finish,

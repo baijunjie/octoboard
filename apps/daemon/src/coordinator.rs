@@ -408,8 +408,9 @@ pub async fn handle(
 
         RequestBody::UpdateSettings {
             auto_sync_repositories,
+            default_clone_dir,
         } => {
-            update_settings(state, auto_sync_repositories)?;
+            update_settings(state, auto_sync_repositories, default_clone_dir)?;
             Ok(None)
         }
 
@@ -538,11 +539,14 @@ pub async fn add_project(
             }
             repos
         }
-        ProjectSource::Github => {
+        ProjectSource::Git => {
             let url = remote_url
                 .clone()
                 .ok_or_else(|| field_required("remote_url"))?;
-            let parent = absolute_path(&path.ok_or_else(|| field_required("path"))?)?;
+            let parent = match path {
+                Some(path) => absolute_path(&path)?,
+                None => PathBuf::from(state.store.default_clone_dir()?),
+            };
             let cloned =
                 tokio::task::spawn_blocking(move || hostfs::clone_repo(&url, &parent)).await??;
             vec![cloned]
@@ -1689,14 +1693,29 @@ fn normalize_icon(text: Option<&str>) -> Result<Option<String>> {
 /// Applies the settable fields of `update_settings`: absent means "leave it alone", as in
 /// `update_project`. Broadcasts `settings_updated` only when something actually changed, the
 /// trusted-directories pattern.
-fn update_settings(state: &Arc<AppState>, auto_sync_repositories: Option<bool>) -> Result<()> {
-    let Some(auto_sync_repositories) = auto_sync_repositories else {
-        return Ok(());
+fn update_settings(
+    state: &Arc<AppState>,
+    auto_sync_repositories: Option<bool>,
+    default_clone_dir: Option<String>,
+) -> Result<()> {
+    // Checked before anything is written, so a refused directory leaves the other field unapplied
+    // too rather than half the request taking effect.
+    let default_clone_dir = match default_clone_dir {
+        Some(text) if text.trim().is_empty() => Some(None),
+        Some(text) => Some(Some(absolute_path(&text)?.to_string_lossy().into_owned())),
+        None => None,
     };
-    if !state
-        .store
-        .set_auto_sync_repositories(auto_sync_repositories)?
-    {
+    let mut changed = false;
+    let mut sync_turned_on = false;
+    if let Some(value) = auto_sync_repositories {
+        let updated = state.store.set_auto_sync_repositories(value)?;
+        sync_turned_on = updated && value;
+        changed |= updated;
+    }
+    if let Some(value) = default_clone_dir {
+        changed |= state.store.set_default_clone_dir(value.as_deref())?;
+    }
+    if !changed {
         return Ok(());
     }
     state.broadcast(Event::SettingsUpdated {
@@ -1705,7 +1724,7 @@ fn update_settings(state: &Arc<AppState>, auto_sync_repositories: Option<bool>) 
     // Turning the sync on takes effect at once rather than at the client's next five-minute sweep:
     // the branches already known to be behind are fast-forwarded now (see
     // `git_status::sync_behind_projects`).
-    if auto_sync_repositories {
+    if sync_turned_on {
         git_status::sync_behind_projects(state);
     }
     Ok(())
@@ -1762,6 +1781,23 @@ mod tests {
             ["Rust", "backend", "web"]
         );
         assert!(tags(&[]).is_empty());
+    }
+
+    #[test]
+    fn update_settings_applies_all_or_nothing_and_a_blank_clone_dir_clears_it() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-update-settings");
+        let built_in = state.store.default_clone_dir().unwrap();
+
+        update_settings(&state, None, Some("/work/repos/".to_string())).unwrap();
+        assert_eq!(state.store.default_clone_dir().unwrap(), "/work/repos");
+
+        // A refused directory leaves the other field of the same request unapplied too.
+        assert!(update_settings(&state, Some(true), Some("relative".to_string())).is_err());
+        assert!(!state.store.get_settings().unwrap().auto_sync_repositories);
+        assert_eq!(state.store.default_clone_dir().unwrap(), "/work/repos");
+
+        update_settings(&state, None, Some("  ".to_string())).unwrap();
+        assert_eq!(state.store.default_clone_dir().unwrap(), built_in);
     }
 
     fn console(console_session_agent: Agent, workdir: &Path) -> Console {

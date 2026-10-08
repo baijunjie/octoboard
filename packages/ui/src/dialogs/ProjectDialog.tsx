@@ -17,7 +17,7 @@ import { TextInput } from "./TextInput";
 const SOURCE_OPTIONS: { value: ProjectSource; label: PlainMessageKey }[] = [
   { value: "local", label: "dialog.project.source.local" },
   { value: "parent", label: "dialog.project.source.parent" },
-  { value: "github", label: "dialog.project.source.github" },
+  { value: "git", label: "dialog.project.source.git" },
 ];
 
 export function ProjectDialog({
@@ -35,7 +35,13 @@ export function ProjectDialog({
   const { request } = useDaemon();
   const consoleAgent = useDaemonStore((s) => s.consoles.get(consoleId)?.default_agent);
   const [source, setSource] = useState<ProjectSource>(editing?.source ?? "local");
-  const [path, setPath] = useState(editing?.path ?? "");
+  const defaultCloneDir = useDaemonStore((s) => s.settings.default_clone_dir);
+  // The clone directory is kept apart from the other sources' directory, so switching the source
+  // back and forth loses neither; it starts at the default clone directory, which the user may change.
+  const [directory, setDirectory] = useState(editing?.path ?? "");
+  const [cloneDir, setCloneDir] = useState(defaultCloneDir);
+  const path = source === "git" ? cloneDir : directory;
+  const setPath = source === "git" ? setCloneDir : setDirectory;
   const [remoteUrl, setRemoteUrl] = useState(editing?.remote_url ?? "");
   const [name, setName] = useState(editing?.name ?? "");
   const [defaultAgent, setDefaultAgent] = useState<Agent | "">(editing?.default_agent ?? "");
@@ -49,12 +55,11 @@ export function ProjectDialog({
   const [pickingDirectory, setPickingDirectory] = useState(false);
   const { error, busy, run } = useDialogAction();
 
-  // `path` is required for every source — for `github` it is the parent directory the clone lands
-  // in, not something the daemon can default — and `remote_url` additionally for `github`. Checked
-  // here so an obviously incomplete request never reaches the daemon only to come back as a raw
-  // "`path` is required" field-name error.
-  const pathError = !editing && !path.trim() ? t("dialog.project.directoryRequired") : undefined;
-  const urlError = !editing && source === "github" && !remoteUrl.trim() ? t("dialog.project.urlRequired") : undefined;
+  // `path` is required for the `local` and `parent` sources, and `remote_url` for `git`, whose own
+  // `path` the daemon defaults when blank. Checked here so an obviously incomplete request never
+  // reaches the daemon only to come back as a raw "`path` is required" field-name error.
+  const pathError = !editing && source !== "git" && !path.trim() ? t("dialog.project.directoryRequired") : undefined;
+  const urlError = !editing && source === "git" && !remoteUrl.trim() ? t("dialog.project.urlRequired") : undefined;
   // `name: name || undefined` below means "blank leaves it alone" everywhere else this pattern is
   // used (the field is genuinely optional on creation), but here blanking it out and saving would
   // silently keep the old name instead of doing what the empty field visually suggests.
@@ -80,8 +85,8 @@ export function ProjectDialog({
           type: "add_project",
           console_id: consoleId,
           source,
-          path: path || undefined,
-          remote_url: source === "github" ? remoteUrl : undefined,
+          path: path.trim() || undefined,
+          remote_url: source === "git" ? remoteUrl : undefined,
           name: name || undefined,
           default_agent: defaultAgent || undefined,
           tags,
@@ -113,7 +118,7 @@ export function ProjectDialog({
         onSubmit={submit}
       >
         {!editing && <OptionSelect label={t("dialog.project.source")} options={SOURCE_OPTIONS.map((option) => ({ ...option, label: t(option.label) }))} value={source} onChange={setSource} />}
-        {!editing && source === "github" && (
+        {!editing && source === "git" && (
           <TextInput
             label={t("dialog.project.repositoryUrl")}
             value={remoteUrl}
@@ -125,11 +130,11 @@ export function ProjectDialog({
         )}
         {!editing && (
           <TextInput
-            label={source === "github" ? t("dialog.project.cloneInto") : t("dialog.project.directory")}
+            label={source === "git" ? t("dialog.project.cloneInto") : t("dialog.project.directory")}
             value={path}
             onChange={setPath}
             dir="ltr"
-            placeholder={t("dialog.project.directoryExample")}
+            placeholder={source === "git" ? defaultCloneDir : t("dialog.project.directoryExample")}
             errorMessage={shown(pathError)}
             trailing={
               <Button type="button" variant="secondary" onPress={() => setPickingDirectory(true)}>

@@ -45,7 +45,7 @@ async fn control_ws(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) ->
 
 async fn handle_control(socket: WebSocket, state: Arc<AppState>) {
     // One writer, many producers. Requests are handled in their own tasks rather than inline,
-    // because some of them are long: `add_project` with a GitHub source runs a `git clone`, which
+    // because some of them are long: `add_project` with a `git` source runs a `git clone`, which
     // is minutes on a large repository. Handled inline, that would stall every status event for
     // every session until the clone finished — and a stall long enough to overrun the broadcast
     // channel costs the client its place in it. Replies are correlated by request id, so they do

@@ -128,7 +128,7 @@ const initialState: State = {
   trustPrompts: [],
   trustedDirectories: [],
   gitStatuses: new Map(),
-  settings: { auto_sync_repositories: false, accounts: [] },
+  settings: { auto_sync_repositories: false, default_clone_dir: "", accounts: [] },
   agentAvailability: new Map(INITIAL_AGENT_AVAILABILITY.map((a) => [a.agent, a])),
 };
 

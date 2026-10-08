@@ -168,7 +168,7 @@ it("opens on a selectable agent, with the console's account for it, and sends bo
         ["grok", { agent: "grok", availability: "available" }],
       ]),
       settings: {
-        auto_sync_repositories: false,
+        auto_sync_repositories: false, default_clone_dir: "/p",
         accounts: [{ id: "a-1", agent: "codex", name: "Work", config_dir: "/home/me/.codex-work" }],
       },
     },

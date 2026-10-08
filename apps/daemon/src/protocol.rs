@@ -109,7 +109,10 @@ pub enum HostKind {
 pub enum ProjectSource {
     Local,
     Parent,
-    Github,
+    /// Clones any git remote, not only GitHub. `github` is what this value was called before and is
+    /// still read, in a request and in a stored project; it is never written.
+    #[serde(alias = "github")]
+    Git,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -339,6 +342,9 @@ pub struct GitStatus {
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Settings {
     pub auto_sync_repositories: bool,
+    /// The directory a `git` association clones into when none is named: the one the user set, or
+    /// `~/Projects` (expanded) while none is. Always an absolute, lexically normalised path.
+    pub default_clone_dir: String,
     /// Every account of every agent, application-wide. The default account of each agent is not
     /// among these — it is the state of pinning nothing, not a row (see `Account`).
     pub accounts: Vec<Account>,
@@ -525,6 +531,8 @@ pub enum RequestBody {
     /// something actually changed, as `remove_trusted_directory` does.
     UpdateSettings {
         auto_sync_repositories: Option<bool>,
+        /// A blank value goes back to the built-in default.
+        default_clone_dir: Option<String>,
     },
     /// Both fields are required: an account always has a name and a directory. Broadcasts
     /// `settings_updated`.
@@ -980,7 +988,27 @@ pub fn now_millis() -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{Request, RequestBody};
+    use super::{ProjectSource, Request, RequestBody};
+
+    /// `github` is the old name of the `git` source; a request still naming it must be accepted,
+    /// and the source is emitted as `git`.
+    #[test]
+    fn the_github_source_is_read_as_git_and_written_as_git() {
+        for name in ["git", "github"] {
+            let json = format!(r#"{{"type":"add_project","console_id":"c","source":"{name}"}}"#);
+            match serde_json::from_str::<Request>(&json).unwrap().body {
+                RequestBody::AddProject { source, path, .. } => {
+                    assert_eq!(source, ProjectSource::Git);
+                    assert!(path.is_none());
+                }
+                _ => panic!("not add_project"),
+            }
+        }
+        assert_eq!(
+            serde_json::to_value(ProjectSource::Git).unwrap(),
+            serde_json::json!("git")
+        );
+    }
 
     /// The envelope's request id and the request's own fields arrive in one flat object, so a
     /// request field named `id` would be indistinguishable from the envelope's — and the daemon

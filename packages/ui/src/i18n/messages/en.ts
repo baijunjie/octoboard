@@ -337,7 +337,7 @@ export const en = {
   "dialog.project.source": "Source",
   "dialog.project.source.local": "A single directory",
   "dialog.project.source.parent": "A parent directory (find git repositories inside it)",
-  "dialog.project.source.github": "A GitHub URL (clone it)",
+  "dialog.project.source.git": "A git repository URL (clone it)",
   "dialog.project.repositoryUrl": "Repository URL",
   "dialog.project.urlExample": "https://github.com/owner/website",
   "dialog.project.directory": "Directory",
@@ -447,6 +447,10 @@ export const en = {
   "settings.language.label": "Language",
   "settings.language.description":
     "The language of {appName}'s interface. It is picked from the system's languages the first time {appName} opens.",
+  "settings.cloneDir.label": "Default clone directory",
+  "settings.cloneDir.description":
+    "Where a repository is cloned when adding a project from a git URL, unless another directory is chosen. Leave it empty to use ~/Projects.",
+  "settings.cloneDir.placeholder": "~/Projects",
   "settings.git.autoSync.label": "Automatically sync repositories",
   "settings.git.autoSync.description":
     "Fast-forwards a project's branch when it is behind its upstream and can be. It never pushes, and it leaves a branch that has commits of its own alone. The remote is checked every few minutes whichever way this is set, so the branch always shows how far ahead or behind it is.",

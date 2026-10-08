@@ -14,6 +14,7 @@ const hub2 = sessionOf("s-console-2", console_.id, undefined, "Hub 2", "working"
 // A named account, so a card's agent line reads "Claude Code (Work)".
 const settings = {
   auto_sync_repositories: false,
+  default_clone_dir: "/Users/dev/Projects",
   accounts: [{ id: "a-work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }],
 };
 

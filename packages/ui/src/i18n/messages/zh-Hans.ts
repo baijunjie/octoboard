@@ -306,7 +306,7 @@ export const zhHans: Translation<"other"> = {
   "dialog.project.source": "来源",
   "dialog.project.source.local": "单个目录",
   "dialog.project.source.parent": "父目录（查找其中的 git 仓库）",
-  "dialog.project.source.github": "GitHub 网址（克隆）",
+  "dialog.project.source.git": "git 仓库网址（克隆）",
   "dialog.project.repositoryUrl": "仓库网址",
   "dialog.project.urlExample": "https://github.com/owner/website",
   "dialog.project.directory": "目录",
@@ -406,6 +406,9 @@ export const zhHans: Translation<"other"> = {
   "settings.appearance.system": "跟随系统",
   "settings.language.label": "语言",
   "settings.language.description": "{appName} 界面的语言。首次打开时按系统语言选定。",
+  "settings.cloneDir.label": "默认克隆目录",
+  "settings.cloneDir.description": "通过 git 仓库网址添加项目时，仓库默认克隆到的目录，除非另行选择目录。留空则使用 ~/Projects。",
+  "settings.cloneDir.placeholder": "~/Projects",
   "settings.git.autoSync.label": "自动同步仓库",
   "settings.git.autoSync.description":
     "当项目分支落后于其上游且可以快进时，将其快进。从不推送，也不会改动有本地提交的分支。无论此设置如何，都会每隔几分钟检查一次远程，因此分支始终会显示领先或落后的提交数。",

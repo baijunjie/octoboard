@@ -34,6 +34,9 @@ pub const LOCAL_HOST_ID: &str = "local";
 /// the same `WHERE` every other table uses.
 const SETTINGS_ID: &str = "singleton";
 
+/// Where a clone goes while the user has not chosen a directory.
+const BUILT_IN_CLONE_DIR: &str = "~/Projects";
+
 pub struct Store {
     conn: Mutex<Connection>,
 }
@@ -155,14 +158,21 @@ impl Store {
             );
             CREATE TABLE IF NOT EXISTS settings (
                 id                     TEXT PRIMARY KEY,
-                auto_sync_repositories INTEGER NOT NULL DEFAULT 0
+                auto_sync_repositories INTEGER NOT NULL DEFAULT 0,
+                -- NULL until the user sets one; see `Store::default_clone_dir`.
+                default_clone_dir      TEXT
             );
             "#,
         )?;
         // No migration runs here: the application has not shipped, so a database whose schema is
         // not this one has already been moved aside by `supersede_if_outdated`, above, rather than
         // upgraded in place. `CREATE TABLE IF NOT EXISTS` therefore only ever meets either a brand
-        // new file or one already in this shape.
+        // new file or one already in this shape. The one exception: an optional setting gained
+        // after a database was created is added in place, since moving the file aside would cost
+        // the user every project over a setting that has a default.
+        if !column_exists(&conn, "settings", "default_clone_dir")? {
+            conn.execute("ALTER TABLE settings ADD COLUMN default_clone_dir TEXT", [])?;
+        }
         let store = Self {
             conn: Mutex::new(conn),
         };
@@ -493,6 +503,7 @@ impl Store {
         )?;
         Ok(Settings {
             auto_sync_repositories,
+            default_clone_dir: self.default_clone_dir()?,
             accounts: self.list_accounts()?,
         })
     }
@@ -510,6 +521,40 @@ impl Store {
         }
         conn.execute(
             "UPDATE settings SET auto_sync_repositories = ?2 WHERE id = ?1",
+            params![SETTINGS_ID, value],
+        )?;
+        Ok(true)
+    }
+
+    /// The directory a clone lands in when none is named: the stored one, else `~/Projects`
+    /// expanded.
+    pub fn default_clone_dir(&self) -> Result<String> {
+        let stored: Option<String> = self.lock().query_row(
+            "SELECT default_clone_dir FROM settings WHERE id = ?1",
+            params![SETTINGS_ID],
+            |row| row.get(0),
+        )?;
+        Ok(stored.unwrap_or_else(|| {
+            crate::hostfs::expand(BUILT_IN_CLONE_DIR)
+                .to_string_lossy()
+                .into_owned()
+        }))
+    }
+
+    /// Stores the already-normalised directory, or `None` to go back to the built-in default.
+    /// Whether the setting actually changed.
+    pub fn set_default_clone_dir(&self, value: Option<&str>) -> Result<bool> {
+        let conn = self.lock();
+        let current: Option<String> = conn.query_row(
+            "SELECT default_clone_dir FROM settings WHERE id = ?1",
+            params![SETTINGS_ID],
+            |row| row.get(0),
+        )?;
+        if current.as_deref() == value {
+            return Ok(false);
+        }
+        conn.execute(
+            "UPDATE settings SET default_clone_dir = ?2 WHERE id = ?1",
             params![SETTINGS_ID, value],
         )?;
         Ok(true)
@@ -1550,6 +1595,46 @@ mod tests {
             "a repeat write changes nothing"
         );
         assert!(store.get_settings().unwrap().auto_sync_repositories);
+    }
+
+    /// The default clone directory is the built-in one until set, a blank value goes back to it,
+    /// and a database created before the setting existed gains the column and keeps its data.
+    #[test]
+    fn the_default_clone_dir_falls_back_and_a_database_without_the_column_still_opens() {
+        let path = temp_db("clone-dir");
+        let store = Store::open(&path).expect("store");
+        let built_in = crate::hostfs::expand("~/Projects")
+            .to_string_lossy()
+            .into_owned();
+        assert_eq!(store.default_clone_dir().unwrap(), built_in);
+
+        assert!(store.set_default_clone_dir(Some("/work/repos")).unwrap());
+        assert!(!store.set_default_clone_dir(Some("/work/repos")).unwrap());
+        assert_eq!(
+            store.get_settings().unwrap().default_clone_dir,
+            "/work/repos"
+        );
+        assert!(store.set_default_clone_dir(None).unwrap());
+        assert_eq!(store.default_clone_dir().unwrap(), built_in);
+        drop(store);
+
+        {
+            let conn = Connection::open(&path).expect("conn");
+            conn.execute("ALTER TABLE settings DROP COLUMN default_clone_dir", [])
+                .expect("drop column");
+        }
+        let store = Store::open(&path).expect("reopened");
+        assert_eq!(store.default_clone_dir().unwrap(), built_in);
+    }
+
+    /// A project stored with the source's old name still reads, and is written back as `git`.
+    #[test]
+    fn a_stored_github_source_reads_as_git() {
+        assert_eq!(
+            enum_from_text::<ProjectSource>("github").unwrap(),
+            ProjectSource::Git
+        );
+        assert_eq!(enum_to_text(&ProjectSource::Git), "git");
     }
 
     /// A console session to feed [`Store::insert_console_session`]: a plain `role: Console` record

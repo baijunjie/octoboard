@@ -76,27 +76,30 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     },
     ToolDef {
         name: "add_project",
-        description: "Associate a directory with this console, or clone a GitHub repository and \
+        description: "Associate a directory with this console, or clone a git repository and \
                       associate the clone. `source` is `local` for one directory, `parent` for \
-                      every git repository directly beneath `path`, or `github` to clone \
-                      `remote_url` into `path`.",
+                      every git repository directly beneath `path`, or `git` to clone \
+                      `remote_url` into `path`, which defaults to the user's default clone \
+                      directory.",
         schema: || {
             object_schema(
                 json!({
                     "source": {
                         "type": "string",
-                        "enum": ["local", "parent", "github"],
+                        "enum": ["local", "parent", "git"],
                         "description": "How the directory is being associated.",
                     },
                     "path": {
                         "type": "string",
                         "description": "The directory to associate, the parent directory to scan, \
                                         or the parent directory to clone into. Must be an \
-                                        absolute path or start with `~/`.",
+                                        absolute path or start with `~/`. Required for \
+                                        `local` and `parent`; for `git` it defaults to the \
+                                        user's default clone directory.",
                     },
                     "remote_url": {
                         "type": "string",
-                        "description": "The repository to clone. Required for `github`.",
+                        "description": "The repository to clone. Required for `git`.",
                     },
                     "name": {
                         "type": "string",

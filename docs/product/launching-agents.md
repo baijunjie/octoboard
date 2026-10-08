@@ -105,7 +105,7 @@ one it was:
 - the shell exited with an error, in which case its own diagnostic output is included;
 - the shell exited cleanly without having produced a complete environment dump.
 
-The same capture is what gives a GitHub clone the user's `git` and git credentials, so a clone is refused the same
+The same capture is what gives a git clone the user's `git` and git credentials, so a clone is refused the same
 way (see "Associating a project" in `docs/product/consoles-and-projects.md`).
 
 Two groups of variables are removed from that snapshot:

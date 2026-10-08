@@ -74,7 +74,7 @@ again until its next check.
 - Finally the branch may be fast-forwarded; see "Automatically syncing repositories" below.
 
 `git` runs with the user's own shell environment, so it is the `git` on the user's `PATH` and their git credentials
-that are used, as for a GitHub association's clone (see "Associating a project" in
+that are used, as for a git association's clone (see "Associating a project" in
 `docs/product/consoles-and-projects.md`). It is run so that it can never stop to ask for a credential, a passphrase or
 an unknown host key — each of those fails immediately instead — and every `git` call is given at most two minutes, so
 a check cannot hang; a call that runs out reports only that it did not finish in time.

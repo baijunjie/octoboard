@@ -1,6 +1,7 @@
 import { Button, Chip, Input, ListBox } from "@heroui/react";
 import React, { useEffect, useRef, useState } from "react";
 
+import { DaemonRequestError } from "../daemon-client";
 import { useT } from "../i18n/react";
 import type { DirEntry, Event } from "../protocol";
 import { useDaemon } from "../store";
@@ -10,6 +11,14 @@ import { Dialog, DialogError, useRefocusIfLost } from "./Dialog";
  * path, which neither of these can be. */
 const PARENT_KEY = "..";
 const EMPTY_KEY = "empty";
+
+/** The directory containing `path`, `~` once there is nothing above it. */
+function ancestorOf(path: string): string {
+  const trimmed = path.replace(/\/+$/, "");
+  const slash = trimmed.lastIndexOf("/");
+  if (slash < 0) return "~";
+  return slash === 0 ? "/" : trimmed.slice(0, slash);
+}
 
 /**
  * Browses directories through the daemon's `list_dir`, never the local filesystem directly — this
@@ -41,7 +50,7 @@ export function DirectoryPicker({
   const [error, setError] = useState<string>();
   const listRef = useRef<HTMLDivElement>(null);
 
-  const load = async (targetPath: string) => {
+  const load = async (targetPath: string, fallBackToAncestor = false) => {
     setError(undefined);
     try {
       const event = (await request({ type: "list_dir", path: targetPath })) as Extract<Event, { type: "dir_listing" }>;
@@ -52,6 +61,13 @@ export function DirectoryPicker({
       // than needing its own notion of "has the user edited this since the last listing".
       setPath(event.path);
     } catch (err) {
+      // A starting path that does not exist yet (a default clone directory not yet created) would
+      // leave nothing to navigate from, so the first listing walks up to the nearest ancestor that
+      // lists. Only that failure does: a declined volume prompt or an unreadable directory is
+      // shown as it is.
+      if (fallBackToAncestor && targetPath !== "~" && err instanceof DaemonRequestError && err.code === "path_not_found") {
+        return load(ancestorOf(targetPath), true);
+      }
       setError((err as Error).message);
       // Deliberately not clearing `entries`/`resolvedPath`: a denied or not-yet-answered volume
       // prompt is the expected failure here, and it should not yank the previous listing (and its
@@ -60,7 +76,7 @@ export function DirectoryPicker({
   };
 
   useEffect(() => {
-    void load(path);
+    void load(path, true);
     // Only on mount — subsequent navigation calls `load` directly so the input field can be edited
     // freely without triggering a listing on every keystroke. `path`'s initial value is read once
     // via `useState`'s initializer above, so it is intentionally not a dependency here.

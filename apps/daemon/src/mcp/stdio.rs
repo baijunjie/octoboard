@@ -28,7 +28,7 @@ use serde_json::{json, Value};
 
 use crate::protocol::Role;
 
-/// How long a tool call may take. Generous on purpose: `add_project` with a GitHub source runs a
+/// How long a tool call may take. Generous on purpose: `add_project` with a `git` source runs a
 /// `git clone`, which is minutes on a large repository. The agent's own tool timeout is the one
 /// that should decide when to give up, not this.
 const CALL_TIMEOUT: Duration = Duration::from_secs(600);

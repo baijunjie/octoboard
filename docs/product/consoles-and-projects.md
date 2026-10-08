@@ -144,7 +144,7 @@ removes the console's own working directory under `~/.octoboard`. No project dir
 ## Projects
 
 A project carries a name, the directory it points at, an optional default agent, how it was associated, the remote
-URL it was cloned from (for a GitHub association), whether the user has pinned it (see "Order of projects and
+URL it was cloned from (for a git association), whether the user has pinned it (see "Order of projects and
 sessions" in `docs/product/sidebar.md`), and any number of tags. Every project is bound to a host (see "Hosts" below).
 
 A project also carries whether the user has agreed that Octoboard may answer Claude Code's workspace-trust prompt for
@@ -176,7 +176,7 @@ There are three sources:
 |---|---|---|
 | A single directory | a path | That one directory becomes a project. The path must exist and be a directory. |
 | A parent directory | a path | Every git repository **directly beneath** that path becomes its own project. Only one level down is scanned; a checkout nested deeper belongs to the repository above it. Associating nothing is an error: if no git repository is found directly beneath the path, the request is refused and names the directory. |
-| A GitHub URL | a repository URL plus a parent directory | The repository is cloned into a new directory beneath the parent, and the clone is then associated. |
+| A git repository URL | a repository URL plus a parent directory | The repository, from any git remote and not only GitHub, is cloned into a new directory beneath the parent, and the clone is then associated. The parent directory is filled in with the default clone directory (see below), which can be changed in the form or left blank to use that directory anyway. |
 
 A path may be entered by hand or picked with the directory browser. A leading `~` is expanded to the home directory
 of the host the daemon runs on. The path must then be absolute: a relative path is refused, for every source. It is
@@ -187,7 +187,13 @@ what a trusted folder is compared against (see "Trusted folders" in `docs/produc
 The console session can associate a project itself, from the same three sources and under all the
 rules in this section (see "The console session's tools" in `docs/product/hub-orchestration.md`).
 
-For a GitHub association:
+The **default clone directory** is where a clone lands when no parent directory is named. It is `~/Projects` (expanded
+to the home directory) until the user sets one in Settings' General section (see "General" in
+`docs/product/settings.md`), and follows the same path rules as any other path here. The form starts its "Clone into"
+field with it, and the console session's `add_project` falls back to it when it gives no `path` for a clone; a path is
+still required for the other two sources. The directory is created if it does not exist.
+
+For a git association:
 
 - The target directory name is taken from the URL's last segment with any `.git` suffix removed. Both
   `https://host/owner/repo(.git)` and `git@host:owner/repo(.git)` are understood.
@@ -259,7 +265,9 @@ In the browser, the listed directory's subdirectories are one list, with a `..` 
 top except at the filesystem root (announced to assistive technology as the parent directory), and a "git" tag on
 each entry that is a git repository. Clicking an entry, or pressing Enter on it, lists that directory. The list is a
 single Tab stop: the arrow keys, Home and End move between its entries. A directory with no subdirectories shows an
-entry saying so, which does nothing.
+entry saying so, which does nothing. When the browser is opened on a path that does not exist (such as a default clone
+directory not created yet), it lists the nearest ancestor that does exist instead (a `~/` path goes no higher than the
+home directory), so there is always somewhere to navigate from; any other failure is reported as described next.
 
 A listing can fail, and that is a normal path rather than an edge case: a packaged application is granted file access
 per volume by macOS, and the user may decline the prompt or leave it unanswered. The failure is reported with the path
