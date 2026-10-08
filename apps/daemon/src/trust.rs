@@ -351,14 +351,13 @@ fn trustable_parent(project_path: &str, home: &Path) -> Result<PathBuf> {
         Some(parent) if parent.parent().is_some() => parent.to_path_buf(),
         _ => return Err(too_broad(&path)),
     };
-    let home = lexically_normalise(home);
-    if !home.is_absolute() || home.parent().is_none() {
+    let Some(home) = paths::known_home(home) else {
         return Err(CodedError::raised(
             error_code::TRUST_HOME_UNKNOWN,
             "the home directory could not be determined, so no folder can be checked against it",
             &[],
         ));
-    }
+    };
     if home.starts_with(&parent) {
         return Err(too_broad(&parent));
     }

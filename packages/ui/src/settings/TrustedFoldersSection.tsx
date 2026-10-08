@@ -1,7 +1,7 @@
 import { Button, EmptyState } from "@heroui/react";
 import React from "react";
 
-import { PathText } from "../components/PathText";
+import { MarkedPath } from "../components/MarkedPath";
 import { TitledControl } from "../components/TitledControl";
 import { useT } from "../i18n/react";
 import { useDaemon, useDaemonStore } from "../store";
@@ -32,7 +32,7 @@ export function TrustedFoldersSection(): React.ReactElement {
           {directories.map((path) => (
             <SettingRow
               key={path}
-              label={<PathText path={path} />}
+              label={<MarkedPath path={path} />}
               description={t("settings.trusted.rowDescription")}
             >
               <TitledControl title={t("settings.trusted.removeTooltip")}>

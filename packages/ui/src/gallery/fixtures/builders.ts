@@ -107,6 +107,7 @@ export function snapshotState(parts: {
     trustedDirectories: parts.trustedDirectories ?? [],
     gitStatuses: new Map((parts.gitStatuses ?? []).map((g) => [g.project, g])),
     settings: parts.settings ?? { auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts: [] },
+    homeDir: "/Users/dev",
   };
 }
 

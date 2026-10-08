@@ -43,6 +43,20 @@ keyboard focus back on the selected session's terminal.
 
 While Settings is open everything under it stays as it was, the terminal included, and its size does not change.
 
+## How paths are shown
+
+A directory path listed in Settings — a trusted folder, an account's directory, the directory an agent's default
+account resolves to — is set apart from the text around it: a folder icon ahead of it and the path in a monospace
+font. A path too long for its row is cut from its start and fades out there, so the directory's own name stays
+visible; the icon stays in place.
+
+A path inside the home directory of the host the daemon runs on — the daemon's, not the browser's, since the two may
+be different machines — is shown with that home directory written as `~`: `~/Projects/app`, and `~` for the home
+directory itself. A path that only shares its first characters with the home directory (`/Users/devx` against
+`/Users/dev`) is shown in full. Whenever a path is shown shortened — written with `~`, cut, or both — its tooltip is
+the full path. When the daemon cannot determine its home directory (`HOME` unset, relative or the filesystem root),
+every path is shown in full.
+
 ## General
 
 Small app-wide settings: an **Appearance** row, a **Language** row, then a **Default clone directory** row.
@@ -61,13 +75,17 @@ options are, how the first launch picks a language, what follows the choice and 
 
 ### Default clone directory
 
-A text field with a **Browse** button (the directory browser, see "Browsing directories" in
-`docs/product/consoles-and-projects.md`), showing the directory a repository is cloned into when a
-project is added from a git URL and no other directory is named. It is `~/Projects`, shown expanded, until the user sets
-one. The value is sent when the field loses focus or Enter is pressed, and at once when a directory is picked; once it
-is answered the field shows the directory as stored, expanded and without a trailing slash. A value that is neither
-absolute nor starts with `~/` is refused with a toast and the field returns to the stored one, and a blank value goes
-back to `~/Projects`. The browser opens on the nearest existing ancestor when the directory does not exist yet (see
+A text field with a folder icon in it and a **Browse** button beside it (the directory browser, see "Browsing
+directories" in `docs/product/consoles-and-projects.md`), showing the directory a repository is cloned into when a
+project is added from a git URL and no other directory is named. It is `~/Projects` until the user sets one. The field
+shows the directory in a monospace font, with the daemon host's home directory written as `~` under the same rules as
+in "How paths are shown" above, and the full path as the field's tooltip whenever the two differ. The daemon stores
+the directory expanded, as an absolute path without a trailing slash; a leading `~/` in what is sent is expanded
+again. The value is sent when the field loses focus or Enter is pressed, and at once when a directory is picked; a
+value equal to what the field shows unedited, or to the full path it stands for, sends nothing. Once a send is
+answered the field shows the stored directory again, written as above. A value that is neither absolute nor starts
+with `~/` is refused with a toast and the field returns to the stored one, and a blank value goes back to
+`~/Projects`. The browser opens on the nearest existing ancestor when the directory does not exist yet (see
 "Browsing directories" in `docs/product/consoles-and-projects.md`). Where the directory applies is in "Associating a
 project" in the same document.
 
@@ -88,8 +106,8 @@ determined is headed plainly.
 
 Each group starts with the agent's **default account**, said to be the setup a session runs under when nothing is
 pinned, with the directory it currently resolves to. It has no actions: its name is Octoboard's own and it cannot be
-edited or removed. The accounts the user owns follow, each with its name, its directory (cut from its start when too
-long, the full path as the tooltip), an **Edit** button and a **Remove** button.
+edited or removed. The accounts the user owns follow, each with its name, its directory, an **Edit** button and a
+**Remove** button. Both kinds of directory are shown as in "How paths are shown" above.
 
 One **Add account** button, above the groups, serves every agent: its form asks for the agent — every agent can be
 picked, one that is not installed included, since an account may be set up before its agent is — then a name and a

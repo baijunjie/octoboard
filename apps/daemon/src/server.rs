@@ -185,6 +185,7 @@ fn snapshot(state: &Arc<AppState>) -> anyhow::Result<Event> {
         settings: state.store.get_settings()?,
         git_statuses: state.git_statuses(),
         agent_availability: state.agent_availability(),
+        home_dir: crate::paths::known_home_dir().map(|home| home.to_string_lossy().into_owned()),
     })
 }
 

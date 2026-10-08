@@ -105,6 +105,10 @@ export interface State {
    * `agent_availability_updated` said. Always holds all three agents, each `not_determined`
    * until the daemon's one-time determination for this run lands. */
   agentAvailability: Map<Agent, AgentAvailability>;
+  /** The daemon host's home directory as the last `snapshot` said, for showing paths under it as
+   * `~/...` (see `abbreviateHome`). Null until the first snapshot, and when the daemon cannot
+   * determine one. */
+  homeDir: string | null;
 }
 
 /** The three entries every run begins with, before the daemon's one-time determination lands. */
@@ -130,6 +134,7 @@ const initialState: State = {
   gitStatuses: new Map(),
   settings: { auto_sync_repositories: false, default_clone_dir: "", accounts: [] },
   agentAvailability: new Map(INITIAL_AGENT_AVAILABILITY.map((a) => [a.agent, a])),
+  homeDir: null,
 };
 
 /** A store holding the empty state with `initial` laid over it. */
@@ -165,6 +170,7 @@ function reducer(state: State, action: Action): State {
             gitStatuses: new Map(event.git_statuses.map((s) => [s.project, s])),
             settings: event.settings,
             agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])),
+            homeDir: event.home_dir,
           };
         case "trusted_directories_updated":
           // A prompt for a project under a directory that is now trusted has nothing left to ask:

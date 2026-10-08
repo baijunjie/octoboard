@@ -583,6 +583,10 @@ pub enum Event {
         /// replaced once the daemon's one-time login-shell snapshot lands; see
         /// `crate::availability`.
         agent_availability: Vec<AgentAvailability>,
+        /// The daemon host's home directory, so a client can show a path under it as `~/...`; it
+        /// is the daemon's home, not the browser's, since the two may be on different machines.
+        /// Null when the daemon cannot determine one.
+        home_dir: Option<String>,
     },
     /// Availability or a default account's resolved directory changed for one or more agents —
     /// the whole three-entry list, like every other upsert. Broadcast once, when the daemon's
@@ -1321,9 +1325,11 @@ mod tests {
                 default_account_dir: None,
             })
             .collect(),
+            home_dir: Some("/Users/dev".to_string()),
         })
         .unwrap();
         assert_eq!(snapshot["trusted_directories"][0], "/work");
+        assert_eq!(snapshot["home_dir"], "/Users/dev");
     }
 
     /// A client words a failure and a notice from their code and params; the English message rides

@@ -351,6 +351,10 @@ export type Event =
       /** Always three entries, one per agent, each `not_determined` until the daemon's one-time
        * determination for this run lands. */
       agent_availability: AgentAvailability[];
+      /** The daemon host's home directory — not the browser's, the two may be on different
+       * machines — so a path under it can be shown as `~/...`. Null when the daemon cannot
+       * determine one. */
+      home_dir: string | null;
     }
   /** Availability or a default account's resolved directory changed for one or more agents — the
    * whole three-entry list. Broadcast once, when the daemon's one-time determination lands; never

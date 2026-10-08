@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { accountsByAgent, AGENT_LABEL } from "../agents";
 import { AgentIcon } from "../components/AgentIcon";
 import { FadeOverflow } from "../components/FadeOverflow";
-import { PathText } from "../components/PathText";
+import { MarkedPath } from "../components/MarkedPath";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { useT } from "../i18n/react";
 import type { Account } from "../protocol";
@@ -55,7 +55,7 @@ export function AgentAccountsSection(): React.ReactElement {
                 description={
                   <>
                     <div>{t("settings.accounts.defaultDescription")}</div>
-                    {state?.default_account_dir && <PathText path={state.default_account_dir} />}
+                    {state?.default_account_dir && <MarkedPath path={state.default_account_dir} />}
                   </>
                 }
               />
@@ -69,7 +69,7 @@ export function AgentAccountsSection(): React.ReactElement {
                   }
                   description={
                     <>
-                      <PathText path={account.config_dir} />
+                      <MarkedPath path={account.config_dir} />
                       {notUsable}
                     </>
                   }

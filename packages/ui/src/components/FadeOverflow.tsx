@@ -180,6 +180,9 @@ interface FadeOverflowProps {
   /** Set as the element's `title` only while an edge is clipped, so a name that fits does not
    * grow a tooltip repeating itself. */
   titleWhenClipped?: string;
+  /** Set as the element's `title` always, for text that stands for something longer than it shows
+   * even while it fits (an abbreviated path); takes the place of `titleWhenClipped`. */
+  title?: string;
   /** Off to keep a clipped label still on hover (see `useMarquee`); on by default. */
   marquee?: boolean;
   children: React.ReactNode;
@@ -211,6 +214,7 @@ export function FadeOverflow({
   dir,
   clip = "end",
   titleWhenClipped,
+  title,
   marquee = true,
   children,
 }: FadeOverflowProps): React.ReactElement {
@@ -255,7 +259,7 @@ export function FadeOverflow({
       ref={ref as React.RefObject<never>}
       dir={dir}
       className={`overflow-hidden whitespace-nowrap${dir ? " align-match-parent" : ""} ${className}`}
-      title={clipped.start || clipped.end ? titleWhenClipped : undefined}
+      title={title ?? (clipped.start || clipped.end ? titleWhenClipped : undefined)}
       style={mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined}
     >
       {children}

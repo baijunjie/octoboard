@@ -357,10 +357,10 @@ answers is sent under the same checks, and reported the same way when a check fa
 screen Octoboard answers.
 
 **The list in Settings.** The Trusted folders section of Settings (see `docs/product/settings.md`)
-explains what trusting a folder grants, as above, and lists every trusted folder, sorted by path. A
-path too long for the row is cut from its start and fades out there, so the folder's own name stays
-visible, and the full path is then the entry's tooltip. Each folder has a Remove button that stops
-trusting it at once, without a confirmation. With no folder trusted, the section says so and that a
+explains what trusting a folder grants, as above, and lists every trusted folder, sorted by path,
+each path shown as in "How paths are shown" in `docs/product/settings.md`. Each folder has a Remove
+button, whose accessible name gives the folder's full path, that stops trusting it at once, without
+a confirmation. With no folder trusted, the section says so and that a
 folder is trusted from a session's trust prompt. Removing a folder leaves every project's own
 consent as it is and leaves running sessions alone, a screen already answered included; a trust
 screen that comes up afterwards in a project under it, without consent of its own and not under

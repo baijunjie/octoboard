@@ -1,20 +1,25 @@
-import { Button, Input, TextField } from "@heroui/react";
+import { Button, InputGroup, TextField } from "@heroui/react";
+import { Folder } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
 import { useT } from "../i18n/react";
+import { abbreviateHome } from "../pathDisplay";
 import { useDaemon, useDaemonStore } from "../store";
 import { SettingRow } from "./SettingRow";
 
 /** The directory a `git` association clones into when none is named (see `Settings.default_clone_dir`
  * in protocol.ts). The text is sent when the field loses focus or Enter is pressed, and a directory
  * picked with Browse is sent at once; blanking the field goes back to the built-in default. Once a
- * send is answered the field shows the daemon's value again, which is the normalised, expanded form
- * of whatever was typed. */
+ * send is answered the field shows the daemon's value again: the normalised form of whatever was
+ * typed, written with the daemon host's home directory as `~` (which the daemon expands again when
+ * it is sent back), with the full path as the tooltip whenever the two differ. */
 export function CloneDirSetting(): React.ReactElement {
   const t = useT();
   const { request, toastError } = useDaemon();
-  const stored = useDaemonStore((s) => s.settings.default_clone_dir);
+  const storedFull = useDaemonStore((s) => s.settings.default_clone_dir);
+  const home = useDaemonStore((s) => s.homeDir);
+  const stored = abbreviateHome(storedFull, home);
   const [draft, setDraft] = useState(stored);
   const [picking, setPicking] = useState(false);
   // Follows the daemon's value: another window, or a refused edit, puts the field back to it.
@@ -24,7 +29,13 @@ export function CloneDirSetting(): React.ReactElement {
   latest.current = stored;
 
   const save = (value: string) => {
-    if (value.trim() === stored) return;
+    const typed = value.trim();
+    // An untouched field shows the abbreviated form, which the daemon would only expand back to
+    // what it already holds; the full form typed or picked is the same value, shown the usual way.
+    if (typed === stored || typed === storedFull) {
+      setDraft(stored);
+      return;
+    }
     void request({ type: "update_settings", default_clone_dir: value })
       .catch((err) => toastError((err as Error).message))
       .finally(() => setDraft(latest.current));
@@ -43,7 +54,12 @@ export function CloneDirSetting(): React.ReactElement {
             onKeyDown={(event) => event.key === "Enter" && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229 && save(draft)}
             className="min-w-0 flex-1"
           >
-            <Input dir="ltr" placeholder={t("settings.cloneDir.placeholder")} />
+            <InputGroup title={stored === storedFull ? undefined : storedFull}>
+              <InputGroup.Prefix>
+                <Folder size={14} aria-hidden />
+              </InputGroup.Prefix>
+              <InputGroup.Input dir="ltr" className="font-mono" placeholder={t("settings.cloneDir.placeholder")} />
+            </InputGroup>
           </TextField>
           {/* Not taking focus on a mouse press keeps the field from losing it, and so from sending
               what is typed, just to open the picker. */}
@@ -57,7 +73,7 @@ export function CloneDirSetting(): React.ReactElement {
       {picking && (
         <DirectoryPicker
           title={t("dialog.chooseDirectory")}
-          initialPath={stored || "~"}
+          initialPath={storedFull || "~"}
           onPick={(picked) => {
             setPicking(false);
             setDraft(picked);
