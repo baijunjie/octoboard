@@ -10,7 +10,7 @@ import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
-import { Message, useCurrentLanguage, useT } from "../i18n/react";
+import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
 import { sessionAccountName, sessionAgentLabel, sessionAriaLabel, statusLabel } from "../sessionLabel";
@@ -32,10 +32,10 @@ const ARCHIVE_PREVIEW = 10;
 function FocusHeader({ handlers, children }: { handlers: SidebarHandlers; children: React.ReactNode }): React.ReactElement {
   const t = useT();
   return (
-    // A card below sits in the scroll area, then inside its own border and padding (`px-2` + 1px +
-    // `p-3`), so the end padding matches that and this header's trailing menus line up with the menu
-    // on a card. The start stays put: only the trailing icons were inset short of the cards.
-    <div className="flex h-14 shrink-0 items-center gap-1 border-b border-separator ps-2 pe-[21px]">
+    // A row or card below sits in the scroll area (`px-2`), then inside its own padding (a card's
+    // border and padding add up to `px-2`), so the end padding matches that and this header's
+    // trailing menus line up with the menu on a row or card. The start stays put.
+    <div className="flex h-14 shrink-0 items-center gap-1 border-b border-separator ps-2 pe-4">
       <TitledControl title={t("sidebar.focus.exit")}>
         <Button
           isIconOnly
@@ -70,8 +70,9 @@ function FocusTitle({ consoleName, title }: { consoleName: string; title: string
 
 /** A project's focus mode: the sidebar given over to one project, its unbound sessions as cards
  * and its recent archive below them ("Focus mode" in docs/product/sidebar.md). The sessions bound
- * to a console session are left out of the list and summed up in one line leading to each console
- * session's own focus mode; the archive, bound sessions included, is not filtered. */
+ * to a console session are left out of the list and summed up by a sentence with a chip for each
+ * console session, leading to its own focus mode; the archive, bound sessions included, is not
+ * filtered. */
 export function ProjectFocusView({
   handlers,
   console: parentConsole,
@@ -260,7 +261,7 @@ function FocusProjectGroup({
   const t = useT();
   return (
     <>
-      <div className="mb-1 flex min-h-7 items-center gap-1 ps-2">
+      <div className="mb-1 flex min-h-7 items-center gap-1 ps-2 pe-2">
         <h4 className="min-w-0 flex-1">
           <RowLabel title={project.name} className="block min-w-0">
             <span className="text-sm font-medium">{project.name}</span>
@@ -279,8 +280,9 @@ function FocusProjectGroup({
   );
 }
 
-/** The one line a project's focus mode carries for the sessions it leaves out: how many are bound
- * to which console sessions, each named console session leading to its own focus mode. */
+/** What a project's focus mode carries for the sessions it leaves out: a line saying how many are
+ * bound to console sessions, over a chip for each console session, with how many of them are
+ * bound to it, leading to its own focus mode. */
 function BoundElsewhere({
   handlers,
   count,
@@ -288,42 +290,38 @@ function BoundElsewhere({
 }: {
   handlers: SidebarHandlers;
   count: number;
-  owners: Session[];
+  owners: { owner: Session; count: number }[];
 }): React.ReactElement {
   const t = useT();
-  const language = useCurrentLanguage();
-  let next = 0;
-  // The list's own punctuation and joining word, per language, around the names as buttons. Known
-  // and accepted: `Intl.ListFormat` joins zh-Hans names with 和 and no spaces, where the glossary
-  // wants a half-width space beside Latin text. Mending it by joining translated fragments here
-  // would break the rule that a sentence is one message.
-  const names = new Intl.ListFormat(language, { style: "long", type: "conjunction" })
-    .formatToParts(owners.map((owner) => owner.title))
-    .map((part, index) => {
-      if (part.type === "literal") return <React.Fragment key={index}>{part.value}</React.Fragment>;
-      const owner = owners[next++];
-      return (
-        <Button
-          key={index}
-          size="sm"
-          variant="ghost"
-          preventFocusOnPress
-          aria-label={t("sidebar.focus.enterConsoleSession", { name: owner.title })}
-          onPress={() => handlers.onFocus({ consoleSession: owner })}
-          className="h-auto min-h-0 min-w-0 max-w-full gap-1 px-1 py-0 align-baseline text-xs font-medium"
-        >
-          <BindingBadge owner={owner} decorative />
-          {/* A name longer than the line is cut rather than pushed past the sidebar's edge. */}
-          <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={owner.title}>
-            {part.value}
-          </FadeOverflow>
-        </Button>
-      );
-    });
   return (
-    <p className="px-2 pb-1 text-xs text-muted">
-      <Message id="sidebar.focus.boundElsewhere" params={{ count, owners: names }} />
-    </p>
+    <div className="px-2 pb-2">
+      <p className="text-xs text-muted">
+        {t("sidebar.focus.boundElsewhere", { count })}
+      </p>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {owners.map(({ owner, count: bound }) => (
+          <Button
+            key={owner.id}
+            size="sm"
+            variant="tertiary"
+            preventFocusOnPress
+            aria-label={t("sidebar.focus.enterConsoleSession", { name: owner.title, count: bound })}
+            onPress={() => handlers.onFocus({ consoleSession: owner })}
+            // Pill-shaped on purpose: a chip reads as a tag, not as one of the sidebar's buttons.
+            className="h-6 min-h-0 min-w-0 max-w-full gap-1 rounded-full px-2 text-xs font-medium"
+          >
+            <BindingBadge owner={owner} decorative />
+            {/* A name longer than the line is cut rather than pushed past the sidebar's edge. */}
+            <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={owner.title}>
+              {owner.title}
+            </FadeOverflow>
+            <span aria-hidden="true" className="shrink-0 text-muted">
+              · {bound}
+            </span>
+          </Button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -404,7 +402,7 @@ function SessionCard({
       ariaLabel={sessionAriaLabel(t, language, session, accounts)}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
-      className="min-h-8 flex-col gap-1.5 border border-separator bg-background p-3 data-selected:border-accent"
+      className="min-h-8 flex-col gap-1 border border-separator bg-background px-[7px] py-2 data-selected:border-accent"
     >
       <div className="flex items-center gap-2">
         <StatusIcon status={session.status} decorative />

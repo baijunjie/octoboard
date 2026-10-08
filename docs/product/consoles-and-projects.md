@@ -265,12 +265,13 @@ dot. Each entry is flagged with whether it is a git repository. Entries are sort
 listing always comes from the host the projects live on, never from the application's own filesystem view.
 
 In the browser, the listed directory's subdirectories are one list, with a `..` entry for the parent directory at its
-top except at the filesystem root (announced to assistive technology as the parent directory), and a "git" tag on
-each entry that is a git repository. Clicking an entry, or pressing Enter on it, lists that directory. The list is a
-single Tab stop: the arrow keys, Home and End move between its entries. A directory with no subdirectories shows an
-entry saying so, which does nothing. When the browser is opened on a path that does not exist (such as a default clone
-directory not created yet), it lists the nearest ancestor that does exist instead (a `~/` path goes no higher than the
-home directory), so there is always somewhere to navigate from; any other failure is reported as described next.
+top except at the filesystem root — followed by a muted hint naming it as the parent directory, which is also what it
+is announced as to assistive technology — and a "git" tag on each entry that is a git repository. Clicking an entry,
+or pressing Enter on it, lists that directory. The list is a single Tab stop: the arrow keys, Home and End move between
+its entries. A directory with no subdirectories shows an entry saying so, which does nothing. When the browser is
+opened on a path that does not exist (such as a default clone directory not created yet), it lists the nearest
+ancestor that does exist instead (a `~/` path goes no higher than the home directory), so there is always somewhere to
+navigate from; any other failure is reported as described next.
 
 A listing can fail, and that is a normal path rather than an edge case: a packaged application is granted file access
 per volume by macOS, and the user may decline the prompt or leave it unanswered. The failure is reported with the path

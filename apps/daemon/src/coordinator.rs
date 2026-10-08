@@ -678,7 +678,8 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
             // running.
             mcp::role::write_console_session_instructions(&console)?;
             // Overwritten by `Store::insert_console_session` below, which decides the real default
-            // ("Hub <ordinal>") once it knows the ordinal; nothing here reads this value.
+            // ("Hub" for the first, "Hub <ordinal>" after) once it knows the ordinal; nothing here
+            // reads this value.
             (Role::Console, workdir, None, String::new())
         }
     };

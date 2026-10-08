@@ -30,8 +30,8 @@ const TIMEOUT_MS = 5000;
 export interface Ui {
   /** The catalog's message in the window's language, for naming a control. */
   t: <K extends MessageKey>(key: K, ...args: MessageArgs<K>) => string;
-  /** The sidebar row of the session titled `title`, not its actions menu — a console session's row
-   * included, since it is an ordinary session row like any other now. */
+  /** The sidebar row of the session titled exactly `title` (so "Hub" is not "Hub 2"), not its
+   * actions menu — a console session's row included, since it is an ordinary session row. */
   session: (title: string) => Matcher;
   /** Presses the first control named `matcher`, waiting for it to appear. Mind a name that exists
    * twice: a tag already picked in the filter is on the sidebar's heading row (earlier in the DOM)
@@ -57,7 +57,11 @@ export function createUi(doc: Document, language: Language): Ui {
 
   return {
     t,
-    session: (title) => (name) => name.includes(title) && name !== t("sidebar.session.actions", { title }),
+    // A session row's name begins with its whole title, so "Hub" does not also match "Hub 2".
+    session: (title) => {
+      const prefix = t("sidebar.session.ariaLabel", { title, agent: "\0", status: "\0" }).split("\0")[0];
+      return (name) => name.startsWith(prefix);
+    },
     wait,
     async key(key) {
       const target = doc.activeElement ?? doc.body;

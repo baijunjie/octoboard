@@ -28,6 +28,11 @@ What it holds, in this order:
   shown only while it is not zero and each number written in the current language. A branch with no upstream shows
   neither.
 
+**While a check is in flight the badge keeps what the last check found** — the branch name (or short commit id), the
+counts and the warning triangle — and only its glyph turns into the spinning refresh glyph; the whole badge is replaced
+once the check finishes. A project's first check has nothing to keep, so until it finishes the badge shows the
+spinning glyph alone.
+
 **As the row gets tight the branch name is what gives way**: it fades out and can disappear entirely, leaving the
 glyph, the counts and the warning, which carry the same facts. The counts go next, and the warning triangle is the
 last thing to go. The project's name keeps a floor of its own and never vanishes.

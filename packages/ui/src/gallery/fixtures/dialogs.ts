@@ -19,7 +19,7 @@ const twoHubsState = snapshotState({
   consoles: [console_],
   projects: [web, api],
   sessions: [
-    ...sessions.map((s) => (s.id === SAMPLE.consoleSession.id ? { ...s, title: "Hub 1" } : s)),
+    ...sessions.map((s) => (s.id === SAMPLE.consoleSession.id ? { ...s, title: "Hub" } : s)),
     sessionOf("s-console-2", console_.id, undefined, "Hub 2", "working", { colour: "rose", started_at: minutesAgo(20) }),
     sessionOf("s-console-old", console_.id, undefined, "Hub 3", "archived", { colour: "azure" }),
   ],

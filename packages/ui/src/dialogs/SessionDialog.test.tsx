@@ -61,7 +61,7 @@ function renderDialog(
   return { container, root, daemon };
 }
 
-const hub1 = sessionOf("s-hub-1", parentConsole.id, undefined, "Hub 1", "idle", { colour: "teal", started_at: 100 });
+const hub1 = sessionOf("s-hub-1", parentConsole.id, undefined, "Hub", "idle", { colour: "teal", started_at: 100 });
 const hub2 = sessionOf("s-hub-2", parentConsole.id, undefined, "Hub 2", "working", { colour: "rose", started_at: 200 });
 const hubArchived = sessionOf("s-hub-3", parentConsole.id, undefined, "Hub 3", "archived", { colour: "azure" });
 
@@ -96,11 +96,11 @@ async function openWith(
 
 const choose: NewSessionBinding = { kind: "choose" };
 it.each([
-  { name: "defaults to none and offers every live console session", sessions: [hub1, hub2, hubArchived], pick: undefined, binding: choose, options: ["No console session", "Hub 2", "Hub 1"], boundTo: undefined },
-  { name: "binds to the console session chosen", sessions: [hub1, hub2, hubArchived], pick: "Hub 1", binding: choose, options: ["No console session", "Hub 2", "Hub 1"], boundTo: "s-hub-1" },
+  { name: "defaults to none and offers every live console session", sessions: [hub1, hub2, hubArchived], pick: undefined, binding: choose, options: ["No console session", "Hub 2", "Hub"], boundTo: undefined },
+  { name: "binds to the console session chosen", sessions: [hub1, hub2, hubArchived], pick: "Hub", binding: choose, options: ["No console session", "Hub 2", "Hub"], boundTo: "s-hub-1" },
   { name: "offers no choice with no live console session", sessions: [hubArchived], pick: undefined, binding: choose, options: [], boundTo: undefined },
   { name: "offers no choice and sends no binding when unbound", sessions: [hub1, hub2], pick: undefined, binding: { kind: "unbound" } as const, options: [], boundTo: undefined },
-  { name: "binds to the fixed owner without offering a choice", sessions: [hub1, hub2], pick: undefined, binding: { kind: "bound", to: hub1 } as const, options: [], boundTo: "s-hub-1", fixedLine: "Reports to Hub 1" },
+  { name: "binds to the fixed owner without offering a choice", sessions: [hub1, hub2], pick: undefined, binding: { kind: "bound", to: hub1 } as const, options: [], boundTo: "s-hub-1", fixedLine: "Reports to Hub" },
 ])("$name", async ({ sessions, pick, binding, options, boundTo, fixedLine }) => {
   const result = await openWith(sessions, pick, binding);
   expect(result.options).toEqual(options);
@@ -112,7 +112,7 @@ it.each([
 it("cannot open a session for a fixed owner that is no longer live", () => {
   const { container, root } = renderDialog([{ ...hub1, status: "archived" }], {}, {}, { kind: "bound", to: hub1 });
   expect(buttons().find((b) => b.textContent === "Open")?.hasAttribute("disabled")).toBe(true);
-  expect(document.body.textContent).toContain("Hub 1 is no longer available");
+  expect(document.body.textContent).toContain("Hub is no longer available");
   act(() => root.unmount());
   container.remove();
 });
@@ -121,8 +121,8 @@ it("keeps the owner select, back on none, when the chosen console session is arc
   const { container, root, daemon } = renderDialog([hub1]);
   vi.mocked(daemon.request).mockResolvedValue({ type: "ack" } as never);
   await act(async () => buttons().find((b) => b.textContent?.includes("No console session"))?.click());
-  await act(async () => optionElements().find((o) => o.textContent === "Hub 1")?.click());
-  expect(buttons().some((b) => b.textContent === "Hub 1")).toBe(true);
+  await act(async () => optionElements().find((o) => o.textContent === "Hub")?.click());
+  expect(buttons().some((b) => b.textContent === "Hub")).toBe(true);
 
   act(() =>
     root.render(

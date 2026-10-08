@@ -91,24 +91,26 @@ export function unboundSessions(sessions: Session[]): Session[] {
 
 /** The sessions a project's focus mode leaves out of its list: those of `sessions` (the project's)
  * that are bound to a console session and not archived, counted and grouped by the console session
- * they report to. `owners` holds the console's console sessions by id; the owners come out in the
- * sidebar's order, and a session whose owner is not in it, or is archived, cannot be named and is
- * not counted. An archived owner with a live bound session should not exist (archiving a console
- * session archives its dormant bound sessions, and reopening a bound one reopens its owner first),
- * so this only keeps a link that could not be followed from being offered.
- * `undefined` when there are none, which is when the focus view shows no line at all. */
+ * they report to. `owners` holds the console's console sessions by id; each owner comes out once,
+ * with its count, in the sidebar's order, and a session whose owner is not in it, or is archived,
+ * cannot be named and is not counted. An archived owner with a live bound session should not exist
+ * (archiving a console session archives its dormant bound sessions, and reopening a bound one
+ * reopens its owner first), so this only keeps a link that could not be followed from being
+ * offered. `undefined` when there are none, which is when the focus view shows nothing for them. */
 export function boundElsewhere(
   sessions: Session[],
   owners: Map<string, Session>,
-): { count: number; owners: Session[] } | undefined {
+): { count: number; owners: { owner: Session; count: number }[] } | undefined {
   const named = (id: string | null | undefined) => {
     const owner = id ? owners.get(id) : undefined;
     return owner && owner.status !== "archived" ? owner : undefined;
   };
   const bound = sessions.filter((s) => s.status !== "archived" && named(s.bound_to));
   if (bound.length === 0) return undefined;
-  const ids = new Set(bound.map((s) => s.bound_to!));
-  return { count: bound.length, owners: [...ids].map((id) => named(id)!).sort(compareSessions) };
+  const counts = new Map<string, number>();
+  for (const s of bound) counts.set(s.bound_to!, (counts.get(s.bound_to!) ?? 0) + 1);
+  const perOwner = [...counts].map(([id, count]) => ({ owner: named(id)!, count }));
+  return { count: bound.length, owners: perOwner.sort((a, b) => compareSessions(a.owner, b.owner)) };
 }
 
 /** What a console session's focus mode lists: the console's projects that have a live session bound

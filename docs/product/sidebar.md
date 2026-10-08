@@ -142,7 +142,8 @@ A project row shows the project's name, a pin glyph when the project is pinned, 
 the row, or Enter or Space on it, collapses or expands it. Projects start expanded; whether one is collapsed is kept
 per window and is not stored. The chevron always shows while the project is collapsed, and only while the row is
 hovered or focused while it is expanded, and while hidden it takes no room, so a long name runs as far as it would in
-a session row and ends sooner when the chevron appears.
+a session row and ends sooner when the chevron appears. The hover chevron fades and opens out as it appears, and back
+as it goes, briefly — at once where the system asks for reduced motion.
 
 After the name, before the activity marker below and the row's controls, comes the project's **branch badge** — its
 current branch and how far it is from its upstream, when its directory is a git repository (see "The branch badge" in
@@ -205,8 +206,8 @@ project session is listed: its sidebar row. An unbound session carries no badge.
 owning console session, and the row's own accessible name carries the same fact in words for assistive technology
 ("Bound to …"). The badge itself still carries no information its tooltip does not, so colour alone never
 distinguishes two owners for a user who cannot tell the colours apart. A console session's own row shows the same
-colour, decoratively, since the row's own label already names it, as does its focus mode's header and the line in a
-project's focus mode that names it. The cards in a focus mode carry no badge: a project's focus mode lists only
+colour, decoratively, since the row's own label already names it, as do its focus mode's header and its chip in a
+project's focus mode. The cards in a focus mode carry no badge: a project's focus mode lists only
 unbound sessions, and a console session's lists only the ones bound to it.
 
 **Where the colour comes from.** Octoboard gives each new console session a colour of its own from a fixed palette of
@@ -223,7 +224,9 @@ has its own light and dark value (see "What follows the choice" in `docs/product
   row runs the name as a marquee (see "Names too long for their space" in `docs/product/window-layout.md`). When the
   sidebar's content is taller than the sidebar it scrolls, and fades out at whichever end has more of it beyond.
 - A row's **+** and action-menu buttons show while the row is hovered, holds keyboard focus, is the selected session,
-  or has its menu open; they are still reached with Tab when hidden, and show once one of them has focus.
+  or has its menu open; they are still reached with Tab when hidden, and show once one of them has focus. They fade
+  and open out as they appear, and fade and close up as they go, briefly — at once where the system asks for reduced
+  motion.
 - Clicking a row deliberately does not move keyboard focus away from the terminal; a row reached with Tab can be
   activated with Enter or Space.
 - Each row tells assistive technology what its icons show: a session row its title, agent (Claude Code, Codex or Grok
@@ -310,10 +313,13 @@ title and how long ago it was archived. Clicking one selects it. Its action menu
 - **Sessions (n)**: the project's **unbound** sessions that are not archived. A session bound to a console session is
   not listed here, and so no card carries a binding badge. With none, a message and a **New session** button take
   their place.
-- **One line** under that heading, present only while the project has sessions bound to a console session that are
-  not archived: how many sessions in this project are bound to which console sessions — "2 sessions in this project
-  are bound to Hub 1 and Hub 2" — with each console session named as a control, after its colour, that enters that
-  console session's focus mode. It is one line for the whole project, not one per console session.
+- **The sessions bound elsewhere**, under that heading, present only while the project has sessions that are not
+  archived bound to a console session that is not archived: one sentence for the whole project saying how many of its
+  sessions are bound to console sessions, naming none of them, and below it a row of chips, wrapping onto as many
+  lines as it needs — one chip per console session they are bound to, in the order the console sessions section lists
+  them. A chip shows the console session's colour, its title (faded out when too long, the full title then its
+  tooltip) and how many of this project's sessions that are not archived are bound to it. Pressing a chip enters that
+  console session's focus mode; assistive technology hears it as entering that focus mode, with the count.
 - **New session** (the **+** and the empty message's button) opens the new-session dialog with no "Report to" choice:
   the session is always unbound.
 - **Archived (n)** is the project's archived sessions with the bound ones included. The archive is not filtered by
@@ -339,7 +345,7 @@ title and how long ago it was archived. Clicking one selects it. Its action menu
 **The sidebar's view changes are animated**, the incoming view only, over about a fifth of a second: entering a focus
 mode slides it in from the sidebar's end edge as it fades in, a level down; returning to the console's view slides
 that in from the start edge, a level up; and switching to another console fades its view in with a slight upward
-drift, as does going from one focus mode straight to another (following a summary line). The horizontal slides are
+drift, as does going from one focus mode straight to another (following a chip). The horizontal slides are
 mirrored under a right-to-left language, and nothing moves where the system asks for reduced motion.
 
 **Focus mode is remembered per client** together with the console shown. It is left by the back button, by switching

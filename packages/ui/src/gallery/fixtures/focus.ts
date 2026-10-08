@@ -8,8 +8,9 @@ const project = projectOf("p-1", console_.id, "Search API");
 const other = projectOf("p-2", console_.id, "Website");
 const third = projectOf("p-3", console_.id, "Docs");
 
-const hub1 = sessionOf("s-console", console_.id, undefined, "Hub 1", "idle", { colour: "teal" });
+const hub1 = sessionOf("s-console", console_.id, undefined, "Hub", "idle", { colour: "teal" });
 const hub2 = sessionOf("s-console-2", console_.id, undefined, "Hub 2", "working", { colour: "rose" });
+const hub3 = sessionOf("s-console-3", console_.id, undefined, "Hub 3", "idle", { colour: "jade" });
 
 // A named account, so a card's agent line reads "Claude Code (Work)".
 const settings = {
@@ -18,17 +19,19 @@ const settings = {
   accounts: [{ id: "a-work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }],
 };
 
-// The sessions of `project` are bound to either console session or to none, so the project's focus
-// mode has something to leave out; `hub1`'s focus mode has two projects of its own, a bound session
-// of another owner and an unbound one to leave out, and archived sessions of its own.
+// The sessions of `project` are bound to one of three console sessions or to none, so the project's
+// focus mode has something to leave out; `hub1`'s focus mode has two projects of its own, a bound
+// session of another owner and an unbound one to leave out, and archived sessions of its own.
 const sessions = [
   hub1,
   hub2,
+  hub3,
   sessionOf("s-1", console_.id, project.id, "Add idempotency keys", "working", { pinned: true, bound_to: hub1.id, account_id: "a-work" }),
   sessionOf("s-2", console_.id, project.id, "Fix the rounding of partial results", "waiting_user", { bound_to: hub1.id }),
   sessionOf("s-3", console_.id, project.id, "Write the migration", "idle"),
   sessionOf("s-3b", console_.id, project.id, "Profile the slow query", "interrupted", { account_id: "a-work" }),
   sessionOf("s-3c", console_.id, project.id, "Rework the retry loop", "idle", { bound_to: hub2.id }),
+  sessionOf("s-3d", console_.id, project.id, "Document the retry policy", "idle", { bound_to: hub3.id }),
   sessionOf("s-4", console_.id, project.id, "Older investigation", "archived", {
     ended_at: minutesAgo(60 * 5),
     bound_to: hub1.id,
@@ -55,8 +58,9 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     title: "Focus mode on a project",
     description:
-      "Only the project's unbound sessions are listed. One line says how many others are bound to which console " +
-      "sessions and leads to their focus modes; the archive still holds bound sessions.",
+      "Only the project's unbound sessions are listed. A sentence says how many others are bound to console " +
+      "sessions, with a chip for each of those console sessions that leads to its focus mode; the archive " +
+      "still holds bound sessions.",
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
     state,
     steps: [(ui) => ui.press(ui.session("Write the migration"))],
@@ -110,8 +114,8 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     title: "A project's focus mode with long and CJK console session names, narrow",
     description:
-      "The summary line wraps its owner buttons inside running text at the narrowest sidebar; the names are a long " +
-      "Latin one and a CJK one.",
+      "The chips wrap onto further rows at the narrowest sidebar and cut a name longer than the row; the names " +
+      "are a long Latin one and a CJK one.",
     preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
     state: snapshotState({
       consoles: [console_],

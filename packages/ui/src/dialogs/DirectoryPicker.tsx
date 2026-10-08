@@ -129,6 +129,7 @@ export function DirectoryPicker({
           {resolvedPath && resolvedPath !== "/" && (
             <ListBox.Item id={PARENT_KEY} textValue={t("directoryPicker.parent")} aria-label={t("directoryPicker.parent")}>
               ..
+              <span className="ms-2 text-muted">{t("directoryPicker.parent")}</span>
             </ListBox.Item>
           )}
           {entries.map((entry) => (

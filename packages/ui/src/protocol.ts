@@ -112,7 +112,8 @@ export interface Session {
   colour?: ConsoleSessionColour | null;
   /** A console session's place in its console's history — one past the highest ordinal ever used
    * there, so a title is never reused after a console session is archived or deleted — and what
-   * gives it its default title ("Hub `<ordinal>`"). Absent for a project session. */
+   * gives it its default title ("Hub" for the first, "Hub `<ordinal>`" after). Absent for a project
+   * session. */
   ordinal?: number | null;
   /** The account this session's own agent reads, by id; absent means the default account. Written
    * when the session is opened and when its account is switched. */

@@ -6,14 +6,26 @@ control on the right; under a right-to-left language the sides swap (see "Right-
 `docs/product/window-layout.md`). The sections, in order, are **General**, **Git**, **Agent accounts**, **Trusted
 folders** and **Notifications**; the dialog opens on General unless it was asked to open on another section.
 
+## In a narrow window
+
+Below 1100 px — the width under which the window's panes become drawers (see "Below 1100 px: the sidebar and the
+report panel become drawers" in `docs/product/window-layout.md`), so only a client with no window minimum of its own,
+such as a plain browser, gets here — the dialog fills the window inside a 16 px margin on every side, and the list of
+sections becomes a row of tabs along its top, above the selected section. When the tabs do not fit the row's width,
+the row scrolls sideways, and the selected section's tab is scrolled into view when the dialog opens.
+
+Below 640 px each setting row puts its control under its name and description instead of beside them.
+
 ## Moving between sections
 
-The list of sections is a vertical tab list, with the selected section marked. Opening Settings puts keyboard
-focus on the selected section's tab. Only that tab is reached with Tab: the arrow keys move to the previous or next
-section and show it at once, wrapping around at either end, and Tab from the list moves on into the section's
-settings. When a control holding keyboard focus disappears from a section — a trusted folder's or an account's Remove
-button, which goes with its folder or account, or the Notifications Enable button once the browser has answered — focus
-goes back to the selected section's tab rather than leaving the dialog.
+The list of sections is a tab list — vertical, or the row along the top in a narrow window — with the selected
+section marked. Opening Settings puts keyboard focus on the selected section's tab. Only that tab is reached with Tab:
+the arrow keys move to the previous or next section and show it at once, wrapping around at either end, and Tab from
+the list moves on into the section's settings. In the row along the top only Left and Right move, mirrored under a
+right-to-left language; in the vertical list Up and Down do too. When a control holding keyboard focus disappears
+from a section — a trusted folder's or an account's Remove button, which goes with its folder or account, or the
+Notifications Enable button once the browser has answered — focus goes back to the selected section's tab rather than
+leaving the dialog.
 
 ## Opening and closing Settings
 

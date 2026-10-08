@@ -13,7 +13,7 @@ import type { FocusTarget } from "./types";
 const main = consoleOf("c-1", "Main");
 const other = consoleOf("c-2", "Other");
 const project = projectOf("p-1", main.id, "Search API");
-const hub = sessionOf("s-hub", main.id, undefined, "Hub 1", "idle", { colour: "teal" });
+const hub = sessionOf("s-hub", main.id, undefined, "Hub", "idle", { colour: "teal" });
 const bound = sessionOf("s-bound", main.id, project.id, "Bound", "idle", { bound_to: hub.id });
 const unbound = sessionOf("s-unbound", main.id, project.id, "Unbound", "idle");
 const byId = <T extends { id: string }>(items: T[]) => new Map(items.map((item) => [item.id, item]));

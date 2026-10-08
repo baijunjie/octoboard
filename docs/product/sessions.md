@@ -21,7 +21,8 @@ A console session's row follows a session row exactly — the same status glyph,
 title, a pin glyph when pinned, and selecting it resumes it when it is interrupted, as selecting any
 interrupted session does. Its action menu offers **Pin**/**Unpin**, **Rename**, **Focus mode** (see "Focus mode"
 in `docs/product/sidebar.md`), **Switch account** and **Archive**; there is no Resume item, for the same reason. A
-console session's title is renameable, like a project session's, and defaults to its ordinal ("Hub 1", "Hub 2", …).
+console session's title is renameable, like a project session's; its default is under **Title** in "Opening a session"
+below.
 
 The console session cannot archive itself (see "The console session's tools" in
 `docs/product/hub-orchestration.md`), so the user archives it from its own row's menu, as any session
@@ -68,9 +69,9 @@ A session is opened under a project with:
   list opens on a selectable entry whenever there is one. Before that
   determination has landed every group is selectable and none is labelled as not installed. Until accounts have been
   added an agent's group holds its default account alone.
-- **Title** (optional) — defaults to the project's name. A console session's title defaults to
-  "Hub `<ordinal>`", where the ordinal is one past the highest ever used in its console, so a title
-  is not reused after a console session is archived or deleted.
+- **Title** (optional) — defaults to the project's name. A console session's title defaults to "Hub" for ordinal 1
+  and "Hub `<ordinal>`" for any later one ("Hub 2", "Hub 3", …), where the ordinal is one past the highest ever used in
+  its console, so a title is not reused after a console session is archived or deleted.
 - **Report to** (a choice, "No console session" by default) — one of the console's console sessions that are not
   archived, the most recently started first, each shown beside its colour, the same one the session's binding badge
   will carry (see "The binding badge" in `docs/product/sidebar.md`), or none. A chosen console session receives this
@@ -142,7 +143,7 @@ Where a session's agent is named in the sidebar, its account is named with it (s
 | Working | `working` | an accent-coloured dot pulsing a fading copy of itself outward | The agent is executing a turn. |
 | Waiting for the user | `waiting_user` | a raised hand that waves now and then | The agent is waiting on a permission decision or has asked the user a question through its own ask-the-user tool. |
 | Awaiting instructions | `idle` | a green speech bubble | The process is running and sitting at its prompt. |
-| Interrupted | `interrupted` | a power-off sign | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
+| Interrupted | `interrupted` | a pause sign | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
 | Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming"). No longer listed among its project's sessions (a console session, no longer in the console sessions section); reached through the archive (see "Archived sessions" below) and can be reopened. |
 
 The first three mean a process is running; the last two mean none is, and both can be resumed.

@@ -41,14 +41,14 @@ const withPages = (list: Page[]) =>
   snapshotState({ consoles: [console_], projects: [project], sessions, pages: { [consoleSession.id]: list } });
 
 // Two console sessions in one console, each with pages of its own.
-const hub1 = sessionOf("s-hub-1", console_.id, undefined, "Hub 1", "idle", { colour: "olive" });
+const hub1 = sessionOf("s-hub-1", console_.id, undefined, "Hub", "idle", { colour: "olive" });
 const hub2 = sessionOf("s-hub-2", console_.id, undefined, "Hub 2", "idle", { colour: "jade" });
 const twoSessions = snapshotState({
   consoles: [console_],
   projects: [project],
   sessions: [hub1, hub2],
   pages: {
-    [hub1.id]: [pageOf("h1-1", hub1.id, summary("Hub 1, first"), 60 * 6), pageOf("h1-2", hub1.id, summary("Hub 1, second"), 30)],
+    [hub1.id]: [pageOf("h1-1", hub1.id, summary("Hub, first"), 60 * 6), pageOf("h1-2", hub1.id, summary("Hub, second"), 30)],
     [hub2.id]: [
       pageOf("h2-1", hub2.id, summary("Hub 2, first"), 60 * 5),
       pageOf("h2-2", hub2.id, summary("Hub 2, second"), 60 * 2),
@@ -93,11 +93,11 @@ export const reportScenarios: Scenario[] = [
     group: GROUP,
     title: "Two console sessions, each with its own pages",
     description:
-      "Hub 1 is paged back to its first page (read-only, 1 / 2). Selecting Hub 2 shows only its own pages, " +
-      "on its newest (3 / 3, a form). Selecting Hub 1 again shows its newest page, not where it was left.",
+      "Hub is paged back to its first page (read-only, 1 / 2). Selecting Hub 2 shows only its own pages, " +
+      "on its newest (3 / 3, a form). Selecting Hub again shows its newest page, not where it was left.",
     state: twoSessions,
     steps: [
-      (ui) => ui.press(ui.session("Hub 1")),
+      (ui) => ui.press(ui.session("Hub")),
       (ui) => ui.press(ui.t("report.previous")),
       (ui) => ui.press(ui.session("Hub 2")),
       (ui) => ui.wait(500),

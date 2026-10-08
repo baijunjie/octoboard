@@ -124,7 +124,20 @@ fn check_project(state: &AppState, project: &Project) {
         activity: GitActivity::Checking,
         error: None,
     };
-    state.publish_git_status(status.clone());
+    // Only the published in-flight status carries the last check's branch, counts and error, so
+    // the badge swaps just its glyph while the check runs instead of blanking for its duration.
+    // The working `status` stays blank: it is what the fast-forward gate reads, and a `git status`
+    // that fails below must not leave cached numbers standing as that gate. Taken from the cache
+    // rather than read from the repository, since one more `git` process here would hold the
+    // spinner back by however long a process takes to start.
+    let in_flight = match state.git_status(&project.id).filter(|s| s.repository) {
+        Some(previous) => GitStatus {
+            activity: GitActivity::Checking,
+            ..previous
+        },
+        None => status.clone(),
+    };
+    state.publish_git_status(in_flight);
 
     let remotes = list_remotes(&path);
     if !remotes.is_empty() {

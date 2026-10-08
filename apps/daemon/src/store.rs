@@ -629,8 +629,8 @@ impl Store {
     }
 
     /// Inserts a freshly-opened console session, assigning its colour and its ordinal — and, with
-    /// no `title` given, the default title that ordinal spells out ("Hub `<ordinal>`") — in the same
-    /// locked step as the row insert itself.
+    /// no `title` given, the default title that ordinal spells out ("Hub", then "Hub 2", "Hub 3",
+    /// …) — in the same locked step as the row insert itself.
     ///
     /// Fused into one critical section because both assignments are a read followed by a decision
     /// that the insert must not be allowed to go stale between: the colour is the first palette
@@ -645,7 +645,7 @@ impl Store {
     ///
     /// The ordinal is consumed here, before the caller has launched the agent process, and is not
     /// given back if that launch then fails: a console whose agent binary is missing hands out
-    /// "Hub 2" to its next successful open after a failed one at "Hub 1", with a gap in between.
+    /// "Hub 3" to its next successful open after a failed one at "Hub 2", with a gap in between.
     /// This is the intended reading of "one past the highest ever used", not a bug to fix by
     /// moving the increment into the same transaction as the launch: a title is never reused once
     /// handed out, whether or not the session behind it ever came up.
@@ -686,7 +686,11 @@ impl Store {
         )?;
         session.colour = Some(colour);
         session.ordinal = Some(ordinal);
-        session.title = title.unwrap_or_else(|| format!("Hub {ordinal}"));
+        session.title = title.unwrap_or_else(|| match ordinal {
+            // The first one needs no number to tell it apart.
+            1 => "Hub".to_string(),
+            _ => format!("Hub {ordinal}"),
+        });
         insert_session_row(&conn, &session)?;
         Ok(session)
     }
@@ -1756,8 +1760,8 @@ mod tests {
         );
     }
 
-    /// With no title given, a console session's default title spells out its ordinal; an explicit
-    /// title is kept instead.
+    /// With no title given, a console session's default title spells out its ordinal, bare for the
+    /// first; an explicit title is kept instead.
     #[test]
     fn a_console_sessions_default_title_names_its_ordinal() {
         let path = temp_db("console-session-title");
@@ -1769,7 +1773,12 @@ mod tests {
         let defaulted = store
             .insert_console_session(console_session("session-0"), None)
             .expect("inserted");
-        assert_eq!(defaulted.title, "Hub 1");
+        assert_eq!(defaulted.title, "Hub");
+
+        let second = store
+            .insert_console_session(console_session("session-0b"), None)
+            .expect("inserted");
+        assert_eq!(second.title, "Hub 2");
 
         let named = store
             .insert_console_session(

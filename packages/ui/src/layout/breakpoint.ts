@@ -36,8 +36,10 @@ function dockedQuery(): string {
  * variant directly, so it tracks the breakpoint with no JavaScript at all and no hydration/resize
  * flicker. This hook exists only for the behaviour that genuinely needs the current mode in JS:
  * closing an open drawer when the window widens past the breakpoint, since an overlay left open
- * there would otherwise cover the row it no longer needs to, and the top bar's panel toggles, which
- * drive a drawer below the breakpoint and show or hide the docked pane above it.
+ * there would otherwise cover the row it no longer needs to; the top bar's panel toggles, which
+ * drive a drawer below the breakpoint and show or hide the docked pane above it; and the settings
+ * dialog's tabs, whose orientation sets react-aria's arrow keys and `aria-orientation`, not only
+ * their layout.
  */
 export function useIsNarrow(): boolean {
   const [isNarrow, setIsNarrow] = useState(() => !window.matchMedia(dockedQuery()).matches);

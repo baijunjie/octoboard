@@ -243,7 +243,8 @@ bound. `report` and the synthesised report both deliver to this session; see "Re
 `Session.colour` is a console session's badge colour, one of a fixed palette — `olive`, `jade`, `teal`, `azure`,
 `violet`, `rose` — assigned on creation and fixed afterwards; unset for a project session. `Session.ordinal` is a
 console session's place in its console's history —
-one past the highest ever used there — which gives it its default title ("Hub `<ordinal>`"); unset for a project session.
+one past the highest ever used there — which gives it its default title ("Hub" for the first, "Hub `<ordinal>`"
+after); unset for a project session.
 `Session.account_id` is the account this session's own agent reads, by id, resolved as above when
 the session is opened (unset means the default account), and changed afterwards only by a successful
 `switch_session_account`. `Session.config_dir` is that account's directory at the same moment, written with it and
@@ -315,7 +316,9 @@ for this, so nothing runs until a client asks, and a project already checked wit
 entirely (see `refresh_git_status` above):
 
 1. If the directory is not a git repository, broadcast `repository: false`, `activity: idle`, and stop.
-2. Set `activity` to `checking` and broadcast `project_git_status`.
+2. Set `activity` to `checking` and broadcast `project_git_status`. That broadcast carries the branch, upstream,
+   counts and error of the project's previous status (none before its first check), so the badge keeps showing them
+   while the check runs; the check itself starts from a blank status, which the steps below fill in.
 3. If the repository has no remote at all (`git remote` prints nothing), skip the fetch — that is not an error.
    Otherwise run `git fetch --quiet` in the project's directory; a failure (offline, authentication, no upstream
    remote) records `error` and the check continues to the next step regardless, so the branch name and the last

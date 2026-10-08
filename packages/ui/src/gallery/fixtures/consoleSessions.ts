@@ -9,7 +9,7 @@ const api = projectOf("p-api", console_.id, "Search API");
 
 // Three console sessions, each its own colour from the palette (`style.css`), one of each status a
 // console session can be in while live.
-const hub1 = sessionOf("s-hub-1", console_.id, undefined, "Hub 1", "idle", { colour: "olive" });
+const hub1 = sessionOf("s-hub-1", console_.id, undefined, "Hub", "idle", { colour: "olive" });
 const hub2 = sessionOf("s-hub-2", console_.id, undefined, "Hub 2", "working", { colour: "jade" });
 const hub3 = sessionOf("s-hub-3", console_.id, undefined, "Hub 3", "waiting_user", { colour: "teal" });
 
@@ -44,7 +44,7 @@ export const consoleSessionsScenarios: Scenario[] = [
     id: "console-sessions-focus-bound",
     group: GROUP,
     title: "A console session's focus mode",
-    description: "Only the sessions bound to Hub 1, in the project they are in; an unbound session and another owner's are left out.",
+    description: "Only the sessions bound to Hub, in the project they are in; an unbound session and another owner's are left out.",
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
     state: snapshotState({ consoles: [console_], projects: [web, api], sessions }),
   },

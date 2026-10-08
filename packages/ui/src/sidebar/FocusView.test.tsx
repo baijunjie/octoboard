@@ -23,7 +23,7 @@ window.matchMedia ??= ((query: string) => ({ matches: false, media: query })) as
 const main = consoleOf("c-1", "Main");
 const web = projectOf("p-web", main.id, "Website");
 const api = projectOf("p-api", main.id, "Search API");
-const hub1 = sessionOf("s-hub-1", main.id, undefined, "Hub 1", "idle", { colour: "teal" });
+const hub1 = sessionOf("s-hub-1", main.id, undefined, "Hub", "idle", { colour: "teal" });
 const hub2 = sessionOf("s-hub-2", main.id, undefined, "Hub 2", "idle", { colour: "rose" });
 const sessions = [
   hub1,
@@ -65,9 +65,9 @@ it("a project's focus mode lists only its unbound sessions, its archive in full,
   expect(labels.some((l) => l.includes("Tidy the changelog"))).toBe(true);
   expect(labels.some((l) => l.includes("Fix the layout") || l.includes("Update the dependencies"))).toBe(false);
   expect(labels.some((l) => l.includes("An old bound spike"))).toBe(true);
-  expect(text()).toContain("2 sessions in this project are bound to Hub 1 and Hub 2");
+  expect(text()).toContain("2 sessions in this project are bound to console sessions");
 
-  const hub2Link = container.querySelector<HTMLElement>('button[aria-label="Enter focus mode for Hub 2"]');
+  const hub2Link = container.querySelector<HTMLElement>('button[aria-label="Enter focus mode for Hub 2, 1 bound session"]');
   act(() => hub2Link?.click());
   expect(handlers.onFocus).toHaveBeenCalledWith({ consoleSession: hub2 });
   unmount();
@@ -86,7 +86,7 @@ it("a console session's focus mode shows only its projects and sessions, naming 
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={sessions} />
   ));
   const labels = sessionLabels(container);
-  expect(labels.filter((l) => l.includes(" session,") && !l.startsWith("Hub 1")).map((l) => l.split(" session,")[0]).sort()).toEqual(
+  expect(labels.filter((l) => l.includes(" session,") && !l.startsWith("Hub")).map((l) => l.split(" session,")[0]).sort()).toEqual(
     ["Add idempotency keys", "An old bound spike", "Fix the layout"].sort(),
   );
   expect(text()).toContain("Claude Code (Work)");

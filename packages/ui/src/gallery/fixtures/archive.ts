@@ -15,7 +15,7 @@ const archived = Array.from({ length: 70 }, (_, i) =>
   }),
 );
 const consoleSessions = Array.from({ length: 8 }, (_, i) =>
-  sessionOf(`s-c${i}`, console_.id, undefined, `Hub ${i + 1}`, "archived", { ended_at: minutesAgo(60 * (i + 1)) }),
+  sessionOf(`s-c${i}`, console_.id, undefined, i === 0 ? "Hub" : `Hub ${i + 1}`, "archived", { ended_at: minutesAgo(60 * (i + 1)) }),
 );
 
 const state = snapshotState({
@@ -28,7 +28,7 @@ const state = snapshotState({
 // not bound to it, kept out of `state` above so that mixing it into the shared project archive does
 // not perturb the counts the scenarios above assert. Exported for `ArchiveView.test.tsx`, which
 // renders the view on these directly.
-export const boundConsoleSession = sessionOf("s-bound-console", console_.id, undefined, "Hub 1", "idle", { colour: "teal" });
+export const boundConsoleSession = sessionOf("s-bound-console", console_.id, undefined, "Hub", "idle", { colour: "teal" });
 export const boundArchived = Array.from({ length: 3 }, (_, i) =>
   sessionOf(`s-bound${i}`, console_.id, project.id, `Bound archived session ${i}`, "archived", {
     bound_to: boundConsoleSession.id,

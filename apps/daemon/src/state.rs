@@ -795,6 +795,15 @@ impl AppState {
             .collect()
     }
 
+    /// The git status the daemon currently holds for one project, if any.
+    pub fn git_status(&self, project_id: &str) -> Option<GitStatus> {
+        self.git_statuses
+            .read()
+            .expect("git statuses lock poisoned")
+            .get(project_id)
+            .cloned()
+    }
+
     /// Drops a project's git status. Called when the project itself is removed, and when a whole
     /// console is — nothing else ever cleans up these entries, since the daemon keeps no timer of
     /// its own that would otherwise notice a project is gone.

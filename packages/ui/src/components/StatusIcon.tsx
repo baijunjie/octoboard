@@ -1,4 +1,4 @@
-import { Archive, Hand, MessageSquareMore, PowerOff } from "lucide-react";
+import { Archive, Hand, MessageCircleMore, Pause } from "lucide-react";
 import React from "react";
 
 import { useT } from "../i18n/react";
@@ -33,8 +33,8 @@ function WavingHand({ className }: { className: string }): React.ReactElement {
  * user-facing UI free of decorative emoji, the same convention `CLAUDE.md` sets for committed
  * prose). Each carries the status as its accessible name, since it is the only status cue where
  * nothing else names it; `decorative` drops that for a row whose own label already does. Idle is a
- * speech bubble (sitting at the prompt, waiting to be told), and interrupted a power-off sign, not
- * a pause: its process is gone, not suspended.
+ * speech bubble (sitting at the prompt, waiting to be told), and interrupted a pause sign (stopped
+ * where it was, and can be resumed from there).
  */
 export function StatusIcon({ status, decorative }: { status: SessionStatus; decorative?: boolean }): React.ReactElement {
   const t = useT();
@@ -55,9 +55,9 @@ export function StatusIcon({ status, decorative }: { status: SessionStatus; deco
     case "idle":
       // HeroUI's own success colour, about 2.2:1 on white, under the 3:1 a meaningful glyph needs;
       // kept so on purpose, by the user's decision.
-      return <MessageSquareMore {...a11y} className={`${ICON_CLASS} text-success`} />;
+      return <MessageCircleMore {...a11y} className={`${ICON_CLASS} text-success`} />;
     case "interrupted":
-      return <PowerOff {...a11y} className={`${ICON_CLASS} text-muted`} />;
+      return <Pause {...a11y} className={`${ICON_CLASS} text-muted`} />;
     case "archived":
       return <Archive {...a11y} className={`${ICON_CLASS} text-muted`} />;
   }
@@ -81,7 +81,7 @@ export function ActivityMarker({ activity }: { activity: Activity }): React.Reac
         </span>
       );
     case "running":
-      return <MessageSquareMore aria-hidden="true" className="size-3.5 shrink-0 text-success" />;
+      return <MessageCircleMore aria-hidden="true" className="size-3.5 shrink-0 text-success" />;
     default:
       return null;
   }

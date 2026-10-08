@@ -259,7 +259,8 @@ pub struct Session {
     pub colour: Option<ConsoleSessionColour>,
     /// A console session's place in its console's history — one past the highest ordinal ever
     /// used there, so a title is never reused after a console session is archived or deleted — and
-    /// what gives it its default title ("Hub `<ordinal>`"). `None` for a project session.
+    /// what gives it its default title ("Hub" for the first, "Hub `<ordinal>`" after). `None` for a
+    /// project session.
     pub ordinal: Option<i64>,
     /// The account this session's own agent reads, by id: the console's reference for that agent
     /// at the time the session was opened. `None` means the default account. Written when the

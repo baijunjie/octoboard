@@ -264,10 +264,13 @@ export const en = {
   "sidebar.focus.newSession": "New session",
   "sidebar.focus.newSessionIn": "New session in {name}",
   "sidebar.focus.noBoundSessions": "No sessions are bound to this console session",
-  "sidebar.focus.enterConsoleSession": "Enter focus mode for {name}",
+  "sidebar.focus.enterConsoleSession": {
+    one: "Enter focus mode for {name}, {count} bound session",
+    other: "Enter focus mode for {name}, {count} bound sessions",
+  },
   "sidebar.focus.boundElsewhere": {
-    one: "{count} session in this project is bound to {owners}",
-    other: "{count} sessions in this project are bound to {owners}",
+    one: "{count} session in this project is bound to a console session",
+    other: "{count} sessions in this project are bound to console sessions",
   },
   "sidebar.focus.sessions": "Sessions ({count})",
   "sidebar.focus.archived": "Archived ({count})",
