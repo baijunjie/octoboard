@@ -131,7 +131,7 @@ in `docs/product/application-lifecycle.md`).
 |---|---|---|
 | Sidebar | 280 px | 200–480 px |
 | Report panel | 420 px | 300–720 px |
-| Terminal | everything left over | never below 520 px (55 columns) |
+| Terminal | everything left over | never below 520 px (about 53 columns) |
 
 The sidebar and the report panel are drawn at the width the user chose (see "Resizing the sidebar and the report
 panel" below), and neither grows past it: width a wider window frees goes to the terminal.
@@ -232,7 +232,7 @@ widening the window again brings back each docked pane as the user last left it.
 Because the drawers overlay the terminal rather than pushing it aside, **opening or closing one never
 resizes the terminal**, so the running agent is never sent a terminal-size change by a drawer.
 
-The terminal's floor below the breakpoint is 382 px, about 40 columns. A viewport narrower than that
+The terminal's floor below the breakpoint is 398 px, about 40 columns. A viewport narrower than that
 **scrolls horizontally** rather than squeezing the terminal further.
 
 ## Moving focus between regions with F6

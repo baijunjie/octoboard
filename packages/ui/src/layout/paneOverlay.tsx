@@ -80,10 +80,10 @@ export function drawerClass(side: PaneEdge, mode: PaneMode, open: boolean, peeki
  * It is a bare element because it is not a control: it is `aria-hidden`, a mouse-only hover target
  * with no HeroUI equivalent.
  *
- * The strip on the window's physical right is 4px, the width of the terminal's padding, so it stays
- * off xterm's scrollbar, which is on the right whatever the direction; the one on the left is 8px,
- * easy to reach by pushing the pointer to the edge. That is the start strip under left-to-right and
- * the end strip under right-to-left, hence the physical widths.
+ * The strip on the window's physical right is 4px, inside the terminal's horizontal padding, so it
+ * stays off xterm's scrollbar, which is on the right whatever the direction; the one on the left is
+ * 8px, easy to reach by pushing the pointer to the edge. That is the start strip under left-to-right
+ * and the end strip under right-to-left, hence the physical widths.
  */
 export function PeekHotZone({
   side,

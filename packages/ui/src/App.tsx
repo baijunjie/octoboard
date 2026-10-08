@@ -357,21 +357,21 @@ export function App(): React.ReactElement {
         />
         {panes.sidebarDocked && <PaneResizeHandle side="sidebar" paneWidth={sidebarWidth} />}
         {/* Below the `docked` breakpoint the terminal is the row's only content and the floor
-            drops to 382px (see the terminal's wrapper below); `overflow-x-auto` is what makes a
+            drops to 398px (see the terminal's wrapper below); `overflow-x-auto` is what makes a
             viewport narrower than that scroll instead of clipping. */}
         <main className="relative flex min-w-0 flex-1 overflow-x-auto docked:overflow-visible">
           {/* Takes the terminal's place in the row, so the archive covers the terminal alone, not the
               report panel beside it; the terminal fills it. Above the `docked` breakpoint the 520px
               basis and floor are the report panel's counterpart: with a 0 basis free space stays
               positive at any window wider than the panel's own basis, flexbox never leaves the grow
-              phase, and the panel's shrink factor is never consulted. 520px is 55 columns at
-              ~9.2px/column off a real agent CLI (the terminal's padding eats the rest). Below the
+              phase, and the panel's shrink factor is never consulted. 520px is about 53 columns
+              at ~9.2px/column off a real agent CLI (the terminal's padding eats the rest). Below the
               breakpoint the sidebar and the report panel are overlays rather than row siblings
               (`usePaneToggles`), so this is the row's only content and takes a much smaller floor:
-              382px is 40 columns at the same ~9.2px/column plus the same padding allowance, under
+              398px is 40 columns at the same ~9.2px/column plus the same padding allowance, under
               which the terminal stops being usable at all, so `overflow-x-auto` on `main` scrolls
               rather than squeezing it further. */}
-          <div className="relative flex min-h-0 min-w-[382px] flex-[1_1_382px] docked:min-w-[520px] docked:flex-[1_1_520px]">
+          <div className="relative flex min-h-0 min-w-[398px] flex-[1_1_398px] docked:min-w-[520px] docked:flex-[1_1_520px]">
             {archiveOpen && archiveConsole && (
               <ArchiveView
                 key={`${archiveScope?.console}:${archiveProjectId ?? ""}:${archiveConsoleSessionId ?? ""}`}
