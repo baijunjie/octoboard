@@ -16,8 +16,8 @@ that one protocol.
 
 This is the `@octoboard/desktop` package of the repository's pnpm workspace. Its dependencies install from the
 workspace root with `pnpm install` (there is no per-package install), and its scripts run from this directory as
-`pnpm <script>`. It has no `typecheck` or `build` script, so the root's `pnpm typecheck` and `pnpm build` cover only
-`packages/ui`; the Rust side is checked with `cargo`, which must be reachable on `PATH`.
+`pnpm <script>`. It has no `typecheck` or `build` script, so the root's `pnpm typecheck` and `pnpm build` cover
+`packages/ui` and `apps/web`; the Rust side is checked with `cargo`, which must be reachable on `PATH`.
 
 `src-tauri/` is a member of the repository's root Cargo workspace, alongside `apps/daemon/`: the lockfile and the
 build directory are the root's `Cargo.lock` and `target/`, and `cargo build` / `cargo test` from the root cover both

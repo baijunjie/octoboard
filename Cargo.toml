@@ -11,7 +11,7 @@ members = ["apps/daemon", "apps/desktop/src-tauri"]
 # exist only to stay within it — see "Known pitfalls of the Tauri / Rust approach" in
 # docs/architecture.md before raising it.
 [workspace.package]
-authors = ["Junjie Bai"]
+authors = ["BaiJunjie"]
 license = "MIT"
 repository = "https://github.com/baijunjie/octoboard"
 edition = "2021"

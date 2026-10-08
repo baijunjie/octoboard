@@ -24,11 +24,12 @@ Per-package commands are in that package's doc.
 
 ## Shared configuration
 
-- [`config/app.json`](../config/app.json) — the single source for app-level facts (`name`, `repositoryUrl`): the UI
-  fills the name into its copy as `{appName}` (`packages/ui/src/appConfig.ts`) and into the page title, and the
-  desktop and daemon crates' `build.rs` hand it to the code that words the menu, window title and the daemon's own
-  messages. The copies Tauri and Cargo require (`productName` in `tauri.conf.json`, `repository` in the root
-  `Cargo.toml`) mirror it, and the desktop crate's `build.rs` fails the build when they drift.
+- [`config/app.json`](../config/app.json) — the single source for product identity, repository, author and support
+  contact details. The UI and website fill the name into their copy as `{appName}` and into page titles; the website
+  exposes `author.name` as `operatorName` and `support.email` as `contactEmail`. The desktop and daemon crates'
+  `build.rs` hand the name to the menu, window title and daemon messages. The copies Tauri and Cargo require
+  (`productName` in `tauri.conf.json`, `repository` in the root `Cargo.toml`) mirror it, and the desktop crate's
+  `build.rs` fails the build when they drift.
 - [`.env`](../.env), [`.env.secret.example`](../.env.secret.example) and [`scripts/env.mjs`](../scripts/env.mjs) — the
   env files and the small reader they share. `.env` (committed) holds non-secret configuration, read by the UI's dev
   server, with a gitignored `.env.local` overriding it; `.env.secret` (gitignored, template `.env.secret.example`) holds
@@ -50,8 +51,8 @@ Per-package commands are in that package's doc.
 - [`apps/ios/`](../apps/ios/README.md) — placeholder for the native iOS client; no content, not a workspace package.
 - [`apps/android/`](../apps/android/README.md) — placeholder for the native Android client; no content, not a
   workspace package.
-- [`apps/web/`](../apps/web/README.md) — placeholder for the project website (not a client of `apps/daemon/`); no
-  content, not a workspace package.
+- [`apps/web/`](../apps/web/README.md) — `@octoboard/web`, the public Nuxt website: localized product and privacy
+  pages generated as static files for GitHub Pages, independent of the daemon and desktop UI.
 
 ## Shared packages
 

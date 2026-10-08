@@ -1,4 +1,10 @@
 {
   "name": "Octoboard",
-  "repositoryUrl": "https://github.com/baijunjie/octoboard"
+  "repositoryUrl": "https://github.com/baijunjie/octoboard",
+  "author": {
+    "name": "BaiJunjie"
+  },
+  "support": {
+    "email": "support@octoboard.dev"
+  }
 }

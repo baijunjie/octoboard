@@ -80,6 +80,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   (running sessions grouped by status in sidebar order, at most 10 per group with an "N more…" line, "No sessions
   running", Open, Quit), choosing a session from it, and its Quit.
 
+- [Website](product/website.md) — the localized homepage, privacy and error pages, keyboard navigation, motion,
+  illustrative workflow, release download links, platform roadmap, privacy disclosures, and planned remote host support.
+
 ## Reference
 
 - [Architecture](architecture.md) — what Octoboard is and its core concepts, the layers and why the daemon is split from
