@@ -98,10 +98,14 @@ let openDialogs = 0;
  * dialog too, which HeroUI's `AlertDialog` would otherwise make explicit-action only); the dialog is
  * mounted only while it is open, so `isOpen` is constant. With `onSubmit` the body and footer sit in
  * a `<form>`, so Enter in a text field submits it — the dialog decides what "submit" means. The
- * footer is Cancel plus a submit button labelled `submitLabel`, both disabled while `busy`, unless
- * the dialog brings its own `footer`. `submitDisabled` disables the submit button alone, Cancel
- * stays pressable, and since it is the form's only submit control this also suppresses implicit
- * submission from Enter in a text field.
+ * footer is Cancel plus a submit button labelled `submitLabel`, unless the dialog brings its own
+ * `footer`. While `busy`, the submit button is marked pending rather than disabled: a disabled
+ * attribute would blur the button the user has just pressed and take the dialog's Escape and Tab
+ * with it for as long as the request runs, where pending blocks press and hover, keeps the button
+ * focusable and announces itself. Cancel is disabled instead, which costs nothing because focus
+ * cannot be on it at the moment the request starts. `submitDisabled` disables the submit button
+ * alone, before any action, Cancel stays pressable, and since it is the form's only submit control
+ * this also suppresses implicit submission from Enter in a text field.
  */
 export function Dialog({
   title,
@@ -167,7 +171,7 @@ export function Dialog({
             <Button type="button" variant="secondary" onPress={onClose} isDisabled={busy}>
               {t("common.cancel")}
             </Button>
-            <Button type="submit" isDisabled={busy || submitDisabled}>
+            <Button type="submit" isPending={busy} isDisabled={submitDisabled}>
               {submitLabel}
             </Button>
           </>
