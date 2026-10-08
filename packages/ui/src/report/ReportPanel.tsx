@@ -7,6 +7,7 @@ import { TitledControl } from "../components/TitledControl";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { drawerClass, PANE_ID, PeekHotZone } from "../layout/paneOverlay";
 import type { PanePeek } from "../layout/usePaneToggles";
+import { usePlatform } from "../platform/react";
 import type { Page } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import {
@@ -271,13 +272,14 @@ function PageFrame({
   onPointerLeave?: () => void;
 }): React.ReactElement {
   const t = useT();
+  const platform = usePlatform();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   // State rather than a memo: React may drop a memo's cache, and a new nonce reloads the frame,
   // losing whatever the user has typed into the page.
   const [nonce] = useState(newNonce);
   const srcDoc = useMemo(
-    () => composePageDocument(page.html, isHistory, nonce),
-    [page.html, isHistory, nonce],
+    () => composePageDocument(page.html, isHistory, nonce, platform.kind === "tauri"),
+    [page.html, isHistory, nonce, platform.kind],
   );
 
   useEffect(() => {

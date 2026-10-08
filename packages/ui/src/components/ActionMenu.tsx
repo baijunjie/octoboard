@@ -1,6 +1,6 @@
 import { Dropdown, Label, Separator } from "@heroui/react";
 import { EllipsisVertical, type LucideIcon } from "lucide-react";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import { useT } from "../i18n/react";
 import { TitledControl } from "./TitledControl";
@@ -20,6 +20,10 @@ export function takeMenuFocusToRestore(): HTMLElement | null {
 
 /** How many menus are open right now; see `isActionMenuOpen`. */
 let openMenus = 0;
+
+/** The element a menu that just closed will give focus back to, until it does; a menu opened by a
+ * right-click in the meantime takes it over, so focus is returned once, when that one closes. */
+let handedFocus: HTMLElement | null = null;
 
 /** Whether any action menu's popover is open, which holds keyboard focus like a modal does. */
 export function isActionMenuOpen(): boolean {
@@ -139,6 +143,7 @@ export function ActionMenu({
   triggerClassName,
   className = "shrink-0",
   tooltip,
+  contextTargetRef,
 }: {
   label: string;
   items: ActionMenuEntry[];
@@ -150,8 +155,14 @@ export function ActionMenu({
    * has to name the row it belongs to so each trigger is told apart; off for a trigger whose
    * visible text already says what it does. */
   tooltip?: string | false;
+  /** An element whose right-click (context menu) opens this same menu at the pointer: the row or
+   * header the menu belongs to. A menu opened that way is anchored to the pointer, not the trigger. */
+  contextTargetRef?: React.RefObject<HTMLElement | null>;
 }): React.ReactElement {
   const t = useT();
+  const [isOpen, setIsOpen] = useState(false);
+  // Where a right-click opened the menu; `null` while it is anchored to its trigger.
+  const [pointerAt, setPointerAt] = useState<{ x: number; y: number } | null>(null);
   // Set only for a pointer-opened menu: react-aria returns focus to the trigger when a menu closes,
   // which is right for the keyboard but would pull it off the terminal for the mouse.
   const pointerFocus = usePointerFocusReturn();
@@ -166,22 +177,83 @@ export function ActionMenu({
   };
   useEffect(() => () => countOpen(false), []);
 
-  const onOpenChange = (isOpen: boolean) => {
-    countOpen(isOpen);
-    if (isOpen) menuFocusToRestore = null;
-    const restore = pointerFocus.opened(isOpen);
-    if (isOpen) return;
+  const onOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    countOpen(open);
+    if (open) menuFocusToRestore = null;
+    const restore = pointerFocus.opened(open);
+    if (open) return;
+    setPointerAt(null);
     const previous = restore?.previous;
+    // Offered at once to a menu opened in the same gesture (a right-click on another row closes this
+    // one, and on macOS opens that one before the timeout below runs); that menu takes it.
+    if (previous) handedFocus = previous;
     // Deferred by one task: a synchronous `focus()` here is overridden by react-aria moving focus to
     // the trigger as the menu closes. Its later restore on unmount only acts while focus has fallen to
     // <body>, so it leaves this alone.
     setTimeout(() => {
       if (!previous?.isConnected) return;
+      // Another menu is open, or took the element over: focusing now would pull focus out from under it.
+      if (openMenus > 0 || handedFocus !== previous) return;
+      handedFocus = null;
       previous.focus();
       // A dialog the item opened keeps focus inside itself and refuses this.
       if (document.activeElement !== previous) menuFocusToRestore = previous;
     }, 0);
   };
+
+  // Listens natively, on the target itself: a React handler would also hear the right-clicks of this
+  // menu's own portalled popover, which bubble through the component tree. The handlers only use
+  // state setters and refs, so the ones from the render that set the effect up stay valid.
+  useEffect(() => {
+    const target = contextTargetRef?.current;
+    if (!target) return;
+    // A secondary press (right button, or ctrl+click on macOS, which also raises a context menu)
+    // must not take focus: a target without its own focus handling would pull it off whatever had
+    // it (typically the terminal), and the menu returns focus to where it stood at the gesture.
+    const onMouseDown = (event: MouseEvent) => {
+      if (event.button === 2 || (event.button === 0 && event.ctrlKey)) event.preventDefault();
+    };
+    const onContextMenu = (event: MouseEvent) => {
+      event.preventDefault();
+      const active = document.activeElement;
+      const adopt =
+        handedFocus?.isConnected && (active === document.body || active?.closest("[data-slot=dropdown-popover]"))
+          ? handedFocus
+          : undefined;
+      handedFocus = null;
+      pointerFocus.notePress(adopt);
+      setPointerAt({ x: event.clientX, y: event.clientY });
+      onOpenChange(true);
+    };
+    target.addEventListener("mousedown", onMouseDown);
+    target.addEventListener("contextmenu", onContextMenu);
+    return () => {
+      target.removeEventListener("mousedown", onMouseDown);
+      target.removeEventListener("contextmenu", onContextMenu);
+    };
+  }, [contextTargetRef]);
+
+  // react-aria's popover ignores a press outside it made with anything but the primary button, so
+  // a right-click while the menu is open would leave it open (and, on the web, show the browser's
+  // own menu over it). Close it the way react-aria's own menu trigger closes on a context menu.
+  useEffect(() => {
+    if (!isOpen) return;
+    const inMenu = (event: Event) => event.target instanceof Element && event.target.closest("[data-slot=dropdown-popover]");
+    const onMouseDown = (event: MouseEvent) => {
+      if (inMenu(event)) return;
+      if (event.button === 2 || (event.button === 0 && event.ctrlKey)) onOpenChange(false);
+    };
+    const onContextMenu = (event: MouseEvent) => {
+      if (!inMenu(event)) event.preventDefault();
+    };
+    document.addEventListener("mousedown", onMouseDown, true);
+    document.addEventListener("contextmenu", onContextMenu, true);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown, true);
+      document.removeEventListener("contextmenu", onContextMenu, true);
+    };
+  }, [isOpen]);
 
   return (
     // Always a flex container, so the trigger is a flex item and not an inline box in a line: left
@@ -192,7 +264,7 @@ export function ActionMenu({
       onClick={(e) => e.stopPropagation()}
       onPointerDownCapture={pointerFocus.onPointerDownCapture}
     >
-      <Dropdown onOpenChange={onOpenChange}>
+      <Dropdown isOpen={isOpen} onOpenChange={onOpenChange}>
         {/* `preventFocusOnPress` keeps a press from moving focus off whatever had it (typically
             the terminal); the menu itself takes focus once it opens. */}
         <TitledControl title={tooltip === false ? undefined : (tooltip ?? t("common.moreActions"))}>
@@ -207,7 +279,7 @@ export function ActionMenu({
             {trigger ?? <EllipsisVertical aria-hidden="true" className="size-4" />}
           </Dropdown.Trigger>
         </TitledControl>
-        <Dropdown.Popover className="min-w-48 max-w-72">
+        <Dropdown.Popover className="min-w-48 max-w-72" getTargetRect={pointerAt ? () => new DOMRect(pointerAt.x, pointerAt.y, 0, 0) : undefined}>
           <MenuItems entries={items} label={label} />
         </Dropdown.Popover>
       </Dropdown>

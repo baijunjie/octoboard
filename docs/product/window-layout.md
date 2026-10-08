@@ -277,6 +277,16 @@ The control focus lands on shows its focus ring, even when the last input before
 
 `F6` does nothing while a modal dialog, Settings included, or a menu is open; focus stays where it is.
 
+## Right-click menus
+
+**In the desktop app** a right-click (or Control-click) shows the system's own menu only in an input field, a text area
+or editable text, and in the terminal, where it is how text is copied and pasted. Anywhere else it shows nothing, unless
+what was clicked offers its own action menu: the sidebar's rows and headers open theirs at the pointer (see "Rows, names
+and keyboard focus" in `docs/product/sidebar.md`). A report page follows the same rule (see "Right-click inside a page"
+in `docs/product/report-panel.md`).
+
+**In a browser** the browser's own menu stays everywhere except over the rows and headers that open an action menu.
+
 ## Toasts
 
 Failures and notices that need no answer are shown as **toasts**; which ones are, and how they name the session they

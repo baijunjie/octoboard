@@ -227,6 +227,17 @@ has its own light and dark value (see "What follows the choice" in `docs/product
   or has its menu open; they are still reached with Tab when hidden, and show once one of them has focus. They fade
   and open out as they appear, and fade and close up as they go, briefly — at once where the system asks for reduced
   motion.
+- **Right-clicking** (or Control-clicking on macOS) a row that has an action menu opens that menu at the pointer, with
+  the same entries as its action-menu button. This holds for a project row, a session row (a console session's
+  included), the top of the sidebar (the console switcher and the button beside it, which opens the shown console's
+  action menu, not the list of consoles), a focus mode's header, a project's heading in a console session's focus mode,
+  a session card and a focus mode's archived rows. The right-click neither selects nor activates the row, nor takes
+  keyboard focus; right-clicking another such row while a menu is open closes it and opens that row's. It works the
+  same in the desktop app and in a browser, where the browser's own menu is not shown over these rows; what a
+  right-click shows anywhere else is in "Right-click menus" in `docs/product/window-layout.md`.
+- Closing an action menu that was opened with the pointer, by its button or by a right-click, gives keyboard focus back
+  to whatever had it before, typically the terminal; one opened from the keyboard gives it back to its button. An
+  entry that opens a dialog leaves focus in the dialog.
 - Clicking a row deliberately does not move keyboard focus away from the terminal; a row reached with Tab can be
   activated with Enter or Space.
 - Each row tells assistive technology what its icons show: a session row its title, agent (Claude Code, Codex or Grok

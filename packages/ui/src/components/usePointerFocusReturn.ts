@@ -7,13 +7,18 @@ import React, { useRef } from "react";
  * would pull it off whatever had it.
  *
  * Put `onPointerDownCapture` on an element around the trigger, and call `opened` from the popup's
- * `onOpenChange`. On open it settles the press into a pointer-opened popup; on close it returns
- * `{ previous }` for a pointer-opened one — `previous` the element that had focus at the press,
- * `null` when none did — and `undefined` for one opened from the keyboard, which keeps react-aria's
- * own return to the trigger.
+ * `onOpenChange`; a popup opened by a gesture that is not a press on the trigger (a right-click on
+ * the row it belongs to) calls `notePress` just before opening. On open it settles the press into a
+ * pointer-opened popup; on close it returns `{ previous }` for a pointer-opened one — `previous` the
+ * element that had focus at the press, `null` when none did — and `undefined` for one opened from
+ * the keyboard, which keeps react-aria's own return to the trigger.
  */
 export function usePointerFocusReturn(): {
   onPointerDownCapture: (event: React.PointerEvent<HTMLElement>) => void;
+  /** For a popup a pointer opens without a press on its trigger (a right-click on the row it
+   * belongs to): notes the focus as it stands, to be settled by the `opened` that follows.
+   * `previous` stands in for the focus when it is known to be elsewhere than where it now sits. */
+  notePress: (previous?: HTMLElement) => void;
   opened: (isOpen: boolean) => { previous: HTMLElement | null } | undefined;
 } {
   // Held only until the press ends; if the press opened the popup it moves to `restoreRef`, so a
@@ -21,11 +26,17 @@ export function usePointerFocusReturn(): {
   const pressRef = useRef<{ previous: HTMLElement | null } | null>(null);
   const restoreRef = useRef<{ previous: HTMLElement | null } | null>(null);
 
+  const notePress = (previous?: HTMLElement) => {
+    const active = document.activeElement;
+    pressRef.current = {
+      previous: previous ?? (active instanceof HTMLElement && active !== document.body ? active : null),
+    };
+  };
+
   const onPointerDownCapture = (event: React.PointerEvent<HTMLElement>) => {
     // Only a press on the trigger itself: a portalled popup's presses bubble through here as well.
     if (!event.currentTarget.contains(event.target as Node)) return;
-    const active = document.activeElement;
-    pressRef.current = { previous: active instanceof HTMLElement && active !== document.body ? active : null };
+    notePress();
     // The press opens the popup during this gesture (on pointerdown for a mouse, on release for
     // touch), before this timeout runs.
     const listeners = new AbortController();
@@ -48,5 +59,5 @@ export function usePointerFocusReturn(): {
     return restore ?? undefined;
   };
 
-  return { onPointerDownCapture, opened };
+  return { onPointerDownCapture, notePress, opened };
 }

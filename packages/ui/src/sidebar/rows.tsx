@@ -43,6 +43,7 @@ export function TreeRow({
   expanded,
   className = "min-h-8 items-center gap-2 px-2",
   children,
+  ref,
 }: {
   ariaLabel: string;
   onActivate: () => void;
@@ -50,9 +51,12 @@ export function TreeRow({
   expanded?: boolean;
   className?: string;
   children: React.ReactNode;
+  /** The row's element, so its action menu can open on a right-click anywhere on the row. */
+  ref?: React.Ref<HTMLDivElement>;
 }): React.ReactElement {
   return (
     <div
+      ref={ref}
       role="button"
       tabIndex={0}
       aria-label={ariaLabel}

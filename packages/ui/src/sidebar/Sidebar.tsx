@@ -360,6 +360,7 @@ function ConsoleSwitcher({
     { label: t("sidebar.newConsole"), icon: Plus, onClick: () => handlers.onOpenDialog({ kind: "new-console" }) },
   ];
 
+  const headerRef = useRef<HTMLDivElement>(null);
   const consoleActions: ActionMenuEntry[] = [
     { label: t("sidebar.console.addProject"), icon: FolderPlus, onClick: () => handlers.onOpenDialog({ kind: "new-project", console: current }) },
     { label: t("sidebar.console.edit"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "edit-console", console: current }) },
@@ -372,7 +373,7 @@ function ConsoleSwitcher({
     // the end padding matches that and this menu lines up with the rows' menus. The chevron is a
     // bare glyph: the trigger keeps only the inset a size-6 icon button puts around its own glyph,
     // and the gap is the one those buttons use, so the chevron sits over the button beside a menu.
-    <div className="flex h-14 shrink-0 items-center gap-0.5 border-b border-separator ps-2 pe-4">
+    <div ref={headerRef} className="flex h-14 shrink-0 items-center gap-0.5 border-b border-separator ps-2 pe-4">
       <ActionMenu
         className="min-w-0 flex-1"
         label={t(elsewhere ? "sidebar.console.switchWaiting" : "sidebar.console.switch", { name: current.name })}
@@ -390,7 +391,7 @@ function ConsoleSwitcher({
           </>
         }
       />
-      <ActionMenu label={t("sidebar.console.actions", { name: current.name })} items={consoleActions} />
+      <ActionMenu label={t("sidebar.console.actions", { name: current.name })} items={consoleActions} contextTargetRef={headerRef} />
     </div>
   );
 }
@@ -656,6 +657,7 @@ function ProjectNode({
   const archived = archivedSessions(sessions);
   const activity = consoleActivity(live);
   const listRef = useFlip<HTMLDivElement>();
+  const rowRef = useRef<HTMLDivElement>(null);
   const openSession = () =>
     handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project, binding: { kind: "choose" } });
   const activityKey = activityLabelKey(activity, project.pinned);
@@ -668,6 +670,7 @@ function ProjectNode({
   return (
     <div>
       <TreeRow
+        ref={rowRef}
         ariaLabel={withGitBadge(language, t, nameLabel, gitStatus)}
         onActivate={onToggle}
         expanded={!isCollapsed}
@@ -696,7 +699,7 @@ function ProjectNode({
         {isCollapsed && <ActivityMarker activity={activity} />}
         <RowControls>
           <RowIconButton icon={Plus} label={t("sidebar.project.openSession")} onPress={openSession} />
-          <ActionMenu label={t("sidebar.project.actions", { name: project.name })} items={projectMenu(t, handlers, project, archived)} />
+          <ActionMenu label={t("sidebar.project.actions", { name: project.name })} items={projectMenu(t, handlers, project, archived)} contextTargetRef={rowRef} />
         </RowControls>
       </TreeRow>
       {!isCollapsed && (
@@ -749,8 +752,10 @@ function SessionRow({
   const t = useT();
   const language = useCurrentLanguage();
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const rowRef = useRef<HTMLDivElement>(null);
   return (
     <TreeRow
+      ref={rowRef}
       ariaLabel={sessionAriaLabel(t, language, session, accounts, owner)}
       selected={session.id === selectedSessionId}
       onActivate={() => handlers.onSelectSession(session)}
@@ -767,7 +772,7 @@ function SessionRow({
       )}
       {session.pinned && <Pin aria-hidden="true" className="size-3 shrink-0 text-muted" />}
       <RowControls>
-        <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session, accounts)} />
+        <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
       </RowControls>
     </TreeRow>
   );

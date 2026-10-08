@@ -109,6 +109,26 @@
     true,
   );
 
+  // The desktop app shows no webview menu of its own, text fields aside; this frame is a separate
+  // document, so the window's own rule does not reach it. `config.noContextMenu` is set only there.
+  if (config.noContextMenu) {
+    var closest = Element.prototype.closest;
+    win.addEventListener(
+      "contextmenu",
+      function (event) {
+        var target = event.target;
+        if (
+          target instanceof Element &&
+          closest.call(target, 'input, textarea, [contenteditable]:not([contenteditable="false"])')
+        ) {
+          return;
+        }
+        event.preventDefault();
+      },
+      true,
+    );
+  }
+
   function render() {
     var head = doc.head;
     var root = doc.documentElement;

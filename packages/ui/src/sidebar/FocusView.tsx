@@ -1,6 +1,6 @@
 import { Button, ScrollShadow } from "@heroui/react";
 import { Archive, ArrowLeft, FolderOpen, FolderPlus, List, MessageSquarePlus, Pin, Plus } from "lucide-react";
-import React from "react";
+import React, { useRef } from "react";
 
 import { AGENT_LABEL } from "../agents";
 import { ActionMenu } from "../components/ActionMenu";
@@ -29,13 +29,22 @@ const ARCHIVE_PREVIEW = 10;
 /** The top of either focus view: the back button that leaves focus mode, then whatever the view
  * puts after it. Both views are built from this header, the session cards and the archived list
  * below, so they differ only in what they are given. */
-function FocusHeader({ handlers, children }: { handlers: SidebarHandlers; children: React.ReactNode }): React.ReactElement {
+function FocusHeader({
+  handlers,
+  children,
+  ref,
+}: {
+  handlers: SidebarHandlers;
+  children: React.ReactNode;
+  /** The header's element, so its action menu can open on a right-click anywhere on the header. */
+  ref?: React.Ref<HTMLDivElement>;
+}): React.ReactElement {
   const t = useT();
   return (
     // A row or card below sits in the scroll area (`px-2`), then inside its own padding (a card's
     // border and padding add up to `px-2`), so the end padding matches that and this header's
     // trailing menus line up with the menu on a row or card. The start stays put.
-    <div className="flex h-14 shrink-0 items-center gap-1 border-b border-separator ps-2 pe-4">
+    <div ref={ref} className="flex h-14 shrink-0 items-center gap-1 border-b border-separator ps-2 pe-4">
       <TitledControl title={t("sidebar.focus.exit")}>
         <Button
           isIconOnly
@@ -101,10 +110,11 @@ export function ProjectFocusView({
   const openSession = () =>
     handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project, binding: { kind: "unbound" } });
   const viewAll = () => handlers.onOpenArchive({ console: project.console_id, project: project.id });
+  const headerRef = useRef<HTMLDivElement>(null);
 
   return (
     <>
-      <FocusHeader handlers={handlers}>
+      <FocusHeader handlers={handlers} ref={headerRef}>
         {/* `min-w-16` is the floor itself: this is the flex item (`flex-1`'s basis is 0%, so a
             floor on the `RowLabel` child below would clamp nothing), leaving `GitBadge`'s own
             `min-w-0` as the one that keeps giving way once this is reached. */}
@@ -116,6 +126,7 @@ export function ProjectFocusView({
         <ActionMenu
           label={t("sidebar.project.actions", { name: project.name })}
           items={projectMenu(t, handlers, project, archived, { inFocus: true })}
+          contextTargetRef={headerRef}
         />
       </FocusHeader>
       <ScrollShadow size={24} className="min-h-0 flex-1 px-2 pb-2">
@@ -169,10 +180,11 @@ export function ConsoleSessionFocusView({
   const newSessionLabel = t("sidebar.focus.newSession");
   // The groups are ordered by how urgent their sessions are, which changes while the view is open.
   const groupsRef = useFlip<HTMLDivElement>();
+  const headerRef = useRef<HTMLDivElement>(null);
 
   return (
     <>
-      <FocusHeader handlers={handlers}>
+      <FocusHeader handlers={handlers} ref={headerRef}>
         {/* The name selects the console session, whose terminal and report panel this view has no
             other way to reach. */}
         <TreeRow
@@ -205,6 +217,7 @@ export function ConsoleSessionFocusView({
         <ActionMenu
           label={t("sidebar.session.actions", { title: consoleSession.title })}
           items={sessionMenu(t, handlers, consoleSession, accounts, { inFocus: true })}
+          contextTargetRef={headerRef}
         />
       </FocusHeader>
       <ScrollShadow size={24} className="min-h-0 flex-1 px-2 pb-2">
@@ -259,9 +272,10 @@ function FocusProjectGroup({
   selectedSessionId?: string;
 }): React.ReactElement {
   const t = useT();
+  const headerRef = useRef<HTMLDivElement>(null);
   return (
     <>
-      <div className="mb-1 flex min-h-7 items-center gap-1 ps-2 pe-2">
+      <div ref={headerRef} className="mb-1 flex min-h-7 items-center gap-1 ps-2 pe-2">
         <h4 className="min-w-0 flex-1">
           <RowLabel title={project.name} className="block min-w-0">
             <span className="text-sm font-medium">{project.name}</span>
@@ -273,6 +287,7 @@ function FocusProjectGroup({
         <ActionMenu
           label={t("sidebar.project.actions", { name: project.name })}
           items={projectMenu(t, handlers, project, archived, { inFocus: true })}
+          contextTargetRef={headerRef}
         />
       </div>
       <SessionCards handlers={handlers} sessions={boundHere} selectedSessionId={selectedSessionId} />
@@ -397,8 +412,10 @@ function SessionCard({
   const t = useT();
   const language = useCurrentLanguage();
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const rowRef = useRef<HTMLDivElement>(null);
   return (
     <TreeRow
+      ref={rowRef}
       ariaLabel={sessionAriaLabel(t, language, session, accounts)}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
@@ -410,7 +427,7 @@ function SessionCard({
         <span className="flex-1" />
         {session.pinned && <Pin aria-hidden="true" className="size-3 shrink-0 text-muted" />}
         <RowControls always>
-          <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session, accounts)} />
+          <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
         </RowControls>
       </div>
       <div dir="auto" className="line-clamp-2 text-sm font-medium break-words">
@@ -444,8 +461,10 @@ function ArchivedRow({
   const t = useT();
   const language = useCurrentLanguage();
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const rowRef = useRef<HTMLDivElement>(null);
   return (
     <TreeRow
+      ref={rowRef}
       ariaLabel={sessionAriaLabel(t, language, session, accounts)}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
@@ -458,7 +477,7 @@ function ArchivedRow({
         {formatRelativeTime(language, session.ended_at ?? session.started_at)}
       </span>
       <RowControls>
-        <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session, accounts)} />
+        <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
       </RowControls>
     </TreeRow>
   );

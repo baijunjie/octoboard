@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 
 import { App } from "./App";
+import { suppressNativeContextMenu } from "./contextMenuGuard";
 import { resolveDaemonOrigin, resolveStartupError } from "./daemon";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { LanguageProvider } from "./i18n/react";
@@ -19,6 +20,7 @@ const rootEl = document.getElementById("root")!;
 const root = ReactDOM.createRoot(rootEl);
 
 const platform = selectPlatform();
+suppressNativeContextMenu(platform);
 
 // The native window is created hidden (`open_main_window` in
 // `apps/desktop/src-tauri/src/lib.rs`), so that AppKit never gets to paint it in the OS's own

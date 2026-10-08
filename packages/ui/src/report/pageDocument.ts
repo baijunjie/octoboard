@@ -78,11 +78,20 @@ function scriptJson(value: unknown): string {
  *
  * `nonce` has to be unguessable and fresh for each document: it is what tells Octoboard's scripts
  * from anything else the frame might come to hold.
+ *
+ * `noContextMenu` makes the frame suppress its own right-click menu, outside text fields, as the
+ * desktop app does for the rest of its window.
  */
-export function composePageDocument(html: string, isHistory: boolean, nonce: string): string {
+export function composePageDocument(
+  html: string,
+  isHistory: boolean,
+  nonce: string,
+  noContextMenu = false,
+): string {
   const page = {
     html,
     history: isHistory,
+    noContextMenu,
     sources: {
       submit: SUBMIT_MESSAGE_SOURCE,
       escape: ESCAPE_MESSAGE_SOURCE,

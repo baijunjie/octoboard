@@ -16,7 +16,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   sessions section and the project list, project and session rows and their menus, the binding badge a bound session
   carries, keyboard focus on rows, the order of projects and sessions and pinning, filtering the project list and
   folding every project from its heading, how the sidebar follows the selected session, the two focus modes (a
-  project's and a console session's), and the archive view.
+  project's and a console session's), the archive view, and right-clicking a row or header for its action menu (and
+  where focus goes when the menu closes).
 - [Project git status](product/project-git-status.md) — the branch badge on a project's row and in focus mode's header:
   its glyphs for a branch, a detached `HEAD`, a check in flight and a fast-forward in flight, the ahead and behind
   counts, the marker a failed check leaves and what it tells assistive technology; when and how often the shown
@@ -30,13 +31,14 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   the page id is for, paging back through the kept history, why a history page is read-only and where that is
   enforced, why a page is a static document whose scripts never run and what is stripped from it, why it has no route
   to the network, submitting a native form and how its fields reach the console session, Escape and F6 inside a page,
-  and the light surface a page renders on whatever the window's appearance is.
+  the light surface a page renders on whatever the window's appearance is, and right-clicking inside a page.
 - [Window layout](product/window-layout.md) — the top bar across the window and what it holds (and how it doubles as the
   macOS titlebar), the connection status it shows only on trouble, the three panes and what each is allowed to give up,
   resizing the sidebar and the report panel, hiding either and floating it back in on hover, the macOS window's
   1100×600 minimum and the arithmetic behind it, how the window's size and position are remembered across launches,
   the narrow layout a plain browser gets below 1100 px, where the sidebar and the report panel become drawers over the
-  terminal, toasts, and how all of it mirrors under a right-to-left language (and what never does).
+  terminal, which right-click menus the desktop app and a browser show, toasts, and how all of it mirrors under a
+  right-to-left language (and what never does).
 - [Appearance](product/appearance.md) — the light, dark and follow-the-system choice and which of them is the default,
   where it is chosen, what follows it (down to the terminal's palette and the native window's own appearance), where the
   choice is kept, and why a report page stays on a light surface either way.

@@ -148,3 +148,9 @@ history page too, and move focus to the next or previous region of the window (s
 between regions with F6" in `docs/product/window-layout.md`); the browser's own handling of the key
 inside the frame is cancelled. The signal is acted on only while focus is inside the page's frame.
 Neither this signal nor Escape's carries anything from the page.
+
+## Right-click inside a page
+
+A page follows the window's rule (see "Right-click menus" in `docs/product/window-layout.md`): in the desktop app a
+right-click on a page shows nothing, except in its input fields and text areas, which keep the system's menu for copy
+and paste; in a browser the frame keeps the browser's own menu.
