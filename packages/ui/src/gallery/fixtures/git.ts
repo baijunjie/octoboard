@@ -70,7 +70,7 @@ export const gitScenarios: Scenario[] = [
     group: GROUP,
     title: "Branch badge in focus mode",
     description: "The same ahead-and-behind badge, in focus mode's header.",
-    preferences: { sidebarConsole: console_.id, sidebarFocusProject: aheadBehindProject.id },
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${aheadBehindProject.id}` },
     state: snapshotState({ consoles: [console_], projects, sessions, gitStatuses }),
   },
   {
@@ -95,7 +95,7 @@ export const gitScenarios: Scenario[] = [
     title: "Branch badge at the sidebar's minimum width, in focus mode",
     description: "The same worst case for the header's own, narrower, share of the row.",
     width: 1440,
-    preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocusProject: squeezeProject.id },
+    preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
     state: snapshotState({
       consoles: [console_],
       projects: [squeezeProject],

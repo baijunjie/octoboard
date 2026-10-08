@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 
 import type { Agent, AgentAvailability, Session } from "../protocol";
+import type { NewSessionBinding } from "./dialogRequest";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import { SessionDialog } from "./SessionDialog";
@@ -38,6 +39,7 @@ function renderDialog(
   sessions: Session[],
   initial: Partial<State> = {},
   consoleOverride: Partial<typeof parentConsole> = {},
+  binding: NewSessionBinding = { kind: "choose" },
 ): { container: HTMLElement; root: ReturnType<typeof createRoot>; daemon: Daemon } {
   const daemon = fakeDaemon(initial);
   const container = document.body.appendChild(document.createElement("div"));
@@ -48,6 +50,7 @@ function renderDialog(
         <SessionDialog
           console={{ ...parentConsole, ...consoleOverride }}
           project={project}
+          binding={binding}
           sessions={sessions}
           onClose={() => {}}
           onOpened={() => {}}
@@ -66,10 +69,14 @@ const buttons = () => Array.from(document.body.querySelectorAll("button"));
 const optionElements = () => Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]'));
 
 /** Renders the dialog over `sessions`, picks the owner option named `choose` if given, submits, and
- * returns the `open_session` request sent plus the owner select's option labels (empty when the
- * dialog offers no choice). */
-async function openWith(sessions: Session[], choose?: string): Promise<{ request: Record<string, unknown>; options: string[] }> {
-  const { container, root, daemon } = renderDialog(sessions);
+ * returns the `open_session` request sent, the owner select's option labels (empty when the dialog
+ * offers no choice) and the dialog's text. */
+async function openWith(
+  sessions: Session[],
+  choose?: string,
+  binding?: NewSessionBinding,
+): Promise<{ request: Record<string, unknown>; options: string[]; text: string }> {
+  const { container, root, daemon } = renderDialog(sessions, {}, {}, binding);
   vi.mocked(daemon.request).mockResolvedValue({ type: "ack" } as never);
   // The owner select is the one trigger showing its default, "none".
   const ownerTrigger = buttons().find((b) => b.textContent?.includes("No console session"));
@@ -79,21 +86,35 @@ async function openWith(sessions: Session[], choose?: string): Promise<{ request
     options = optionElements().map((o) => o.textContent ?? "");
     if (choose) await act(async () => optionElements().find((o) => o.textContent === choose)?.click());
   }
+  const text = document.body.textContent ?? "";
   await act(async () => buttons().find((b) => b.textContent === "Open")?.click());
   const request = vi.mocked(daemon.request).mock.calls[0][0] as unknown as Record<string, unknown>;
   act(() => root.unmount());
   container.remove();
-  return { request, options };
+  return { request, options, text };
 }
 
+const choose: NewSessionBinding = { kind: "choose" };
 it.each([
-  { name: "defaults to none and offers every live console session", sessions: [hub1, hub2, hubArchived], choose: undefined, options: ["No console session", "Hub 2", "Hub 1"], boundTo: undefined },
-  { name: "binds to the console session chosen", sessions: [hub1, hub2, hubArchived], choose: "Hub 1", options: ["No console session", "Hub 2", "Hub 1"], boundTo: "s-hub-1" },
-  { name: "offers no choice with no live console session", sessions: [hubArchived], choose: undefined, options: [], boundTo: undefined },
-])("$name", async ({ sessions, choose, options, boundTo }) => {
-  const result = await openWith(sessions, choose);
+  { name: "defaults to none and offers every live console session", sessions: [hub1, hub2, hubArchived], pick: undefined, binding: choose, options: ["No console session", "Hub 2", "Hub 1"], boundTo: undefined },
+  { name: "binds to the console session chosen", sessions: [hub1, hub2, hubArchived], pick: "Hub 1", binding: choose, options: ["No console session", "Hub 2", "Hub 1"], boundTo: "s-hub-1" },
+  { name: "offers no choice with no live console session", sessions: [hubArchived], pick: undefined, binding: choose, options: [], boundTo: undefined },
+  { name: "offers no choice and sends no binding when unbound", sessions: [hub1, hub2], pick: undefined, binding: { kind: "unbound" } as const, options: [], boundTo: undefined },
+  { name: "binds to the fixed owner without offering a choice", sessions: [hub1, hub2], pick: undefined, binding: { kind: "bound", to: hub1 } as const, options: [], boundTo: "s-hub-1", fixedLine: "Reports to Hub 1" },
+])("$name", async ({ sessions, pick, binding, options, boundTo, fixedLine }) => {
+  const result = await openWith(sessions, pick, binding);
   expect(result.options).toEqual(options);
   expect(result.request.bound_to).toBe(boundTo);
+  expect(result.text.includes("Reports to")).toBe(fixedLine !== undefined);
+  if (fixedLine) expect(result.text).toContain(fixedLine);
+});
+
+it("cannot open a session for a fixed owner that is no longer live", () => {
+  const { container, root } = renderDialog([{ ...hub1, status: "archived" }], {}, {}, { kind: "bound", to: hub1 });
+  expect(buttons().find((b) => b.textContent === "Open")?.hasAttribute("disabled")).toBe(true);
+  expect(document.body.textContent).toContain("Hub 1 is no longer available");
+  act(() => root.unmount());
+  container.remove();
 });
 
 it("keeps the owner select, back on none, when the chosen console session is archived under it", async () => {
@@ -109,6 +130,7 @@ it("keeps the owner select, back on none, when the chosen console session is arc
         <SessionDialog
           console={parentConsole}
           project={project}
+          binding={choose}
           sessions={[{ ...hub1, status: "archived" }]}
           onClose={() => {}}
           onOpened={() => {}}

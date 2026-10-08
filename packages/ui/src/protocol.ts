@@ -286,9 +286,10 @@ export type RequestBody =
   /** Removes Octoboard's record of one archived session; refused with `session_not_archived`
    * otherwise. The agent's own transcript is never touched. */
   | { type: "delete_session"; session: string }
-  /** With `project`: every archived session of that project. Without: every archived console
-   * session of the console. Each removal is broadcast as `session_deleted`. */
-  | { type: "delete_archived_sessions"; console: string; project?: string }
+  /** With `project`: every archived session of that project. With `console_session`: every
+   * archived session bound to it. With neither: every archived console session of the console.
+   * Naming both is refused. Each removal is broadcast as `session_deleted`. */
+  | { type: "delete_archived_sessions"; console: string; project?: string; console_session?: string }
   | { type: "set_session_pinned"; session: string; pinned: boolean }
   | { type: "send_message"; session: string; text: string }
   | { type: "rename_session"; session: string; title: string }

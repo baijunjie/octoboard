@@ -12,9 +12,9 @@ export interface Preferences {
   /** Chosen docked widths in pixels. */
   sidebarWidth?: number;
   reportWidth?: number;
-  /** The console the sidebar shows, and the project in focus mode. */
+  /** The console the sidebar shows, and what is in focus mode. */
   sidebarConsole?: string;
-  sidebarFocusProject?: string;
+  sidebarFocus?: `project:${string}` | `consoleSession:${string}`;
 }
 
 /** What the window shows in place of the app, for the screens that have no daemon behind them. */

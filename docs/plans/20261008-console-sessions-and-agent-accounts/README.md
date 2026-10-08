@@ -246,7 +246,7 @@ milestone 1 settles. Nothing it adds says "hub".
 10. 10 What a console session may see and touch (closed)
 11. 11 Archiving, reopening and deleting along the binding (closed)
 12. 12 Choosing a binding when a session is created (closed)
-13. [The two focus modes](13-focus-modes.md)
+13. 13 The two focus modes (closed)
 14. [Final confirmation](14-final-confirmation.md)
 
 [The relocation findings](agent-relocation-findings.md) are a reference rather than a milestone: they are already

@@ -238,3 +238,36 @@ Covered by dialog tests; the control itself has not been rendered.
 - [ ] The `dialog-new-session-owner` **gallery scenario** renders, including its step that opens the select by
       pressing the trigger's text — which matches exactly, so it breaks if the trigger ever gains text of its own.
 
+## From milestone 13 — the two focus modes
+
+The rules are unit-tested; none of the views has been rendered. The gallery scenarios named here exist for exactly
+these checks.
+
+- [ ] **The row menu's Focus mode entry and the keyboard shortcut**: entering from a project session, entering from a
+      selected console session (where the shortcut did nothing before), leaving both, ignored while a dialog or a
+      menu is open and during input-method composition, and never reaching the agent.
+- [ ] **Where keyboard focus lands** on entering and leaving each mode, and on following the summary line from one
+      focus mode into another.
+- [ ] **The project groups move without dropping focus.** They are now a `useFlip` list, so a group that re-sorts
+      while the keyboard is on its "+" must slide and keep focus rather than dropping it to the page.
+- [ ] **The animation between views**, including the fade chosen for a focus-to-focus transition, and that nothing
+      moves under Reduce motion — which needs a person, since the preference cannot be set from a test.
+- [ ] **Layout and contrast of both views** in light and dark, in a right-to-left language, with long and CJK names
+      at a narrow sidebar. The `focus-project-long-names` and `focus-console-session-long-names` scenarios are built
+      for this at `sidebarWidth: 200`. The summary line matters most: it is the only new layout with several
+      flex-wrapping controls inside running text, and it has never been looked at.
+- [ ] The **no-projects state** of a console session's focus mode: the disabled header action, and the empty panel
+      naming the reason with its Add project button (`focus-console-session-no-projects`).
+- [ ] **The whole gallery run in WebKit** — every new and changed scenario, plus `archive-many` and
+      `archive-console-sessions`, which this topic perturbed. Nothing automated executes a scenario's steps.
+- [ ] **Ctrl+Shift+F on a non-Mac browser**; only the Mac path was reasoned about.
+- [ ] **Real daemon round trips**: a session created from a console session's focus mode arrives bound; one created
+      from a project's focus mode arrives unbound; "Delete all" in a console session's archive removes only its own
+      bound archived sessions; archiving a console session from its focus header leaves focus and leaves the archive
+      view in a sensible state; and reopening a bound archived session from that archive view.
+- [ ] **Leaving focus when the selected session stops belonging to it** — reopen an archived bound session of the
+      focused project and confirm the sidebar leaves focus mode. The rule underneath is unit-tested; the effect that
+      applies it is not.
+- [ ] The **remembered focus mode across a window reload**, and that a value stored under the old preference key is
+      silently dropped.
+

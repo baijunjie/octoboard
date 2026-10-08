@@ -42,8 +42,9 @@ function pinItem(t: Translate, pinned: boolean, onToggle: () => void): ActionMen
     : { label: t("sidebar.pin"), icon: Pin, onClick: onToggle };
 }
 
-/** The project's actions, in the project row and in focus mode's header (which leaves out "Focus
- * mode", being in it). */
+/** The project's actions, in the project row and in a focus mode (the project's own header, and a
+ * console session's project headings), which leaves out "Focus mode": the project's own is in it
+ * already, and a console session's has no project focus mode to enter from there. */
 export function projectMenu(
   t: Translate,
   handlers: SidebarHandlers,
@@ -55,7 +56,7 @@ export function projectMenu(
     pinItem(t, project.pinned, () => handlers.onSetPinned({ project }, !project.pinned)),
     { label: t("sidebar.project.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-project", project }) },
     { label: t("sidebar.project.edit"), icon: Settings2, onClick: () => handlers.onOpenDialog({ kind: "edit-project", project }) },
-    ...(inFocus ? [] : [{ label: t("sidebar.project.focus"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocusProject(project.id) }]),
+    ...(inFocus ? [] : [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ project }) }]),
     archiveSubmenu(t, t("sidebar.project.archive"), archived, handlers.onSelectSession, () =>
       handlers.onOpenArchive({ console: project.console_id, project: project.id }),
     ),
@@ -96,23 +97,28 @@ function switchAccountSubmenu(
   };
 }
 
-/** A session's actions: pin, rename, switch account and archive; an archived session (listed in
- * focus mode) offers deleting instead. Resuming or reopening is no item: selecting an interrupted
- * session resumes it, and an archived one is reopened by typing to it or from the archive view.
- * Shared by a project session's row and a console session's row (`ConsoleSessionsSection` in
- * `Sidebar.tsx`) — a console session cannot archive itself (see "The console session's tools" in
- * `docs/product/hub-orchestration.md`), so this is the only way to archive one, and the only place
- * to switch its account.
- *
- * TODO(docs/plans/20261008-console-sessions-and-agent-accounts/13-focus-modes.md): a console
- * session's row still owes its "Enter focus mode" entry, left out of this menu because the
- * behaviour it would open is that milestone's; see its Handoff. */
-export function sessionMenu(t: Translate, handlers: SidebarHandlers, session: Session, accounts: Account[]): ActionMenuEntry[] {
+/** A session's actions: pin, rename, focus mode, switch account and archive; an archived session
+ * (listed in focus mode) offers deleting instead. Resuming or reopening is no item: selecting an
+ * interrupted session resumes it, and an archived one is reopened by typing to it or from the
+ * archive view. Shared by a project session's row and a console session's row
+ * (`ConsoleSessionsSection` in `Sidebar.tsx`) — a console session cannot archive itself (see "The
+ * console session's tools" in `docs/product/hub-orchestration.md`), so this is the only way to
+ * archive one, and the only place to switch its account. Focus mode is offered for a console
+ * session alone, and not from its own focus mode's header (`inFocus`). */
+export function sessionMenu(
+  t: Translate,
+  handlers: SidebarHandlers,
+  session: Session,
+  accounts: Account[],
+  { inFocus = false }: { inFocus?: boolean } = {},
+): ActionMenuEntry[] {
   const archived = session.status === "archived";
   const switchAccount = archived ? undefined : switchAccountSubmenu(t, handlers, session, accounts);
+  const focusable = session.role === "console" && !archived && !inFocus;
   return [
     ...(archived ? [] : [pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned))]),
     { label: t("sidebar.session.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) },
+    ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ consoleSession: session }) }] : []),
     ...(switchAccount ? [switchAccount] : []),
     "separator",
     archived

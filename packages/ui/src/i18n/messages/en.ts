@@ -85,6 +85,7 @@ export const en = {
   "daemon.unknown_account": "Unknown account {account}.",
   "daemon.account_name_taken": "{agent} already has an account named “{name}”.",
   "daemon.field_required": "{field} is required.",
+  "daemon.conflicting_fields": "{first} and {second} cannot both be given.",
   "daemon.console_has_running_sessions":
     "This console still has sessions that are running or starting. Archive the running ones, or wait for the ones that are starting to finish.",
   "daemon.project_has_running_sessions":
@@ -246,7 +247,6 @@ export const en = {
   "sidebar.project.openSession": "New session",
   "sidebar.project.rename": "Rename",
   "sidebar.project.edit": "Project settings",
-  "sidebar.project.focus": "Focus mode",
   "sidebar.project.archive": "View archive",
   "sidebar.project.remove": "Remove project",
   "sidebar.session.ariaLabel": "{title} session, {agent}, {status}",
@@ -259,7 +259,16 @@ export const en = {
   "sidebar.session.delete": "Delete",
   "sidebar.session.switchAccount": "Switch account",
   "sidebar.session.manageAccounts": "Manage accounts…",
+  "sidebar.focus.enter": "Focus mode",
   "sidebar.focus.exit": "Leave focus mode",
+  "sidebar.focus.newSession": "New session",
+  "sidebar.focus.newSessionIn": "New session in {name}",
+  "sidebar.focus.noBoundSessions": "No sessions are bound to this console session",
+  "sidebar.focus.enterConsoleSession": "Enter focus mode for {name}",
+  "sidebar.focus.boundElsewhere": {
+    one: "{count} session in this project is bound to {owners}",
+    other: "{count} sessions in this project are bound to {owners}",
+  },
   "sidebar.focus.sessions": "Sessions ({count})",
   "sidebar.focus.archived": "Archived ({count})",
 
@@ -353,6 +362,8 @@ export const en = {
   "dialog.session.titleOptional": "Title (optional)",
   "dialog.session.owner": "Report to",
   "dialog.session.ownerNone": "No console session",
+  "dialog.session.ownerFixed": "Reports to {name}",
+  "dialog.session.ownerGone": "{name} is no longer available, so a session cannot be opened for it.",
   "dialog.rename.title": "Rename session",
   "dialog.rename.field": "Title",
   "dialog.rename.titleRequired": "Title is required.",

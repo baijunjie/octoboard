@@ -9,6 +9,7 @@ import { liveConsoleSessions } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
 import { AccountSelect } from "./AccountSelect";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
+import type { NewSessionBinding } from "./dialogRequest";
 import { OptionSelect } from "./OptionSelect";
 import { TextInput } from "./TextInput";
 
@@ -26,22 +27,26 @@ const NO_OWNER = "none";
  * that puts it in the tree carries no request id, so this reply is the only way to tell which of
  * the sessions appearing there is ours to select.
  *
- * The owner choice below offers the console's console sessions that are not archived, each beside
- * its colour (the binding badge's own dot), and "none", which is the default: a session the user
- * starts stays outside the orchestration unless they say otherwise. With no console session to
- * offer there is no choice at all and the session goes out unbound. The binding is immutable once
- * the session opens, so this is the only place it is ever chosen; it goes out as `open_session`'s
- * `bound_to`.
+ * Where the dialog was opened from settles the session's binding (`binding`). From the project
+ * list it is a choice: the console's console sessions that are not archived, each beside its colour
+ * (the binding badge's own dot), and "none", which is the default, since a session the user starts
+ * stays outside the orchestration unless they say otherwise; with no console session to offer there
+ * is no choice at all and the session goes out unbound. From a project's focus mode it is never
+ * offered and the session is always unbound. From a console session's focus mode the session is
+ * bound to it, shown as a fixed line rather than a field. The binding is immutable once the session
+ * opens, so this is the only place it is ever set; it goes out as `open_session`'s `bound_to`.
  */
 export function SessionDialog({
   console: parentConsole,
   project,
+  binding,
   sessions,
   onClose,
   onOpened,
 }: {
   console: Console;
   project: Project;
+  binding: NewSessionBinding;
   sessions: Session[];
   onClose: () => void;
   onOpened: (sessionId: string) => void;
@@ -63,20 +68,19 @@ export function SessionDialog({
   // for the rest of the dialog's life, even if the list later empties, leaving "none" alone: it is
   // a focusable control, and unmounting it under the user would drop focus to the body and take
   // Escape and Tab containment with it. Hiding the field when the dialog opens with nothing to
-  // offer is the milestone's rule for that state; a list that empties under the user is not that
-  // state, and a field vanishing would also hide that their choice went with it.
+  // offer is the rule for that state; a list that empties under the user is not that state, and a
+  // field vanishing would also hide that their choice went with it.
   //
   // `owner` is only ever one still offered, never the picked id as it stands: `open_session` does
   // not check the target's status, so sending an archived console session's id would create a live
   // session bound to an archived one, whose reports would be refused. An archived pick therefore
   // falls back to none, visibly in the select. `pickedOwner` keeps the stale id, so reopening that
-  // console session while the dialog is still open restores the choice, which is harmless.
-  //
-  // TODO(docs/plans/20261008-console-sessions-and-agent-accounts/13-focus-modes.md): a focus mode
-  // that forces the owner makes it `fixedOwner ?? owners.find(...)`, and one that removes the
-  // choice leaves it unset.
+  // console session while the dialog is still open restores the choice, which is harmless. A fixed
+  // owner that is no longer live cannot fall back to anything, so it stops the dialog instead.
   const owners = liveConsoleSessions(sessions, parentConsole.id);
-  const owner = owners.find((s) => s.id === pickedOwner);
+  const fixedOwner = binding.kind === "bound" ? binding.to : undefined;
+  const fixedOwnerGone = fixedOwner !== undefined && !owners.some((s) => s.id === fixedOwner.id);
+  const owner = fixedOwner ?? (binding.kind === "choose" ? owners.find((s) => s.id === pickedOwner) : undefined);
   const [ownerOffered, setOwnerOffered] = useState(owners.length > 0);
   if (owners.length > 0 && !ownerOffered) setOwnerOffered(true);
 
@@ -101,13 +105,22 @@ export function SessionDialog({
       onClose={onClose}
       submitLabel={t("dialog.session.open")}
       busy={busy}
-      submitDisabled={blocked}
+      submitDisabled={blocked || fixedOwnerGone}
       onSubmit={submit}
     >
       {blocked && <p className="text-sm text-danger">{t("agents.installPrompt")}</p>}
       <AccountSelect label={t("dialog.session.agentAccount")} groups={groups} value={choice} onChange={setPicked} />
       <TextInput label={t("dialog.session.titleOptional")} value={title} onChange={setTitle} />
-      {ownerOffered && (
+      {fixedOwner && (
+        <div className="flex items-center gap-2 text-sm">
+          <BindingBadge owner={fixedOwner} decorative />
+          <span dir="auto" className="min-w-0 truncate">
+            {t("dialog.session.ownerFixed", { name: fixedOwner.title })}
+          </span>
+        </div>
+      )}
+      {fixedOwner && fixedOwnerGone && <p className="text-sm text-danger">{t("dialog.session.ownerGone", { name: fixedOwner.title })}</p>}
+      {binding.kind === "choose" && ownerOffered && (
         <OptionSelect
           label={t("dialog.session.owner")}
           value={owner?.id ?? NO_OWNER}

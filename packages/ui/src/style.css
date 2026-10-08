@@ -37,9 +37,9 @@
   --bottom-chrome-height: var(--connection-banner-height, 0px);
 
   /* The console session colour palette (`ConsoleSessionColour` in `protocol.ts`), light variant:
-     one token per entry, assigned to a console session on creation (see "Key design decisions" in
-     `docs/plans/20261008-console-sessions-and-agent-accounts/README.md`) and drawn by
-     `BindingBadge` (`packages/ui/src/sidebar/BindingBadge.tsx`). The six hues are spaced as far as
+     one token per entry, assigned to a console session on creation from the entries not already in
+     use in that console, and drawn by `BindingBadge`
+     (`packages/ui/src/sidebar/BindingBadge.tsx`). The six hues are spaced as far as
      they fall from HeroUI's own `--accent`, `--success`, `--warning` and `--danger` (253.83°,
      150.81°, 72.33° and 25.74° respectively), so a console session's badge never echoes a status
      colour's meaning by coincidence. One lightness for the whole palette, picked against the

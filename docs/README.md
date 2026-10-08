@@ -15,7 +15,7 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Sidebar](product/sidebar.md) — one console at a time and the switcher with its activity markers, the console
   sessions section and the project list, project and session rows and their menus, the binding badge a bound session
   carries, keyboard focus on rows, the order of projects and sessions and pinning, how the sidebar follows the
-  selected session, a project's focus mode, and the archive view.
+  selected session, the two focus modes (a project's and a console session's), and the archive view.
 - [Project git status](product/project-git-status.md) — the branch badge on a project's row and in focus mode's header:
   its glyphs for a branch, a detached `HEAD`, a check in flight and a fast-forward in flight, the ahead and behind
   counts, the marker a failed check leaves and what it tells assistive technology; when and how often the shown

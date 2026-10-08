@@ -25,10 +25,9 @@ const state = snapshotState({
 });
 
 // A live console session with some of its own bound sessions since archived, among other sessions
-// not bound to it, kept out of `state` above: nothing in the sidebar opens this scope yet (see the
-// TODO on `ArchiveScope` in `sidebar/types.ts`), so there is no scenario driving the app to it, and
-// mixing it into the shared project archive would perturb the counts the scenarios above assert.
-// Exported for `ArchiveView.test.tsx`, which renders the view on these directly.
+// not bound to it, kept out of `state` above so that mixing it into the shared project archive does
+// not perturb the counts the scenarios above assert. Exported for `ArchiveView.test.tsx`, which
+// renders the view on these directly.
 export const boundConsoleSession = sessionOf("s-bound-console", console_.id, undefined, "Hub 1", "idle", { colour: "teal" });
 export const boundArchived = Array.from({ length: 3 }, (_, i) =>
   sessionOf(`s-bound${i}`, console_.id, project.id, `Bound archived session ${i}`, "archived", {
@@ -71,5 +70,18 @@ export const archiveScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("sidebar.archive.consoleSessions")),
       (ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: consoleSessions.length })),
     ],
+  },
+  {
+    id: "archive-bound-sessions",
+    group: GROUP,
+    title: "A console session's archived bound sessions",
+    description: "Reached from the console session's focus mode; the sessions bound elsewhere and the unbound one are not listed.",
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
+    state: snapshotState({
+      consoles: [console_],
+      projects: [project],
+      sessions: [boundConsoleSession, otherConsoleSession, otherOwnerArchived, unboundArchived, ...boundArchived],
+    }),
+    steps: [(ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: boundArchived.length }))],
   },
 ];

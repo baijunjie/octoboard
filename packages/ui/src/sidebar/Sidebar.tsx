@@ -35,14 +35,15 @@ import type { Console, Project, Session } from "../protocol";
 import { sessionAriaLabel } from "../sessionLabel";
 import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
-import { FocusView } from "./FocusView";
+import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
 import { type FilterUpdate, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterTag, ProjectFilterTags } from "./ProjectFilter";
 import { archiveSubmenu, projectMenu, sessionMenu } from "./menus";
 import { archivedSessions, consoleActivity, isInactiveProject, liveSessions, sortProjects, type Activity } from "./order";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
 import { RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
-import type { SidebarHandlers } from "./types";
+import { focusTargetId } from "./sidebarView";
+import type { FocusTarget, SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
 
 interface SidebarProps extends SidebarHandlers {
@@ -52,8 +53,8 @@ interface SidebarProps extends SidebarHandlers {
   selectedSessionId?: string;
   /** The console the sidebar shows; the caller resolves it to an existing one. */
   currentConsole?: Console;
-  /** The project in focus mode, if any; it belongs to `currentConsole`. */
-  focusProject?: Project;
+  /** The project or console session in focus mode, if any; it belongs to `currentConsole`. */
+  focus?: FocusTarget;
   /** Whether the drawer is open below the `docked` breakpoint; above it the docked sidebar is
    * shown or, with `peek`, hidden (`usePaneToggles` owns the state, resetting it once the window no
    * longer needs it). */
@@ -68,8 +69,8 @@ interface SidebarProps extends SidebarHandlers {
 }
 
 /** The sidebar: one console at a time, picked from the switcher at its top (see
- * docs/product/sidebar.md), with its console sessions and projects — or, in a project's focus mode,
- * that project alone. Expand/collapse state is purely local UI state; the daemon has no notion of
+ * docs/product/sidebar.md), with its console sessions and projects — or, in focus mode, one project
+ * or one console session alone. Expand/collapse state is purely local UI state; the daemon has no notion of
  * it. */
 export function Sidebar({
   consoles,
@@ -77,7 +78,7 @@ export function Sidebar({
   sessions,
   selectedSessionId,
   currentConsole,
-  focusProject,
+  focus,
   open,
   peek,
   sidebarWidth,
@@ -129,16 +130,17 @@ export function Sidebar({
   // terminal, which this does not touch.
   const navRef = useRef<HTMLElement>(null);
   const holdsFocus = useRef(false);
-  const shownFocusId = useRef(focusProject?.id);
+  const focusId = focus && focusTargetId(focus);
+  const shownFocusId = useRef(focusId);
   useEffect(() => {
     const previousId = shownFocusId.current;
-    shownFocusId.current = focusProject?.id;
-    if (previousId === focusProject?.id) return;
+    shownFocusId.current = focusId;
+    if (previousId === focusId) return;
     // After a short delay: a menu item that switched the view has its menu hand focus back (to the
     // trigger that just unmounted) a task later, which would otherwise land after this.
     const timer = setTimeout(() => {
       if (!holdsFocus.current || document.activeElement !== document.body) return;
-      const target = focusProject
+      const target = focus
         ? navRef.current?.querySelector<HTMLElement>("[data-focus-exit]")
         : navRef.current?.querySelector<HTMLElement>(`[data-flip="${CSS.escape(previousId ?? "")}"] [role=button]`);
       if (!target) return;
@@ -146,7 +148,7 @@ export function Sidebar({
       target.focus();
     }, 50);
     return () => clearTimeout(timer);
-  }, [focusProject?.id]);
+  }, [focusId]);
 
   const drawerClassName = peek
     ? `docked:rounded-e-xl ${drawerClass("start", "floating", open, peek.active)}`
@@ -157,10 +159,10 @@ export function Sidebar({
   // looking it up here, once, rather than each row searching the console's sessions itself.
   const owners = new Map(consoleSessions.filter((s) => s.role === "console").map((s) => [s.id, s]));
 
-  // What the sidebar is showing, and how it arrived there: going down into a project's focus mode
-  // slides the new view in from the end, coming back up slides it in from the start, and switching
-  // to another console fades it in.
-  const viewKey = !currentConsole ? "none" : focusProject ? `focus:${focusProject.id}` : `console:${currentConsole.id}`;
+  // What the sidebar is showing, and how it arrived there: going down into a focus mode slides the
+  // new view in from the end, coming back up slides it in from the start, and switching to another
+  // console fades it in.
+  const viewKey = !currentConsole ? "none" : focusId ? `focus:${focusId}` : `console:${currentConsole.id}`;
   const viewRef = useRef<HTMLDivElement>(null);
   const previousViewRef = useRef(viewKey);
   // Played in place rather than by remounting the view: a remount on a console switch would
@@ -169,13 +171,17 @@ export function Sidebar({
     const previous = previousViewRef.current;
     previousViewRef.current = viewKey;
     if (previous === viewKey || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const from = viewKey.startsWith("focus:")
-      ? { transform: "translateX(var(--view-shift))" }
-      : previous.startsWith("focus:")
-        ? { transform: "translateX(calc(-1 * var(--view-shift)))" }
-        : previous.startsWith("console:")
-          ? { transform: "translateY(6px)" }
-          : undefined;
+    // Between two focus modes (following a summary line) there is no level to go down or up.
+    const from =
+      viewKey.startsWith("focus:") && previous.startsWith("focus:")
+        ? { transform: "translateY(6px)" }
+        : viewKey.startsWith("focus:")
+          ? { transform: "translateX(var(--view-shift))" }
+          : previous.startsWith("focus:")
+            ? { transform: "translateX(calc(-1 * var(--view-shift)))" }
+            : previous.startsWith("console:")
+              ? { transform: "translateY(6px)" }
+              : undefined;
     if (from) viewRef.current?.animate([{ ...from, opacity: 0 }, {}], { duration: 240, easing: "cubic-bezier(0.2, 0, 0, 1)" });
   }, [viewKey]);
 
@@ -188,14 +194,25 @@ export function Sidebar({
         action={{ label: t("sidebar.newConsole"), icon: Plus, onPress: () => handlers.onOpenDialog({ kind: "new-console" }) }}
       />
     );
-  } else if (focusProject) {
+  } else if (focus && "project" in focus) {
     content = (
-      <FocusView
+      <ProjectFocusView
         handlers={handlers}
         console={currentConsole}
-        project={focusProject}
-        sessions={consoleSessions.filter((s) => s.project_id === focusProject.id)}
+        project={focus.project}
+        sessions={consoleSessions.filter((s) => s.project_id === focus.project.id)}
         owners={owners}
+        selectedSessionId={selectedSessionId}
+      />
+    );
+  } else if (focus) {
+    content = (
+      <ConsoleSessionFocusView
+        handlers={handlers}
+        console={currentConsole}
+        consoleSession={focus.consoleSession}
+        projects={projects.filter((p) => p.console_id === currentConsole.id)}
+        sessions={consoleSessions}
         selectedSessionId={selectedSessionId}
       />
     );
@@ -283,7 +300,7 @@ export function Sidebar({
         style={{ "--sidebar-width": `${sidebarWidth.width}px` } as React.CSSProperties}
         aria-label={t("sidebar.sessions")}
       >
-        <div key={focusProject?.id ?? "console"} ref={viewRef} className="flex min-h-0 flex-1 flex-col">
+        <div key={focusId ?? "console"} ref={viewRef} className="flex min-h-0 flex-1 flex-col">
           {content}
         </div>
       </nav>
@@ -636,7 +653,8 @@ function ProjectNode({
   const archived = archivedSessions(sessions);
   const activity = consoleActivity(live);
   const listRef = useFlip<HTMLDivElement>();
-  const openSession = () => handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project });
+  const openSession = () =>
+    handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project, binding: { kind: "choose" } });
   const activityKey = activityLabelKey(activity, project.pinned);
   const nameLabel = activityKey
     ? t(activityKey, { name: project.name })

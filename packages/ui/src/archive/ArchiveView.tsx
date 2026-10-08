@@ -39,10 +39,7 @@ export function ArchiveView({
   console: Console;
   project?: Project;
   /** The console session whose own archived bound sessions this lists, instead of a project's or
-   * the console's. Never set together with `project`.
-   *
-   * TODO(docs/plans/20261008-console-sessions-and-agent-accounts/13-focus-modes.md): nothing
-   * passes this yet — a console session's focus mode is what will. */
+   * the console's. Never set together with `project`. */
   boundTo?: Session;
   /** The scope's sessions; only the archived ones are listed, or, with `boundTo`, only the ones
    * archived and bound to it. */
@@ -96,13 +93,8 @@ export function ArchiveView({
     : boundTo
       ? t("archive.title.boundSessions", { name: boundTo.title })
       : t("archive.title.consoleSessions", { name: owner.name });
-  // `delete-archived` and the `delete_archived_sessions` request behind it only know a project's
-  // scope or the console's; neither names a console session's own archive. So "Delete all" does not
-  // render under `boundTo` below — passing it through regardless would, once some milestone reaches
-  // this scope, open the dialog with `project: undefined` and delete the console's own archived
-  // console sessions instead of the bound sessions the heading and the count are about.
   const deleteAll = () =>
-    onOpenDialog({ kind: "delete-archived", console: owner, project, count: archived.length });
+    onOpenDialog({ kind: "delete-archived", console: owner, project, consoleSession: boundTo, count: archived.length });
 
   return (
     <section
@@ -128,7 +120,7 @@ export function ArchiveView({
             {t(project ? "archive.heading.project" : boundTo ? "archive.heading.boundSessions" : "archive.heading.consoleSessions")}
           </h2>
         </div>
-        {archived.length > 0 && !boundTo && (
+        {archived.length > 0 && (
           <Button size="sm" variant="danger-soft" preventFocusOnPress onPress={deleteAll}>
             <Trash2 aria-hidden="true" className="size-4" />
             {t("archive.deleteAll")}

@@ -472,11 +472,14 @@ pub enum RequestBody {
     DeleteSession {
         session: String,
     },
-    /// Removes every archived session of `project`, or, with no `project`, every archived console
-    /// session of `console`.
+    /// Removes every archived session of `project`, or every archived session bound to
+    /// `console_session`, or, with neither, every archived console session of `console`. Naming
+    /// both is refused as unreadable.
     DeleteArchivedSessions {
         console: String,
         project: Option<String>,
+        #[serde(default)]
+        console_session: Option<String>,
     },
     SetSessionPinned {
         session: String,
@@ -872,6 +875,9 @@ pub mod error_code {
     pub const UNKNOWN_PROJECT: &str = "unknown_project";
     pub const UNKNOWN_SESSION: &str = "unknown_session";
     pub const UNKNOWN_PAGE: &str = "unknown_page";
+    /// A request names two fields that exclude each other. `params` names them as `first` and
+    /// `second`, as on the wire.
+    pub const CONFLICTING_FIELDS: &str = "conflicting_fields";
     /// A request lacks a field its kind needs.
     pub const FIELD_REQUIRED: &str = "field_required";
     pub const CONSOLE_HAS_RUNNING_SESSIONS: &str = "console_has_running_sessions";

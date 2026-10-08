@@ -43,9 +43,9 @@ export const consoleSessionsScenarios: Scenario[] = [
   {
     id: "console-sessions-focus-bound",
     group: GROUP,
-    title: "A bound session's card in focus mode",
-    description: "The badge and the owner's name replace the old 'reports to console session' line.",
-    preferences: { sidebarConsole: console_.id, sidebarFocusProject: web.id },
+    title: "A console session's focus mode",
+    description: "Only the sessions bound to Hub 1, in the project they are in; an unbound session and another owner's are left out.",
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
     state: snapshotState({ consoles: [console_], projects: [web, api], sessions }),
   },
   {

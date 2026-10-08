@@ -7,12 +7,17 @@ import type { SettingsSectionId } from "../settings/SettingsDialog";
  * console sessions. A discriminated union rather than two optional fields, so `project` and
  * `consoleSession` being mutually exclusive is enforced by the type rather than left to prose: a
  * value naming both does not type-check, and narrowing one in by `"project" in scope` (or the
- * reverse) rules the other out too.
- *
- * TODO(docs/plans/20261008-console-sessions-and-agent-accounts/13-focus-modes.md): nothing opens
- * this scope with `consoleSession` set yet — a console session's focus mode is where milestone 13
- * reaches it. */
-export type ArchiveScope = { console: string } & ({ project: string } | { consoleSession: string } | {});
+ * reverse) rules the other out too. A console session's focus mode opens the `consoleSession`
+ * scope. */
+export type ArchiveScope = { console: string } &
+  (
+    | { project: string; consoleSession?: never }
+    | { consoleSession: string; project?: never }
+    | { project?: never; consoleSession?: never }
+  );
+
+/** What focus mode is given over to: one project, or one console session. */
+export type FocusTarget = { project: Project } | { consoleSession: Session };
 
 /** The callbacks the sidebar triggers. Kept as one object, passed down by reference rather than
  * spread, so a child's prop list says exactly what data it narrows instead of inheriting whatever
@@ -22,8 +27,8 @@ export interface SidebarHandlers {
   onOpenConsoleSession: (console: Console) => void;
   onOpenDialog: (dialog: DialogRequest) => void;
   onSelectConsole: (consoleId: string) => void;
-  /** Enters a project's focus mode, or with `undefined` leaves it. */
-  onFocusProject: (projectId: string | undefined) => void;
+  /** Enters the focus mode of a project or a console session, or with `undefined` leaves it. */
+  onFocus: (target: FocusTarget | undefined) => void;
   onOpenArchive: (scope: ArchiveScope) => void;
   onSetPinned: (target: { project: Project } | { session: Session }, pinned: boolean) => void;
   /** Opens Settings at a section. */

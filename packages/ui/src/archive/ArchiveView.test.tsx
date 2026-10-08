@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import {
   boundArchived,
@@ -11,6 +11,7 @@ import {
   otherOwnerArchived,
   unboundArchived,
 } from "../gallery/fixtures/archive";
+import type { DialogRequest } from "../dialogs/dialogRequest";
 import { ArchiveView } from "./ArchiveView";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -31,7 +32,7 @@ const OTHER_SESSIONS = [boundConsoleSession, otherConsoleSession, otherOwnerArch
 
 /** Renders the view for `boundConsoleSession`'s own scope and returns its container, for a test to
  * query, and a way to unmount it. */
-function renderArchiveView(): { container: HTMLElement; unmount: () => void } {
+function renderArchiveView(onOpenDialog: (dialog: DialogRequest) => void = () => {}): { container: HTMLElement; unmount: () => void } {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() =>
@@ -42,7 +43,7 @@ function renderArchiveView(): { container: HTMLElement; unmount: () => void } {
         sessions={[...OTHER_SESSIONS, ...boundArchived]}
         accounts={[]}
         onReopen={() => {}}
-        onOpenDialog={() => {}}
+        onOpenDialog={onOpenDialog}
         dialogOpen={false}
         onClose={() => {}}
       />,
@@ -70,5 +71,16 @@ it("titles the view after the owning console session, not the console", () => {
   const { container, unmount } = renderArchiveView();
   const section = container.querySelector("section[data-region='archive']");
   expect(section?.getAttribute("aria-label")).toBe(`Archived sessions bound to ${boundConsoleSession.title}`);
+  unmount();
+});
+
+it("deletes all of a console session's archive by naming that console session", () => {
+  const onOpenDialog = vi.fn();
+  const { container, unmount } = renderArchiveView(onOpenDialog);
+  const deleteAll = Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Delete all");
+  act(() => deleteAll?.click());
+  expect(onOpenDialog).toHaveBeenCalledWith(
+    expect.objectContaining({ kind: "delete-archived", consoleSession: boundConsoleSession, project: undefined, count: boundArchived.length }),
+  );
   unmount();
 });

@@ -336,8 +336,17 @@ pub async fn handle(
             Ok(None)
         }
 
-        RequestBody::DeleteArchivedSessions { console, project } => {
-            delete_archived_sessions(state, &console, project.as_deref())?;
+        RequestBody::DeleteArchivedSessions {
+            console,
+            project,
+            console_session,
+        } => {
+            delete_archived_sessions(
+                state,
+                &console,
+                project.as_deref(),
+                console_session.as_deref(),
+            )?;
             Ok(None)
         }
 
@@ -1272,18 +1281,27 @@ fn delete_archived_group(state: &Arc<AppState>, session: &Session) -> Result<boo
     Ok(true)
 }
 
-/// Deletes every archived session of `project`, or with no project every archived console session
-/// of `console` along with the archived sessions bound to them. One that stopped being archived
-/// meanwhile (a resume got there first) is skipped.
+/// Deletes every archived session of `project`, or every archived session bound to the console
+/// session `console_session_id`, or with neither every archived console session of `console` along
+/// with the archived sessions bound to them. One that stopped being archived meanwhile (a resume
+/// got there first) is skipped.
 fn delete_archived_sessions(
     state: &Arc<AppState>,
     console_id: &str,
     project_id: Option<&str>,
+    console_session_id: Option<&str>,
 ) -> Result<()> {
     state
         .store
         .get_console(console_id)?
         .ok_or_else(|| CodedError::unknown_console(console_id))?;
+    if project_id.is_some() && console_session_id.is_some() {
+        return Err(CodedError::raised(
+            error_code::CONFLICTING_FIELDS,
+            "`project` and `console_session` cannot both be given",
+            &[("first", "project"), ("second", "console_session")],
+        ));
+    }
     if let Some(project_id) = project_id {
         let project = state
             .store
@@ -1293,11 +1311,18 @@ fn delete_archived_sessions(
             return Err(CodedError::unknown_project(project_id));
         }
     }
+    if let Some(console_session_id) = console_session_id {
+        let owner = state.session_record(console_session_id)?;
+        if owner.console_id != console_id || owner.role != Role::Console {
+            return Err(CodedError::unknown_session(console_session_id));
+        }
+    }
     for session in state.store.list_sessions()? {
         let in_scope = session.console_id == console_id
-            && match project_id {
-                Some(project_id) => session.project_id.as_deref() == Some(project_id),
-                None => session.role == Role::Console,
+            && match (project_id, console_session_id) {
+                (Some(project_id), _) => session.project_id.as_deref() == Some(project_id),
+                (None, Some(owner)) => session.bound_to.as_deref() == Some(owner),
+                (None, None) => session.role == Role::Console,
             };
         if in_scope {
             delete_archived_group(state, &session)?;
@@ -1907,13 +1932,13 @@ mod tests {
         let coded = refused.downcast_ref::<CodedError>().expect("a coded error");
         assert_eq!(coded.code, error_code::SESSION_NOT_ARCHIVED);
 
-        delete_archived_sessions(&state, "console-1", Some("project-1")).unwrap();
+        delete_archived_sessions(&state, "console-1", Some("project-1"), None).unwrap();
         assert_eq!(
             remaining(),
             ["console-archived", "other-console-archived", "project-idle"]
         );
 
-        delete_archived_sessions(&state, "console-1", None).unwrap();
+        delete_archived_sessions(&state, "console-1", None, None).unwrap();
         assert_eq!(remaining(), ["other-console-archived", "project-idle"]);
 
         std::fs::remove_dir_all(dir).ok();
@@ -3214,7 +3239,8 @@ mod tests {
 
     /// Deleting every archived console session of a console takes their archived bound sessions
     /// too; deleting a project's archived sessions takes the bound ones among them and leaves the
-    /// console sessions.
+    /// console sessions; deleting a console session's archive takes its archived bound sessions
+    /// and nothing else, and a project together with a console session is refused.
     #[tokio::test]
     async fn deleting_archived_sessions_in_bulk_follows_the_binding_for_console_sessions_only() {
         use SessionStatus::Archived;
@@ -3231,13 +3257,32 @@ mod tests {
         };
 
         let (state, dir) = seed("bulk-console-scope");
-        delete_archived_sessions(&state, "console-1", None).unwrap();
+        delete_archived_sessions(&state, "console-1", None, None).unwrap();
         assert_eq!(session_ids(&state), ["unbound"]);
         std::fs::remove_dir_all(dir).ok();
 
         let (state, dir) = seed("bulk-project-scope");
-        delete_archived_sessions(&state, "console-1", Some("project-1")).unwrap();
+        delete_archived_sessions(&state, "console-1", Some("project-1"), None).unwrap();
         assert_eq!(session_ids(&state), ["hub"]);
+        std::fs::remove_dir_all(dir).ok();
+
+        let (state, dir) = seed("bulk-bound-scope");
+        delete_archived_sessions(&state, "console-1", None, Some("hub")).unwrap();
+        assert_eq!(session_ids(&state), ["hub", "unbound"]);
+        for (project, owner, code) in [
+            (
+                Some("project-1"),
+                Some("hub"),
+                error_code::CONFLICTING_FIELDS,
+            ),
+            (None, Some("unbound"), error_code::UNKNOWN_SESSION),
+            (None, Some("nobody"), error_code::UNKNOWN_SESSION),
+        ] {
+            let refused = delete_archived_sessions(&state, "console-1", project, owner)
+                .expect_err("not a scope");
+            assert_eq!(code_of(&refused), code);
+        }
+        assert_eq!(session_ids(&state), ["hub", "unbound"]);
         std::fs::remove_dir_all(dir).ok();
     }
 

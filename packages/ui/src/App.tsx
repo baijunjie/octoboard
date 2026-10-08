@@ -24,7 +24,7 @@ import { SettingsDialog } from "./settings/SettingsDialog";
 import { useSettingsDialog } from "./settings/useSettingsDialog";
 import { useFocusShortcut } from "./sidebar/focusShortcut";
 import { Sidebar } from "./sidebar/Sidebar";
-import { useSidebarView } from "./sidebar/sidebarView";
+import { belongsToFocus, shortcutOutcome, useSidebarView } from "./sidebar/sidebarView";
 import type { ArchiveScope } from "./sidebar/types";
 import { useDaemon, useDaemonStore } from "./store";
 import { TerminalPane, type TerminalPaneHandle, type TerminalProblem } from "./terminal/TerminalPane";
@@ -60,13 +60,11 @@ export function App(): React.ReactElement {
   // Only a console session has a report panel at all; computed here (rather than where it is
   // consumed below) because the pane toggles and the panes' width clamps need it too.
   const hasReportPanel = selectedSession?.role === "console";
-  const sidebarView = useSidebarView(consoleList, projects);
+  const sidebarView = useSidebarView(consoleList, projects, sessions);
   useGitStatusSchedule(sidebarView.currentConsole?.id);
   const archiveConsole = archiveScope ? consoles.get(archiveScope.console) : undefined;
   const archiveProjectId = archiveScope && "project" in archiveScope ? archiveScope.project : undefined;
   const archiveProject = archiveProjectId ? projects.get(archiveProjectId) : undefined;
-  // Nothing in this milestone sets `consoleSession`; see the TODO on `ArchiveScope` in
-  // `sidebar/types.ts`. Resolved here anyway, so the view is ready once something does.
   const archiveConsoleSessionId = archiveScope && "consoleSession" in archiveScope ? archiveScope.consoleSession : undefined;
   const archiveBoundTo = archiveConsoleSessionId ? sessions.get(archiveConsoleSessionId) : undefined;
   // The archive view closes by itself once what it lists is gone.
@@ -220,9 +218,10 @@ export function App(): React.ReactElement {
   const selectSession = (session: Session) => {
     setSelectedSessionId(session.id);
     // Whatever led here — the sidebar, the archive, the waiting-count button — the sidebar follows
-    // the session: its console is the one shown, and focus mode on another project is left.
+    // the session: its console is the one shown, and focus mode on something the session does not
+    // belong to is left.
     sidebarView.selectConsole(session.console_id);
-    if (sidebarView.focusProject && sidebarView.focusProject.id !== session.project_id) sidebarView.focusProjectId(undefined);
+    if (sidebarView.focus && !belongsToFocus(sidebarView.focus, session)) sidebarView.setFocus(undefined);
     if (archiveOpen) {
       setArchiveScope(undefined);
       focusTerminal();
@@ -244,14 +243,21 @@ export function App(): React.ReactElement {
     if (panes.sidebarOpen) panes.closeSidebar();
   };
 
-  // ⇧⌘F: into the selected session's project's focus mode, or back out of it. A console session
-  // belongs to no project, so with one selected there is nothing to enter.
-  useFocusShortcut(() => {
-    if (sidebarView.focusProject) sidebarView.focusProjectId(undefined);
-    else if (selectedSession?.project_id) {
-      sidebarView.selectConsole(selectedSession.console_id);
-      sidebarView.focusProjectId(selectedSession.project_id);
+  // The selected session can stop belonging to the focus mode without being selected again: an
+  // archived session of a project, reopened from the archive view, becomes live and bound, and is
+  // then not listed there.
+  useEffect(() => {
+    if (sidebarView.focus && selectedSession && !belongsToFocus(sidebarView.focus, selectedSession)) {
+      sidebarView.setFocus(undefined);
     }
+  }, [selectedSession?.id, selectedSession?.status, selectedSession?.bound_to]);
+
+  // ⇧⌘F: into the focus mode of the selected session's context, or back out of focus mode.
+  useFocusShortcut(() => {
+    const outcome = shortcutOutcome(sidebarView.focus, selectedSession, projects);
+    if (!outcome) return;
+    if (selectedSession && outcome.focus) sidebarView.selectConsole(selectedSession.console_id);
+    sidebarView.setFocus(outcome.focus);
   });
 
   const closeArchive = () => {
@@ -313,7 +319,9 @@ export function App(): React.ReactElement {
           archiveOpen && archiveConsole
             ? archiveProject
               ? [archiveConsole.name, archiveProject.name, t("archive.heading.project")]
-              : [archiveConsole.name, t("archive.heading.consoleSessions")]
+              : archiveBoundTo
+                ? [archiveConsole.name, archiveBoundTo.title, t("archive.heading.boundSessions")]
+                : [archiveConsole.name, t("archive.heading.consoleSessions")]
             : undefined
         }
         terminalProblem={terminalProblem}
@@ -334,12 +342,12 @@ export function App(): React.ReactElement {
           sessions={sessionList}
           selectedSessionId={selectedSessionId}
           currentConsole={sidebarView.currentConsole}
-          focusProject={sidebarView.focusProject}
+          focus={sidebarView.focus}
           onSelectSession={selectSession}
           onOpenConsoleSession={openConsoleSession}
           onOpenDialog={openDialog}
           onSelectConsole={sidebarView.selectConsole}
-          onFocusProject={sidebarView.focusProjectId}
+          onFocus={sidebarView.setFocus}
           onOpenArchive={openArchive}
           onSetPinned={setPinned}
           onOpenSettings={openSettingsAt}
@@ -374,7 +382,7 @@ export function App(): React.ReactElement {
                   archiveProject
                     ? sessionList.filter((s) => s.project_id === archiveProject.id)
                     : archiveBoundTo
-                      ? sessionList
+                      ? sessionList.filter((s) => s.console_id === archiveConsole.id)
                       : sessionList.filter((s) => s.console_id === archiveConsole.id && s.role === "console")
                 }
                 accounts={accounts}

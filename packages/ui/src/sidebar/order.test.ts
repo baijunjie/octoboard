@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Project, Session, SessionStatus } from "../protocol";
-import { boundArchivedSessions, liveSessions, sortProjects } from "./order";
+import { boundArchivedSessions, boundElsewhere, focusGroups, liveSessions, sortProjects, unboundSessions } from "./order";
 
 const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to?: string): Session => ({
   id,
@@ -70,5 +70,46 @@ describe("sortProjects", () => {
       (p) => sessions[p.id] ?? [],
     );
     expect(ordered.map((p) => p.id)).toEqual(["z", "c", "b", "d", "a2", "a10"]);
+  });
+});
+
+describe("unboundSessions", () => {
+  it("keeps the sessions with no binding, whatever their status", () => {
+    const sessions = [session("unbound", "idle", 1), session("archived", "archived", 2), session("bound", "idle", 3, false, "s-console")];
+    expect(unboundSessions(sessions).map((s) => s.id)).toEqual(["unbound", "archived"]);
+  });
+});
+
+describe("boundElsewhere", () => {
+  const owner = (id: string, started_at: number): Session => ({ ...session(id, "idle", started_at), role: "console", project_id: undefined });
+  const owners = new Map([owner("hub-1", 1), owner("hub-2", 2), { ...owner("hub-old", 3), status: "archived" as const }].map((o) => [o.id, o]));
+
+  it.each([
+    { name: "counts the live bound sessions and names each owner once, in the sidebar's order", sessions: [session("a", "idle", 1, false, "hub-1"), session("b", "working", 2, false, "hub-2"), session("c", "idle", 3, false, "hub-1")], expected: { count: 3, owners: ["hub-2", "hub-1"] } },
+    { name: "leaves out unbound, archived, unknown-owner and archived-owner sessions", sessions: [session("a", "idle", 1), session("b", "archived", 2, false, "hub-1"), session("c", "idle", 3, false, "gone"), session("d", "idle", 4, false, "hub-old")], expected: undefined },
+  ])("$name", ({ sessions, expected }) => {
+    const summary = boundElsewhere(sessions, owners);
+    expect(summary && { count: summary.count, owners: summary.owners.map((o) => o.id) }).toEqual(expected);
+  });
+});
+
+describe("focusGroups", () => {
+  it("lists the projects with a live session bound to the console session, each with only those, in project order", () => {
+    const in_ = (id: string, project: string, status: SessionStatus, bound_to?: string): Session => ({ ...session(id, status, 1, false, bound_to), project_id: project });
+    const groups = focusGroups(
+      [project("a", "alpha"), project("b", "beta"), project("c", "charlie"), project("d", "delta")],
+      [
+        in_("a-mine", "a", "idle", "hub"),
+        in_("a-other", "a", "idle", "other"),
+        in_("b-mine", "b", "working", "hub"),
+        in_("b-unbound", "b", "working"),
+        in_("c-archived", "c", "archived", "hub"),
+      ],
+      "hub",
+    );
+    expect(groups.map((g) => [g.project.id, g.sessions.map((s) => s.id)])).toEqual([
+      ["b", ["b-mine"]],
+      ["a", ["a-mine"]],
+    ]);
   });
 });

@@ -34,7 +34,7 @@ It has three parts:
   the bar fades out at its right edge, as in "Names too long for their space" below, and the status icon always
   stays visible. With no session selected the middle is empty. While the archive view is open (see "The archive view"
   in `docs/product/sidebar.md`) the breadcrumb shows where that is instead, with no status icon: *console › project ›
-  Archived sessions*, or *console › Archived console sessions*.
+  Archived sessions*, *console › console session › Archived bound sessions*, or *console › Archived console sessions*.
 - **Right**, left to right:
   - the **waiting count**, a raised hand with the number of sessions waiting for the user in a badge on its corner,
     shown only while at least one is (99+ beyond 99); pressing it goes to the next waiting session (see "The raised

@@ -19,9 +19,9 @@ console sessions section and the project list" in `docs/product/sidebar.md`).
 
 A console session's row follows a session row exactly — the same status glyph, its agent's icon, its
 title, a pin glyph when pinned, and selecting it resumes it when it is interrupted, as selecting any
-interrupted session does. Its action menu offers **Pin**/**Unpin**, **Rename** and **Archive**; there
-is no Resume item, for the same reason. A console session's title is renameable, like a project
-session's, and defaults to its ordinal ("Hub 1", "Hub 2", …).
+interrupted session does. Its action menu offers **Pin**/**Unpin**, **Rename**, **Focus mode** (see "Focus mode"
+in `docs/product/sidebar.md`), **Switch account** and **Archive**; there is no Resume item, for the same reason. A
+console session's title is renameable, like a project session's, and defaults to its ordinal ("Hub 1", "Hub 2", …).
 
 The console session cannot archive itself (see "The console session's tools" in
 `docs/product/hub-orchestration.md`), so the user archives it from its own row's menu, as any session
@@ -76,7 +76,10 @@ A session is opened under a project with:
   session staying outside the orchestration. A console with no console session that is not archived shows no choice
   at all, and the session is unbound. The binding is fixed for the session's lifetime once set. A session the
   console session itself starts is always bound to it; see "Which sessions the console session drives" in
-  `docs/product/hub-orchestration.md`.
+  `docs/product/hub-orchestration.md`. The choice is offered only from the project list. Opened from a project's
+  focus mode the dialog has no such field and the session is always unbound; opened from a console session's focus
+  mode it has none either, and shows a line saying the session reports to that console session instead, which
+  is the binding it gets (see "Focus mode" in `docs/product/sidebar.md`).
 
 The dialog takes no task: a session the user opens by hand starts in *awaiting instructions*, sitting at the agent's
 prompt, and is given its work by typing into its terminal. Only a session the console session starts is handed an
@@ -379,7 +382,8 @@ project is removed or the console is deleted. They are listed most recently arch
 
 - from the project's "View archive" submenu, or for console sessions the console sessions section's
   "Archived console sessions" submenu, with the newest five;
-- from the project's focus mode, with the newest ten;
+- from the project's focus mode, with the newest ten, bound sessions included; from a console session's focus mode,
+  the archived sessions bound to it, again the newest ten;
 - from the archive view, with all of them.
 
 How each of those looks and behaves is in "Project rows", "Focus mode" and "The archive view" in
@@ -387,14 +391,15 @@ How each of those looks and behaves is in "Project rows", "Focus mode" and "The 
 
 ### Deleting archived sessions
 
-Only an archived session can be deleted: one at a time, or at once every archived session of a project or every
-archived console session of a console. The user is asked to confirm either way.
+Only an archived session can be deleted: one at a time, or at once every archived session of a project, every
+archived session bound to a console session, or every archived console session of a console. The user is asked to
+confirm either way.
 
 **Deleting an archived console session deletes the archived sessions bound to it.** Left behind, reopening one of them
 would have no console session to come back with, and its binding would point at nothing. The confirmation says how many
 that is before anything is deleted; deleting every archived console session of a console takes their archived bound
 sessions in the same way, and says how many. Deleting an archived bound session on its own leaves its console session
-alone, as does deleting a project's archived sessions.
+alone, as does deleting a project's archived sessions or a console session's own archive of bound sessions.
 
 - **Deleting removes only Octoboard's record of the session**, for good. The session disappears from every client, and
   the console session's `list_archived` and `reopen_session` no longer find it. The agent's own record of the conversation, in the

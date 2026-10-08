@@ -77,13 +77,53 @@ export function boundSessions(sessions: Session[], consoleSessionId: string): Se
 
 /** A console session's own archived bound sessions — the project sessions that are bound to it and
  * have since been archived. This is a third filter over the same session records the archive view
- * already serves for a project (`project_id`) and for a console's console sessions (`role`).
- * `ArchiveScope`'s `consoleSession` selects it, but nothing in the sidebar opens that scope yet.
- *
- * TODO(docs/plans/20261008-console-sessions-and-agent-accounts/13-focus-modes.md): a console
- * session's focus mode is what reaches this scope. */
+ * already serves for a project (`project_id`) and for a console's console sessions (`role`);
+ * `ArchiveScope`'s `consoleSession` selects it. */
 export function boundArchivedSessions(sessions: Session[], consoleSessionId: string): Session[] {
   return archivedSessions(sessions.filter((s) => s.bound_to === consoleSessionId));
+}
+
+/** The sessions bound to no console session. A project's focus mode lists only these among its
+ * live sessions; its archive is not filtered this way. */
+export function unboundSessions(sessions: Session[]): Session[] {
+  return sessions.filter((s) => !s.bound_to);
+}
+
+/** The sessions a project's focus mode leaves out of its list: those of `sessions` (the project's)
+ * that are bound to a console session and not archived, counted and grouped by the console session
+ * they report to. `owners` holds the console's console sessions by id; the owners come out in the
+ * sidebar's order, and a session whose owner is not in it, or is archived, cannot be named and is
+ * not counted. An archived owner with a live bound session should not exist (archiving a console
+ * session archives its dormant bound sessions, and reopening a bound one reopens its owner first),
+ * so this only keeps a link that could not be followed from being offered.
+ * `undefined` when there are none, which is when the focus view shows no line at all. */
+export function boundElsewhere(
+  sessions: Session[],
+  owners: Map<string, Session>,
+): { count: number; owners: Session[] } | undefined {
+  const named = (id: string | null | undefined) => {
+    const owner = id ? owners.get(id) : undefined;
+    return owner && owner.status !== "archived" ? owner : undefined;
+  };
+  const bound = sessions.filter((s) => s.status !== "archived" && named(s.bound_to));
+  if (bound.length === 0) return undefined;
+  const ids = new Set(bound.map((s) => s.bound_to!));
+  return { count: bound.length, owners: [...ids].map((id) => named(id)!).sort(compareSessions) };
+}
+
+/** What a console session's focus mode lists: the console's projects that have a live session bound
+ * to `consoleSessionId`, in the order of `sortProjects`, each with only those sessions. */
+export function focusGroups(
+  projects: Project[],
+  sessions: Session[],
+  consoleSessionId: string,
+): { project: Project; sessions: Session[] }[] {
+  const bound = liveSessions(boundSessions(sessions, consoleSessionId));
+  const sessionsOf = (project: Project) => bound.filter((s) => s.project_id === project.id);
+  return sortProjects(
+    projects.filter((p) => sessionsOf(p).length > 0),
+    sessionsOf,
+  ).map((project) => ({ project, sessions: sessionsOf(project) }));
 }
 
 /** What a console in the switcher or a project row shows: the most pressing activity among its sessions. */

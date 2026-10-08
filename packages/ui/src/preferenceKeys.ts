@@ -8,5 +8,5 @@ export const PREFERENCE_KEYS = {
   sidebarWidth: "octoboard.sidebarWidth",
   reportWidth: "octoboard.reportWidth",
   sidebarConsole: "octoboard.sidebarConsole",
-  sidebarFocusProject: "octoboard.sidebarFocusProject",
+  sidebarFocus: "octoboard.sidebarFocus",
 } as const;

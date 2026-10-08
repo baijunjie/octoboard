@@ -123,6 +123,7 @@ export function RequestedDialog({
         <SessionDialog
           console={dialog.console}
           project={dialog.project}
+          binding={dialog.binding}
           sessions={Array.from(sessions.values())}
           onClose={onClose}
           onOpened={onSessionOpened}
@@ -215,8 +216,8 @@ export function RequestedDialog({
     }
     case "delete-archived": {
       // All of a console's archived console sessions take their archived bound sessions with them;
-      // a project's archive does not reach any console session.
-      const consoleSessions = dialog.project
+      // a project's archive, and a console session's own, do not reach any console session.
+      const consoleSessions = dialog.project || dialog.consoleSession
         ? []
         : Array.from(sessions.values()).filter((s) => s.console_id === dialog.console.id && s.role === "console" && s.status === "archived");
       const withThem = consoleSessions.flatMap((owner) => boundArchivedSessions(Array.from(sessions.values()), owner.id)).length;
@@ -233,7 +234,12 @@ export function RequestedDialog({
           destructive
           onCancel={onClose}
           onConfirm={async () => {
-            await request({ type: "delete_archived_sessions", console: dialog.console.id, project: dialog.project?.id });
+            await request({
+              type: "delete_archived_sessions",
+              console: dialog.console.id,
+              project: dialog.project?.id,
+              console_session: dialog.consoleSession?.id,
+            });
             onClose();
           }}
         />

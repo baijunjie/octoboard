@@ -83,7 +83,9 @@ function MenuItems({ entries, label }: { entries: ActionMenuEntry[]; label: stri
       isDisabled={entry.disabled}
     >
       <ItemIcon icon={entry.icon} destructive={entry.destructive} />
-      <Label className="min-w-0 flex-1 truncate">{entry.content ?? entry.label}</Label>
+      {/* A label is often a name the user typed, so it reads in its own direction; `content` sets
+          its own. */}
+      <Label dir={entry.content ? undefined : "auto"} className="min-w-0 flex-1 truncate">{entry.content ?? entry.label}</Label>
       {entry.end}
       {entry.selected !== undefined && <Dropdown.ItemIndicator />}
     </Dropdown.Item>

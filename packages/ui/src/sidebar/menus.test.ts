@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { sessionOf } from "../gallery/fixtures/builders";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
-import type { Account, Session } from "../protocol";
-import { sessionMenu } from "./menus";
+import type { Account, Project, Session } from "../protocol";
+import { projectMenu, sessionMenu } from "./menus";
 import type { SidebarHandlers } from "./types";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
@@ -42,5 +42,37 @@ describe("the Switch account entry", () => {
     expect(handlers.onOpenDialog).toHaveBeenCalledWith(expect.objectContaining({ kind: "switch-account", account: "w", accountName: "w" }));
     (manage as { onClick: () => void }).onClick();
     expect(handlers.onOpenSettings).toHaveBeenCalledWith("accounts");
+  });
+});
+
+describe("the Focus mode entry", () => {
+  const hub = sessionOf("h", "c", undefined, "Hub", "idle");
+  const labels = (session: Session, inFocus = false) =>
+    sessionMenu(t, {} as SidebarHandlers, session, [], { inFocus }).flatMap((entry) => (typeof entry === "object" ? [entry.label] : []));
+
+  it.each([
+    ["a console session's row", hub, false, true],
+    ["a console session's own focus mode", hub, true, false],
+    ["an archived console session", { ...hub, status: "archived" as const }, false, false],
+    ["a project session", sessionOf("s", "c", "p", "Title", "idle"), false, false],
+  ])("is offered for %s: %#", (_, session, inFocus, offered) => {
+    expect(labels(session, inFocus).includes("Focus mode")).toBe(offered);
+  });
+
+  it("enters the console session's focus mode", () => {
+    const handlers = { onFocus: vi.fn() } as unknown as SidebarHandlers;
+    const entry = sessionMenu(t, handlers, hub, []).find((candidate) => typeof candidate === "object" && candidate.label === "Focus mode");
+    (entry as { onClick: () => void }).onClick();
+    expect(handlers.onFocus).toHaveBeenCalledWith({ consoleSession: hub });
+  });
+});
+
+describe("a project's Focus mode entry", () => {
+  const labels = (inFocus: boolean) =>
+    projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, [], { inFocus }).flatMap((entry) => (typeof entry === "object" ? [entry.label] : []));
+
+  it("is left out of any focus mode's project menu, and offered in the project list's", () => {
+    expect(labels(false)).toContain("Focus mode");
+    expect(labels(true)).not.toContain("Focus mode");
   });
 });
