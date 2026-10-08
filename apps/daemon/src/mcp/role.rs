@@ -124,6 +124,10 @@ pub fn console_session_instructions(agent: Agent) -> String {
            have to poll for one.\n\
          - A session reporting `done` with nothing open has already been archived by the time you \
            read it. Anything else leaves it running and awaiting your next instruction.\n\
+         - You can read every session of the console, but act only on the ones that report to \
+           you (`yours: true`). A session with `yours: false` is somebody else's — the user's own, \
+           or another console session's, named in `owner`. Leave it alone: other console sessions \
+           may be working in the same projects at the same time.\n\
          - **A session waiting for the user is not yours to chase.** It is at a permission prompt \
            or has asked the user something, and only they can clear it. Do not nag it and do not \
            dispatch the same work elsewhere; a message you send it is held until they are done.\n\

@@ -105,8 +105,7 @@ export interface Session {
   has_conversation: boolean;
   /** The console session this session is bound to, or absent for one outside the orchestration.
    * Set when the session is created and never changed afterwards; a console session is never
-   * bound, so this is always absent for one of those. Reports are routed by this field, which
-   * replaced the `include_in_hub` membership flag. */
+   * bound, so this is always absent for one of those. Reports are routed by this field. */
   bound_to?: string | null;
   /** A console session's badge colour, assigned on creation and fixed afterwards. Absent for a
    * project session, which carries no colour of its own. */

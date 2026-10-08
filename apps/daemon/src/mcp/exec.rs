@@ -174,10 +174,8 @@ async fn send_message(
     console_session: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let target = resolve_session(state, console_session, required_str(arguments, "session")?)?;
-    if target.role == Role::Console {
-        bail!("this is your own session; say it to the user instead");
-    }
+    let target =
+        resolve_owned_session(state, console_session, required_str(arguments, "session")?)?;
     let text = required_str(arguments, "text")?.to_string();
     let delivery = write_off_runtime(state, &target.id, text, WhenBlocked::Queue).await?;
     Ok(json!({
@@ -233,12 +231,8 @@ fn archive_session(
     console_session: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let target = resolve_session(state, console_session, required_str(arguments, "session")?)?;
-    if target.role == Role::Console {
-        // Including its own: a console session that ended itself would leave its console's project
-        // sessions reporting to nothing.
-        bail!("archiving a console session is the user's to do, not yours");
-    }
+    let target =
+        resolve_owned_session(state, console_session, required_str(arguments, "session")?)?;
     coordinator::archive_session(state, &target.id)?;
     Ok(json!({ "session": target.id, "status": SessionStatus::Archived }))
 }
@@ -271,7 +265,8 @@ async fn reopen_session(
     console_session: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let target = resolve_session(state, console_session, required_str(arguments, "session")?)?;
+    let target =
+        resolve_owned_session(state, console_session, required_str(arguments, "session")?)?;
     // The instruction travels with the relaunch rather than being written after it: whichever hook
     // would release it can fire the moment the agent starts, so the queueing belongs inside the
     // launch, where a refusal also undoes it.
@@ -437,23 +432,68 @@ fn resolve_session(
     Ok(session)
 }
 
-/// `caller` is the console session asking — what `include_in_hub` reports is relative to it, not
-/// an absolute fact about `session`: a console may hold several console sessions, and a session
-/// bound to a different one reads the same as an unbound one here.
-///
-/// TODO(docs/plans/20261008-console-sessions-and-agent-accounts/10-tool-surface.md): tell the two
-/// apart by naming the actual owner, rather than collapsing them to one boolean.
+/// Finds a session the console session may act on: one of its own console's that is bound to it.
+/// Every tool that writes into another session goes through this and nothing else, so the rule
+/// that reads are console-wide and writes are the caller's own is kept in one place. A session that
+/// is unbound, or bound to another console session, is refused with a reason (naming the owner when
+/// there is one), so the model leaves it alone rather than retrying.
+fn resolve_owned_session(
+    state: &Arc<AppState>,
+    console_session: &Session,
+    wanted: &str,
+) -> Result<Session> {
+    let session = resolve_session(state, console_session, wanted)?;
+    if session.role == Role::Console {
+        // Including the caller's own: a console session that ended itself would leave its
+        // console's project sessions reporting to nothing.
+        if wanted == console_session.id {
+            bail!(
+                "session `{wanted}` is your own session. A console session is not yours to act \
+                 on; if you meant to say something, say it to the user"
+            );
+        }
+        bail!(
+            "session `{wanted}` is another console session; acting on one is the user's to do, \
+             not yours"
+        );
+    }
+    match session.bound_to.as_deref() {
+        Some(owner) if owner == console_session.id => Ok(session),
+        Some(owner) => {
+            let title = state
+                .store
+                .get_session(owner)?
+                .map(|owner| format!(" (\"{}\")", owner.title))
+                .unwrap_or_default();
+            bail!(
+                "session `{wanted}` is bound to another console session, `{owner}`{title}. It is \
+                 that console session's to drive, not yours; leave it alone"
+            )
+        }
+        None => bail!(
+            "session `{wanted}` is not bound to any console session: the user opened it themselves \
+             and kept it outside the orchestration. It is theirs, not yours; leave it alone"
+        ),
+    }
+}
+
+/// `caller` is the console session asking. Everything here is the same whoever asks except `yours`,
+/// which is relative to `caller`: a console may hold several console sessions, and each reads a
+/// session's owner alike but is told only of its own that they are its to act on.
 fn describe_session(session: &Session, caller: &Session) -> Value {
     json!({
         "session": session.id,
         "title": session.title,
         "agent": session.agent,
         "status": session.status,
+        "role": session.role,
         "project": session.project_id,
-        // Whether this session reports to the console session asking. A session the user opened
-        // by hand and kept out of the orchestration, or bound to some other console session, is
-        // not this caller's to drive.
-        "include_in_hub": session.bound_to.as_deref() == Some(caller.id.as_str()),
+        // The console session this one reports to. Null for a project session means unbound: the
+        // user opened it themselves and kept it outside the orchestration. It is also null for a
+        // console session, which is never bound, so `role` is what tells the two apart. Only a
+        // session whose owner is the caller is the caller's to act on.
+        "owner": session.bound_to,
+        "yours": session.bound_to.as_deref() == Some(caller.id.as_str()),
         "started_at": session.started_at,
         "ended_at": session.ended_at,
     })
@@ -614,6 +654,213 @@ mod tests {
             .await
             .expect_err("refused");
         assert!(err.to_string().contains("Claude Code"), "{err}");
+    }
+
+    fn project_session(id: &str, console_id: &str, bound_to: Option<&str>) -> Session {
+        Session {
+            role: Role::Project,
+            console_id: console_id.to_string(),
+            project_id: Some("project-1".to_string()),
+            title: format!("Work {id}"),
+            bound_to: bound_to.map(str::to_string),
+            ..console_session(id)
+        }
+    }
+
+    /// Two console sessions of one console, one project, and a session each: bound to `a`, bound to
+    /// `b`, unbound, one archived under each owner, and one in another console.
+    fn shared_console_state(name: &str) -> Arc<AppState> {
+        let state = Arc::new(crate::state::tests::app_state(name));
+        state.store.insert_console(&console()).unwrap();
+        state
+            .store
+            .insert_console(&Console {
+                id: "console-2".to_string(),
+                ..console()
+            })
+            .unwrap();
+        for (id, console_id) in [("project-1", "console-1"), ("project-2", "console-2")] {
+            state
+                .store
+                .insert_project(&Project {
+                    id: id.to_string(),
+                    console_id: console_id.to_string(),
+                    host_id: LOCAL_HOST_ID.to_string(),
+                    name: id.to_string(),
+                    path: format!("/tmp/{id}"),
+                    default_agent: None,
+                    source: ProjectSource::Local,
+                    remote_url: None,
+                    claude_trust_consent: false,
+                    pinned: false,
+                    tags: Vec::new(),
+                })
+                .unwrap();
+        }
+        let mut sessions = vec![
+            console_session("a"),
+            console_session("b"),
+            project_session("of-a", "console-1", Some("a")),
+            project_session("of-b", "console-1", Some("b")),
+            project_session("loose", "console-1", None),
+            Session {
+                project_id: Some("project-2".to_string()),
+                ..project_session("foreign", "console-2", None)
+            },
+        ];
+        for (id, owner) in [("archived-of-a", "a"), ("archived-of-b", "b")] {
+            let mut archived = project_session(id, "console-1", Some(owner));
+            archived.status = SessionStatus::Archived;
+            sessions.push(archived);
+        }
+        for session in &sessions {
+            state.store.insert_session(session).unwrap();
+        }
+        state
+    }
+
+    fn arguments(value: Value) -> Map<String, Value> {
+        value.as_object().unwrap().clone()
+    }
+
+    /// Reads are console-wide: each console session sees the other's sessions and who owns them.
+    #[tokio::test]
+    async fn reads_cover_the_whole_console_with_each_sessions_owner() {
+        let state = shared_console_state("tool-surface-reads");
+        for (caller, other_owner_session, other_owner) in [("a", "of-b", "b"), ("b", "of-a", "a")] {
+            let listed = call(&state, caller, "list_projects", &Map::new())
+                .await
+                .unwrap();
+            // Only this console's project is listed, so the other console's session is not.
+            assert_eq!(listed["projects"].as_array().unwrap().len(), 1);
+            let sessions = listed["projects"][0]["sessions"].as_array().unwrap();
+            let ids: Vec<&str> = sessions
+                .iter()
+                .map(|session| session["session"].as_str().unwrap())
+                .collect();
+            assert_eq!(ids.len(), 3, "{ids:?}");
+            assert!(
+                ids.contains(&"loose") && !ids.contains(&"foreign"),
+                "{ids:?}"
+            );
+            let theirs = sessions
+                .iter()
+                .find(|session| session["session"] == other_owner_session)
+                .unwrap();
+            assert_eq!(theirs["owner"], other_owner);
+            assert_eq!(theirs["yours"], false);
+
+            let fetched = call(
+                &state,
+                caller,
+                "get_session",
+                &arguments(json!({ "session": other_owner_session })),
+            )
+            .await
+            .unwrap();
+            assert_eq!(fetched["owner"], other_owner);
+            assert_eq!(fetched["yours"], false);
+        }
+        let loose = call(
+            &state,
+            "a",
+            "get_session",
+            &arguments(json!({ "session": "loose" })),
+        )
+        .await
+        .unwrap();
+        assert!(loose["owner"].is_null());
+    }
+
+    /// The archive of a project is listed whole, owners marked, rather than filtered to the caller.
+    #[tokio::test]
+    async fn the_archive_lists_every_owners_sessions() {
+        let state = shared_console_state("tool-surface-archive");
+        let listed = call(
+            &state,
+            "a",
+            "list_archived",
+            &arguments(json!({ "project": "project-1" })),
+        )
+        .await
+        .unwrap();
+        let mut owners: Vec<(&str, &str)> = listed["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|session| {
+                (
+                    session["session"].as_str().unwrap(),
+                    session["owner"].as_str().unwrap(),
+                )
+            })
+            .collect();
+        owners.sort();
+        assert_eq!(owners, [("archived-of-a", "a"), ("archived-of-b", "b")]);
+    }
+
+    /// The one ownership check, exercised through each write-side tool: a session that is unbound,
+    /// bound to the other console session, a console session, or from another console is refused
+    /// with a reason. For the two tools whose success would change the session, the session is also
+    /// checked to be untouched; `send_message` has no such visible effect to compare.
+    #[tokio::test]
+    async fn writes_are_refused_for_sessions_the_caller_does_not_own() {
+        let state = shared_console_state("tool-surface-writes");
+        let cases = [
+            (
+                "send_message",
+                "of-b",
+                "bound to another console session, `b`",
+            ),
+            ("send_message", "loose", "not bound to any console session"),
+            ("send_message", "b", "another console session;"),
+            ("send_message", "foreign", "belongs to another console"),
+            (
+                "archive_session",
+                "of-b",
+                "bound to another console session, `b`",
+            ),
+            (
+                "archive_session",
+                "loose",
+                "not bound to any console session",
+            ),
+            ("archive_session", "a", "your own session"),
+            (
+                "reopen_session",
+                "archived-of-b",
+                "bound to another console session, `b`",
+            ),
+        ];
+        for (tool, target, reason) in cases {
+            let before = state.store.get_session(target).unwrap().unwrap();
+            let err = call(
+                &state,
+                "a",
+                tool,
+                &arguments(json!({ "session": target, "text": "hello" })),
+            )
+            .await
+            .expect_err("refused");
+            assert!(err.to_string().contains(reason), "{tool} {target}: {err}");
+            let after = state.store.get_session(target).unwrap().unwrap();
+            if tool != "send_message" {
+                assert_eq!(before.status, after.status, "{tool} {target}");
+                assert_eq!(before.ended_at, after.ended_at, "{tool} {target}");
+            }
+        }
+
+        // The caller's own is not refused by the ownership check.
+        call(
+            &state,
+            "a",
+            "archive_session",
+            &arguments(json!({ "session": "of-a" })),
+        )
+        .await
+        .unwrap();
+        let archived = state.store.get_session("of-a").unwrap().unwrap();
+        assert_eq!(archived.status, SessionStatus::Archived);
     }
 
     #[test]

@@ -246,10 +246,9 @@ pub struct Session {
     pub has_conversation: bool,
     /// The console session this session is bound to, or `None` for one outside the orchestration.
     /// Set when the session is created and never changed afterwards; a console session is never
-    /// bound, so this is always `None` for one of those. Reports are
-    /// routed by this field (`crate::reporting::deliver_report`), which replaced the
-    /// `include_in_hub` membership flag: a binding names who to report to directly, rather than
-    /// asking whether the console happens to have one console session to find by lookup.
+    /// bound, so this is always `None` for one of those. Reports are routed by this field
+    /// (`crate::reporting::deliver_report`): a binding names who to report to directly, rather
+    /// than asking whether the console happens to have one console session to find by lookup.
     pub bound_to: Option<String>,
     /// A console session's badge colour, assigned on creation and fixed afterwards (see
     /// `ConsoleSessionColour`). `None` for a project session, which carries no colour of its own.

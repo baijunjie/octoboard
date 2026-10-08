@@ -66,10 +66,12 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "list_projects",
         description: "List this console's projects: name, host, directory, and the sessions \
-                      currently running in each. A session with `include_in_hub: false` is not \
-                      this caller's to drive — the user opened it themselves and kept it outside \
-                      the orchestration, or it reports to a different console session — leave it \
-                      alone.",
+                      currently running in each — every session of the console, whichever \
+                      console session owns it. Each carries `owner`, the console session it \
+                      reports to, and `yours`; a project session with `owner: null` is unbound, \
+                      which the user opened themselves and kept outside the orchestration. A \
+                      session with `yours: false` is not this caller's to drive — it is \
+                      unbound, or reports to a different console session — leave it alone.",
         schema: || object_schema(json!({}), &[]),
     },
     ToolDef {
@@ -116,7 +118,8 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
         name: "start_session",
         description: "Start a session in one of this console's projects and hand it a task. \
                       Returns the new session's id. The brief is rendered into the session's \
-                      opening prompt.",
+                      opening prompt. The new session reports to this console session, \
+                      which is its owner.",
         schema: || {
             object_schema(
                 json!({
@@ -151,9 +154,10 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     },
     ToolDef {
         name: "send_message",
-        description: "Append an instruction to a running session. Delivered straight away when \
-                      the session is idle or mid-turn; held until the user is done when the \
-                      session is waiting for them.",
+        description: "Append an instruction to a running session of yours. Delivered straight \
+                      away when the session is idle or mid-turn; held until the user is done when \
+                      the session is waiting for them. Refused for a session that is not yours \
+                      (`yours: false`): it is somebody else's, to be left alone.",
         schema: || {
             object_schema(
                 json!({
@@ -168,9 +172,11 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
         name: "get_session",
         description: "The session's status, plus a tail of what it has printed. Use it to follow \
                       up; a session that is waiting for the user must be left alone until they \
-                      have answered, and so must one with `include_in_hub: false` — it is not \
-                      this caller's to drive, whether the user kept it outside the orchestration \
-                      or it reports to a different console session.",
+                      have answered. Any session can be read, but one with `yours: false` is not \
+                      this caller's to act on, whether it is unbound (`owner: null` on a project \
+                      session) or reports to a different console session: leave it alone. \
+                      `owner` says whose it is, and `role` says whether it is a console \
+                      session.",
         schema: || {
             object_schema(
                 json!({
@@ -184,7 +190,8 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
         name: "archive_session",
         description: "End a session's process and archive it. Use it to wrap a session up \
                       explicitly; a session that finishes cleanly with nothing left open is \
-                      archived without being asked.",
+                      archived without being asked. Refused for a session that is not yours \
+                      (`yours: false`): it is somebody else's, to be left alone.",
         schema: || {
             object_schema(
                 json!({
@@ -196,8 +203,10 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     },
     ToolDef {
         name: "list_archived",
-        description: "List the archived sessions of one project, so an earlier one can be \
-                      reopened instead of starting over.",
+        description: "List the archived sessions of one project, whichever console session \
+                      owns them. Each carries its `owner` and `yours`, so an earlier one of \
+                      yours can be reopened instead of starting over. A session with \
+                      `yours: false` is somebody else's: leave it alone.",
         schema: || {
             object_schema(
                 json!({
@@ -212,8 +221,10 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     },
     ToolDef {
         name: "reopen_session",
-        description: "Relaunch an archived or interrupted session, continuing its conversation, \
-                      and optionally hand it the next instruction.",
+        description: "Relaunch an archived or interrupted session of yours, continuing its \
+                      conversation, and optionally hand it the next instruction. Refused for a \
+                      session that is not yours (`yours: false`): it is somebody else's, to be \
+                      left alone.",
         schema: || {
             object_schema(
                 json!({

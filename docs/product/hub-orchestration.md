@@ -23,14 +23,14 @@ console sessions are listed, are in "Console sessions and project sessions" in
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `list_projects` | — | The console's projects: id, name, host, directory, default agent, and the sessions currently running in each. |
+| `list_projects` | — | The console's projects: id, name, host, directory, default agent, and the sessions currently running in each — every session of the console, whichever console session owns it. |
 | `add_project` | `source` (`local` / `parent` / `github`), `path?`, `remote_url?`, `name?`, `default_agent?` | Associates one or more projects with this console, under the same rules as the user's own form (see "Associating a project" in `docs/product/consoles-and-projects.md`). Answers with the projects it added. |
-| `start_session` | `project`, `brief`, `agent?` | Starts a session in one of this console's projects and hands it the brief as its opening prompt. `agent` overrides the agent for that one session. Answers with the new session's id and its agent. Refused, with the reason in prose, when the session's resolved agent has been determined unavailable on this machine — never while that determination is still pending. |
-| `send_message` | `session`, `text` | Appends an instruction to a running session. Answers with whether it was written or queued. |
-| `get_session` | `session` | The session's record — status, title, agent, project, whether it is part of the orchestration, timestamps — plus a tail of what it has printed. |
-| `archive_session` | `session` | Ends the session's process and archives it. |
-| `list_archived` | `project` | The archived sessions of one project. |
-| `reopen_session` | `session`, `text?` | Relaunches an archived or interrupted session, continuing its conversation, and optionally hands it an instruction, delivered once the relaunched session can take one. |
+| `start_session` | `project`, `brief`, `agent?` | Starts a session in one of this console's projects, bound to the calling console session, and hands it the brief as its opening prompt. `agent` overrides the agent for that one session. Answers with the new session's id and its agent. Refused, with the reason in prose, when the session's resolved agent has been determined unavailable on this machine — never while that determination is still pending. |
+| `send_message` | `session`, `text` | Appends an instruction to a running session of the caller's. Answers with whether it was written or queued. |
+| `get_session` | `session` | The session's record — status, title, agent, project, which console session owns it (or that it is unbound), whether it is a console session, whether it is the caller's, timestamps — plus a tail of what it has printed. |
+| `archive_session` | `session` | Ends the process of one of the caller's sessions and archives it. |
+| `list_archived` | `project` | The archived sessions of one project, whoever owns them, each with its owner. |
+| `reopen_session` | `session`, `text?` | Relaunches an archived or interrupted session of the caller's, continuing its conversation, and optionally hands it an instruction, delivered once the relaunched session can take one. |
 | `show_page` | `html` | Pushes an HTML page to the calling console session's report panel, beside the console session's own terminal. Answers with the new page's id. See `docs/product/report-panel.md`. |
 
 A project is named either by its id or by its name where that name is unambiguous within the
@@ -41,7 +41,17 @@ sequences and cursor-control bytes stripped and runs of blank lines collapsed, s
 prose rather than a rendered frame. A session that is waiting for the user carries a note saying so.
 
 The console session reaches only its own console: a session or project id from another console is
-refused. So is `send_message` or `archive_session` aimed at a console session.
+refused. So is `send_message`, `archive_session` or `reopen_session` aimed at a console session.
+
+**Reads are console-wide, writes are the caller's own.** `list_projects`, `get_session` and `list_archived`
+return every session of the console, each carrying `owner` (the console session it is bound to, or null when it is
+unbound) and `yours` (whether that owner is the caller). `send_message`, `archive_session` and `reopen_session` act
+only on a session bound to the caller; for any other they refuse, with a reason naming who owns it, and change
+nothing. `start_session` always binds the new session to the caller, so a console session cannot start one on
+another's behalf. The reads are not narrowed because two console sessions can dispatch into the same project, and so
+the same working directory, at once; one that could not see the other's sessions would collide with them. The tool
+descriptions and the console session's instructions tell it that a session it does not own is somebody else's and is
+to be left alone.
 
 A refused call comes back to the agent as a **tool error carrying the reason in prose**, not as a
 transport failure — "this session is waiting for the user" is advice the model is meant to act on.
@@ -131,9 +141,9 @@ instructions, for the console session to continue with `send_message` or to arch
 A session the console session started is always bound to it, so it always reports to it. A session
 **the user opens by hand is not**, unless they check "Report to console session" in the session
 dialog; the box is unchecked by default and the binding is fixed for that session's lifetime once
-set. Every session record the console session reads carries its binding, and a session that is
-unbound, or bound to a different console session, is not this one's to drive — the console session
-is told to leave it alone.
+set. Every session record the console session reads names its owner, and a session that is
+unbound, or bound to a different console session, is not this one's to drive — it can read such a
+session, but is told to leave it alone and is refused if it tries to act on it.
 
 A console session itself never reports anywhere.
 

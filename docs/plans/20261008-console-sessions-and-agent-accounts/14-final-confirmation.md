@@ -187,3 +187,21 @@ been viewed in a browser.
 - [ ] The `report-two-console-sessions` **gallery scenario** runs clean in a browser. Its steps stop at selecting the
       second console session, so the return to the first is described rather than exercised.
 
+## From milestone 10 — what a console session may see and touch
+
+Covered by unit tests against the tool layer. What cannot be tested here is how a real model reads the texts, since
+every one of them is an instruction to a model rather than something a user sees.
+
+- [ ] With **two console sessions in one console**, each with a bound session in the same project, `list_projects`
+      and `get_session` in each show the other's session with the other's `owner` and `yours: false` — and a real
+      model then actually leaves it alone rather than acting on it.
+- [ ] `send_message`, `archive_session` and `reopen_session` **aimed at the other's session**, and at a session the
+      user opened unbound, come back as tool errors whose prose the model can act on rather than retry, and the
+      target's process and status are unchanged.
+- [ ] `list_archived` shows **both owners' archived sessions**, and a reopen of the other's is refused.
+- [ ] `start_session` really **binds the new session to the caller**. The binding is a hardcoded field and the
+      mechanism is covered by the coordinator's own tests, but nothing has launched a real agent through it.
+- [ ] A real model reads a console session's own record — `role: "console"` with `owner: null` — as neither unbound
+      nor actionable, and reads the reworded tool descriptions, the console session's instructions and the refusal
+      texts as intended.
+
