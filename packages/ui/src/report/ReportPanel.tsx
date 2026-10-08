@@ -18,12 +18,12 @@ import {
 } from "./pageDocument";
 
 /**
- * The console's report panel: shown only for the console session, which is what makes a console's
- * pages visible at all (there is nowhere else to show them). Lists pages on mount and on every
- * snapshot — the daemon never replays a missed `page_created` on its own (see the `page_list`
+ * A console session's report panel: shown only while a console session is selected, which is what
+ * makes its pages visible at all (there is nowhere else to show them). Lists pages on mount and on
+ * every snapshot — the daemon never replays a missed `page_created` on its own (see the `page_list`
  * row under "Daemon to client" in `apps/daemon/PROTOCOL.md`), so re-listing is the only way to recover
- * from one. A console switch mounting a fresh instance is the call site's concern, not this
- * component's.
+ * from one. Switching to another console session mounting a fresh instance, so that its position is
+ * not carried over from the previous one, is the call site's concern, not this component's.
  *
  * Below the `docked` breakpoint this renders as a closed-by-default overlay instead of a row
  * sibling (`open`, owned by `usePaneToggles` alongside the sidebar's own overlay state) — never
@@ -31,7 +31,6 @@ import {
  * state above and re-request it on every reopen.
  */
 export function ReportPanel({
-  consoleId,
   consoleSessionId,
   open,
   reportWidth,
@@ -39,7 +38,6 @@ export function ReportPanel({
   onEscape,
   onCycleRegion,
 }: {
-  consoleId: string;
   consoleSessionId: string;
   open: boolean;
   /** The user's chosen width (`usePaneWidth`) for the docked and the floating forms; the drawer
@@ -60,7 +58,7 @@ export function ReportPanel({
   const t = useT();
   const language = useCurrentLanguage();
   const { request, toastError } = useDaemon();
-  const consolePages = useDaemonStore((s) => s.pages.get(consoleId));
+  const sessionPages = useDaemonStore((s) => s.pages.get(consoleSessionId));
   const connectionState = useDaemonStore((s) => s.connectionState);
   const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
 
@@ -75,27 +73,28 @@ export function ReportPanel({
   // the connection never goes through a state change of its own.
   useEffect(() => {
     if (connectionState !== "open") return;
-    // Guards against a slow reply for a console the user has since switched away from (and
+    // Guards against a slow reply for a console session the user has since switched away from (and
     // possibly back to) landing a now-stale error after the fact.
     let stale = false;
-    request({ type: "list_pages", console: consoleId }).catch((err) => {
+    request({ type: "list_pages", console_session: consoleSessionId }).catch((err) => {
       if (!stale) toastError((err as Error).message);
     });
     return () => {
       stale = true;
     };
-  }, [consoleId, connectionState, snapshotEpoch, request, toastError]);
+  }, [consoleSessionId, connectionState, snapshotEpoch, request, toastError]);
 
   const handleSubmit = useCallback(
     (page: Page, data: unknown) => {
-      // The daemon refuses `submit_page` for any page that is not this console's newest (see
+      // The daemon refuses `submit_page` for any page that is not this console session's newest (see
       // "Client to daemon" in `apps/daemon/PROTOCOL.md`), so a stale submission in flight from a page
       // the user has since paged away from is caught there, not here — this just forwards it and
       // reports whatever comes back.
       //
-      // A submission is delivered to the console session, so that is what the daemon's refusals
-      // are about ("This session is not running.", "This session is waiting for you."): naming it
-      // keeps the user from reading the message as being about whatever session they are looking at.
+      // A submission is delivered to the console session that pushed the page, which is this
+      // panel's, so that is what the daemon's refusals are about ("This session is not running.",
+      // "This session is waiting for you."): naming it keeps the user from reading the message as being
+      // about whatever session they are looking at.
       request({ type: "submit_page", page: page.id, data }).catch((err) => {
         toastError((err as Error).message, consoleSessionId);
       });
@@ -147,7 +146,7 @@ export function ReportPanel({
   };
   const hotZone = peek && <PeekHotZone side="end" peek={peek} />;
 
-  if (consolePages === undefined) {
+  if (sessionPages === undefined) {
     return (
       <>
         <div {...pane} className={panelClass} />
@@ -156,7 +155,7 @@ export function ReportPanel({
     );
   }
 
-  if (consolePages.length === 0) {
+  if (sessionPages.length === 0) {
     return (
       <>
         <div {...pane} className={`${panelClass} items-center justify-center text-sm text-muted`}>
@@ -169,15 +168,15 @@ export function ReportPanel({
 
   // Look the anchor up fresh: an id either still names a page in the current list or it does not,
   // and falling back to the newest on a miss is the "re-arm following" behaviour `goTo` relies on.
-  const anchorIndex = anchorId !== undefined ? consolePages.findIndex((p) => p.id === anchorId) : -1;
-  const displayIndex = anchorIndex === -1 ? consolePages.length - 1 : anchorIndex;
-  const page = consolePages[displayIndex];
-  const isHistory = displayIndex !== consolePages.length - 1;
+  const anchorIndex = anchorId !== undefined ? sessionPages.findIndex((p) => p.id === anchorId) : -1;
+  const displayIndex = anchorIndex === -1 ? sessionPages.length - 1 : anchorIndex;
+  const page = sessionPages[displayIndex];
+  const isHistory = displayIndex !== sessionPages.length - 1;
 
   const goTo = (index: number) => {
     // Clearing the anchor on the newest page makes "following" its own state again: the next
     // `page_created` then needs no special-casing to keep the view on the new newest page.
-    setAnchorId(index === consolePages.length - 1 ? undefined : consolePages[index].id);
+    setAnchorId(index === sessionPages.length - 1 ? undefined : sessionPages[index].id);
   };
 
   return (
@@ -200,7 +199,7 @@ export function ReportPanel({
             </Button>
           </TitledControl>
           <span className="whitespace-nowrap">
-            {t("report.position", { index: displayIndex + 1, total: consolePages.length })}
+            {t("report.position", { index: displayIndex + 1, total: sessionPages.length })}
           </span>
           <TitledControl title={t("report.next")}>
             <Button
@@ -209,7 +208,7 @@ export function ReportPanel({
               variant="ghost"
               aria-label={t("report.next")}
               preventFocusOnPress
-              isDisabled={displayIndex === consolePages.length - 1}
+              isDisabled={displayIndex === sessionPages.length - 1}
               onPress={() => goTo(displayIndex + 1)}
             >
               <ChevronRight aria-hidden="true" className="size-4 rtl:-scale-x-100" />

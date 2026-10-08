@@ -6,8 +6,9 @@ const GROUP = "Report panel";
 
 const console_ = consoleOf("c-1", "Main");
 const project = projectOf("p-1", console_.id, "Search API");
+const consoleSession = sessionOf("s-console", console_.id, undefined, "Hub", "idle", { colour: "teal" });
 const sessions = [
-  sessionOf("s-console", console_.id, undefined, "Hub", "idle", { colour: "teal" }),
+  consoleSession,
   sessionOf("s-1", console_.id, project.id, "Add idempotency keys", "working"),
 ];
 
@@ -31,13 +32,30 @@ const form = `<!doctype html><html><head><title>Choose a release</title></head><
 </body></html>`;
 
 const pages: Page[] = [
-  pageOf("pg-1", console_.id, summary("Morning summary"), 60 * 20),
-  pageOf("pg-2", console_.id, summary("Midday summary"), 60 * 8),
-  pageOf("pg-3", console_.id, form, 12),
+  pageOf("pg-1", consoleSession.id, summary("Morning summary"), 60 * 20),
+  pageOf("pg-2", consoleSession.id, summary("Midday summary"), 60 * 8),
+  pageOf("pg-3", consoleSession.id, form, 12),
 ];
 
 const withPages = (list: Page[]) =>
-  snapshotState({ consoles: [console_], projects: [project], sessions, pages: { [console_.id]: list } });
+  snapshotState({ consoles: [console_], projects: [project], sessions, pages: { [consoleSession.id]: list } });
+
+// Two console sessions in one console, each with pages of its own.
+const hub1 = sessionOf("s-hub-1", console_.id, undefined, "Hub 1", "idle", { colour: "olive" });
+const hub2 = sessionOf("s-hub-2", console_.id, undefined, "Hub 2", "idle", { colour: "jade" });
+const twoSessions = snapshotState({
+  consoles: [console_],
+  projects: [project],
+  sessions: [hub1, hub2],
+  pages: {
+    [hub1.id]: [pageOf("h1-1", hub1.id, summary("Hub 1, first"), 60 * 6), pageOf("h1-2", hub1.id, summary("Hub 1, second"), 30)],
+    [hub2.id]: [
+      pageOf("h2-1", hub2.id, summary("Hub 2, first"), 60 * 5),
+      pageOf("h2-2", hub2.id, summary("Hub 2, second"), 60 * 2),
+      pageOf("h2-3", hub2.id, form, 10),
+    ],
+  },
+});
 
 export const reportScenarios: Scenario[] = [
   {
@@ -69,5 +87,20 @@ export const reportScenarios: Scenario[] = [
     title: "One page, a day old",
     state: withPages([{ ...pages[0], created_at: minutesAgo(60 * 30) }]),
     steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500)],
+  },
+  {
+    id: "report-two-console-sessions",
+    group: GROUP,
+    title: "Two console sessions, each with its own pages",
+    description:
+      "Hub 1 is paged back to its first page (read-only, 1 / 2). Selecting Hub 2 shows only its own pages, " +
+      "on its newest (3 / 3, a form). Selecting Hub 1 again shows its newest page, not where it was left.",
+    state: twoSessions,
+    steps: [
+      (ui) => ui.press(ui.session("Hub 1")),
+      (ui) => ui.press(ui.t("report.previous")),
+      (ui) => ui.press(ui.session("Hub 2")),
+      (ui) => ui.wait(500),
+    ],
   },
 ];

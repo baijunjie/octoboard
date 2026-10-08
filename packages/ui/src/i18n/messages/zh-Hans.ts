@@ -101,7 +101,6 @@ export const zhHans: Translation<"other"> = {
   "daemon.relocation_failed": "无法将对话复制到“{path}”：{detail}。会话仍在原账户上。",
   "daemon.session_did_not_stop": "{session} 未能及时停止，因此没有切换。它可能仍在运行。",
   "daemon.switch_did_not_come_up": "{session} 在新账户下重新启动后立即结束，因此仍在原账户上。",
-  "daemon.console_session_missing": "此控制台没有可提交的控制台会话。",
   "daemon.session_not_running": "此会话未在运行。",
   "daemon.session_not_archived": "只能删除已归档的会话。",
   "daemon.session_waiting_for_user": "此会话正在等你回应。请先在终端中回答。",

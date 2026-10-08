@@ -359,15 +359,15 @@ pub async fn handle(
             Ok(None)
         }
 
-        RequestBody::ListPages { console } => {
-            state
-                .store
-                .get_console(&console)?
-                .ok_or_else(|| CodedError::unknown_console(&console))?;
-            let pages = state.store.list_pages(&console)?;
+        RequestBody::ListPages { console_session } => {
+            let session = state.session_record(&console_session)?;
+            if session.role != Role::Console {
+                return Err(CodedError::unknown_session(&console_session));
+            }
+            let pages = state.store.list_pages(&console_session)?;
             Ok(Some(Event::PageList {
                 id: request_id,
-                console_id: console,
+                console_session_id: console_session,
                 pages,
             }))
         }
@@ -1193,7 +1193,7 @@ fn send_message(state: &Arc<AppState>, id: &str, text: &str) -> Result<()> {
     Ok(())
 }
 
-/// A report panel form submission. Refused unless `page_id` names that console's newest page —
+/// A report panel form submission. Refused unless `page_id` names its console session's newest page —
 /// history pages are read-only, and this is where that is actually enforced; a panel that disables
 /// its own submit button on a history page is only reflecting the rule, not the source of it.
 async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Value) -> Result<()> {
@@ -1204,7 +1204,7 @@ async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Val
             &[("page", page_id)],
         )
     })?;
-    let newest = state.store.newest_page_id(&page.console_id)?;
+    let newest = state.store.newest_page_id(&page.console_session_id)?;
     if newest.as_deref() != Some(page.id.as_str()) {
         return Err(CodedError::raised(
             error_code::PAGE_NOT_CURRENT,
@@ -1212,13 +1212,7 @@ async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Val
             &[],
         ));
     }
-    let console_session = newest_console_session(state, &page.console_id)?.ok_or_else(|| {
-        CodedError::raised(
-            error_code::CONSOLE_SESSION_MISSING,
-            "this console has no console session, so there is nobody to submit to",
-            &[],
-        )
-    })?;
+    let console_session_id = page.console_session_id;
 
     let message = reporting::render_page_submission(&page.id, &data);
     let owned_state = state.clone();
@@ -1227,30 +1221,13 @@ async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Val
     tokio::task::spawn_blocking(move || {
         reporting::write_message(
             &owned_state,
-            &console_session.id,
+            &console_session_id,
             &message,
             reporting::WhenBlocked::Queue,
         )
     })
     .await??;
     Ok(())
-}
-
-/// One console session to address a report-panel submission to, preferring one with a process
-/// behind it: a console may hold several, but a page still belongs to the console as a whole
-/// rather than to one of them, so which one gets the submission is a guess.
-///
-/// TODO(docs/plans/20261008-console-sessions-and-agent-accounts/09-report-panel-scope.md): remove
-/// this once a page carries the id of the console session it belongs to.
-fn newest_console_session(state: &Arc<AppState>, console_id: &str) -> Result<Option<Session>> {
-    let mut candidates: Vec<Session> = state
-        .store
-        .list_sessions()?
-        .into_iter()
-        .filter(|session| session.console_id == console_id && session.role == Role::Console)
-        .collect();
-    candidates.sort_by_key(|session| (session.status.is_dormant(), -session.started_at));
-    Ok(candidates.into_iter().next())
 }
 
 /// Refuses to open a session whose resolved agent has been *determined* unavailable — never while
@@ -2766,6 +2743,103 @@ mod tests {
             state.store.get_session("s").unwrap().unwrap().status,
             SessionStatus::Archived
         );
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    fn page_of(id: &str, console_session_id: &str, created_at: i64) -> crate::protocol::Page {
+        crate::protocol::Page {
+            id: id.to_string(),
+            console_session_id: console_session_id.to_string(),
+            html: "<p>page</p>".to_string(),
+            anchor_message_id: None,
+            created_at,
+        }
+    }
+
+    /// Two console sessions in one console each keep their own page history: a submission is
+    /// written into the console session that pushed the page and no other, and "the newest page"
+    /// is the newest of that console session, so a later page from the other one does not make an
+    /// earlier page read-only.
+    #[tokio::test]
+    async fn a_page_submission_reaches_the_console_session_that_pushed_it() {
+        let state = Arc::new(crate::state::tests::app_state(
+            "submit-page-routes-by-owner",
+        ));
+        let dir = temp_dir("submit-page-routes-by-owner");
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &dir))
+            .unwrap();
+        let mut live = HashMap::new();
+        for id in ["owner-a", "owner-b"] {
+            state
+                .store
+                .insert_session(&bare_session(id, Role::Console))
+                .unwrap();
+            let session =
+                crate::state::tests::fake_live_session(id, Agent::Claude, 80, 24, "sleep 30");
+            state.register_live(session.clone());
+            crate::session::spawn_reader_thread(session.clone(), 8 * 1024);
+            live.insert(id, session);
+        }
+        for page in [
+            page_of("a-old", "owner-a", 1),
+            page_of("a-new", "owner-a", 3),
+            page_of("b-new", "owner-b", 4),
+        ] {
+            state.store.insert_page(&page).unwrap();
+        }
+
+        // Pages are listed by console session only: a project session is not one.
+        state
+            .store
+            .insert_session(&bare_session("worker", Role::Project))
+            .unwrap();
+        let listing = |session: &str| {
+            handle(
+                &state,
+                None,
+                RequestBody::ListPages {
+                    console_session: session.to_string(),
+                },
+            )
+        };
+        assert!(matches!(
+            listing("owner-a").await.unwrap(),
+            Some(Event::PageList { ref pages, .. }) if pages.len() == 2
+        ));
+        let refused = listing("worker").await.expect_err("not a console session");
+        assert_eq!(code_of(&refused), error_code::UNKNOWN_SESSION);
+
+        let refused = submit_page(&state, "a-old", serde_json::json!({}))
+            .await
+            .expect_err("a history page of its console session");
+        assert_eq!(code_of(&refused), error_code::PAGE_NOT_CURRENT);
+
+        submit_page(&state, "a-new", serde_json::json!({}))
+            .await
+            .expect("owner-a's newest page, though owner-b has a later one");
+
+        let output_of = |id: &str| {
+            let deadline = Instant::now() + Duration::from_millis(500);
+            loop {
+                let output = live[id].recent_output(8 * 1024);
+                if !output.is_empty() || Instant::now() >= deadline {
+                    return String::from_utf8_lossy(&output).into_owned();
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        };
+        assert!(output_of("owner-a").contains("a-new"));
+        // Read once, after owner-a's delivery has landed. A mistaken write to owner-b would most
+        // likely have arrived by now; this cannot rule out one that is still on its way.
+        assert!(!live["owner-b"]
+            .recent_output(8 * 1024)
+            .windows(5)
+            .any(|window| window == b"a-new"));
+        for session in live.values() {
+            session.terminate();
+        }
         std::fs::remove_dir_all(dir).ok();
     }
 }

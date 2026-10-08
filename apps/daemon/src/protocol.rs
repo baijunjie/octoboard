@@ -276,14 +276,14 @@ pub struct Session {
     pub ended_at: Option<i64>,
 }
 
-/// One page the console session pushed to its console's report panel. Every page is kept, so the
-/// panel can be paged back through; `anchor_message_id` records the conversation position the page
-/// was pushed at and is stored only (see "Data model" in `docs/architecture.md`), and no agent
-/// exposes a message id to put in it yet.
+/// One page a console session pushed to its report panel. It belongs to that console session, not
+/// to its console. Every page is kept, so the panel can be paged back through; `anchor_message_id`
+/// records the conversation position the page was pushed at and is stored only (see "Data model"
+/// in `docs/architecture.md`), and no agent exposes a message id to put in it yet.
 #[derive(Debug, Clone, Serialize)]
 pub struct Page {
     pub id: String,
-    pub console_id: String,
+    pub console_session_id: String,
     pub html: String,
     pub anchor_message_id: Option<String>,
     pub created_at: i64,
@@ -492,11 +492,12 @@ pub enum RequestBody {
         title: String,
     },
     ListPages {
-        console: String,
+        console_session: String,
     },
     /// What a report panel form was submitted with. The page it came from is named rather than the
     /// console session, because that is what the panel knows and it is also what decides whether the
-    /// submission is allowed at all: only the console's newest page is live.
+    /// submission is allowed at all: only its console session's newest page is live. The page also
+    /// names the console session the submission is delivered to.
     SubmitPage {
         page: String,
         data: serde_json::Value,
@@ -650,14 +651,14 @@ pub enum Event {
         entries: Vec<DirEntry>,
     },
     /// The reply to `list_pages`, oldest first. Pages are not in `snapshot`: a page carries a whole
-    /// HTML document, and only a console whose console session the user is looking at needs its
-    /// pages, so the panel asks for them instead — and asks again after every `snapshot`, which is
-    /// what keeps it correct across a `page_created` the client was too far behind to receive. A
+    /// HTML document, and only the console session the user is looking at needs its pages, so the
+    /// panel asks for them instead — and asks again after every `snapshot`, which is what keeps it
+    /// correct across a `page_created` the client was too far behind to receive. A
     /// lagging client is sent a fresh snapshot in place of the events it missed, on the socket it
     /// already has, so nothing else tells it that its list is now short.
     PageList {
         id: Option<String>,
-        console_id: String,
+        console_session_id: String,
         pages: Vec<Page>,
     },
     /// A page the console session just pushed. The panel showing that console session refreshes to
@@ -905,7 +906,6 @@ pub mod error_code {
     pub const SESSION_WAITING_FOR_USER: &str = "session_waiting_for_user";
     pub const QUEUED_MESSAGES_LOST: &str = "queued_messages_lost";
     pub const PAGE_NOT_CURRENT: &str = "page_not_current";
-    pub const CONSOLE_SESSION_MISSING: &str = "console_session_missing";
     pub const BINARY_NOT_FOUND: &str = "binary_not_found";
     pub const SHELL_ENVIRONMENT_TIMEOUT: &str = "shell_environment_timeout";
     /// A session's resolved agent has been determined unavailable (its binary does not resolve on
@@ -1044,9 +1044,9 @@ mod tests {
                 },
             ),
             (
-                r#"{"type":"list_pages","id":"request-1","console":"console-7"}"#,
+                r#"{"type":"list_pages","id":"request-1","console_session":"session-7"}"#,
                 |body| match body {
-                    RequestBody::ListPages { console } => Some(console),
+                    RequestBody::ListPages { console_session } => Some(console_session),
                     _ => None,
                 },
             ),

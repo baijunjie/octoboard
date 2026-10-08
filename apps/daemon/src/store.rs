@@ -142,7 +142,9 @@ impl Store {
             );
             CREATE TABLE IF NOT EXISTS pages (
                 id                TEXT PRIMARY KEY,
-                console_id        TEXT NOT NULL REFERENCES consoles(id) ON DELETE CASCADE,
+                -- The console session that pushed the page; deleting it takes its pages, and
+                -- deleting a console therefore takes all of them.
+                console_session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
                 html              TEXT NOT NULL,
                 anchor_message_id TEXT,
                 created_at        INTEGER NOT NULL
@@ -515,7 +517,7 @@ impl Store {
         let conn = self.lock();
         let page = conn
             .query_row(
-                "SELECT id, console_id, html, anchor_message_id, created_at
+                "SELECT id, console_session_id, html, anchor_message_id, created_at
                  FROM pages WHERE id = ?1",
                 params![id],
                 read_page,
@@ -526,11 +528,11 @@ impl Store {
 
     pub fn insert_page(&self, page: &Page) -> Result<()> {
         self.lock().execute(
-            "INSERT INTO pages (id, console_id, html, anchor_message_id, created_at)
+            "INSERT INTO pages (id, console_session_id, html, anchor_message_id, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
                 page.id,
-                page.console_id,
+                page.console_session_id,
                 page.html,
                 page.anchor_message_id,
                 page.created_at,
@@ -541,27 +543,27 @@ impl Store {
 
     /// Oldest first: `created_at` alone can tie at millisecond resolution, so `id` breaks the tie
     /// deterministically rather than leaving the order to SQLite's whim.
-    pub fn list_pages(&self, console_id: &str) -> Result<Vec<Page>> {
+    pub fn list_pages(&self, console_session_id: &str) -> Result<Vec<Page>> {
         let conn = self.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, console_id, html, anchor_message_id, created_at
-             FROM pages WHERE console_id = ?1 ORDER BY created_at, id",
+            "SELECT id, console_session_id, html, anchor_message_id, created_at
+             FROM pages WHERE console_session_id = ?1 ORDER BY created_at, id",
         )?;
         let rows = stmt
-            .query_map(params![console_id], read_page)?
+            .query_map(params![console_session_id], read_page)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(rows)
     }
 
-    /// The id of the console's newest page, or `None` if it has none yet. The ordering is the exact
+    /// The id of the console session's newest page, or `None` if it has none yet. The ordering is the exact
     /// reverse of [`Self::list_pages`]'s, so the two never disagree about which page is newest when
     /// `created_at` ties.
-    pub fn newest_page_id(&self, console_id: &str) -> Result<Option<String>> {
+    pub fn newest_page_id(&self, console_session_id: &str) -> Result<Option<String>> {
         let id = self
             .lock()
             .query_row(
-                "SELECT id FROM pages WHERE console_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 1",
-                params![console_id],
+                "SELECT id FROM pages WHERE console_session_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 1",
+                params![console_session_id],
                 |row| row.get(0),
             )
             .optional()?;
@@ -795,6 +797,16 @@ fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
     Ok(found > 0)
 }
 
+/// A column each table must already have for a database to be in the current shape, one entry per
+/// schema change that has no migration. A table that does not exist at all is not outdated — it is
+/// what `CREATE TABLE IF NOT EXISTS` is about to create fresh — so only a table that is present
+/// without its column counts against the file.
+const CURRENT_SHAPE_COLUMNS: [(&str, &str); 3] = [
+    ("sessions", "bound_to"),
+    ("sessions", "account_id"),
+    ("pages", "console_session_id"),
+];
+
 /// Moves `path` aside and out of the way when it is a database from before this schema, so that
 /// `Store::open`'s own `CREATE TABLE IF NOT EXISTS` always lands on either an empty file or one
 /// already in the current shape, and runs no migration of its own. "Before this schema" is
@@ -802,9 +814,9 @@ fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
 /// path: a `sessions` table that predates the binding milestone 2 added has no `bound_to` column,
 /// and one that predates the accounts milestone (4) has no `account_id` column — every build that
 /// has ever carried one of those also carries the rest of the shape as of its own milestone, so
-/// the two columns together tell an outdated table apart from a current one. A `sessions` table
-/// that does not exist at all is not outdated — it is what `CREATE TABLE IF NOT EXISTS` is about
-/// to create fresh.
+/// the two columns together tell an outdated table apart from a current one. A `pages` table that
+/// still names the console rather than the console session (milestone 9) is outdated the same way;
+/// see [`CURRENT_SHAPE_COLUMNS`].
 ///
 /// The old file is renamed rather than deleted, so a user who needs what was in it still has it on
 /// disk; see "the files Octoboard keeps under `~/.octoboard`" in
@@ -812,14 +824,17 @@ fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
 fn supersede_if_outdated(path: &Path) -> Result<()> {
     {
         let conn = Connection::open(path).with_context(|| format!("opening {}", path.display()))?;
-        let sessions_exists: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sessions'",
-            [],
-            |row| row.get(0),
-        )?;
-        let current = sessions_exists == 0
-            || (column_exists(&conn, "sessions", "bound_to")?
-                && column_exists(&conn, "sessions", "account_id")?);
+        let mut current = true;
+        for (table, column) in CURRENT_SHAPE_COLUMNS {
+            let table_exists: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                params![table],
+                |row| row.get(0),
+            )?;
+            if table_exists > 0 && !column_exists(&conn, table, column)? {
+                current = false;
+            }
+        }
         if current {
             return Ok(());
         }
@@ -966,7 +981,7 @@ fn read_project(row: &Row<'_>) -> rusqlite::Result<Project> {
 fn read_page(row: &Row<'_>) -> rusqlite::Result<Page> {
     Ok(Page {
         id: row.get(0)?,
-        console_id: row.get(1)?,
+        console_session_id: row.get(1)?,
         html: row.get(2)?,
         anchor_message_id: row.get(3)?,
         created_at: row.get(4)?,
@@ -1693,5 +1708,100 @@ mod tests {
             )
             .expect("inserted");
         assert_eq!(named.title, "Investigate the outage");
+    }
+
+    fn page(id: &str, console_session_id: &str, created_at: i64) -> Page {
+        Page {
+            id: id.to_string(),
+            console_session_id: console_session_id.to_string(),
+            html: String::new(),
+            anchor_message_id: None,
+            created_at,
+        }
+    }
+
+    /// Pages belong to the console session that pushed them: listing and "the newest" are per
+    /// console session even within one console, a tie on `created_at` still resolves to the same
+    /// page in both, and deleting a console session takes its pages and no one else's.
+    #[test]
+    fn pages_are_scoped_to_their_console_session_and_deleted_with_it() {
+        let path = temp_db("pages-per-console-session");
+        let store = Store::open(&path).expect("store");
+        store.insert_console(&console(None, None, None)).unwrap();
+        for id in ["session-a", "session-b"] {
+            store.insert_session(&console_session(id)).unwrap();
+        }
+        for page in [
+            page("a-1", "session-a", 1),
+            page("b-1", "session-b", 2),
+            page("a-2", "session-a", 3),
+            page("a-3", "session-a", 3),
+        ] {
+            store.insert_page(&page).unwrap();
+        }
+
+        let ids = |owner: &str| -> Vec<String> {
+            store
+                .list_pages(owner)
+                .unwrap()
+                .into_iter()
+                .map(|page| page.id)
+                .collect()
+        };
+        assert_eq!(ids("session-a"), ["a-1", "a-2", "a-3"]);
+        assert_eq!(ids("session-b"), ["b-1"]);
+        assert_eq!(
+            store.newest_page_id("session-a").unwrap().as_deref(),
+            Some("a-3")
+        );
+        assert_eq!(
+            store.newest_page_id("session-b").unwrap().as_deref(),
+            Some("b-1")
+        );
+
+        store.delete_session("session-a").unwrap();
+        assert!(ids("session-a").is_empty());
+        assert_eq!(ids("session-b"), ["b-1"]);
+
+        store.delete_console("console-1").unwrap();
+        assert!(ids("session-b").is_empty());
+        assert!(store.get_page("b-1").unwrap().is_none());
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    /// A database already in the current shape is opened in place, and one whose `pages` table
+    /// still names the console rather than the console session — the only difference from the
+    /// current shape — is moved aside, though its `sessions` table is current.
+    #[test]
+    fn a_pages_table_naming_the_console_marks_the_database_outdated() {
+        let moved_aside = |old_pages: bool| -> bool {
+            let path = temp_db(if old_pages {
+                "old-pages"
+            } else {
+                "current-pages"
+            });
+            drop(Store::open(&path).expect("current shape"));
+            if old_pages {
+                let conn = Connection::open(&path).expect("reopened");
+                conn.execute_batch(
+                    "DROP TABLE pages;
+                     CREATE TABLE pages (id TEXT PRIMARY KEY, console_id TEXT NOT NULL,
+                         html TEXT NOT NULL, anchor_message_id TEXT, created_at INTEGER NOT NULL);",
+                )
+                .expect("old pages table");
+            }
+            Store::open(&path).expect("opens");
+            let moved = path.parent().unwrap().read_dir().unwrap().any(|entry| {
+                entry
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("octoboard.db.superseded-")
+            });
+            std::fs::remove_dir_all(path.parent().unwrap()).ok();
+            moved
+        };
+        assert!(!moved_aside(false));
+        assert!(moved_aside(true));
     }
 }

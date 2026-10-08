@@ -127,11 +127,11 @@ export interface Session {
   ended_at?: number | null;
 }
 
-/** One page the console session pushed to its console's report panel. `anchor_message_id` is stored only — the
- * rewind linkage that would read it does not exist. */
+/** One page a console session pushed to its report panel; it belongs to that console session, not to its
+ * console. `anchor_message_id` is stored only — the rewind linkage that would read it does not exist. */
 export interface Page {
   id: string;
-  console_id: string;
+  console_session_id: string;
   html: string;
   anchor_message_id?: string | null;
   created_at: number;
@@ -293,9 +293,10 @@ export type RequestBody =
   | { type: "set_session_pinned"; session: string; pinned: boolean }
   | { type: "send_message"; session: string; text: string }
   | { type: "rename_session"; session: string; title: string }
-  | { type: "list_pages"; console: string }
+  | { type: "list_pages"; console_session: string }
   /** What a report panel form was submitted with. The page is named rather than the console
-   * session: it is what the panel knows, and only a console's newest page may be submitted from. */
+   * session: it is what the panel knows, and it names the console session the submission goes to.
+   * Only that console session's newest page may be submitted from. */
   | { type: "submit_page"; page: string; data: unknown }
   /** The user's go-ahead to a `claude_trust_prompt`: Octoboard may answer that session's trust
    * screen. `remember` also records the project's consent, so its later sessions are answered
@@ -390,7 +391,7 @@ export type Event =
    * HTML document — so the panel asks for them, and asks again after every `snapshot`: a client
    * that falls too far behind the daemon's broadcasts is sent a fresh snapshot in place of the
    * events it missed, on the same socket, so re-listing is the only way back to a correct list. */
-  | { type: "page_list"; id?: string; console_id: string; pages: Page[] }
+  | { type: "page_list"; id?: string; console_session_id: string; pages: Page[] }
   /** A page the console session just pushed. The panel showing that console session refreshes to it. */
   | { type: "page_created"; page: Page }
   | { type: "ack"; id?: string }

@@ -134,7 +134,7 @@ resumed at that moment — those must be archived (or the application restarted,
 error names the reason.
 
 When it goes through, deleting a console also deletes every project association under it, every session record
-belonging to it, archived sessions included, and every page its console session pushed to the report panel, and
+belonging to it, archived sessions included, and every page its console sessions pushed to the report panel, and
 removes the console's own working directory under `~/.octoboard`. No project directory is touched.
 
 ## Projects

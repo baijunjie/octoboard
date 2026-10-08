@@ -292,7 +292,7 @@ fn show_page(
     let html = required_str(arguments, "html")?.to_string();
     let page = Page {
         id: Uuid::new_v4().to_string(),
-        console_id: console_session.console_id.clone(),
+        console_session_id: console_session.id.clone(),
         html,
         // No agent exposes a message id to put here yet; the rewind linkage that would read it is
         // not built.

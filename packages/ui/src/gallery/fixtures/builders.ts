@@ -63,8 +63,8 @@ export function sessionOf(
   };
 }
 
-export function pageOf(id: string, consoleId: string, html: string, minutes: number): Page {
-  return { id, console_id: consoleId, html, created_at: minutesAgo(minutes) };
+export function pageOf(id: string, consoleSessionId: string, html: string, minutes: number): Page {
+  return { id, console_session_id: consoleSessionId, html, created_at: minutesAgo(minutes) };
 }
 
 export function gitStatusOf(projectId: string, extra: Partial<GitStatus> = {}): GitStatus {

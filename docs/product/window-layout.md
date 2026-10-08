@@ -4,10 +4,10 @@ The window has a **top bar** across its whole width and, under it, up to three p
 under a right-to-left language, see "Right-to-left layout" below): the **sidebar**, showing one console's console
 session, projects and sessions (see `docs/product/sidebar.md`), the selected session's **terminal**, which the archive
 view covers while it is open (see "The archive view" in `docs/product/sidebar.md`), and — only while the selected
-session is a console session — that console's **report panel** (see `docs/product/report-panel.md`). The connection banner, while the
-daemon connection is down, is a full-width strip along the window's bottom edge, under the panes (see "Losing the
-daemon connection" in `docs/product/application-lifecycle.md`). Toasts float over the bottom right, above the banner
-while it is shown (see "Toasts" below).
+session is a console session — that console session's **report panel** (see `docs/product/report-panel.md`). The
+connection banner, while the daemon connection is down, is a full-width strip along the window's bottom edge, under
+the panes (see "Losing the daemon connection" in `docs/product/application-lifecycle.md`). Toasts float over the
+bottom right, above the banner while it is shown (see "Toasts" below).
 
 How the three panes are arranged depends on one width, **1100 px**. At that width and above they sit side by
 side in a row, the layout the macOS window is always in; a pane the user has hidden there can still float in over

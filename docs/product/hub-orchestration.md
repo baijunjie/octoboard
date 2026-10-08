@@ -31,7 +31,7 @@ console sessions are listed, are in "Console sessions and project sessions" in
 | `archive_session` | `session` | Ends the session's process and archives it. |
 | `list_archived` | `project` | The archived sessions of one project. |
 | `reopen_session` | `session`, `text?` | Relaunches an archived or interrupted session, continuing its conversation, and optionally hands it an instruction, delivered once the relaunched session can take one. |
-| `show_page` | `html` | Pushes an HTML page to the console's report panel, beside the console session's own terminal. Answers with the new page's id. See `docs/product/report-panel.md`. |
+| `show_page` | `html` | Pushes an HTML page to the calling console session's report panel, beside the console session's own terminal. Answers with the new page's id. See `docs/product/report-panel.md`. |
 
 A project is named either by its id or by its name where that name is unambiguous within the
 console; an ambiguous name is refused and asks for the id.

@@ -78,8 +78,8 @@ export interface State {
   consoles: Map<string, Console>;
   projects: Map<string, Project>;
   sessions: Map<string, Session>;
-  /** Keyed by console id, oldest first, as `page_list` delivers them. Absent for a console the
-   * report panel has not (re-)listed yet — distinct from an empty array, which means it has and
+  /** Keyed by console session id, oldest first, as `page_list` delivers them. Absent for a console
+   * session the report panel has not (re-)listed yet — distinct from an empty array, which means it has and
    * there genuinely are none. Pages are deliberately left out of `snapshot` (see `protocol.ts`),
    * so this map starts empty and is filled only by the panel's own `list_pages` requests. */
   pages: Map<string, Page[]>;
@@ -154,10 +154,10 @@ function reducer(state: State, action: Action): State {
             projects: new Map(event.projects.map((p) => [p.id, p])),
             sessions: new Map(event.sessions.map((s) => [s.id, s])),
             // A snapshot means either first connect or a lag recovery, and carries no pages either
-            // way (see `Page` in protocol.ts). Cleared rather than kept, because a console that
-            // was deleted while this client was behind would otherwise go on holding that
-            // console's pages forever — nothing else ever removes an entry for a console the
-            // snapshot no longer lists.
+            // way (see `Page` in protocol.ts). Cleared rather than kept, because a console session
+            // that was deleted while this client was behind would otherwise go on holding its
+            // pages forever — nothing else ever removes an entry for a session the snapshot no
+            // longer lists.
             pages: new Map(),
             snapshotEpoch: state.snapshotEpoch + 1,
             trustPrompts: [],
@@ -191,8 +191,10 @@ function reducer(state: State, action: Action): State {
           const sessions = new Map(
             Array.from(state.sessions).filter(([, s]) => s.console_id !== event.console),
           );
-          const pages = new Map(state.pages);
-          pages.delete(event.console);
+          // A page goes with the console session that pushed it, so with the console's.
+          const pages = new Map(
+            Array.from(state.pages).filter(([consoleSessionId]) => sessions.has(consoleSessionId)),
+          );
           // Same cascade one level further down: a git status for a project the console took
           // with it has nothing left to be about.
           const gitStatuses = new Map(
@@ -236,7 +238,10 @@ function reducer(state: State, action: Action): State {
         case "session_deleted": {
           const sessions = new Map(state.sessions);
           sessions.delete(event.session);
-          return { ...state, sessions };
+          // The daemon takes a console session's pages with it, and says so only through this event.
+          const pages = new Map(state.pages);
+          pages.delete(event.session);
+          return { ...state, sessions, pages };
         }
         case "claude_trust_prompt": {
           if (state.trustPrompts.some((p) => p.session === event.session)) return state;
@@ -259,10 +264,10 @@ function reducer(state: State, action: Action): State {
           // the reply is missing.
           // Pages are append-only and a `page_created` is always the newest, so appending after
           // keeps the merged order correct.
-          const existing = state.pages.get(event.console_id) ?? [];
+          const existing = state.pages.get(event.console_session_id) ?? [];
           const seen = new Set(event.pages.map((p) => p.id));
           const pages = new Map(state.pages);
-          pages.set(event.console_id, [...event.pages, ...existing.filter((p) => !seen.has(p.id))]);
+          pages.set(event.console_session_id, [...event.pages, ...existing.filter((p) => !seen.has(p.id))]);
           return { ...state, pages };
         }
         case "page_created": {
@@ -270,9 +275,9 @@ function reducer(state: State, action: Action): State {
           // being in flight, and dropping the event here would mean waiting for a second push to
           // ever see it. The transient "1 / 1" this produces is corrected once that reply's merge
           // (above) lands.
-          const existing = state.pages.get(event.page.console_id) ?? [];
+          const existing = state.pages.get(event.page.console_session_id) ?? [];
           const pages = new Map(state.pages);
-          pages.set(event.page.console_id, [...existing, event.page]);
+          pages.set(event.page.console_session_id, [...existing, event.page]);
           return { ...state, pages };
         }
         case "project_git_status": {

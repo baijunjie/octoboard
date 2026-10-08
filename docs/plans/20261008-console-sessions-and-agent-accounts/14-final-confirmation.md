@@ -169,3 +169,21 @@ unit tests against synthetic directories. What is missing is a real agent and a 
 - [ ] A **removed-account entry** renders its path left-to-right with a tooltip when clipped.
 - [ ] The terminal **reattaches** to the new process across the Interrupted-to-Idle transition.
 
+## From milestone 09 — report panel pages per console session
+
+Covered at the unit and gallery level only; the `report-two-console-sessions` scenario shows the state but has not
+been viewed in a browser.
+
+- [ ] With **two console sessions in one console** each pushing pages, selecting either shows only its own pages,
+      with its own position-and-total count and its own read-only badge. This is the milestone's own acceptance
+      state, and the defect it fixes is visible here: a page of one console session used to go read-only because
+      the other pushed later.
+- [ ] **Leaving a console session and coming back shows its newest page again** — for another console session and
+      for a project session alike. The panel remounts rather than remembering where the user had paged to, which is
+      deliberate; confirm it reads as following the newest page rather than as losing the user's place.
+- [ ] **A form submitted on one console session's panel reaches that console session** and not the other, and an
+      older page's form stays disabled.
+- [ ] Deleting an **archived console session**, and deleting a **console**, leave no page behind.
+- [ ] The `report-two-console-sessions` **gallery scenario** runs clean in a browser. Its steps stop at selecting the
+      second console session, so the return to the first is described rather than exercised.
+

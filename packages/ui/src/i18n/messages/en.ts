@@ -120,7 +120,6 @@ export const en = {
     "{session} did not stop in time, so it was not switched. It may still be running.",
   "daemon.switch_did_not_come_up":
     "{session} ended as soon as it was relaunched under the new account, so it stays on the account it had.",
-  "daemon.console_session_missing": "This console has no console session to submit to.",
   "daemon.session_not_running": "This session is not running.",
   "daemon.session_not_archived": "Only an archived session can be deleted.",
   "daemon.session_waiting_for_user": "This session is waiting for you. Answer it in the terminal first.",

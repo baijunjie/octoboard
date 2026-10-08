@@ -2,8 +2,9 @@
 
 The **report panel** is the third pane of the window, to the right of the terminal (to its left under a right-to-left
 language, see "Right-to-left layout" in `docs/product/window-layout.md`). It belongs to a
-**console** rather than to a session: its pages are pushed by its console session, and
-the panel is on screen only while the selected session is a console session. Selecting a project
+**console session** rather than to its console: each console session has its own pages, and
+the panel shows those of the selected console session, so two console sessions in one console do not share a history.
+It is on screen only while the selected session is a console session. Selecting a project
 session leaves the terminal to fill the pane on its own. How wide the panel is, how the user resizes and hides it, how a
 hidden one floats in, and what becomes of it in a window too narrow for three panes, is described in
 `docs/product/window-layout.md`.
@@ -25,14 +26,17 @@ panel when they come back to the console session.
 
 ## Paging through the history
 
-**Every page ever pushed is kept.** Pages belong to the console and are deleted with it (see
-"Deleting a console" in `docs/product/consoles-and-projects.md`). Nothing else deletes a page, and
-the console session cannot withdraw one it has pushed.
+**Every page ever pushed is kept.** Pages belong to the console session that pushed them and are deleted with it,
+and so with its console, which deletes its console sessions (see "Deleting a console" in
+`docs/product/consoles-and-projects.md`). Nothing else deletes a page, and the console session cannot withdraw one it
+has pushed.
 
 The panel's bar carries, left to right (mirrored under a right-to-left language): ◀ and ▶ to step one page back
 and one forward, the position as "current / total" counted from 1 with the oldest page first, the page's creation
 time formatted for the UI's current language (see "What follows the language" in `docs/product/language.md`), and — on
-any page but the newest — a "Read-only" badge.
+any page but the newest — a "Read-only" badge. The position, the total and the badge all count the selected console
+session's pages only. The place the user has paged to is not kept: leaving a console session, for another console
+session or for a project session, and coming back shows its newest page again.
 
 - The panel follows the newest page: a page pushed while the user is on the newest one moves the view
   to it.
@@ -40,17 +44,17 @@ any page but the newest — a "Read-only" badge.
   they paged to, and only the total grows.
 - Paging away from a page discards it: paging back to it starts the page over from its markup, and whatever had
   been typed into its form is gone.
-- A console that has never had a page pushed reads "No pages yet."
+- A console session that has never pushed a page reads "No pages yet."
 
 ## History pages are read-only
 
-Only a console's **newest** page can be submitted from. On every older page:
+Only a console session's **newest** page can be submitted from. On every older page:
 
 - the page's form controls are disabled, and submitting its form sends nothing;
 - the "Read-only" badge is shown in the panel's bar.
 
 The rule does not depend on the panel: the daemon refuses any submission naming a page that is not
-the console's newest, whatever that page's own markup does.
+its console session's newest, whatever that page's own markup does.
 
 ## What a page may contain, and what it cannot do
 
@@ -124,16 +128,11 @@ console session is working or awaiting instructions, and **queued** while the co
 waiting for the user — queued rather than refused, because the user is the one submitting and there
 is nobody to ask to answer the console session's prompt first.
 
-A submission fails, and the failure is shown to the user, when the page is no longer the console's
-newest or the console session's process is not running. A failed submission changes nothing. The
+The submission goes to the console session that pushed the page, found from the page itself, whichever console
+session the user happens to be looking at. It fails, and the failure is shown to the user, when the page is no longer
+its console session's newest or the console session's process is not running. A failed submission changes nothing. The
 message names which console session the submission was meant for, so that it cannot be
 read as being about whichever session the user happens to be looking at.
-
-A page still belongs to the console as a whole rather than to one console session, so with more
-than one live, a submission currently goes to the one with a process running, and the newest of
-those if several qualify — not necessarily the console session whose page the user is looking at.
-This is transitional: it is a consequence of the page record carrying only the console's id, and is
-resolved by giving a page the id of the console session it belongs to.
 
 ## Escape and F6 inside a page
 

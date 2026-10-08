@@ -43,7 +43,7 @@ A project session opened bound to a console session carries that console session
 wherever it is listed, and the console session's own row shows the same colour (see "The binding
 badge" in `docs/product/sidebar.md`).
 
-Selecting a console session also shows its console's **report panel** beside the terminal, described
+Selecting a console session also shows its own **report panel** beside the terminal, described
 in `docs/product/report-panel.md`; a project session's terminal has the pane to itself.
 
 ## Where sessions are listed

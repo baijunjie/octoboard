@@ -214,6 +214,9 @@ Entities: console, host, project, session, account, report, report-panel page, a
   its transcripts there and a resume must find them.
 - Every project and session carries a `host_id` while the host table holds a single local record, so going remote needs
   no data migration. Trusted-folder entries ignore `host_id`, which is harmless while every host is local.
+- `Page.console_session_id` is the console session that pushed the page, not its console: a console may hold several
+  console sessions, each with its own page history. Deleting a console session deletes its pages in the database, and
+  deleting a console therefore deletes all of them.
 - `Page.anchor_message_id` records the conversation position a page was pushed at. It is stored and never read; a
   linkage that hid pages after the user rewinds the agent's conversation would read it, but no agent exposes a message
   id to put in it yet.

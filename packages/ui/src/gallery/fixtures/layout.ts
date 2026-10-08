@@ -3,9 +3,9 @@ import { SAMPLE, pageOf, snapshotState } from "./builders";
 
 const GROUP = "Window layout";
 
-const { console: console_, web, api, sessions } = SAMPLE;
-const pages = [pageOf("pg-1", console_.id, "<h1>Report</h1><p>Nothing needs your attention.</p>", 5)];
-const state = snapshotState({ consoles: [console_], projects: [web, api], sessions, pages: { [console_.id]: pages } });
+const { console: console_, web, api, consoleSession, sessions } = SAMPLE;
+const pages = [pageOf("pg-1", consoleSession.id, "<h1>Report</h1><p>Nothing needs your attention.</p>", 5)];
+const state = snapshotState({ consoles: [console_], projects: [web, api], sessions, pages: { [consoleSession.id]: pages } });
 
 export const layoutScenarios: Scenario[] = [
   {

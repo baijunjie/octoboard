@@ -392,14 +392,13 @@ export function App(): React.ReactElement {
               onProblemChange={setTerminalProblem}
             />
           </div>
-          {/* Only the console session's console has a report panel — it is that console's panel,
-              not the session's. Keyed on the console id so switching console sessions mounts a
-              fresh instance. */}
+          {/* Only a console session has a report panel, and it is that console session's own.
+              Keyed on its id so switching console sessions mounts a fresh instance, which does
+              not carry one's position over to the other. */}
           {/* The `selectedSession &&` is only for narrowing: `hasReportPanel` already implies it. */}
           {hasReportPanel && selectedSession && (
             <ReportPanel
-              key={selectedSession.console_id}
-              consoleId={selectedSession.console_id}
+              key={selectedSession.id}
               consoleSessionId={selectedSession.id}
               open={panes.reportOpen}
               reportWidth={reportWidth.width}

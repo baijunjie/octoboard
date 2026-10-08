@@ -242,7 +242,7 @@ milestone 1 settles. Nothing it adds says "hub".
 6. 06 Settings section (closed)
 7. 07 Choosing an account where an agent is chosen (closed)
 8. 08 Switching a session's account (closed)
-9. [Report panel pages per console session](09-report-panel-scope.md)
+9. 09 Report panel pages per console session (closed)
 10. [What a console session may see and touch](10-tool-surface.md)
 11. [Archiving, reopening and deleting along the binding](11-archive-cascade.md)
 12. [Choosing a binding when a session is created](12-binding-selector.md)

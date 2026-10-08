@@ -54,11 +54,15 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           return { type: "dir_listing", ...(listed ? { path: body.path, entries: listed } : genericListing(body.path)) };
         }
         case "list_pages": {
-          // As the real client's reply reaches the reducer, so a console with no fixture pages ends
-          // up listed as empty rather than not listed yet.
-          const pages = store.getState().pages.get(body.console) ?? [];
-          store.setState((state) => (state.pages.has(body.console) ? state : { pages: new Map(state.pages).set(body.console, pages) }));
-          return { type: "page_list", console_id: body.console, pages };
+          // As the real client's reply reaches the reducer, so a console session with no fixture
+          // pages ends up listed as empty rather than not listed yet.
+          const pages = store.getState().pages.get(body.console_session) ?? [];
+          store.setState((state) =>
+            state.pages.has(body.console_session)
+              ? state
+              : { pages: new Map(state.pages).set(body.console_session, pages) },
+          );
+          return { type: "page_list", console_session_id: body.console_session, pages };
         }
         default:
           return { type: "ack" };
