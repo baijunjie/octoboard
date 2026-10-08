@@ -230,9 +230,9 @@ changed from the project's Rename or Project settings, the default agent and the
 "Project rows" in `docs/product/sidebar.md`). The tags field sits between the name and the default agent: typing in it
 offers the tags already in use that the project lacks, in a list that opens below the field and stays open after a pick
 so several can be added in a row, and Enter adds what was typed as a tag, or the highlighted suggestion if there is one;
-leaving the field adds it too. The tags the project carries show inside the field, ahead of the text input, and wrap
-onto more lines as they grow, the field growing with them; each has a remove button, and removing one puts the focus in
-the text input. Backspace in the empty text input removes the last tag, one per key press (holding it down does not
+leaving the field adds it too. The tags the project carries show inside the field, ahead of the text input, in a
+light accent tint with accent-coloured text, and wrap onto more lines as they grow, the field growing with them; each
+has a remove button, and removing one puts the focus in the text input. Backspace in the empty text input removes the last tag, one per key press (holding it down does not
 keep removing). Clicking the field's empty area puts the focus in the text input. The same field is in the dialog that associates a project, and the tags chosen there go on every
 project that association creates. The association itself — the source, the directory, the remote URL — is fixed once the
 project exists; a project that should point somewhere else is removed and associated again.

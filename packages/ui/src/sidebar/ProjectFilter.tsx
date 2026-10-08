@@ -12,6 +12,7 @@ import type { Key } from "react-aria";
 import React, { type RefObject, useRef, useState } from "react";
 
 import { handFocusOff } from "../components/handFocusOff";
+import { PICKED_TAG_CLASS, PICKED_TAG_REMOVE_CLASS } from "../components/tagStyle";
 import { TitledControl } from "../components/TitledControl";
 import { usePointerFocusReturn } from "../components/usePointerFocusReturn";
 import { useT } from "../i18n/react";
@@ -273,7 +274,7 @@ export function ProjectFilterTag({
 
 /** The tags picked in the filter, on the Projects heading right after the keyword and wrapping
  * onto further lines when they do not fit, each removable on its own. They are filled with the
- * accent colour, which sets them apart from the keyword chip. The heading's Clear filter button
+ * soft accent colour, which sets them apart from the keyword chip. The heading's Clear filter button
  * clears them with the keyword. The group goes away with its last tag, so a removal that empties
  * it while it holds focus moves focus to `returnFocusTo`, the element around the filter button;
  * the tag unmounting would drop it to `<body>`, and the terminal would stop receiving keystrokes.
@@ -317,7 +318,7 @@ export function ProjectFilterTags({
             key={tag}
             id={tag}
             textValue={tag}
-            className="max-w-full bg-accent text-accent-foreground hover:bg-accent-hover"
+            className={PICKED_TAG_CLASS}
           >
             {() => (
               <>
@@ -328,9 +329,7 @@ export function ProjectFilterTags({
                   <Tag.RemoveButton
                     aria-label={t("common.removeTag")}
                     preventFocusOnPress
-                    // On the accent fill the glyph and its hover fill are drawn from the accent's own
-                    // foreground; `bg-transparent` so the tag's hover fill is not left with a pill inside it.
-                    className="bg-transparent text-accent-foreground/80 hover:bg-accent-foreground/20 hover:text-accent-foreground"
+                    className={PICKED_TAG_REMOVE_CLASS}
                   />
                 </TitledControl>
               </>

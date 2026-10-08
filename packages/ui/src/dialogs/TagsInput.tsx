@@ -9,6 +9,10 @@ import {
 } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
+import {
+  PICKED_TAG_CLASS,
+  PICKED_TAG_REMOVE_CLASS,
+} from "../components/tagStyle";
 import { TitledControl } from "../components/TitledControl";
 import { useT } from "../i18n/react";
 
@@ -91,7 +95,6 @@ export function TagsInput({
         <TagGroup
           aria-label={t("dialog.project.tagsPicked")}
           size="sm"
-          variant="surface"
           className="contents"
           onRemove={(keys) => {
             onChange(value.filter((tag) => !keys.has(tag)));
@@ -100,7 +103,12 @@ export function TagsInput({
         >
           <TagGroup.List className="contents">
             {value.map((tag) => (
-              <Tag key={tag} id={tag} textValue={tag} className="max-w-full">
+              <Tag
+                key={tag}
+                id={tag}
+                textValue={tag}
+                className={PICKED_TAG_CLASS}
+              >
                 {/* The function form: TagRoot only finds a remove button among its direct children, and
                     would add a default one beside a wrapped button. */}
                 {() => (
@@ -115,9 +123,7 @@ export function TagsInput({
                     >
                       <Tag.RemoveButton
                         aria-label={t("common.removeTag")}
-                        // As the keyword chip's ×: `foreground/10` for hover, and `bg-transparent` so the
-                        // tag's own hover fill is not left with a pill inside it.
-                        className="bg-transparent text-muted hover:bg-foreground/10 hover:text-foreground"
+                        className={PICKED_TAG_REMOVE_CLASS}
                       />
                     </TitledControl>
                   </>
