@@ -25,6 +25,7 @@ mod ringbuf;
 mod saved_output;
 mod server;
 mod session;
+mod sharing;
 mod state;
 mod store;
 mod term;

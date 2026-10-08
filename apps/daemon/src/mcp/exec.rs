@@ -23,6 +23,7 @@ use crate::protocol::{
     now_millis, Agent, Event, Origin, Page, Project, ProjectSource, Role, Session, SessionStatus,
 };
 use crate::reporting::{self, Delivery, Report, ReportStatus, WhenBlocked};
+use crate::sharing::{self, OwnerCopy};
 use crate::state::AppState;
 
 /// How much of a session's output `get_session` hands back. Enough to see what it is doing and how
@@ -53,6 +54,8 @@ pub async fn call(
         "reopen_session" => reopen_session(state, &session, arguments).await,
         "show_page" => show_page(state, &session, arguments),
         "report" => report(state, &session, arguments).await,
+        "list_project_sessions" => list_project_sessions(state, &session),
+        "share_info" => share_info(state, &session, arguments).await,
         // Unreachable while the catalogue and this dispatch agree; a tool added to one and not the
         // other should say so rather than look like a refusal.
         _ => bail!("`{tool}` is announced but not implemented"),
@@ -188,16 +191,21 @@ async fn send_message(
     let delivery = write_off_runtime(state, &target.id, text, WhenBlocked::Queue).await?;
     Ok(json!({
         "delivered": delivery == Delivery::Written,
-        "note": match delivery {
-            Delivery::Written => "Delivered.",
-            // The caller is told rather than refused: queuing is the designed behaviour
-            // for a session that is waiting for the user, and nagging it is exactly what it must
-            // not do.
-            Delivery::Queued =>
-                "Queued: this session cannot take a message right now. It will be delivered as \
-                 soon as it can, so do not send it again.",
-        },
+        "note": delivery_note(delivery),
     }))
+}
+
+/// What the caller is told of a message for a session. A queued one is reported rather than
+/// refused: queuing is the designed behaviour for a session that is waiting for the user, and
+/// nagging it is exactly what the caller must not do.
+fn delivery_note(delivery: Delivery) -> &'static str {
+    match delivery {
+        Delivery::Written => "Delivered.",
+        Delivery::Queued => {
+            "Queued: this session cannot take a message right now. It will be delivered as soon \
+             as it can, so do not send it again."
+        }
+    }
 }
 
 /// Writes into a session from the runtime. The write itself blocks on the PTY for as long as the
@@ -303,6 +311,63 @@ fn show_page(
     state.store.insert_page(&page)?;
     state.broadcast(Event::PageCreated { page: page.clone() });
     Ok(json!({ "page": page.id }))
+}
+
+// -- information exchange ----------------------------------------------------
+
+/// The running sessions of the caller's own project, project sessions only: a console session is
+/// outside every project and cannot be shared with.
+fn list_project_sessions(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
+    let sessions = state
+        .store
+        .list_sessions()?
+        .iter()
+        .filter(|session| {
+            session.role == Role::Project
+                && session.project_id == caller.project_id
+                && session.id != caller.id
+                && !session.status.is_dormant()
+        })
+        .map(|session| {
+            let mut description = describe_session(state, session, caller)?;
+            description["your_owner"] = json!(caller.bound_to.as_deref() == Some(&session.id));
+            Ok(description)
+        })
+        .collect::<Result<Vec<Value>>>()?;
+    Ok(json!({ "your_owner": caller.bound_to, "sessions": sessions }))
+}
+
+async fn share_info(
+    state: &Arc<AppState>,
+    caller: &Session,
+    arguments: &Map<String, Value>,
+) -> Result<Value> {
+    let wanted = required_str(arguments, "session")?;
+    let target = resolve_session(state, caller, wanted)?;
+    if target.id == caller.id {
+        bail!("session `{wanted}` is your own session; there is nobody to share with");
+    }
+    let text = required_str(arguments, "text")?.to_string();
+    let owned_state = state.clone();
+    let (caller_id, target_id) = (caller.id.clone(), target.id.clone());
+    // Delivery writes into the sessions' PTYs, which blocks.
+    let (delivery, copy) = tokio::task::spawn_blocking(move || {
+        sharing::deliver_info(&owned_state, &caller_id, &target_id, &text)
+    })
+    .await??;
+    let mut note = delivery_note(delivery).to_string();
+    match copy {
+        OwnerCopy::NotNeeded => {}
+        OwnerCopy::Sent(Delivery::Written) => note.push_str(" Its owner was sent a copy."),
+        OwnerCopy::Sent(Delivery::Queued) => note.push_str(
+            " Its owner's copy is queued, and will arrive as soon as the owner can take it.",
+        ),
+        OwnerCopy::Failed(reason) => note.push_str(&format!(
+            " Its owner could not be sent a copy ({reason}); the information itself was not \
+             affected."
+        )),
+    }
+    Ok(json!({ "delivered": delivery == Delivery::Written, "note": note }))
 }
 
 // -- reporting ---------------------------------------------------------------
@@ -953,7 +1018,8 @@ mod tests {
     }
 
     /// What a session is offered follows from its role and binding, and the daemon holds to it:
-    /// a session bound to another session has only `report`, whatever its child announced.
+    /// a session bound to another session has no orchestration tools, whatever its child
+    /// announced.
     #[tokio::test]
     async fn only_an_unbound_project_session_may_call_the_orchestration_tools() {
         let (state, _dir) = peer_state("peer-tool-gating");
@@ -1139,6 +1205,178 @@ mod tests {
         .unwrap();
         let archived = state.store.get_session("mine").unwrap().unwrap();
         assert_eq!(archived.status, SessionStatus::Archived);
+    }
+
+    /// Every project session sees the other running sessions of its own project with their owners,
+    /// whether it is bound or not, and which one owns it; archived sessions, console sessions and
+    /// other projects' sessions are left out.
+    #[tokio::test]
+    async fn a_project_session_lists_its_own_projects_running_sessions() {
+        let (state, _dir) = peer_state("peer-list");
+        let listed = call(&state, "mine", "list_project_sessions", &Map::new())
+            .await
+            .unwrap();
+        assert_eq!(listed["your_owner"], "starter");
+        let mut ids: Vec<&str> = listed["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|session| session["session"].as_str().unwrap())
+            .collect();
+        ids.sort();
+        assert_eq!(ids, ["loose", "of-a", "of-b", "starter"]);
+        for session in listed["sessions"].as_array().unwrap() {
+            assert_eq!(
+                session["your_owner"],
+                session["session"] == "starter",
+                "{session}"
+            );
+        }
+        let of_a = listed["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|session| session["session"] == "of-a")
+            .unwrap();
+        assert_eq!(of_a["owner_kind"], "console");
+
+        let unbound = call(&state, "loose", "list_project_sessions", &Map::new())
+            .await
+            .unwrap();
+        assert!(unbound["your_owner"].is_null());
+    }
+
+    /// Information reaches only a project session of the caller's own project: not another
+    /// project's, not a console session, not the caller itself.
+    #[tokio::test]
+    async fn information_is_refused_outside_the_callers_project() {
+        let (state, _dir) = peer_state("peer-share-scope");
+        for (target, reason) in [
+            ("other-project", "belongs to another project"),
+            ("a", "is a console session"),
+            ("foreign", "belongs to another console"),
+            ("mine", "your own session"),
+        ] {
+            let err = call(
+                &state,
+                "mine",
+                "share_info",
+                &arguments(json!({ "session": target, "text": "hello" })),
+            )
+            .await
+            .expect_err(target);
+            assert!(err.to_string().contains(reason), "{target}: {err}");
+        }
+    }
+
+    /// Polls a stand-in session's output until it holds `needle`.
+    fn output_containing(live: &crate::session::LiveSession, needle: &str) -> String {
+        let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
+        loop {
+            let output = String::from_utf8_lossy(&live.recent_output(8 * 1024)).into_owned();
+            if output.contains(needle) || std::time::Instant::now() >= deadline {
+                return output;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
+    fn running(state: &Arc<AppState>, id: &str) -> crate::test_support::StandIn {
+        let live = crate::test_support::idle_stand_in(id);
+        state.register_live(live.clone());
+        crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
+        live
+    }
+
+    /// Information arrives framed as information from a session that is not the receiver's owner,
+    /// and the receiver's owner, a console session or a project session, is sent a copy; when the
+    /// sender is the owner it is told so instead, and nobody is copied.
+    #[tokio::test]
+    async fn information_is_framed_and_copied_to_the_receivers_owner() {
+        let (state, _dir) = peer_state("peer-share-delivery");
+        let share = |caller: &'static str, target: &'static str| {
+            let state = state.clone();
+            async move {
+                call(
+                    &state,
+                    caller,
+                    "share_info",
+                    &arguments(json!({ "session": target, "text": "the port moved" })),
+                )
+                .await
+            }
+        };
+        let loose = running(&state, "loose");
+        let of_a = running(&state, "of-a");
+        let console_a = running(&state, "a");
+        let starter = running(&state, "starter");
+        let mine = running(&state, "mine");
+
+        // Unbound receiver: framed, and there is no owner to copy.
+        let result = share("starter", "loose").await.unwrap();
+        assert_eq!(result["note"], "Delivered.");
+        let seen = output_containing(&loose, "the port moved");
+        assert!(
+            seen.contains("Information from session starter — Work starter"),
+            "{seen}"
+        );
+        assert!(seen.contains("not your owner"), "{seen}");
+
+        // Receiver owned by a console session: that session is sent the copy.
+        let result = share("loose", "of-a").await.unwrap();
+        assert!(result["note"].as_str().unwrap().contains("sent a copy"));
+        assert!(output_containing(&of_a, "the port moved").contains("not your owner"));
+        let copy = output_containing(&console_a, "the port moved");
+        assert!(
+            copy.contains("Copy of information shared with your session of-a"),
+            "{copy}"
+        );
+        assert!(copy.contains("Sent by session loose"), "{copy}");
+
+        // Receiver owned by a project session: likewise.
+        share("loose", "mine").await.unwrap();
+        assert!(output_containing(&mine, "the port moved").contains("not your owner"));
+        let copy = output_containing(&starter, "Copy of information");
+        assert!(copy.contains("shared with your session mine"), "{copy}");
+
+        // From the owner itself: no "not your owner", and a note with no copy in it.
+        let result = share("starter", "mine").await.unwrap();
+        assert_eq!(result["note"], "Delivered.");
+        let seen = output_containing(&mine, "is your owner");
+        assert!(seen.contains("Information from session starter"), "{seen}");
+    }
+
+    /// A copy that cannot be delivered, because the owner is not running, does not fail the
+    /// information: the receiver has it, and the sender is told the owner has not.
+    #[tokio::test]
+    async fn an_owner_that_cannot_be_copied_does_not_fail_the_delivery() {
+        let (state, _dir) = peer_state("peer-share-copy-fails");
+        let of_b = running(&state, "of-b");
+        let result = call(
+            &state,
+            "loose",
+            "share_info",
+            &arguments(json!({ "session": "of-b", "text": "heads up" })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(result["delivered"], true);
+        assert!(result["note"]
+            .as_str()
+            .unwrap()
+            .contains("could not be sent a copy"));
+        assert!(output_containing(&of_b, "heads up").contains("heads up"));
+
+        // A receiver that is not running is the one refusal.
+        let err = call(
+            &state,
+            "loose",
+            "share_info",
+            &arguments(json!({ "session": "of-a", "text": "heads up" })),
+        )
+        .await
+        .expect_err("not running");
+        assert!(err.to_string().contains("not running"), "{err}");
     }
 
     #[test]

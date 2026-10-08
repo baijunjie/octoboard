@@ -48,8 +48,11 @@ An **unbound** project session — one the user opened by hand without choosing 
 (see "Opening a session" below) — is given a narrower set of the orchestration tools, scoped to its own project: it can
 start sessions there, which are bound to it and report to it, and drive them (see "The unbound project session's
 tools" in `docs/product/hub-orchestration.md`). A session it starts carries no binding badge and cannot start sessions
-of its own. A session's **owner** is the session it is bound to: a console session, or the unbound project session
-that started it.
+of its own. A session's **owner** is the session it is bound to: a console session, or the unbound project session that
+started it (an unbound session's own owner is the user). Every project session, bound or not, can also list the other
+running sessions of its project and share information with them; it takes work only from its owner, and what comes from
+another session is information to weigh (see "Information between sessions of a project" in
+`docs/product/hub-orchestration.md`).
 
 Selecting a console session also shows its own **report panel** beside the terminal, described
 in `docs/product/report-panel.md`; a project session's terminal has the pane to itself.

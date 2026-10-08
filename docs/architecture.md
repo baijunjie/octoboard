@@ -119,6 +119,13 @@ back, which requires the daemon's events to be replayable by sequence number.
   the role description encourages `report`, nothing is blocked, and the daemon synthesizes a report for a session that
   reports to the console session and stops without one. The price is that `status` and `open_items` degrade to prose
   on those turns.
+- **Information between sessions is a channel of its own, because "not an instruction" cannot be enforced.** A message
+  is text written into the receiving terminal, so any session that can write to another could steer it. Commanding is
+  therefore the only hard-enforced boundary (`send_message`, `archive_session` and `reopen_session` act on the caller's
+  own sessions). Sharing information is a separate tool, offered to every project session and confined to one project;
+  it is delivered under a header naming the sender and saying the text is information to weigh, role descriptions tell
+  each session whose work it takes, and the receiver's owner is copied so it is never blind to what reaches its
+  sessions. Octoboard makes the distinction plain; whether a model keeps to it is the model's call.
 - **A project session goes to the user directly for permissions and questions, not through the console session.**
   Relaying through the console session only creates confusion when several projects ask at once. "Needs a console
   session decision" (the agent calls `report(status: needs_decision)`) and "needs a user decision" (a permission

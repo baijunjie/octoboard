@@ -19,9 +19,11 @@ and "Deleting archived sessions" in `docs/product/sessions.md`).
 
 Octoboard injects the tools into the session. A console session gets the full set (see "The console session's tools"
 below), an unbound project session a narrower set scoped to its own project, and a session bound to an owner gets one
-tool back the other way, `report`. **Which tools a session sees follows from its role and from whether it is bound**,
-both fixed for its lifetime: a bound session cannot start or archive sessions, so orchestration under an unbound
-project session is one level deep, and an owner cannot report to itself.
+tool back the other way, `report`. Every project session, bound or not, also gets the two tools for sharing information
+with the other sessions of its project (see "Information between sessions of a project" below). **Which tools a session
+sees follows from its role and from whether it is bound**, both fixed for its lifetime: a bound session cannot start or
+archive sessions, so orchestration under an unbound project session is one level deep, and an owner cannot report to
+itself.
 
 ## Several console sessions per console
 
@@ -83,6 +85,7 @@ way a console session drives its console's:
 | `archive_session` | `session` | As the console session's. |
 | `reopen_session` | `session`, `text?` | As the console session's. |
 | `report` | as in "Reporting" below | Offered, but always refused: an unbound session has nobody to report to. |
+| `list_project_sessions`, `share_info` | as in "Information between sessions of a project" below | As for every project session. |
 
 It has no `list_projects`, `list_archived`, `add_project` or `show_page`.
 
@@ -93,9 +96,52 @@ session of another project, and any console session, is refused. `send_message`,
 nothing, for any other: an unbound session, one bound to a console session or to another project session, the caller
 itself, or a session outside its project.
 
-A session an unbound project session starts is bound to it, so it is offered `report` alone and cannot start
-sessions of its own. It reports to the project session that started it exactly as a console session's sessions report
-to their console session: see "Reporting" below.
+A session an unbound project session starts is bound to it, so it is offered `report` and the two information tools and
+cannot start sessions of its own. It reports to the project session that started it exactly as a console session's
+sessions report to their console session: see "Reporting" below.
+
+## Information between sessions of a project
+
+Every project session — unbound, bound to a console session, or bound to a project session — can see the other running
+sessions of its own project and tell them things. Console sessions are outside every project: they do not get these
+tools and cannot be shared with, and a session of another project cannot be listed or reached.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `list_project_sessions` | — | The other running project sessions of the caller's project, each with its status, title, agent, `owner` and `owner_kind` as in the reads above, and `your_owner` marking the one that owns the caller. The caller's own owner is also given at the top level (null when the caller is unbound). |
+| `share_info` | `session`, `text` | Writes `text` into a running project session of the caller's project, as information from the caller. Answers with whether it was written or queued, and whether the receiver's owner was sent a copy. Refused, with the reason in prose, for a session of another project, a console session, the caller itself, and a session with no process running. |
+
+**Information is not instruction.** Every session knows who it belongs to: the console session or project session that
+started it, or the user for one they opened by hand. It takes work only from that owner (or from the user typing in its
+terminal), and is told so in its role description; what comes from any other session is to be weighed and not obeyed. A
+bound session is also told that information neither starts nor finishes a round of work, so it does not `report` because
+of it: a `done` report would archive it. A message `share_info` writes into the receiver therefore opens with a header
+naming the sender (id and title) and saying the sender is not the receiver's owner and that the text is information to
+weigh, not work to take on. The text itself is quoted — every line, blank ones included, is prefixed with `> ` — and
+followed by a closing line naming the sender, so that a body imitating a report, a report panel form submission or a
+header of Octoboard's own is plainly the sender's text and not one of those; the copy to an owner is quoted the same
+way. When the sender *is* the receiver's owner the header says so instead and does not call it a non-owner. Commanding
+stays as in "Which sessions an owner drives": `send_message`, `archive_session` and `reopen_session` act only on the
+caller's own sessions.
+
+**This boundary is framing, not enforcement.** A message is text written into the receiver's terminal, and whether a
+model acts on it is the model's own call; Octoboard cannot stop one that does. What it does is make the distinction as
+plain as it can — a separate tool for information, the header on every delivery, role descriptions that name the
+session's owner — and keep the one thing it can enforce, which sessions may be commanded, hard.
+
+**An owner is told what reaches its sessions.** Information delivered to a session that is bound is also copied to that
+session's owner, whether a console session or a project session, naming the sender and the receiver and saying it is
+information. A copy is for the owner's awareness: if it shows a session of its own being redirected, the owner may
+correct that session with `send_message`. This way a task an owner dispatched is not redirected by outside input it
+cannot see. No copy goes to the sender when the sender is the owner, and none when the receiver is unbound, the user
+being its owner. A copy that cannot be delivered — the owner has no process running — does not fail the delivery to the
+receiver; the sender is told the owner was not copied. A copy for an owner that cannot take a message right now is
+queued.
+
+Delivery is the same as for any other message: sanitized as in "Messages held until a session can take them", held when
+the receiver is waiting for the user, and refused when it has no process running. The two tools are on by default and
+have no setting. A session launched before they existed keeps the role description it was first given, and on resume
+sees the tools without being told about them or about its owner.
 
 ## Handing out a task: the brief
 
@@ -202,16 +248,16 @@ A console session itself never reports anywhere, and neither does an unbound pro
 A session that is working or awaiting instructions takes a message straight away; every agent queues
 one written mid-turn and consumes it when the turn ends.
 
-**A message is not written verbatim.** Every control character except newline and tab is removed from
-its text, and a message that would otherwise begin with `/` is written with a single leading space, so
-it reaches the model as text instead of being run as one of the agent's own slash commands. This holds
-for everything Octoboard writes into a running session — an instruction, a report, a report panel form
-submission — because all three can be model-authored and none is reviewed first.
+**A message is not written verbatim.** Every control character except newline and tab is removed from its text, and a
+message that would otherwise begin with `/` is written with a single leading space, so it reaches the model as text
+instead of being run as one of the agent's own slash commands. This holds for everything Octoboard writes into a running
+session — an instruction, a report, a report panel form submission, information shared by another session — because all
+of them can be model-authored and none is reviewed first.
 
-An instruction or a report for a session that **cannot** take one right now — it is waiting for the
-user at a permission prompt or a question — is queued rather than dropped, and delivered as soon as
-the session can take one, oldest first. A session that sent an instruction is told it was queued and that it must
-not send it again.
+An instruction, a report or information shared by another session, for a session that **cannot** take one right now — it
+is waiting for the user at a permission prompt or a question — is queued rather than dropped, and delivered as soon as
+the session can take one, oldest first. A session that sent an instruction or shared information is told it was queued
+and that it must not send it again.
 
 A message for a session with no process running is refused outright: a resume starts the agent at
 its prompt and replays nothing. Anything still queued when a session's process ends goes with it.

@@ -42,6 +42,7 @@ the repository root and cover both crates; `-p octoboardd` narrows either to thi
 | `src/protocol.rs` | Rust types for the wire protocol; kept in sync with `PROTOCOL.md` and with `packages/ui/src/protocol.ts` by hand |
 | `src/coordinator.rs` | Coordinator role: what each control-socket request does to the stored consoles/projects/sessions/pages/accounts, and which host-role work it triggers, including the launch flow a resume and a switch of a session's account share; projects are stored with absolute, lexically normalised paths |
 | `src/reporting.rs` | The channel between an owner (a console session, or an unbound project session that started sessions) and the project sessions bound to it: the brief a task is handed over as, writing a message into a running session, a report reaching its owner, the report synthesised when a session stops without sending one, automatic archiving, and rendering a report panel form submission into the console session's message |
+| `src/sharing.rs` | Information one project session shares with another: the quoted, framed message the receiver reads, and the copy sent to the receiver's owner, delivered through `reporting.rs`'s message writing |
 | `src/relocate.rs` | Copying one session's conversation record from one account's config directory into another's, for a switch of the session's account: finding the record by name under the agent's root, and copying it to the same path relative to the directory, staged and checked before it replaces anything |
 | `src/outbox.rs` | The per-session queue every message Octoboard writes into an agent passes through: order-preserving, one drainer per session, and what happens to a message the session only partly accepted |
 | `src/store.rs` | Coordinator's SQLite storage for consoles, projects, sessions, pages, agent accounts, the trusted folders, the user settings and the host table |
@@ -69,18 +70,19 @@ the repository root and cover both crates; `-p octoboardd` narrows either to thi
 ### `src/mcp/`
 
 The Octoboard MCP server: the orchestration tools the console session drives Octoboard with, the narrower set an
-unbound project session drives its own project with, and the reporting tool a bound project session answers through.
+unbound project session drives its own project with, the reporting tool a bound project session answers through, and
+the two tools every project session shares information with its project's other sessions through.
 Which set a session sees follows from its role and from whether it is bound (`--bound`), both fixed for its lifetime.
 The tool catalogue is shared by both sides of the stdio bridge, so the child process, the daemon, and the role
 descriptions cannot drift apart. The wire-level `POST /mcp/:token` contract is in `PROTOCOL.md`; "The console
-session's tools", "The unbound project session's tools" and "Reporting" in `docs/product/hub-orchestration.md` list
-the tools and what each one does.
+session's tools", "The unbound project session's tools", "Information between sessions of a project" and "Reporting"
+in `docs/product/hub-orchestration.md` list the tools and what each one does.
 
 | File | Role |
 |---|---|
 | `mod.rs` | The tool catalogue, and which tools a session may see, by its role (`console` / `project`) and whether it is bound |
 | `role.rs` | The role description injected at launch, and the console session instruction file written into a console's working directory |
-| `exec.rs` | Runs one tool call against the real consoles, projects and sessions, through the same coordinator/reporting functions the control socket uses |
+| `exec.rs` | Runs one tool call against the real consoles, projects and sessions, through the same coordinator/reporting functions the control socket uses; the project-scoped reads and `share_info` resolve their targets within the caller's own project |
 | `stdio.rs` | `octoboardd mcp` itself: the stdio child process each adapter registers, forwarding every call to the daemon over loopback |
 
 ### `src/adapter/`

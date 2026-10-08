@@ -27,7 +27,7 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Orchestration](product/hub-orchestration.md) — how an owner (a console session, or an unbound project session in
   its own project) starts and drives sessions: each one's tools and a bound session's `report`, the brief a task is
   handed over as, the reporting loop and what happens when a session stops without reporting, automatic archiving,
-  and which sessions an owner drives.
+  which sessions an owner drives, and the information sessions of one project share with each other.
 - [Report panel](product/report-panel.md) — the console session's third pane: pushing a page with `show_page` and what
   the page id is for, paging back through the kept history, why a history page is read-only and where that is
   enforced, why a page is a static document whose scripts never run and what is stripped from it, why it has no route

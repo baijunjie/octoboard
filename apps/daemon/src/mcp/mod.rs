@@ -1,6 +1,7 @@
 //! The Octoboard MCP server: the orchestration tools the console session drives Octoboard with, the
-//! narrower set an unbound project session drives its own project with, and the reporting tool a
-//! bound project session answers through.
+//! narrower set an unbound project session drives its own project with, the reporting tool a
+//! bound project session answers through, and the two tools every project session shares
+//! information with its project's other sessions through.
 //!
 //! **Transport is a stdio child process, not an HTTP endpoint the agent connects to.** Each
 //! adapter registers `octoboardd mcp --session … --role … --port … --token …` as a `command`-type
@@ -305,8 +306,46 @@ const REPORT: ToolDef = ToolDef {
     },
 };
 
-/// A project session that reports to another session has the one tool it answers through.
-const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[REPORT];
+/// What every project session, bound or not, may do with the other sessions of its project:
+/// look at them, and tell them things. Kept apart from `send_message` so that a message arriving
+/// in a session is framed by which tool sent it: an instruction comes from its owner, and
+/// information from anyone.
+const LIST_PROJECT_SESSIONS: ToolDef = ToolDef {
+    name: "list_project_sessions",
+    description: "List the running sessions of this project other than this one: id, title, \
+                  agent, status, and `owner` (the session it reports to, `owner_kind` saying \
+                  whether that is a console or a project session; null when the user opened it \
+                  themselves). `your_owner` marks the session that owns this one, and is also \
+                  given at the top level. Use it to find who to share information with.",
+    schema: || object_schema(json!({}), &[]),
+};
+
+const SHARE_INFO: ToolDef = ToolDef {
+    name: "share_info",
+    description: "Tell a running session of this project something it may find useful: what you \
+                  found, decided or changed that touches its work. It is delivered marked as \
+                  information from you, not as an instruction, and the session it is for takes \
+                  work only from its owner. When that session reports to another session, that \
+                  owner is sent a copy. Held until the user is done when the session is waiting \
+                  for them. Refused for a session of another project, a console session, and \
+                  this session itself.",
+    schema: || {
+        object_schema(
+            json!({
+                "session": { "type": "string", "description": "The session's id." },
+                "text": {
+                    "type": "string",
+                    "description": "The information, in natural language.",
+                },
+            }),
+            &["session", "text"],
+        )
+    },
+};
+
+/// A project session that reports to another session has the one tool it answers through, and the
+/// two it shares information with.
+const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[REPORT, LIST_PROJECT_SESSIONS, SHARE_INFO];
 
 /// A project session nobody dispatched drives its own project the way a console session drives
 /// its console's, and what it starts reports back to it. `report` is announced too, though a call
@@ -342,6 +381,8 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     ARCHIVE_SESSION,
     REOPEN_SESSION,
     REPORT,
+    LIST_PROJECT_SESSIONS,
+    SHARE_INFO,
 ];
 
 /// The schema of `start_session`. `with_project` is for the console session, which chooses a
@@ -394,7 +435,8 @@ mod tests {
     use super::*;
 
     /// What a session is offered follows from its role and whether it is bound: only an unbound
-    /// project session may start sessions, and only a project session can report.
+    /// project session may start sessions, only a project session can report, and every project
+    /// session may share information with its project.
     #[test]
     fn the_tools_offered_follow_from_role_and_binding() {
         let names = |role, bound| -> Vec<&'static str> {
@@ -403,7 +445,10 @@ mod tests {
                 .map(|tool| tool.name)
                 .collect()
         };
-        assert_eq!(names(Role::Project, true), ["report"]);
+        assert_eq!(
+            names(Role::Project, true),
+            ["report", "list_project_sessions", "share_info"]
+        );
         assert_eq!(
             names(Role::Project, false),
             [
@@ -412,7 +457,9 @@ mod tests {
                 "get_session",
                 "archive_session",
                 "reopen_session",
-                "report"
+                "report",
+                "list_project_sessions",
+                "share_info"
             ]
         );
         // Console sessions are never bound, so the flag changes nothing for them.
@@ -421,6 +468,9 @@ mod tests {
         assert!(tool_by_name(Role::Console, false, "report").is_none());
         assert!(tool_by_name(Role::Project, true, "start_session").is_none());
         assert!(tool_by_name(Role::Project, false, "list_projects").is_none());
+        // Console sessions are outside every project, so they take no part in the exchange.
+        assert!(tool_by_name(Role::Console, false, "share_info").is_none());
+        assert!(tool_by_name(Role::Console, false, "list_project_sessions").is_none());
     }
 
     /// An unbound project session starts sessions only in its own project, so it is not asked
