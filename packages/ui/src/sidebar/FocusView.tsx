@@ -56,7 +56,10 @@ export function FocusView({
 
   return (
     <>
-      <div className="flex h-14 shrink-0 items-center gap-1 border-b border-separator px-2">
+      {/* A card below sits in the scroll area, then inside its own border and padding
+          (`px-2` + 1px + `p-3`), so the end padding matches that and this menu lines up with the
+          menu on a card. The start stays put: only the trailing icons were inset short of the cards. */}
+      <div className="flex h-14 shrink-0 items-center gap-1 border-b border-separator ps-2 pe-[21px]">
         <TitledControl title={t("sidebar.focus.exit")}>
           <Button
             isIconOnly

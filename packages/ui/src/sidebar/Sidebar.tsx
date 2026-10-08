@@ -351,13 +351,17 @@ function ConsoleSwitcher({
   ];
 
   return (
-    <div className="flex h-14 shrink-0 items-center gap-1 border-b border-separator px-2">
+    // The list under this header is inset twice — the scroll area, then each heading and row — so
+    // the end padding matches that and this menu lines up with the rows' menus. The chevron is a
+    // bare glyph: the trigger keeps only the inset a size-6 icon button puts around its own glyph,
+    // and the gap is the one those buttons use, so the chevron sits over the button beside a menu.
+    <div className="flex h-14 shrink-0 items-center gap-0.5 border-b border-separator ps-2 pe-4">
       <ActionMenu
         className="min-w-0 flex-1"
         label={t(elsewhere ? "sidebar.console.switchWaiting" : "sidebar.console.switch", { name: current.name })}
         tooltip={false}
         items={items}
-        triggerClassName="flex h-9 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-start text-sm hover:bg-default aria-expanded:bg-default"
+        triggerClassName="flex h-9 w-full min-w-0 items-center gap-2 rounded-lg ps-2 pe-1 text-start text-sm hover:bg-default aria-expanded:bg-default"
         trigger={
           <>
             <ConsoleAvatar icon={current.icon} />
