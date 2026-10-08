@@ -161,9 +161,14 @@ pub async fn handle(
                 .filter(|project| project.console_id == id)
                 .map(|project| project.id)
                 .collect();
+            // Its sessions cascade the same way, and their saved output is Octoboard's own.
+            let session_ids = session_ids_where(state, |session| session.console_id == id)?;
             state.store.delete_console(&id)?;
             for project_id in &project_ids {
                 state.remove_git_status(project_id);
+            }
+            for session_id in &session_ids {
+                state.forget_saved_output(session_id);
             }
             // The working directory is Octoboard's own, under `~/.octoboard/consoles/`; no project
             // directory is ever touched by this.
@@ -270,9 +275,14 @@ pub async fn handle(
                     }
                 }
             }
-            // Only the association goes away. The directory is the user's.
+            // Only the association goes away. The directory is the user's. Its sessions cascade
+            // with it, so their saved output is collected first.
+            let session_ids = session_ids_where(state, in_project)?;
             state.store.delete_project(&id)?;
             state.remove_git_status(&id);
+            for session_id in &session_ids {
+                state.forget_saved_output(session_id);
+            }
             state.broadcast(Event::ProjectDeleted { project: id });
             Ok(None)
         }
@@ -750,6 +760,7 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
             // Nothing ran, so there is nothing to resume: drop the record rather than leave a
             // session in the tree that never existed.
             state.store.delete_session(&session.id)?;
+            state.forget_saved_output(&session.id);
             state.revoke_mcp_tokens(&session.id);
             Err(err)
         }
@@ -933,6 +944,14 @@ async fn start_process(
     // The live map now says the session is running; `claim` stays with the caller, which drops it
     // when it is done with the launch.
     state.register_live(launch.session.clone());
+    // The output of an earlier run is stale from here on: were this process to end without saving
+    // (a daemon killed outright), it must not stand in for what this one printed. It goes after
+    // `register_live`, so a client attaching meanwhile finds either the process or the saved
+    // output, never neither (and a launch that fails leaves it to show). It also goes before
+    // `watch_exit`, so the exit save of this process is never the one removed; `stop_all_sessions`
+    // saves too, but only after `terminate` has returned, which waits on the process, long past
+    // this point.
+    state.forget_saved_output(&session.id);
     state.watch_exit(launch.session.clone());
     trust::supervise(state, &launch.session);
     if let Some(agent_session_id) = launch.agent_session_id {
@@ -1270,12 +1289,27 @@ async fn came_up(live: &LiveSession, settle: Duration) -> bool {
     !live.poll_exit()
 }
 
+/// The ids of the stored sessions that match, for a deletion that drops them by cascade.
+fn session_ids_where(
+    state: &Arc<AppState>,
+    matches: impl Fn(&Session) -> bool,
+) -> Result<Vec<String>> {
+    Ok(state
+        .store
+        .list_sessions()?
+        .into_iter()
+        .filter(|session| matches(session))
+        .map(|session| session.id)
+        .collect())
+}
+
 /// Removes Octoboard's record of one archived session, and with an archived console session the
 /// archived sessions bound to it: left behind, reopening one would have no console session to come
 /// back with. Deleting an archived bound session on its own leaves its console session alone.
-/// Nothing else of Octoboard's hangs off a session: its queue, MCP token and turn bookkeeping go
-/// when its process does, and so does its scratch directory (clearing the run directory at startup
-/// is only the fallback). The agent's own transcript and the project are never touched.
+/// The record takes its saved terminal output with it. Nothing else of Octoboard's hangs off a
+/// session: its queue, MCP token and turn bookkeeping go when its process does, and so does its
+/// scratch directory (clearing the run directory at startup is only the fallback). The agent's own
+/// transcript and the project are never touched.
 fn delete_session(state: &Arc<AppState>, id: &str) -> Result<()> {
     let session = state.session_record(id)?;
     if !delete_archived_group(state, &session)? {
@@ -2063,6 +2097,65 @@ mod tests {
         handle(&state, None, delete()).await.unwrap();
         assert!(state.store.get_project("project-1").unwrap().is_none());
         assert!(state.store.get_session("project").unwrap().is_none());
+    }
+
+    /// Every request that removes a session's record removes the output saved for it as well,
+    /// including the two where the record goes by cascade.
+    #[tokio::test]
+    async fn a_session_record_takes_its_saved_output_with_it() {
+        let requests = [
+            RequestBody::DeleteSession {
+                session: "s".to_string(),
+            },
+            RequestBody::DeleteProject {
+                project: "project-1".to_string(),
+                stop_sessions: false,
+            },
+            RequestBody::DeleteConsole {
+                console: "console-1".to_string(),
+            },
+        ];
+        for request in requests {
+            let (state, dir) = crate::test_support::app_state("coordinator-saved-output-deleted");
+            let workdir = console_workdir(&dir);
+            state
+                .store
+                .insert_console(&console(Agent::Claude, &workdir))
+                .unwrap();
+            state
+                .store
+                .insert_project(&Project {
+                    id: "project-1".to_string(),
+                    console_id: "console-1".to_string(),
+                    host_id: LOCAL_HOST_ID.to_string(),
+                    name: "Project".to_string(),
+                    path: "/tmp/project-1".to_string(),
+                    default_agent: None,
+                    source: ProjectSource::Local,
+                    remote_url: None,
+                    claude_trust_consent: false,
+                    pinned: false,
+                    tags: Vec::new(),
+                })
+                .unwrap();
+            state
+                .store
+                .insert_session(&project_session(
+                    "s",
+                    Agent::Claude,
+                    SessionStatus::Archived,
+                ))
+                .unwrap();
+            let saved = dir.join("output").join("s");
+            std::fs::create_dir_all(saved.parent().unwrap()).unwrap();
+            std::fs::write(&saved, b"last output").unwrap();
+            assert_eq!(state.saved_output("s"), Some(b"last output".to_vec()));
+
+            let label = format!("{request:?}");
+            handle(&state, None, request).await.unwrap();
+            assert!(state.store.get_session("s").unwrap().is_none(), "{label}");
+            assert!(!saved.exists(), "{label}");
+        }
     }
 
     /// A session whose resolved agent has been determined unavailable is refused before anything

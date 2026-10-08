@@ -1,8 +1,9 @@
 /**
  * The terminal sockets of the gallery. A session's terminal URL points at `FIXTURE_ORIGIN`, which
  * `installFakeTerminal` answers in the page itself, so there is no daemon and no failed network
- * request to read off the console: `output` connects and draws a sample, `refuse` closes at once
- * without ever opening, which is a live session whose terminal cannot be reached.
+ * request to read off the console: `output` connects and draws a sample (for a dormant session, as
+ * the output its last process left), `refuse` closes at once without ever opening, which is a live
+ * session whose terminal cannot be reached.
  */
 
 const FIXTURE_ORIGIN = "ws://gallery.invalid/";

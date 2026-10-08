@@ -39,8 +39,36 @@ function keepModifiersFromArmingKeyDownSeen(term: Terminal): (event: KeyboardEve
   };
 }
 
-/** Turns off the mouse tracking (X10 to any-motion, and the SGR and urxvt encodings) and focus
- * reporting an agent may have switched on, which xterm answers with input of its own. */
+/**
+ * Calls `onUserInput` right before each `onData` that xterm marks as the user's: a key, a paste, an
+ * input method's text, a wheel turned into arrow keys. xterm's own answers to queries in the output
+ * (device attributes, cursor position, colours, focus and window reports) are not marked. Mouse
+ * reports are marked too when they come through `onData` (the SGR and SGR-pixels encodings), as is
+ * an Alt+click that moves the cursor (the controller keeps that off outside `attach`..`detach`,
+ * so a click never reopens a dormant session); the default encoding comes through `onBinary`
+ * unmarked. The controller itself tells the mouse reports apart (see `MOUSE_REPORT`, `onBinary`),
+ * since they are not typing. The public API does not expose the mark, so this reaches
+ * `coreService.onUserInput` through the private `_core`; recheck it on every `@xterm/xterm`
+ * upgrade. Without it nothing is ever marked, so only the user's input typed while saved output is
+ * still being parsed is lost.
+ */
+function watchUserInput(term: Terminal, onUserInput: () => void): void {
+  const core = (
+    term as unknown as {
+      _core?: { coreService?: { onUserInput?: (listener: () => void) => unknown } };
+    }
+  )._core;
+  core?.coreService?.onUserInput?.(onUserInput);
+}
+
+/** Whether `data` is a mouse report that reaches `onData`: SGR and SGR-pixels (`CSI < b;x;y M|m`).
+ * xterm's default encoding always goes through `onBinary`, and it has no urxvt encoding. */
+const MOUSE_REPORT = /^\x1b\[<\d+;\d+;\d+[Mm]$/;
+
+/** Turns off the mouse tracking (X10 to any-motion, and the SGR encoding) and focus reporting an
+ * agent may have switched on, which xterm answers with input of its own. `?1015l` (urxvt) is a
+ * no-op in xterm 6.0.0, which does not support that encoding; it is harmless and kept for an
+ * xterm that does. */
 const RESET_REPORTING_MODES = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?1015l";
 
 /** How long the terminal's size must hold still before `syncSize` reports it to the daemon. */
@@ -51,7 +79,8 @@ export type TermStatus = "connecting" | "open" | "closed" | "not_running";
 export interface TerminalControllerHandlers {
   onStatusChange: (status: TermStatus) => void;
   /** Whether the screen shows anything of the current session yet: false from a reset until the
-   * first output after it has been written and drawn. */
+   * first output after it has been written and drawn. Saved output (see `detach`) does not count:
+   * it is not what a session being started is waiting for. */
   onPaintedChange?: (painted: boolean) => void;
   /** The first input typed while armed for a session with no process (see `armWake`); resolves to
    * whether the session was started. When it was not, the held input is dropped and the next
@@ -94,6 +123,18 @@ export class TerminalController {
   private painted = false;
   /** Bumped on every `attach()`; a socket's event handlers no-op once their generation is stale. */
   private generation = 0;
+  /** The saved output being shown for the session on screen, which has no process (see `detach`).
+   * Replaced or cleared with the screen, and compared by identity, so a load that arrives for a
+   * screen that has since been reset is dropped. */
+  private savedLoad?: WebSocket;
+  /** Saved output written and not yet parsed. While any is, what xterm emits is taken for its own
+   * answer to a query in that output and dropped, unless xterm marked it as the user's (`userInput`). */
+  private savedWritesInFlight = 0;
+  /** Set by xterm's `onUserInput` right before the `onData` it belongs to, and consumed there:
+   * whether that data came from the user (a key, a paste, an input method) rather than being
+   * xterm's own answer to a query. */
+  private userInput = false;
+  private disposed = false;
   private pendingInput: Uint8Array[] = [];
   /** The session whose process typing should start (an archived one on screen), if any. */
   private wakeFor: string | undefined;
@@ -109,6 +150,9 @@ export class TerminalController {
       // CJK status text, and the default `courier-new` xterm.js falls back to has neither.
       fontFamily: '"SF Mono", Menlo, Consolas, "Noto Sans Mono CJK SC", "PingFang SC", monospace',
       theme: XTERM_THEMES[initialColorTheme],
+      // An Option+click sends cursor-move arrow keys marked as the user's input, which would
+      // reopen a dormant session; it is only on from `attach` until `detach`.
+      altClickMovesCursor: false,
     });
     this.fitAddon = new FitAddon();
     this.term.loadAddon(this.fitAddon);
@@ -136,12 +180,39 @@ export class TerminalController {
       return true;
     });
 
-    this.term.onData((data) => this.sendInput(new TextEncoder().encode(data)));
-    // Mouse reports are not UTF-8: in the default mouse protocol a coordinate is `32 + n`, so past
-    // column 95 the encoded byte exceeds 127 and `onData` never sees it — only `onBinary` does,
-    // as a JS string of raw code units (one per byte), hence the mask back to a byte rather than a
-    // UTF-8 encode (see "Known pitfalls of the Tauri / Rust approach" in docs/architecture.md).
-    this.term.onBinary((data) => this.sendInput(Uint8Array.from(data, (c) => c.charCodeAt(0) & 0xff)));
+    // Saved output may be left in the alternate screen, where xterm turns a wheel turn into arrow
+    // keys: that would be input, and would wake an archived session. In the normal buffer the wheel
+    // scrolls, which is wanted.
+    this.term.attachCustomWheelEventHandler(
+      () => this.socket !== undefined || this.term.buffer.active.type !== "alternate",
+    );
+
+    watchUserInput(this.term, () => (this.userInput = true));
+    this.term.onData((data) => {
+      let fromUser = this.userInput;
+      this.userInput = false;
+      // Saved output may have turned mouse tracking on, with the reset (`RESET_REPORTING_MODES`)
+      // still to be parsed: a click then would be reported, and a report is not the user typing.
+      if (
+        fromUser &&
+        this.savedWritesInFlight > 0 &&
+        this.term.modes.mouseTrackingMode !== "none" &&
+        MOUSE_REPORT.test(data)
+      ) {
+        fromUser = false;
+      }
+      this.sendInput(new TextEncoder().encode(data), fromUser);
+    });
+    // Mouse reports in the default encoding are not UTF-8: a coordinate is `32 + n`, so a byte can
+    // exceed 127, and xterm always sends them through `onBinary` rather than `onData`, as a JS
+    // string of raw code units (one per byte), hence the mask back to a byte rather than a UTF-8
+    // encode (see "Known pitfalls of the Tauri / Rust approach" in docs/architecture.md). xterm
+    // does not mark them as the user's, and they are not typing. While saved output is parsed they
+    // are dropped along with xterm's own replies (see `sendInput`); after that the reset reporting
+    // modes (`RESET_REPORTING_MODES`) stop xterm from producing them.
+    this.term.onBinary((data) =>
+      this.sendInput(Uint8Array.from(data, (c) => c.charCodeAt(0) & 0xff), false),
+    );
   }
 
   mount(container: HTMLElement): void {
@@ -164,9 +235,12 @@ export class TerminalController {
     // exactly the uncatchable kind this class defers around in the first place.
     if (this.openFrame !== undefined) cancelAnimationFrame(this.openFrame);
     clearTimeout(this.resizeTimer);
+    this.disposed = true;
     this.generation++;
     this.socket?.close();
     this.socket = undefined;
+    this.savedLoad?.close();
+    this.savedLoad = undefined;
     this.term.dispose();
   }
 
@@ -201,10 +275,10 @@ export class TerminalController {
    *
    * Call this only for a session that is actually running (`working` / `waiting_user` / `idle`);
    * an interrupted or archived session must be resumed first (`resume_session`), per
-   * `apps/daemon/PROTOCOL.md` — "attaching to a session whose process is not running closes the socket
-   * immediately". That immediate close is still handled below (as `not_running`) as a safety net
-   * for the race where a session stops between the click and the socket connecting, not as the
-   * normal path for opening a dormant session.
+   * `apps/daemon/PROTOCOL.md` — attaching to a session whose process is not running gets only the
+   * output its last process left, if any, and then the close. That close is still handled below
+   * (as `not_running`) as a safety net for the race where a session stops between the click and
+   * the socket connecting, not as the normal path for opening a dormant session.
    */
   attach(sessionId: string, wsUrl: string, userInitiated: boolean): void {
     const generation = ++this.generation;
@@ -223,6 +297,7 @@ export class TerminalController {
     this.resetScreen();
     this.screenSessionId = sessionId;
     this.setStatus("connecting");
+    this.term.options.altClickMovesCursor = true;
 
     const socket = new WebSocket(wsUrl);
     socket.binaryType = "arraybuffer";
@@ -255,9 +330,9 @@ export class TerminalController {
     });
     socket.addEventListener("close", () => {
       if (generation !== this.generation) return;
-      // The daemon closes immediately, without ever reaching "open", when the session's process
-      // is not running — that is a status to display and offer resume for, not a dropped
-      // connection (apps/daemon/PROTOCOL.md, "GET /ws/term/:session"). It is also what a *reconnect*
+      // The daemon closes at once, after at most the saved output, when the session's process is
+      // not running — that is a status to display and offer resume for, not a dropped connection
+      // (apps/daemon/PROTOCOL.md, "GET /ws/term/:session"). It is also what a *reconnect*
       // gets if it loses a race against the session genuinely ending, so callers must not treat
       // this alone as proof the process is gone — only the session's own stored status says that.
       this.setStatus(everOpened ? "closed" : "not_running");
@@ -279,6 +354,13 @@ export class TerminalController {
   /** Detaches without connecting a new session — used when nothing is selected, or the selected
    * session is dormant (interrupted/archived) and waiting to be resumed.
    *
+   * With `savedOutputUrl` (the session's terminal socket), a screen that does not already hold
+   * `keepScreenFor`'s output is filled with what that session's last process printed, which the
+   * daemon replays for a session with no process and then closes (`apps/daemon/PROTOCOL.md`, "GET
+   * /ws/term/:session"). Read-only: nothing is ever sent on that socket, and a keystroke still goes
+   * to `armWake`. It counts as the session's output on screen, so a later detach for the same
+   * session neither clears it nor loads it again, and `attach()` replaces it like any other.
+   *
    * `keepScreenFor` names the session the pane is detaching *to*, and the last output stays on
    * screen only while it is the session that produced it — a process that has just ended, whose
    * final output (why it stopped, what it was waiting for) is the most useful thing the pane can
@@ -290,17 +372,47 @@ export class TerminalController {
    * unconditionally, so a kept screen never survives into the next connection.
    *
    * One real limit of that: if `TerminalPane`'s auto-reconnect timer fires before the daemon's
-   * `session_upserted` → `interrupted` broadcast arrives, `attach()` runs first and clears the
-   * screen itself, and the detach that follows once the broadcast does land then keeps a screen
-   * that is already blank. The broadcast normally wins by a wide margin, so this is a note on the
-   * contract, not something worth restructuring for. */
-  detach({ keepScreenFor }: { keepScreenFor?: string }): void {
+   * `session_upserted` → `interrupted` broadcast arrives, `attach()` runs first. The reconnect has
+   * lost the race against the process ending, so the daemon answers it with the saved output and
+   * closes: that frame goes through the live message handler like a replay and counts as painted,
+   * which is harmless because the socket closes right after. The screen then already holds the
+   * session's output, so the detach that follows when the broadcast lands keeps it and loads
+   * nothing. The broadcast normally wins by a wide margin, so this is a note on the contract, not
+   * something worth restructuring for. */
+  detach({
+    keepScreenFor,
+    savedOutputUrl,
+  }: {
+    keepScreenFor?: string;
+    savedOutputUrl?: string;
+  }): void {
     this.generation++;
     this.socket?.close();
     this.socket = undefined;
     this.sessionId = undefined;
-    if (keepScreenFor === undefined || keepScreenFor !== this.screenSessionId) this.resetScreen();
+    this.term.options.altClickMovesCursor = false;
+    if (keepScreenFor === undefined || keepScreenFor !== this.screenSessionId) {
+      this.resetScreen();
+      if (keepScreenFor !== undefined && savedOutputUrl !== undefined) {
+        this.loadSavedOutput(keepScreenFor, savedOutputUrl);
+      }
+    }
     this.setStatus("closed");
+  }
+
+  private loadSavedOutput(sessionId: string, url: string): void {
+    const socket = new WebSocket(url);
+    socket.binaryType = "arraybuffer";
+    this.savedLoad = socket;
+    this.screenSessionId = sessionId;
+    socket.addEventListener("message", (ev) => {
+      if (this.savedLoad !== socket || !(ev.data instanceof ArrayBuffer)) return;
+      this.savedWritesInFlight++;
+      this.term.write(new Uint8Array(ev.data));
+      // The process that left these modes on is gone, so anything xterm would report under them
+      // could only wake the session by accident (see `armWake`).
+      this.term.write(RESET_REPORTING_MODES, () => this.savedWritesInFlight--);
+    });
   }
 
   /** Tells the daemon the terminal's current size once it has settled for `RESIZE_SETTLE_MS`, and
@@ -317,12 +429,21 @@ export class TerminalController {
   }
 
   /** Skipped while the terminal is untouchable (see `mount`); there is nothing on screen to clear
-   * that early anyway. */
+   * that early anyway.
+   *
+   * The reset is queued behind whatever has been written and not parsed yet, rather than done on
+   * the spot: xterm parses a write in a later task, and `reset()` does not drop what is still
+   * queued, so a large replay written just before a session switch would otherwise be drawn on the
+   * next session's screen. */
   private resetScreen(): void {
     this.screenSessionId = undefined;
+    this.savedLoad?.close();
+    this.savedLoad = undefined;
     this.setPainted(false);
     if (!this.touchable) return;
-    this.term.reset();
+    this.term.write("", () => {
+      if (!this.disposed) this.term.reset();
+    });
   }
 
   /** Skipped while the terminal is untouchable (see `mount`) and while the pane has no size: a
@@ -369,7 +490,8 @@ export class TerminalController {
     this.wakeFor = undefined;
   }
 
-  private sendInput(data: Uint8Array): void {
+  private sendInput(data: Uint8Array, fromUser = true): void {
+    if (this.savedWritesInFlight > 0 && !fromUser) return;
     if (!this.socket && this.wakeFor !== undefined) {
       const first = this.pendingInput.length === 0;
       this.pendingInput.push(data);

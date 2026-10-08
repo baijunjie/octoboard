@@ -22,6 +22,7 @@ mod ptyio;
 mod relocate;
 mod reporting;
 mod ringbuf;
+mod saved_output;
 mod server;
 mod session;
 mod state;
@@ -168,7 +169,15 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let port = listener.local_addr()?.port();
     let self_exe = std::env::current_exe()?.to_string_lossy().into_owned();
-    let state = Arc::new(AppState::new(store, port, self_exe));
+    let state = Arc::new(AppState::new(
+        store,
+        port,
+        self_exe,
+        paths::saved_output_dir(),
+    ));
+    // Saved output whose session is gone (a daemon that died between deleting the record and the
+    // file) or whose write was cut short has nothing else to remove it.
+    state.sweep_saved_output()?;
 
     // Printed before anything else can block: the application waits for this line to know where to
     // connect.

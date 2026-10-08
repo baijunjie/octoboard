@@ -53,6 +53,7 @@ the repository root and cover both crates; `-p octoboardd` narrows either to thi
 | `src/term.rs` | Launching an agent in a PTY, and writing messages into a running one |
 | `src/ptyio.rs` | Non-blocking read/write on a PTY master fd (a blocking write can park forever behind a modal dialog) |
 | `src/ringbuf.rs` | Fixed-capacity ring buffer holding a session's recent terminal output, replayed to a client that attaches or reconnects |
+| `src/saved_output.rs` | The ring buffer's contents kept as one file per session once its process ends (`paths::saved_output_dir`), replayed by the terminal socket for a session with no process; written atomically, removed with the session's record, and swept at startup |
 | `src/hostfs.rs` | Host role's filesystem work: browsing directories, finding git repositories under a parent directory, cloning one, lexical path normalisation |
 | `src/env_shell.rs` | Captures the user's real shell environment (`$SHELL -l -i -c 'env -0 && printf <marker>'`) that every agent is launched with; also a cached variant for a caller on its own repeating schedule (`cached_snapshot`) and a generic timeout-bounded subprocess runner (`run_with_timeout`), both used by `git_status.rs` |
 | `src/hooks.rs` | Turns one agent's hook event payload into a session status; each agent's events and payload shape differ |

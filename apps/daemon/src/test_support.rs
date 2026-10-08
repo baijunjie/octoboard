@@ -111,7 +111,12 @@ pub(crate) fn app_state(label: &str) -> (Arc<AppState>, ScratchDir) {
     let dir = ScratchDir::new(label);
     let store = Store::open(&dir.join("octoboard.db")).expect("store");
     (
-        Arc::new(AppState::new(store, 1234, "/opt/octoboardd".to_string())),
+        Arc::new(AppState::new(
+            store,
+            1234,
+            "/opt/octoboardd".to_string(),
+            dir.join("output"),
+        )),
         dir,
     )
 }

@@ -166,14 +166,17 @@ export function TerminalPane({
     const controller = controllerRef.current;
     if (!controller) return;
     // A dormant session is resumed by the caller before it is ever attached to directly (selecting
-    // an interrupted one, or typing to or reopening an archived one) — the daemon closes the
-    // terminal socket immediately for a session with no running process (`apps/daemon/PROTOCOL.md`),
-    // so connecting here would just bounce. Once the resume's `session_upserted` broadcast flips the
-    // status, this effect re-runs and attaches for real.
+    // an interrupted one, or typing to or reopening an archived one) — the daemon has no process to
+    // connect the terminal socket to for a session with no running process
+    // (`apps/daemon/PROTOCOL.md`), only the output its last one left. Once the resume's
+    // `session_upserted` broadcast flips the status, this effect re-runs and attaches for real.
     if (!session || isDormant) {
-      // Keeps the ended session's last output on screen; `detach` itself checks that the output
-      // belongs to this session, so selecting a different dormant session clears as before.
-      controller.detach({ keepScreenFor: session?.id });
+      // `detach` keeps the screen when it already holds this session's output, and otherwise
+      // replaces it with the output the daemon saved for this session.
+      controller.detach({
+        keepScreenFor: session?.id,
+        savedOutputUrl: session ? terminalUrl(session.id) : undefined,
+      });
       // An archived session is not reopened by selecting it, only by typing to it: the first
       // input starts it (`onResume`), and is handed to it once connected.
       if (session?.status === "archived") controller.armWake(session.id);
@@ -187,7 +190,7 @@ export function TerminalPane({
       (controller.currentStatus === "connecting" || controller.currentStatus === "open");
     if (alreadyAttached) return;
     attachCurrent(true);
-  }, [session, isDormant, attachCurrent]);
+  }, [session, isDormant, attachCurrent, terminalUrl]);
 
   // Reconnects a session that is still live (per its own `Session` record) after its socket landed
   // on `closed` or `not_running` — the daemon drops a client that stops draining for a few seconds

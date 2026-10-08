@@ -47,3 +47,9 @@ pub fn run_dir() -> PathBuf {
 pub fn session_scratch(session_id: &str) -> PathBuf {
     run_dir().join(session_id)
 }
+
+/// Each ended session's last terminal output, one file per session; see `crate::saved_output`.
+/// Unlike `run_dir`, it outlives the daemon: it is what an archived session shows.
+pub fn saved_output_dir() -> PathBuf {
+    data_dir().join("output")
+}

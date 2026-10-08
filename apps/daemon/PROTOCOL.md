@@ -368,8 +368,15 @@ of a console no client is showing stays in the daemon's status for it until that
   then live output follows.
 - Client to daemon: **binary** frames are raw PTY input, written through verbatim. **Text** frames are JSON control:
   `{"type":"resize","cols":N,"rows":N}`.
-- Attaching to a session whose process is not running closes the socket immediately; the UI shows the stored status
-  instead and offers resume.
+- Attaching to a session whose process is not running sends what that session's last process printed, as one binary
+  frame, when the daemon kept it, and then closes the socket; with nothing kept it closes straight away. Nothing is
+  read from such a socket. The UI shows the stored status and offers resume, and shows this output read-only in the
+  meantime.
+- What is kept is the ring buffer's contents at the moment the process ended, for whatever reason it ended (archiving,
+  the agent exiting or crashing, a switch of the session's account, the daemon shutting down). Each end replaces what an
+  earlier one left, starting a new process removes it, and deleting the session's record deletes it. A session whose
+  process ended before the daemon kept output, or ended with the daemon killed outright, has none, even if an earlier
+  process left some.
 - The daemon takes backpressure from each attached client: a client that stops draining for longer than the daemon's
   grace window is dropped (its socket closes) rather than allowed to make the daemon buffer without bound. A dropped
   client reconnects and gets the ring buffer replayed.

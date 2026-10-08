@@ -138,8 +138,9 @@ resumed at that moment — those must be archived (or the application restarted,
 error names the reason.
 
 When it goes through, deleting a console also deletes every project association under it, every session record
-belonging to it, archived sessions included, and every page its console sessions pushed to the report panel, and
-removes the console's own working directory under `~/.octoboard`. No project directory is touched.
+belonging to it, archived sessions included, with the last output Octoboard kept for each, and every page its console
+sessions pushed to the report panel, and removes the console's own working directory under `~/.octoboard`. No project
+directory is touched.
 
 ## Projects
 
@@ -253,7 +254,7 @@ Removing a project asks for confirmation. **Sessions of the project that are sti
   many sessions are still running and will be ended, and its button reads **End and remove**. The list follows
   sessions starting or stopping while the confirmation is open. Confirming ends each running session's process the way
   archiving does (see "Archiving, interruption and resuming" in `docs/product/sessions.md`), then removes the project
-  with all its sessions.
+  with all its sessions and the last output Octoboard kept for each.
 
 Removal is refused only while a session of the project is being launched or resumed at that moment, since that
 session has no process yet that could be ended; the error names the reason, and nothing is ended or removed.

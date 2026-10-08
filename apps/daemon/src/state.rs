@@ -3,7 +3,7 @@
 //! tokens, the turn bookkeeping a synthesised report rests on, a facade over the write queue in
 //! `crate::outbox`, and each project's live git status together with the claim that keeps two
 //! checks of one project from racing and the timestamp that keeps them from piling up across
-//! several clients.
+//! several clients, and each ended session's saved terminal output.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
@@ -17,6 +17,7 @@ use crate::protocol::{
     error_code, notice_code, now_millis, Agent, AgentAvailability, Availability, CodedError, Event,
     GitStatus, Notice, Session, SessionStatus,
 };
+use crate::saved_output::SavedOutput;
 use crate::session::LiveSession;
 use crate::store::Store;
 
@@ -71,6 +72,9 @@ pub struct AppState {
     /// field of `Store`'s settings row, which only the user's own updates write. Always holds all
     /// three agents, each starting `NotDetermined` — the state every run begins in.
     agent_availability: RwLock<HashMap<Agent, AgentAvailability>>,
+    /// Each ended session's last terminal output, written as its process ends and removed with its
+    /// record.
+    saved_output: SavedOutput,
     events: broadcast::Sender<Event>,
     shutdown: tokio::sync::Notify,
 }
@@ -113,7 +117,12 @@ pub enum TurnClose {
 }
 
 impl AppState {
-    pub fn new(store: Store, port: u16, self_exe: String) -> Self {
+    pub fn new(
+        store: Store,
+        port: u16,
+        self_exe: String,
+        saved_output_dir: std::path::PathBuf,
+    ) -> Self {
         let (events, _) = broadcast::channel(1024);
         Self {
             store,
@@ -143,6 +152,7 @@ impl AppState {
                     })
                     .collect(),
             ),
+            saved_output: SavedOutput::new(saved_output_dir),
             events,
             shutdown: tokio::sync::Notify::new(),
         }
@@ -352,17 +362,18 @@ impl AppState {
         Ok(())
     }
 
-    /// Deletes the session's record if it is archived, and broadcasts `session_deleted` when it
-    /// was. `false` means it was not archived, is gone already, or is being launched right now (a
-    /// resume in flight). Checked and deleted under the live-sessions lock (`live`), so a resume
-    /// cannot claim the session between the two. An archived session whose process is still
-    /// exiting is deleted: its exit watcher finds no record and skips.
+    /// Deletes the session's record and its saved output if it is archived, and broadcasts
+    /// `session_deleted` when it was. `false` means it was not archived, is gone already, or is
+    /// being launched right now (a resume in flight). Checked and deleted under the live-sessions
+    /// lock (`live`), so a resume cannot claim the session between the two. An archived session
+    /// whose process is still exiting is deleted: its exit watcher finds no record and skips.
     pub fn delete_if_archived(&self, id: &str) -> Result<bool> {
         let live = self.live.read().expect("live sessions lock poisoned");
         if live.launching.contains(id) || !self.store.delete_session_if_archived(id)? {
             return Ok(false);
         }
         drop(live);
+        self.forget_saved_output(id);
         self.broadcast(Event::SessionDeleted {
             session: id.to_string(),
         });
@@ -686,6 +697,13 @@ impl AppState {
                     break;
                 }
             }
+            // Saved before the live entry goes, so a terminal client attaching meanwhile finds
+            // either the process or what it left, never neither.
+            let saving = {
+                let (state, live) = (state.clone(), live.clone());
+                tokio::task::spawn_blocking(move || state.save_output(&live))
+            };
+            let _ = saving.await;
             state.unregister_live(&live);
             match state.store.get_session(&live.id) {
                 Ok(Some(mut session)) => {
@@ -728,14 +746,62 @@ impl AppState {
                 }
             }
         }
-        // `terminate` waits out the graceful period, so it goes to a blocking thread.
+        // `terminate` waits out the graceful period, so it goes to a blocking thread. The output is
+        // saved here rather than left to each exit watcher, which the daemon may not outlive.
         let handles: Vec<_> = sessions
             .into_iter()
-            .map(|live| tokio::task::spawn_blocking(move || live.terminate()))
+            .map(|live| {
+                let state = self.clone();
+                tokio::task::spawn_blocking(move || {
+                    live.terminate();
+                    state.save_output(&live);
+                })
+            })
             .collect();
         for handle in handles {
             let _ = handle.await;
         }
+    }
+
+    // -- saved output ------------------------------------------------------------
+
+    /// Keeps what this session's process printed last, now that it has exited. **Blocks** on the
+    /// file and on the PTY reader (see `LiveSession::keep_final_output`).
+    fn save_output(&self, live: &LiveSession) {
+        live.keep_final_output(|output| {
+            self.saved_output.write(&live.id, output);
+            // A record deleted while its process was exiting may have had its file removed before
+            // the write above. Looked at after writing, and the deletion removes the file after
+            // the record, so whichever comes second leaves no file behind.
+            if let Ok(None) = self.store.get_session(&live.id) {
+                self.saved_output.remove(&live.id);
+            }
+        });
+    }
+
+    /// What this session's process printed last, if its output was kept.
+    pub fn saved_output(&self, id: &str) -> Option<Vec<u8>> {
+        self.saved_output.read(id)
+    }
+
+    /// Removes the saved output of every session the store has no record of, and any file left
+    /// half-written. Run once at startup, before anything is served.
+    pub fn sweep_saved_output(&self) -> Result<()> {
+        let ids: std::collections::HashSet<String> = self
+            .store
+            .list_sessions()?
+            .into_iter()
+            .map(|session| session.id)
+            .collect();
+        self.saved_output.sweep(|id| ids.contains(id));
+        Ok(())
+    }
+
+    /// Drops a session's saved output. Called after its record is deleted, never before: see
+    /// [`Self::save_output`]. Also when a new process takes the session over, whose output replaces
+    /// it.
+    pub fn forget_saved_output(&self, id: &str) {
+        self.saved_output.remove(id);
     }
 
     // -- git status ------------------------------------------------------------
@@ -964,7 +1030,119 @@ pub fn install_panic_hook() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::app_state;
+    use crate::protocol::{Origin, Role};
+    use crate::session::spawn_reader_thread;
+    use crate::store::LOCAL_HOST_ID;
+    use crate::test_support::{app_state, fake_live_session, PATIENCE};
+
+    fn session_record(id: &str, status: SessionStatus) -> Session {
+        Session {
+            id: id.to_string(),
+            agent: Agent::Claude,
+            agent_session_id: None,
+            console_id: "console-1".to_string(),
+            project_id: None,
+            host_id: LOCAL_HOST_ID.to_string(),
+            role: Role::Project,
+            origin: Origin::User,
+            title: "Session".to_string(),
+            status,
+            has_conversation: false,
+            bound_to: None,
+            colour: None,
+            ordinal: None,
+            account_id: None,
+            config_dir: None,
+            pinned: false,
+            started_at: 0,
+            ended_at: None,
+        }
+    }
+
+    /// Stores a session record, with the console it belongs to.
+    fn insert_record(state: &AppState, dir: &std::path::Path, id: &str, status: SessionStatus) {
+        state
+            .store
+            .insert_console(&crate::protocol::Console {
+                id: "console-1".to_string(),
+                name: "Console".to_string(),
+                workdir: dir.join("workdir").to_string_lossy().into_owned(),
+                console_session_agent: Agent::Claude,
+                default_agent: Agent::Claude,
+                claude_account_id: None,
+                codex_account_id: None,
+                grok_account_id: None,
+                icon: None,
+                created_at: 0,
+            })
+            .unwrap();
+        state
+            .store
+            .insert_session(&session_record(id, status))
+            .unwrap();
+    }
+
+    /// Waits, up to `PATIENCE`, for the exit watcher to let go of the session.
+    async fn until_unregistered(state: &AppState, id: &str) {
+        let deadline = Instant::now() + PATIENCE;
+        while state.live_session(id).is_some() {
+            assert!(Instant::now() < deadline, "the exit was never recorded");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
+    /// The output is saved before the live entry goes, so the moment the session stops being
+    /// running there is already something to show for it.
+    #[tokio::test]
+    async fn a_process_that_ends_leaves_its_last_output_behind() {
+        let (state, dir) = app_state("state-output-kept-on-exit");
+        insert_record(&state, &dir, "s", SessionStatus::Working);
+        let live = fake_live_session("s", Agent::Claude, 80, 24, "printf 'last words'; sleep 0.2");
+        spawn_reader_thread(live.clone(), 8 * 1024);
+        state.register_live(live.clone());
+        state.watch_exit(live.clone());
+
+        until_unregistered(&state, "s").await;
+        let saved = state.saved_output("s").expect("the output was kept");
+        assert!(String::from_utf8_lossy(&saved).contains("last words"));
+    }
+
+    /// The daemon does not wait for its exit watchers on the way out, so a shutdown keeps the
+    /// output itself.
+    #[tokio::test]
+    async fn stopping_every_session_keeps_each_ones_output() {
+        let (state, dir) = app_state("state-output-kept-on-shutdown");
+        insert_record(&state, &dir, "s", SessionStatus::Working);
+        let live = fake_live_session("s", Agent::Claude, 80, 24, "printf 'still here'; sleep 30");
+        spawn_reader_thread(live.clone(), 8 * 1024);
+        state.register_live(live.clone());
+        let deadline = Instant::now() + PATIENCE;
+        while live.recent_output(64).is_empty() {
+            assert!(Instant::now() < deadline, "the stand-in printed nothing");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+
+        state.stop_all_sessions().await;
+        let saved = state.saved_output("s").expect("the output was kept");
+        assert!(String::from_utf8_lossy(&saved).contains("still here"));
+    }
+
+    /// A record deleted while its process is still exiting, which is allowed, gets no output saved
+    /// after it.
+    #[tokio::test]
+    async fn a_session_deleted_while_exiting_leaves_no_output_behind() {
+        let (state, dir) = app_state("state-output-deleted-while-exiting");
+        insert_record(&state, &dir, "s", SessionStatus::Archived);
+        let live = fake_live_session("s", Agent::Claude, 80, 24, "printf 'gone'; sleep 0.2");
+        spawn_reader_thread(live.clone(), 8 * 1024);
+        state.register_live(live.clone());
+        assert!(state.delete_if_archived("s").unwrap());
+        state.watch_exit(live.clone());
+
+        until_unregistered(&state, "s").await;
+        assert_eq!(state.saved_output("s"), None);
+        assert!(!dir.join("output").join("s").exists());
+    }
 
     /// Only one report may come out of one turn, and only when the session did not report for
     /// itself. The repeat case is not hypothetical: Grok fires its `idle_prompt` backstop about a

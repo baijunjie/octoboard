@@ -284,11 +284,12 @@ is archived and when it is resumed; an archived session's menu offers no Pin or 
 ## Selecting a session
 
 Selecting a session shows its terminal; selecting an interrupted one resumes it. Selecting an archived one does not
-reopen it: it is shown still archived, and typing into its terminal or pressing Reopen reopens it (see "Archiving,
-interruption and resuming" and "The terminal" in `docs/product/sessions.md`). Whatever it is selected from — a sidebar
-row, a "View archive" or "Archived console sessions" submenu, focus mode, the archive view, or the top bar's waiting
-count — **the sidebar follows it**: it switches to the session's console, and leaves focus mode when the session does
-not belong to what focus mode is on (see "Focus mode" below).
+reopen it: it is shown still archived, with the output its last process left on screen read-only, and typing into its
+terminal or pressing Reopen reopens it (see "Archiving, interruption and resuming" and "The terminal" in
+`docs/product/sessions.md`). Whatever it is selected from — a sidebar row, a "View archive" or "Archived console
+sessions" submenu, focus mode, the archive view, or the top bar's waiting count — **the sidebar follows it**: it
+switches to the session's console, and leaves focus mode when the session does not belong to what focus mode is on
+(see "Focus mode" below).
 
 A session is selected automatically only when this application is the one that opened it — through the console
 sessions section's New console session button or the new-session dialog — and that closes the archive view if it is

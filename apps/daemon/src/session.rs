@@ -34,6 +34,11 @@ const SUBSCRIBER_GRACE: Duration = Duration::from_secs(3);
 /// renderer-fallback counter, which is machine-level state it keeps about itself.
 const TERM_GRACE: Duration = Duration::from_secs(3);
 
+/// How long [`LiveSession::keep_final_output`] waits for the PTY reader to take what the process
+/// wrote just before it exited. Bounded because the reader only finishes once nothing holds the PTY
+/// open, and a background process the agent started may hold it long after the agent is gone.
+const FINAL_OUTPUT_DRAIN: Duration = Duration::from_millis(500);
+
 struct Subscriber {
     id: u64,
     tx: mpsc::Sender<Bytes>,
@@ -67,6 +72,11 @@ pub struct LiveSession {
     child: Mutex<Box<dyn Child + Send + Sync>>,
     reaped: AtomicBool,
     fan: Mutex<Fan>,
+    /// A reader thread is reading the PTY into `fan`; see [`spawn_reader_thread`].
+    reader_running: AtomicBool,
+    /// [`Self::keep_final_output`] has run. A lock rather than a flag, so that a second caller
+    /// returns only once the first has finished.
+    final_output_kept: Mutex<bool>,
     /// Per-session scratch directory (Grok's `GROK_HOME` symlink farm), removed when the session's
     /// process is gone.
     scratch_dir: Mutex<Option<std::path::PathBuf>>,
@@ -115,6 +125,8 @@ impl LiveSession {
                 subscribers: Vec::new(),
                 next_id: 0,
             }),
+            reader_running: AtomicBool::new(false),
+            final_output_kept: Mutex::new(false),
             scratch_dir: Mutex::new(session.scratch_dir),
             resolves_approvals_itself: session.resolves_approvals_itself,
             trust: TrustState::new(session.agent),
@@ -148,6 +160,29 @@ impl LiveSession {
             .expect("fan mutex poisoned")
             .ring
             .tail(max_bytes)
+    }
+
+    /// Hands everything still buffered to `keep`, once the process has exited, and only the first
+    /// time: the exit watcher and a shutdown can both see the same exit. A later caller waits for
+    /// the first to finish, so a shutdown that returns has its output kept whichever of the two got
+    /// there first. Waits up to `FINAL_OUTPUT_DRAIN` for the reader to finish before taking the
+    /// buffer, since what an agent prints on its way out can still be in the PTY when its exit is
+    /// observed. **Blocks** for that long.
+    pub fn keep_final_output(&self, keep: impl FnOnce(&[u8])) {
+        let mut kept = self
+            .final_output_kept
+            .lock()
+            .expect("final output mutex poisoned");
+        if *kept {
+            return;
+        }
+        let deadline = Instant::now() + FINAL_OUTPUT_DRAIN;
+        while self.reader_running.load(Ordering::Acquire) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let output = self.fan.lock().expect("fan mutex poisoned").ring.snapshot();
+        keep(&output);
+        *kept = true;
     }
 
     /// How many bytes this session has printed in all. A mark for [`Self::output_since`].
@@ -456,6 +491,7 @@ fn send_with_backpressure(tx: &mpsc::Sender<Bytes>, chunk: Bytes) -> bool {
 /// rather than a tokio task, because the throttling in `on_output` is the mechanism that applies
 /// backpressure and must not occupy a runtime worker.
 pub fn spawn_reader_thread(session: Arc<LiveSession>, read_buf_bytes: usize) {
+    session.reader_running.store(true, Ordering::Release);
     std::thread::spawn(move || {
         let mut buf = vec![0u8; read_buf_bytes];
         loop {
@@ -468,6 +504,7 @@ pub fn spawn_reader_thread(session: Arc<LiveSession>, read_buf_bytes: usize) {
                 }
             }
         }
+        session.reader_running.store(false, Ordering::Release);
         tracing::info!(session = %session.id, "PTY reader thread exiting");
     });
 }

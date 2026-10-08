@@ -412,9 +412,10 @@ that is before anything is deleted; deleting every archived console session of a
 sessions in the same way, and says how many. Deleting an archived bound session on its own leaves its console session
 alone, as does deleting a project's archived sessions or a console session's own archive of bound sessions.
 
-- **Deleting removes only Octoboard's record of the session**, for good. The session disappears from every client, and
-  the console session's `list_archived` and `reopen_session` no longer find it. The agent's own record of the
-  conversation, in the agent's own configuration directory, and the project's directory are never touched.
+- **Deleting removes only Octoboard's record of the session**, for good, and the last output Octoboard kept for it. The
+  session disappears from every client, and the console session's `list_archived` and `reopen_session` no longer find
+  it. The agent's own record of the conversation, in the agent's own configuration directory, and the project's
+  directory are never touched.
 - Deleting a session that is not archived is refused, saying that only an archived session can be deleted. So is
   deleting an archived session that is being resumed at that moment. An archived session whose process is still on its
   way out can be deleted.
@@ -467,7 +468,18 @@ focus between regions with F6" in `docs/product/window-layout.md`).
   "Reopen". The card is hidden while the session is being resumed.
 - **Typing into an archived session's terminal reopens it.** The first input starts the relaunch, and what is typed
   until the session is connected is held and handed to the agent once it is, so it reaches the agent's prompt.
-- **A session's last output stays on screen once its process has ended**, behind that card, so what
-  the agent printed last — why it stopped, what it was waiting for — can still be read. The kept screen belongs to
-  that one session: selecting a different dormant session clears the screen rather than showing the previous session's
-  output, and resuming re-attaches and redraws from the daemon's replay rather than appending to what was kept.
+- **A session's last output stays on screen once its process has ended**, behind that card, so what the agent
+  printed last — why it stopped, what it was waiting for — can still be read. The kept screen belongs to that one
+  session: selecting a different dormant session shows that session's own saved output (a blank screen if it has
+  none) rather than the previous session's, and resuming re-attaches and redraws from the daemon's replay rather than
+  appending to what was kept.
+- **A dormant session selected later shows the output its last process left.** Whenever a session's process ends —
+  archived, exited or crashed, switched to another account, or stopped with the daemon on the way out — the daemon
+  keeps the most recent 2 MiB of its output, replacing what an earlier end left; a resume that starts a new process
+  discards it. Selecting the session while it has no process puts that output on screen behind the card, read-only:
+  nothing typed reaches it, and in an archived session the first keystroke reopens the session as above;
+  clicking, selecting or scrolling over it does not. While a
+  resume is under way the loading state covers it, so it is what shows when the resume fails. Resuming redraws from
+  the new process's replay rather than appending to it. A session whose process ended before Octoboard kept this
+  output, or with the daemon killed outright, shows a blank terminal, even if an earlier process left some. Deleting
+  the session's record deletes the output too (see "Files Octoboard owns" in `docs/product/application-lifecycle.md`).

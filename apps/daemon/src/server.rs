@@ -201,7 +201,18 @@ async fn term_ws(
 
 async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, session_id: String) {
     let Some(session) = state.live_session(&session_id) else {
-        // Not running: the UI shows the stored status and offers to resume.
+        // Not running: what its last process printed, if that was kept, and the close. Read-only:
+        // there is nothing to write input into.
+        let saved = {
+            let state = state.clone();
+            let session_id = session_id.clone();
+            tokio::task::spawn_blocking(move || state.saved_output(&session_id))
+        };
+        if let Ok(Some(output)) = saved.await {
+            if !output.is_empty() && socket.send(Message::Binary(output)).await.is_err() {
+                return;
+            }
+        }
         let _ = socket.send(Message::Close(None)).await;
         return;
     };
@@ -475,20 +486,102 @@ mod tests {
     use std::net::TcpStream;
 
     use super::*;
-    use crate::test_support::app_state;
+    use crate::test_support::{app_state, PATIENCE};
 
     /// Serves the real router on an ephemeral loopback port and returns the port.
     async fn serve(name: &str) -> u16 {
+        serve_with_output_dir(name).await.0
+    }
+
+    /// `serve`, also handing back the directory the daemon keeps saved session output in.
+    async fn serve_with_output_dir(name: &str) -> (u16, std::path::PathBuf) {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .expect("a loopback port");
         let port = listener.local_addr().expect("a bound address").port();
         let (state, dir) = app_state(&format!("server-{name}"));
+        let output_dir = dir.join("output");
         tokio::spawn(async move {
             let _dir = dir;
             axum::serve(listener, router(state)).await
         });
-        port
+        (port, output_dir)
+    }
+
+    /// Opens a WebSocket on `path` and reads every frame the daemon sends until its close, as
+    /// `(opcode, payload)`. Frames from a server are never masked.
+    fn websocket_frames(port: u16, path: &str) -> Vec<(u8, Vec<u8>)> {
+        use std::io::Read;
+
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
+        write!(
+            stream,
+            "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: Upgrade\r\n\
+             Upgrade: websocket\r\nSec-WebSocket-Version: 13\r\n\
+             Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n"
+        )
+        .expect("write");
+        stream
+            .set_read_timeout(Some(PATIENCE))
+            .expect("a read timeout");
+        let mut reader = BufReader::new(stream);
+        let mut line = String::new();
+        reader.read_line(&mut line).expect("read");
+        assert!(line.contains(" 101 "), "{line}");
+        while line != "\r\n" {
+            line.clear();
+            reader.read_line(&mut line).expect("read");
+        }
+        let mut frames = Vec::new();
+        loop {
+            let mut head = [0u8; 2];
+            reader.read_exact(&mut head).expect("a frame");
+            let len = match head[1] & 0x7f {
+                126 => {
+                    let mut len = [0u8; 2];
+                    reader.read_exact(&mut len).expect("a length");
+                    u16::from_be_bytes(len) as usize
+                }
+                127 => {
+                    let mut len = [0u8; 8];
+                    reader.read_exact(&mut len).expect("a length");
+                    u64::from_be_bytes(len) as usize
+                }
+                len => len as usize,
+            };
+            let mut payload = vec![0u8; len];
+            reader.read_exact(&mut payload).expect("a payload");
+            let opcode = head[0] & 0x0f;
+            frames.push((opcode, payload));
+            if opcode == 0x8 {
+                return frames;
+            }
+        }
+    }
+
+    /// A session with no process replays what its last one printed and closes, and one with
+    /// nothing kept closes straight away, as before there was anything to keep.
+    #[tokio::test]
+    async fn the_terminal_of_a_session_with_no_process_replays_its_saved_output_and_closes() {
+        let (port, output_dir) = serve_with_output_dir("saved-output").await;
+        std::fs::create_dir_all(&output_dir).unwrap();
+        std::fs::write(output_dir.join("kept"), b"\x1b[1mlast words\x1b[0m").unwrap();
+
+        tokio::task::spawn_blocking(move || {
+            assert_eq!(
+                websocket_frames(port, "/ws/term/kept"),
+                [
+                    (0x2, b"\x1b[1mlast words\x1b[0m".to_vec()),
+                    (0x8, Vec::new())
+                ]
+            );
+            assert_eq!(
+                websocket_frames(port, "/ws/term/nothing-kept"),
+                [(0x8, Vec::new())]
+            );
+        })
+        .await
+        .expect("the checks ran");
     }
 
     /// Sends one request with exactly the headers given (plus a body length) and returns the
