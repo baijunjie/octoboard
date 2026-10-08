@@ -224,3 +224,17 @@ take, which is launching a real agent.
 - [ ] The **`console-sessions-archive-cascade` gallery scenario** runs clean in a browser, which is also where the
       callout's layout, its zh-Hans rendering and a long or CJK session title in it get looked at.
 
+## From milestone 12 — choosing a binding when a session is created
+
+Covered by dialog tests; the control itself has not been rendered.
+
+- [ ] In a console with two console sessions the new-session dialog shows a **Report to** select: the closed trigger
+      and each option carry the console session's colour dot, matching that console session's own badge in the
+      sidebar, in both light and dark, and the default reads as the no-console-session option.
+- [ ] A session created with a console session chosen then **carries that colour's badge** on its sidebar row.
+- [ ] A console with **no console session that is not archived** shows no select at all.
+- [ ] The select **inside the HeroUI modal in WebKit**: its dot, a long console session title now that the label
+      truncates, and a right-to-left or CJK title.
+- [ ] The `dialog-new-session-owner` **gallery scenario** renders, including its step that opens the select by
+      pressing the trigger's text — which matches exactly, so it breaks if the trigger ever gains text of its own.
+

@@ -70,10 +70,12 @@ A session is opened under a project with:
 - **Title** (optional) — defaults to the project's name. A console session's title defaults to
   "Hub `<ordinal>`", where the ordinal is one past the highest ever used in its console, so a title
   is not reused after a console session is archived or deleted.
-- **Report to console session** (a checkbox, off by default) — binds this session to the console's
-  console session, so its reports go there instead of it staying outside the orchestration. The
-  binding is fixed for the session's lifetime once set. A session the console session itself starts
-  is always bound to it; see "Which sessions the console session drives" in
+- **Report to** (a choice, "No console session" by default) — one of the console's console sessions that are not
+  archived, each shown beside its colour, the same one the session's binding badge will carry (see "The binding badge"
+  in `docs/product/sidebar.md`), or none. A chosen console session receives this session's reports, instead of the
+  session staying outside the orchestration. A console with no console session that is not archived shows no choice
+  at all, and the session is unbound. The binding is fixed for the session's lifetime once set. A session the
+  console session itself starts is always bound to it; see "Which sessions the console session drives" in
   `docs/product/hub-orchestration.md`.
 
 The dialog takes no task: a session the user opens by hand starts in *awaiting instructions*, sitting at the agent's

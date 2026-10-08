@@ -7,7 +7,7 @@ import React from "react";
  * cannot be chosen — the current `value` may still be one, so the reason it cannot be changed
  * away *to* is on screen without taking away what is already picked. With `inline` it is only as
  * wide as its value and `label` is its accessible name alone, for a control whose own row already
- * shows the name (a setting). */
+ * shows the name (a setting). A label too long for the control is cut with an ellipsis, as in `AccountSelect`. */
 export function OptionSelect<T extends string>({
   label,
   options,
@@ -54,7 +54,9 @@ export function OptionSelect<T extends string>({
                   {option.icon}
                 </span>
               )}
-              <span lang={option.lang}>{option.label}</span>
+              <span lang={option.lang} dir="auto" className="truncate">
+                {option.label}
+              </span>
               <ListBox.ItemIndicator />
             </ListBox.Item>
           ))}

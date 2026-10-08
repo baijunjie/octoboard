@@ -143,8 +143,8 @@ takes with it, is the user's to do (see "Archiving, interruption and resuming" i
 ## Which sessions the console session drives
 
 A session the console session started is always bound to it, so it always reports to it. A session
-**the user opens by hand is not**, unless they check "Report to console session" in the session
-dialog; the box is unchecked by default and the binding is fixed for that session's lifetime once
+**the user opens by hand is not**, unless they choose a console session under "Report to" in the
+session dialog; the choice is none by default and the binding is fixed for that session's lifetime once
 set. Every session record the console session reads names its owner, and a session that is
 unbound, or bound to a different console session, is not this one's to drive — it can read such a
 session, but is told to leave it alone and is refused if it tries to act on it.

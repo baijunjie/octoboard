@@ -25,8 +25,9 @@ import type { Session } from "../protocol";
  * one by turning the badge into a tab stop of its own; see "Rows, names and keyboard focus" in
  * `docs/product/sidebar.md` for why an extra one inside a sidebar row is unwanted.
  *
- * `decorative` drops the tooltip for a console session's own row, which already shows its colour
- * and its full name side by side — the tooltip would only repeat the row's own label.
+ * `decorative` drops the tooltip where the owner's name is already visible text beside the dot: a
+ * console session's own row, which shows its colour and its full name side by side, and an owner
+ * option in the new-session dialog's select. The tooltip would only repeat that label.
  */
 export function BindingBadge({ owner, decorative }: { owner: Session; decorative?: boolean }): React.ReactElement | null {
   const t = useT();

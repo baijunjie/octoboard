@@ -61,22 +61,13 @@ export function archivedSessions(sessions: Session[]): Session[] {
 }
 
 /** A console's live console sessions (not archived), newest first. Several may exist at once; this
- * is `newestConsoleSession`'s own lookup, not the sidebar's order (see "The console sessions
- * section and the project list" in `docs/product/sidebar.md` for that one, `compareSessions` via
- * `liveSessions`). */
-function liveConsoleSessions(sessions: Session[], consoleId: string): Session[] {
+ * is the new-session dialog's list of owners to choose from, not the sidebar's order (see "The
+ * console sessions section and the project list" in `docs/product/sidebar.md` for that one,
+ * `compareSessions` via `liveSessions`). */
+export function liveConsoleSessions(sessions: Session[], consoleId: string): Session[] {
   return sessions
     .filter((s) => s.console_id === consoleId && s.role === "console" && s.status !== "archived")
     .sort((a, b) => b.started_at - a.started_at);
-}
-
-/** The newest of a console's `liveConsoleSessions`, or `undefined` with none. This is what the
- * session dialog's "report to console session" box binds to, as a stand-in for a real choice.
- *
- * TODO(docs/plans/20261008-console-sessions-and-agent-accounts/12-binding-selector.md): once the
- * dialog offers a real choice of console session, this is no longer what it binds to by default. */
-export function newestConsoleSession(sessions: Session[], consoleId: string): Session | undefined {
-  return liveConsoleSessions(sessions, consoleId)[0];
 }
 
 /** The sessions bound to the console session `consoleSessionId`, in any status, in the sidebar's order. */

@@ -1,15 +1,19 @@
-import { Checkbox, Description, Label } from "@heroui/react";
 import React, { useState } from "react";
 
 import { choiceGroups, currentChoice, initialChoice, type AccountChoice } from "../accountChoices";
 import { noAgentAvailable } from "../agents";
 import { useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
-import { newestConsoleSession } from "../sidebar/order";
+import { BindingBadge } from "../sidebar/BindingBadge";
+import { liveConsoleSessions } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
 import { AccountSelect } from "./AccountSelect";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
+import { OptionSelect } from "./OptionSelect";
 import { TextInput } from "./TextInput";
+
+/** `OptionSelect`'s value for "no owner"; a session id is never this. */
+const NO_OWNER = "none";
 
 /**
  * Opens a session manually under a project. One grouped control settles the agent and its account
@@ -22,15 +26,12 @@ import { TextInput } from "./TextInput";
  * that puts it in the tree carries no request id, so this reply is the only way to tell which of
  * the sessions appearing there is ours to select.
  *
- * The checkbox below still offers only a yes/no choice, binding to the console's console session
- * row (`newestConsoleSession`) when checked — a stand-in for choosing among several (see the TODO
- * below). The binding is immutable once the session opens, so with nothing to bind to the
- * checkbox is disabled rather than left to send an unbound session silently:
- * `newestConsoleSession` is `undefined` until a console session is live, and there is no way back
- * from that choice.
- *
- * TODO(docs/plans/20261008-console-sessions-and-agent-accounts/12-binding-selector.md): replace
- * the checkbox with a real choice of console session.
+ * The owner choice below offers the console's console sessions that are not archived, each beside
+ * its colour (the binding badge's own dot), and "none", which is the default: a session the user
+ * starts stays outside the orchestration unless they say otherwise. With no console session to
+ * offer there is no choice at all and the session goes out unbound. The binding is immutable once
+ * the session opens, so this is the only place it is ever chosen; it goes out as `open_session`'s
+ * `bound_to`.
  */
 export function SessionDialog({
   console: parentConsole,
@@ -52,19 +53,35 @@ export function SessionDialog({
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const [picked, setPicked] = useState<AccountChoice>();
   const [title, setTitle] = useState("");
-  const [reportToConsoleSession, setReportToConsoleSession] = useState(false);
+  const [pickedOwner, setPickedOwner] = useState(NO_OWNER);
   const { error, busy, run } = useDialogAction();
 
   const groups = choiceGroups(accounts, agentAvailability, t("settings.accounts.defaultName"));
   const choice = currentChoice(picked, initialChoice(parentConsole, project, accounts, agentAvailability), groups);
 
-  // Nothing to bind to until a console session is live; `boundTo` would silently fall back to
-  // unbound, and the binding cannot be changed afterwards, so the checkbox must not be checkable.
-  const consoleSession = newestConsoleSession(sessions, parentConsole.id);
+  // The select is shown from the moment there is a console session to offer and stays mounted
+  // for the rest of the dialog's life, even if the list later empties, leaving "none" alone: it is
+  // a focusable control, and unmounting it under the user would drop focus to the body and take
+  // Escape and Tab containment with it. Hiding the field when the dialog opens with nothing to
+  // offer is the milestone's rule for that state; a list that empties under the user is not that
+  // state, and a field vanishing would also hide that their choice went with it.
+  //
+  // `owner` is only ever one still offered, never the picked id as it stands: `open_session` does
+  // not check the target's status, so sending an archived console session's id would create a live
+  // session bound to an archived one, whose reports would be refused. An archived pick therefore
+  // falls back to none, visibly in the select. `pickedOwner` keeps the stale id, so reopening that
+  // console session while the dialog is still open restores the choice, which is harmless.
+  //
+  // TODO(docs/plans/20261008-console-sessions-and-agent-accounts/13-focus-modes.md): a focus mode
+  // that forces the owner makes it `fixedOwner ?? owners.find(...)`, and one that removes the
+  // choice leaves it unset.
+  const owners = liveConsoleSessions(sessions, parentConsole.id);
+  const owner = owners.find((s) => s.id === pickedOwner);
+  const [ownerOffered, setOwnerOffered] = useState(owners.length > 0);
+  if (owners.length > 0 && !ownerOffered) setOwnerOffered(true);
 
   const submit = () =>
     void run(async () => {
-      const boundTo = reportToConsoleSession ? consoleSession?.id : undefined;
       const reply = await request({
         type: "open_session",
         console_id: parentConsole.id,
@@ -72,7 +89,7 @@ export function SessionDialog({
         agent: choice.agent,
         account: choice.account,
         title: title || undefined,
-        bound_to: boundTo,
+        bound_to: owner?.id,
       });
       if (reply.type === "session_opened") onOpened(reply.session.id);
       onClose();
@@ -90,30 +107,17 @@ export function SessionDialog({
       {blocked && <p className="text-sm text-danger">{t("agents.installPrompt")}</p>}
       <AccountSelect label={t("dialog.session.agentAccount")} groups={groups} value={choice} onChange={setPicked} />
       <TextInput label={t("dialog.session.titleOptional")} value={title} onChange={setTitle} />
-      {/* HeroUI's variant for a control on a surface (the dialog), whose unselected box the default
-          variant would leave to blend into it. */}
-      <Checkbox
-        variant="secondary"
-        isSelected={reportToConsoleSession}
-        onChange={setReportToConsoleSession}
-        isDisabled={consoleSession === undefined}
-      >
-        {/* `Checkbox.Content` is the pressable part, so the box goes inside it with the label;
-            the description is the field's, a sibling of it. */}
-        <Checkbox.Content>
-          <Checkbox.Control>
-            <Checkbox.Indicator />
-          </Checkbox.Control>
-          <Label>{t("dialog.session.reportToConsoleSession")}</Label>
-        </Checkbox.Content>
-        <Description>
-          {t(
-            consoleSession === undefined
-              ? "dialog.session.reportToConsoleSessionUnavailable"
-              : "dialog.session.reportToConsoleSessionDescription",
-          )}
-        </Description>
-      </Checkbox>
+      {ownerOffered && (
+        <OptionSelect
+          label={t("dialog.session.owner")}
+          value={owner?.id ?? NO_OWNER}
+          onChange={setPickedOwner}
+          options={[
+            { value: NO_OWNER, label: t("dialog.session.ownerNone") },
+            ...owners.map((s) => ({ value: s.id, label: s.title, icon: <BindingBadge owner={s} decorative /> })),
+          ]}
+        />
+      )}
       <DialogError message={error} />
     </Dialog>
   );

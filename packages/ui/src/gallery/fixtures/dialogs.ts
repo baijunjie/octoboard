@@ -1,6 +1,6 @@
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
-import { SAMPLE, projectOf, snapshotState } from "./builders";
+import { SAMPLE, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
 
 const GROUP = "Dialogs";
 
@@ -13,6 +13,17 @@ const tagged = [
   projectOf("p-billing", console_.id, "Billing Service", { tags: ["backend", "payments"] }),
 ];
 const taggedState = snapshotState({ consoles: [console_], projects: tagged, sessions: [] });
+
+// A second live console session beside the sample's, and an archived one the dialog must not offer.
+const twoHubsState = snapshotState({
+  consoles: [console_],
+  projects: [web, api],
+  sessions: [
+    ...sessions.map((s) => (s.id === SAMPLE.consoleSession.id ? { ...s, title: "Hub 1" } : s)),
+    sessionOf("s-console-2", console_.id, undefined, "Hub 2", "working", { colour: "rose", started_at: minutesAgo(20) }),
+    sessionOf("s-console-old", console_.id, undefined, "Hub 3", "archived", { colour: "azure" }),
+  ],
+});
 
 const consoleActions = (ui: Ui) =>
   ui.press(ui.t("sidebar.console.actions", { name: console_.name }));
@@ -84,6 +95,18 @@ export const dialogScenarios: Scenario[] = [
     title: "New session",
     state,
     steps: [(ui) => projectActions(ui, web.name), (ui) => ui.press(ui.t("sidebar.project.openSession"))],
+  },
+  {
+    id: "dialog-new-session-owner",
+    group: GROUP,
+    title: "New session, choosing its console session",
+    description: "The owner choice open: none, then each live console session beside its colour; the archived one is absent.",
+    state: twoHubsState,
+    steps: [
+      (ui) => projectActions(ui, web.name),
+      (ui) => ui.press(ui.t("sidebar.project.openSession")),
+      (ui) => ui.press(ui.t("dialog.session.ownerNone")),
+    ],
   },
   {
     id: "dialog-remove-project-running",
