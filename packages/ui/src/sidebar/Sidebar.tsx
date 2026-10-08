@@ -463,14 +463,24 @@ function ConsoleBody({
       <ConsoleSessionsSection handlers={handlers} console={thisConsole} sessions={sessions} selectedSessionId={selectedSessionId} />
       <SectionHeading
         after={
-          // Only while the filter button is there (below): the chip hands focus to it when removed.
-          projects.length > 0 &&
-          filter.keyword.trim() !== "" && (
-            <ProjectFilterTag
-              keyword={filter.keyword.trim()}
-              returnFocusTo={filterButton}
-              onRemove={() => setFilter((f) => ({ ...f, keyword: "" }))}
-            />
+          // Only while the filter button is there (below): the chips hand focus to it when removed.
+          projects.length > 0 && (
+            <>
+              {filter.keyword.trim() !== "" && (
+                <ProjectFilterTag
+                  keyword={filter.keyword.trim()}
+                  returnFocusTo={filterButton}
+                  onRemove={() => setFilter((f) => ({ ...f, keyword: "" }))}
+                />
+              )}
+              {filter.tags.length > 0 && (
+                <ProjectFilterTags
+                  tags={filter.tags}
+                  returnFocusTo={filterButton}
+                  onRemove={(removed) => setFilter((f) => ({ ...f, tags: withoutTags(f.tags, removed) }))}
+                />
+              )}
+            </>
           )
         }
         action={
@@ -502,13 +512,6 @@ function ConsoleBody({
       >
         {t("sidebar.projects")}
       </SectionHeading>
-      {filter.tags.length > 0 && (
-        <ProjectFilterTags
-          tags={filter.tags}
-          returnFocusTo={filterButton}
-          onRemove={(removed) => setFilter((f) => ({ ...f, tags: withoutTags(f.tags, removed) }))}
-        />
-      )}
       {projects.length > 0 && ordered.length === 0 ? (
         <EmptyPanel compact icon={SearchX} message={t("sidebar.filter.noMatch")} />
       ) : ordered.length === 0 ? (

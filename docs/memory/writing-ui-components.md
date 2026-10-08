@@ -63,10 +63,14 @@ Render any list whose order can change while one of its rows may hold focus thro
 (`packages/ui/src/sidebar/useFlip.ts`), which puts focus back after the move, rather than beside it.
 
 A wrapper that renders nothing once its last child is gone takes focus down with it, and a library's own rescue does
-not reach that case: react-aria's `useTagGroup` focuses its container when the last tag is removed, but a container
-that unmounts in the same commit is gone before the effect runs. So either keep such a wrapper mounted and vary only
-its spacing — the tags field in `packages/ui/src/dialogs/TagsInput.tsx` does, a dialog being where focus on `<body>`
-costs Escape and Tab as well — or move focus to a named element before the removal that empties it.
+not reach that case: react-aria's `useTagGroup` focuses its list element when the last tag is removed, but a list
+that unmounts in the same commit is gone before the effect runs, and one laid out with `display: contents` (as both
+tag groups in `packages/ui` are, to flow their tags into a row of the parent's) cannot be counted on to take focus. So
+move focus to a named element yourself, in the removal handler, rather than leave it to the library: `ProjectFilterTags`
+in `packages/ui/src/sidebar/ProjectFilter.tsx` hands it to `returnFocusTo` through `handFocusOff`
+(`packages/ui/src/components/handFocusOff.ts`) on the removal that empties the group, and `TagsInput` in
+`packages/ui/src/dialogs/TagsInput.tsx` hands it to its text input on every removal, a dialog being where focus on
+`<body>` costs Escape and Tab as well.
 
 ## Inside a dialog, a focused control that unmounts or turns disabled takes Escape and Tab with it
 

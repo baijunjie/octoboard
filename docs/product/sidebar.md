@@ -88,8 +88,10 @@ drops that tag and the popover stays open. A picked tag also shows a check mark,
 alone. Opening and closing it with the mouse leaves keyboard focus where it was.
 
 - While a keyword is in force it shows as a tag right after the "Projects" label, with a small remove button that drops
-  just the keyword and leaves the picked tags. The picked tags are laid out one after another on a row of their own
-  under the heading, each with a small remove button that drops just that tag from the filter; clicking a tag, the
+  just the keyword and leaves the picked tags. The picked tags follow it on the heading, filled with the accent colour
+  so they are told apart from the keyword, and wrap onto further lines when they do not fit, while the label and the
+  heading's controls stay on the first line. Each picked tag has a small remove button that drops just that tag from
+  the filter; clicking a tag, the
   keyword's remove button or a tag's remove button with the mouse leaves keyboard focus where it was, and removing the
   keyword, or the last tag, with the keyboard moves focus to the filter button. A **Clear filter** button appears just
   before the filter button and clears the keyword and the picked tags together; the search field's own clear button

@@ -38,7 +38,7 @@ export const filterScenarios: Scenario[] = [
     group: GROUP,
     title: "Filter in force",
     description:
-      "The keyword beside the heading and the picked tags on their own row under it; only the matching projects remain.",
+      "The keyword beside the heading and the picked tags after it, wrapping when they do not fit; only the matching projects remain.",
     state,
     steps: [
       openFilter,

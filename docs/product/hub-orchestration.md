@@ -24,7 +24,7 @@ console sessions are listed, are in "Console sessions and project sessions" in
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `list_projects` | — | The console's projects: id, name, host, directory, default agent, and the sessions currently running in each — every session of the console, whichever console session owns it. |
+| `list_projects` | — | The console's projects: id, name, host, directory, default agent, tags (see "Tags" in `docs/product/consoles-and-projects.md`), and the sessions currently running in each — every session of the console, whichever console session owns it. |
 | `add_project` | `source` (`local` / `parent` / `git`), `path?`, `remote_url?`, `name?`, `default_agent?` | Associates one or more projects with this console, under the same rules as the user's own form (see "Associating a project" in `docs/product/consoles-and-projects.md`). Answers with the projects it added. |
 | `start_session` | `project`, `brief`, `agent?` | Starts a session in one of this console's projects, bound to the calling console session, and hands it the brief as its opening prompt. `agent` overrides the agent for that one session. Answers with the new session's id and its agent. Refused, with the reason in prose, when the session's resolved agent has been determined unavailable on this machine — never while that determination is still pending. |
 | `send_message` | `session`, `text` | Appends an instruction to a running session of the caller's. Answers with whether it was written or queued. |

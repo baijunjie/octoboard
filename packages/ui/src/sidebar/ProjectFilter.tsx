@@ -41,7 +41,8 @@ function isFiltering(filter: ProjectFilter): boolean {
  * the field (on a tag, Enter picks or drops it). While a filter is in force, a button beside it
  * clears the keyword and the tags together. `filter.tags` is already narrowed to the vocabulary,
  * so changes go up as updates to apply to the stored filter, which still holds the tags no project
- * carries. `holderRef` is the element around the filter button, for the tag row to hand focus to. */
+ * carries. `holderRef` is the element around the filter button, for the chips on the heading to
+ * hand focus to. */
 export function ProjectFilterButton({
   filter,
   vocabulary,
@@ -270,14 +271,16 @@ export function ProjectFilterTag({
   );
 }
 
-/** The tags picked in the filter, one after another on the row under the Projects heading, each
- * removable on its own. The heading's Clear filter button clears them with the keyword. The row
- * goes away with its last tag, so a removal that empties it while it holds focus moves focus to
- * `returnFocusTo`, the element around the filter button; the tag unmounting would drop it to
- * `<body>`, and the terminal would stop receiving keystrokes. The button's focus ring follows
- * whatever modality the interaction had already set, so it shows for a removal from the keyboard.
- * One edge: after Tabbing into the row, a click on a tag's remove button also shows the ring, as
- * the browser treats the scripted `focus()` as focus-visible. */
+/** The tags picked in the filter, on the Projects heading right after the keyword and wrapping
+ * onto further lines when they do not fit, each removable on its own. They are filled with the
+ * accent colour, which sets them apart from the keyword chip. The heading's Clear filter button
+ * clears them with the keyword. The group goes away with its last tag, so a removal that empties
+ * it while it holds focus moves focus to `returnFocusTo`, the element around the filter button;
+ * the tag unmounting would drop it to `<body>`, and the terminal would stop receiving keystrokes.
+ * The button's focus ring follows whatever modality the interaction had already set, so it shows
+ * for a removal from the keyboard. One edge: after Tabbing into the group, a click on a tag's
+ * remove button also shows the ring, as the browser treats the scripted `focus()` as
+ * focus-visible. */
 export function ProjectFilterTags({
   tags,
   onRemove,
@@ -288,27 +291,34 @@ export function ProjectFilterTags({
   returnFocusTo: RefObject<HTMLElement | null>;
 }): React.ReactElement {
   const t = useT();
-  const row = useRef<HTMLDivElement>(null);
+  const group = useRef<HTMLDivElement>(null);
   const remove = (keys: Set<Key>) => {
     const removed = tags.filter((tag) => keys.has(tag));
-    // The row only goes away with its last tag.
+    // The group only goes away with its last tag.
     const emptied = removed.length === tags.length;
-    handFocusOff(emptied ? row.current : null, returnFocusTo.current, false);
+    handFocusOff(emptied ? group.current : null, returnFocusTo.current, false);
     onRemove(removed);
   };
   return (
     <TagGroup
-      ref={row}
+      ref={group}
       aria-label={t("sidebar.filter.picked")}
       size="sm"
-      className="mb-1 px-2"
+      // The group and its list take no box of their own, so each tag is an item of the heading's
+      // wrapping row and flows on right after the keyword.
+      className="contents"
       // Clicking a tag must not take keyboard focus off the terminal; the remove button still gets its click.
       onMouseDownCapture={keepFocus}
       onRemove={remove}
     >
-      <TagGroup.List>
+      <TagGroup.List className="contents">
         {tags.map((tag) => (
-          <Tag key={tag} id={tag} textValue={tag}>
+          <Tag
+            key={tag}
+            id={tag}
+            textValue={tag}
+            className="max-w-full bg-accent text-accent-foreground hover:bg-accent-hover"
+          >
             {() => (
               <>
                 <span dir="auto" className="truncate">
@@ -318,9 +328,9 @@ export function ProjectFilterTags({
                   <Tag.RemoveButton
                     aria-label={t("common.removeTag")}
                     preventFocusOnPress
-                    // As the keyword chip's ×: `foreground/10` for hover on a `--default` tag, and
-                    // `bg-transparent` so the tag's own hover fill is not left with a pill inside it.
-                    className="bg-transparent text-muted hover:bg-foreground/10 hover:text-foreground"
+                    // On the accent fill the glyph and its hover fill are drawn from the accent's own
+                    // foreground; `bg-transparent` so the tag's hover fill is not left with a pill inside it.
+                    className="bg-transparent text-accent-foreground/80 hover:bg-accent-foreground/20 hover:text-accent-foreground"
                   />
                 </TitledControl>
               </>

@@ -65,13 +65,14 @@ pub fn qualified_tool_name(agent: Agent, tool: &str) -> String {
 const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "list_projects",
-        description: "List this console's projects: name, host, directory, and the sessions \
-                      currently running in each — every session of the console, whichever \
-                      console session owns it. Each carries `owner`, the console session it \
-                      reports to, and `yours`; a project session with `owner: null` is unbound, \
-                      which the user opened themselves and kept outside the orchestration. A \
-                      session with `yours: false` is not this caller's to drive — it is \
-                      unbound, or reports to a different console session — leave it alone.",
+        description: "List this console's projects: name, host, directory, the tags the user \
+                      gave each, and the sessions currently running in each — every session of \
+                      the console, whichever console session owns it. Each carries `owner`, \
+                      the console session it reports to, and `yours`; a project session with \
+                      `owner: null` is unbound, which the user opened themselves and kept \
+                      outside the orchestration. A session with `yours: false` is not this \
+                      caller's to drive — it is unbound, or reports to a different console \
+                      session — leave it alone.",
         schema: || object_schema(json!({}), &[]),
     },
     ToolDef {

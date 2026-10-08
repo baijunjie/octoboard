@@ -139,9 +139,10 @@ export function RowIconButton({
   );
 }
 
-/** A heading over a group of rows: what follows the label (a filter in force) sits right after it,
- * and `action` at the row's end — several controls there are spaced by the heading, so a caller
- * hands them over as a fragment rather than wrapping them itself. */
+/** A heading over a group of rows: what follows the label (a filter in force) sits right after it
+ * and wraps onto further lines when it does not fit, and `action` at the row's end — several
+ * controls there are spaced by the heading, so a caller hands them over as a fragment rather than
+ * wrapping them itself. */
 export function SectionHeading({
   children,
   after,
@@ -152,11 +153,13 @@ export function SectionHeading({
   action?: React.ReactNode;
 }): React.ReactElement {
   return (
-    <div className="mt-2 mb-0.5 flex min-h-7 items-center gap-2 px-2">
-      <h3 className="shrink-0 text-xs font-medium text-muted">{children}</h3>
+    // Top-aligned, with the label and the controls each a line high, so they stay on the first line
+    // when what follows the label wraps.
+    <div className="mt-2 mb-0.5 flex items-start gap-2 px-2">
+      <h3 className="flex h-7 shrink-0 items-center text-xs font-medium text-muted">{children}</h3>
       {/* What follows the label gives way first when the row is short; the controls never do. */}
-      <div className="flex min-w-0 flex-1">{after}</div>
-      {action && <div className="flex shrink-0 items-center gap-0.5">{action}</div>}
+      <div className="flex min-h-7 min-w-0 flex-1 flex-wrap items-center gap-1.5 py-1">{after}</div>
+      {action && <div className="flex h-7 shrink-0 items-center gap-0.5">{action}</div>}
     </div>
   );
 }

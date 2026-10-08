@@ -78,6 +78,7 @@ fn list_projects(state: &Arc<AppState>, console_session: &Session) -> Result<Val
                 "host": project.host_id,
                 "path": project.path,
                 "default_agent": project.default_agent,
+                "tags": project.tags,
                 "sessions": live,
             })
         })
