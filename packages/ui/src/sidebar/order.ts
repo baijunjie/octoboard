@@ -131,7 +131,7 @@ export function focusGroups(
   ).map((project) => ({ project, sessions: sessionsOf(project) }));
 }
 
-/** What a console in the switcher or a project row shows: the most pressing activity among its sessions. */
+/** What a console on the rail or a project row shows: the most pressing activity among its sessions. */
 export type Activity = "waiting" | "working" | "running" | undefined;
 
 export function consoleActivity(sessions: Session[]): Activity {
@@ -139,6 +139,29 @@ export function consoleActivity(sessions: Session[]): Activity {
   if (sessions.some((s) => s.status === "working")) return "working";
   if (sessions.some((s) => s.status === "idle")) return "running";
   return undefined;
+}
+
+/** One chip of a console session's focus mode's switch strip: a console session and what is going on
+ * in it and in the sessions bound to it, as far as the strip shows it. */
+export interface SwitchStripEntry {
+  consoleSession: Session;
+  /** A raised hand beats a session at work, which beats nothing: a session merely running is not
+   * worth a chip's room. */
+  activity: "waiting" | "working" | undefined;
+}
+
+/** The chips of the switch strip: the console's console sessions that are not archived, each with the
+ * most pressing activity among itself and its bound sessions. The order is fixed, pinned first and
+ * then by when they started (ties by id), not ranked by status like the sidebar's list: a chip stays
+ * where it is while statuses change, so cycling through them never skips or repeats one. */
+export function switchStrip(sessions: Session[], consoleId: string): SwitchStripEntry[] {
+  const consoleSessions = sessions
+    .filter((s) => s.console_id === consoleId && s.role === "console" && s.status !== "archived")
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.started_at - b.started_at || (a.id < b.id ? -1 : 1));
+  return consoleSessions.map((consoleSession) => {
+    const activity = consoleActivity([consoleSession, ...boundSessions(sessions, consoleSession.id)]);
+    return { consoleSession, activity: activity === "waiting" || activity === "working" ? activity : undefined };
+  });
 }
 
 /** The sessions `include` picks, in the order the sidebar tree lists them: console by console, its

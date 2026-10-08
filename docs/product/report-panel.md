@@ -149,6 +149,21 @@ between regions with F6" in `docs/product/window-layout.md`); the browser's own 
 inside the frame is cancelled. The signal is acted on only while focus is inside the page's frame.
 Neither this signal nor Escape's carries anything from the page.
 
+## Window shortcuts inside a page
+
+In the macOS application, two of the window's keyboard shortcuts are passed to the window when pressed while focus is
+inside a page, on a history page too, and are kept from the page itself:
+
+- `Cmd+[` and `Cmd+]`, with no other modifier held, go back and forward (see "Keyboard shortcuts" in
+  `docs/product/navigation-history.md`).
+- `Ctrl+Tab` and `Ctrl+Shift+Tab`, with neither `Cmd` nor `Option` held, move to the next or previous console session
+  (see "The switch strip" in `docs/product/focus-mode.md`). The page never gets them, even when the window has
+  nowhere to move at that moment; a key held down is passed on once.
+
+As with Escape and `F6`, neither is passed on during an input method's composition, the signal is acted on only while
+focus is inside the page's frame, and it carries nothing from the page. In a browser neither is passed on, and the
+page keeps the browser's own handling of the keys.
+
 ## Right-click inside a page
 
 A page follows the window's rule (see "Right-click menus" in `docs/product/window-layout.md`): in the desktop app a

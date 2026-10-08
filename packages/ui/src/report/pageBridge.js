@@ -1,7 +1,7 @@
 // Runs inside a report page's sandboxed frame, after the two scripts that define DOMPurify and the
 // page (see `composePageDocument`); the page's own scripts never run. A page is a declarative
 // document: this script sanitizes the page's HTML, renders the result, and relays the frame's
-// native form submissions and two keys to the window. It reads `DOMPurify` and `OCTOBOARD_PAGE`,
+// native form submissions and a few keys to the window. It reads `DOMPurify` and `OCTOBOARD_PAGE`,
 // which the scripts before it define.
 (function () {
   // Everything the script uses is captured before the page's markup is inserted: a page can name an
@@ -87,8 +87,13 @@
 
   // Escape keeps its default action in the frame (closing an open `<dialog>` or `<select>`), while
   // F6 is the window's own key and the browser's default for it (moving focus to its own chrome) is
-  // cancelled. Skipped while an IME composition is active, where Escape cancels the composition
-  // rather than meaning "close". Present on history pages too.
+  // cancelled. ⌘[ and ⌘] (nothing else held) are the window's Back and Forward, relayed only where
+  // the window has them (`config.historyKeys`) and cancelled in the frame. Ctrl+Tab, with or without
+  // Shift and nothing else held, is the window's move between console sessions
+  // (`config.switchKeys`): cancelled in the frame wherever the window has that shortcut, even when
+  // it does nothing at the moment, since Ctrl+Tab has no use in a static page; a held key is
+  // cancelled but relayed once. All are skipped while an IME composition is active, where Escape
+  // cancels the composition rather than meaning "close". Present on history pages too.
   win.addEventListener(
     "keydown",
     function (event) {
@@ -104,6 +109,29 @@
       ) {
         event.preventDefault();
         post({ source: config.sources.region, backward: event.shiftKey }, "*");
+      }
+      if (
+        config.historyKeys &&
+        (event.code === "BracketLeft" || event.code === "BracketRight") &&
+        !event.isComposing &&
+        event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.shiftKey
+      ) {
+        event.preventDefault();
+        post({ source: config.sources.history, backward: event.code === "BracketLeft" }, "*");
+      }
+      if (
+        config.switchKeys &&
+        event.key === "Tab" &&
+        !event.isComposing &&
+        event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey
+      ) {
+        event.preventDefault();
+        if (!event.repeat) post({ source: config.sources.switch, backward: event.shiftKey }, "*");
       }
     },
     true,

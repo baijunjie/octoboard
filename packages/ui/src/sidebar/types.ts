@@ -24,9 +24,10 @@ export type FocusTarget = { project: Project } | { consoleSession: Session };
  * the parent happened to have in scope under the same names. */
 export interface SidebarHandlers {
   onSelectSession: (session: Session) => void;
+  /** Enters a console session's focus mode and selects it, as one navigation. */
+  onSwitchConsoleSession: (session: Session) => void;
   onOpenConsoleSession: (console: Console) => void;
   onOpenDialog: (dialog: DialogRequest) => void;
-  onSelectConsole: (consoleId: string) => void;
   /** Enters the focus mode of a project or a console session, or with `undefined` leaves it. */
   onFocus: (target: FocusTarget | undefined) => void;
   onOpenArchive: (scope: ArchiveScope) => void;

@@ -1,11 +1,12 @@
-import { Archive, ArrowLeftRight, Focus, KeyRound, List, Pencil, Pin, PinOff, Settings2, Trash2 } from "lucide-react";
+import { Archive, ArrowLeftRight, Focus, FolderPlus, KeyRound, List, Pencil, Pin, PinOff, Settings2, Trash2 } from "lucide-react";
 
 import { switchEntries } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuSubmenu } from "../components/ActionMenu";
 import { AgentIcon } from "../components/AgentIcon";
 import { PathText } from "../components/PathText";
 import type { Translate } from "../i18n/catalog";
-import type { Account, Project, Session } from "../protocol";
+import type { DialogRequest } from "../dialogs/dialogRequest";
+import type { Account, Console, Project, Session } from "../protocol";
 import { FocusShortcutKbd } from "./focusShortcut";
 import type { SidebarHandlers } from "./types";
 
@@ -40,6 +41,16 @@ function pinItem(t: Translate, pinned: boolean, onToggle: () => void): ActionMen
   return pinned
     ? { label: t("sidebar.unpin"), icon: PinOff, onClick: onToggle }
     : { label: t("sidebar.pin"), icon: Pin, onClick: onToggle };
+}
+
+/** A console's actions, in the sidebar's header and on the console's avatar in the rail. */
+export function consoleMenu(t: Translate, console: Console, onOpenDialog: (dialog: DialogRequest) => void): ActionMenuEntry[] {
+  return [
+    { label: t("sidebar.console.addProject"), icon: FolderPlus, onClick: () => onOpenDialog({ kind: "new-project", console }) },
+    { label: t("sidebar.console.edit"), icon: Pencil, onClick: () => onOpenDialog({ kind: "edit-console", console }) },
+    "separator",
+    { label: t("sidebar.console.delete"), icon: Trash2, onClick: () => onOpenDialog({ kind: "delete-console", console }), destructive: true },
+  ];
 }
 
 /** The project's actions, in the project row and in a focus mode (the project's own header, and a

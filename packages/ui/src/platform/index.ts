@@ -25,6 +25,10 @@ export interface PlatformAdapter {
    * window's titlebar: it then carries the drag region and keeps `leftInset` clear for the
    * window controls the shell floats over it. */
   readonly windowChrome?: WindowChromeCapability;
+  /** True only where the shell puts a translucent native material behind a transparent webview, so
+   * the UI leaves the window chrome's own background clear and paints the content panel opaquely
+   * (`--window-background` in `style.css`). */
+  readonly translucentWindow?: boolean;
   /** The shell's native menu bar: the items that ask the UI to do something, and the labels the
    * UI gives every item. */
   readonly appMenu?: AppMenuCapability;

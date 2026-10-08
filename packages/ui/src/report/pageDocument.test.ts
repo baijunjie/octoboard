@@ -1,15 +1,24 @@
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
 
-import { composePageDocument, submissionFromEntries, SUBMIT_MESSAGE_SOURCE } from "./pageDocument";
+import {
+  composePageDocument,
+  HISTORY_MESSAGE_SOURCE,
+  type PageDocumentOptions,
+  submissionFromEntries,
+  SUBMIT_MESSAGE_SOURCE,
+  SWITCH_MESSAGE_SOURCE,
+} from "./pageDocument";
 
 const NONCE = "0123456789abcdef";
 
 /** Renders a page the way the sandboxed frame does: the composed document runs its own scripts in
  * a fresh window and the bridge builds the page's DOM. Returns that window's document, and the
  * messages the bridge posted to its parent (here, the window itself). */
-async function render(html: string, isHistory = false) {
-  const dom = new JSDOM(composePageDocument(html, isHistory, NONCE), { runScripts: "dangerously" });
+async function render(html: string, isHistory = false, options: PageDocumentOptions = {}) {
+  const dom = new JSDOM(composePageDocument(html, isHistory, NONCE, options), {
+    runScripts: "dangerously",
+  });
   const { window } = dom;
   const messages: unknown[] = [];
   window.addEventListener("message", (event) => messages.push(event.data));
@@ -74,6 +83,81 @@ describe("the report page's sanitizer", () => {
       .dispatchEvent(new history.window.Event("submit", { bubbles: true, cancelable: true }));
     await new Promise((resolve) => setTimeout(resolve));
     expect(history.messages).toEqual([]);
+  });
+});
+
+describe("the report page's key relay", () => {
+  const press = (window: Awaited<ReturnType<typeof render>>["window"], init: KeyboardEventInit) => {
+    const event = new window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
+    window.document.body.dispatchEvent(event);
+    return event;
+  };
+
+  it("relays ⌘[ and ⌘] where the window has them, and keeps them from the page", async () => {
+    const { window, messages } = await render("<p>x</p>", false, { relayHistoryKeys: true });
+    expect(press(window, { code: "BracketLeft", metaKey: true }).defaultPrevented).toBe(true);
+    expect(press(window, { code: "BracketRight", metaKey: true }).defaultPrevented).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(messages).toEqual([
+      { source: HISTORY_MESSAGE_SOURCE, backward: true },
+      { source: HISTORY_MESSAGE_SOURCE, backward: false },
+    ]);
+  });
+
+  it("relays nothing else: not the bracket keys with another modifier, not other keys, not elsewhere", async () => {
+    const { window, messages } = await render("<p>x</p>", false, { relayHistoryKeys: true });
+    for (const init of [
+      { code: "BracketLeft" },
+      { code: "BracketLeft", metaKey: true, shiftKey: true },
+      { code: "BracketLeft", metaKey: true, altKey: true },
+      { code: "BracketLeft", metaKey: true, ctrlKey: true },
+      { code: "KeyA", metaKey: true },
+    ]) {
+      expect(press(window, init).defaultPrevented).toBe(false);
+    }
+    const elsewhere = await render("<p>x</p>");
+    expect(press(elsewhere.window, { code: "BracketLeft", metaKey: true }).defaultPrevented).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(messages).toEqual([]);
+    expect(elsewhere.messages).toEqual([]);
+  });
+
+  it("relays Ctrl+Tab and Ctrl+Shift+Tab where the window has them, and keeps them from the page", async () => {
+    const { window, messages } = await render("<p>x</p>", false, { relaySwitchKeys: true });
+    expect(press(window, { key: "Tab", ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(press(window, { key: "Tab", ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(messages).toEqual([
+      { source: SWITCH_MESSAGE_SOURCE, backward: false },
+      { source: SWITCH_MESSAGE_SOURCE, backward: true },
+    ]);
+  });
+
+  it("keeps a held Ctrl+Tab from the page but relays only the first press", async () => {
+    const { window, messages } = await render("<p>x</p>", false, { relaySwitchKeys: true });
+    expect(press(window, { key: "Tab", ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(press(window, { key: "Tab", ctrlKey: true, repeat: true }).defaultPrevented).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(messages).toEqual([{ source: SWITCH_MESSAGE_SOURCE, backward: false }]);
+  });
+
+  it("relays no Tab but Ctrl+Tab, and none elsewhere", async () => {
+    const { window, messages } = await render("<p>x</p>", false, { relaySwitchKeys: true });
+    for (const init of [
+      { key: "Tab" },
+      { key: "Tab", shiftKey: true },
+      { key: "Tab", ctrlKey: true, altKey: true },
+      { key: "Tab", ctrlKey: true, metaKey: true },
+      { key: "Tab", ctrlKey: true, isComposing: true },
+      { key: "a", ctrlKey: true },
+    ]) {
+      expect(press(window, init).defaultPrevented).toBe(false);
+    }
+    const elsewhere = await render("<p>x</p>", false, { relayHistoryKeys: true });
+    expect(press(elsewhere.window, { key: "Tab", ctrlKey: true }).defaultPrevented).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(messages).toEqual([]);
+    expect(elsewhere.messages).toEqual([]);
   });
 });
 

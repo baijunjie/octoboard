@@ -8,7 +8,7 @@ folders** and **Notifications**; the dialog opens on General unless it was asked
 
 ## In a narrow window
 
-Below 1100 px — the width under which the window's panes become drawers (see "Below 1100 px: the sidebar and the
+Below 1148 px — the width under which the window's panes become drawers (see "Below 1148 px: the sidebar and the
 report panel become drawers" in `docs/product/window-layout.md`), so only a client with no window minimum of its own,
 such as a plain browser, gets here — the dialog fills the window inside a 16 px margin on every side, and the list of
 sections becomes a row of tabs along its top, above the selected section. When the tabs do not fit the row's width,
@@ -31,7 +31,7 @@ leaving the dialog.
 
 Settings opens from:
 
-- the **Settings** button at the right end of the top bar (see "The top bar" in `docs/product/window-layout.md`);
+- the **Settings** button at the bottom of the rail (see "The rail" in `docs/product/window-layout.md`);
 - in the macOS application, the application menu's **Settings…** item, shortcut `Cmd+,`. The menu item does nothing
   while the window has nothing to show yet (before the daemon's state has first arrived), while Settings is already
   open, and while another dialog or a row's action menu is open;
@@ -145,8 +145,8 @@ Whether Octoboard may show a system notification when a session starts waiting f
 
 A browser is asked only from a press of the user's, never on its own: a browser ignores or refuses an ask made
 otherwise. Besides the Enable button here, a browser that has not decided yet gets the same ask as the **Turn on
-notifications** button in the top bar: a bell icon with a small dot on it, shown only while the browser's answer is
-undecided (see "The top bar" in `docs/product/window-layout.md`). It cannot be dismissed; pressing it asks the
+notifications** button on the rail: a bell icon with a small dot on it, shown only while the browser's answer is
+undecided (see "The rail" in `docs/product/window-layout.md`). It cannot be dismissed; pressing it asks the
 browser. Once the browser has answered, whichever the answer, the bell is gone, and answering from either place
 updates the other. The macOS application never shows the bell, since it asks nothing. A browser's state is read
 again whenever the window regains focus, since it can be changed in the browser's own settings meanwhile.

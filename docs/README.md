@@ -12,12 +12,19 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   hand from the agent's own transcript and what that costs to keep working, archiving, interruption and resuming,
   switching a session to another account of its agent, how a console session's archive, reopen and delete follow the
   sessions bound to it, where archived sessions are kept, and the terminal.
-- [Sidebar](product/sidebar.md) — one console at a time and the switcher with its activity markers, the console
-  sessions section and the project list, project and session rows and their menus, the binding badge a bound session
-  carries, keyboard focus on rows, the order of projects and sessions and pinning, filtering the project list and
-  folding every project from its heading, how the sidebar follows the selected session, the two focus modes (a
-  project's and a console session's), the archive view, and right-clicking a row or header for its action menu (and
-  where focus goes when the menu closes).
+- [Sidebar](product/sidebar.md) — one console at a time, picked on the rail's console switcher with each console's
+  activity badge, the console header, the console sessions section and the project list, project and session rows and
+  their menus, the binding badge a bound session carries, keyboard focus on rows, the order of projects and sessions
+  and pinning, filtering the project list and folding every project from its heading, how the sidebar follows the
+  selected session, how its view changes are animated, the archive view, and right-clicking a row, header or rail
+  avatar for its action menu (and where focus goes when the menu closes).
+- [Focus mode](product/focus-mode.md) — a project's and a console session's focus mode: what each view lists, the
+  switch strip of a console session's focus mode (its fixed chip order, the activity each chip carries, a click versus
+  ⌃Tab / ⌃⇧Tab and which of them resumes an interrupted console session), leaving focus mode and what is remembered,
+  the focus mode shortcut, and where keyboard focus lands on entering and leaving.
+- [Navigation history](product/navigation-history.md) — Back and Forward in the top bar: what counts as a place, how a
+  move skips places that no longer exist and never resumes a session, what the history keeps, and the ⌘[ / ⌘]
+  shortcuts in the macOS app.
 - [Project git status](product/project-git-status.md) — the branch badge on a project's row and in focus mode's header:
   its glyphs for a branch, a detached `HEAD`, a check in flight and a fast-forward in flight, the ahead and behind
   counts, the marker a failed check leaves and what it tells assistive technology; when and how often the shown
@@ -32,18 +39,26 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   the page id is for, paging back through the kept history, why a history page is read-only and where that is
   enforced, why a page is a static document whose scripts never run and what is stripped from it, why it has no route
   to the network, submitting a native form and how its fields reach the console session, Escape and F6 inside a page,
-  the light surface a page renders on whatever the window's appearance is, and right-clicking inside a page.
-- [Window layout](product/window-layout.md) — the top bar across the window and what it holds (and how it doubles as the
-  macOS titlebar), the connection status it shows only on trouble, the three panes and what each is allowed to give up,
-  resizing the sidebar and the report panel, hiding either and floating it back in on hover, the macOS window's
-  1100×600 minimum and the arithmetic behind it, how the window's size and position are remembered across launches,
-  the narrow layout a plain browser gets below 1100 px, where the sidebar and the report panel become drawers over the
-  terminal, which right-click menus the desktop app and a browser show, toasts, and how all of it mirrors under a
-  right-to-left language (and what never does).
+  the window shortcuts (⌘[ / ⌘], ⌃Tab) a page passes on to the window, the light surface a page renders on whatever
+  the window's appearance is, and right-clicking inside a page.
+- [Window layout](product/window-layout.md) — the window chrome (the top bar and the left rail, over the translucent
+  macOS material or an opaque colour in a browser) and the opaque content panel it frames, what the top bar holds and
+  how it doubles as the macOS titlebar, what the rail holds (the console switcher, the waiting count, the connection
+  status it shows only on trouble, the notifications bell, the report panel toggle, Settings), the three panes and
+  what each is allowed to give up, resizing the sidebar and the report panel, hiding either and floating it back in on
+  hover, the macOS window's 1148×600 minimum and the arithmetic behind it, how the window's size and position are
+  remembered across launches, the narrow layout a plain browser gets below 1148 px, where the sidebar and the report
+  panel become drawers over the terminal, moving between regions with F6, which right-click menus the desktop app and
+  a browser show, and how all of it mirrors under a right-to-left language (and what never does).
+- [Toasts](product/toasts.md) — failures and notices that need no answer: where they appear, how one about a session
+  is titled, when they dismiss themselves, how an identical one replaces rather than stacks, copying their text
+  without taking focus off the terminal, and reaching them with F6.
+- [Labels and tooltips](product/labels-and-tooltips.md) — the tooltip every icon-only control of the top bar, the rail
+  and the sidebar carries, and how a name too long for its space is faded and offered in full.
 - [Appearance](product/appearance.md) — the light, dark and follow-the-system choice and which of them is the default,
-  where it is chosen, what follows it (down to the terminal's palette and the native window's own appearance), where the
-  choice is kept, and why a report page stays on a light surface either way.
-- [Settings](product/settings.md) — the Settings dialog: how it opens (the top bar, and the macOS menu's Settings… /
+  where it is chosen, what follows it (down to the terminal's palette, its 4.5:1 minimum contrast, and the native
+  window's own appearance), where the choice is kept, and why a report page stays on a light surface either way.
+- [Settings](product/settings.md) — the Settings dialog: how it opens (the rail, and the macOS menu's Settings… /
   ⌘, and when that is ignored), how it closes and where focus goes, its General (Appearance and Language), Git, Agent
   accounts, Trusted folders and Notifications sections.
 - [Language](product/language.md) — the 17 offered languages and why they are ordered by tag, English as the fallback,
@@ -128,17 +143,18 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   icon-only control also gets a tooltip through `TitledControl`, how user-facing text goes through the message catalog
   (`useT` over the module-level `t()`, a helper taking the translator, `PlainMessageKey` tables, placeholders and plural
   messages instead of joined fragments), how layout follows the reading direction (logical utilities, mirrored
-  directional icons, two-glyph chevrons, `dir` on paths and typed names, `docked:rtl:` twins), and the WCAG 2.2 AA
-  bar the UI is held to (keyboard,
-  visible focus, names, roles and states (`aria-current` only on hand-built rows), contrast — which token an outline
-  meant to be seen is built from, and why HeroUI's own text colours are measured rather than trusted — colour,
-  motion).
+  directional icons, two-glyph chevrons, `dir` on paths and typed names, `docked:rtl:` twins), why only icon-only
+  chrome sits on the translucent window material and text goes on the opaque panel, and the WCAG 2.2 AA bar the UI
+  is held to (keyboard, visible focus, names, roles and states (`aria-current` only on hand-built rows), contrast —
+  auditing every gallery scenario in both themes, fills against their surface and animations at their faintest frame,
+  overriding HeroUI's whole `--default` family on a region with its own surface, which token an outline meant to be
+  seen is built from, and why HeroUI's own text colours are measured rather than trusted — colour, motion).
 - [Writing automated tests](memory/writing-automated-tests.md) — how lean unit tests are kept (one case per rule,
   table-driven), then the fixture conventions this project's tests need on macOS: why an executable written fresh per
   test flakes only under a parallel run, why every wait on a spawned process is bounded by the shared `PATIENCE`
   (exec stalls of seconds on machines with endpoint-security software) and how to tell that stall apart, and how to
   verify behaviour the daemon derives from an agent's own output by replaying a committed capture rather than staging
-  a live session.
+  a live session, and why a jsdom test cannot tell where keyboard focus ends after a session is selected.
 - [Writing daemon code](memory/writing-daemon-code.md) — conventions for the Rust daemon: live state the daemon
   derives held on `AppState` and published by its own event rather than as a field on a stored record, with the
   cleanups that follow from there being no deletion event for it; why a repeating refresh is timed by the client and

@@ -8,7 +8,9 @@ running in the background, sessions included (see "Closing the window" below).
 
 - **macOS 11 or later**, on **Apple Silicon only** — the release build is a single-architecture `arm64` bundle, and
   there is no Intel or universal build.
-- Octoboard is distributed as a `.dmg` disk image. The release build is signed with a Developer ID and notarized, so
+- Octoboard is distributed as a `.dmg` disk image. It cannot be distributed through the Mac App Store: its translucent
+  window (see "The window chrome and the content panel" in `docs/product/window-layout.md`) relies on a private macOS
+  interface, which the store does not admit. The release build is signed with a Developer ID and notarized, so
   Gatekeeper admits it as built: `spctl` reports `Notarized Developer ID` for the `.app` and the `.dmg`, including a
   copy carrying the quarantine attribute, and `codesign --verify --deep --strict` passes on the bundled daemon. That was
   verified on the machine that built it; installing and running it on a clean machine has not been tried yet.
@@ -62,13 +64,13 @@ Each new connection re-reads the whole state, so nothing has to be replayed by h
 a daemon that is gone), together with a toast "The daemon process exited unexpectedly (exit code 0). Restart Octoboard
 to continue."
 
-Failures a user has to know about are shown as toasts (see "Toasts" in `docs/product/window-layout.md`), and so are
-notices about a session that are not failures. Every such notice names where its session is — the project it runs in,
-or the console whose console session it is — and so does a failure that is about one particular session, since
-what the daemon reports refers to the session it is about only as "this session". A failed report-page submission is
-one such failure (see "Submitting a form back to the console session" in `docs/product/report-panel.md`). A failure raised by a dialog's own action is shown in that dialog instead — except in
-the dialog for Claude Code's workspace-trust prompt, which closes and reports most failures as a
-toast (see "Claude Code's workspace-trust prompt" in `docs/product/launching-agents.md`).
+Failures a user has to know about are shown as toasts (see `docs/product/toasts.md`), and so are notices about a session
+that are not failures. Every such notice names where its session is — the project it runs in, or the console whose
+console session it is — and so does a failure that is about one particular session, since what the daemon reports refers
+to the session it is about only as "this session". A failed report-page submission is one such failure (see "Submitting
+a form back to the console session" in `docs/product/report-panel.md`). A failure raised by a dialog's own action is
+shown in that dialog instead — except in the dialog for Claude Code's workspace-trust prompt, which closes and reports
+most failures as a toast (see "Claude Code's workspace-trust prompt" in `docs/product/launching-agents.md`).
 
 A dialog has two places to say what went wrong. **The failure of the dialog's own action** — what the daemon
 rejected, or an image the window could not read as an avatar — is a line at the foot of the dialog. **What is wrong

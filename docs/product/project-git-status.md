@@ -9,14 +9,15 @@ repositories**, described last.
 
 At the end of a project's row — after the project's name, before the activity marker a collapsed project carries and
 the row's **+** and action-menu buttons (see "Project rows" in `docs/product/sidebar.md`) — sits a badge showing that
-project's git state. The same badge sits in focus mode's header, after the project's name (see "Focus mode" in
-`docs/product/sidebar.md`). It shows nothing at all while no status has arrived for the project yet, and nothing when
-the project's directory is not a git repository.
+project's git state. The same badge sits in focus mode's header, after the project's name (see "What both views
+show" in `docs/product/focus-mode.md`). It shows nothing at all while no status has arrived for the project yet, and
+nothing when the project's directory is not a git repository.
 
 What it holds, in this order:
 
 - **A glyph for what is going on**: a branch glyph normally; a commit glyph when `HEAD` is detached; a spinning
-  refresh glyph while the remote is being checked; a pulsing download glyph while the branch is being fast-forwarded.
+  refresh glyph while the remote is being checked; a download glyph bobbing up and down while the branch is being
+  fast-forwarded.
   The four differ in shape, not in motion alone, and nothing animates where the system asks for reduced motion.
 - **A warning triangle**, only when the last check failed. Its tooltip carries the message `git` or the operating
   system itself gave, shown as it came inside localized wording (see "What follows the language" in

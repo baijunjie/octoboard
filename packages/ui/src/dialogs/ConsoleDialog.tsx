@@ -133,7 +133,7 @@ export function ConsoleDialog({
       <div role="group" aria-labelledby={avatarLabelId} className="flex flex-col gap-1.5">
         <Label id={avatarLabelId}>{t("dialog.console.avatar")}</Label>
         <div className="flex items-center gap-3">
-          <ConsoleAvatar icon={icon} className="size-12" />
+          <ConsoleAvatar name={name} icon={icon} className="size-12" />
           <Button type="button" variant="secondary" onPress={() => fileInput.current?.click()} isDisabled={busy || decoding}>
             {t("dialog.console.avatarChoose")}
           </Button>

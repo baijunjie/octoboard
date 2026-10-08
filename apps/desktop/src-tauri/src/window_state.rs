@@ -24,7 +24,7 @@ use tauri::{AppHandle, Manager, PhysicalRect, WebviewWindow, WindowEvent};
 pub const DEFAULT_SIZE: (f64, f64) = (1200.0, 760.0);
 
 /// The smallest inner size the window allows.
-pub const MIN_SIZE: (f64, f64) = (1100.0, 600.0);
+pub const MIN_SIZE: (f64, f64) = (1148.0, 600.0);
 
 const FILE_NAME: &str = "window-state.json";
 
@@ -576,7 +576,7 @@ mod tests {
         let state = saved(0.0, 0.0, 1200.0, 760.0, false);
         assert_eq!(
             initial_window(Some(&state), &[tiny], Some(tiny)),
-            restored(0.0, 0.0, 1100.0, 600.0, false)
+            restored(0.0, 0.0, 1148.0, 600.0, false)
         );
     }
 
@@ -671,7 +671,7 @@ mod tests {
         let state = saved(100.0, 100.0, 600.0, 380.0, false);
         assert_eq!(
             initial_window(Some(&state), &[LAPTOP], Some(LAPTOP)),
-            restored(100.0, 100.0, 1100.0, 600.0, false)
+            restored(100.0, 100.0, 1148.0, 600.0, false)
         );
         let state = saved(100.0, 100.0, 1300.0, 380.0, false);
         assert_eq!(

@@ -1,0 +1,44 @@
+# Labels and tooltips
+
+How the window's controls and names are labelled where their text does not fit or is not shown.
+
+## Tooltips on icon-only controls
+
+A control shown only as an icon has a tooltip naming it, shown both when the mouse rests on it and when it receives
+keyboard focus. The tooltip's text is the same name assistive technology announces for the control, except on the consoles'
+avatars and the ⋮ buttons below. These are:
+
+- the top bar's buttons — Back, Forward and the sidebar toggle, whose tooltip follows its "Show …" / "Hide …" label;
+- the rail's buttons — each console's avatar, whose tooltip is the console's name while the name announced for it also
+  says what is going on in it (see "The console switcher" in `docs/product/sidebar.md`), New console, the waiting
+  count, whose tooltip says how many sessions are waiting and that pressing it goes to the next one, Reconnect
+  terminal, Turn on notifications, the report toggle, whose tooltip follows its "Show …" / "Hide …" label, and
+  Settings;
+- the ⋮ button that opens an action menu — a row's, the console's in the sidebar's header, and the project's in
+  focus mode. Its tooltip is a short "More actions", while the name announced for it also names what it belongs to
+  ("Actions for session …" and the like), so that each ⋮ can be told apart;
+- the sidebar's other icon buttons — a project's **+** (New session), wherever it appears, the Projects heading's
+  Filter projects, the Clear filter beside it, and the Expand all projects or Collapse all projects button (see
+  "Expanding and collapsing the listed projects" in `docs/product/sidebar.md`), and focus mode's Leave focus mode;
+- the archive view's Close button and each of its rows' Delete button, whose tooltip names the session;
+- the three options of Settings' Appearance row — Light, Dark and System (see "Appearance" in
+  `docs/product/settings.md`);
+- the report panel's previous-page and next-page buttons;
+- the close button of every dialog, of Settings and of each toast ("Close").
+
+## Names too long for their space
+
+A single-line name or label too long for its space — a sidebar row's name, the top bar's breadcrumb, a session listed
+in a confirmation, the report panel's page timestamp — fades out where it is cut off rather than ending in an
+ellipsis. A name, unlike the timestamp, then has its full text as its tooltip.
+
+**While the pointer is over it, such a label runs as a marquee**, so all of it can be read:
+
+- For a sidebar row the pointer only has to be over the row; elsewhere it has to be over the label itself.
+- After a short pause the text scrolls through at reading speed, about 60 px a second, pauses at its end, scrolls
+  quickly back to its start and goes round again for as long as the pointer stays.
+- When the pointer leaves, the text scrolls back to its start.
+- The fades follow the text: its start fades once text has scrolled past it, and its end stops fading once the last
+  of the text is in view.
+- Nothing moves where the system asks for reduced motion, and a label that is cut at its start, such as a path
+  (see "Right-to-left layout" in `docs/product/window-layout.md`), never runs.

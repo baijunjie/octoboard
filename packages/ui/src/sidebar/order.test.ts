@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Project, Session, SessionStatus } from "../protocol";
-import { boundArchivedSessions, boundElsewhere, focusGroups, liveSessions, sortProjects, notBoundToConsoleSession } from "./order";
+import { boundArchivedSessions, boundElsewhere, focusGroups, liveSessions, notBoundToConsoleSession, sortProjects, switchStrip } from "./order";
 
 const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to?: string): Session => ({
   id,
@@ -117,5 +117,64 @@ describe("focusGroups", () => {
       ["b", ["b-mine"]],
       ["a", ["a-mine"]],
     ]);
+  });
+});
+
+describe("switchStrip", () => {
+  const hub = (id: string, status: SessionStatus, started_at: number, extra: Partial<Session> = {}): Session => ({
+    ...session(id, status, started_at),
+    project_id: undefined,
+    role: "console",
+    origin: "console",
+    ...extra,
+  });
+
+  it("lists the console's console sessions that are not archived: pinned first, then by start, ties by id", () => {
+    const strip = switchStrip(
+      [
+        hub("idle-old", "idle", 1),
+        hub("idle-new", "idle", 2),
+        hub("waiting", "waiting_user", 3),
+        hub("tie-b", "idle", 4),
+        hub("tie-a", "working", 4),
+        hub("pinned", "interrupted", 9, { pinned: true }),
+        hub("archived", "archived", 5),
+        hub("elsewhere", "idle", 9, { console_id: "other" }),
+        session("project-session", "working", 3),
+      ],
+      "c",
+    );
+    expect(strip.map((e) => e.consoleSession.id)).toEqual(["pinned", "idle-old", "idle-new", "waiting", "tie-a", "tie-b"]);
+  });
+
+  it("keeps its order when statuses change", () => {
+    const before = [hub("a", "idle", 1), hub("b", "idle", 2), hub("c", "idle", 3)];
+    const after = [hub("a", "interrupted", 1), hub("b", "waiting_user", 2), hub("c", "working", 3)];
+    const ids = (sessions: Session[]) => switchStrip(sessions, "c").map((e) => e.consoleSession.id);
+    expect(ids(after)).toEqual(ids(before));
+  });
+
+  it("sums a console session's activity with that of the sessions bound to it: a raised hand, then work, then nothing", () => {
+    const strip = switchStrip(
+      [
+        hub("a", "idle", 4),
+        hub("b", "idle", 3),
+        hub("c", "waiting_user", 2),
+        hub("d", "interrupted", 1),
+        session("a-1", "working", 1, false, "a"),
+        session("a-2", "waiting_user", 1, false, "a"),
+        session("b-1", "working", 1, false, "b"),
+        session("b-2", "archived", 1, false, "b"),
+        session("d-1", "idle", 1, false, "d"),
+        session("unbound", "waiting_user", 1),
+      ],
+      "c",
+    );
+    expect(Object.fromEntries(strip.map((e) => [e.consoleSession.id, e.activity]))).toEqual({
+      a: "waiting",
+      b: "working",
+      c: "waiting",
+      d: undefined,
+    });
   });
 });

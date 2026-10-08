@@ -19,6 +19,18 @@ export const ESCAPE_MESSAGE_SOURCE = "octoboard-page-escape";
  * the frame by keyboard. It carries only `backward`, whether Shift was held. */
 export const REGION_MESSAGE_SOURCE = "octoboard-page-region";
 
+/** The `source` tag on the message the bridge posts when ⌘[ or ⌘] is pressed inside the page, for
+ * the same reason as `ESCAPE_MESSAGE_SOURCE`: without the relay the window's Back and Forward
+ * shortcuts would not work while the page holds focus. It carries only `backward`, whether it was
+ * ⌘[. */
+export const HISTORY_MESSAGE_SOURCE = "octoboard-page-history";
+
+/** The `source` tag on the message the bridge posts when ⌃Tab or ⌃⇧Tab is pressed inside the page,
+ * for the same reason as `ESCAPE_MESSAGE_SOURCE`: without the relay the window's shortcut between
+ * console sessions would not work while the page holds focus. It carries only `backward`, whether
+ * Shift was held. */
+export const SWITCH_MESSAGE_SOURCE = "octoboard-page-switch";
+
 /** What the page may do with the network, stated once: nothing. The only script the frame runs is
  * Octoboard's own, which `script-src` admits by the per-document `nonce`, so a script the page
  * carries (which the bridge removes first, in any case) has no source to run from. `connect-src`
@@ -67,6 +79,13 @@ function scriptJson(value: unknown): string {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
+/** What the window around a report page has, which the page's frame follows. */
+export interface PageDocumentOptions {
+  noContextMenu?: boolean;
+  relayHistoryKeys?: boolean;
+  relaySwitchKeys?: boolean;
+}
+
 /**
  * Builds the iframe's `srcdoc` document: the CSP meta tag, then the colour-scheme meta, then
  * Octoboard's own scripts, in that order — a CSP delivered by `<meta>` only covers what the parser
@@ -79,23 +98,31 @@ function scriptJson(value: unknown): string {
  * `nonce` has to be unguessable and fresh for each document: it is what tells Octoboard's scripts
  * from anything else the frame might come to hold.
  *
- * `noContextMenu` makes the frame suppress its own right-click menu, outside text fields, as the
- * desktop app does for the rest of its window.
+ * The `options` are what the window the frame sits in has: `noContextMenu` makes the frame suppress
+ * its own right-click menu, outside text fields, as the desktop app does for the rest of its
+ * window. `relayHistoryKeys` makes it relay ⌘[ and ⌘] to the window and keep them from the page,
+ * where the window has those shortcuts (the macOS app); the browser's own meaning of the keys is
+ * left alone elsewhere. `relaySwitchKeys` does the same for ⌃Tab and ⌃⇧Tab, the window's shortcut
+ * between console sessions, where it has that one (the same window).
  */
 export function composePageDocument(
   html: string,
   isHistory: boolean,
   nonce: string,
-  noContextMenu = false,
+  { noContextMenu = false, relayHistoryKeys = false, relaySwitchKeys = false }: PageDocumentOptions = {},
 ): string {
   const page = {
     html,
     history: isHistory,
     noContextMenu,
+    historyKeys: relayHistoryKeys,
+    switchKeys: relaySwitchKeys,
     sources: {
       submit: SUBMIT_MESSAGE_SOURCE,
       escape: ESCAPE_MESSAGE_SOURCE,
       region: REGION_MESSAGE_SOURCE,
+      history: HISTORY_MESSAGE_SOURCE,
+      switch: SWITCH_MESSAGE_SOURCE,
     },
   };
   const config = `window.OCTOBOARD_PAGE = ${scriptJson(page)};`;

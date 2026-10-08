@@ -42,7 +42,7 @@ export interface Scenario {
   title: string;
   /** Said under the title in the gallery; what to look at. */
   description?: string;
-  /** The window width it opens at unless the URL says otherwise; the `docked` breakpoint is 1100. */
+  /** The window width it opens at unless the URL says otherwise; the `docked` breakpoint is 1148. */
   width?: number;
   /** Shown in place of the app; without it the real `App` is rendered over `state`. */
   startup?: Startup;

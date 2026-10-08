@@ -35,7 +35,7 @@ export const statusScenarios: Scenario[] = [
     group: GROUP,
     title: "Raised hands",
     description:
-      "Three sessions waiting, one of them a console session and one in another console: the top bar's waiting count and the console switcher's marker.",
+      "Three sessions waiting, one of them a console session and one in another console: the rail's waiting count and its console markers.",
     state: snapshotState({
       consoles: [console_, second],
       projects: [project, other],
@@ -47,5 +47,18 @@ export const statusScenarios: Scenario[] = [
       ],
     }),
     steps: [(ui) => ui.press(ui.session("Needs permission to run tests"))],
+  },
+  {
+    id: "status-waiting-overflow",
+    group: GROUP,
+    title: "More than 99 raised hands",
+    description: "A hundred and five sessions waiting: the rail's waiting count shows its overflow label, and the glyph is cut out around the wider pill.",
+    state: snapshotState({
+      consoles: [console_],
+      projects: [project],
+      sessions: Array.from({ length: 105 }, (_, i) =>
+        sessionOf(`s-${i}`, console_.id, project.id, `Needs an answer ${i + 1}`, "waiting_user"),
+      ),
+    }),
   },
 ];

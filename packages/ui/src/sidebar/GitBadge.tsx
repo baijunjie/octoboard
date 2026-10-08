@@ -14,7 +14,7 @@ import type { GitStatus } from "../protocol";
  * The glyph differs by `activity` and against the idle glyph, since motion alone is never the only
  * cue for a state: idle is a branch glyph (a commit glyph instead for a detached `HEAD`, so that is
  * told apart without reading the accessible name), `checking` a spinning `RefreshCw` (contacting
- * the remote), `syncing` a pulsing `ArrowDownToLine` (fast-forwarding the branch, which is
+ * the remote), `syncing` a nudging `ArrowDownToLine` (fast-forwarding the branch, which is
  * specifically a pull). The ahead/behind counts and the error marker are likewise never colour
  * alone.
  *
@@ -56,7 +56,7 @@ export function GitBadge({ status, decorative }: { status: GitStatus | undefined
       {status.activity === "checking" ? (
         <RefreshCw aria-hidden="true" className="size-3.5 shrink-0 motion-safe:animate-spin-slow" />
       ) : status.activity === "syncing" ? (
-        <ArrowDownToLine aria-hidden="true" className="size-3.5 shrink-0 motion-safe:animate-pulse" />
+        <ArrowDownToLine aria-hidden="true" className="size-3.5 shrink-0 motion-safe:animate-sync-nudge" />
       ) : status.detached ? (
         <GitCommitHorizontal aria-hidden="true" className="size-3.5 shrink-0" />
       ) : (

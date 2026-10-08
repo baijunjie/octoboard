@@ -114,7 +114,9 @@ keeps answering with the other worktree's build, and the verification passes or 
 Confirm that the process listening on the port is the one you started, or start yours with `--port` on a free port.
 When cleaning up, stop only processes you started, by PID, never with `pkill` / `killall`: a pattern such as
 `pkill -f target/debug/octoboardd` also matches every other worktree's daemon, and a looser one has killed the daemon
-of the user's own running app, interrupting their sessions.
+of the user's own running app, interrupting their sessions. For a dev server the PID to stop is the one listening on
+its port (`lsof -ti tcp:<port> -sTCP:LISTEN`), not the one recorded when it was started: `pnpm exec vite` and
+`pnpm dev` alike run Vite as a child process, and stopping the `pnpm` PID leaves Vite serving on the port.
 
 A `pnpm tauri dev` app running from the worktree you edit rebuilds and restarts itself on every change under
 `apps/desktop/src-tauri/`, and the restart interrupts every session in it: the daemon exits with the app and ends the

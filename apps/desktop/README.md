@@ -129,7 +129,12 @@ nothing to keep in the background, so the close button quits, and a quit gesture
 The window has no native titlebar
 background or title text: it is created with an overlay titlebar and a hidden title on macOS, and the traffic lights
 float over the UI's own top bar (`TitleBar` in `packages/ui`), centred in it by `TRAFFIC_LIGHT_X` /
-`TRAFFIC_LIGHT_Y` in `src-tauri/src/lib.rs`.
+`TRAFFIC_LIGHT_Y` in `src-tauri/src/lib.rs`. The window is transparent too, with a sidebar-material visual effect
+behind the webview (Tauri's `effects`, which needs `macos-private-api`, see `Cargo.toml` and `app.macOSPrivateApi` in
+`tauri.conf.json`; the private API rules out Mac App Store distribution). The effect follows the appearance the UI
+pushes, and the window stays hidden until it has. The UI leaves its window chrome (the top bar and the left rail) clear
+over the material and paints the content panel opaquely (`packages/ui/src/style.css`; the UI marks the page
+translucent through the platform adapter's `translucentWindow`).
 
 `src-tauri/capabilities/default.json` also allowlists the `notification` plugin's commands (used by
 `packages/ui/src/lifecycle/useWaitingNotifications.ts` for the raised-hand system notification),
@@ -167,7 +172,7 @@ that move is what makes the window zoom on its own display and un-zoom back to t
 - no saved state, or an unreadable or malformed one: 1200×760, placed (centred) by the OS — the first-launch behaviour;
 - the saved frame's top 40 points (the UI's top bar, where the window is grabbed) overlap some connected display by at
   least 200×20 points: restored, held inside the bounding box of all the connected displays' work areas — size first
-  (never below the 1100×600 minimum), then position — so a frame spanning displays that are all still connected comes
+  (never below the 1148×600 minimum), then position — so a frame spanning displays that are all still connected comes
   back unchanged, and one that reached onto a display since unplugged is pulled back onto the ones left;
 - otherwise (its display is gone, the bar is off every display, or the frame held inside the box no longer has its bar
   on a display): 1200×760, centred on the main display's work area.

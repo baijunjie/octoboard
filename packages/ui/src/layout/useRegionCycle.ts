@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
  * toast stack comes last and is a stop only while a toast is on screen; unlike the others it is not
  * for the caller to say: the stack is in the DOM while it holds a toast, and one that is closing
  * (kept mounted for its exit animation, `data-exiting`) is not a landing place. */
-const REGIONS = ["topbar", "sidebar", "archive", "terminal", "report", "banner", "toast"] as const;
+const REGIONS = ["topbar", "rail", "sidebar", "archive", "terminal", "report", "banner", "toast"] as const;
 export type Region = (typeof REGIONS)[number];
 type ShownRegion = Exclude<Region, "toast">;
 
@@ -32,8 +32,9 @@ function currentRegion(): Region | undefined {
 }
 
 /** Focuses where `region` takes focus and says whether it did: the sidebar goes to its selected
- * row, falling back to its first control, like the other regions that are not the terminal. The
- * toast stack lists its newest toast first, so its first control is that toast. */
+ * row and the rail to the current console, falling back to the first control, as the other regions
+ * that are not the terminal do. The toast stack lists its newest toast first, so its first control
+ * is that toast. */
 function focusRegion(region: Region, focusTerminal: () => void): boolean {
   if (region === "terminal") {
     focusTerminal();
@@ -44,7 +45,7 @@ function focusRegion(region: Region, focusTerminal: () => void): boolean {
   const target =
     region === "toast"
       ? root.querySelector<HTMLElement>(LIVE_TOAST)
-      : (region === "sidebar" && root.querySelector<HTMLElement>('[aria-current="true"]')) ||
+      : ((region === "sidebar" || region === "rail") && root.querySelector<HTMLElement>('[aria-current="true"]')) ||
         root.querySelector<HTMLElement>(FOCUSABLE);
   if (!target) return false;
   target.focus();

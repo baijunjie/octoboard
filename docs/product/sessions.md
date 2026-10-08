@@ -18,9 +18,9 @@ not archived, each as its own row, in the console sessions section above the pro
 console sessions section and the project list" in `docs/product/sidebar.md`).
 
 A console session's row follows a session row exactly — the same status glyph, its agent's icon, its
-title, a pin glyph when pinned, and selecting it resumes it when it is interrupted, as selecting any
-interrupted session does. Its action menu offers **Pin**/**Unpin**, **Rename**, **Focus mode** (see "Focus mode"
-in `docs/product/sidebar.md`), **Switch account** and **Archive**; there is no Resume item, for the same reason. A
+title, a pin glyph when pinned, and selecting it resumes it when it is interrupted, as selecting an
+interrupted session's row does. Its action menu offers **Pin**/**Unpin**, **Rename**, **Focus mode** (see
+`docs/product/focus-mode.md`), **Switch account** and **Archive**; there is no Resume item, for the same reason. A
 console session's title is renameable, like a project session's; its default is under **Title** in "Opening a session"
 below.
 
@@ -63,8 +63,8 @@ Sessions are listed in the sidebar, one console at a time: its console sessions 
 sessions section, a project session under its project. Archived sessions are not listed among the
 others; they are reached from their project's or, for a console session, the section's own action
 menu, and from the archive view. Everything about the sidebar — its rows and menus, the order sessions
-are listed in, pinning, focus mode, the archive view and how selecting a session works — is in
-`docs/product/sidebar.md`.
+are listed in, pinning, the archive view and how selecting a session works — is in
+`docs/product/sidebar.md`; focus mode is in `docs/product/focus-mode.md`.
 
 ## Opening a session
 
@@ -92,7 +92,7 @@ A session is opened under a project with:
   `docs/product/hub-orchestration.md`. The choice is offered only from the project list. Opened from a project's focus
   mode the dialog has no such field and the session is always unbound; opened from a console session's focus mode it
   has none either, and shows a line saying the session reports to that console session instead, which is the binding
-  it gets (see "Focus mode" in `docs/product/sidebar.md`).
+  it gets (see `docs/product/focus-mode.md`).
 
 The dialog takes no task: a session the user opens by hand starts in *awaiting instructions*, sitting at the agent's
 prompt, and is given its work by typing into its terminal. Only a session started with `start_session` — by a console
@@ -222,10 +222,11 @@ practice was not checked (in one run an ending followed within a second by a new
 own row:
 
 - The session's row shows the raised hand. Its project row shows one while the project is collapsed,
-  its console shows one in the console switcher's list, and the switcher itself shows one while the
-  waiting session is in a console other than the one shown, so a waiting session can be found
-  whatever the sidebar is showing (see "The console switcher" and "Project rows" in
-  `docs/product/sidebar.md`).
+  and its console's avatar on the rail carries one, the rail showing every console at once, so a
+  waiting session can be found whatever the sidebar is showing (see "The console switcher" and
+  "Project rows" in `docs/product/sidebar.md`). In a console session's focus mode, a console session's
+  chip in the switch strip shows one too while it or a session bound to it is waiting (see "The switch
+  strip" in `docs/product/focus-mode.md`).
 - A system notification fires once as a session enters that state, naming the session by its title
   and the project it runs in — or the console whose console session it is. A session that is answered and later
   waits again notifies again. No notification permission is asked for: the application posts the
@@ -237,7 +238,7 @@ own row:
   is still kept and shows once it returns to the Dock (see "Closing the window" in
   `docs/product/application-lifecycle.md`). The menu bar icon's menu lists the waiting sessions too
   (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
-- The top bar carries the same count, as a raised hand and the number, shown only while at least one
+- The rail carries the same count, as a raised hand and the number, shown only while at least one
   session is waiting. Pressing it selects the next waiting session after the selected one — console by
   console in the order the consoles were created, its console sessions before its projects' sessions,
   and both in the sidebar's order (see "Order of projects and sessions" in `docs/product/sidebar.md`) —
@@ -327,9 +328,10 @@ not archived, and a session at its prompt, at work or waiting for the user does 
   session's account" below).
 
 **Resuming** an interrupted session happens by selecting it, or by pressing "Resume" on its terminal's card (see
-"The terminal" below). **Reopening** an archived session is the same relaunch, but selecting an archived session does
-not do it: the session is shown, still archived, and is reopened by typing into its terminal, by pressing "Reopen" on
-its terminal's card, or by pressing "Reopen" in the archive view (see "The archive view" in
+"The terminal" below, which also names the two ways of showing an interrupted session that do not resume it).
+**Reopening** an archived session is the same relaunch, but selecting an archived session does not do it:
+the session is shown, still archived, and is reopened by typing into its terminal, by pressing "Reopen" on its
+terminal's card, or by pressing "Reopen" in the archive view (see "The archive view" in
 `docs/product/sidebar.md`). Either relaunches the same agent in the same directory and reassembles everything
 Octoboard injects.
 
@@ -408,8 +410,8 @@ project is removed or the console is deleted. They are listed most recently arch
   the archived sessions bound to it, again the newest ten;
 - from the archive view, with all of them.
 
-How each of those looks and behaves is in "Project rows", "Focus mode" and "The archive view" in
-`docs/product/sidebar.md`.
+How each of those looks and behaves is in "Project rows" and "The archive view" in `docs/product/sidebar.md`, and in
+`docs/product/focus-mode.md`.
 
 ### Deleting archived sessions
 
@@ -461,12 +463,13 @@ focus between regions with F6" in `docs/product/window-layout.md`).
   size change rather than one for every step of the drag. The window has a minimum size, sized so that
   the sidebar, the terminal and the report panel all stay usable side by side — see "The window's
   minimum size" in `docs/product/window-layout.md`.
-- The terminal's colours follow the window's light or dark appearance — see "What follows the choice"
-  in `docs/product/appearance.md`.
+- The terminal's colours follow the window's light or dark appearance, and its text is held to a minimum contrast
+  against its cell's background whatever colours the agent prints — see "What follows the choice" in
+  `docs/product/appearance.md`.
 - A client that stops draining output for more than a few seconds is dropped by the daemon rather than letting output
   buffer without bound. The application then reconnects by itself, with a backoff, up to five times. Meanwhile the
-  top bar's connection status reads "Terminal reconnecting…"; once the attempts are spent it reads "Terminal
-  disconnected" and offers a "Reconnect" button, which starts them over (see "The connection status" in
+  rail's connection status says the terminal is reconnecting; once the attempts are spent it reads "Terminal
+  disconnected" and offers a "Reconnect terminal" button, which starts them over (see "The connection status" in
   `docs/product/window-layout.md`). A reconnect in the background never steals keyboard focus.
 - **Until the session's first output is on screen, the terminal is covered by a loading state** — a spinner and a
   line saying the session is being resumed, while a resume of it is under way or it has no process yet, and that the
@@ -474,7 +477,10 @@ focus between regions with F6" in `docs/product/window-layout.md`).
   — when a session is selected, resumed or reconnected: the resume starting the process, the connection being made,
   and a freshly started agent drawing its first screen. An agent that prints nothing does not keep it up: after
   10 seconds without output the bare terminal is shown.
-- Selecting an interrupted session resumes it rather than attaching. While a session has no process and no resume of
+- Selecting an interrupted session resumes it rather than attaching. Two ways of reaching one only show it, with its
+  card, and never resume it: moving with Back or Forward (see "Moving back and forward" in
+  `docs/product/navigation-history.md`), and `Ctrl+Tab` / `Ctrl+Shift+Tab` in a console session's focus mode (see
+  "The switch strip" in `docs/product/focus-mode.md`). While a session has no process and no resume of
   it is under way, the terminal shows a card at its bottom centre: for an interrupted session it reads "Not running"
   and offers "Resume"; for an archived one it says the session is archived and that typing reopens it, and offers
   "Reopen". The card is hidden while the session is being resumed.

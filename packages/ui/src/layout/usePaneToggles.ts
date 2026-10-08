@@ -23,11 +23,10 @@ const PEEK_HIDE_DELAY_MS = 200;
 export interface PanePeek {
   /** Whether the pane is currently floating. Never true below the breakpoint or while it is docked. */
   active: boolean;
-  /** Floats the pane in, as the pointer reaches the window's edge or the toggle; does nothing
-   * where the pane cannot float, and closes the other side's floating pane. `armHide` starts the
-   * slide-away timer at once, for a pointer that is not on anything that would later report
-   * leaving: the pane is still sliding in under it, and the pane's own enter cancels the timer. */
-  reveal: (armHide?: boolean) => void;
+  /** Floats the pane in, as the pointer rests on the content panel's edge or reaches the toggle; does
+   * nothing where the pane cannot float, and closes the other side's floating pane. It arms no
+   * slide-away timer: that starts when the pointer leaves the pane or the toggle (`leave`). */
+  reveal: () => void;
   /** The pointer is on the floating pane again: cancels a pending slide-away. */
   keep: () => void;
   /** The pointer left whatever kept the floating pane up: slides it away after a short delay. */
@@ -76,11 +75,10 @@ function usePanePeek(panel: DockedPanel, peekable: boolean, focusTerminal: () =>
     };
     timer.current = setTimeout(tick, PEEK_HIDE_DELAY_MS);
   };
-  const reveal = (armHide = false) => {
+  const reveal = () => {
     clearTimeout(timer.current);
     if (!peekable) return;
     setPeek(true);
-    if (armHide) leave();
   };
 
   // A floating pane only means something while it is hidden at and above the breakpoint.
@@ -113,14 +111,15 @@ export interface PaneToggles {
 }
 
 /**
- * The state behind the top bar's two panel toggles. Below the `docked` breakpoint the sidebar and
- * the report panel are closed-by-default overlays (their own components' doc comments have the
- * layout); at and above it the same toggles show or hide the docked panes instead
- * (`panelVisibility.ts`). Both states live in one place since the toggles sit in the top bar, and
- * widening the window past the breakpoint has to be able to close either overlay.
+ * The state behind the two panel toggles (the sidebar's in the top bar, the report panel's on the
+ * rail). Below the `docked` breakpoint the sidebar and the report panel are closed-by-default
+ * overlays (their own components' doc comments have the layout); at and above it the same toggles
+ * show or hide the docked panes instead (`panelVisibility.ts`). Both states live in one place since
+ * the toggles sit in the window chrome, and widening the window past the breakpoint has to be able
+ * to close either overlay.
  *
  * While a docked pane is hidden, the pointer can float it in over the terminal without resizing
- * it (`sidebarPeek`, `reportPeek`): the window's edge on its side and its toggle reveal it,
+ * it (`sidebarPeek`, `reportPeek`): the content panel's edge on its side and its toggle reveal it,
  * leaving it (or Escape) hides it again, and pressing the toggle docks it for good. The two never
  * float together: revealing one hides the other.
  *
@@ -141,10 +140,10 @@ export function usePaneToggles({
   const [reportDocked, setReportDocked] = useDockedPanelVisible("report");
   const sidebarPeek = usePanePeek("sidebar", !isNarrow && !sidebarDocked, focusTerminal);
   const reportPeek = usePanePeek("report", !isNarrow && !reportDocked && hasReportPanel, focusTerminal);
-  const revealPeek = (mine: PeekControl, other: PeekControl) => (armHide?: boolean) => {
+  const revealPeek = (mine: PeekControl, other: PeekControl) => () => {
     if (!mine.peekable) return;
     other.hide();
-    mine.reveal(armHide);
+    mine.reveal();
   };
 
   // An overlay left open stops meaning anything once the window is wide enough to show its

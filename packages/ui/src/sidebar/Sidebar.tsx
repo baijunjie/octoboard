@@ -2,18 +2,15 @@ import { ScrollShadow } from "@heroui/react";
 import {
   ChevronDown,
   ChevronRight,
-  ChevronsUpDown,
   FolderOpen,
   FolderPlus,
   LayoutDashboard,
   ListChevronsDownUp,
   ListChevronsUpDown,
   MessageSquarePlus,
-  Pencil,
   Pin,
   Plus,
   SearchX,
-  Trash2,
 } from "lucide-react";
 import { setInteractionModality } from "react-aria";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -21,7 +18,6 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { noAgentAvailable } from "../agents";
 import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
 import { AgentIcon } from "../components/AgentIcon";
-import { ConsoleAvatar } from "../components/ConsoleAvatar";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { handFocusOff } from "../components/handFocusOff";
 import { ActivityMarker, StatusIcon } from "../components/StatusIcon";
@@ -32,22 +28,21 @@ import type { PaneWidth } from "../layout/paneWidth";
 import type { PanePeek } from "../layout/usePaneToggles";
 import { effectiveTags, matchesFilter, tagVocabulary, withoutTags } from "../projectFiltering";
 import type { Console, Project, Session } from "../protocol";
-import { sessionAriaLabel } from "../sessionLabel";
+import { activityLabelKey, sessionAriaLabel } from "../sessionLabel";
 import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
 import { type FilterUpdate, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterTag, ProjectFilterTags } from "./ProjectFilter";
-import { archiveSubmenu, projectMenu, sessionMenu } from "./menus";
-import { archivedSessions, consoleActivity, isInactiveProject, liveSessions, sortProjects, type Activity } from "./order";
+import { archiveSubmenu, consoleMenu, projectMenu, sessionMenu } from "./menus";
+import { archivedSessions, consoleActivity, isInactiveProject, liveSessions, sortProjects } from "./order";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
 import { RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
-import { focusTargetId } from "./sidebarView";
+import { focusTargetId } from "./focus";
 import type { FocusTarget, SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
 
 interface SidebarProps extends SidebarHandlers {
-  consoles: Console[];
   projects: Project[];
   sessions: Session[];
   selectedSessionId?: string;
@@ -68,12 +63,11 @@ interface SidebarProps extends SidebarHandlers {
   sidebarWidth: PaneWidth;
 }
 
-/** The sidebar: one console at a time, picked from the switcher at its top (see
+/** The sidebar: one console at a time, the one picked on the rail (see
  * docs/product/sidebar.md), with its console sessions and projects — or, in focus mode, one project
  * or one console session alone. Expand/collapse state is purely local UI state; the daemon has no notion of
  * it. */
 export function Sidebar({
-  consoles,
   projects,
   sessions,
   selectedSessionId,
@@ -132,16 +126,24 @@ export function Sidebar({
   const holdsFocus = useRef(false);
   const focusId = focus && focusTargetId(focus);
   const shownFocusId = useRef(focusId);
+  const shownConsoleSessionFocus = useRef(focus !== undefined && "consoleSession" in focus);
   useEffect(() => {
     const previousId = shownFocusId.current;
+    const fromConsoleSession = shownConsoleSessionFocus.current;
     shownFocusId.current = focusId;
+    shownConsoleSessionFocus.current = focus !== undefined && "consoleSession" in focus;
     if (previousId === focusId) return;
     // After a short delay: a menu item that switched the view has its menu hand focus back (to the
     // trigger that just unmounted) a task later, which would otherwise land after this.
     const timer = setTimeout(() => {
       if (!holdsFocus.current || document.activeElement !== document.body) return;
+      // Only where nothing else took focus: a switch that selects a session normally hands it to that
+      // session's terminal. Between two console sessions' focus modes, the strip's chip that was
+      // pressed has been replaced by the new current one, the nearest place to the keyboard user.
+      // From a project's focus mode or from none, the first control is the way out.
       const target = focus
-        ? navRef.current?.querySelector<HTMLElement>("[data-focus-exit]")
+        ? (fromConsoleSession ? navRef.current?.querySelector<HTMLElement>("[data-switch-current]") : null) ??
+          navRef.current?.querySelector<HTMLElement>("[data-focus-exit]")
         : navRef.current?.querySelector<HTMLElement>(`[data-flip="${CSS.escape(previousId ?? "")}"] [role=button]`);
       if (!target) return;
       setInteractionModality("keyboard");
@@ -165,8 +167,8 @@ export function Sidebar({
   const viewKey = !currentConsole ? "none" : focusId ? `focus:${focusId}` : `console:${currentConsole.id}`;
   const viewRef = useRef<HTMLDivElement>(null);
   const previousViewRef = useRef(viewKey);
-  // Played in place rather than by remounting the view: a remount on a console switch would
-  // destroy the switcher's trigger that the menu hands keyboard focus back to.
+  // Played in place rather than by remounting the view, so a console switch leaves what is mounted
+  // in it (the header and its menu trigger among it) as it is.
   useLayoutEffect(() => {
     const previous = previousViewRef.current;
     previousViewRef.current = viewKey;
@@ -227,7 +229,7 @@ export function Sidebar({
     );
     content = (
       <>
-        <ConsoleSwitcher handlers={handlers} consoles={consoles} sessions={sessions} current={currentConsole} />
+        <ConsoleHeader handlers={handlers} current={currentConsole} />
         <ScrollShadow size={24} className="min-h-0 flex-1 px-2 pb-2">
           <ConsoleBody
             handlers={handlers}
@@ -294,7 +296,7 @@ export function Sidebar({
         id={PANE_ID.sidebar}
         data-pane="sidebar"
         data-region="sidebar"
-        className={`flex w-70 flex-col overflow-hidden border-e border-separator bg-surface shrink-0 docked:w-(--sidebar-width) ${drawerClassName}`}
+        className={`flex w-70 flex-col overflow-hidden sidebar-fills border-e border-separator bg-panel-sidebar shrink-0 docked:w-(--sidebar-width) ${drawerClassName}`}
         onPointerEnter={peek?.keep}
         onPointerLeave={peek?.leave}
         style={{ "--sidebar-width": `${sidebarWidth.width}px` } as React.CSSProperties}
@@ -309,89 +311,24 @@ export function Sidebar({
   );
 }
 
-function activityLabelKey(activity: Activity, pinned = false) {
-  switch (activity) {
-    case "waiting":
-      return pinned ? ("sidebar.activity.waitingPinned" as const) : ("sidebar.activity.waiting" as const);
-    case "working":
-      return pinned ? ("sidebar.activity.workingPinned" as const) : ("sidebar.activity.working" as const);
-    case "running":
-      return pinned ? ("sidebar.activity.runningPinned" as const) : ("sidebar.activity.running" as const);
-    default:
-      return undefined;
-  }
-}
-
-/** The header naming the console shown, which switches to another one; every console in its list
- * carries what is going on in it, so activity elsewhere is visible without switching. Beside it,
- * the console's own actions. */
-function ConsoleSwitcher({
-  handlers,
-  consoles,
-  sessions,
-  current,
-}: {
-  handlers: SidebarHandlers;
-  consoles: Console[];
-  sessions: Session[];
-  current: Console;
-}): React.ReactElement {
+/** The header naming the console shown, with the console's own actions beside it. Its name only:
+ * the console's avatar is already marked as the current one on the rail (`Rail.tsx`), which also
+ * switches consoles and carries what is going on in every console. */
+function ConsoleHeader({ handlers, current }: { handlers: SidebarHandlers; current: Console }): React.ReactElement {
   const t = useT();
-  const activities = new Map(consoles.map((c) => [c.id, consoleActivity(sessions.filter((s) => s.console_id === c.id))]));
-  // What the other consoles are doing shows on the switcher itself, so a raised hand elsewhere is
-  // not hidden behind it.
-  const elsewhere = consoles.some((c) => c.id !== current.id && activities.get(c.id) === "waiting")
-    ? "waiting"
-    : undefined;
-
-  const items: ActionMenuEntry[] = [
-    ...consoles.map((c) => {
-      const activityKey = activityLabelKey(activities.get(c.id));
-      return {
-        label: c.name,
-        ariaLabel: activityKey ? t(activityKey, { name: c.name }) : undefined,
-        icon: <ConsoleAvatar icon={c.icon} className="size-5" />,
-        end: <ActivityMarker activity={activities.get(c.id)} />,
-        selected: c.id === current.id,
-        onClick: () => handlers.onSelectConsole(c.id),
-      };
-    }),
-    "separator",
-    { label: t("sidebar.newConsole"), icon: Plus, onClick: () => handlers.onOpenDialog({ kind: "new-console" }) },
-  ];
-
   const headerRef = useRef<HTMLDivElement>(null);
-  const consoleActions: ActionMenuEntry[] = [
-    { label: t("sidebar.console.addProject"), icon: FolderPlus, onClick: () => handlers.onOpenDialog({ kind: "new-project", console: current }) },
-    { label: t("sidebar.console.edit"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "edit-console", console: current }) },
-    "separator",
-    { label: t("sidebar.console.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-console", console: current }), destructive: true },
-  ];
-
   return (
     // The list under this header is inset twice — the scroll area, then each heading and row — so
-    // the end padding matches that and this menu lines up with the rows' menus. The chevron is a
-    // bare glyph: the trigger keeps only the inset a size-6 icon button puts around its own glyph,
-    // and the gap is the one those buttons use, so the chevron sits over the button beside a menu.
-    <div ref={headerRef} className="flex h-14 shrink-0 items-center gap-0.5 border-b border-separator ps-2 pe-4">
+    // the end padding matches that and this menu lines up with the rows' menus.
+    <div ref={headerRef} className="flex h-14 shrink-0 items-center gap-2 border-b border-separator ps-4 pe-4">
+      <RowLabel title={current.name}>
+        <span className="text-base font-semibold">{current.name}</span>
+      </RowLabel>
       <ActionMenu
-        className="min-w-0 flex-1"
-        label={t(elsewhere ? "sidebar.console.switchWaiting" : "sidebar.console.switch", { name: current.name })}
-        tooltip={false}
-        items={items}
-        triggerClassName="flex h-9 w-full min-w-0 items-center gap-2 rounded-lg ps-2 pe-1 text-start text-sm hover:bg-default aria-expanded:bg-default"
-        trigger={
-          <>
-            <ConsoleAvatar icon={current.icon} />
-            <RowLabel title={current.name}>
-              <span className="font-semibold">{current.name}</span>
-            </RowLabel>
-            <ActivityMarker activity={elsewhere} />
-            <ChevronsUpDown aria-hidden="true" className="size-4 shrink-0 text-muted" />
-          </>
-        }
+        label={t("sidebar.console.actions", { name: current.name })}
+        items={consoleMenu(t, current, handlers.onOpenDialog)}
+        contextTargetRef={headerRef}
       />
-      <ActionMenu label={t("sidebar.console.actions", { name: current.name })} items={consoleActions} contextTargetRef={headerRef} />
     </div>
   );
 }
@@ -542,7 +479,7 @@ function ConsoleBody({
               // plain paint and lets every pointer event through. It takes the dimmed names below
               // WCAG AA (about 2.9:1, muted text about 1.9:1) on purpose, by the user's decision: a
               // de-emphasis cue, lifted as soon as the group is pointed at, focused or has a menu open.
-              className="relative after:pointer-events-none after:absolute after:inset-0 after:transition-colors after:duration-200 data-inactive:after:bg-surface/55"
+              className="relative after:pointer-events-none after:absolute after:inset-0 after:transition-colors after:duration-200 data-inactive:after:bg-panel-sidebar/55"
             >
               <ProjectNode
                 handlers={handlers}

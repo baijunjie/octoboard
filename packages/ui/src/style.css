@@ -2,14 +2,14 @@
 @import "@heroui/styles";
 
 @theme {
-  /* The one named breakpoint this app has: the width at which the sidebar, the terminal and the
-     report panel all fit side by side without any of them going under its own floor (280 +
-     520 + 300, see the terminal's wrapper in `App.tsx` and `ReportPanel.tsx`). Below it
-     `usePaneToggles` turns the sidebar and the report panel into overlays instead of row
-     siblings. The macOS window's own
-     minimum (`apps/desktop/src-tauri/src/lib.rs`) keeps the desktop app from ever going under it,
-     so the `docked:` variant is also what "the layout as it always was" means there. */
-  --breakpoint-docked: 1100px;
+  /* The one named breakpoint this app has: the width at which the left rail, the sidebar, the
+     terminal and the report panel all fit side by side without any of them going under its own
+     floor (48 + 280 + 520 + 300, see `--rail-width` below, `TERMINAL_FLOOR` in
+     `layout/paneWidth.ts` and `ReportPanel.tsx`). Below it `usePaneToggles` turns the sidebar and
+     the report panel into overlays instead of row siblings. The macOS window's own minimum
+     (`apps/desktop/src-tauri/src/lib.rs`) keeps the desktop app from ever going under it, so the
+     `docked:` variant is also what "the layout as it always was" means there. */
+  --breakpoint-docked: 1148px;
 }
 
 :root {
@@ -24,6 +24,12 @@
      lights in it (`TRAFFIC_LIGHT_Y` in `apps/desktop/src-tauri/src/lib.rs`), so the two move
      together; a fixed pixel size, since the lights' position is fixed too. */
   --title-bar-height: 40px;
+
+  /* The left rail under the top bar (`Rail.tsx`): the window chrome's second half, at the reading
+     direction's start. The content panel starts where it ends (the panel's own 1px start border
+     overlaps the rail's last pixel, so that is also where the sidebar starts), which is what the
+     docked arithmetic above counts. Pane drawers and the pointer's hot zone start there too. */
+  --rail-width: 48px;
 
   /* Where the content area starts: right below the top bar. Anything that overlays the content
      area, or runs along an edge that starts there, starts at this offset rather than at the window
@@ -44,23 +50,237 @@
      150.81°, 72.33° and 25.74° respectively), so a console session's badge never echoes a status
      colour's meaning by coincidence. One lightness for the whole palette, picked against the
      badge's 3:1 bar for a non-text graphic (WCAG 1.4.11) on the two surfaces a row sits on,
-     `--background` (L 0.9702) and `--default` (L 0.94): measured 4.05 / 3.70 olive, 3.93 / 3.59
-     jade, 3.55 / 3.24 teal, 3.58 / 3.28 azure, 4.40 / 4.03 violet, 4.55 / 4.16 rose. Teal and azure
-     are the floor, which is what fixes the lightness; a lighter palette puts them under the bar. */
-  --console-session-olive: oklch(0.57 0.15 98);
-  --console-session-jade: oklch(0.57 0.15 125);
-  --console-session-teal: oklch(0.57 0.15 185);
-  --console-session-azure: oklch(0.57 0.17 220);
-  --console-session-violet: oklch(0.57 0.17 298);
-  --console-session-rose: oklch(0.57 0.19 342);
+     `--panel-sidebar` (L 0.965) and a selected row on it (`--panel-selected` over it): measured
+     4.15 / 3.55 olive, 4.03 / 3.45 jade, 3.63 / 3.11 teal, 3.67 / 3.14 azure, 4.52 / 3.87 violet,
+     4.67 / 4.00 rose. Teal and azure on a selected row are the floor, which is what fixes the
+     lightness; a lighter palette puts them under the bar. The badge also sits, as a decorative dot
+     beside the console session's name, on the fill of a BoundElsewhere chip (`FocusView.tsx`),
+     where light teal and azure measure 3.04:1 / 3.07:1 resting and 2.77:1 / 2.80:1 hovered: under
+     the bar, which a dot the name already labels does not need. */
+  --console-session-olive: oklch(0.56 0.15 98);
+  --console-session-jade: oklch(0.56 0.15 125);
+  --console-session-teal: oklch(0.56 0.15 185);
+  --console-session-azure: oklch(0.56 0.17 220);
+  --console-session-violet: oklch(0.56 0.17 298);
+  --console-session-rose: oklch(0.56 0.19 342);
+}
+
+/* The window's surfaces, the one place their colours are set. Two kinds:
+   - Window chrome (the top bar and the left rail) holds only icons, avatars and one line of
+     breadcrumb text. In the macOS app it is the native translucent material and paints nothing
+     (`--window-background` below); in a browser it is `--chrome`. Glyphs on it use the theme's
+     `--foreground`, secondary text on it `--chrome-muted`, and `--chrome-hover` / `--chrome-active`
+     / `--chrome-current` are the tints a control, a pressed control and the current console's tile
+     take on it: translucent, so they read on the material and on `--chrome`. The current tile is
+     the one that has to be found at a glance, so it is the strongest: 1.59:1 on the light material
+     (#e2e4e5), 1.57:1 on its darker variant (#d0d2d3) and 1.59:1 on `--chrome`, 1.84:1 on the dark
+     material (#484a4b) and 1.96:1 on dark `--chrome`, where `--chrome-hover` and `--chrome-active`
+     are 1.14:1 to 1.31:1 in light and 1.21:1 to 1.53:1 in dark.
+   - The content panel is always opaque, since text-heavy UI must never sit on the material.
+     `--panel` is the main area and has to equal the terminal's own background (`XTERM_THEMES` in
+     `terminal/xtermThemes.ts`) so the terminal does not look like a box inside a box;
+     `--panel-sidebar` is the sidebar's, a touch greyer than `--panel` in light and a touch lighter
+     in dark (1.06:1 and 1.09:1 against it: a step that shows without drawing a box).
+     `--panel-hover` / `--panel-selected` are the tints a row takes on either of them, translucent
+     so a control inside a hovered row (its "⋯" menu, which hovers with `--default`, see
+     `.sidebar-fills` below) can stack its own hover on top. The selected tint is held to what keeps
+     `--muted` text on a selected sidebar row at 4.5:1 (4.65:1 light, 4.58:1 dark) while still
+     standing apart from the rows around it (1.17:1 light, 1.25:1 dark).
+   `--chrome-muted` is measured on the real material as well as on `--chrome`, since the material
+   is not `--chrome`: in the dark appearance the material is #484a4b behind the window, far lighter
+   than `--chrome`, where `--muted` is 3.39:1. `--chrome-muted` is 5.63:1 on that and 12.08:1 on
+   `--chrome` in dark, 5.60:1 on the light material (#e2e4e5) and 5.81:1 on `--chrome` in light,
+   with room for a material tinted lighter or darker by what is behind the window (4.71:1 on
+   #d0d2d3). */
+:root {
+  --chrome: oklch(0.93 0.004 286);
+  --chrome-muted: oklch(0.46 0.0138 285.94);
+  --chrome-hover: oklch(0 0 0 / 0.06);
+  --chrome-active: oklch(0 0 0 / 0.12);
+  --chrome-current: oklch(0 0 0 / 0.2);
+  --panel: #fafafa;
+  --panel-sidebar: oklch(0.965 0.002 286);
+  --panel-hover: oklch(0 0 0 / 0.04);
+  --panel-selected: oklch(0 0 0 / 0.07);
+  --sidebar-fill: oklch(0 0 0 / 0.08);
+  --sidebar-fill-hover: oklch(0 0 0 / 0.12);
+}
+
+.dark,
+[data-theme="dark"] {
+  --chrome: oklch(0.17 0.005 286);
+  --chrome-muted: oklch(0.85 0.01 286);
+  --chrome-hover: oklch(1 0 0 / 0.08);
+  --chrome-active: oklch(1 0 0 / 0.15);
+  --chrome-current: oklch(1 0 0 / 0.22);
+  --panel: #1e1f22;
+  --panel-sidebar: oklch(0.27 0.006 286);
+  --panel-hover: oklch(1 0 0 / 0.045);
+  --panel-selected: oklch(1 0 0 / 0.075);
+  --sidebar-fill: oklch(1 0 0 / 0.07);
+  --sidebar-fill-hover: oklch(1 0 0 / 0.11);
+}
+
+/* The fills of HeroUI's `--default` family inside the sidebar. A ghost button's hover and pressed
+   fill, a tertiary button's fill and the keyword chip's all come from `--default`, which is the
+   sidebar's own colour in dark (L 0.274 against 0.27) and a step from it in light (1.08:1), so a
+   control would show no fill at all. The sidebar takes its own translucent tints, stronger than a
+   row's (`--panel-hover`): 1.19:1 (resting) and 1.31:1 (hovered) against the light sidebar, 1.24:1
+   and 1.41:1 against the dark one, the same on a selected row. `--default-hover` and
+   `--default-soft` are computed from `--default` on `<html>`, so the family is overridden whole
+   here: setting `--default` alone on this subtree would leave them behind. The fills are
+   translucent, so they are also what an inline Switch, Checkbox or Input added to the sidebar later
+   would get as its track or field. Muted text does not go on one (see `--muted` below). */
+.sidebar-fills {
+  --default: var(--sidebar-fill);
+  --default-hover: var(--sidebar-fill-hover);
+  --default-soft: var(--sidebar-fill);
+  --default-soft-hover: var(--sidebar-fill-hover);
+}
+
+/* A secondary button's label is HeroUI's accent-soft colour, 4.2:1 on the dark fill. In dark it
+   takes a lighter blue of its own, 5.27:1 on the resting fill and 4.62:1 hovered, where the glyph
+   accent (`--accent-glyph`) is 4.56:1 resting and 3.99:1 hovered. (Over a selected row the label
+   is 4.18:1 resting and 3.68:1 hovered; no such button sits there.) */
+.dark .sidebar-fills,
+[data-theme="dark"] .sidebar-fills {
+  --accent-soft-foreground: oklch(0.74 0.14 254);
+}
+
+/* HeroUI's `--separator`, the 1px line between the panes and along the content panel's edge, is
+   set a step further from the surfaces than HeroUI's own, whose dark value (L 0.25) is the dark
+   sidebar's own colour and vanishes there, and whose light one barely shows against `--chrome`.
+   This is a quiet line on every surface it divides: 1.29 / 1.22 / 1.10 against `--panel`,
+   `--panel-sidebar` and `--chrome` in light, 1.35 / 1.23 / 1.56 in dark, lighter than the dark
+   surfaces rather than darker so it reads as an edge. Not a control's boundary, so it is not held
+   to 3:1. The light selector excludes the dark theme rather than relying on order (see `--muted`
+   below). */
+:root:not(.dark):not([data-theme="dark"]) {
+  --separator: oklch(0.9 0.004 286);
+}
+
+.dark,
+[data-theme="dark"] {
+  --separator: oklch(0.33 0.006 286);
+}
+
+/* HeroUI's accent (L 0.6204) puts its own white label at 3.59:1 on every primary button; a step
+   darker clears 4.5:1 (4.56) and is shared by both themes, as HeroUI's is. As a glyph or a line on a
+   dark surface that is too dark for 3:1 on a selected row (2.56:1), so what is drawn in the accent
+   there takes `--accent-glyph` instead (below): a status glyph, the focus ring, a selected card's
+   border. */
+:root {
+  --accent: oklch(0.56 0.195 253.83);
+}
+
+/* HeroUI's danger is both a fill under a label and the colour of error text (`FieldError`, an
+   invalid field's label, a destructive menu item), and its stock values fail both: light 3.48:1
+   for the white label on it and 3.57:1 as text on white, dark 4.35:1 and 3.97:1 on `--overlay`.
+   Light takes one a step darker, which clears both (4.71 / 4.83). Dark takes a lighter one for
+   the text (5.63:1 on `--overlay`, 5.24:1 on `--panel`) and labels its fills in the dark
+   foreground (5.63:1 on the fill), as HeroUI's own `--warning` does (9.99:1). */
+:root:not(.dark):not([data-theme="dark"]) {
+  --danger: oklch(0.577 0.215 27);
+}
+
+.dark,
+[data-theme="dark"] {
+  --danger: oklch(0.68 0.19 24);
+  --danger-foreground: var(--eclipse);
+}
+
+/* The colours of the status glyphs (`StatusIcon.tsx`: a waiting session's hand, a working one's
+   dot; and the rail's waiting count and connection trouble), which carry meaning and so need 3:1 on
+   every surface they sit on: the panel, the sidebar, a selected row, the chrome, and on the chrome's
+   real material with its hover and pressed tints (light #e2e4e5 and its darker variant #d0d2d3, dark
+   #484a4b). HeroUI's light `--warning` is a fill colour (1.65:1 on `--chrome`, 2.04:1 on white), so
+   light takes a deeper amber for the glyph: 4.87:1 on a selected sidebar row, its floor among the
+   content surfaces, 4.94:1 on the light material, 4.33:1 hovered and 3.78:1 pressed, and 4.15 /
+   3.65 / 3.19 on the darker variant; `--warning` itself stays the fill of the banner and the
+   badges, under its dark label. Dark keeps HeroUI's own (5.03:1 on the dark material, 4.00:1
+   hovered, 3.29:1 pressed). HeroUI's `--danger` is too dark as a glyph on the dark material, 2.83:1
+   (3.18:1 in light, which the glyph keeps), so dark takes a lighter red for it: 3.33:1 there; the
+   connection indicator it colours has no hover fill. The accent glyph is `--accent` in light (3.62
+   on a selected sidebar row) and a lighter blue in dark, where `--accent` is 2.56:1 on a selected
+   sidebar row (this one 4.48 there, its floor). Idle's speech bubble keeps HeroUI's `--success`,
+   below 3:1 (see `StatusIcon.tsx`). */
+:root {
+  --warning-glyph: oklch(0.5 0.15 55);
+  --danger-glyph: var(--danger);
+  --accent-glyph: var(--accent);
+}
+
+.dark,
+[data-theme="dark"] {
+  --warning-glyph: var(--warning);
+  --danger-glyph: oklch(0.72 0.17 24);
+  --accent-glyph: oklch(0.7 0.15 254);
+  --focus: var(--accent-glyph);
+}
+
+/* A console's default avatar (`ConsoleAvatar.tsx`): the network glyph in
+   `--avatar-foreground` on one of these, picked from the name. Muted fills on hues spread around
+   the wheel and kept off the status colours' own, so an avatar never reads as a status. In light
+   the glyph is white on a dark fill (between 5.18:1 on teal and 5.91:1 on olive); the fills stand
+   off the light material by 3.41:1 to 4.80:1 and off the current console's tile by at least
+   2.17:1. The dark material is itself light grey, and a dark fill could not stand off it (1.51:1
+   to 1.72:1) or off the current console's tile, so in dark the fills are pale and the glyph is the
+   dark foreground (7.88:1 to 8.59:1). The fills then stand off the material by 3.96:1 to 4.32:1
+   and off the tile by at least 2.15:1, with the same hues apart from each other. */
+:root {
+  --avatar-foreground: var(--white);
+  --avatar-olive: oklch(0.5 0.1 110);
+  --avatar-teal: oklch(0.52 0.1 180);
+  --avatar-azure: oklch(0.52 0.11 230);
+  --avatar-indigo: oklch(0.52 0.13 278);
+  --avatar-plum: oklch(0.52 0.13 325);
+  --avatar-copper: oklch(0.52 0.1 45);
+  --avatar-slate: oklch(0.52 0.03 260);
+}
+
+.dark,
+[data-theme="dark"] {
+  --avatar-foreground: var(--eclipse);
+  --avatar-olive: oklch(0.76 0.1 110);
+  --avatar-teal: oklch(0.76 0.09 180);
+  --avatar-azure: oklch(0.76 0.1 230);
+  --avatar-indigo: oklch(0.76 0.11 278);
+  --avatar-plum: oklch(0.76 0.11 325);
+  --avatar-copper: oklch(0.76 0.1 45);
+  --avatar-slate: oklch(0.76 0.03 260);
+}
+
+@theme inline {
+  --color-chrome-muted: var(--chrome-muted);
+  --color-panel: var(--panel);
+  --color-panel-sidebar: var(--panel-sidebar);
+  --color-panel-hover: var(--panel-hover);
+  --color-panel-selected: var(--panel-selected);
+  --color-warning-glyph: var(--warning-glyph);
+  --color-danger-glyph: var(--danger-glyph);
+  --color-accent-glyph: var(--accent-glyph);
+  --color-avatar-foreground: var(--avatar-foreground);
+}
+
+/* What the window itself is painted with, behind the top bar and the rail: `--chrome` in a browser;
+   clear in the macOS app, whose window is translucent behind the page (a native sidebar material,
+   applied by the shell in `open_main_window`, `apps/desktop/src-tauri/src/lib.rs`), which
+   `main.tsx` marks on the page. The material then shows through wherever the page paints nothing,
+   and everything else the page draws stays opaque. */
+:root {
+  --window-background: var(--chrome);
+}
+
+:root[data-window-material="translucent"] {
+  --window-background: transparent;
 }
 
 /* The same palette, dark variant: lighter than the light theme's so each still shows up against
-   the near-black `--background` dark resolves to, the way HeroUI's own `--warning` and `--danger`
-   are each given their own brighter dark-theme value rather than reusing the light one. Measured
-   against dark's `--background` (L 0.12) and `--default` (L 0.274), the same two surfaces: every
-   entry is between 10.81 / 7.93 (azure, the lightest against both) and 9.21 / 6.76 (rose, the
-   darkest), so the whole palette clears the 3:1 bar with room to spare. */
+   the dark surfaces, the way HeroUI's own `--warning` and `--danger` are each given their own
+   brighter dark-theme value rather than reusing the light one. Measured against the dark
+   `--panel-sidebar` (L 0.27) and a selected row on it, the same two surfaces: every entry is
+   between 8.03 / 6.41 (azure, the lightest against both) and 6.84 / 5.46 (rose, the darkest), so
+   the whole palette clears the 3:1 bar with room to spare. */
 .dark,
 [data-theme="dark"] {
   --console-session-olive: oklch(0.78 0.14 98);
@@ -79,12 +299,18 @@
 }
 
 /* HeroUI's light `--muted` (L 0.5517) is secondary text everywhere, but it reaches 4.5:1 only on
-   white: 4.43:1 on `--background` and 4.05:1 on `--default`. A slightly darker one clears 4.5:1 on
-   all three (5.07, 4.63, 5.52). Dark's own value already does, so this is light-only; the selector
-   excludes the dark theme rather than relying on order, since this sheet's unlayered `:root` would
-   otherwise beat HeroUI's layered dark rule. */
+   white: 4.43:1 on `--background`, 4.05:1 on `--default` and 3.93:1 on `--chrome`, where the
+   breadcrumb's parents sit. A darker one clears 4.5:1 on all of them and on a selected sidebar row
+   (6.02 on white, 5.52 on `--background`, 5.05 on HeroUI's `--default`, 4.89 on `--chrome`, 4.65
+   on a selected row). Dark's own value already does, so this is light-only; the selector excludes
+   the dark theme rather than relying on order, since this sheet's unlayered `:root` would otherwise
+   beat HeroUI's layered dark rule.
+
+   Muted text sits on none of the sidebar's translucent fills (`.sidebar-fills`) in either theme:
+   in light it is 4.55:1 on a fill resting and 4.14:1 hovered, in dark 4.63:1 resting, 4.06:1
+   hovered and 3.67:1 on a fill over a selected row. */
 :root:not(.dark):not([data-theme="dark"]) {
-  --muted: oklch(0.52 0.0138 285.94);
+  --muted: oklch(0.5 0.0138 285.94);
 }
 
 /* The window is an application shell, not a document: the root is exactly the viewport and never
@@ -112,7 +338,7 @@ body {
 
 body {
   margin: 0;
-  background: var(--background);
+  background: var(--window-background);
   color: var(--foreground);
 }
 
@@ -150,12 +376,25 @@ html.pane-resizing * {
   }
 }
 
+/* The syncing git badge's arrow (`GitBadge.tsx`): a small nudge down and back. Moves rather than
+   fades, so the glyph keeps its full contrast; applied through `motion-safe:` only. */
+@keyframes sync-nudge {
+  0%,
+  100% {
+    transform: translateY(-1px);
+  }
+  50% {
+    transform: translateY(1px);
+  }
+}
+
 @theme {
-  /* A spinning glyph showing work in progress (`ConnectionBanner.tsx`, `TitleBar.tsx`,
+  /* A spinning glyph showing work in progress (`ConnectionBanner.tsx`, `Rail.tsx`,
      `GitBadge.tsx`): the stock spin, slower. Defined as a whole animation because `animate-spin`
      is a shorthand that resets any duration set beside it. */
   --animate-spin-slow: spin 2s linear infinite;
   --animate-status-wave: status-wave 2.4s ease-in-out infinite;
+  --animate-sync-nudge: sync-nudge 1s ease-in-out infinite;
 }
 
 /* The sidebar's view changes (`Sidebar.tsx`, played with the Web Animations API so the view is

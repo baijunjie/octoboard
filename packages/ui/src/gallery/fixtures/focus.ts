@@ -52,6 +52,41 @@ const cjkProject = projectOf("p-cjk", console_.id, "搜索接口服务");
 
 const state = snapshotState({ consoles: [console_], projects: [project, other, third], sessions, settings });
 
+// A fourth console session with nothing going on, and one of the others waiting through a session
+// bound to it, so the switch strip shows both activities and a chip without one. The strip lists
+// console sessions by when they started, so these start in the order they are named.
+const hub4 = sessionOf("s-console-4", console_.id, undefined, "Release notes", "idle", { colour: "violet", started_at: minutesAgo(100) });
+const stripState = snapshotState({
+  consoles: [console_],
+  projects: [project, other, third],
+  sessions: [
+    { ...hub1, started_at: minutesAgo(400) },
+    { ...hub2, started_at: minutesAgo(300) },
+    { ...hub3, started_at: minutesAgo(200) },
+    hub4,
+    sessionOf("t-1", console_.id, project.id, "Fix the rounding of partial results", "waiting_user", { bound_to: hub1.id }),
+    sessionOf("t-2", console_.id, project.id, "Add idempotency keys", "idle", { bound_to: hub3.id }),
+    sessionOf("t-3", console_.id, other.id, "Refresh the landing page", "working", { bound_to: hub3.id }),
+    sessionOf("t-4", console_.id, other.id, "Check the dark theme", "working", { bound_to: hub1.id }),
+    sessionOf("t-5", console_.id, third.id, "Proofread the guide", "idle", { bound_to: hub4.id }),
+    sessionOf("t-6", console_.id, third.id, "An archived console session's session", "archived", { bound_to: hub4.id, ended_at: minutesAgo(60) }),
+    sessionOf("s-console-old", console_.id, undefined, "Archived console session", "archived", { colour: "azure", ended_at: minutesAgo(60 * 24) }),
+  ],
+  settings,
+});
+
+// Many console sessions, some with long and CJK titles, so the strip has to scroll; started in the
+// order they are listed here, which is the strip's order.
+const crowd = [
+  sessionOf("o-1", console_.id, undefined, "Website redesign", "working", { colour: "teal" }),
+  sessionOf("o-2", console_.id, undefined, "A console session titled at a length no chip fits", "idle", { colour: "azure" }),
+  sessionOf("o-3", console_.id, undefined, "负责网站改版的编排会话", "waiting_user", { colour: "olive" }),
+  sessionOf("o-4", console_.id, undefined, "Release notes", "idle", { colour: "rose" }),
+  sessionOf("o-5", console_.id, undefined, "Billing migration", "idle", { colour: "violet" }),
+  sessionOf("o-6", console_.id, undefined, "Docs", "idle", { colour: "jade" }),
+  sessionOf("o-7", console_.id, undefined, "Search tuning", "working", { colour: "teal" }),
+].map((s, i) => ({ ...s, started_at: minutesAgo(700 - i * 10) }));
+
 export const focusScenarios: Scenario[] = [
   {
     id: "focus-project",
@@ -86,6 +121,29 @@ export const focusScenarios: Scenario[] = [
     steps: [(ui) => ui.press(ui.session("Add idempotency keys"))],
   },
   {
+    id: "focus-console-session-strip",
+    group: GROUP,
+    title: "Focus mode on a console session, with the switch strip",
+    description:
+      "Under the header, one chip per console session of the console that is not archived, in the order " +
+      "they started: Hub is waiting through a bound session, Hub 2 and Hub 3 (in focus, outlined) are working, " +
+      "Release notes has nothing going on, so shows nothing. Pressing a chip enters that console session's focus mode and selects it; with " +
+      "`chrome=1` in the URL, ⌃Tab and ⌃⇧Tab do the same going round.",
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub3.id}` },
+    state: stripState,
+    steps: [(ui) => ui.press(ui.session("Add idempotency keys"))],
+  },
+  {
+    id: "focus-console-session-strip-overflow",
+    group: GROUP,
+    title: "The switch strip with more console sessions than fit",
+    description:
+      "One row that scrolls sideways under an edge fade, with no scrollbar; the current chip, the sixth (Docs), is " +
+      "scrolled into view. A title too long for its chip fades out and is the chip's tooltip.",
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${crowd[5].id}` },
+    state: snapshotState({ consoles: [console_], projects: [project], sessions: crowd, settings }),
+  },
+  {
     id: "focus-console-session-new-session",
     group: GROUP,
     title: "New session from a console session's focus mode",
@@ -98,6 +156,7 @@ export const focusScenarios: Scenario[] = [
     id: "focus-console-session-empty",
     group: GROUP,
     title: "Focus mode on a console session with nothing bound",
+    description: "It is the console's only console session, so there is no switch strip.",
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub2.id}` },
     state: snapshotState({ consoles: [console_], projects: [project], sessions: [hub2], settings }),
   },

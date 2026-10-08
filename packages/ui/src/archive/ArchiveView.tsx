@@ -102,7 +102,7 @@ export function ArchiveView({
       tabIndex={-1}
       data-region="archive"
       aria-label={heading}
-      className="absolute inset-0 z-10 flex flex-col bg-surface outline-none"
+      className="absolute inset-0 z-10 flex flex-col bg-panel outline-none"
       onKeyDown={(e) => {
         if (e.key === "Escape" && !e.defaultPrevented) {
           e.preventDefault();
@@ -141,7 +141,7 @@ export function ArchiveView({
               <li
                 key={session.id}
                 data-marquee-scope
-                className="group flex min-h-12 items-center gap-3 rounded-lg px-2 transition-colors hover:bg-default"
+                className="group flex min-h-12 items-center gap-3 rounded-lg px-2 transition-colors hover:bg-panel-hover"
               >
                 <AgentIcon agent={session.agent} />
                 <div className="min-w-0 flex-1">

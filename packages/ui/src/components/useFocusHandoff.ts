@@ -7,7 +7,8 @@ import { useEffect, useRef } from "react";
  * window (the browser's own prompt taking focus) leaves the element the active element and keeps it
  * remembered. Focus moved by script while the window is unfocused fires nothing either, so the
  * hand-off also needs focus to have actually fallen to `<body>`. It then goes to the terminal, or
- * to the top bar's first control when there is no terminal to take it.
+ * to the top bar's first enabled button when there is no terminal to take it (not a disabled one,
+ * as Back often is, which cannot hold focus).
  *
  * The caller must stay mounted while the control goes away (render `null`, not unmount): the check
  * runs in the caller's own effect.
@@ -26,7 +27,7 @@ export function useFocusHandoff(focusTerminal: () => void): {
     if (document.activeElement !== document.body) return;
     focusTerminal();
     if (document.activeElement === document.body) {
-      document.querySelector<HTMLElement>("[data-region=topbar] button")?.focus();
+      document.querySelector<HTMLElement>("[data-region=topbar] button:not([disabled])")?.focus();
     }
   });
   return {

@@ -1,6 +1,7 @@
 import { Button } from "@heroui/react";
 import React, { useState } from "react";
 
+import { ContentPanel } from "./components/ContentPanel";
 import { BareTitleBar } from "./components/TitleBar";
 import { Message, useT } from "./i18n/react";
 import { useAppExit } from "./lifecycle/useAppExit";
@@ -29,20 +30,22 @@ export function StartupScreen({ message, action }: StartupScreenProps): React.Re
   return (
     <div className="flex h-full flex-col">
       <BareTitleBar />
-      {/* The window never scrolls (`style.css`), so content taller than it scrolls here, under the
-          title bar; `m-auto` centres it while it fits, where `justify-center` would clip its top. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <div className="m-auto flex flex-col items-center gap-4 p-8 text-center">
-          <div className="max-w-xl">{message}</div>
-          <div className="flex gap-2">
-            {action && <Button onPress={action.onSelect}>{action.label}</Button>}
-            {canQuit && <Button onPress={() => void requestQuit()}>{t("common.quit")}</Button>}
+      <ContentPanel bare>
+        {/* The window never scrolls (`style.css`), so content taller than it scrolls here, under the
+            title bar; `m-auto` centres it while it fits, where `justify-center` would clip its top. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <div className="m-auto flex flex-col items-center gap-4 p-8 text-center">
+            <div className="max-w-xl">{message}</div>
+            <div className="flex gap-2">
+              {action && <Button onPress={action.onSelect}>{action.label}</Button>}
+              {canQuit && <Button onPress={() => void requestQuit()}>{t("common.quit")}</Button>}
+            </div>
+            {/* Quitting is the only action this screen has, so a quit that fails silently would leave
+                the user with nothing at all. */}
+            {quitError && <p className="text-danger">{quitError}</p>}
           </div>
-          {/* Quitting is the only action this screen has, so a quit that fails silently would leave
-              the user with nothing at all. */}
-          {quitError && <p className="text-danger">{quitError}</p>}
         </div>
-      </div>
+      </ContentPanel>
     </div>
   );
 }

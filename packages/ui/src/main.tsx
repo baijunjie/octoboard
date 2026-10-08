@@ -22,6 +22,12 @@ const root = ReactDOM.createRoot(rootEl);
 const platform = selectPlatform();
 suppressNativeContextMenu(platform);
 
+// Where the shell puts a translucent material behind a transparent webview (the macOS application,
+// `open_main_window` in `apps/desktop/src-tauri/src/lib.rs`), the page leaves the window chrome's
+// background clear and paints the content panel opaquely (`style.css`, `ContentPanel`). A browser
+// has no material, and keeps an opaque chrome colour.
+if (platform.translucentWindow) document.documentElement.dataset.windowMaterial = "translucent";
+
 // The native window is created hidden (`open_main_window` in
 // `apps/desktop/src-tauri/src/lib.rs`), so that AppKit never gets to paint it in the OS's own
 // appearance before this page has painted anything themed — nothing CSS can reach fixes a flash

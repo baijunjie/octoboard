@@ -9,7 +9,7 @@ import { SCENARIOS } from "./fixtures";
 
 const WIDTHS = [
   { label: "Wide", width: 1440 },
-  { label: "Docked", width: 1100 },
+  { label: "Docked", width: 1148 },
   { label: "Narrow", width: 800 },
   { label: "Phone", width: 420 },
 ];

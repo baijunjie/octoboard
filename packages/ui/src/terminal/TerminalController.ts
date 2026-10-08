@@ -150,6 +150,13 @@ export class TerminalController {
       // CJK status text, and the default `courier-new` xterm.js falls back to has neither.
       fontFamily: '"SF Mono", Menlo, Consolas, "Noto Sans Mono CJK SC", "PingFang SC", monospace',
       theme: XTERM_THEMES[initialColorTheme],
+      // The colours on screen are the agent's own, picked for whichever background its own theme
+      // setting assumes, so on the other one some of them all but vanish (a dark theme's pale
+      // greys and blues on the light terminal). xterm.js lightens or darkens a foreground under
+      // this ratio against its cell's background as far as it can towards it: the WCAG text bar.
+      // Faint text is held to half of it, and box-drawing, block-element and most powerline glyphs
+      // are left as they are.
+      minimumContrastRatio: 4.5,
       // An Option+click sends cursor-move arrow keys marked as the user's input, which would
       // reopen a dormant session; it is only on from `attach` until `detach`.
       altClickMovesCursor: false,

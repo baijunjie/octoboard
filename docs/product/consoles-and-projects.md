@@ -15,7 +15,7 @@ A console carries:
 | Console session agent | the user | The agent the console's console sessions run. |
 | Default agent | the user | The fallback agent for sessions opened under this console's projects. |
 | Agent accounts | the user, optional | One per agent: the account that agent's sessions in this console run under, the agent's default account when none is picked; see "Agent config directories" below. |
-| Avatar | the user, optional | A custom image shown in place of the default glyph, in a circle; see "Avatar" below. |
+| Avatar | the user, optional | A custom image shown in place of the default avatar, in a circle; see "Avatar" below. |
 | Working directory | Octoboard | `~/.octoboard/consoles/<console id>/`, created when the console is created. Not settable and not changeable. |
 
 Both agent fields take one of the three supported agents (Claude Code, Codex, Grok Build) and default to Claude Code in
@@ -31,9 +31,13 @@ Multiple consoles can exist side by side and are independent of each other.
 
 ### Avatar
 
-A console is drawn as a round avatar in the sidebar's switcher and in its list of consoles. Without a
-custom image it is the default glyph on the accent colour. The console dialog's **Avatar** field shows the current
-avatar, with **Choose image** to pick an image file from disk and **Remove image** to go back to the default. A chosen
+A console is drawn as a round avatar on the rail (see "The console switcher" in `docs/product/sidebar.md`). Without a
+custom image it is a network glyph on a coloured fill, one of seven, picked from the console's name: the same name
+always gets the same fill, two different names can still share one, and renaming a console can change its fill.
+Spaces and invisible characters around the name, and whether accented letters were typed precomposed or combined, do
+not change it. Each fill has its own light and dark value (see "What follows the choice" in
+`docs/product/appearance.md`). The console dialog's **Avatar** field shows the current avatar, following the name as it
+is typed, with **Choose image** to pick an image file from disk and **Remove image** to go back to the default. A chosen
 image is cropped to its centred square and scaled to 128 x 128 pixels in the window before it is saved, so any
 size or shape of picture is accepted; a file that is not a readable image is refused in the dialog. As with the other
 fields, an avatar that was not touched is left as it is when the console is saved.

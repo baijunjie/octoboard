@@ -46,6 +46,16 @@ const { createFixtureDaemon } = await import("./fixtureDaemon");
 
 const { DaemonFailedMessage, NoAddressMessage, StartupScreen } = startup;
 
+/** The browser platform, with the desktop window's `windowChrome` added while the URL says `chrome=1`,
+ * so what the desktop app alone offers (the window shortcuts among it, ⌃Tab between console
+ * sessions) can be driven in the gallery. It also puts the top bar's drag region on, and nothing
+ * else native. */
+function galleryPlatform(): ReturnType<typeof selectPlatform> {
+  const platform = selectPlatform();
+  if (params.get("chrome") !== "1") return platform;
+  return { ...platform, windowChrome: { leftInset: () => 0, subscribe: () => () => {} } };
+}
+
 function Crash(): never {
   throw new Error("Gallery: a component threw while rendering.");
 }
@@ -71,7 +81,7 @@ function screen(): React.ReactElement {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <PlatformProvider value={selectPlatform()}>
+    <PlatformProvider value={galleryPlatform()}>
       <LanguageProvider>
         <ErrorBoundary>
           <ThemeProvider>{screen()}</ThemeProvider>

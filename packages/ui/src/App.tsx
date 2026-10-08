@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 import { ArchiveView } from "./archive/ArchiveView";
 import { ConnectionBanner } from "./components/ConnectionBanner";
+import { ContentPanel } from "./components/ContentPanel";
 import { PaneResizeHandle } from "./components/PaneResizeHandle";
+import { Rail } from "./components/Rail";
 import { Scrim } from "./components/Scrim";
 import { BareTitleBar, TitleBar } from "./components/TitleBar";
 import { Toasts } from "./components/Toasts";
@@ -19,13 +22,18 @@ import { useAppExit } from "./lifecycle/useAppExit";
 import { useGitStatusSchedule } from "./lifecycle/useGitStatusSchedule";
 import { useStatusItemMenu } from "./lifecycle/useStatusItemMenu";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
+import { isLive, type Location } from "./navigation/history";
+import { useNavigationHistory } from "./navigation/useNavigationHistory";
 import { ALREADY_RUNNING_CODES, type Console, type Project, type Session } from "./protocol";
 import { ReportPanel } from "./report/ReportPanel";
 import { SettingsDialog } from "./settings/SettingsDialog";
 import { useSettingsDialog } from "./settings/useSettingsDialog";
+import { belongsToFocus, focusAfterSelect, focusFor, focusKey, KEY_SWITCH_SELECTION, resolveFocus, shortcutOutcome } from "./sidebar/focus";
 import { useFocusShortcut } from "./sidebar/focusShortcut";
+import { switchStrip } from "./sidebar/order";
 import { Sidebar } from "./sidebar/Sidebar";
-import { belongsToFocus, shortcutOutcome, useSidebarView } from "./sidebar/sidebarView";
+import { useSidebarView } from "./sidebar/sidebarView";
+import { useSwitchShortcut } from "./sidebar/switchShortcut";
 import type { ArchiveScope } from "./sidebar/types";
 import { useDaemon, useDaemonStore } from "./store";
 import { TerminalPane, type TerminalPaneHandle, type TerminalProblem } from "./terminal/TerminalPane";
@@ -77,10 +85,11 @@ export function App(): React.ReactElement {
   const panes = usePaneToggles({ hasReportPanel, focusTerminal });
 
   // A region off screen is skipped by F6: a hidden docked pane, a closed drawer, and a floating pane
-  // too, which is only a hover away rather than shown. The top bar is always there.
+  // too, which is only a hover away rather than shown. The top bar and the rail are always there.
   const regionCycle = useRegionCycle({
     shown: {
       topbar: true,
+      rail: true,
       sidebar: panes.sidebarShown,
       archive: archiveOpen,
       terminal: selectedSession !== undefined && !archiveOpen,
@@ -228,20 +237,21 @@ export function App(): React.ReactElement {
     if (consolesBeforeNew.current) setTimeout(() => (consolesBeforeNew.current = undefined), 2000);
   };
 
-  const selectSession = (session: Session) => {
+  const selectSession = (session: Session, { enterFocus = false, resume = true } = {}) => {
     setSelectedSessionId(session.id);
     // Whatever led here — the sidebar, the archive, the waiting-count button — the sidebar follows
     // the session: its console is the one shown, and focus mode on something the session does not
-    // belong to is left.
+    // belong to is left, unless `enterFocus` asks for the focus mode of this console session itself.
     sidebarView.selectConsole(session.console_id);
-    if (sidebarView.focus && !belongsToFocus(sidebarView.focus, session, sessions)) sidebarView.setFocus(undefined);
+    const nextFocus = focusAfterSelect(sidebarView.focus, session, enterFocus, sessions);
+    if (nextFocus !== sidebarView.focus) sidebarView.setFocus(nextFocus);
     if (archiveOpen) {
       setArchiveScope(undefined);
       focusTerminal();
     }
-    // An interrupted session is resumed by selecting it; an archived one only shows, and is
-    // reopened by typing to it (`TerminalPane`) or an explicit Reopen (`reopenSession`).
-    if (session.status === "interrupted") void resumeSession(session.id);
+    // An interrupted session is resumed by selecting it, unless `resume` is off; an archived one only
+    // shows, and is reopened by typing to it (`TerminalPane`) or an explicit Reopen (`reopenSession`).
+    if (resume && session.status === "interrupted") void resumeSession(session.id);
   };
 
   const reopenSession = (session: Session) => {
@@ -257,8 +267,8 @@ export function App(): React.ReactElement {
   };
 
   // The selected session can stop belonging to the focus mode without being selected again: an
-  // archived session of a project, reopened from the archive view, becomes live and bound, and is
-  // then not listed there.
+  // archived session of a project, reopened from the archive view, becomes live and bound to a
+  // console session, and is then not listed there.
   useEffect(() => {
     if (sidebarView.focus && selectedSession && !belongsToFocus(sidebarView.focus, selectedSession, sessions)) {
       sidebarView.setFocus(undefined);
@@ -273,10 +283,56 @@ export function App(): React.ReactElement {
     sidebarView.setFocus(outcome.focus);
   });
 
+  // The console sessions a console session's focus mode offers to switch between (its switch strip),
+  // for ⌃Tab.
+  const switchableConsoleSessions = useMemo(
+    () => (sidebarView.currentConsole ? switchStrip(sessionList, sidebarView.currentConsole.id).map((e) => e.consoleSession) : []),
+    [sessionList, sidebarView.currentConsole?.id],
+  );
+  // Pressing a chip is a selection like pressing the session's row, which also enters its focus mode.
+  const switchConsoleSession = (session: Session) => selectSession(session, { enterFocus: true });
+  // ⌃Tab only shows the console session, without resuming an interrupted one (`KEY_SWITCH_SELECTION`),
+  // and hands keyboard focus to its terminal, as selecting a session does. The switch is applied in
+  // one render first, so the terminal is already showing the new session when it takes focus: taken
+  // any earlier, the focus-in report xterm sends would reach the session being left.
+  const switchConsoleSessionByKey = (session: Session) => {
+    flushSync(() => selectSession(session, KEY_SWITCH_SELECTION));
+    focusTerminal();
+  };
+  const moveConsoleSession = useSwitchShortcut({
+    focus: sidebarView.focus,
+    strip: switchableConsoleSessions,
+    shown: panes.sidebarShown,
+    onSwitch: switchConsoleSessionByKey,
+  });
+
   const closeArchive = () => {
     setArchiveScope(undefined);
     focusTerminal();
   };
+
+  // What the content area shows, for Back and Forward. A session that is gone counts as none selected.
+  const location: Location = {
+    console: sidebarView.currentConsole?.id,
+    session: selectedSession?.id,
+    focus: sidebarView.focus && focusKey(sidebarView.focus),
+    archive: archiveOpen ? archiveScope : undefined,
+  };
+  const navigation = useNavigationHistory({
+    location,
+    ready: hosts !== undefined,
+    isLive: (target) => isLive(target, { consoles, projects, sessions }),
+    // Sets the state straight, not through `selectSession`: going back to an interrupted session
+    // must not resume it. A focus mode that does not show the session is left, as selecting does.
+    apply: (target) => {
+      if (target.console) sidebarView.selectConsole(target.console);
+      const session = target.session ? sessions.get(target.session) : undefined;
+      sidebarView.setFocus(focusFor(resolveFocus(target.focus, target.console, projects, sessions), session, sessions));
+      setSelectedSessionId(target.session);
+      setArchiveScope(target.archive);
+    },
+    focusTerminal,
+  });
 
   const setPinned = (target: { project: Project } | { session: Session }, pinned: boolean) => {
     const body =
@@ -303,9 +359,11 @@ export function App(): React.ReactElement {
       <div className="flex h-full flex-col">
         <BareTitleBar />
         <Toasts focusTerminal={focusTerminal} />
-        <div className="flex flex-1 items-center justify-center text-muted">
-          {connectionState === "closed" ? t("app.daemonNotAnswering") : t("app.connecting")}
-        </div>
+        <ContentPanel bare>
+          <div className="flex flex-1 items-center justify-center text-muted">
+            {connectionState === "closed" ? t("app.daemonNotAnswering") : t("app.connecting")}
+          </div>
+        </ContentPanel>
         {/* Mounted only while closed, unlike the main screen's always-mounted banner, so its focus
             hand-off does not run as it goes; nothing is lost, as this screen has no terminal and an
             empty bar to hand focus to. */}
@@ -320,13 +378,15 @@ export function App(): React.ReactElement {
     <div className="relative flex h-full flex-col">
       <Toasts focusTerminal={focusTerminal} />
       <TitleBar
-        onOpenSettings={openSettings}
         sidebarWidth={panes.sidebarDocked ? sidebarWidth.width : undefined}
         sidebarShown={panes.sidebarShown}
         onToggleSidebar={panes.toggleSidebar}
         onSidebarToggleEnter={() => panes.sidebarPeek.reveal()}
         onSidebarToggleLeave={panes.sidebarPeek.leave}
-        onNewConsole={() => openDialog({ kind: "new-console" })}
+        canGoBack={navigation.canGoBack}
+        canGoForward={navigation.canGoForward}
+        onBack={navigation.back}
+        onForward={navigation.forward}
         selectedSession={selectedSession}
         viewTrail={
           archiveOpen && archiveConsole
@@ -337,100 +397,111 @@ export function App(): React.ReactElement {
                 : [archiveConsole.name, t("archive.heading.consoleSessions")]
             : undefined
         }
-        terminalProblem={terminalProblem}
-        waitingCount={waitingSessions.length}
-        onNextWaiting={selectNextWaiting}
-        hasReportPanel={hasReportPanel}
-        reportShown={panes.reportShown}
-        onToggleReport={panes.toggleReport}
-        onReportToggleEnter={() => panes.reportPeek.reveal()}
-        onReportToggleLeave={panes.reportPeek.leave}
-        focusTerminal={focusTerminal}
       />
       <div className="flex min-h-0 flex-1">
-        {panes.sidebarOpen && <Scrim label={t("app.closeSessions")} onClose={panes.closeSidebar} />}
-        <Sidebar
+        <Rail
           consoles={consoleList}
-          projects={projectList}
           sessions={sessionList}
-          selectedSessionId={selectedSessionId}
-          currentConsole={sidebarView.currentConsole}
-          focus={sidebarView.focus}
-          onSelectSession={selectSession}
-          onOpenConsoleSession={openConsoleSession}
-          onOpenDialog={openDialog}
+          currentConsoleId={sidebarView.currentConsole?.id}
           onSelectConsole={sidebarView.selectConsole}
-          onFocus={sidebarView.setFocus}
-          onOpenArchive={openArchive}
-          onSetPinned={setPinned}
-          onOpenSettings={openSettingsAt}
-          open={panes.sidebarOpen}
-          peek={panes.sidebarDocked ? undefined : panes.sidebarPeek}
-          sidebarWidth={sidebarWidth}
+          onOpenDialog={openDialog}
+          waitingCount={waitingSessions.length}
+          onNextWaiting={selectNextWaiting}
+          terminalProblem={terminalProblem}
+          hasReportPanel={hasReportPanel}
+          reportShown={panes.reportShown}
+          onToggleReport={panes.toggleReport}
+          onReportToggleEnter={() => panes.reportPeek.reveal()}
+          onReportToggleLeave={panes.reportPeek.leave}
+          onOpenSettings={openSettings}
+          focusTerminal={focusTerminal}
         />
-        {panes.sidebarDocked && <PaneResizeHandle side="sidebar" paneWidth={sidebarWidth} />}
-        {/* Below the `docked` breakpoint the terminal is the row's only content and the floor
-            drops to 398px (see the terminal's wrapper below); `overflow-x-auto` is what makes a
-            viewport narrower than that scroll instead of clipping. */}
-        <main className="relative flex min-w-0 flex-1 overflow-x-auto docked:overflow-visible">
-          {/* Takes the terminal's place in the row, so the archive covers the terminal alone, not the
-              report panel beside it; the terminal fills it. Above the `docked` breakpoint the 520px
-              basis and floor are the report panel's counterpart: with a 0 basis free space stays
-              positive at any window wider than the panel's own basis, flexbox never leaves the grow
-              phase, and the panel's shrink factor is never consulted. 520px is about 53 columns
-              at ~9.2px/column off a real agent CLI (the terminal's padding eats the rest). Below the
-              breakpoint the sidebar and the report panel are overlays rather than row siblings
-              (`usePaneToggles`), so this is the row's only content and takes a much smaller floor:
-              398px is 40 columns at the same ~9.2px/column plus the same padding allowance, under
-              which the terminal stops being usable at all, so `overflow-x-auto` on `main` scrolls
-              rather than squeezing it further. */}
-          <div className="relative flex min-h-0 min-w-[398px] flex-[1_1_398px] docked:min-w-[520px] docked:flex-[1_1_520px]">
-            {archiveOpen && archiveConsole && (
-              <ArchiveView
-                key={`${archiveScope?.console}:${archiveProjectId ?? ""}:${archiveConsoleSessionId ?? ""}`}
-                console={archiveConsole}
-                project={archiveProject}
-                boundTo={archiveBoundTo}
-                sessions={
-                  archiveProject
-                    ? sessionList.filter((s) => s.project_id === archiveProject.id)
-                    : archiveBoundTo
-                      ? sessionList.filter((s) => s.console_id === archiveConsole.id)
-                      : sessionList.filter((s) => s.console_id === archiveConsole.id && s.role === "console")
-                }
-                accounts={accounts}
-                onReopen={reopenSession}
-                onOpenDialog={openDialog}
-                dialogOpen={dialogRequest !== undefined}
-                onClose={closeArchive}
+        <ContentPanel>
+          {panes.sidebarOpen && <Scrim label={t("app.closeSessions")} onClose={panes.closeSidebar} />}
+          <Sidebar
+            projects={projectList}
+            sessions={sessionList}
+            selectedSessionId={selectedSessionId}
+            currentConsole={sidebarView.currentConsole}
+            focus={sidebarView.focus}
+            onSelectSession={(session) => selectSession(session)}
+            onSwitchConsoleSession={switchConsoleSession}
+            onOpenConsoleSession={openConsoleSession}
+            onOpenDialog={openDialog}
+            onFocus={sidebarView.setFocus}
+            onOpenArchive={openArchive}
+            onSetPinned={setPinned}
+            onOpenSettings={openSettingsAt}
+            open={panes.sidebarOpen}
+            peek={panes.sidebarDocked ? undefined : panes.sidebarPeek}
+            sidebarWidth={sidebarWidth}
+          />
+          {panes.sidebarDocked && <PaneResizeHandle side="sidebar" paneWidth={sidebarWidth} />}
+          {/* Below the `docked` breakpoint the terminal is the row's only content and the floor
+              drops to 398px (see the terminal's wrapper below); `overflow-x-auto` is what makes a
+              viewport narrower than that scroll instead of clipping. */}
+          <main className="relative flex min-w-0 flex-1 overflow-x-auto docked:overflow-visible">
+            {/* Takes the terminal's place in the row, so the archive covers the terminal alone, not the
+                report panel beside it; the terminal fills it. Above the `docked` breakpoint the 520px
+                basis and floor are the report panel's counterpart: with a 0 basis free space stays
+                positive at any window wider than the panel's own basis, flexbox never leaves the grow
+                phase, and the panel's shrink factor is never consulted. 520px is about 53 columns
+                at ~9.2px/column off a real agent CLI (the terminal's padding eats the rest). Below the
+                breakpoint the sidebar and the report panel are overlays rather than row siblings
+                (`usePaneToggles`), so this is the row's only content and takes a much smaller floor:
+                398px is 40 columns at the same ~9.2px/column plus the same padding allowance, under
+                which the terminal stops being usable at all, so `overflow-x-auto` on `main` scrolls
+                rather than squeezing it further. */}
+            <div className="relative flex min-h-0 min-w-[398px] flex-[1_1_398px] docked:min-w-[520px] docked:flex-[1_1_520px]">
+              {archiveOpen && archiveConsole && (
+                <ArchiveView
+                  key={`${archiveScope?.console}:${archiveProjectId ?? ""}:${archiveConsoleSessionId ?? ""}`}
+                  console={archiveConsole}
+                  project={archiveProject}
+                  boundTo={archiveBoundTo}
+                  sessions={
+                    archiveProject
+                      ? sessionList.filter((s) => s.project_id === archiveProject.id)
+                      : archiveBoundTo
+                        ? sessionList.filter((s) => s.console_id === archiveConsole.id)
+                        : sessionList.filter((s) => s.console_id === archiveConsole.id && s.role === "console")
+                  }
+                  accounts={accounts}
+                  onReopen={reopenSession}
+                  onOpenDialog={openDialog}
+                  dialogOpen={dialogRequest !== undefined}
+                  onClose={closeArchive}
+                />
+              )}
+              <TerminalPane
+                ref={terminalRef}
+                session={selectedSession}
+                onResume={resumeSession}
+                resuming={selectedSessionId !== undefined && resumingIds.has(selectedSessionId)}
+                onProblemChange={setTerminalProblem}
+              />
+            </div>
+            {/* Only a console session has a report panel, and it is that console session's own.
+                Keyed on its id so switching console sessions mounts a fresh instance, which does
+                not carry one's position over to the other. */}
+            {/* The `selectedSession &&` is only for narrowing: `hasReportPanel` already implies it. */}
+            {hasReportPanel && selectedSession && (
+              <ReportPanel
+                key={selectedSession.id}
+                consoleSessionId={selectedSession.id}
+                open={panes.reportOpen}
+                reportWidth={reportWidth.width}
+                peek={panes.reportDocked ? undefined : panes.reportPeek}
+                onEscape={panes.dismissOverlays}
+                onCycleRegion={regionCycle.cycle}
+                onMoveHistory={navigation.moveByShortcut}
+                onMoveConsoleSession={moveConsoleSession}
               />
             )}
-            <TerminalPane
-              ref={terminalRef}
-              session={selectedSession}
-              onResume={resumeSession}
-              resuming={selectedSessionId !== undefined && resumingIds.has(selectedSessionId)}
-              onProblemChange={setTerminalProblem}
-            />
-          </div>
-          {/* Only a console session has a report panel, and it is that console session's own.
-              Keyed on its id so switching console sessions mounts a fresh instance, which does
-              not carry one's position over to the other. */}
-          {/* The `selectedSession &&` is only for narrowing: `hasReportPanel` already implies it. */}
-          {hasReportPanel && selectedSession && (
-            <ReportPanel
-              key={selectedSession.id}
-              consoleSessionId={selectedSession.id}
-              open={panes.reportOpen}
-              reportWidth={reportWidth.width}
-              peek={panes.reportDocked ? undefined : panes.reportPeek}
-              onEscape={panes.dismissOverlays}
-              onCycleRegion={regionCycle.cycle}
-            />
-          )}
-        </main>
-        {hasReportPanel && panes.reportDocked && <PaneResizeHandle side="report" paneWidth={reportWidth} />}
-        {panes.reportOpen && <Scrim label={t("app.closeReport")} onClose={panes.closeReport} />}
+          </main>
+          {hasReportPanel && panes.reportDocked && <PaneResizeHandle side="report" paneWidth={reportWidth} />}
+          {panes.reportOpen && <Scrim label={t("app.closeReport")} onClose={panes.closeReport} />}
+        </ContentPanel>
       </div>
       <ConnectionBanner state={connectionState} onRetry={reconnect} focusTerminal={focusTerminal} />
       {settingsOpen && <SettingsDialog initialSection={settingsSection} onClose={closeSettings} />}

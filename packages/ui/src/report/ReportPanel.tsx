@@ -13,8 +13,10 @@ import { useDaemon, useDaemonStore } from "../store";
 import {
   composePageDocument,
   ESCAPE_MESSAGE_SOURCE,
+  HISTORY_MESSAGE_SOURCE,
   REGION_MESSAGE_SOURCE,
   SUBMIT_MESSAGE_SOURCE,
+  SWITCH_MESSAGE_SOURCE,
   submissionFromEntries,
 } from "./pageDocument";
 
@@ -38,13 +40,15 @@ export function ReportPanel({
   peek,
   onEscape,
   onCycleRegion,
+  onMoveHistory,
+  onMoveConsoleSession,
 }: {
   consoleSessionId: string;
   open: boolean;
   /** The user's chosen width (`usePaneWidth`) for the docked and the floating forms; the drawer
    * below the breakpoint ignores it. */
   reportWidth: number;
-  /** The hover reveal of the panel while the user has hidden the docked one from the top bar (which
+  /** The hover reveal of the panel while the user has hidden the docked one from the rail (which
    * has no effect below the breakpoint, where `open` decides): the same panel, kept as a fixed
    * overlay that floats in over the terminal, with its shadow and rounded edge. `undefined` while
    * the docked panel is shown. Hiding never unmounts the panel, for the same reason as `open`. */
@@ -55,6 +59,12 @@ export function ReportPanel({
   /** F6 (`backward` with Shift) was pressed inside the page's frame; the owner moves focus to the
    * neighbouring region of the window. */
   onCycleRegion: (backward: boolean) => void;
+  /** ⌘[ (`backward`) or ⌘] was pressed inside the page's frame; the owner moves through the
+   * navigation history, where the window has that shortcut. */
+  onMoveHistory: (backward: boolean) => void;
+  /** ⌃⇧Tab (`backward`) or ⌃Tab was pressed inside the page's frame; the owner moves to the
+   * neighbouring console session, where the window has that shortcut. */
+  onMoveConsoleSession: (backward: boolean) => void;
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
@@ -110,22 +120,22 @@ export function ReportPanel({
   // terminal never comes up there in the first place — `open` only ever slides it on and off
   // screen, never changes whether it is mounted.
   //
-  // `drawerClass` fits the drawer between `--top-chrome-height` and `--bottom-chrome-height`,
-  // leaving the top bar (and its report toggle) and the connection banner visible while it is open,
-  // and puts it back as a plain row sibling at or above the breakpoint — see that function's own
-  // comment for the geometry.
+  // `drawerClass` fits the drawer between `--top-chrome-height` and `--bottom-chrome-height`, leaving
+  // the window chrome (the top bar, and the rail with the report toggle) and the connection banner
+  // visible while it is open, and puts it back as a plain row sibling at or above the breakpoint —
+  // see that function's own comment for the geometry.
   //
   // The drawer below the breakpoint is a fixed 420px, capped at 92vw. The docked panel is
   // `flex: 0 1` at `--report-width`, the chosen width already held back to what the row affords;
   // the shrink and the 300px floor are only a safety net. With the docked panel hidden,
   // `drawerClass` instead keeps it the overlay at every width, floating in while `peek` is
   // active at `--report-width` (still capped at 92vw); `overflow-hidden` clips the iframe to the
-  // rounded edge, and the surface background keeps the empty states from showing the terminal
-  // through.
+  // rounded edge. In every form the panel is painted `--panel`, the content panel's own colour, so a
+  // drawer or a floating panel keeps the empty states from showing the terminal through.
   const overlay = peek
-    ? `docked:w-(--report-width) docked:rounded-s-xl docked:overflow-hidden docked:bg-surface ${drawerClass("end", "floating", open, peek.active)}`
+    ? `docked:w-(--report-width) docked:rounded-s-xl docked:overflow-hidden ${drawerClass("end", "floating", open, peek.active)}`
     : `docked:w-auto docked:max-w-none docked:min-w-[300px] docked:flex-[0_1_var(--report-width)] ${drawerClass("end", "drawer", open)}`;
-  const panelClass = `flex min-h-0 flex-col border-s border-separator w-[420px] max-w-[92vw] ${overlay}`;
+  const panelClass = `flex min-h-0 flex-col border-s border-separator bg-panel w-[420px] max-w-[92vw] ${overlay}`;
 
   // `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener closes a
   // drawer for, on every branch below since any of them can be what is on screen while open.
@@ -185,7 +195,7 @@ export function ReportPanel({
       <div {...pane} className={panelClass}>
         {/* A previous / next pager with "n / m", hand-assembled from buttons: HeroUI's `Pagination`
             is a list of numbered pages, which neither reads as nor behaves like this. */}
-        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-separator bg-surface px-3 text-xs text-muted">
+        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-separator px-3 text-xs text-muted">
           <TitledControl title={t("report.previous")}>
             <Button
               isIconOnly
@@ -233,6 +243,8 @@ export function ReportPanel({
           onSubmit={handleSubmit}
           onEscape={onEscape}
           onCycleRegion={onCycleRegion}
+          onMoveHistory={onMoveHistory}
+          onMoveConsoleSession={onMoveConsoleSession}
           onPointerEnter={peek?.keep}
           onPointerLeave={peek?.leave}
         />
@@ -260,6 +272,8 @@ function PageFrame({
   onSubmit,
   onEscape,
   onCycleRegion,
+  onMoveHistory,
+  onMoveConsoleSession,
   onPointerEnter,
   onPointerLeave,
 }: {
@@ -268,6 +282,8 @@ function PageFrame({
   onSubmit: (page: Page, data: unknown) => void;
   onEscape: () => void;
   onCycleRegion: (backward: boolean) => void;
+  onMoveHistory: (backward: boolean) => void;
+  onMoveConsoleSession: (backward: boolean) => void;
   onPointerEnter?: () => void;
   onPointerLeave?: () => void;
 }): React.ReactElement {
@@ -278,8 +294,13 @@ function PageFrame({
   // losing whatever the user has typed into the page.
   const [nonce] = useState(newNonce);
   const srcDoc = useMemo(
-    () => composePageDocument(page.html, isHistory, nonce, platform.kind === "tauri"),
-    [page.html, isHistory, nonce, platform.kind],
+    () =>
+      composePageDocument(page.html, isHistory, nonce, {
+        noContextMenu: platform.kind === "tauri",
+        relayHistoryKeys: platform.windowChrome !== undefined,
+        relaySwitchKeys: platform.windowChrome !== undefined,
+      }),
+    [page.html, isHistory, nonce, platform.kind, platform.windowChrome],
   );
 
   useEffect(() => {
@@ -300,6 +321,16 @@ function PageFrame({
         if (document.activeElement !== iframeRef.current) return;
         return onCycleRegion((data as { backward?: unknown }).backward === true);
       }
+      // Likewise only what the user's own ⌘[ or ⌘] would do, and only while focus is in the frame.
+      if (data.source === HISTORY_MESSAGE_SOURCE) {
+        if (document.activeElement !== iframeRef.current) return;
+        return onMoveHistory((data as { backward?: unknown }).backward === true);
+      }
+      // Likewise only what the user's own ⌃Tab would do, and only while focus is in the frame.
+      if (data.source === SWITCH_MESSAGE_SOURCE) {
+        if (document.activeElement !== iframeRef.current) return;
+        return onMoveConsoleSession((data as { backward?: unknown }).backward === true);
+      }
       // A history page's bridge already posts nothing, and the daemon refuses a `submit_page` for
       // one regardless (it is the enforcement point), but a forged message would surface that
       // refusal as an error toast for an action the user never took, so a history page's messages
@@ -310,7 +341,7 @@ function PageFrame({
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [page, isHistory, onSubmit, onEscape, onCycleRegion]);
+  }, [page, isHistory, onSubmit, onEscape, onCycleRegion, onMoveHistory, onMoveConsoleSession]);
 
   return (
     <iframe

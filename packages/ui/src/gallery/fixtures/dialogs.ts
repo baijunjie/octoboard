@@ -40,7 +40,7 @@ export const dialogScenarios: Scenario[] = [
     group: GROUP,
     title: "New console",
     state,
-    steps: [(ui) => ui.press(ui.t("titleBar.newConsole"))],
+    steps: [(ui) => ui.press(ui.t("rail.newConsole"))],
   },
   {
     id: "dialog-edit-console",

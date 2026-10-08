@@ -17,7 +17,7 @@ const LONG_PATH =
 const consoles = [
   consoleOf("c-1", "Work", { default_agent: "claude" }),
   consoleOf("c-2", "Personal", { default_agent: "codex" }),
-  consoleOf("c-3", "A console with a name that is far too long to fit the switcher header"),
+  consoleOf("c-3", "A console with a name that is far too long to fit the sidebar header"),
   consoleOf("c-4", "Experiments", { default_agent: "grok" }),
 ];
 

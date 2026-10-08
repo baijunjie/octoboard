@@ -17,15 +17,20 @@ import React from "react";
 export function TitledControl({
   title,
   children,
+  placement,
 }: {
   title: string | undefined;
   children: React.ReactElement;
+  /** Where the tooltip opens relative to the control; HeroUI's default is above it. `end` is the
+   * reading direction's, so a control on a vertical strip at the window's start edge opens it
+   * toward the content under either direction. */
+  placement?: "end";
 }): React.ReactElement {
   if (!title) return children;
   return (
     <Tooltip>
       {children}
-      <Tooltip.Content className="pointer-events-none">{title}</Tooltip.Content>
+      <Tooltip.Content placement={placement} className="pointer-events-none">{title}</Tooltip.Content>
     </Tooltip>
   );
 }

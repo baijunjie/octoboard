@@ -64,7 +64,7 @@ export function TreeRow({
       aria-expanded={expanded}
       data-selected={selected || undefined}
       data-marquee-scope
-      className={`group flex cursor-pointer rounded-lg text-sm outline-none select-none transition-colors hover:bg-default focus-visible:ring-2 focus-visible:ring-focus data-selected:bg-default ${className}`}
+      className={`group flex cursor-pointer rounded-lg text-sm outline-none select-none transition-colors hover:bg-panel-hover focus-visible:ring-2 focus-visible:ring-focus data-selected:bg-panel-selected ${className}`}
       onMouseDown={keepFocus}
       onClick={onActivate}
       onKeyDown={rowKeyHandler(onActivate)}

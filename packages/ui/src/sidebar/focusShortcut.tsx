@@ -1,36 +1,20 @@
 import { Kbd } from "@heroui/react";
-import React, { useEffect, useRef } from "react";
+import React from "react";
 
-import { MODAL_OPEN } from "../layout/useRegionCycle";
-
-const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+import { IS_MAC, useWindowShortcut } from "../useWindowShortcut";
 
 /** ⇧⌘F on macOS, Ctrl+Shift+F elsewhere: a combination the terminal's agents do not use, since
  * on macOS ⌘ never reaches a terminal application, and not one of the system's own. Matched on the
  * physical key so a keyboard layout or a held Shift does not change it. */
-function isFocusShortcut(event: KeyboardEvent): boolean {
-  if (event.code !== "KeyF" || !event.shiftKey || event.altKey) return false;
-  return IS_MAC ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+function matchFocusShortcut(event: KeyboardEvent): true | undefined {
+  if (event.code !== "KeyF" || !event.shiftKey || event.altKey) return undefined;
+  return (IS_MAC ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey) ? true : undefined;
 }
 
 /** Toggles focus mode from the keyboard: enters it for the project of the selected session, or
- * leaves it. Listened for on the window's capture phase so the key never reaches the terminal
- * (and through it the agent); ignored while a dialog or menu is open and during an input method
- * composition. */
+ * leaves it. */
 export function useFocusShortcut(toggle: () => void): void {
-  const latest = useRef(toggle);
-  latest.current = toggle;
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.isComposing || !isFocusShortcut(event)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      if (document.querySelector(MODAL_OPEN)) return;
-      latest.current();
-    };
-    window.addEventListener("keydown", onKeyDown, { capture: true });
-    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, []);
+  useWindowShortcut(matchFocusShortcut, () => toggle());
 }
 
 /** The shortcut as HeroUI shows one in a menu item. */

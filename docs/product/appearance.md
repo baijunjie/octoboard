@@ -14,13 +14,26 @@ Everything the window shows follows the chosen appearance, including:
 
 - **The terminal.** Each appearance has its own full palette — background, foreground, cursor, selection
   and all sixteen ANSI colours — so ordinary coloured agent output stays readable on a light background as
-  well as a dark one.
+  well as a dark one. On top of that, in either appearance the terminal enforces a **minimum contrast ratio of
+  4.5:1** between each character and the background of its own cell — the terminal's background, a background colour
+  the agent set for that cell, or the selection colour where the text is selected. A foreground colour that falls
+  under it, whether the default foreground, one of the sixteen ANSI colours, the 256-colour range or a true colour, is
+  shown lightened or darkened until it reaches the ratio, or as near to it as the colour can go where it cannot; colours
+  that already clear it are shown unchanged. Faint text is held to half the ratio, 2.25:1, so it stays distinct from
+  ordinary text. Box-drawing and block-element glyphs and most Powerline separator glyphs are exempt and keep the colour
+  they were given; the Powerline branch, line-number and lock symbols are adjusted like any other character. So
+  output from an agent whose own colour scheme assumes the other appearance (pale greys and blues meant for a dark
+  background, for instance) stays readable rather than all but vanishing.
 - **A console session's colour**, shown in its own sidebar row and as the binding badge on every project
   session bound to it (see "The binding badge" in `docs/product/sidebar.md`).
   Each colour in the fixed palette a console session is assigned from has its own light and dark value, so
   the badge clears the same contrast bar against the sidebar's background in either appearance.
-- **The top bar**, which in the macOS application stands in for the window's titlebar (see "The top bar" in
+- **The window chrome** — the top bar, which in the macOS application stands in for the window's titlebar, and the
+  rail. In the macOS application it is the system's translucent sidebar material, drawn in the chosen appearance; in a
+  browser it is an opaque colour of the appearance's own (see "The window chrome and the content panel" in
   `docs/product/window-layout.md`).
+- **A console's default avatar**, whose fills have their own light and dark values (see "Avatar" in
+  `docs/product/consoles-and-projects.md`).
 - **The native window's own appearance** in the macOS application — the window's close, minimise and zoom buttons
   and anything else the system draws for the window. Choosing System hands the window's appearance back to the
   operating system rather than pinning it to whatever System resolved to at that moment, so it keeps following a

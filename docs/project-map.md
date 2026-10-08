@@ -43,9 +43,10 @@ Per-package commands are in that package's doc.
   SQLite). Every client reaches it only through the WebSocket/HTTP protocol in
   [`apps/daemon/PROTOCOL.md`](../apps/daemon/PROTOCOL.md).
 - [`apps/desktop/`](../apps/desktop/README.md) — `@octoboard/desktop`, the Tauri 2 shell of the macOS desktop
-  application: window (with its overlay titlebar and remembered frame), native menu (labelled in the UI's language),
-  `octoboardd` sidecar, exit flow, background running behind a menu bar icon and release scripts. It loads the UI from
-  `packages/ui/` and has no UI of its own; a client of `apps/daemon/` over WebSocket only.
+  application: window (with its overlay titlebar, translucent native material and remembered frame), native menu
+  (labelled in the UI's language), `octoboardd` sidecar, exit flow, background running behind a menu bar icon and
+  release scripts. It loads the UI from `packages/ui/` and has no UI of its own; a client of `apps/daemon/` over
+  WebSocket only.
 - [`apps/ios/`](../apps/ios/README.md) — placeholder for the native iOS client; no content, not a workspace package.
 - [`apps/android/`](../apps/android/README.md) — placeholder for the native Android client; no content, not a
   workspace package.
@@ -55,9 +56,9 @@ Per-package commands are in that package's doc.
 ## Shared packages
 
 - [`packages/ui/`](../packages/ui/README.md) — `@octoboard/ui`, the HeroUI + React 19 UI of the desktop application: the
-  daemon client, store and platform adapter, the window-wide top bar, the sidebar (console switcher, projects and
-  sessions, the project and console session focus modes), the archive view, the xterm.js terminal pane, the pane-layout
-  state, the settings dialog, the other dialogs, the console session's report panel and the internationalization
-  (language choice and message catalogs), and a dev-only gallery of UI states over a fixture daemon (`src/gallery/`,
-  served by the dev server, not part of the build). Loaded by the `apps/desktop/` shell and also runs in a plain
-  browser.
+  daemon client, store and platform adapter, the window chrome (the top bar and the left rail with the console
+  switcher), the content panel with the sidebar (projects and sessions, the project and console session focus modes),
+  the archive view, the xterm.js terminal pane, the pane-layout state, Back/Forward navigation history, the settings
+  dialog, the other dialogs, the console session's report panel and the internationalization (language choice and
+  message catalogs), and a dev-only gallery of UI states over a fixture daemon (`src/gallery/`, served by the dev
+  server, not part of the build). Loaded by the `apps/desktop/` shell and also runs in a plain browser.

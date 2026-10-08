@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { createPersistedPreference } from "../persistedPreference";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
@@ -14,9 +14,25 @@ const PANES = {
   report: { key: PREFERENCE_KEYS.reportWidth, min: 300, default: 420, max: 720 },
 } satisfies Record<PaneSide, { key: string; min: number; default: number; max: number }>;
 
-/** The terminal pane's floor (the terminal's wrapper in `App.tsx`); the window's 1100px minimum is
- * this plus the sidebar's default and the report panel's minimum. */
+/** The terminal pane's floor (the terminal's wrapper in `App.tsx`); the window's 1148px minimum is
+ * this plus the rail, the sidebar's default and the report panel's minimum. */
 const TERMINAL_FLOOR = 520;
+
+/** Memoised once resolved: the rail's width cannot change at runtime. */
+let railWidthPxCache: number | undefined;
+
+/** The left rail's width, which the panes' row does not have, read back out of `--rail-width` in
+ * `style.css` rather than kept as a second literal here (as `breakpoint.ts` does for the
+ * breakpoint). Throws if the stylesheet has not loaded yet, rather than guessing a width the
+ * layout then disagrees with. Reached only from `usePaneWidth`'s state initialiser, never from the
+ * snapshot read that runs on every render, so that throw comes from a call site prepared for it. */
+function railWidthPx(): number {
+  if (railWidthPxCache !== undefined) return railWidthPxCache;
+  const raw = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--rail-width"));
+  if (!Number.isFinite(raw)) throw new Error("--rail-width is not set; is style.css loaded?");
+  railWidthPxCache = raw;
+  return raw;
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -64,20 +80,20 @@ export interface DockedPanes {
  * width first, down to its minimum. The sidebar therefore only ever assumes the report panel's
  * minimum (not its chosen width), and the report panel gets what is left after the sidebar's
  * rendered width. A pane that is not docked is not limited by the viewport (it overlays the
- * terminal). At 1100px with both docked: sidebar 280, terminal 520, report 300.
+ * terminal). At 1148px with both docked: rail 48, sidebar 280, terminal 520, report 300.
  */
-function maxWidthFor(side: PaneSide, docked: DockedPanes, chosenSidebar: number | undefined): number {
+function maxWidthFor(side: PaneSide, docked: DockedPanes, chosenSidebar: number | undefined, railWidth: number): number {
   const { min, max } = PANES[side];
   if (!docked[side]) return max;
   if (side === "sidebar") {
     const reportReserve = docked.report ? PANES.report.min : 0;
-    return clamp(viewportWidth - TERMINAL_FLOOR - reportReserve, min, max);
+    return clamp(viewportWidth - railWidth - TERMINAL_FLOOR - reportReserve, min, max);
   }
   const sidebar = PANES.sidebar;
   const sidebarWidth = docked.sidebar
-    ? clamp(chosenSidebar ?? sidebar.default, sidebar.min, maxWidthFor("sidebar", docked, chosenSidebar))
+    ? clamp(chosenSidebar ?? sidebar.default, sidebar.min, maxWidthFor("sidebar", docked, chosenSidebar, railWidth))
     : 0;
-  return clamp(viewportWidth - TERMINAL_FLOOR - sidebarWidth, min, max);
+  return clamp(viewportWidth - railWidth - TERMINAL_FLOOR - sidebarWidth, min, max);
 }
 
 export interface PaneWidth {
@@ -108,7 +124,8 @@ export function usePaneWidth(side: PaneSide, docked: DockedPanes): PaneWidth {
   const chosenSidebar = chosenWidths.sidebar.useValue();
   // Subscribing to the answer rather than to the viewport itself is what keeps a window resize
   // from re-rendering the caller while the answer is unchanged.
-  const max = useSyncExternalStore(subscribeToViewport, () => maxWidthFor(side, docked, chosenSidebar));
+  const [railWidth] = useState(railWidthPx);
+  const max = useSyncExternalStore(subscribeToViewport, () => maxWidthFor(side, docked, chosenSidebar, railWidth));
   const { min, default: defaultWidth } = PANES[side];
   const preference = chosenWidths[side];
   return {

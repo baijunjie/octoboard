@@ -3,6 +3,7 @@ import type { MessageKey, Translate } from "./i18n/catalog";
 import { joinPhrases } from "./i18n/joinPhrases";
 import type { Language } from "./i18n/languages";
 import type { Account, Console, Project, Session, SessionStatus } from "./protocol";
+import type { Activity } from "./sidebar/order";
 
 /** Where to tell the user a session is, since the daemon's `Session` record itself only carries
  * ids. A console session has no project, so it is named for its console instead. */
@@ -78,4 +79,20 @@ export function sessionAriaLabel(
     status: statusLabel(t, session.status),
   });
   return owner ? joinPhrases(language, [base, t("sidebar.session.boundTo", { name: owner.title })]) : base;
+}
+
+/** The message that names a console or a project together with what is going on beneath it, for its
+ * accessible name; `undefined` for one with nothing going on, whose own name says enough. A pinned
+ * project's variant says so too. */
+export function activityLabelKey(activity: Activity, pinned = false) {
+  switch (activity) {
+    case "waiting":
+      return pinned ? ("sidebar.activity.waitingPinned" as const) : ("sidebar.activity.waiting" as const);
+    case "working":
+      return pinned ? ("sidebar.activity.workingPinned" as const) : ("sidebar.activity.working" as const);
+    case "running":
+      return pinned ? ("sidebar.activity.runningPinned" as const) : ("sidebar.activity.running" as const);
+    default:
+      return undefined;
+  }
 }

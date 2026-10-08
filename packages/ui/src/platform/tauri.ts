@@ -20,6 +20,7 @@ export function tauriPlatform(): PlatformAdapter {
     badge: tauriBadge(),
     nativeWindow: tauriNativeWindow(),
     windowChrome: tauriWindowChrome(),
+    translucentWindow: onMac(),
     appMenu: tauriAppMenu(),
     statusItem: tauriStatusItem(),
   };
@@ -45,6 +46,12 @@ function unlistenTracker(): { track: (unlisten: () => void) => void; undo: () =>
   };
 }
 
+/** The shell hides the native titlebar and puts a translucent material behind the page on macOS
+ * alone (`open_main_window` in `apps/desktop/src-tauri/src/lib.rs`). */
+function onMac(): boolean {
+  return navigator.userAgent.includes("Mac");
+}
+
 /** What the traffic lights cover at the bar's leading edge: `TRAFFIC_LIGHT_X` in
  * `apps/desktop/src-tauri/src/lib.rs` plus three buttons and a gap. */
 const TRAFFIC_LIGHT_INSET = 80;
@@ -52,7 +59,7 @@ const TRAFFIC_LIGHT_INSET = 80;
 /** Present only on macOS, where `lib.rs` hides the native titlebar and floats the traffic lights
  * over the page; they leave the bar in fullscreen, and with them the inset. */
 function tauriWindowChrome(): WindowChromeCapability | undefined {
-  if (!navigator.userAgent.includes("Mac")) return undefined;
+  if (!onMac()) return undefined;
   let inset = TRAFFIC_LIGHT_INSET;
   const callbacks = new Set<() => void>();
   return {

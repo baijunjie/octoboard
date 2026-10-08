@@ -1,6 +1,6 @@
 import { Button, ScrollShadow } from "@heroui/react";
 import { Archive, ArrowLeft, FolderOpen, FolderPlus, List, MessageSquarePlus, Pin, Plus } from "lucide-react";
-import React, { useRef } from "react";
+import React, { useLayoutEffect, useRef } from "react";
 
 import { AGENT_LABEL } from "../agents";
 import { ActionMenu } from "../components/ActionMenu";
@@ -8,17 +8,17 @@ import { AgentAccountText } from "../components/AgentAccountText";
 import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
-import { StatusIcon } from "../components/StatusIcon";
+import { ActivityMarker, StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
-import { sessionAccountName, sessionAgentLabel, sessionAriaLabel, statusLabel } from "../sessionLabel";
+import { activityLabelKey, sessionAccountName, sessionAgentLabel, sessionAriaLabel, statusLabel } from "../sessionLabel";
 import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
 import { GitBadge } from "./GitBadge";
 import { projectMenu, sessionMenu } from "./menus";
-import { archivedSessions, boundArchivedSessions, boundElsewhere, focusGroups, liveSessions, sortProjects, notBoundToConsoleSession } from "./order";
+import { archivedSessions, boundArchivedSessions, boundElsewhere, focusGroups, liveSessions, notBoundToConsoleSession, sortProjects, switchStrip, type SwitchStripEntry } from "./order";
 import { RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
 import type { SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
@@ -77,11 +77,11 @@ function FocusTitle({ consoleName, title }: { consoleName: string; title: string
   );
 }
 
-/** A project's focus mode: the sidebar given over to one project, its unbound sessions as cards
- * and its recent archive below them ("Focus mode" in docs/product/sidebar.md). The sessions bound
- * to a console session are left out of the list and summed up by a sentence with a chip for each
- * console session, leading to its own focus mode; the archive, bound sessions included, is not
- * filtered. */
+/** A project's focus mode: the sidebar given over to one project, its sessions not bound to a
+ * console session as cards and its recent archive below them ("A project's focus mode" in
+ * docs/product/focus-mode.md). The sessions bound to a console session are left out of the list
+ * and summed up by a sentence with a chip for each console session, leading to its own focus mode;
+ * the archive, bound sessions included, is not filtered. */
 export function ProjectFocusView({
   handlers,
   console: parentConsole,
@@ -178,6 +178,7 @@ export function ConsoleSessionFocusView({
     handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project, binding: { kind: "bound", to: consoleSession } });
   const viewAll = () => handlers.onOpenArchive({ console: parentConsole.id, consoleSession: consoleSession.id });
   const newSessionLabel = t("sidebar.focus.newSession");
+  const strip = switchStrip(sessions, parentConsole.id);
   // The groups are ordered by how urgent their sessions are, which changes while the view is open.
   const groupsRef = useFlip<HTMLDivElement>();
   const headerRef = useRef<HTMLDivElement>(null);
@@ -220,6 +221,7 @@ export function ConsoleSessionFocusView({
           contextTargetRef={headerRef}
         />
       </FocusHeader>
+      {strip.length > 1 && <SwitchStrip handlers={handlers} entries={strip} currentId={consoleSession.id} />}
       <ScrollShadow size={24} className="min-h-0 flex-1 px-2 pb-2">
         <SectionHeading>{t("sidebar.focus.sessions", { count: liveCount })}</SectionHeading>
         {projects.length === 0 ? (
@@ -250,6 +252,76 @@ export function ConsoleSessionFocusView({
         <ArchivedList handlers={handlers} archived={archived} selectedSessionId={selectedSessionId} onViewAll={viewAll} />
       </ScrollShadow>
     </>
+  );
+}
+
+/** The console's console sessions, one chip each, the current one marked, to see what is going on in
+ * them and to move between them without leaving focus mode: a chip enters that console session's
+ * focus mode and selects it. Not drawn for a console with a single console session, since there is
+ * nothing to switch to. A row that does not fit scrolls sideways under an edge fade, with no
+ * scrollbar, and brings the current chip into view when the view opens or the chip moves. */
+function SwitchStrip({
+  handlers,
+  entries,
+  currentId,
+}: {
+  handlers: SidebarHandlers;
+  entries: SwitchStripEntry[];
+  currentId: string;
+}): React.ReactElement {
+  const t = useT();
+  const ref = useRef<HTMLDivElement>(null);
+  // Pinning or unpinning reorders the strip, which moves the current chip without changing it.
+  const currentIndex = entries.findIndex((entry) => entry.consoleSession.id === currentId);
+  // Scrolls the strip's own `scrollLeft`, so no ancestor scrolls with it. Moved by the distance
+  // between the chip's centre and the strip's, which holds in a right-to-left layout too, where
+  // `scrollLeft` is negative.
+  useLayoutEffect(() => {
+    const scroller = ref.current;
+    const chip = scroller?.querySelector<HTMLElement>("[data-switch-current]");
+    if (!scroller || !chip) return;
+    const from = scroller.getBoundingClientRect();
+    const box = chip.getBoundingClientRect();
+    scroller.scrollLeft += box.left + box.width / 2 - (from.left + from.width / 2);
+  }, [currentId, currentIndex]);
+  return (
+    <ScrollShadow
+      ref={ref}
+      orientation="horizontal"
+      hideScrollBar
+      size={24}
+      role="group"
+      aria-label={t("sidebar.focus.switchStrip")}
+      className="flex shrink-0 gap-1 px-2 py-2"
+    >
+      {entries.map(({ consoleSession, activity }) => {
+        const current = consoleSession.id === currentId;
+        const activityKey = activityLabelKey(activity);
+        return (
+          <Button
+            key={consoleSession.id}
+            size="sm"
+            variant="tertiary"
+            preventFocusOnPress
+            aria-label={activityKey ? t(activityKey, { name: consoleSession.title }) : consoleSession.title}
+            aria-current={current ? "true" : undefined}
+            data-switch-current={current || undefined}
+            onPress={() => handlers.onSwitchConsoleSession(consoleSession)}
+            // Pill-shaped, so a chip reads as a tag rather than as one of the sidebar's buttons. The
+            // current one is marked by the selected card's border alone, so it keeps the tertiary
+            // fill's hover and press feedback; the others have a transparent border so that nothing
+            // shifts when it changes.
+            className="h-7 min-h-0 min-w-0 max-w-48 shrink-0 gap-1.5 rounded-full border border-transparent px-2.5 text-xs font-medium data-switch-current:border-accent-glyph"
+          >
+            <BindingBadge owner={consoleSession} decorative />
+            <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={consoleSession.title}>
+              {consoleSession.title}
+            </FadeOverflow>
+            <ActivityMarker activity={activity} />
+          </Button>
+        );
+      })}
+    </ScrollShadow>
   );
 }
 
@@ -322,7 +394,8 @@ function BoundElsewhere({
             preventFocusOnPress
             aria-label={t("sidebar.focus.enterConsoleSession", { name: owner.title, count: bound })}
             onPress={() => handlers.onFocus({ consoleSession: owner })}
-            // Pill-shaped on purpose: a chip reads as a tag, not as one of the sidebar's buttons.
+            // Pill-shaped on purpose, on the sidebar's tinted tertiary fill (`.sidebar-fills`): a chip
+            // reads as a tag, not as one of the sidebar's buttons.
             className="h-6 min-h-0 min-w-0 max-w-full gap-1 rounded-full px-2 text-xs font-medium"
           >
             <BindingBadge owner={owner} decorative />
@@ -330,7 +403,7 @@ function BoundElsewhere({
             <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={owner.title}>
               {owner.title}
             </FadeOverflow>
-            <span aria-hidden="true" className="shrink-0 text-muted">
+            <span aria-hidden="true" className="shrink-0 font-normal">
               · {bound}
             </span>
           </Button>
@@ -398,8 +471,8 @@ function ArchivedList({
 }
 
 /** A session in focus mode: its status put into words, its agent and account, its title over two
- * lines, and when it started. No binding badge: a focus mode lists either only unbound sessions or
- * only those bound to the one console session it is for. */
+ * lines, and when it started. No binding badge: a focus mode lists either only sessions not bound
+ * to a console session or only those bound to the one console session it is for. */
 function SessionCard({
   handlers,
   session,
@@ -419,7 +492,7 @@ function SessionCard({
       ariaLabel={sessionAriaLabel(t, language, session, accounts)}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
-      className="min-h-8 flex-col gap-1 border border-separator bg-background px-[7px] py-2 data-selected:border-accent"
+      className="min-h-8 flex-col gap-1 border border-separator px-[7px] py-2 data-selected:border-accent-glyph"
     >
       <div className="flex items-center gap-2">
         <StatusIcon status={session.status} decorative />

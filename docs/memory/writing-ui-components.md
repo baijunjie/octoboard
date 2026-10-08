@@ -123,9 +123,9 @@ Tailwind 4 reads the source as plain text and emits a utility only for a class n
 a name assembled at runtime — `` `${side}-0` ``, a suffix appended to a prefix, anything concatenated — compiles to no
 CSS at all and the element silently loses that property. Write each variant out in full and branch between them.
 
-Nothing on the way past catches it: `packages/ui` has no linter, and its tests (`vitest`) cover pure modules and a hook
-or two, not rendered components, so `tsc --noEmit` is the only automated gate on a component, and a class whose utility
-was never emitted is valid TypeScript, builds clean and reads fine in a diff. After adding or changing a utility class, grep the built `packages/ui/dist/assets/*.css` for it.
+Nothing on the way past catches it: `packages/ui` has no linter, and its tests (`vitest`, components under jsdom) never
+evaluate the CSS, so a class whose utility was never emitted is valid TypeScript, passes the tests, builds clean and
+reads fine in a diff. After adding or changing a utility class, grep the built `packages/ui/dist/assets/*.css` for it.
 
 ## Dim a region with a veil, not `opacity` on it
 
@@ -146,8 +146,8 @@ name needs that context; `ActionMenu` already does this by default. The exceptio
 collection row, such as a tag's remove button, whose accessible name react-aria already composes from the button and
 the row through `aria-labelledby`: there the `aria-label` is the bare verb with no placeholder, or the row's own text
 is announced twice. Give it one by wrapping the control in `TitledControl` from
-`packages/ui/src/components/TitledControl.tsx`, as the title bar's `BarButton` in
-`packages/ui/src/components/TitleBar.tsx` does. Passing `title` to the HeroUI control itself does nothing: its
+`packages/ui/src/components/TitledControl.tsx`, as the window chrome's `ChromeButton` in
+`packages/ui/src/components/ChromeButton.tsx` does. Passing `title` to the HeroUI control itself does nothing: its
 react-aria base filters `title` out of the DOM props without a warning.
 
 Any tooltip on a control takes this shape — the control directly inside HeroUI's `Tooltip`, as `TitledControl` does —
@@ -197,6 +197,16 @@ build it in from the start:
 - An `rtl:` utility wins over a `docked:` one on the same property, so a `docked:` value for a property also set under
   `rtl:` needs a `docked:rtl:` twin, or it silently does not apply under right-to-left.
 
+## Only icon-only chrome sits on the window material; text goes on the opaque panel
+
+In the macOS app the top bar and the rail show the translucent window material (see "The window chrome and the
+content panel" in `docs/product/window-layout.md`), whose colour shifts with whatever is behind the window. The user
+rejected a layout that put the text-heavy sidebar on it, and one that floated the content as a card with gutters of
+material around it. So nothing beyond an icon, an avatar or the breadcrumb's one line goes on the chrome; anything
+else belongs in the opaque content panel. A glyph or tint added to the chrome is measured against the material's
+measured colours (in the comment on the window's surfaces in `packages/ui/src/style.css`), not only against
+`--chrome`, which is just the browser's stand-in for it: the dark material is a grey far lighter than dark `--chrome`.
+
 ## The UI meets WCAG 2.2 AA
 
 Every control and view in `packages/ui` meets WCAG 2.2 level AA, checked in both the light and the dark appearance.
@@ -245,6 +255,15 @@ marked as it is, and do not add a new exception without the user's say. Concrete
   appearances, so a surface-filled component (`Alert`, `Card`) inside a dialog or popover is set apart only by its
   shadow, which does not show in the dark appearance; give it a fill of its own there (a tint such as
   `bg-warning/10 shadow-none`).
+  A change to a colour token or a surface touches every screen, so its audit covers every gallery scenario in both
+  appearances (the user rejected a re-theme whose contrast had been spot-checked), and it measures what a pass over
+  text and glyphs misses: every fill — a chip, a tertiary button, a ghost button's hover — against the surface it sits
+  on, and an animated state at its faintest frame (an `animate-pulse` glyph sank to about 2:1; animate such a glyph
+  without lowering its opacity). A region given a surface colour of its own needs HeroUI's `--default`-filled
+  controls checked on it in particular: the dark sidebar landed on `--default`'s own lightness and every such control
+  vanished. Override the whole `--default` family on that subtree, as `.sidebar-fills` in `packages/ui/src/style.css`
+  does, since `--default-hover` and `--default-soft` are computed on `<html>` and `--default` alone does not reach
+  them.
 - **Not by colour alone**: a status or state that differs in colour also differs in glyph, shape or text.
 - **Motion**: an animation or transition that is not essential stops under `prefers-reduced-motion: reduce`
   (Tailwind's `motion-safe:` / `motion-reduce:` variants).

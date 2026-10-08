@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import type { Project } from "../protocol";
-import { belongsToFocus, resolveFocus, shortcutOutcome, type SidebarView, useSidebarView } from "./sidebarView";
+import { type SidebarView, useSidebarView } from "./sidebarView";
 import type { FocusTarget } from "./types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -22,63 +22,6 @@ const sessions = byId([hub, bound, unbound, { ...hub, id: "s-archived-hub", stat
 
 const projectFocus: FocusTarget = { project };
 const hubFocus: FocusTarget = { consoleSession: hub };
-
-describe("resolveFocus", () => {
-  it.each([
-    ["a project", "project:p-1", main.id, projectFocus],
-    ["a console session", "consoleSession:s-hub", main.id, hubFocus],
-    ["a project that no longer exists", "project:gone", main.id, undefined],
-    ["a console session that no longer exists", "consoleSession:gone", main.id, undefined],
-    ["a project of another console", "project:p-2", main.id, undefined],
-    ["a console session of another console", "consoleSession:s-hub", other.id, undefined],
-    ["an archived console session", "consoleSession:s-archived-hub", main.id, undefined],
-    ["a project session's id as a console session", "consoleSession:s-bound", main.id, undefined],
-    ["nothing stored", undefined, main.id, undefined],
-    ["an unreadable value", "p-1", main.id, undefined],
-  ])("%s", (_, key, consoleId, expected) => {
-    const focus = resolveFocus(key, consoleId, projects, sessions);
-    expect(focus && ("project" in focus ? focus.project.id : focus.consoleSession.id)).toBe(
-      expected && ("project" in expected ? expected.project.id : expected.consoleSession.id),
-    );
-  });
-});
-
-describe("belongsToFocus", () => {
-  const archivedBound = { ...bound, status: "archived" as const };
-  it.each([
-    ["a project", projectFocus, unbound, true],
-    ["a project", projectFocus, bound, false],
-    ["a project", projectFocus, archivedBound, true],
-    ["a project", projectFocus, { ...bound, bound_to: unbound.id }, true],
-    ["a project", projectFocus, hub, false],
-    ["a console session", hubFocus, bound, true],
-    ["a console session", hubFocus, hub, true],
-    ["a console session", hubFocus, unbound, false],
-    ["a console session", hubFocus, { ...bound, bound_to: "s-other" }, false],
-  ])("in the focus mode of %s, selecting %#", (_, focus, selected, belongs) => {
-    expect(belongsToFocus(focus, selected, sessions)).toBe(belongs);
-  });
-});
-
-describe("shortcutOutcome", () => {
-  it.each([
-    ["enters the project of a selected project session", undefined, unbound, projectFocus],
-    ["enters the project of a selected bound session", undefined, bound, projectFocus],
-    ["enters a selected console session itself", undefined, hub, hubFocus],
-    ["does nothing for an archived console session", undefined, { ...hub, status: "archived" as const }, null],
-    ["does nothing with nothing selected", undefined, undefined, null],
-    ["does nothing for a session of an unknown project", undefined, { ...unbound, project_id: "gone" }, null],
-    ["leaves a project's focus mode", projectFocus, unbound, undefined],
-    ["leaves a console session's focus mode", hubFocus, hub, undefined],
-    ["leaves focus mode with nothing selected", projectFocus, undefined, undefined],
-  ])("%s", (_, focus, selected, expected) => {
-    const outcome = shortcutOutcome(focus, selected, projects);
-    if (expected === null) expect(outcome).toBeUndefined();
-    else expect(outcome?.focus && ("project" in outcome.focus ? outcome.focus.project.id : outcome.focus.consoleSession.id)).toBe(
-      expected && ("project" in expected ? expected.project.id : expected.consoleSession.id),
-    );
-  });
-});
 
 /** Mounts `useSidebarView` over the fixtures and gives the latest view back. */
 function mountView(): { view: () => SidebarView; unmount: () => void } {

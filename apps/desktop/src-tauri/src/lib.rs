@@ -29,9 +29,12 @@ mod window_state;
 use std::thread;
 use std::time::Duration;
 
-use tauri::{Emitter, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 #[cfg(target_os = "macos")]
-use tauri::{LogicalPosition, TitleBarStyle};
+use tauri::{
+    window::{Effect, EffectsBuilder},
+    LogicalPosition, TitleBarStyle,
+};
+use tauri::{Emitter, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 use background::BackgroundState;
 use exit::{
@@ -225,10 +228,11 @@ fn open_main_window(
     let builder = WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, WebviewUrl::App(url.into()))
         .title(menu::APP_NAME)
         .inner_size(initial.size.0, initial.size.1)
-        // 280 (sidebar) + 520 (the terminal pane's own floor) + 300 (the report panel's own
-        // floor) = 1100: at this minimum, both panes already sit on their floors with nothing
-        // left to give up, so neither can be squeezed past usability by a narrower window. Height
-        // 600 gives the terminal about 30 rows, which is comfortably usable.
+        // 48 (the left rail) + 280 (sidebar) + 520 (the terminal pane's own floor) + 300 (the
+        // report panel's own floor) = 1148: at this minimum, both panes already sit on their
+        // floors with nothing left to give up, so neither can be squeezed past usability by a
+        // narrower window. Height 600 gives the terminal about 30 rows, which is comfortably
+        // usable.
         .min_inner_size(window_state::MIN_SIZE.0, window_state::MIN_SIZE.1)
         // Created hidden so AppKit never paints the window in the OS's own appearance before the
         // webview has painted anything themed — with no window on screen yet, there is nothing
@@ -244,17 +248,27 @@ fn open_main_window(
     #[cfg(target_os = "macos")]
     let builder = builder.with_webview_configuration(configuration);
 
-    // The UI draws its own top bar across the whole window (`TitleBar` in `packages/ui`), so the
-    // native titlebar's background and text go and the traffic lights float over the page.
+    // The UI draws a top bar across the whole window (`TitleBar` in `packages/ui`), so the native
+    // titlebar's background and text go and the traffic lights float over the page.
     // `TRAFFIC_LIGHT_X` / `TRAFFIC_LIGHT_Y` centre them in the bar's `--title-bar-height`, and
     // `TRAFFIC_LIGHT_INSET` in `packages/ui/src/platform/tauri.ts` is the width the bar keeps clear
     // for them; the three move together. The window keeps its title for the Dock and Mission
     // Control.
+    //
+    // The window is also translucent: a sidebar-material `NSVisualEffectView` behind a transparent
+    // webview, which is why the UI paints nothing of its own behind the top bar and the left rail
+    // (the window chrome) and paints the content panel opaquely (`--window-background` in
+    // `packages/ui/src/style.css`). The material follows the window's appearance, which the UI
+    // pushes before it reveals the window (`packages/ui/src/main.tsx`), and the window stays hidden
+    // until then, so neither the material nor the transparent webview is ever seen in the wrong
+    // appearance. Transparency needs `macos-private-api` (`Cargo.toml`, `tauri.conf.json`).
     #[cfg(target_os = "macos")]
     let builder = builder
         .title_bar_style(TitleBarStyle::Overlay)
         .hidden_title(true)
-        .traffic_light_position(LogicalPosition::new(TRAFFIC_LIGHT_X, TRAFFIC_LIGHT_Y));
+        .traffic_light_position(LogicalPosition::new(TRAFFIC_LIGHT_X, TRAFFIC_LIGHT_Y))
+        .transparent(true)
+        .effects(EffectsBuilder::new().effect(Effect::Sidebar).build());
 
     let window = builder.build()?;
     // Not the builder's `.maximized`. AppKit first puts a new window's frame on the main display,

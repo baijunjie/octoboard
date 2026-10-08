@@ -262,8 +262,8 @@ export function ProjectFilterTag({
           aria-label={label}
           preventFocusOnPress
           onPress={remove}
-          // The hover fill is `foreground/10`, not the `bg-default` the "⋯" menu trigger uses: the
-          // chip sits on `--default` itself, where HeroUI's `bg-default-hover` is nearly invisible.
+          // The hover fill is a tint of the foreground, not HeroUI's `bg-default-hover`, which is a
+          // translucent fill about as strong as the chip's own (`.sidebar-fills`) and so adds little on it.
           // `bg-transparent` cancels `.close-button--default`'s own fill, so the resting look is the chip's.
           className="touch-target size-3 shrink-0 rounded-full bg-transparent hover:bg-foreground/10 hover:text-foreground [&_svg]:size-[inherit]"
         />

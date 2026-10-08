@@ -9,9 +9,9 @@ import React from "react";
  * themselves.
  *
  * Runs between the top bar and the connection banner (`--top-chrome-height`,
- * `--bottom-chrome-height`) rather than the whole viewport, so the bar's toggles and the banner's
- * Retry button stay reachable while a drawer is open instead of being dimmed and swallowing the
- * press into a close instead.
+ * `--bottom-chrome-height`) and clear of the left rail (`--rail-width`) rather than the whole
+ * viewport, so the bar's toggles, the rail's controls and the banner's Retry button stay reachable
+ * while a drawer is open instead of being dimmed and swallowing the press into a close instead.
  *
  * It is a native `<button>` rather than HeroUI's `Button` because it is a full-bleed dimming layer
  * with no button look, which HeroUI's styled `Button` cannot be made into without overriding it
@@ -30,7 +30,7 @@ export function Scrim({ label, onClose }: { label: string; onClose: () => void }
       aria-label={label}
       data-escape-scope
       style={{ top: "var(--top-chrome-height)", bottom: "var(--bottom-chrome-height)" }}
-      className="fixed inset-x-0 z-30 bg-black/40 docked:hidden"
+      className="fixed start-(--rail-width) end-0 z-30 bg-black/40 docked:hidden"
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClose}
     />

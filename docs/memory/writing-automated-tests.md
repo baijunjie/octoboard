@@ -69,3 +69,11 @@ CLI version it came from recorded beside it, and replay the production entry con
 the bytes — the offset the real caller would have started from, the truncation a half-finished write
 leaves. Commit the near-miss capture next to the matching one: the shape that must *not* be
 recognised is what makes recognising the other one mean anything.
+
+## A jsdom test cannot tell where focus ends after a session is selected
+
+Applies to `packages/ui` component tests, which run under jsdom without the terminal. In the app, selecting a live
+session attaches the terminal to it, and that attach (`attach` in `packages/ui/src/terminal/TerminalController.ts`)
+focuses the terminal after whatever the sidebar or a hook did with focus. So a jsdom test asserting that focus stays
+on a sidebar control after a selection passes while the app does the opposite. Assert focus in jsdom only for moves
+that select no session; judge where focus lands after a selection in the real app.

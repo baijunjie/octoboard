@@ -15,8 +15,8 @@ function WorkingDot({ small }: { small?: boolean }): React.ReactElement {
   return (
     <span className={`flex shrink-0 items-center justify-center ${small ? "size-3" : "size-4"}`}>
       <span className="relative flex size-2">
-        <span className="absolute inline-flex size-full rounded-full bg-accent opacity-75 motion-safe:animate-ping" />
-        <span className="relative inline-flex size-2 rounded-full bg-accent" />
+        <span className="absolute inline-flex size-full rounded-full bg-accent-glyph opacity-75 motion-safe:animate-ping" />
+        <span className="relative inline-flex size-2 rounded-full bg-accent-glyph" />
       </span>
     </span>
   );
@@ -24,7 +24,7 @@ function WorkingDot({ small }: { small?: boolean }): React.ReactElement {
 
 /** The waving hand of a session waiting for the user. */
 function WavingHand({ className }: { className: string }): React.ReactElement {
-  return <Hand className={`${className} origin-[70%_90%] text-warning motion-safe:animate-status-wave`} />;
+  return <Hand className={`${className} origin-[70%_90%] text-warning-glyph motion-safe:animate-status-wave`} />;
 }
 
 /**
@@ -53,8 +53,9 @@ export function StatusIcon({ status, decorative }: { status: SessionStatus; deco
         </span>
       );
     case "idle":
-      // HeroUI's own success colour, about 2.2:1 on white, under the 3:1 a meaningful glyph needs;
-      // kept so on purpose, by the user's decision.
+      // HeroUI's own success colour, 1.98:1 on the sidebar and 1.70:1 on a selected row, under the 3:1
+      // a meaningful glyph needs. The exception is deliberate: the green is only a secondary cue, as
+      // the bubble's shape tells idle apart from the working dot and the accessible name says it.
       return <MessageCircleMore {...a11y} className={`${ICON_CLASS} text-success`} />;
     case "interrupted":
       return <Pause {...a11y} className={`${ICON_CLASS} text-muted`} />;
@@ -63,9 +64,10 @@ export function StatusIcon({ status, decorative }: { status: SessionStatus; deco
   }
 }
 
-/** The marker a project row or a console in the switcher shows for the sessions beneath it: a
- * waving hand when one is waiting for the user, a ringing dot when one is at work, a speech bubble
- * when one is merely running, awaiting instructions. Decorative: the row's own label carries the words. */
+/** The marker a collapsed project row shows for the sessions beneath it (the rail's consoles show
+ * the same as an `ActivityBadge`): a waving hand when one is waiting for the user, a ringing dot
+ * when one is at work, a speech bubble when one is merely running, awaiting instructions.
+ * Decorative: the row's own label carries the words. */
 export function ActivityMarker({ activity }: { activity: Activity }): React.ReactElement | null {
   switch (activity) {
     case "waiting":
@@ -84,5 +86,38 @@ export function ActivityMarker({ activity }: { activity: Activity }): React.Reac
       return <MessageCircleMore aria-hidden="true" className="size-3.5 shrink-0 text-success" />;
     default:
       return null;
+  }
+}
+
+/** `ActivityMarker` as a badge on a console's avatar (the rail): a small disc in the activity's own
+ * colour with its glyph in that colour's foreground, so the glyph reads against the disc whatever
+ * the disc sits on — on the light chrome the warning and success colours are fills, too light to
+ * read as glyphs of their own. The waiting hand still waves and the working dot still pings, as
+ * they do in the sidebar. Decorative: the console's accessible name carries the activity. */
+export function ActivityBadge({ activity, className = "" }: { activity: Activity; className?: string }): React.ReactElement | null {
+  if (!activity) return null;
+  const disc = `flex size-3.5 items-center justify-center rounded-full ${className}`;
+  switch (activity) {
+    case "waiting":
+      return (
+        <span aria-hidden="true" className={`${disc} bg-warning text-warning-foreground`}>
+          <Hand strokeWidth={2.5} className="size-2.5 origin-[70%_90%] motion-safe:animate-status-wave" />
+        </span>
+      );
+    case "working":
+      return (
+        <span aria-hidden="true" className={`${disc} bg-accent`}>
+          <span className="relative flex size-1.5">
+            <span className="absolute inline-flex size-full rounded-full bg-accent-foreground opacity-75 motion-safe:animate-ping" />
+            <span className="relative inline-flex size-1.5 rounded-full bg-accent-foreground" />
+          </span>
+        </span>
+      );
+    case "running":
+      return (
+        <span aria-hidden="true" className={`${disc} bg-success text-success-foreground`}>
+          <MessageCircleMore strokeWidth={2.5} className="size-2.5" />
+        </span>
+      );
   }
 }
