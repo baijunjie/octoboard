@@ -1,4 +1,5 @@
 import { Button, Chip, Input, ListBox } from "@heroui/react";
+import { CornerLeftUp, Folder } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { DaemonRequestError } from "../daemon-client";
@@ -71,7 +72,7 @@ export function DirectoryPicker({
       setError((err as Error).message);
       // Deliberately not clearing `entries`/`resolvedPath`: a denied or not-yet-answered volume
       // prompt is the expected failure here, and it should not yank the previous listing (and its
-      // `..` row back up) out from under the user along with it.
+      // parent-directory row back up) out from under the user along with it.
     }
   };
 
@@ -128,15 +129,18 @@ export function DirectoryPicker({
         >
           {resolvedPath && resolvedPath !== "/" && (
             <ListBox.Item id={PARENT_KEY} textValue={t("directoryPicker.parent")} aria-label={t("directoryPicker.parent")}>
-              ..
-              <span className="ms-2 text-muted">{t("directoryPicker.parent")}</span>
+              <CornerLeftUp aria-hidden="true" className="size-4 shrink-0 text-muted rtl:-scale-x-100" />
+              <span className="text-muted">{t("directoryPicker.parent")}</span>
             </ListBox.Item>
           )}
           {entries.map((entry) => (
             <ListBox.Item key={entry.path} id={entry.path} textValue={entry.name}>
-              <span dir="auto">{entry.name}</span>
+              <Folder aria-hidden="true" className="size-4 shrink-0 text-muted" />
+              <span dir="auto" className="min-w-0 truncate text-foreground">
+                {entry.name}
+              </span>
               {entry.is_git_repo && (
-                <Chip size="sm" variant="soft" className="ms-2">
+                <Chip size="sm" variant="soft" className="ms-auto">
                   git
                 </Chip>
               )}

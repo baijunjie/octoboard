@@ -372,10 +372,10 @@ parts of the window:
   is laid out in the direction of its own text, so a Latin name in an Arabic window still fades at its right edge.
 - Paths always read left to right, in the fields that take one and in the settings list, where a path too long for its
   space fades at its start, so its last folder stays readable.
-- Icons that point a direction or show a side are mirrored: the two pane toggles, whose pane is drawn on its own
-  side, the breadcrumb's separators, the report panel's
-  previous-page and next-page buttons, focus mode's back button, and a collapsed project row's chevron, which points
-  left. An expanded row's chevron points down, as in left-to-right.
+- Icons that point a direction or show a side are mirrored: the two pane toggles, whose pane is drawn on its own side,
+  the breadcrumb's separators, the report panel's previous-page and next-page buttons, focus mode's back button, the
+  directory browser's parent-directory entry, and a collapsed project row's chevron, which points left. An expanded
+  row's chevron points down, as in left-to-right.
 
 Not mirrored:
 
