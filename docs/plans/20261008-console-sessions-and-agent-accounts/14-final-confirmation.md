@@ -48,3 +48,46 @@ is left beyond this milestone.
       and editing a console's per-agent directory field, and a session actually launching with what was
       saved. Covered at the protocol and unit level only. The dialog becomes a picker in milestone 07, so
       this is worth confirming before that replaces it.
+
+## From milestone 05 — agent availability and the default account
+
+- [ ] On a real machine with at least one agent actually installed, the daemon's one-time determination
+      **lands within a couple of seconds of starting**, without the application's own start-up appearing to
+      wait on it — the non-blocking shape (`tokio::task::spawn_blocking` fired and not awaited before the
+      server starts serving) is verified by reading the code and by the unit tests exercising the pure
+      `determine` function and the no-op failure path; the actual wall-clock behaviour of a real ten-second
+      shell snapshot racing a real application start has not been timed.
+- [ ] An agent installed **only under a version manager or in `~/.local/bin`** (not on a plain `PATH`) is
+      found as available through the login-shell snapshot, the way a launch already finds it — this
+      mirrors an existing, tested capability (`env_shell::resolve_binary`) but the availability path
+      itself has only been exercised against a synthetic `PATH` in a unit test, never a real shell profile.
+- [ ] The **session dialog**, the **console dialog**'s two agent rows and the **sidebar**'s console-sessions
+      empty state render the unavailable-agent styling and the install prompt correctly on screen, in both
+      light and dark, and in a right-to-left language — covered by `pnpm typecheck` and by unit tests that
+      assert the underlying data (`isDisabled`, the rendered text) but never by looking at the rendered
+      HeroUI `Select` popover or `EmptyPanel` itself.
+- [ ] On a machine with **no supported agent installed at all**, every one of the three places this
+      milestone refuses — the session dialog, the console sessions section's own action, and a console
+      session's `start_session` tool called from a real agent conversation — is confirmed end to end
+      against a live daemon, including that the install prompt's wording reads naturally in context in
+      each of the three.
+- [ ] The **zh-Hans** catalog's new strings (`agents.installPrompt`, `agents.notInstalled`,
+      `daemon.agent_not_available`) are confirmed to read naturally in the running application; only
+      placeholder parity with the English source is checked automatically (`catalog.test.ts`), not the
+      translation's sense or register.
+
+## From milestone 05 — agent availability and the default account
+
+- [ ] The one-time determination's real **wall-clock cost** against a real login shell, and that the window
+      starts serving clients before it lands.
+- [ ] An agent installed only under a **version manager** is found, since it resolves through the login-shell
+      snapshot and not through the daemon's own environment.
+- [ ] The three refusal surfaces end to end against a live daemon **with no agent installed at all**: the
+      session dialog's disabled submit, the console sessions section's create action, and a console session's
+      own start-session tool.
+- [ ] The rendered **disabled picker option** — that an unavailable agent is visible, reaches keyboard
+      traversal (`disabledBehavior="selection"`, verified from the react-aria sources only), is announced as
+      disabled, and cannot be chosen.
+- [ ] The sidebar's **install-prompt banner above interrupted console sessions** reads well in light, dark
+      and right-to-left.
+- [ ] The new zh-Hans strings read naturally in place.

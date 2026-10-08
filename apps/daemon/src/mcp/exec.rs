@@ -436,10 +436,11 @@ fn resolve_session(
 }
 
 /// `caller` is the console session asking — what `include_in_hub` reports is relative to it, not
-/// an absolute fact about `session`: a console may now hold several console sessions, and a
-/// session bound to a different one reads the same as an unbound one here. Telling the two apart
-/// by naming the actual owner is the tool surface's to widen, not this milestone's — see
-/// `docs/plans/20261008-console-sessions-and-agent-accounts/10-tool-surface.md`.
+/// an absolute fact about `session`: a console may hold several console sessions, and a session
+/// bound to a different one reads the same as an unbound one here.
+///
+/// TODO(docs/plans/20261008-console-sessions-and-agent-accounts/10-tool-surface.md): tell the two
+/// apart by naming the actual owner, rather than collapsing them to one boolean.
 fn describe_session(session: &Session, caller: &Session) -> Value {
     json!({
         "session": session.id,
@@ -523,6 +524,98 @@ fn readable_output(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::{AgentAvailability, Availability, Console, ProjectSource};
+    use crate::store::LOCAL_HOST_ID;
+
+    fn console() -> Console {
+        Console {
+            id: "console-1".to_string(),
+            name: "Console".to_string(),
+            workdir: "/tmp/console-1".to_string(),
+            console_session_agent: Agent::Claude,
+            default_agent: Agent::Claude,
+            claude_account_id: None,
+            codex_account_id: None,
+            grok_account_id: None,
+            claude_config_dir: None,
+            codex_config_dir: None,
+            grok_config_dir: None,
+            icon: None,
+            created_at: 0,
+        }
+    }
+
+    fn console_session(id: &str) -> Session {
+        Session {
+            id: id.to_string(),
+            agent: Agent::Claude,
+            agent_session_id: None,
+            console_id: "console-1".to_string(),
+            project_id: None,
+            host_id: LOCAL_HOST_ID.to_string(),
+            role: Role::Console,
+            origin: Origin::User,
+            title: "Hub".to_string(),
+            status: SessionStatus::Idle,
+            has_conversation: false,
+            bound_to: None,
+            colour: None,
+            ordinal: None,
+            account_id: None,
+            config_dir: None,
+            pinned: false,
+            started_at: 0,
+            ended_at: None,
+        }
+    }
+
+    /// The refusal `coordinator::open_session` raises for an unavailable agent is not only the
+    /// control socket's — a console session reaches it through its own `start_session` tool, and
+    /// comes back with a tool error carrying the reason in prose, as "The console session's
+    /// tools" in `docs/product/hub-orchestration.md` promises for any refusal.
+    #[tokio::test]
+    async fn an_unavailable_agent_refuses_the_console_sessions_own_start_session_tool() {
+        let state = Arc::new(crate::state::tests::app_state(
+            "start-session-agent-unavailable",
+        ));
+        state.store.insert_console(&console()).unwrap();
+        state
+            .store
+            .insert_project(&Project {
+                id: "project-1".to_string(),
+                console_id: "console-1".to_string(),
+                host_id: LOCAL_HOST_ID.to_string(),
+                name: "Project".to_string(),
+                path: "/tmp/project-1".to_string(),
+                default_agent: None,
+                source: ProjectSource::Local,
+                remote_url: None,
+                claude_trust_consent: false,
+                pinned: false,
+                tags: Vec::new(),
+            })
+            .unwrap();
+        let owner = console_session("owner");
+        state.store.insert_session(&owner).unwrap();
+        state.set_agent_availability(vec![AgentAvailability {
+            agent: Agent::Claude,
+            availability: Availability::Unavailable,
+            default_account_dir: Some("/home/user/.claude".to_string()),
+        }]);
+
+        let arguments = json!({
+            "project": "project-1",
+            "brief": { "goal": "do the thing" },
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+
+        let err = call(&state, &owner.id, "start_session", &arguments)
+            .await
+            .expect_err("refused");
+        assert!(err.to_string().contains("Claude Code"), "{err}");
+    }
 
     #[test]
     fn escape_sequences_and_control_bytes_are_stripped_from_the_output_tail() {

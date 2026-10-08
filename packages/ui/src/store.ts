@@ -6,7 +6,20 @@ import { DaemonClient, DaemonRequestError, type ConnectionState } from "./daemon
 import { daemonMessage } from "./daemonMessage";
 import { currentLanguage } from "./i18n/language";
 import { daemonWsUrl, type DaemonOrigin } from "./daemon";
-import { isLive, type Console, type Event, type GitStatus, type Host, type Page, type Project, type RequestBody, type Session, type Settings } from "./protocol";
+import {
+  isLive,
+  type Agent,
+  type AgentAvailability,
+  type Console,
+  type Event,
+  type GitStatus,
+  type Host,
+  type Page,
+  type Project,
+  type RequestBody,
+  type Session,
+  type Settings,
+} from "./protocol";
 
 /**
  * Something to tell the user in a toast: a daemon `error` or `session_notice`, or a message with
@@ -88,7 +101,17 @@ export interface State {
   gitStatuses: Map<string, GitStatus>;
   /** The app-wide settings the daemon stores, as the last `snapshot` or `settings_updated` said. */
   settings: Settings;
+  /** Every agent's availability, keyed by agent, as the last `snapshot` or
+   * `agent_availability_updated` said. Always holds all three agents, each `not_determined`
+   * until the daemon's one-time determination for this run lands. */
+  agentAvailability: Map<Agent, AgentAvailability>;
 }
+
+/** The three entries every run begins with, before the daemon's one-time determination lands. */
+const INITIAL_AGENT_AVAILABILITY: AgentAvailability[] = (["claude", "codex", "grok"] as Agent[]).map((agent) => ({
+  agent,
+  availability: "not_determined",
+}));
 
 type Action =
   | { kind: "connection"; state: ConnectionState }
@@ -106,6 +129,7 @@ const initialState: State = {
   trustedDirectories: [],
   gitStatuses: new Map(),
   settings: { auto_sync_repositories: false, accounts: [] },
+  agentAvailability: new Map(INITIAL_AGENT_AVAILABILITY.map((a) => [a.agent, a])),
 };
 
 /** A store holding the empty state with `initial` laid over it. */
@@ -140,6 +164,7 @@ function reducer(state: State, action: Action): State {
             trustedDirectories: event.trusted_directories,
             gitStatuses: new Map(event.git_statuses.map((s) => [s.project, s])),
             settings: event.settings,
+            agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])),
           };
         case "trusted_directories_updated":
           // A prompt for a project under a directory that is now trusted has nothing left to ask:
@@ -257,6 +282,8 @@ function reducer(state: State, action: Action): State {
         }
         case "settings_updated":
           return { ...state, settings: event.settings };
+        case "agent_availability_updated":
+          return { ...state, agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])) };
         default:
           return state;
       }

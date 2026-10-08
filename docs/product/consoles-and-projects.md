@@ -19,7 +19,11 @@ A console carries:
 | Working directory | Octoboard | `~/.octoboard/consoles/<console id>/`, created when the console is created. Not settable and not changeable. |
 
 Both agent fields take one of the three supported agents (Claude Code, Codex, Grok Build) and default to Claude Code
-in the creation form.
+in the creation form. Both rows list all three every time, whether or not the machine has each one installed: once
+Octoboard has determined an agent unavailable (its binary does not resolve on the user's login shell `PATH`), that
+row names it rather than leaving it out, labels it as not installed, and will not let it be chosen — it is shown
+rather than hidden so the reason it cannot be picked is on screen. Before that determination has landed every agent
+is offered normally; an agent already chosen before it was found unavailable is left exactly as it is.
 
 Multiple consoles can exist side by side and are independent of each other.
 

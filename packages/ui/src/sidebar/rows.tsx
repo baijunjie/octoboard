@@ -109,10 +109,12 @@ export function RowIconButton({
   icon: Icon,
   label,
   onPress,
+  isDisabled,
 }: {
   icon: LucideIcon;
   label: string;
   onPress: () => void;
+  isDisabled?: boolean;
 }): React.ReactElement {
   return (
     <div className="flex" onClick={(e) => e.stopPropagation()}>
@@ -124,6 +126,7 @@ export function RowIconButton({
           aria-label={label}
           preventFocusOnPress
           onPress={onPress}
+          isDisabled={isDisabled}
           className="size-6 min-w-0 rounded-md text-muted hover:text-foreground"
         >
           <Icon aria-hidden="true" className="size-4" />

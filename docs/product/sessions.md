@@ -59,7 +59,10 @@ are listed in, pinning, focus mode, the archive view and how selecting a session
 
 A session is opened under a project with:
 
-- **Agent** — defaulted as below, overridable for this session only.
+- **Agent** — defaulted as below, overridable for this session only. The picker lists all three
+  agents every time; one Octoboard has determined unavailable (its binary does not resolve on the
+  user's login shell `PATH`) is named rather than left out, labelled as not installed, and cannot
+  be chosen.
 - **Title** (optional) — defaults to the project's name. A console session's title defaults to
   "Hub `<ordinal>`", where the ordinal is one past the highest ever used in its console, so a title
   is not reused after a console session is archived or deleted.
@@ -87,6 +90,14 @@ or, for Grok Build only, the account the session would hold pins a directory tha
 (see "Agent config directories" in `docs/product/consoles-and-projects.md`) — no session appears in the sidebar and
 the failure is reported. A missing config directory does not fail a brand new session for the other two agents: it
 has no conversation to lose, so the agent is left to create the directory itself.
+
+**With every agent determined unavailable, opening a session is refused outright, before any of that**: the dialog
+cannot be submitted, the console sessions section's own new-session action is disabled, and a console session's
+`start_session` tool is refused with a reason it can report (see "The console session's tools" in
+`docs/product/hub-orchestration.md`). In every one of those places Octoboard says which agents it supports and that
+one of them has to be on the user's `PATH`, without saying how to install one. This refusal only ever fires once
+availability has actually been determined and found none; while that determination is still pending, nothing is
+refused on its account and a session opens or fails exactly as described above.
 
 ### Which agent a session uses
 

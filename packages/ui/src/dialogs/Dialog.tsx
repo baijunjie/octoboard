@@ -99,7 +99,9 @@ let openDialogs = 0;
  * mounted only while it is open, so `isOpen` is constant. With `onSubmit` the body and footer sit in
  * a `<form>`, so Enter in a text field submits it — the dialog decides what "submit" means. The
  * footer is Cancel plus a submit button labelled `submitLabel`, both disabled while `busy`, unless
- * the dialog brings its own `footer`.
+ * the dialog brings its own `footer`. `submitDisabled` disables the submit button alone, Cancel
+ * stays pressable, and since it is the form's only submit control this also suppresses implicit
+ * submission from Enter in a text field.
  */
 export function Dialog({
   title,
@@ -108,6 +110,7 @@ export function Dialog({
   footer,
   submitLabel,
   busy,
+  submitDisabled,
   onSubmit,
   size = "md",
   alert,
@@ -123,8 +126,8 @@ export function Dialog({
    * was lost with the old content, it is put back on the dialog. */
   resetKey?: string;
 } & (
-  | { footer: BodyChildren; submitLabel?: never; busy?: never; onSubmit?: () => void }
-  | { footer?: never; submitLabel: string; busy?: boolean; onSubmit: () => void }
+  | { footer: BodyChildren; submitLabel?: never; busy?: never; submitDisabled?: never; onSubmit?: () => void }
+  | { footer?: never; submitLabel: string; busy?: boolean; submitDisabled?: boolean; onSubmit: () => void }
 )): React.ReactElement {
   const t = useT();
   // Closing returns focus to the element focused when the dialog opened, which for a dialog a menu
@@ -164,7 +167,7 @@ export function Dialog({
             <Button type="button" variant="secondary" onPress={onClose} isDisabled={busy}>
               {t("common.cancel")}
             </Button>
-            <Button type="submit" isDisabled={busy}>
+            <Button type="submit" isDisabled={busy || submitDisabled}>
               {submitLabel}
             </Button>
           </>

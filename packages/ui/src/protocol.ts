@@ -13,8 +13,7 @@ export type ProjectSource = "local" | "parent" | "github";
 
 /** A console session's badge colour (`Session.colour`), assigned once on creation from this fixed
  * palette and never changed afterwards. Each entry's light and dark CSS values live in the UI's
- * own colour system (`style.css`), not here — see "Reusable capabilities" in
- * `docs/plans/20261008-console-sessions-and-agent-accounts/02-binding-data-model.md`. */
+ * own colour system (`style.css`), not here. */
 export type ConsoleSessionColour = "olive" | "jade" | "teal" | "azure" | "violet" | "rose";
 
 /** Statuses meaning the session has a running process. The complement of `DORMANT_STATUSES`. */
@@ -47,15 +46,17 @@ export interface Console {
   default_agent: Agent;
   /** The account each agent's sessions opened in this console read, by id; absent means that
    * agent's default account — the state of pinning nothing. Not yet consulted by anything in this
-   * client; the account picker that reads it is milestone 7 of the accounts plan. */
+   * client; nothing here picks an account yet. */
   claude_account_id?: string | null;
   codex_account_id?: string | null;
   grok_account_id?: string | null;
   /** The referenced account's directory, derived for display: absent for the default account.
-   * This is what the console dialog still shows and saves per agent, until milestone 7 replaces
-   * it with a picker — Claude Code is launched with it as `CLAUDE_CONFIG_DIR`, Codex as
-   * `CODEX_HOME`, and for Grok it replaces `~/.grok` as the directory its per-session home is
-   * built from. */
+   * This is what the console dialog still shows and saves per agent — Claude Code is launched
+   * with it as `CLAUDE_CONFIG_DIR`, Codex as `CODEX_HOME`, and for Grok it replaces `~/.grok` as
+   * the directory its per-session home is built from.
+   *
+   * TODO(docs/plans/20261008-console-sessions-and-agent-accounts/07-account-pickers.md): drop
+   * this once the console dialog picks an account rather than a path. */
   claude_config_dir?: string | null;
   codex_config_dir?: string | null;
   grok_config_dir?: string | null;
@@ -69,7 +70,7 @@ export type ConfigDirField = "claude_config_dir" | "codex_config_dir" | "grok_co
 
 /** A named config directory of one agent, kept once for the whole application. The default
  * account of each agent is not one of these — it is the state of pinning nothing, and what it is
- * shown as is derived elsewhere (milestone 5 of the accounts plan), not sent as a record. */
+ * shown as is derived on the client from `AgentAvailability`, not sent as a record. */
 export interface Account {
   id: string;
   agent: Agent;
@@ -177,6 +178,27 @@ export interface GitStatus {
   behind: number;
   activity: GitActivity;
   error?: string | null;
+}
+
+/** Whether an agent's binary resolves on the user's login shell `PATH` — the only test an agent is
+ * held to. Three states: `not_determined` is where every run of the daemon begins, for every
+ * agent, until its one-time login-shell snapshot for this run lands; only that snapshot ever
+ * moves an agent to `available` or `unavailable`. "No agent available" is `unavailable` on every
+ * agent, never `not_determined` on any of them. */
+export type Availability = "not_determined" | "available" | "unavailable";
+
+/** One agent's availability and what its default account currently resolves to, derived once per
+ * daemon start from one login-shell snapshot and held as the daemon's own derived state — never a
+ * field of `Settings`, which only the user's own updates write. Always three entries, one per
+ * agent, replayed in `snapshot` and broadcast whole by `agent_availability_updated`. */
+export interface AgentAvailability {
+  agent: Agent;
+  availability: Availability;
+  /** The directory this agent's default account currently resolves to: the directory its own
+   * variable is exported to in the snapshot, else the agent's own usual default. For Grok Build
+   * this is the *source* home a session's per-session home would be built from, never the
+   * per-session home itself. Absent exactly while `availability` is `not_determined`. */
+  default_account_dir?: string | null;
 }
 
 /** The app-wide settings the daemon stores. One field for now; it is a record so it can grow. */
@@ -320,7 +342,14 @@ export type Event =
       /** Every status the daemon currently holds; empty on a fresh start. Keeps a reconnecting
        * client from having to re-ask. */
       git_statuses: GitStatus[];
+      /** Always three entries, one per agent, each `not_determined` until the daemon's one-time
+       * determination for this run lands. */
+      agent_availability: AgentAvailability[];
     }
+  /** Availability or a default account's resolved directory changed for one or more agents — the
+   * whole three-entry list. Broadcast once, when the daemon's one-time determination lands; never
+   * again afterwards. */
+  | { type: "agent_availability_updated"; agent_availability: AgentAvailability[] }
   /** The whole list of trusted directories, sent when it changes. */
   | { type: "trusted_directories_updated"; trusted_directories: string[] }
   | { type: "console_upserted"; console: Console }

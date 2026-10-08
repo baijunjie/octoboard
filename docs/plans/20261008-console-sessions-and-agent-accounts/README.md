@@ -240,7 +240,7 @@ milestone 1 settles. Nothing it adds says "hub".
 2. 02 The binding, and the end of the one-live rule (closed)
 3. 03 The sidebar's console sessions (closed)
 4. 04 Accounts: storage and protocol (closed)
-5. [Agent availability and the default account](05-availability-and-the-default-account.md)
+5. 05 Agent availability and the default account (closed)
 6. [The Agent accounts section in Settings](06-settings-section.md)
 7. [Choosing an account where an agent is chosen](07-account-pickers.md)
 8. [Switching a session's account](08-switching-a-sessions-account.md)

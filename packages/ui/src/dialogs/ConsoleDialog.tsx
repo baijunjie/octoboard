@@ -3,11 +3,11 @@ import React, { useId, useRef, useState } from "react";
 
 import { AGENT_CONFIG_DIR, AGENT_LABEL, AGENT_OPTIONS } from "../agents";
 import { imageToAvatar } from "../avatarImage";
-import { AGENT_ICON_OPTIONS } from "../components/AgentIcon";
+import { agentIconPickerOptions } from "../components/AgentIcon";
 import { ConsoleAvatar } from "../components/ConsoleAvatar";
 import { useT } from "../i18n/react";
 import type { Agent, ConfigDirField, Console } from "../protocol";
-import { useDaemon } from "../store";
+import { useDaemon, useDaemonStore } from "../store";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "./Dialog";
 import { OptionSelect } from "./OptionSelect";
 import { TextInput } from "./TextInput";
@@ -22,6 +22,8 @@ export function ConsoleDialog({
 }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
+  const agentAvailability = useDaemonStore((s) => s.agentAvailability);
+  const agentOptions = agentIconPickerOptions(t, agentAvailability);
   const [name, setName] = useState(editing?.name ?? "");
   const [consoleSessionAgent, setConsoleSessionAgent] = useState<Agent>(editing?.console_session_agent ?? "claude");
   const [defaultAgent, setDefaultAgent] = useState<Agent>(editing?.default_agent ?? "claude");
@@ -146,8 +148,8 @@ export function ConsoleDialog({
           />
         </div>
       </div>
-      <OptionSelect label={t("dialog.console.consoleSessionAgent")} options={AGENT_ICON_OPTIONS} value={consoleSessionAgent} onChange={setConsoleSessionAgent} />
-      <OptionSelect label={t("dialog.console.defaultAgent")} options={AGENT_ICON_OPTIONS} value={defaultAgent} onChange={setDefaultAgent} />
+      <OptionSelect label={t("dialog.console.consoleSessionAgent")} options={agentOptions} value={consoleSessionAgent} onChange={setConsoleSessionAgent} />
+      <OptionSelect label={t("dialog.console.defaultAgent")} options={agentOptions} value={defaultAgent} onChange={setDefaultAgent} />
       {shownAgents.map((agent) => {
         const { field, placeholder } = AGENT_CONFIG_DIR[agent];
         return (

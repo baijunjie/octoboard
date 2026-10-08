@@ -57,7 +57,9 @@ directory, and, while the console has an archived console session, the section's
 **Archived console sessions** — a submenu of the console's newest archived console sessions, each of which can be
 selected, and the way to the archive view of all of them (see "The archive view" below). This is the one entry a
 console session's own row never carries: archived console sessions are reached from the section, not from a row.
-With no console session at all, a line says so.
+With no console session at all, a line says so — or, with no agent available on the machine at all, says instead
+which agents Octoboard supports and that one of them has to be on the user's `PATH`, without saying how to install
+one; the **+** button is disabled in that case, since starting one would only be refused.
 
 Below it, a **Projects** heading and the console's projects (see "Order of projects
 and sessions" below). With no project, a message saying the console has none yet and an **Add project** button take

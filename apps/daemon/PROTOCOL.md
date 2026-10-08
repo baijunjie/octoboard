@@ -73,7 +73,8 @@ the request id as if it were a record id.
 
 | `type` | Fields |
 |---|---|
-| `snapshot` | `hosts`, `consoles`, `projects`, `sessions`, `trusted_directories`, `settings`, `git_statuses` — sent once, unprompted, when a control socket connects. `git_statuses` is every `GitStatus` the daemon currently holds, empty on a fresh start — carried here, like the trusted directories, so a reconnecting client never has to ask for it separately |
+| `snapshot` | `hosts`, `consoles`, `projects`, `sessions`, `trusted_directories`, `settings`, `git_statuses`, `agent_availability` — sent once, unprompted, when a control socket connects. `git_statuses` is every `GitStatus` the daemon currently holds, empty on a fresh start — carried here, like the trusted directories, so a reconnecting client never has to ask for it separately. `agent_availability` is always three entries, one per agent, each `not_determined` until the daemon's one-time login-shell snapshot for this run lands — see "Agent availability" below |
+| `agent_availability_updated` | `agent_availability` — the whole three-entry list, sent once, when the daemon's one-time determination of it lands; never again afterwards, since nothing re-determines it during a run |
 | `trusted_directories_updated` | `trusted_directories` — the whole list of trusted directory paths, sent when it changes |
 | `settings_updated` | `settings` — the whole `Settings` record, sent when `update_settings` actually changes it, and also whenever the account list changes (`create_account`, `update_account`, `delete_account`, or a console dialog's save that repoints or mints one) |
 | `console_upserted` / `project_upserted` / `session_upserted` | `console` / `project` / `session` — the whole record, under that key |
@@ -154,6 +155,7 @@ A client also branches on some codes, instead of only showing them:
 | `console_session_trust_not_asked` | — | A go-ahead for a console session's trust screen, which Octoboard answers without asking |
 | `binary_not_found` | `binary` | The agent's binary (or `git`) is not on the shell's `PATH` |
 | `shell_environment_timeout` | `shell`, `command`, `timeout` | The login shell did not finish printing its environment in time |
+| `agent_not_available` | `agent` | `open_session`'s resolved agent has been determined unavailable (its binary does not resolve on the login shell's `PATH`); never raised while that determination is still pending. The console session's own `start_session` tool is refused the same way, as a tool error carrying this same text |
 
 `session_notice` codes:
 
@@ -197,6 +199,7 @@ Page    { id, console_id, html, anchor_message_id?, created_at }
 Settings  { auto_sync_repositories, accounts: Account[] }
 GitStatus { project, repository, branch?, detached, upstream?, ahead, behind,
             activity: "idle"|"checking"|"syncing", error? }
+AgentAvailability { agent, availability: "not_determined"|"available"|"unavailable", default_account_dir? }
 ```
 
 `agent` is one of `claude`, `codex`, `grok`. An `Account` is a named config directory of one agent, kept
@@ -269,6 +272,34 @@ verbatim, untranslatable `git` or operating-system message from the last failed 
 succeeding again — a fetch that fails does not stop the local read, so a status can carry both an error and usable
 numbers. A step that runs past `GIT_COMMAND_TIMEOUT` produces neither: its message says only that it did not finish
 in time.
+
+### Agent availability
+
+`AgentAvailability` is one agent's availability and what its default account currently resolves to, derived once per
+daemon start from one login-shell snapshot — the same kind a launch takes — and held in memory, never in `Settings`:
+it is written only by this determination, never by the user's own updates. `availability` has three states:
+`not_determined` (what every run of the daemon begins with, for every agent, until the snapshot lands),
+`available` (the agent's binary resolved on the snapshot's `PATH`) and `unavailable` (it did not). "No agent
+available" is `unavailable` found on every agent, never `not_determined` on any of them — the two must not be
+conflated, since the latter means nothing has been checked yet, not that nothing was found.
+
+`default_account_dir` is the directory the agent's default account currently resolves to: the directory its own
+variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GROK_HOME`) is exported to in that same snapshot, else the agent's own
+usual default (see "Agent config directories" in `docs/product/consoles-and-projects.md`) under the snapshot's own
+`HOME`. For Grok Build this is the *source* home a session's per-session home would be built from, never the
+per-session home itself, which is Octoboard's own and exists only for the duration of a process. It is `null`
+exactly while `availability` is `not_determined` — there is nothing to show yet, and this is what makes the
+not-yet-determined state representable on the wire rather than implied by an absent field.
+
+Determining this creates or removes no account: the default account exists for every agent by construction (it pins
+nothing), so nothing here mints one, and a snapshot that does not complete — any of the three ways `env_shell`'s own
+snapshot can fail — leaves every agent exactly as it started, `not_determined`, rather than being read as a failure
+of the daemon's own start or as every agent being unavailable.
+
+`open_session` refuses with `agent_not_available` when the session's resolved agent is `unavailable`; it refuses
+nothing while that agent is still `not_determined`, since the launch's own refusal of a missing binary already
+covers a binary that turns out not to be there. The console session's own `start_session` tool is refused through
+the same path, as a tool error carrying the same reason.
 
 ### Daemon behaviour, per project
 

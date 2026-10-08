@@ -1,11 +1,12 @@
 import { Checkbox, Description, Label } from "@heroui/react";
 import React, { useState } from "react";
 
-import { AGENT_ICON_OPTIONS } from "../components/AgentIcon";
+import { noAgentAvailable } from "../agents";
+import { agentIconPickerOptions } from "../components/AgentIcon";
 import { useT } from "../i18n/react";
 import type { Agent, Console, Project, Session } from "../protocol";
 import { newestConsoleSession } from "../sidebar/order";
-import { useDaemon } from "../store";
+import { useDaemon, useDaemonStore } from "../store";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
 import { OptionSelect } from "./OptionSelect";
 import { TextInput } from "./TextInput";
@@ -20,11 +21,11 @@ import { TextInput } from "./TextInput";
  * the sessions appearing there is ours to select.
  *
  * The checkbox below still offers only a yes/no choice, binding to the console's console session
- * row (`newestConsoleSession`) when checked — a stand-in for choosing among several, which
- * milestone 12 of `docs/plans/20261008-console-sessions-and-agent-accounts/` replaces this with.
- * The binding is immutable once the session opens, so with nothing to bind to the checkbox is
- * disabled rather than left to send an unbound session silently: `newestConsoleSession` is
- * `undefined` until a console session is live, and there is no way back from that choice.
+ * row (`newestConsoleSession`) when checked — a stand-in for choosing among several (see the TODO
+ * below). The binding is immutable once the session opens, so with nothing to bind to the
+ * checkbox is disabled rather than left to send an unbound session silently:
+ * `newestConsoleSession` is `undefined` until a console session is live, and there is no way back
+ * from that choice.
  *
  * TODO(docs/plans/20261008-console-sessions-and-agent-accounts/12-binding-selector.md): replace
  * the checkbox with a real choice of console session.
@@ -44,6 +45,8 @@ export function SessionDialog({
 }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
+  const agentAvailability = useDaemonStore((s) => s.agentAvailability);
+  const blocked = noAgentAvailable(agentAvailability);
   const [agent, setAgent] = useState<Agent>(project.default_agent ?? parentConsole.default_agent);
   const [title, setTitle] = useState("");
   const [reportToConsoleSession, setReportToConsoleSession] = useState(false);
@@ -74,9 +77,11 @@ export function SessionDialog({
       onClose={onClose}
       submitLabel={t("dialog.session.open")}
       busy={busy}
+      submitDisabled={blocked}
       onSubmit={submit}
     >
-      <OptionSelect label={t("dialog.session.agent")} options={AGENT_ICON_OPTIONS} value={agent} onChange={setAgent} />
+      {blocked && <p className="text-sm text-danger">{t("agents.installPrompt")}</p>}
+      <OptionSelect label={t("dialog.session.agent")} options={agentIconPickerOptions(t, agentAvailability)} value={agent} onChange={setAgent} />
       <TextInput label={t("dialog.session.titleOptional")} value={title} onChange={setTitle} />
       {/* HeroUI's variant for a control on a surface (the dialog), whose unselected box the default
           variant would leave to blend into it. */}

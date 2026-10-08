@@ -44,7 +44,8 @@ the repository root and cover both crates; `-p octoboardd` narrows either to thi
 | `src/reporting.rs` | The channel between a console session and its project sessions: the brief a task is handed over as, writing a message into a running session, a report reaching the console session, the report synthesised when a session stops without sending one, automatic archiving, and rendering a report panel form submission into the console session's message |
 | `src/outbox.rs` | The per-session queue every message Octoboard writes into an agent passes through: order-preserving, one drainer per session, and what happens to a message the session only partly accepted |
 | `src/store.rs` | Coordinator's SQLite storage for consoles, projects, sessions, pages, the trusted folders, the user settings and the host table |
-| `src/state.rs` | Shared daemon state: the session status transitions, and each project's live git status and check claim |
+| `src/state.rs` | Shared daemon state: the session status transitions, each project's live git status and check claim, and every agent's current availability and resolved default account |
+| `src/availability.rs` | Working out, once per daemon start, which agents are available and what each one's default account resolves to |
 | `src/git_status.rs` | Checks one project's git status against its remote and, with auto-sync on, fast-forwards it — see `PROTOCOL.md`'s "Daemon behaviour, per project" |
 | `src/session.rs` | One running agent process: its PTY, its output fan-out, how it is stopped |
 | `src/trust.rs` | Recognising Claude Code's workspace-trust screen in a Claude session's terminal output, deciding whether the user has consented (per project or through a trusted parent folder; console sessions are answered without asking), asking the application through `claude_trust_prompt` / `confirm_claude_trust`, and answering the screen — the only code that types keys into a session on its own |

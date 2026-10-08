@@ -23,6 +23,12 @@ export const en = {
   "common.removeTag": "Remove tag",
   "common.save": "Save",
 
+  // Shared across the session dialog, the console dialog's agent rows and the sidebar's empty
+  // states — anywhere availability (`AgentAvailability`) is shown or acted on.
+  "agents.installPrompt":
+    "{appName} supports Claude Code, Codex and Grok Build. Make sure one of them is on your PATH to open a session.",
+  "agents.notInstalled": "{agent} (not installed)",
+
   "startup.daemonFailed": "The daemon failed to start: {error}",
   "startup.noAddress":
     "No daemon address is known. The Tauri shell passes a port via {port}; for {dev} against a daemon started by hand, open the page with {port}, set {portVar}, or start the dev server with {proxyVar} to proxy to it.",
@@ -117,6 +123,8 @@ export const en = {
   "daemon.binary_not_found": "“{binary}” was not found on PATH in the snapshotted shell environment.",
   "daemon.shell_environment_timeout":
     "“{shell} -l -i -c '{command}'” did not finish within {timeout}. A shell startup file is probably blocked on something other than stdin, or it left a background process holding the shell's output open. {appName} will not launch while the environment is unknown, because it will not guess at one. Fix or skip the slow step in the shell's rc files.",
+  "daemon.agent_not_available":
+    "{agent} is not available on this machine: its binary does not resolve on your login shell's PATH. {appName} supports Claude Code, Codex and Grok Build; make sure one of them is on your PATH to open a session.",
   "daemon.claude_workspace_untrusted":
     "Claude Code has not been trusted with this directory, so this project's own “allow” permission rules are ignored until Claude Code's trust prompt is answered. Its “deny” rules still apply, so a session is only more restrictive, never less. {appName} answers that prompt for you once you have agreed to it.",
   "daemon.queued_messages_dropped":

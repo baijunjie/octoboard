@@ -64,8 +64,8 @@ impl Store {
                 config_dir TEXT NOT NULL,
                 created_at INTEGER NOT NULL
             );
-            -- Backstop for "a name is required and unique within its agent" (the topic README's
-            -- own words): `coordinator` checks this before every write that can affect a name, but
+            -- Backstop for the rule that an account's name is required and unique within its
+            -- agent: `coordinator` checks this before every write that can affect a name, but
             -- the invariant belongs on the table it protects, not only on the callers that happen
             -- to remember to check it. `LOWER` matches `coordinator::account_name_key`'s
             -- case-insensitive comparison; it is ASCII-only in SQLite, which is a narrower fold
@@ -121,8 +121,8 @@ impl Store {
                 has_conversation INTEGER NOT NULL DEFAULT 0,
                 -- The console session this (project) session reports to, or NULL outside the
                 -- orchestration. Always NULL for a console session itself. No `REFERENCES`: what
-                -- happens to a bound session when its console session is archived or deleted is not
-                -- decided until milestone 11 of the console-sessions-and-agent-accounts plan.
+                -- happens to a bound session when its console session is archived or deleted is
+                -- not yet decided.
                 bound_to         TEXT,
                 -- Set only for a console session (`role = 'console'`); NULL for a project session.
                 colour           TEXT,
@@ -155,8 +155,7 @@ impl Store {
         // No migration runs here: the application has not shipped, so a database whose schema is
         // not this one has already been moved aside by `supersede_if_outdated`, above, rather than
         // upgraded in place. `CREATE TABLE IF NOT EXISTS` therefore only ever meets either a brand
-        // new file or one already in this shape (see "The database is rewritten rather than
-        // migrated" in `docs/plans/20261008-console-sessions-and-agent-accounts/README.md`).
+        // new file or one already in this shape.
         let store = Self {
             conn: Mutex::new(conn),
         };
@@ -594,8 +593,7 @@ impl Store {
     /// ordinal is a read-then-increment counter kept on the console record. Two concurrent opens
     /// for the same console must not both read the same snapshot and pick the same colour, or both
     /// consume the same ordinal — the shape of race the deleted one-live-console-session claim used
-    /// to guard against by a different means (see "Development notes" in
-    /// `docs/plans/20261008-console-sessions-and-agent-accounts/02-binding-data-model.md`).
+    /// to guard against by a different means.
     ///
     /// `session.colour`, `session.ordinal` and `session.title` (when `title` is `None`) are
     /// overwritten; every other field of `session` is inserted as given.
@@ -603,10 +601,9 @@ impl Store {
     /// The ordinal is consumed here, before the caller has launched the agent process, and is not
     /// given back if that launch then fails: a console whose agent binary is missing hands out
     /// "Hub 2" to its next successful open after a failed one at "Hub 1", with a gap in between.
-    /// This is the intended reading of "one past the highest ever used" (see "Technical design" in
-    /// `docs/plans/20261008-console-sessions-and-agent-accounts/02-binding-data-model.md`), not a
-    /// bug to fix by moving the increment into the same transaction as the launch: a title is
-    /// never reused once handed out, whether or not the session behind it ever came up.
+    /// This is the intended reading of "one past the highest ever used", not a bug to fix by
+    /// moving the increment into the same transaction as the launch: a title is never reused once
+    /// handed out, whether or not the session behind it ever came up.
     pub fn insert_console_session(
         &self,
         mut session: Session,
@@ -651,9 +648,9 @@ impl Store {
 
     /// Writes back the fields that change over a session's life. Identity and placement
     /// (`console_id`, `project_id`, `role`, `origin`, `bound_to`, `colour`, `ordinal`) never change,
-    /// and neither does `account_id` or `config_dir` — both are written once, at creation, and the
-    /// write path that lets a running session move to another account is milestone 8 of the
-    /// accounts plan — so none of those are touched here. `pinned` is the user's own statement
+    /// and neither does `account_id` or `config_dir` — both are written once, at creation, and
+    /// moving a running session to another account is a feature not yet built, so none of those
+    /// are touched here. `pinned` is the user's own statement
     /// ([`Self::set_session_pinned`]), which a record read earlier must not overwrite.
     /// Returns whether a row was written: `false` means the session is gone (deleted meanwhile).
     pub fn update_session(&self, session: &Session) -> Result<bool> {

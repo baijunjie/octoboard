@@ -22,6 +22,14 @@ From milestone 04, accounts: storage and protocol:
   list out of the settings record, the fields, `resolve_console_dirs`, the re-reads and
   `republish_consoles_referencing` all go. The `TODO` in the store names this milestone.
 
+- **Both of today's pickers can sit on an unavailable agent as their current value and submit it.** From
+  milestone 05: with Claude Code not installed and the project's default agent Claude, the session dialog
+  opens on "Claude Code (not installed)", nothing is suppressed because an agent *is* available, and the
+  daemon refuses the open with `agent_not_available`. The new console dialog's two pickers default to
+  Claude the same way. The topic's own premise is that the application suppresses every request it knows
+  would be refused, and here it knows. This milestone replaces both controls, so the initial entry it
+  resolves has to land on something selectable.
+
 ## Technical design
 
 - [ ] **The console dialog.** Where it shows a directory input for each currently selected agent, it shows a picker

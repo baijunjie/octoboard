@@ -625,8 +625,8 @@ mod tests {
     }
 
     /// A project session bound to one console session has its report delivered to that one, and
-    /// not to another live console session in the same console — the completion criterion in
-    /// "Technical design" of `docs/plans/20261008-console-sessions-and-agent-accounts/02-binding-data-model.md`.
+    /// not to another live console session in the same console: reports are routed by the
+    /// binding, never by guessing which console session a project session's reports belong to.
     #[test]
     fn a_report_reaches_only_the_console_session_it_is_bound_to() {
         let state = Arc::new(crate::state::tests::app_state("report-routes-by-binding"));

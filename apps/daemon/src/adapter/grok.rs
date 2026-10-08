@@ -95,9 +95,9 @@ impl AgentAdapter for GrokAdapter {
         // created on first use: the per-session home only links what already exists in the source,
         // so an empty one would have Grok write its login and conversation into the throw-away
         // farm instead, discarded with the process — the exact silent failure a switch must not
-        // produce (see "Grok Build is the exception" in the topic README). Checked only for a
-        // *pinned* source home: the default's own (the shell's `GROK_HOME`, or `~/.grok`) is the
-        // user's existing setup, which this milestone has no business second-guessing.
+        // produce. Checked only for a *pinned* source home: the default's own (the shell's
+        // `GROK_HOME`, or `~/.grok`) is the user's existing setup, which is not Octoboard's to
+        // second-guess.
         if let Some(dir) = pinned {
             require_initialized_grok_home(dir)?;
         }
@@ -145,8 +145,7 @@ impl AgentAdapter for GrokAdapter {
 /// goes into the farm instead and is discarded with the process — the exact silent failure this
 /// check exists to prevent. Whether the home also holds a login (`auth.json`) says nothing either
 /// way: an API-key user's legitimate home has `sessions/` with no `auth.json`, and that is not
-/// Octoboard's business to check (see the topic README's "An agent is available when its binary
-/// resolves" decision).
+/// Octoboard's business to check.
 fn require_initialized_grok_home(dir: &Path) -> Result<()> {
     if dir.join("sessions").is_dir() {
         return Ok(());
@@ -203,20 +202,11 @@ fn build_grok_home(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Result<PathB
 
 /// The user's own Grok home when the session pins none, read from the launch environment rather
 /// than the daemon's: `GROK_HOME` is a user setting, and the daemon's own copy of it may belong to
-/// another Octoboard session's farm when the daemon was started from inside one.
+/// another Octoboard session's farm when the daemon was started from inside one. Shared with
+/// `crate::availability`, which shows the same directory as the default account's before any
+/// session has opened.
 fn default_grok_home(spec: &LaunchSpec<'_>) -> PathBuf {
-    if let Some(home) = spec
-        .shell_env
-        .get("GROK_HOME")
-        .filter(|home| !home.is_empty())
-    {
-        return PathBuf::from(home);
-    }
-    // Also the user's own `HOME` rather than the daemon's, for the same reason.
-    match spec.shell_env.get("HOME").filter(|home| !home.is_empty()) {
-        Some(home) => PathBuf::from(home).join(".grok"),
-        None => crate::paths::home_dir().join(".grok"),
-    }
+    super::default_account_dir(Agent::Grok, spec.shell_env)
 }
 
 /// Appends Octoboard's MCP server to the farm's own `config.toml`. Appended rather than written

@@ -194,17 +194,7 @@ fn codex_home(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> PathBuf {
     if let Some(dir) = pinned {
         return dir.to_path_buf();
     }
-    if let Some(home) = spec
-        .shell_env
-        .get("CODEX_HOME")
-        .filter(|home| !home.is_empty())
-    {
-        return PathBuf::from(home);
-    }
-    match spec.shell_env.get("HOME").filter(|home| !home.is_empty()) {
-        Some(home) => PathBuf::from(home).join(".codex"),
-        None => crate::paths::home_dir().join(".codex"),
-    }
+    super::default_account_dir(Agent::Codex, spec.shell_env)
 }
 
 /// A TOML basic string. JSON string escaping is a subset of TOML's, so serde_json produces a valid

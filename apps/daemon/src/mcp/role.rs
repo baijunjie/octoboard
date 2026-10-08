@@ -192,12 +192,10 @@ pub fn write_console_session_instructions(console: &Console) -> Result<()> {
     if let Some(name) = wanted {
         let path = workdir.join(name);
         // Written to a temporary file and renamed into place rather than `std::fs::write`, which
-        // truncates before it writes: the one-live-console-session claim that used to serialise
-        // this against itself is gone (see `docs/plans/20261008-console-sessions-and-agent-accounts/
-        // 02-binding-data-model.md`), so two console sessions of the same console can now open at
-        // once, and both would otherwise race to rewrite the same file — a reader of the truncated
-        // half would see a console session's agent come up with no instructions at all. The rename
-        // is atomic on the same filesystem, which the temporary file is by construction, being a
+        // truncates before it writes: a console may hold several live console sessions at once,
+        // and both would otherwise race to rewrite the same file — a reader of the truncated half
+        // would see a console session's agent come up with no instructions at all. The rename is
+        // atomic on the same filesystem, which the temporary file is by construction, being a
         // sibling of `path`.
         let temp_path = workdir.join(format!("{name}.octoboard-tmp-{}", uuid::Uuid::new_v4()));
         std::fs::write(

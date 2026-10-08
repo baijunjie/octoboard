@@ -32,7 +32,7 @@ pub mod codex;
 pub mod grok;
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
@@ -130,6 +130,33 @@ pub fn pinned_config_dir<'a>(spec: &LaunchSpec<'a>, agent: Agent) -> Result<Opti
         }
         dir => Ok(dir),
     }
+}
+
+/// The directory this agent's default account resolves to — what "pinning nothing" means at
+/// launch: the directory its own variable is exported to in `shell_env`, else the agent's own
+/// usual default under the home directory the snapshot carries, else the daemon's own. For
+/// Grok Build this is the *source* home a session's per-session home is built from
+/// (`grok::build_grok_home`), never the per-session home itself, which is Octoboard's own and
+/// exists only for the duration of a process.
+///
+/// Shared by `crate::availability`, which shows it as the default account's directory before any
+/// session has opened, and by `grok::default_grok_home`, which a launch with no pinned account
+/// builds the farm from.
+pub fn default_account_dir(agent: Agent, shell_env: &HashMap<String, String>) -> PathBuf {
+    let (var, default_name) = match agent {
+        Agent::Claude => ("CLAUDE_CONFIG_DIR", ".claude"),
+        Agent::Codex => ("CODEX_HOME", ".codex"),
+        Agent::Grok => ("GROK_HOME", ".grok"),
+    };
+    if let Some(dir) = shell_env.get(var).filter(|dir| !dir.is_empty()) {
+        return PathBuf::from(dir);
+    }
+    let home = shell_env
+        .get("HOME")
+        .filter(|home| !home.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(crate::paths::home_dir);
+    home.join(default_name)
 }
 
 #[derive(Default)]

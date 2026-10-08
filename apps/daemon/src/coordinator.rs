@@ -18,8 +18,8 @@ use crate::hostfs;
 use crate::mcp;
 use crate::paths;
 use crate::protocol::{
-    error_code, now_millis, Account, Agent, CodedError, Console, Event, Origin, Project,
-    ProjectSource, RequestBody, Role, Session, SessionStatus,
+    error_code, now_millis, Account, Agent, Availability, CodedError, Console, Event, Origin,
+    Project, ProjectSource, RequestBody, Role, Session, SessionStatus,
 };
 use crate::reporting;
 use crate::state::AppState;
@@ -678,9 +678,8 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
             let workdir = PathBuf::from(&console.workdir);
             // Refreshed right before the console session launches, so the file it reads is the one
             // for the agent this console currently uses whatever happened to it since. A console
-            // may now hold any number of live console sessions, so nothing here checks for one
-            // already running — see "The one-live-console-session rule is deleted" in
-            // `docs/plans/20261008-console-sessions-and-agent-accounts/02-binding-data-model.md`.
+            // may hold any number of live console sessions, so nothing here checks for one already
+            // running.
             mcp::role::write_console_session_instructions(&console)?;
             // Overwritten by `Store::insert_console_session` below, which decides the real default
             // ("Hub <ordinal>") once it knows the ordinal; nothing here reads this value.
@@ -697,6 +696,7 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         (_, Some(project)) => project.default_agent.unwrap_or(console.default_agent),
         (_, None) => console.default_agent,
     });
+    refuse_if_agent_unavailable(state, agent)?;
 
     let (account_id, config_dir) = session_account(state, agent, &console)?;
 
@@ -980,10 +980,8 @@ async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Val
 }
 
 /// One console session to address a report-panel submission to, preferring one with a process
-/// behind it: a console may now hold several, but a page still belongs to the console as a whole
-/// rather than to one of them (the report panel is not scoped to a console session until milestone
-/// 9 of `docs/plans/20261008-console-sessions-and-agent-accounts/`, which is also what removes this
-/// guess in favour of a page simply carrying its own console session's id).
+/// behind it: a console may hold several, but a page still belongs to the console as a whole
+/// rather than to one of them, so which one gets the submission is a guess.
 ///
 /// TODO(docs/plans/20261008-console-sessions-and-agent-accounts/09-report-panel-scope.md): remove
 /// this once a page carries the id of the console session it belongs to.
@@ -998,7 +996,29 @@ fn newest_console_session(state: &Arc<AppState>, console_id: &str) -> Result<Opt
     Ok(candidates.into_iter().next())
 }
 
-/// The account id and the directory a new session is pinned to: the console's reference for the
+/// Refuses to open a session whose resolved agent has been *determined* unavailable — never while
+/// that determination is still pending, which the launch's own refusal of a missing binary already
+/// covers; see "Opening a session" in `docs/product/sessions.md`. Checked here, ahead of
+/// everything that follows, so this is also what a console session's own `start_session` tool is
+/// refused through — it calls this same function.
+fn refuse_if_agent_unavailable(state: &Arc<AppState>, agent: Agent) -> Result<()> {
+    if state.agent_availability_of(agent).availability != Availability::Unavailable {
+        return Ok(());
+    }
+    Err(CodedError::raised(
+        error_code::AGENT_NOT_AVAILABLE,
+        format!(
+            "{} is not available: its binary does not resolve on your login shell's PATH. {} \
+             supports Claude Code, Codex and Grok Build; install one of them and make sure it is \
+             on your PATH to open a session.",
+            agent.label(),
+            crate::APP_NAME
+        ),
+        &[("agent", agent.label())],
+    ))
+}
+
+/// The account id and the config directory a session of this console should launch with, for the
 /// session's own agent, and that account's directory at this moment — `None` for both when the
 /// reference names the default account (the state of pinning nothing).
 fn session_account(
@@ -1024,9 +1044,9 @@ fn session_account(
 /// What the user typed for one agent's config directory, as the absolute, lexically normalised
 /// path an account's own directory is stored as. Required and non-blank: an account always has a
 /// directory, unlike a console's field, which clears to the default account instead. Existence is
-/// not checked — see "An account's directory is not checked for existence" in the topic README —
-/// so this may name a directory that does not exist yet; the agent that needs one to already exist
-/// (Grok Build, against a *pinned* source home) checks that itself, at launch.
+/// not checked: the agent creates its own config directory on first run, so a user pointing an
+/// account at a directory they are about to create should not be stopped; the agent that needs one
+/// to already exist (Grok Build, against a *pinned* source home) checks that itself, at launch.
 fn normalize_account_dir(agent: Agent, text: &str) -> Result<String> {
     let text = text.trim();
     if text.is_empty() {
@@ -1257,10 +1277,10 @@ fn mint_account_for_dir(state: &Arc<AppState>, agent: Agent, dir: &str) -> Resul
 }
 
 /// The account of `agent` already pointed at `dir`, if any. Two directories that normalise to the
-/// same stored string are one login — "accounts replace the console's config directory fields" in
-/// the topic README — so the dialog's save must land on that one account rather than minting a
-/// second one for it, which is the common way a duplicate name used to appear (see item 1 of the
-/// milestone's review: the old fallback name was never checked for a collision either).
+/// same stored string are one login, so the dialog's save must land on that one account rather
+/// than minting a second one for it, which would otherwise be the common way a duplicate name
+/// appears: the fallback name derived from a directory's last path component collides with
+/// itself.
 fn find_account_by_dir(state: &Arc<AppState>, agent: Agent, dir: &str) -> Result<Option<Account>> {
     Ok(state
         .store
@@ -1289,8 +1309,7 @@ fn normalize_console_account_path(agent: Agent, path: Option<String>) -> Result<
 /// account. This is the half that writes, so call it only once every field on the request has
 /// been validated.
 ///
-/// Implements the repoint-vs-mint rule from "Keep the console dialog working unchanged" in
-/// `docs/plans/20261008-console-sessions-and-agent-accounts/04-accounts-storage.md`, with one case
+/// Keeps the console dialog's save working the way it did before accounts existed, with one case
 /// ahead of it: a directory that already names an existing account of this agent is reused
 /// outright, before repointing or minting is even considered — two accounts holding the same
 /// directory would be the same login shown twice. Short of that: a directory saved where this
@@ -1719,6 +1738,60 @@ mod tests {
         assert!(state.store.get_session("project").unwrap().is_none());
 
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    /// A session whose resolved agent has been determined unavailable is refused before anything
+    /// is launched or written — no record, no claim, no process.
+    #[tokio::test]
+    async fn opening_a_session_is_refused_when_its_resolved_agent_is_unavailable() {
+        let state = Arc::new(crate::state::tests::app_state(
+            "open-session-agent-unavailable",
+        ));
+        let dir = temp_dir("open-session-agent-unavailable");
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &dir))
+            .unwrap();
+        state.set_agent_availability(vec![crate::protocol::AgentAvailability {
+            agent: Agent::Claude,
+            availability: Availability::Unavailable,
+            default_account_dir: Some("/home/user/.claude".to_string()),
+        }]);
+
+        let err = open_session(
+            &state,
+            OpenRequest {
+                console_id: "console-1".to_string(),
+                project_id: None,
+                agent: None,
+                task: None,
+                title: None,
+                origin: Origin::User,
+                bound_to: None,
+            },
+        )
+        .await
+        .expect_err("refused");
+        let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+        assert_eq!(coded.code, error_code::AGENT_NOT_AVAILABLE);
+        assert!(err.to_string().contains("Claude Code"), "{err}");
+        // Refused ahead of the write that would have recorded a console session.
+        assert!(state.store.list_sessions().unwrap().is_empty());
+
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    /// While availability has not yet been determined — the state every run begins in — nothing is
+    /// refused on that account: the launch's own refusal already covers a binary that is not
+    /// there.
+    #[test]
+    fn nothing_is_refused_for_unavailability_while_it_is_not_yet_determined() {
+        let state = Arc::new(crate::state::tests::app_state("agent-not-yet-determined"));
+        assert_eq!(
+            state.agent_availability_of(Agent::Claude).availability,
+            Availability::NotDetermined
+        );
+        assert!(refuse_if_agent_unavailable(&state, Agent::Claude).is_ok());
     }
 
     /// `~` is the home directory of the host the daemon runs on, like every other path it takes.
@@ -2323,7 +2396,7 @@ mod tests {
 
     /// A directory that already names an existing account of the same agent is reused outright —
     /// the dialog's save must not mint a second account for one directory, which is the common
-    /// route to two accounts a user cannot tell apart (see the topic README's uniqueness rule).
+    /// route to two accounts a user cannot tell apart.
     #[test]
     fn saving_a_path_that_equals_another_accounts_directory_reuses_it() {
         let state = Arc::new(crate::state::tests::app_state("account-reuse-by-dir"));

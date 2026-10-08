@@ -18,6 +18,7 @@ import {
 import { setInteractionModality } from "react-aria";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { noAgentAvailable } from "../agents";
 import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
 import { AgentIcon } from "../components/AgentIcon";
 import { ConsoleAvatar } from "../components/ConsoleAvatar";
@@ -508,6 +509,14 @@ function ConsoleSessionsSection({
   selectedSessionId?: string;
 }): React.ReactElement {
   const t = useT();
+  const agentAvailability = useDaemonStore((s) => s.agentAvailability);
+  // With no agent on the machine at all, starting a console session would only be refused by the
+  // daemon the moment it tried — so the action is disabled here instead, and the install prompt
+  // is shown. The prompt stands on its own rather than inside the empty panel, because a console
+  // can be blocked while still holding console sessions left over from before: one that was
+  // interrupted (an agent removed, or a `PATH` change) stays live and keeps `liveSessions` from
+  // being empty.
+  const blocked = noAgentAvailable(agentAvailability);
   const consoleSessions = sessions.filter((s) => s.role === "console");
   const live = liveSessions(consoleSessions);
   const archivedConsoleSessions = archivedSessions(consoleSessions);
@@ -525,7 +534,7 @@ function ConsoleSessionsSection({
       <SectionHeading
         action={
           <>
-            <RowIconButton icon={Plus} label={t("sidebar.consoleSessions.new")} onPress={openNew} />
+            <RowIconButton icon={Plus} label={t("sidebar.consoleSessions.new")} onPress={openNew} isDisabled={blocked} />
             {archivedConsoleSessions.length > 0 && (
               <ActionMenu label={t("sidebar.consoleSessions.actions", { name: thisConsole.name })} items={menu} />
             )}
@@ -534,9 +543,9 @@ function ConsoleSessionsSection({
       >
         {t("sidebar.consoleSessions.heading")}
       </SectionHeading>
-      {live.length === 0 ? (
-        <EmptyPanel compact icon={MessageSquarePlus} message={t("sidebar.consoleSessions.empty")} />
-      ) : (
+      {blocked && <EmptyPanel compact icon={MessageSquarePlus} message={t("agents.installPrompt")} />}
+      {live.length === 0 && !blocked && <EmptyPanel compact icon={MessageSquarePlus} message={t("sidebar.consoleSessions.empty")} />}
+      {live.length > 0 && (
         <div ref={listRef} className="relative flex flex-col gap-0.5">
           {live.map((session) => (
             <div key={session.id} data-flip={session.id}>

@@ -71,9 +71,7 @@ function liveConsoleSessions(sessions: Session[], consoleId: string): Session[] 
 }
 
 /** The newest of a console's `liveConsoleSessions`, or `undefined` with none. This is what the
- * session dialog's "report to console session" box binds to, as a stand-in for a real choice until
- * milestone 12 of `docs/plans/20261008-console-sessions-and-agent-accounts/` replaces the box with
- * one.
+ * session dialog's "report to console session" box binds to, as a stand-in for a real choice.
  *
  * TODO(docs/plans/20261008-console-sessions-and-agent-accounts/12-binding-selector.md): once the
  * dialog offers a real choice of console session, this is no longer what it binds to by default. */

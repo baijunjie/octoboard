@@ -5,6 +5,7 @@
 
 mod access;
 mod adapter;
+mod availability;
 mod coordinator;
 mod env_shell;
 mod git_status;
@@ -161,6 +162,11 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
     if let Some(parent_pid) = parent_pid {
         spawn_parent_watch(state.clone(), parent_pid);
     }
+
+    // Off the runtime rather than ahead of the line above: a ten-second shell snapshot must not
+    // put that cost on every application launch, and clients are served before it lands either way
+    // (see `apps/daemon/src/availability.rs`).
+    availability::spawn_determine(state.clone());
 
     let serve = axum::serve(listener, server::router(state.clone()));
     tokio::select! {

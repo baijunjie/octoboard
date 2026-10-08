@@ -17,7 +17,7 @@ fn params(pairs: &[(&str, &str)]) -> Params {
         .collect()
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Agent {
     Claude,
@@ -53,8 +53,7 @@ pub enum Origin {
 /// A console session's badge colour, assigned once on creation from this fixed palette and never
 /// changed afterwards (see `Session.colour`). The daemon only ever hands the label around; each
 /// variant's light and dark CSS values live in the UI's own colour system
-/// (`packages/ui/src/style.css`), not here — "Reusable capabilities" in
-/// `docs/plans/20261008-console-sessions-and-agent-accounts/02-binding-data-model.md`.
+/// (`packages/ui/src/style.css`), not here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConsoleSessionColour {
@@ -130,10 +129,8 @@ pub struct Console {
     pub default_agent: Agent,
     /// The account each agent's sessions opened in this console read, by id; one setting per
     /// agent, and a session reads only its own agent's. `None` means that agent's default account
-    /// — the state of pinning nothing (see "Agent accounts" in
-    /// `docs/plans/20261008-console-sessions-and-agent-accounts/README.md`). What a referenced
-    /// account resolves to at launch is `Account.config_dir`, read through `crate::store`, not
-    /// carried here.
+    /// — the state of pinning nothing. What a referenced account resolves to at launch is
+    /// `Account.config_dir`, read through `crate::store`, not carried here.
     pub claude_account_id: Option<String>,
     /// Codex's own reference; see `claude_account_id`.
     pub codex_account_id: Option<String>,
@@ -141,9 +138,11 @@ pub struct Console {
     pub grok_account_id: Option<String>,
     /// The referenced account's directory, derived for display and never stored: `None` for the
     /// default account. Carried here only so the console dialog can keep showing and saving a path
-    /// per agent unchanged until milestone 7 of the accounts plan replaces it with a picker — see
-    /// "Keep the console dialog working unchanged" in `04-accounts-storage.md`. Resolved by
-    /// `crate::store::Store::get_console` / `list_consoles`, not settable directly.
+    /// per agent unchanged. Resolved by `crate::store::Store::get_console` / `list_consoles`, not
+    /// settable directly.
+    ///
+    /// TODO(docs/plans/20261008-console-sessions-and-agent-accounts/07-account-pickers.md): drop
+    /// this once the console dialog picks an account rather than a path.
     pub claude_config_dir: Option<String>,
     /// Codex's own derived directory; see `claude_config_dir`.
     pub codex_config_dir: Option<String>,
@@ -159,8 +158,7 @@ pub struct Console {
 /// id wherever a config directory is referred to — a console's per-agent setting, a session's own
 /// copy of it. Every agent also has a *default* account, which is not a row here: it is the state
 /// of pinning nothing, its name is Octoboard's own untranslatable-here word for it (derived where
-/// it is shown, not stored), and it cannot be created, renamed or removed. See "Every agent has a
-/// default account" in `docs/plans/20261008-console-sessions-and-agent-accounts/README.md`.
+/// it is shown, not stored), and it cannot be created, renamed or removed.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Account {
     pub id: String,
@@ -171,17 +169,50 @@ pub struct Account {
     /// agents.
     pub name: String,
     /// Absolute, lexically normalised, exactly as a console's pinned directory is stored today.
-    /// Existence is not checked when this is set — see "An account's directory is not checked for
-    /// existence" in the topic README — so this may name a directory that does not exist yet.
+    /// Existence is not checked when this is set: the agent creates its own config directory on
+    /// first run, so a user pointing an account at a directory they are about to create should
+    /// not be stopped — this may therefore name a directory that does not exist yet.
     pub config_dir: String,
+}
+
+/// Whether an agent's binary resolves on the user's login shell `PATH`, the only test an agent is
+/// held to: whether its config directory holds a login is not Octoboard's business (see
+/// `crate::availability`'s module doc). Three states, not two:
+/// [`NotDetermined`](Availability::NotDetermined) is where every run of the daemon starts, and
+/// only a completed login-shell snapshot ever moves an agent out of it — a snapshot that times out
+/// or fails leaves it there, rather than being read as [`Unavailable`](Availability::Unavailable).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Availability {
+    NotDetermined,
+    Available,
+    Unavailable,
+}
+
+/// One agent's availability and what its default account currently resolves to, derived once per
+/// daemon start from one login-shell snapshot and held as its own derived state on `AppState`
+/// (`crate::availability`) — never as a field of the stored `Settings`, which is written only by
+/// the user's own updates (see `docs/memory/writing-daemon-code.md`). Travels to a client inside
+/// `Event::Snapshot` and `Event::AgentAvailabilityUpdated`, one entry per agent, always three of
+/// them: the not-yet-determined state is carried by `availability` itself rather than by the
+/// entry's absence.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct AgentAvailability {
+    pub agent: Agent,
+    pub availability: Availability,
+    /// The directory this agent's default account currently resolves to: the directory its own
+    /// variable is exported to in the snapshot, else the agent's own usual default. For Grok Build
+    /// this is the *source* home a session's per-session home would be built from, never the
+    /// per-session home itself. `None` exactly while `availability` is `NotDetermined` — there is
+    /// nothing to show yet.
+    pub default_account_dir: Option<String>,
 }
 
 /// The comparison key the daemon uses for the default account's name when checking a requested
 /// account name for a collision — in English, since the daemon carries no locale and what the
-/// default account is actually *shown* as is a client-side, per-locale concern derived later (see
-/// `Account`'s doc comment and milestone 5 of the accounts plan). Not sent to a client and not
-/// meant to be displayed; it exists only so `claude_account_id: None` has something to compare a
-/// new name against.
+/// default account is actually *shown* as is a client-side, per-locale concern derived separately
+/// (see `Account`'s doc comment). Not sent to a client and not meant to be displayed; it exists
+/// only so `claude_account_id: None` has something to compare a new name against.
 pub const DEFAULT_ACCOUNT_NAME: &str = "Default";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -226,9 +257,8 @@ pub struct Session {
     /// resume therefore starts a fresh conversation rather than failing.
     pub has_conversation: bool,
     /// The console session this session is bound to, or `None` for one outside the orchestration.
-    /// Set when the session is created and never changed afterwards (see "Technical design" in
-    /// `docs/plans/20261008-console-sessions-and-agent-accounts/02-binding-data-model.md`); a
-    /// console session is never bound, so this is always `None` for one of those. Reports are
+    /// Set when the session is created and never changed afterwards; a console session is never
+    /// bound, so this is always `None` for one of those. Reports are
     /// routed by this field (`crate::reporting::deliver_report`), which replaced the
     /// `include_in_hub` membership flag: a binding names who to report to directly, rather than
     /// asking whether the console happens to have one console session to find by lookup.
@@ -242,8 +272,8 @@ pub struct Session {
     pub ordinal: Option<i64>,
     /// The account this session's own agent reads, by id, fixed at creation: the console's
     /// reference for that agent at the time. `None` means the default account. Written only when
-    /// the session is opened — the write path that lets a running session change account belongs
-    /// to milestone 8 of the accounts plan.
+    /// the session is opened; moving a running session to another account is a feature not yet
+    /// built.
     pub account_id: Option<String>,
     /// The configuration directory of this session's own agent that it was started with, fixed at
     /// creation: `account_id`'s directory at the time, or unset when it names the default account.
@@ -531,6 +561,17 @@ pub enum Event {
         /// Every git status the daemon currently holds; empty on a fresh start. Carried here, like
         /// the trusted directories, so a reconnecting client never has to ask for it separately.
         git_statuses: Vec<GitStatus>,
+        /// One entry per supported agent, always three, each starting `not_determined` and
+        /// replaced once the daemon's one-time login-shell snapshot lands; see
+        /// `crate::availability`.
+        agent_availability: Vec<AgentAvailability>,
+    },
+    /// Availability or a default account's resolved directory changed for one or more agents —
+    /// the whole three-entry list, like every other upsert. Broadcast once, when the daemon's
+    /// one-time determination lands; never again afterwards, since nothing re-determines it
+    /// during a run.
+    AgentAvailabilityUpdated {
+        agent_availability: Vec<AgentAvailability>,
     },
     /// The directories whose projects Octoboard answers Claude Code's trust screen for changed: the
     /// whole list, like every other upsert.
@@ -862,6 +903,10 @@ pub mod error_code {
     pub const CONSOLE_SESSION_MISSING: &str = "console_session_missing";
     pub const BINARY_NOT_FOUND: &str = "binary_not_found";
     pub const SHELL_ENVIRONMENT_TIMEOUT: &str = "shell_environment_timeout";
+    /// A session's resolved agent has been determined unavailable (its binary does not resolve on
+    /// the login shell's `PATH`) — never raised while that determination is still pending.
+    /// `params` names `agent`.
+    pub const AGENT_NOT_AVAILABLE: &str = "agent_not_available";
     pub const UNKNOWN_ACCOUNT: &str = "unknown_account";
     /// A requested account name collides with an existing one of the same agent, trimmed and
     /// compared ignoring letter case — the default account's name takes part. `params` names
@@ -1155,6 +1200,18 @@ mod tests {
             trusted_directories: vec!["/work".to_string()],
             settings: super::Settings::default(),
             git_statuses: vec![],
+            agent_availability: [
+                super::Agent::Claude,
+                super::Agent::Codex,
+                super::Agent::Grok,
+            ]
+            .into_iter()
+            .map(|agent| super::AgentAvailability {
+                agent,
+                availability: super::Availability::NotDetermined,
+                default_account_dir: None,
+            })
+            .collect(),
         })
         .unwrap();
         assert_eq!(snapshot["trusted_directories"][0], "/work");
@@ -1186,5 +1243,31 @@ mod tests {
         assert_eq!(notice["code"], "a_notice");
         assert_eq!(notice["params"]["reason"], "why");
         assert_eq!(notice["message"], "English");
+    }
+
+    /// The not-yet-determined state has to be representable on the wire, not implied by an
+    /// absent field: a client reading `availability` must be able to tell "not checked yet" from
+    /// "checked and found unavailable" without inferring either from whether the entry exists at
+    /// all or from `default_account_dir` being present.
+    #[test]
+    fn not_yet_determined_is_an_explicit_value_not_an_absent_entry() {
+        let entry = super::AgentAvailability {
+            agent: super::Agent::Grok,
+            availability: super::Availability::NotDetermined,
+            default_account_dir: None,
+        };
+        let json = serde_json::to_value(&entry).unwrap();
+        assert_eq!(json["agent"], "grok");
+        assert_eq!(json["availability"], "not_determined");
+        assert!(json["default_account_dir"].is_null());
+
+        let determined = super::AgentAvailability {
+            agent: super::Agent::Grok,
+            availability: super::Availability::Unavailable,
+            default_account_dir: Some("/home/user/.grok".to_string()),
+        };
+        let json = serde_json::to_value(&determined).unwrap();
+        assert_eq!(json["availability"], "unavailable");
+        assert_eq!(json["default_account_dir"], "/home/user/.grok");
     }
 }

@@ -137,7 +137,8 @@ Each has an established solution unless noted; two are not yet confirmed by hand
   and `codex` (under `~/.local/bin` or a node-version manager's shims) cannot be found and API keys are missing. A login
   shell is not enough: on zsh it is `~/.zshrc` that sets those up and a login-only non-interactive shell never reads it.
   The daemon therefore snapshots the environment from a **login + interactive** shell, per launch (a version manager's
-  `PATH` entry can point at a per-shell-instance directory), and spawns the agent directly rather than inside a shell.
+  `PATH` entry can point at a per-shell-instance directory), plus once per daemon start to work out which agents are
+  available (`src/availability.rs`), and spawns the agent directly rather than inside a shell.
 - **The snapshot must be filtered, not only taken.** The shell passes the daemon's own environment through, so a daemon
   started from inside an agent session would hand that session's identity to every agent it launches. On Claude Code
   that silently turns transcript saving off and makes `--permission-mode` not apply. Stripping the markers does not

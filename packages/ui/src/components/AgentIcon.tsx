@@ -1,7 +1,8 @@
 import React from "react";
 
-import { AGENT_OPTIONS } from "../agents";
-import type { Agent } from "../protocol";
+import { AGENT_OPTIONS, agentPickerOptions } from "../agents";
+import type { Translate } from "../i18n/catalog";
+import type { Agent, AgentAvailability } from "../protocol";
 
 // The marks are taken from LobeHub's icon set (`@lobehub/icons-static-svg`, MIT): Claude's in its
 // brand colour, Codex's and Grok's monochrome in the current text colour, as their makers draw them.
@@ -33,3 +34,10 @@ export function AgentIcon({ agent, className = "size-4" }: { agent: Agent; class
 
 /** The agents as `OptionSelect` options, each with its mark. */
 export const AGENT_ICON_OPTIONS = AGENT_OPTIONS.map((option) => ({ ...option, icon: <AgentIcon agent={option.value} /> }));
+
+/** `agentPickerOptions`, with each agent's mark — what the session dialog's and the console
+ * dialog's agent pickers show: an agent the machine does not have is named rather than hidden,
+ * and cannot be selected. */
+export function agentIconPickerOptions(t: Translate, agentAvailability: Map<Agent, AgentAvailability>) {
+  return agentPickerOptions(t, agentAvailability).map((option) => ({ ...option, icon: <AgentIcon agent={option.value} /> }));
+}

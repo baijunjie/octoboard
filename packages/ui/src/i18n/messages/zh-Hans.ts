@@ -19,6 +19,9 @@ export const zhHans: Translation<"other"> = {
   "common.removeTag": "移除标签",
   "common.save": "保存",
 
+  "agents.installPrompt": "{appName} 支持 Claude Code、Codex 和 Grok Build。请确保其中一个已配置到 PATH 中，才能打开会话。",
+  "agents.notInstalled": "{agent}（未安装）",
+
   "startup.daemonFailed": "守护进程启动失败：{error}",
   "startup.noAddress":
     "没有已知的守护进程地址。Tauri 外壳通过 {port} 传入端口；若要让 {dev} 连接手动启动的守护进程，请用 {port} 打开页面，设置 {portVar}，或在启动开发服务器时用 {proxyVar} 代理到该进程。",
@@ -105,6 +108,8 @@ export const zhHans: Translation<"other"> = {
   "daemon.binary_not_found": "在已快照的 shell 环境的 PATH 中找不到“{binary}”。",
   "daemon.shell_environment_timeout":
     "“{shell} -l -i -c '{command}'”未在 {timeout} 内完成。某个 shell 启动文件可能卡在了 stdin 以外的地方，或留下了占住 shell 输出的后台进程。{appName} 不会在环境未知时凭猜测启动。请修复 shell 的 rc 文件中缓慢的步骤，或跳过它。",
+  "daemon.agent_not_available":
+    "{agent} 在此设备上不可用：其程序未能在登录 shell 的 PATH 中找到。{appName} 支持 Claude Code、Codex 和 Grok Build；请确保其中一个已配置到 PATH 中，才能打开会话。",
   "daemon.claude_workspace_untrusted":
     "Claude Code 尚未信任此目录，因此在回应 Claude Code 的信任提示之前，此项目自身的“allow”权限规则会被忽略。其“deny”规则仍然生效，因此会话只会更严格，不会更宽松。你同意之后，{appName} 会替你回应该提示。",
   "daemon.queued_messages_dropped":

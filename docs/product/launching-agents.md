@@ -123,6 +123,17 @@ hook" warning; the session ended on an API error before status could be observed
 Which directory a session holds, and the refusal of a launch whose directory no longer exists, are described in "Agent
 config directories" in `docs/product/consoles-and-projects.md`.
 
+**Whether an agent is installed at all is worked out once, not per launch.** Right after the daemon starts it takes
+one login-shell snapshot of its own — the same kind described above — resolves each agent's binary against that
+snapshot's `PATH`, and reads what each agent's default account resolves to from it (see "Agent config directories" in
+`docs/product/consoles-and-projects.md`). This does not hold up the daemon's start: the application is served
+immediately, and the result follows once it lands, typically within a couple of seconds and budgeted the same ten
+seconds a launch's own snapshot is. Until it lands every agent reads as *not yet determined*, during which nothing is
+refused for being unavailable — a launch whose agent turns out to have no binary is refused by the ordinary path
+above, which already covers it. A snapshot that does not complete leaves availability not yet determined for the rest
+of that run rather than marking every agent unavailable. With every agent determined unavailable, no session can be
+opened at all; see "Opening a session" in `docs/product/sessions.md`.
+
 ## Per-agent specifics a user will notice
 
 **Claude Code.** Octoboard assigns the session's id up front, so a session has an agent-side id from the moment it

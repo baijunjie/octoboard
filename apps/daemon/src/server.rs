@@ -184,6 +184,7 @@ fn snapshot(state: &Arc<AppState>) -> anyhow::Result<Event> {
         trusted_directories: state.store.trusted_directories()?,
         settings: state.store.get_settings()?,
         git_statuses: state.git_statuses(),
+        agent_availability: state.agent_availability(),
     })
 }
 
