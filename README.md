@@ -1,10 +1,8 @@
 # Octoboard
 
 <p align="center">
-  <img src="assets/branding/logo-brand-h.png" alt="Octoboard logo" width="640" />
+  <img src="assets/branding/logo-brand-h.png" alt="Octoboard — The Terminator of Programmers' Jobs" width="640" />
 </p>
-
-<p align="center"><strong>The Terminator of Programmers' Jobs</strong></p>
 
 A desktop control board for orchestrating coding agents across multiple projects.
 
