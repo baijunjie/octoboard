@@ -75,19 +75,31 @@ is left beyond this milestone.
       `daemon.agent_not_available`) are confirmed to read naturally in the running application; only
       placeholder parity with the English source is checked automatically (`catalog.test.ts`), not the
       translation's sense or register.
-
-## From milestone 05 — agent availability and the default account
-
-- [ ] The one-time determination's real **wall-clock cost** against a real login shell, and that the window
-      starts serving clients before it lands.
-- [ ] An agent installed only under a **version manager** is found, since it resolves through the login-shell
-      snapshot and not through the daemon's own environment.
-- [ ] The three refusal surfaces end to end against a live daemon **with no agent installed at all**: the
-      session dialog's disabled submit, the console sessions section's create action, and a console session's
-      own start-session tool.
-- [ ] The rendered **disabled picker option** — that an unavailable agent is visible, reaches keyboard
-      traversal (`disabledBehavior="selection"`, verified from the react-aria sources only), is announced as
-      disabled, and cannot be chosen.
+- [ ] The **disabled picker option** as it is actually rendered: an unavailable agent is visible, reaches
+      keyboard traversal (`disabledBehavior="selection"`, verified from the react-aria sources only), is
+      announced as disabled, and cannot be chosen.
 - [ ] The sidebar's **install-prompt banner above interrupted console sessions** reads well in light, dark
       and right-to-left.
-- [ ] The new zh-Hans strings read naturally in place.
+
+## From milestone 06 — the Agent accounts section in Settings
+
+- [ ] **Where keyboard focus lands around a removal**: confirming it leaves focus on the Agent accounts
+      tab, and cancelling the confirmation leaves focus on the Remove button that opened it. The two paths
+      are told apart by a counter bumped only on the confirm path, since react-aria's own focus restore
+      and the section's refocus race in the same commit; the timing is reasoned from the library's
+      sources, not observed.
+- [ ] **Dialogs over dialogs.** The add and edit form, the directory picker opened from it, and the remove
+      confirmation all open over the Settings modal: Escape closes only the topmost one and Tab stays
+      inside it.
+- [ ] **The section as it renders** — the group headers, the default account's two-line description, a long
+      directory cut from its start with the full path as its tooltip, a long or right-to-left account name
+      clipping with a fade and showing its full name as a tooltip, and the Edit and Remove buttons. The
+      `settings-accounts` gallery scenario shows all three availability states and a long path.
+- [ ] The section and its forms under a **right-to-left language**.
+- [ ] An account added, renamed, repointed or removed in one window **appears in another open window**.
+- [ ] **A name collision is reported in place in every case**: against another account of that agent,
+      against the default account's name in the current language, and against the literal `Default` the
+      daemon reserves as its comparison key — the last two confirmed under Chinese, where the two names
+      differ.
+- [ ] A `~/…` directory and a **directory that does not exist yet** are both accepted, and the agent
+      creates the directory on its first run under that account.

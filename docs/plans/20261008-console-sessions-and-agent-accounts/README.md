@@ -241,7 +241,7 @@ milestone 1 settles. Nothing it adds says "hub".
 3. 03 The sidebar's console sessions (closed)
 4. 04 Accounts: storage and protocol (closed)
 5. 05 Agent availability and the default account (closed)
-6. [The Agent accounts section in Settings](06-settings-section.md)
+6. 06 Settings section (closed)
 7. [Choosing an account where an agent is chosen](07-account-pickers.md)
 8. [Switching a session's account](08-switching-a-sessions-account.md)
 9. [Report panel pages per console session](09-report-panel-scope.md)

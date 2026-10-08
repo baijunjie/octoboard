@@ -3,17 +3,17 @@
 Settings is a large dialog over the whole window. A list of sections runs down its left side and the selected
 section's settings fill the right, one row per setting: its name and a line saying what it does on the left, its
 control on the right; under a right-to-left language the sides swap (see "Right-to-left layout" in
-`docs/product/window-layout.md`). The sections, in order, are **General**, **Git**, **Trusted folders** and
-**Notifications**; the dialog opens on General.
+`docs/product/window-layout.md`). The sections, in order, are **General**, **Git**, **Agent accounts**, **Trusted
+folders** and **Notifications**; the dialog opens on General.
 
 ## Moving between sections
 
 The list of sections is a vertical tab list, with the selected section marked. Opening Settings puts keyboard
 focus on the selected section's tab. Only that tab is reached with Tab: the arrow keys move to the previous or next
 section and show it at once, wrapping around at either end, and Tab from the list moves on into the section's
-settings. When a control holding keyboard focus disappears from a section — a trusted folder's Remove button, which
-goes with its folder, or the Notifications Enable button once the browser has answered — focus goes back to the
-selected section's tab rather than leaving the dialog.
+settings. When a control holding keyboard focus disappears from a section — a trusted folder's or an account's Remove
+button, which goes with its folder or account, or the Notifications Enable button once the browser has answered — focus
+goes back to the selected section's tab rather than leaving the dialog.
 
 ## Opening and closing Settings
 
@@ -51,6 +51,27 @@ One row, **Automatically sync repositories**, a switch, off to begin with: wheth
 fast-forwarded on its own when it is behind its upstream, rather than only reported as behind. What it does, what it
 never does and where the value is kept are in "Automatically syncing repositories" in
 `docs/product/project-git-status.md`.
+
+## Agent accounts
+
+Every account, grouped by agent in the order the agents are listed elsewhere, each group headed by the agent's name and
+icon. The section says what an account is — a named config directory of an agent, where it keeps its login and
+conversation history — and that an agent has to be on the user's `PATH` for its accounts to be usable. An agent that is
+not available is headed as not installed and its accounts are marked not usable; one whose availability is not yet
+determined is headed plainly.
+
+Each group starts with the agent's **default account**, said to be the setup a session runs under when nothing is
+pinned, with the directory it currently resolves to. It has no actions: its name is Octoboard's own and it cannot be
+edited or removed. The accounts the user owns follow, each with its name, its directory (cut from its start when too
+long, the full path as the tooltip), an **Edit** button and a **Remove** button. **Add account** opens a form for the
+agent, a name and a directory; editing offers the name and the directory, never the agent. The directory is checked
+for being absolute (or starting with `~/`) and for nothing else: one that does not exist yet is accepted, and the form
+says that Octoboard does not require it to exist. For a Grok Build account the form adds that the directory has to be a
+Grok home that Grok has already been run against, which is checked when a session launches. A name already taken by
+another account of the same agent, or by the default account's name in the current language, is reported under the
+name field. Removing an account asks first and says that consoles referring to it go back to the agent's default
+account and that sessions already open are not affected. What an account is and how consoles and sessions use one are
+in "Agent config directories" in `docs/product/consoles-and-projects.md`.
 
 ## Trusted folders
 

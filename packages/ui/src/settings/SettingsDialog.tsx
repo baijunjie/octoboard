@@ -1,22 +1,26 @@
 import { Modal, Tabs } from "@heroui/react";
-import { Bell, FolderCheck, GitBranch, Settings2, type LucideIcon } from "lucide-react";
+import { Bell, FolderCheck, GitBranch, KeyRound, Settings2, type LucideIcon } from "lucide-react";
 import React, { useCallback, useRef, useState } from "react";
 
 import { TitledControl } from "../components/TitledControl";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
+import { AgentAccountsSection } from "./AgentAccountsSection";
 import { GeneralSection } from "./GeneralSection";
 import { GitSection } from "./GitSection";
 import { NotificationsSection } from "./NotificationsSection";
 import { SettingsFocusContext } from "./useSectionRefocus";
 import { TrustedFoldersSection } from "./TrustedFoldersSection";
 
-const SECTIONS: { id: string; label: PlainMessageKey; Icon: LucideIcon; Content: () => React.ReactElement }[] = [
+const SECTIONS = [
   { id: "general", label: "settings.section.general", Icon: Settings2, Content: GeneralSection },
   { id: "git", label: "settings.section.git", Icon: GitBranch, Content: GitSection },
+  { id: "accounts", label: "settings.section.accounts", Icon: KeyRound, Content: AgentAccountsSection },
   { id: "trusted-folders", label: "settings.section.trustedFolders", Icon: FolderCheck, Content: TrustedFoldersSection },
   { id: "notifications", label: "settings.section.notifications", Icon: Bell, Content: NotificationsSection },
-];
+] as const satisfies readonly { id: string; label: PlainMessageKey; Icon: LucideIcon; Content: () => React.ReactElement }[];
+
+type SectionId = (typeof SECTIONS)[number]["id"];
 
 /**
  * The settings: a large modal over the whole window, the sections as vertical tabs on the start
@@ -24,11 +28,20 @@ const SECTIONS: { id: string; label: PlainMessageKey; Icon: LucideIcon; Content:
  * included, stays mounted and sized. Escape, the close button and a click on the backdrop call
  * `onClose`; opening moves focus to the selected section's entry (also where a section's
  * `useSectionRefocus` sends it back to), and `useSettingsDialog` puts it back on the terminal when
- * this closes.
+ * this closes. It opens on `initialSection` when given, the first section otherwise.
  */
-export function SettingsDialog({ onClose }: { onClose: () => void }): React.ReactElement {
+export function SettingsDialog({
+  initialSection = SECTIONS[0].id,
+  onClose,
+}: {
+  /** The section to open on. A typo must not compile: a key that names no section renders no panel
+   * and never focuses a tab, which would lose the dialog's keyboard rules.
+   * TODO: unused until the account-switch menu's entry opens Settings at the Agent accounts section. */
+  initialSection?: SectionId;
+  onClose: () => void;
+}): React.ReactElement {
   const t = useT();
-  const [sectionId, setSectionId] = useState(SECTIONS[0].id);
+  const [sectionId, setSectionId] = useState<string>(initialSection);
   const selectedRef = useRef<HTMLDivElement | null>(null);
   const focusedOnOpen = useRef(false);
 

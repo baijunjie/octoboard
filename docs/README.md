@@ -39,8 +39,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   where it is chosen, what follows it (down to the terminal's palette and the native window's own appearance), where the
   choice is kept, and why a report page stays on a light surface either way.
 - [Settings](product/settings.md) — the Settings dialog: how it opens (the top bar, and the macOS menu's Settings… /
-  ⌘, and when that is ignored), how it closes and where focus goes, its General (Appearance and Language), Git,
-  Trusted folders and Notifications sections.
+  ⌘, and when that is ignored), how it closes and where focus goes, its General (Appearance and Language), Git, Agent
+  accounts, Trusted folders and Notifications sections.
 - [Language](product/language.md) — the 17 offered languages and why they are ordered by tag, English as the fallback,
   the default picked from the system's languages on the first launch and kept from then on, the language chosen in
   Settings, how the system's languages map onto the list, what follows the current language and what does not (report

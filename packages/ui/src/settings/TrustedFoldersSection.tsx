@@ -1,7 +1,7 @@
 import { Button, EmptyState } from "@heroui/react";
 import React from "react";
 
-import { FadeOverflow } from "../components/FadeOverflow";
+import { PathText } from "../components/PathText";
 import { TitledControl } from "../components/TitledControl";
 import { useT } from "../i18n/react";
 import { useDaemon, useDaemonStore } from "../store";
@@ -32,12 +32,7 @@ export function TrustedFoldersSection(): React.ReactElement {
           {directories.map((path) => (
             <SettingRow
               key={path}
-              label={
-                // Cut from the start when too long, so the folder's own name stays visible.
-                <FadeOverflow dir="ltr" clip="start" titleWhenClipped={path}>
-                  {path}
-                </FadeOverflow>
-              }
+              label={<PathText path={path} />}
               description={t("settings.trusted.rowDescription")}
             >
               <TitledControl title={t("settings.trusted.removeTooltip")}>

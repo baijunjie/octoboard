@@ -40,11 +40,10 @@ fields, an avatar that was not touched is left as it is when the console is save
 
 Underneath, a console refers to one **account** per agent — a named config directory kept once for the whole
 application rather than typed into each console. This is a transitional state: the console dialog below is, for now,
-the only place an account comes into existence, and there is no screen anywhere for editing or removing one directly
-— an account is application-wide, and removing it is an explicit action the user takes, which no screen currently
-offers. One consequence follows from that: an account the dialog mints for a directory, left behind when the field
-that pointed at it is later cleared or repointed elsewhere, stays stored with nothing referring to it and nothing on
-screen to remove it.
+where a console gets one, and an account is also added, renamed, repointed and removed from the Agent accounts section
+of Settings (see `docs/product/settings.md`). An account the dialog mints for a directory, left behind when the field
+that pointed at it is later cleared or repointed elsewhere, stays stored with nothing referring to it, and is removed
+there.
 Each agent's config directory is where that agent keeps its own configuration, login state and conversation history:
 
 | Agent | What the directory is | The agent's usual default |

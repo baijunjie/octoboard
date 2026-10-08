@@ -133,7 +133,7 @@ export function ProjectDialog({
             errorMessage={shown(pathError)}
             trailing={
               <Button type="button" variant="secondary" onPress={() => setPickingDirectory(true)}>
-                {t("dialog.project.browse")}
+                {t("common.browse")}
               </Button>
             }
           />
@@ -164,7 +164,7 @@ export function ProjectDialog({
       </Dialog>
       {pickingDirectory && (
         <DirectoryPicker
-          title={t("dialog.project.chooseDirectory")}
+          title={t("dialog.chooseDirectory")}
           initialPath={path || "~"}
           onPick={(picked) => {
             setPath(picked);

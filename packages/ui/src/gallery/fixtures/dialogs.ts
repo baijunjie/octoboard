@@ -74,7 +74,7 @@ export const dialogScenarios: Scenario[] = [
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
-      (ui) => ui.press(ui.t("dialog.project.browse")),
+      (ui) => ui.press(ui.t("common.browse")),
       (ui) => ui.wait(300),
     ],
   },
