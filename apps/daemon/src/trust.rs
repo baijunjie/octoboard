@@ -790,7 +790,7 @@ fn write(live: &LiveSession, writes: u64, keys: &[u8]) -> Result<()> {
 }
 
 /// Polls `done` until it holds or `timeout` passes.
-fn wait_for(timeout: Duration, mut done: impl FnMut() -> bool) -> bool {
+pub(crate) fn wait_for(timeout: Duration, mut done: impl FnMut() -> bool) -> bool {
     let deadline = Instant::now() + timeout;
     loop {
         if done() {
@@ -810,7 +810,8 @@ mod tests {
     use super::*;
     use crate::protocol::{Console, Origin, ProjectSource, SessionStatus};
     use crate::session::spawn_reader_thread;
-    use crate::store::{Store, LOCAL_HOST_ID};
+    use crate::store::LOCAL_HOST_ID;
+    use crate::test_support::{fake_live_session, ScratchDir, StandIn};
 
     // What Claude Code 2.1.289 actually printed, captured from a real PTY in a directory it had
     // never seen; only the directory's name and the account's plan were replaced. The screen as
@@ -1071,31 +1072,15 @@ mod tests {
         assert!(!consented(&project_session, None, &work));
     }
 
-    /// A fresh directory for one test. Named without the thread id's parentheses, which the shell
-    /// scripts below would have to quote.
-    fn scratch(name: &str) -> PathBuf {
-        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-        let dir = std::env::temp_dir().join(format!(
-            "octoboardd-trust-{name}-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::remove_dir_all(&dir).ok();
-        std::fs::create_dir_all(&dir).expect("temporary directory");
-        dir
+    fn scratch(name: &str) -> ScratchDir {
+        ScratchDir::new(&format!("trust-{name}"))
     }
 
     /// A stand-in for Claude Code on a real PTY: prints what the script says to and records every
     /// byte it is sent, so a test sees exactly what reached the terminal.
-    fn fake_claude(id: &str, agent: Agent, script: &str) -> Arc<LiveSession> {
+    fn fake_claude(id: &str, agent: Agent, script: &str) -> StandIn {
         // Raw first, so the fixtures reach the terminal as captured and the keys are read as sent.
-        let live = crate::state::tests::fake_live_session(
-            id,
-            agent,
-            120,
-            32,
-            &format!("stty raw -echo; {script}"),
-        );
+        let live = fake_live_session(id, agent, 120, 32, &format!("stty raw -echo; {script}"));
         spawn_reader_thread(live.clone(), 8 * 1024);
         live
     }
@@ -1135,8 +1120,6 @@ mod tests {
         // The stand-in is still reading, so a stray byte after the Enter would land in the file.
         std::thread::sleep(Duration::from_millis(500));
         assert_eq!(sent(&received), b"\x1b[B\r");
-        live.terminate();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// With the cursor already on "Yes", a Down would wrap to "No, exit" and the Enter after it
@@ -1161,8 +1144,6 @@ mod tests {
         assert!(err.to_string().contains("first option"), "{err}");
 
         assert!(sent(&received).is_empty(), "no key may have been sent");
-        live.terminate();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// The Down goes in and the cursor does not move, so the Enter that would follow is withheld.
@@ -1192,8 +1173,6 @@ mod tests {
         );
 
         assert_eq!(sent(&received), b"\x1b[B");
-        live.terminate();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// An attached terminal reports focus and answers the agent's queries on its own, which says
@@ -1223,8 +1202,6 @@ mod tests {
 
         std::thread::sleep(Duration::from_millis(500));
         assert_eq!(sent(&received), [&b"\x1b[B"[..], chatter, b"\r"].concat());
-        live.terminate();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// The count of foreign writes and the refusal that rests on it: a terminal's own traffic is not
@@ -1262,8 +1239,6 @@ mod tests {
         assert!(wait_for(Duration::from_secs(5), || sent(&received).len() >= 5));
         std::thread::sleep(Duration::from_millis(200));
         assert_eq!(sent(&received), b"\x1b[Ix\r");
-        live.terminate();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// Someone else types into the session after the Down went in — the user pressing a key in the
@@ -1298,8 +1273,6 @@ mod tests {
         assert!(err.to_string().contains("something else wrote"), "{err}");
         std::thread::sleep(Duration::from_millis(300));
         assert_eq!(sent(&received), b"\x1b[Bx", "no Enter was sent");
-        live.terminate();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// A session that never showed the screen, or another agent's, is never typed at.
@@ -1320,20 +1293,16 @@ mod tests {
 
         std::thread::sleep(Duration::from_millis(300));
         assert!(sent(&received).is_empty());
-        claude.terminate();
-        codex.terminate();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
-    fn app_state(name: &str) -> (Arc<AppState>, PathBuf) {
-        let dir = scratch(name);
-        let store = Store::open(&dir.join("octoboard.db")).expect("store");
-        store.insert_console(&console()).expect("console");
-        store.insert_project(&project(false)).expect("project");
-        (
-            Arc::new(AppState::new(store, 1234, "/opt/octoboardd".to_string())),
-            dir,
-        )
+    fn state_with_project(name: &str) -> (Arc<AppState>, ScratchDir) {
+        let (state, dir) = crate::test_support::app_state(&format!("trust-{name}"));
+        state.store.insert_console(&console()).expect("console");
+        state
+            .store
+            .insert_project(&project(false))
+            .expect("project");
+        (state, dir)
     }
 
     /// Starts a stand-in session of the given kind under a stored record and registers it, as a
@@ -1343,7 +1312,7 @@ mod tests {
         dir: &Path,
         record: Session,
         script: &str,
-    ) -> (Arc<LiveSession>, PathBuf) {
+    ) -> (StandIn, PathBuf) {
         let received = dir.join(format!("received-{}", record.id));
         state.store.insert_session(&record).expect("session");
         let live = fake_claude(
@@ -1357,7 +1326,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_console_sessions_screen_is_answered_without_asking() {
-        let (state, dir) = app_state("console-session");
+        let (state, dir) = state_with_project("console-session");
         let mut events = state.subscribe();
         let record = session("console-session-1", Agent::Claude, Role::Console, None);
         let (live, received) = start(&state, &dir, record, &full_script(Path::new("%RECEIVED%")));
@@ -1378,15 +1347,11 @@ mod tests {
                 "a console session is not asked about"
             );
         }
-        tokio::task::spawn_blocking(move || live.terminate())
-            .await
-            .unwrap();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[tokio::test]
     async fn a_project_without_consent_is_asked_about_and_nothing_is_sent_until_confirmed() {
-        let (state, dir) = app_state("ask");
+        let (state, dir) = state_with_project("ask");
         let mut events = state.subscribe();
         let record = session(
             "project-session-1",
@@ -1450,15 +1415,11 @@ mod tests {
         assert!(confirm(&state, "project-session-1", true, false)
             .await
             .is_err());
-        tokio::task::spawn_blocking(move || live.terminate())
-            .await
-            .unwrap();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[tokio::test]
     async fn a_consented_project_is_answered_without_a_prompt() {
-        let (state, dir) = app_state("consented");
+        let (state, dir) = state_with_project("consented");
         state
             .store
             .set_project_claude_trust_consent("project-1", true)
@@ -1482,17 +1443,13 @@ mod tests {
         while let Ok(event) = events.try_recv() {
             assert!(!matches!(event, Event::ClaudeTrustPrompt { .. }));
         }
-        tokio::task::spawn_blocking(move || live.terminate())
-            .await
-            .unwrap();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// A go-ahead that names a session which is not a running Claude Code project session at its
     /// screen records no consent and sends nothing.
     #[tokio::test]
     async fn a_confirmation_for_a_stale_or_foreign_session_changes_nothing() {
-        let (state, dir) = app_state("refused");
+        let (state, dir) = state_with_project("refused");
 
         // Unknown.
         assert!(confirm(&state, "nobody", true, false).await.is_err());
@@ -1516,7 +1473,7 @@ mod tests {
 
         // Running, but its screen is not up.
         let quiet = session("quiet-1", Agent::Claude, Role::Project, Some("project-1"));
-        let (quiet_live, quiet_received) = start(&state, &dir, quiet, "sleep 30");
+        let (_quiet_live, quiet_received) = start(&state, &dir, quiet, "sleep 30");
         let err = confirm(&state, "quiet-1", true, false)
             .await
             .expect_err("refused");
@@ -1540,14 +1497,6 @@ mod tests {
                 .claude_trust_consent
         );
         assert!(sent(&codex_received).is_empty() && sent(&quiet_received).is_empty());
-        tokio::task::spawn_blocking(move || {
-            codex_live.terminate();
-            quiet_live.terminate();
-            console_session_live.terminate();
-        })
-        .await
-        .unwrap();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     fn consented_in_store(state: &AppState) -> bool {
@@ -1562,7 +1511,7 @@ mod tests {
     /// A go-ahead without `remember` answers the screen and records nothing.
     #[tokio::test]
     async fn without_remember_the_screen_is_answered_and_no_consent_is_recorded() {
-        let (state, dir) = app_state("no-remember");
+        let (state, dir) = state_with_project("no-remember");
         let record = session(
             "project-session-1",
             Agent::Claude,
@@ -1577,18 +1526,13 @@ mod tests {
             .expect("confirmed");
         assert_eq!(sent(&received), b"\x1b[B\r");
         assert!(!consented_in_store(&state));
-
-        tokio::task::spawn_blocking(move || live.terminate())
-            .await
-            .unwrap();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// Consent follows the answer: a screen that could not be answered leaves nothing recorded, and
     /// the user is told, whether or not the dialog they confirmed in is still open.
     #[tokio::test]
     async fn a_failed_answer_records_no_consent_and_tells_the_user() {
-        let (state, dir) = app_state("failed-confirm");
+        let (state, dir) = state_with_project("failed-confirm");
         let mut events = state.subscribe();
         // The stand-in never moves its cursor.
         let script = format!(
@@ -1624,17 +1568,12 @@ mod tests {
                 if session == "project-session-1" && message.contains("Answer it in the terminal"));
         }
         assert!(told, "a notice, for a dialog that may be closed");
-
-        tokio::task::spawn_blocking(move || live.terminate())
-            .await
-            .unwrap();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// An automatic answer that fails is not silent either.
     #[tokio::test]
     async fn an_automatic_answer_that_fails_leaves_a_notice() {
-        let (state, dir) = app_state("failed-auto");
+        let (state, dir) = state_with_project("failed-auto");
         let mut events = state.subscribe();
         let script = format!(
             "cat {}; dd bs=1 count=3 2>/dev/null >> '%RECEIVED%'; sleep 30",
@@ -1662,24 +1601,19 @@ mod tests {
             "{}",
             notice.1
         );
-
-        tokio::task::spawn_blocking(move || live.terminate())
-            .await
-            .unwrap();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// A client that was not there when the prompt was broadcast, or whose snapshot replaced it, is
     /// told again about exactly the screens still waiting for a go-ahead.
     #[tokio::test]
     async fn a_snapshot_is_followed_by_the_prompts_still_waiting() {
-        let (state, dir) = app_state("replay");
+        let (state, dir) = state_with_project("replay");
         let waiting = session("waiting-1", Agent::Claude, Role::Project, Some("project-1"));
         let (waiting_live, _) = start(&state, &dir, waiting, "sleep 30");
         let console_session = session("console-session-1", Agent::Claude, Role::Console, None);
         let (console_session_live, _) = start(&state, &dir, console_session, "sleep 30");
         let quiet = session("quiet-1", Agent::Claude, Role::Project, Some("project-1"));
-        let (quiet_live, _) = start(&state, &dir, quiet, "sleep 30");
+        let (_quiet_live, _) = start(&state, &dir, quiet, "sleep 30");
         let answered = session(
             "answered-1",
             Agent::Claude,
@@ -1706,20 +1640,6 @@ mod tests {
             .set_project_claude_trust_consent("project-1", true)
             .expect("consent");
         assert!(pending_prompts(&state).is_empty());
-
-        tokio::task::spawn_blocking(move || {
-            for live in [
-                waiting_live,
-                console_session_live,
-                quiet_live,
-                answered_live,
-            ] {
-                live.terminate();
-            }
-        })
-        .await
-        .unwrap();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     fn trusted_in_store(state: &AppState) -> Vec<String> {
@@ -1796,7 +1716,7 @@ mod tests {
     /// parent directory — and leaves the project's own consent unset.
     #[tokio::test]
     async fn confirming_for_the_parent_directory_records_it_after_the_answer() {
-        let (state, dir) = app_state("confirm-parent");
+        let (state, dir) = state_with_project("confirm-parent");
         let mut events = state.subscribe();
         let record = session(
             "project-session-1",
@@ -1822,16 +1742,11 @@ mod tests {
                 if trusted_directories == ["/work"]);
         }
         assert!(told, "clients are told");
-
-        tokio::task::spawn_blocking(move || live.terminate())
-            .await
-            .unwrap();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[tokio::test]
     async fn nothing_is_trusted_when_the_answer_fails_or_is_refused() {
-        let (state, dir) = app_state("confirm-parent-refused");
+        let (state, dir) = state_with_project("confirm-parent-refused");
         // The stand-in never moves its cursor.
         let script = format!(
             "cat {}; dd bs=1 count=3 2>/dev/null >> '%RECEIVED%'; sleep 30",
@@ -1861,7 +1776,7 @@ mod tests {
         // The same refusals as for one project: unknown, another agent's, not running, a console
         // session's.
         let codex = session("codex-1", Agent::Codex, Role::Project, Some("project-1"));
-        let (codex_live, _) = start(&state, &dir, codex, "sleep 30");
+        let (_codex_live, _) = start(&state, &dir, codex, "sleep 30");
         let console_session = session("console-session-1", Agent::Claude, Role::Console, None);
         let (console_session_live, _) = start(&state, &dir, console_session, "sleep 30");
         console_session_live.trust.feed(SCREEN);
@@ -1871,22 +1786,13 @@ mod tests {
             assert!(confirm(&state, id, true, true).await.is_err(), "{id}");
         }
         assert!(trusted_in_store(&state).is_empty());
-
-        tokio::task::spawn_blocking(move || {
-            live.terminate();
-            codex_live.terminate();
-            console_session_live.terminate();
-        })
-        .await
-        .unwrap();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// A project directly under the home directory has nothing narrower to trust, so the request is
     /// refused before anything is answered or sent.
     #[tokio::test]
     async fn a_parent_that_is_the_home_directory_is_refused_before_the_screen_is_answered() {
-        let (state, dir) = app_state("confirm-home");
+        let (state, dir) = state_with_project("confirm-home");
         let home = paths::home_dir();
         let mut broad = project(false);
         broad.id = "broad".to_string();
@@ -1911,16 +1817,11 @@ mod tests {
         assert!(trusted_in_store(&state).is_empty());
         assert!(live.trust.waiting(), "the screen is still waiting");
         assert!(sent(&received).is_empty());
-
-        tokio::task::spawn_blocking(move || live.terminate())
-            .await
-            .unwrap();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[tokio::test]
     async fn a_directory_can_be_removed_again_and_each_projects_own_consent_stays() {
-        let (state, dir) = app_state("remove");
+        let (state, _dir) = state_with_project("remove");
         state
             .store
             .set_project_claude_trust_consent("project-1", true)
@@ -1943,14 +1844,13 @@ mod tests {
             }
         }
         assert_eq!(updates, [Vec::<String>::new()], "a repeat is not announced");
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// A screen of a project under a directory is answered without a prompt, and trusting the
     /// directory answers the screens already waiting under it — and only those.
     #[tokio::test]
     async fn trusting_a_directory_answers_the_screens_waiting_under_it_and_no_others() {
-        let (state, dir) = app_state("fan-out");
+        let (state, dir) = state_with_project("fan-out");
         let mut elsewhere = project(false);
         elsewhere.id = "project-2".to_string();
         elsewhere.path = "/other/project".to_string();
@@ -2004,15 +1904,6 @@ mod tests {
         })
         .await
         .unwrap());
-
-        tokio::task::spawn_blocking(move || {
-            under_live.terminate();
-            beside_live.terminate();
-            later_live.terminate();
-        })
-        .await
-        .unwrap();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// Whether the refusal is one of the codes that leave the dialog open.
@@ -2068,7 +1959,6 @@ mod tests {
             std::fs::create_dir_all(flipped.join("app")).expect("a different folder");
             assert!(trustable_parent(&under(flipped), &home).is_ok());
         }
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// The home directory may itself be given through a link whose real location lies under the
@@ -2090,7 +1980,6 @@ mod tests {
         std::fs::create_dir_all(dir.join("other/app")).expect("other");
         let other = dir.join("other/app").to_string_lossy().into_owned();
         assert!(trustable_parent(&other, &home).is_ok());
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// With no usable home directory nothing can be checked against it, so nothing is offered —
@@ -2146,7 +2035,7 @@ mod tests {
     /// directory, as it does one whose project has consented.
     #[tokio::test]
     async fn the_replay_leaves_out_a_screen_under_a_trusted_directory() {
-        let (state, dir) = app_state("replay-trusted");
+        let (state, dir) = state_with_project("replay-trusted");
         let record = session("waiting-1", Agent::Claude, Role::Project, Some("project-1"));
         let (live, _) = start(&state, &dir, record, "sleep 30");
         live.trust.feed(SCREEN);
@@ -2158,11 +2047,6 @@ mod tests {
             "still waiting; only the question is moot"
         );
         assert!(pending_prompts(&state).is_empty());
-
-        tokio::task::spawn_blocking(move || live.terminate())
-            .await
-            .unwrap();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// Trusting the directory from one session's dialog answers another session's screen waiting
@@ -2170,7 +2054,7 @@ mod tests {
     /// another agent's session are left to their own rules.
     #[tokio::test]
     async fn one_sessions_go_ahead_answers_the_others_waiting_under_the_directory() {
-        let (state, dir) = app_state("fan-out-end-to-end");
+        let (state, dir) = state_with_project("fan-out-end-to-end");
         let mut events = state.subscribe();
         let a = session("a-1", Agent::Claude, Role::Project, Some("project-1"));
         let (a_live, a_received) = start(&state, &dir, a, &full_script(Path::new("%RECEIVED%")));
@@ -2225,14 +2109,5 @@ mod tests {
             }
         }
         assert_eq!(announced, 1);
-
-        tokio::task::spawn_blocking(move || {
-            for live in [a_live, b_live, console_session_live, codex_live, c_live] {
-                live.terminate();
-            }
-        })
-        .await
-        .unwrap();
-        std::fs::remove_dir_all(&dir).ok();
     }
 }

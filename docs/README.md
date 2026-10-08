@@ -128,9 +128,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   motion).
 - [Writing automated tests](memory/writing-automated-tests.md) — how lean unit tests are kept (one case per rule,
   table-driven), then the fixture conventions this project's tests need on macOS: why an executable written fresh per
-  test flakes only under a parallel run, how to verify behaviour the daemon derives from an agent's own output by
-  replaying a committed capture rather than staging a live session, and why a test that spawns a stand-in session's
-  process has to end it itself.
+  test flakes only under a parallel run, and how to verify behaviour the daemon derives from an agent's own output by
+  replaying a committed capture rather than staging a live session.
 - [Writing daemon code](memory/writing-daemon-code.md) — conventions for the Rust daemon: live state the daemon
   derives held on `AppState` and published by its own event rather than as a field on a stored record, with the
   cleanups that follow from there being no deletion event for it; why a repeating refresh is timed by the client and

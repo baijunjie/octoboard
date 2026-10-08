@@ -568,6 +568,7 @@ mod tests {
     use super::*;
     use crate::protocol::{AgentAvailability, Availability, Console, ProjectSource};
     use crate::store::LOCAL_HOST_ID;
+    use crate::test_support::ScratchDir;
 
     fn console() -> Console {
         Console {
@@ -614,9 +615,8 @@ mod tests {
     /// tools" in `docs/product/hub-orchestration.md` promises for any refusal.
     #[tokio::test]
     async fn an_unavailable_agent_refuses_the_console_sessions_own_start_session_tool() {
-        let state = Arc::new(crate::state::tests::app_state(
-            "start-session-agent-unavailable",
-        ));
+        let (state, _dir) =
+            crate::test_support::app_state("mcp-exec-start-session-agent-unavailable");
         state.store.insert_console(&console()).unwrap();
         state
             .store
@@ -669,8 +669,8 @@ mod tests {
 
     /// Two console sessions of one console, one project, and a session each: bound to `a`, bound to
     /// `b`, unbound, one archived under each owner, and one in another console.
-    fn shared_console_state(name: &str) -> Arc<AppState> {
-        let state = Arc::new(crate::state::tests::app_state(name));
+    fn shared_console_state(name: &str) -> (Arc<AppState>, ScratchDir) {
+        let (state, dir) = crate::test_support::app_state(&format!("mcp-exec-{name}"));
         state.store.insert_console(&console()).unwrap();
         state
             .store
@@ -716,7 +716,7 @@ mod tests {
         for session in &sessions {
             state.store.insert_session(session).unwrap();
         }
-        state
+        (state, dir)
     }
 
     fn arguments(value: Value) -> Map<String, Value> {
@@ -726,7 +726,7 @@ mod tests {
     /// Reads are console-wide: each console session sees the other's sessions and who owns them.
     #[tokio::test]
     async fn reads_cover_the_whole_console_with_each_sessions_owner() {
-        let state = shared_console_state("tool-surface-reads");
+        let (state, _dir) = shared_console_state("tool-surface-reads");
         for (caller, other_owner_session, other_owner) in [("a", "of-b", "b"), ("b", "of-a", "a")] {
             let listed = call(&state, caller, "list_projects", &Map::new())
                 .await
@@ -775,7 +775,7 @@ mod tests {
     /// The archive of a project is listed whole, owners marked, rather than filtered to the caller.
     #[tokio::test]
     async fn the_archive_lists_every_owners_sessions() {
-        let state = shared_console_state("tool-surface-archive");
+        let (state, _dir) = shared_console_state("tool-surface-archive");
         let listed = call(
             &state,
             "a",
@@ -805,7 +805,7 @@ mod tests {
     /// checked to be untouched; `send_message` has no such visible effect to compare.
     #[tokio::test]
     async fn writes_are_refused_for_sessions_the_caller_does_not_own() {
-        let state = shared_console_state("tool-surface-writes");
+        let (state, _dir) = shared_console_state("tool-surface-writes");
         let cases = [
             (
                 "send_message",

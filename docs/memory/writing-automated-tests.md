@@ -39,13 +39,3 @@ CLI version it came from recorded beside it, and replay the production entry con
 the bytes — the offset the real caller would have started from, the truncation a half-finished write
 leaves. Commit the near-miss capture next to the matching one: the shape that must *not* be
 recognised is what makes recognising the other one mean anything.
-
-## End a stand-in session's process in the test that spawned it
-
-`fake_live_session` (in `apps/daemon/src/state.rs`'s test module) spawns a real `/bin/sh` on a real PTY, and
-`LiveSession` has no `Drop` that ends it. A test whose stand-in script outlives the test body (`"sleep 30"` and
-the like) therefore leaves that process, its PTY master and its reader thread held for the rest of the test
-binary's run — they go when the binary exits and the master closes, so nothing survives the suite, but a whole
-file's worth of them piles up while it runs. So end every such session before the test returns with
-`live.terminate()`, except where the behaviour under test already ended the process and the test asserts that
-(`poll_exit()`).

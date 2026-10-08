@@ -1731,6 +1731,7 @@ fn session_cwd(state: &Arc<AppState>, session: &Session) -> Result<PathBuf> {
 mod tests {
     use super::*;
     use crate::protocol::Console;
+    use crate::test_support::{fake_live_session, idle_stand_in, ScratchDir};
 
     #[test]
     fn tags_are_trimmed_and_deduplicated_ignoring_case_keeping_the_first_spelling() {
@@ -1757,14 +1758,16 @@ mod tests {
         }
     }
 
-    fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "octoboardd-coordinator-{name}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        std::fs::create_dir_all(&dir).expect("temporary directory");
-        dir
+    /// A console workdir inside a store's scratch directory, kept apart from the database, which
+    /// deleting the console would otherwise wipe.
+    fn console_workdir(dir: &Path) -> PathBuf {
+        let workdir = dir.join("workdir");
+        std::fs::create_dir(&workdir).expect("workdir");
+        workdir
+    }
+
+    fn temp_dir(name: &str) -> ScratchDir {
+        ScratchDir::new(&format!("coordinator-{name}"))
     }
 
     /// Every agent matches its instruction filename by exact spelling, and Grok reads several of
@@ -1790,8 +1793,6 @@ mod tests {
             .expect("written");
         assert!(!workdir.join("AGENTS.md").exists());
         assert!(!workdir.join("CLAUDE.md").exists());
-
-        std::fs::remove_dir_all(&workdir).ok();
     }
 
     /// An account directory is stored absolute and lexically normalised or not at all; unlike a
@@ -1818,8 +1819,6 @@ mod tests {
         let relative = normalize(".codex-alt").unwrap_err();
         assert!(relative.to_string().contains("absolute"), "{relative}");
         assert!(relative.to_string().contains("Codex"), "{relative}");
-
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// An account always requires a non-blank directory.
@@ -1833,10 +1832,10 @@ mod tests {
     /// project's archived sessions, or with no project the console's own archived console sessions.
     #[test]
     fn deleting_sessions_is_limited_to_archived_ones_in_scope() {
-        let state = Arc::new(crate::state::tests::app_state("delete-sessions"));
-        let dir = temp_dir("delete-sessions");
+        let (state, dir) = crate::test_support::app_state("coordinator-delete-sessions");
+        let workdir = console_workdir(&dir);
         for id in ["console-1", "console-2"] {
-            let mut other = console(Agent::Claude, &dir);
+            let mut other = console(Agent::Claude, &workdir);
             other.id = id.to_string();
             state.store.insert_console(&other).unwrap();
         }
@@ -1940,19 +1939,17 @@ mod tests {
 
         delete_archived_sessions(&state, "console-1", None, None).unwrap();
         assert_eq!(remaining(), ["other-console-archived", "project-idle"]);
-
-        std::fs::remove_dir_all(dir).ok();
     }
 
     /// A project's deletion can be told to stop its sessions, but never goes ahead under a session
     /// that is being launched; with nothing in flight it removes the project and its sessions.
     #[tokio::test]
     async fn deleting_a_project_with_stop_sessions_refuses_a_launch_in_flight() {
-        let state = Arc::new(crate::state::tests::app_state("delete-project-stop"));
-        let dir = temp_dir("delete-project-stop");
+        let (state, dir) = crate::test_support::app_state("coordinator-delete-project-stop");
+        let workdir = console_workdir(&dir);
         state
             .store
-            .insert_console(&console(Agent::Claude, &dir))
+            .insert_console(&console(Agent::Claude, &workdir))
             .unwrap();
         state
             .store
@@ -2008,21 +2005,18 @@ mod tests {
         handle(&state, None, delete()).await.unwrap();
         assert!(state.store.get_project("project-1").unwrap().is_none());
         assert!(state.store.get_session("project").unwrap().is_none());
-
-        std::fs::remove_dir_all(dir).ok();
     }
 
     /// A session whose resolved agent has been determined unavailable is refused before anything
     /// is launched or written — no record, no claim, no process.
     #[tokio::test]
     async fn opening_a_session_is_refused_when_its_resolved_agent_is_unavailable() {
-        let state = Arc::new(crate::state::tests::app_state(
-            "open-session-agent-unavailable",
-        ));
-        let dir = temp_dir("open-session-agent-unavailable");
+        let (state, dir) =
+            crate::test_support::app_state("coordinator-open-session-agent-unavailable");
+        let workdir = console_workdir(&dir);
         state
             .store
-            .insert_console(&console(Agent::Claude, &dir))
+            .insert_console(&console(Agent::Claude, &workdir))
             .unwrap();
         state.set_agent_availability(vec![crate::protocol::AgentAvailability {
             agent: Agent::Claude,
@@ -2050,8 +2044,6 @@ mod tests {
         assert!(err.to_string().contains("Claude Code"), "{err}");
         // Refused ahead of the write that would have recorded a console session.
         assert!(state.store.list_sessions().unwrap().is_empty());
-
-        std::fs::remove_dir_all(dir).ok();
     }
 
     /// While availability has not yet been determined — the state every run begins in — nothing is
@@ -2059,7 +2051,7 @@ mod tests {
     /// there.
     #[test]
     fn nothing_is_refused_for_unavailability_while_it_is_not_yet_determined() {
-        let state = Arc::new(crate::state::tests::app_state("agent-not-yet-determined"));
+        let (state, _dir) = crate::test_support::app_state("coordinator-agent-not-yet-determined");
         assert_eq!(
             state.agent_availability_of(Agent::Claude).availability,
             Availability::NotDetermined
@@ -2094,7 +2086,7 @@ mod tests {
 
     #[test]
     fn a_session_is_pinned_to_its_own_agents_account() {
-        let state = Arc::new(crate::state::tests::app_state("session-account"));
+        let (state, _dir) = crate::test_support::app_state("coordinator-session-account");
         state
             .store
             .insert_account(&Account {
@@ -2225,7 +2217,7 @@ mod tests {
     /// even look at `requested` for one.
     #[test]
     fn a_console_session_is_never_bound() {
-        let state = Arc::new(crate::state::tests::app_state("resolve-bound-to-console"));
+        let (state, _dir) = crate::test_support::app_state("coordinator-resolve-bound-to-console");
         let bound = resolve_bound_to(&state, "console-1", Role::Console, Some("anything".into()))
             .expect("resolved");
         assert_eq!(bound, None);
@@ -2235,7 +2227,7 @@ mod tests {
     /// starts by hand without checking a box.
     #[test]
     fn a_project_session_named_nothing_to_bind_to_opens_unbound() {
-        let state = Arc::new(crate::state::tests::app_state("resolve-bound-to-none"));
+        let (state, _dir) = crate::test_support::app_state("coordinator-resolve-bound-to-none");
         let bound = resolve_bound_to(&state, "console-1", Role::Project, None).expect("resolved");
         assert_eq!(bound, None);
     }
@@ -2243,7 +2235,7 @@ mod tests {
     /// Naming a real console session of the same console is honoured.
     #[test]
     fn a_project_session_binds_to_the_console_session_it_names() {
-        let state = Arc::new(crate::state::tests::app_state("resolve-bound-to-valid"));
+        let (state, _dir) = crate::test_support::app_state("coordinator-resolve-bound-to-valid");
         state
             .store
             .insert_console(&console(Agent::Claude, Path::new("/tmp/unused")))
@@ -2268,7 +2260,7 @@ mod tests {
     /// session must be refused outright rather than silently dropped or discovered later.
     #[test]
     fn binding_to_an_invalid_target_is_refused() {
-        let state = Arc::new(crate::state::tests::app_state("resolve-bound-to-invalid"));
+        let (state, _dir) = crate::test_support::app_state("coordinator-resolve-bound-to-invalid");
         state
             .store
             .insert_console(&console(Agent::Claude, Path::new("/tmp/unused")))
@@ -2315,7 +2307,7 @@ mod tests {
     /// level.
     #[test]
     fn a_consoles_several_console_sessions_both_come_back_from_listing() {
-        let state = Arc::new(crate::state::tests::app_state("several-console-sessions"));
+        let (state, _dir) = crate::test_support::app_state("coordinator-several-console-sessions");
         state
             .store
             .insert_console(&console(Agent::Claude, Path::new("/tmp/unused")))
@@ -2360,7 +2352,7 @@ mod tests {
     /// visible afterwards through the settings record the account list travels with.
     #[tokio::test]
     async fn an_account_can_be_created_renamed_repointed_and_removed_over_the_protocol() {
-        let state = Arc::new(crate::state::tests::app_state("account-crud"));
+        let (state, _dir) = crate::test_support::app_state("coordinator-account-crud");
 
         handle(
             &state,
@@ -2420,7 +2412,7 @@ mod tests {
     /// an existing account, against the default account's own name, and not at all across agents.
     #[tokio::test]
     async fn a_colliding_account_name_is_refused_within_its_agent_only() {
-        let state = Arc::new(crate::state::tests::app_state("account-name-collision"));
+        let (state, _dir) = crate::test_support::app_state("coordinator-account-name-collision");
         handle(
             &state,
             None,
@@ -2467,7 +2459,7 @@ mod tests {
     /// all is accepted — the two rules this milestone changes about a config directory.
     #[tokio::test]
     async fn a_non_absolute_account_dir_is_refused_and_a_non_existent_one_is_accepted() {
-        let state = Arc::new(crate::state::tests::app_state("account-dir-rules"));
+        let (state, _dir) = crate::test_support::app_state("coordinator-account-dir-rules");
 
         let refused = handle(
             &state,
@@ -2504,9 +2496,8 @@ mod tests {
     /// the agent's default account; a console that never referred to it is untouched.
     #[tokio::test]
     async fn removing_an_account_a_console_refers_to_clears_the_reference() {
-        let state = Arc::new(crate::state::tests::app_state(
-            "account-delete-clears-console",
-        ));
+        let (state, _dir) =
+            crate::test_support::app_state("coordinator-account-delete-clears-console");
         handle(
             &state,
             None,
@@ -2555,9 +2546,8 @@ mod tests {
     /// A console and a project (whose directory does not exist, so a relaunch is refused at the
     /// launch's first check before it writes anything), and one account of each agent whose
     /// directory is under `dir`.
-    fn switch_fixture(name: &str) -> (Arc<AppState>, PathBuf) {
-        let state = Arc::new(crate::state::tests::app_state(name));
-        let dir = temp_dir(name);
+    fn switch_fixture(name: &str) -> (Arc<AppState>, ScratchDir) {
+        let (state, dir) = crate::test_support::app_state(&format!("coordinator-{name}"));
         state
             .store
             .insert_console(&console(Agent::Claude, &dir.join("no-such-workdir")))
@@ -2796,7 +2786,7 @@ mod tests {
         let mut bound = project_session("bound", Agent::Claude, SessionStatus::Interrupted);
         bound.bound_to = Some("hub".to_string());
         state.store.insert_session(&bound).unwrap();
-        let live = crate::state::tests::fake_live_session("hub", Agent::Claude, 80, 24, "sleep 30");
+        let live = idle_stand_in("hub");
         state.register_live(live.clone());
         state.watch_exit(live.clone());
 
@@ -2823,7 +2813,6 @@ mod tests {
             std::fs::read_to_string(dir.join("claude-a").join(record)).unwrap(),
             "conversation"
         );
-        std::fs::remove_dir_all(dir).ok();
     }
 
     /// The other half of the seam: ending a console session's process for a switch is not refused
@@ -2841,9 +2830,8 @@ mod tests {
             .store
             .insert_session(&bound_session("worker", SessionStatus::Working, "hub"))
             .unwrap();
-        let hub = crate::state::tests::fake_live_session("hub", Agent::Claude, 80, 24, "sleep 30");
-        let worker =
-            crate::state::tests::fake_live_session("worker", Agent::Claude, 80, 24, "sleep 30");
+        let hub = idle_stand_in("hub");
+        let worker = idle_stand_in("worker");
         state.register_live(hub.clone());
         state.watch_exit(hub.clone());
         state.register_live(worker.clone());
@@ -2861,8 +2849,6 @@ mod tests {
         assert!(hub.poll_exit(), "its process was ended");
         assert!(!worker.poll_exit(), "the bound session was left running");
         assert_eq!(status_of(&state, "worker"), Some(SessionStatus::Working));
-        worker.terminate();
-        std::fs::remove_dir_all(dir).ok();
     }
 
     /// A relaunched process that has ended by the end of the settling time did not come up; one
@@ -2870,12 +2856,11 @@ mod tests {
     #[tokio::test]
     async fn a_relaunched_process_that_ends_at_once_did_not_come_up() {
         let settle = Duration::from_millis(400);
-        let gone = crate::state::tests::fake_live_session("gone", Agent::Claude, 80, 24, "exit 1");
-        let up = crate::state::tests::fake_live_session("up", Agent::Claude, 80, 24, "sleep 30");
+        let gone = fake_live_session("gone", Agent::Claude, 80, 24, "exit 1");
+        let up = idle_stand_in("up");
 
         assert!(!came_up(&gone, settle).await);
         assert!(came_up(&up, settle).await);
-        up.terminate();
     }
 
     /// The claim a switch holds outlives the relaunched process being registered as live, and it
@@ -2884,11 +2869,11 @@ mod tests {
     /// refused.
     #[tokio::test]
     async fn a_switch_claim_is_held_after_the_relaunched_process_is_live_and_after_it_exits() {
-        let state = Arc::new(crate::state::tests::app_state("switch-claim"));
+        let (state, _dir) = crate::test_support::app_state("coordinator-switch-claim");
         let claim = state.begin_switch("s").unwrap();
-        let live = crate::state::tests::fake_live_session("s", Agent::Claude, 80, 24, "exit 1");
+        let live = fake_live_session("s", Agent::Claude, 80, 24, "exit 1");
         state.register_live(live.clone());
-        state.watch_exit(live);
+        state.watch_exit(live.clone());
         let deadline = Instant::now() + Duration::from_secs(5);
         while state.live_session("s").is_some() {
             assert!(Instant::now() < deadline, "the exit was never seen");
@@ -2908,7 +2893,7 @@ mod tests {
     /// archived.
     #[tokio::test]
     async fn a_relaunch_for_a_switch_never_reopens_an_archived_session() {
-        let (state, dir) = switch_fixture("switch-archived-late");
+        let (state, _dir) = switch_fixture("switch-archived-late");
         state
             .store
             .insert_session(&project_session(
@@ -2927,7 +2912,6 @@ mod tests {
             state.store.get_session("s").unwrap().unwrap().status,
             SessionStatus::Archived
         );
-        std::fs::remove_dir_all(dir).ok();
     }
 
     /// A project session bound to the console session `owner`, titled by its id so a refusal that
@@ -2971,7 +2955,7 @@ mod tests {
     #[tokio::test]
     async fn archiving_a_console_session_is_refused_while_a_bound_process_runs() {
         use SessionStatus::{Idle, Interrupted, WaitingUser, Working};
-        let (state, dir) = switch_fixture("archive-refused");
+        let (state, _dir) = switch_fixture("archive-refused");
         state
             .store
             .insert_session(&console_session("hub", Idle))
@@ -2996,8 +2980,7 @@ mod tests {
                     .store
                     .insert_session(&bound_session(id, *status, "hub"))
                     .unwrap();
-                let fake =
-                    crate::state::tests::fake_live_session(id, Agent::Claude, 80, 24, "sleep 30");
+                let fake = idle_stand_in(id);
                 state.register_live(fake.clone());
                 live.push(fake);
             }
@@ -3017,8 +3000,8 @@ mod tests {
             assert_eq!(status_of(&state, "hub"), Some(Idle), "{name}");
             assert_eq!(status_of(&state, "dormant"), Some(Interrupted), "{name}");
 
-            for (id, fake) in ids.iter().zip(&live) {
-                fake.terminate();
+            drop(live); // ends the stand-in processes
+            for id in &ids {
                 state.store.delete_session(id).unwrap();
             }
         }
@@ -3032,7 +3015,6 @@ mod tests {
         );
         assert_eq!(status_of(&state, "hub"), Some(Idle));
         drop(claim);
-        std::fs::remove_dir_all(dir).ok();
     }
 
     /// With no bound process running, archiving a console session archives every bound session
@@ -3041,7 +3023,7 @@ mod tests {
     #[tokio::test]
     async fn archiving_a_console_session_archives_its_interrupted_bound_sessions() {
         use SessionStatus::{Archived, Idle, Interrupted};
-        let (state, dir) = switch_fixture("archive-cascade");
+        let (state, _dir) = switch_fixture("archive-cascade");
         for session in [
             console_session("hub", Idle),
             console_session("other-hub", Idle),
@@ -3082,7 +3064,6 @@ mod tests {
             state.store.get_session("old").unwrap().unwrap().ended_at,
             Some(5)
         );
-        std::fs::remove_dir_all(dir).ok();
     }
 
     /// Archiving a project session reaches no other session: the automatic archive of a `done`
@@ -3090,7 +3071,7 @@ mod tests {
     /// neither takes the console session the session is bound to.
     #[tokio::test]
     async fn archiving_a_bound_project_session_leaves_its_console_session_alone() {
-        let (state, dir) = switch_fixture("archive-bound-alone");
+        let (state, _dir) = switch_fixture("archive-bound-alone");
         state
             .store
             .insert_session(&console_session("hub", SessionStatus::Idle))
@@ -3104,7 +3085,6 @@ mod tests {
 
         assert_eq!(status_of(&state, "worker"), Some(SessionStatus::Archived));
         assert_eq!(status_of(&state, "hub"), Some(SessionStatus::Idle));
-        std::fs::remove_dir_all(dir).ok();
     }
 
     /// Which console session a relaunch brings back first: the archived one a dormant session is
@@ -3114,7 +3094,7 @@ mod tests {
     #[test]
     fn a_reopen_brings_back_only_an_archived_owner() {
         use SessionStatus::{Archived, Idle, Interrupted};
-        let (state, dir) = switch_fixture("archived-owner");
+        let (state, _dir) = switch_fixture("archived-owner");
         for session in [
             console_session("archived-hub", Archived),
             console_session("interrupted-hub", Interrupted),
@@ -3156,7 +3136,6 @@ mod tests {
             state.store.delete_session("s").unwrap();
         }
         assert_eq!(archived_owner(&state, "archived-hub").unwrap(), None);
-        std::fs::remove_dir_all(dir).ok();
     }
 
     /// The console session is relaunched before the session asked for, and the reopen fails as a
@@ -3191,7 +3170,6 @@ mod tests {
             (SessionStatus::Archived, Some(5))
         );
         assert!(!state.has_process("hub") && !state.has_process("worker"));
-        std::fs::remove_dir_all(dir).ok();
     }
 
     /// Deleting an archived console session takes the archived sessions bound to it and no others;
@@ -3200,7 +3178,7 @@ mod tests {
     #[tokio::test]
     async fn deleting_an_archived_console_session_deletes_its_archived_bound_sessions() {
         use SessionStatus::{Archived, Idle, Interrupted};
-        let (state, dir) = switch_fixture("delete-cascade");
+        let (state, _dir) = switch_fixture("delete-cascade");
         for session in [
             console_session("hub", Archived),
             bound_session("a", Archived, "hub"),
@@ -3234,7 +3212,6 @@ mod tests {
             session_ids(&state),
             ["d", "live-hub", "other-hub", "still-here", "unbound"]
         );
-        std::fs::remove_dir_all(dir).ok();
     }
 
     /// Deleting every archived console session of a console takes their archived bound sessions
@@ -3256,17 +3233,15 @@ mod tests {
             (state, dir)
         };
 
-        let (state, dir) = seed("bulk-console-scope");
+        let (state, _dir) = seed("bulk-console-scope");
         delete_archived_sessions(&state, "console-1", None, None).unwrap();
         assert_eq!(session_ids(&state), ["unbound"]);
-        std::fs::remove_dir_all(dir).ok();
 
-        let (state, dir) = seed("bulk-project-scope");
+        let (state, _dir) = seed("bulk-project-scope");
         delete_archived_sessions(&state, "console-1", Some("project-1"), None).unwrap();
         assert_eq!(session_ids(&state), ["hub"]);
-        std::fs::remove_dir_all(dir).ok();
 
-        let (state, dir) = seed("bulk-bound-scope");
+        let (state, _dir) = seed("bulk-bound-scope");
         delete_archived_sessions(&state, "console-1", None, Some("hub")).unwrap();
         assert_eq!(session_ids(&state), ["hub", "unbound"]);
         for (project, owner, code) in [
@@ -3283,7 +3258,6 @@ mod tests {
             assert_eq!(code_of(&refused), code);
         }
         assert_eq!(session_ids(&state), ["hub", "unbound"]);
-        std::fs::remove_dir_all(dir).ok();
     }
 
     fn page_of(id: &str, console_session_id: &str, created_at: i64) -> crate::protocol::Page {
@@ -3302,13 +3276,12 @@ mod tests {
     /// earlier page read-only.
     #[tokio::test]
     async fn a_page_submission_reaches_the_console_session_that_pushed_it() {
-        let state = Arc::new(crate::state::tests::app_state(
-            "submit-page-routes-by-owner",
-        ));
-        let dir = temp_dir("submit-page-routes-by-owner");
+        let (state, dir) =
+            crate::test_support::app_state("coordinator-submit-page-routes-by-owner");
+        let workdir = console_workdir(&dir);
         state
             .store
-            .insert_console(&console(Agent::Claude, &dir))
+            .insert_console(&console(Agent::Claude, &workdir))
             .unwrap();
         let mut live = HashMap::new();
         for id in ["owner-a", "owner-b"] {
@@ -3316,8 +3289,7 @@ mod tests {
                 .store
                 .insert_session(&bare_session(id, Role::Console))
                 .unwrap();
-            let session =
-                crate::state::tests::fake_live_session(id, Agent::Claude, 80, 24, "sleep 30");
+            let session = idle_stand_in(id);
             state.register_live(session.clone());
             crate::session::spawn_reader_thread(session.clone(), 8 * 1024);
             live.insert(id, session);
@@ -3377,9 +3349,5 @@ mod tests {
             .recent_output(8 * 1024)
             .windows(5)
             .any(|window| window == b"a-new"));
-        for session in live.values() {
-            session.terminate();
-        }
-        std::fs::remove_dir_all(dir).ok();
     }
 }

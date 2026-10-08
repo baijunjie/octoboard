@@ -566,7 +566,7 @@ mod tests {
     /// unbound — there is nobody its binding names to report to.
     #[test]
     fn reporting_fails_for_an_unbound_session() {
-        let state = Arc::new(crate::state::tests::app_state("report-unbound"));
+        let (state, _dir) = crate::test_support::app_state("reporting-unbound");
         state.store.insert_console(&console()).unwrap();
         let mut unbound = project_session("worker");
         unbound.bound_to = None;
@@ -590,7 +590,7 @@ mod tests {
     /// on record — deleted along with its console, say.
     #[test]
     fn reporting_fails_when_the_bound_console_session_is_gone() {
-        let state = Arc::new(crate::state::tests::app_state("report-owner-gone"));
+        let (state, _dir) = crate::test_support::app_state("reporting-owner-gone");
         state.store.insert_console(&console()).unwrap();
         let mut orphaned = project_session("worker");
         orphaned.bound_to = Some("no-such-session".to_string());
@@ -605,7 +605,7 @@ mod tests {
     /// delivered again.
     #[test]
     fn reporting_fails_for_a_session_already_wrapped_up() {
-        let state = Arc::new(crate::state::tests::app_state("report-wrapped-up"));
+        let (state, _dir) = crate::test_support::app_state("reporting-wrapped-up");
         state.store.insert_console(&console()).unwrap();
         let mut done = project_session("worker");
         done.status = SessionStatus::Archived;
@@ -615,18 +615,12 @@ mod tests {
         assert!(err.to_string().contains("wrapped up"), "{err}");
     }
 
-    /// A stand-in live session with no real agent behind it — enough for `write_message` to have
-    /// something to write into and read back from.
-    fn fake_live(id: &str) -> Arc<crate::session::LiveSession> {
-        crate::state::tests::fake_live_session(id, Agent::Claude, 80, 24, "sleep 30")
-    }
-
     /// A project session bound to one console session has its report delivered to that one, and
     /// not to another live console session in the same console: reports are routed by the
     /// binding, never by guessing which console session a project session's reports belong to.
     #[test]
     fn a_report_reaches_only_the_console_session_it_is_bound_to() {
-        let state = Arc::new(crate::state::tests::app_state("report-routes-by-binding"));
+        let (state, _dir) = crate::test_support::app_state("reporting-routes-by-binding");
         state.store.insert_console(&console()).unwrap();
 
         let owner = |id: &str| Session {
@@ -652,8 +646,8 @@ mod tests {
         };
         state.store.insert_session(&owner("owner-a")).unwrap();
         state.store.insert_session(&owner("owner-b")).unwrap();
-        let live_a = fake_live("owner-a");
-        let live_b = fake_live("owner-b");
+        let live_a = crate::test_support::idle_stand_in("owner-a");
+        let live_b = crate::test_support::idle_stand_in("owner-b");
         state.register_live(live_a.clone());
         state.register_live(live_b.clone());
         // What actually fills each session's output ring buffer from its PTY — `register_live`
@@ -691,15 +685,13 @@ mod tests {
             !b_output.contains(&worker.id),
             "owner-b must not see a report bound to owner-a: {b_output}"
         );
-        live_a.terminate();
-        live_b.terminate();
     }
 
     /// A `done` report with no open items archives the reporting session and nothing else: not its
     /// console session, which keeps running, and not a sibling bound to the same console session.
     #[test]
     fn a_done_report_archives_only_the_reporting_session() {
-        let state = Arc::new(crate::state::tests::app_state("report-archives-reporter"));
+        let (state, _dir) = crate::test_support::app_state("reporting-archives-reporter");
         state.store.insert_console(&console()).unwrap();
         let hub = Session {
             id: "hub".to_string(),
@@ -708,7 +700,7 @@ mod tests {
             ..project_session("hub")
         };
         state.store.insert_session(&hub).unwrap();
-        let live = fake_live("hub");
+        let live = crate::test_support::idle_stand_in("hub");
         state.register_live(live.clone());
         for id in ["worker", "sibling"] {
             let session = Session {
@@ -725,7 +717,6 @@ mod tests {
         assert_eq!(status("worker"), SessionStatus::Archived);
         assert_eq!(status("hub"), SessionStatus::Idle);
         assert_eq!(status("sibling"), SessionStatus::Idle);
-        live.terminate();
     }
 
     /// Several sessions in one project have to be told apart in the menu, and the goal is the only

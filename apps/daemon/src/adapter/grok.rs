@@ -331,7 +331,7 @@ mod tests {
         let farm = PathBuf::from(&plan.env[0].1);
         // Still Octoboard's own farm that Grok runs against, never the chosen directory itself.
         assert_eq!(plan.env.len(), 1);
-        assert!(farm.starts_with(&fixture.scratch), "{}", farm.display());
+        assert!(farm.starts_with(&*fixture.scratch), "{}", farm.display());
         // Grok persists into `config.toml`, so it stays a copy and never a link into the source.
         assert!(farm.join("config.toml").is_file());
         assert!(!farm.join("config.toml").is_symlink());

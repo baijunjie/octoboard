@@ -27,6 +27,8 @@ mod session;
 mod state;
 mod store;
 mod term;
+#[cfg(test)]
+mod test_support;
 mod transcript;
 mod trust;
 

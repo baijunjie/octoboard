@@ -304,8 +304,7 @@ mod tests {
 
     use super::*;
     use crate::protocol::{Agent, Console, Origin, Role, Session};
-    use crate::session::LiveSession;
-    use crate::store::Store;
+    use crate::test_support::{idle_stand_in, ScratchDir, ScratchFile, StandIn};
 
     /// A real rejection record, trimmed to the two lines that carry the markers, captured from a
     /// permission-prompt decline on Claude Code 2.1.274; a capture of the same decline on 2.1.286
@@ -327,65 +326,8 @@ mod tests {
     const QUESTION_CHAT_EXIT: &str =
         include_str!("../testdata/transcript_question_chat_exit.jsonl");
 
-    /// A scratch directory for one test, removed when whatever holds it is dropped. Dereferences
-    /// to the path, so it is passed as one. Owning the removal rather than leaving it to each
-    /// test's last statement is what makes a failing assertion clean up too.
-    ///
-    /// The name carries the pid and a per-process counter, so two directories never collide within
-    /// one run. Across runs a pid can be recycled, which is why the directory is also removed
-    /// before being created: a run killed outright leaves its directory behind, and a leftover
-    /// `octoboard.db` in it would fail `Store::insert_console`'s unique constraint.
-    struct ScratchDir(PathBuf);
-
-    impl ScratchDir {
-        fn new(name: &str) -> Self {
-            static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-            let dir = std::env::temp_dir().join(format!(
-                "octoboardd-transcript-{name}-{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-            ));
-            std::fs::remove_dir_all(&dir).ok();
-            std::fs::create_dir_all(&dir).expect("temporary directory");
-            Self(dir)
-        }
-    }
-
-    impl std::ops::Deref for ScratchDir {
-        type Target = Path;
-
-        fn deref(&self) -> &Path {
-            &self.0
-        }
-    }
-
-    impl Drop for ScratchDir {
-        fn drop(&mut self) {
-            std::fs::remove_dir_all(&self.0).ok();
-        }
-    }
-
-    /// A transcript path inside a scratch directory that goes away with it. Dereferences to the
-    /// path, so it is passed as one.
-    struct Scratch {
-        _dir: ScratchDir,
-        path: PathBuf,
-    }
-
-    impl std::ops::Deref for Scratch {
-        type Target = Path;
-
-        fn deref(&self) -> &Path {
-            &self.path
-        }
-    }
-
-    fn temp_path(name: &str) -> Scratch {
-        let dir = ScratchDir::new(name);
-        Scratch {
-            path: dir.join("transcript.jsonl"),
-            _dir: dir,
-        }
+    fn temp_path(name: &str) -> ScratchFile {
+        ScratchFile::new(&format!("transcript-{name}"), "transcript.jsonl")
     }
 
     fn write_transcript(path: &Path, content: &str) {
@@ -511,10 +453,10 @@ mod tests {
         assert_eq!(scan.offset, REJECTION.len() as u64);
     }
 
-    fn app_state(name: &str) -> (Arc<AppState>, ScratchDir) {
-        let dir = ScratchDir::new(&format!("state-{name}"));
-        let store = Store::open(&dir.join("octoboard.db")).expect("store");
-        store
+    fn state_with_console(name: &str) -> (Arc<AppState>, ScratchDir) {
+        let (state, dir) = crate::test_support::app_state(&format!("transcript-{name}"));
+        state
+            .store
             .insert_console(&Console {
                 id: "console-1".to_string(),
                 name: "Console".to_string(),
@@ -528,10 +470,7 @@ mod tests {
                 created_at: 0,
             })
             .expect("console");
-        (
-            Arc::new(AppState::new(store, 1234, "/opt/octoboardd".to_string())),
-            dir,
-        )
+        (state, dir)
     }
 
     fn waiting_session(id: &str) -> Session {
@@ -558,36 +497,16 @@ mod tests {
         }
     }
 
-    /// A stand-in live session with no real agent behind it — just something that stays alive on a
-    /// PTY until dropped, which is all `watch_for_rejection` ever asks of `AppState::live_session`.
-    fn fake_live(id: &str) -> Arc<LiveSession> {
-        crate::state::tests::fake_live_session(id, Agent::Claude, 80, 24, "sleep 30")
-    }
-
     /// Starting a second watch for the same session must retire the first: entering `WaitingUser`
     /// twice in a row must not leave two watchers racing to write the session's status.
     #[test]
     fn a_newer_watch_supersedes_the_one_before_it() {
-        let (state, _dir) = app_state("supersede-generations");
+        let (state, _dir) = state_with_console("supersede-generations");
         let first = state.begin_transcript_watch("s");
         let second = state.begin_transcript_watch("s");
         assert_ne!(first, second);
         assert!(!state.transcript_watch_current("s", first));
         assert!(state.transcript_watch_current("s", second));
-    }
-
-    /// Polls `done` until it holds or `timeout` passes.
-    fn wait_for(timeout: Duration, mut done: impl FnMut() -> bool) -> bool {
-        let deadline = std::time::Instant::now() + timeout;
-        loop {
-            if done() {
-                return true;
-            }
-            if std::time::Instant::now() >= deadline {
-                return false;
-            }
-            std::thread::sleep(Duration::from_millis(20));
-        }
     }
 
     /// How long a test waits for an outcome that is expected to happen, or for the watch loop to
@@ -608,38 +527,29 @@ mod tests {
     }
 
     /// A stand-in session is registered and watched the same way in every test below; this bundles
-    /// the common setup and the common teardown so each test only has to state what is different
-    /// about it.
+    /// the common setup so each test only has to state what is different about it.
     struct Fixture {
+        _live: StandIn,
         state: Arc<AppState>,
         _dir: ScratchDir,
         path: PathBuf,
-        live: Arc<LiveSession>,
     }
 
     impl Fixture {
         fn new(name: &str, session: Session) -> Self {
-            let (state, dir) = app_state(name);
+            let (state, dir) = state_with_console(name);
             state.store.insert_session(&session).expect("session");
-            let live = fake_live(&session.id);
+            let live = idle_stand_in(&session.id);
             state.register_live(live.clone());
 
             let path = dir.join("transcript.jsonl");
             std::fs::write(&path, "").expect("empty transcript");
             Self {
+                _live: live,
                 state,
                 _dir: dir,
                 path,
-                live,
             }
-        }
-    }
-
-    impl Drop for Fixture {
-        fn drop(&mut self) {
-            // A failing assertion earlier in the test must still terminate the stand-in process.
-            // The scratch directory goes with the `ScratchDir` this holds.
-            self.live.terminate();
         }
     }
 
@@ -676,7 +586,7 @@ mod tests {
         // `TEST_TIMEOUT`, same as the other tests use to wait for a real event.
         let state = fixture.state.clone();
         let changed = tokio::task::spawn_blocking(move || {
-            wait_for(TEST_TIMEOUT, || {
+            crate::trust::wait_for(TEST_TIMEOUT, || {
                 status_of(&state, "s") != Some(SessionStatus::Working)
             })
         })
@@ -696,7 +606,7 @@ mod tests {
 
         let state = fixture.state.clone();
         let applied = tokio::task::spawn_blocking(move || {
-            wait_for(TEST_TIMEOUT, || {
+            crate::trust::wait_for(TEST_TIMEOUT, || {
                 status_of(&state, "s") == Some(SessionStatus::Idle)
             })
         })
@@ -721,7 +631,7 @@ mod tests {
 
         let state = fixture.state.clone();
         let changed = tokio::task::spawn_blocking(move || {
-            wait_for(TEST_TIMEOUT, || {
+            crate::trust::wait_for(TEST_TIMEOUT, || {
                 status_of(&state, "s") != Some(SessionStatus::WaitingUser)
             })
         })
@@ -753,7 +663,7 @@ mod tests {
 
         let state = fixture.state.clone();
         let applied = tokio::task::spawn_blocking(move || {
-            wait_for(TEST_TIMEOUT * 2, || {
+            crate::trust::wait_for(TEST_TIMEOUT * 2, || {
                 status_of(&state, "s") == Some(SessionStatus::Idle)
             })
         })
@@ -792,7 +702,7 @@ mod tests {
         .expect("append rejection");
         let state = fixture.state.clone();
         let applied = tokio::task::spawn_blocking(move || {
-            wait_for(TEST_TIMEOUT * 2, || {
+            crate::trust::wait_for(TEST_TIMEOUT * 2, || {
                 status_of(&state, "s") == Some(SessionStatus::Idle)
             })
         })

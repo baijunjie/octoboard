@@ -309,16 +309,10 @@ fn footprint(path: &Path) -> io::Result<BTreeMap<PathBuf, u64>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::ScratchDir;
 
-    fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "octoboardd-relocate-{name}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        std::fs::remove_dir_all(&dir).ok();
-        std::fs::create_dir_all(&dir).expect("temporary directory");
-        dir
+    fn temp_dir(name: &str) -> ScratchDir {
+        ScratchDir::new(&format!("relocate-{name}"))
     }
 
     fn write(root: &Path, relative: &str, content: &str) {
@@ -539,7 +533,7 @@ mod tests {
         );
 
         write(&target, ".octoboard-switch/b/leftover", "from a crash");
-        sweep_staging([target.as_path()]);
+        sweep_staging([&*target]);
         assert!(!target.join(STAGING).exists());
     }
 }

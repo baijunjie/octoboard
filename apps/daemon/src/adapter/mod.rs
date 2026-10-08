@@ -266,7 +266,7 @@ pub mod tests {
         pub role: crate::protocol::Role,
         pub new_agent_session_id: String,
         pub cwd: PathBuf,
-        pub scratch: PathBuf,
+        pub scratch: crate::test_support::ScratchDir,
         pub hook_script: PathBuf,
         pub shell_env: HashMap<String, String>,
         pub config_dir: Option<PathBuf>,
@@ -294,18 +294,8 @@ pub mod tests {
         }
     }
 
-    impl Drop for SpecFixture {
-        fn drop(&mut self) {
-            std::fs::remove_dir_all(&self.scratch).ok();
-        }
-    }
-
     pub fn spec_fixture() -> SpecFixture {
-        let root = std::env::temp_dir().join(format!(
-            "octoboardd-adapter-test-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        let root = crate::test_support::ScratchDir::new("adapter-test");
         let scratch = root.join("scratch");
         let cwd = root.join("project");
         std::fs::create_dir_all(&scratch).expect("scratch directory");

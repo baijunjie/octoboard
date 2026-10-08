@@ -78,12 +78,7 @@ mod tests {
     /// own default — Claude Code's reading of `CLAUDE_CONFIG_DIR`, generalised across all three.
     #[test]
     fn an_available_agent_shows_its_exported_directory() {
-        let dir = std::env::temp_dir().join(format!(
-            "octoboardd-availability-test-bin-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        std::fs::create_dir_all(&dir).expect("bin directory");
+        let dir = crate::test_support::ScratchDir::new("availability-test-bin");
         let claude = dir.join("claude");
         std::fs::write(&claude, "#!/bin/sh\n").expect("fake claude");
         let mut perms = std::fs::metadata(&claude).expect("metadata").permissions();
@@ -110,8 +105,6 @@ mod tests {
             claude_entry.default_account_dir,
             Some("/custom/claude-dir".to_string())
         );
-
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// With no variable exported, the default account falls back to the agent's own usual
@@ -161,7 +154,7 @@ mod tests {
     /// client already connected sees no change at all.
     #[test]
     fn a_snapshot_that_does_not_complete_leaves_availability_not_determined() {
-        let state = crate::state::tests::app_state("availability-snapshot-failed");
+        let (state, _dir) = crate::test_support::app_state("availability-snapshot-failed");
         let mut events = state.subscribe();
 
         apply_snapshot(&state, Err(anyhow::anyhow!("the snapshot shell timed out")));
@@ -186,7 +179,7 @@ mod tests {
     /// already empty.
     #[test]
     fn determining_availability_creates_or_removes_no_account() {
-        let state = crate::state::tests::app_state("availability-mints-no-account");
+        let (state, _dir) = crate::test_support::app_state("availability-mints-no-account");
         let mut env = HashMap::new();
         env.insert("PATH".to_string(), String::new());
         env.insert(

@@ -592,47 +592,10 @@ pub fn resolve_binary(name: &str, env: &HashMap<String, String>) -> Result<Strin
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::OnceLock;
 
     use super::*;
-
-    static TEMP_PATH_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-    /// Builds a process-unique temp-file path labeled `label`. Shared by `FakeShell` and the
-    /// tests that hand the fixture shell a path to write a pid into, so the naming scheme lives
-    /// in one place. Uniqueness comes from an `AtomicUsize` counter rather than `ThreadId`, which
-    /// collapses to the same `ThreadId(1)` for every test under `--test-threads=1` and, formatted
-    /// with `{:?}`, contains parentheses that would otherwise have to be worked around wherever
-    /// the path is substituted into shell script text.
-    fn temp_path(label: &str) -> std::path::PathBuf {
-        let n = TEMP_PATH_COUNTER.fetch_add(1, Ordering::Relaxed);
-        std::env::temp_dir().join(format!(
-            "octoboardd-env-shell-test-{label}-{}-{n}",
-            std::process::id()
-        ))
-    }
-
-    /// A path reserved for a fixture shell script to write into, removed on drop regardless of
-    /// whether the script ever created it — including when a test panics before reaching its own
-    /// cleanup.
-    struct TempFile(std::path::PathBuf);
-
-    impl TempFile {
-        fn new(label: &str) -> Self {
-            Self(temp_path(label))
-        }
-
-        fn path(&self) -> &std::path::Path {
-            &self.0
-        }
-    }
-
-    impl Drop for TempFile {
-        fn drop(&mut self) {
-            std::fs::remove_file(&self.0).ok();
-        }
-    }
+    use crate::test_support::{ScratchDir, ScratchFile};
 
     /// Polls for `path` to exist and parse as the pid it is expected to hold, rather than
     /// asserting it is already there: the fixture shell writes it concurrently, and reading too
@@ -718,27 +681,21 @@ mod tests {
     /// runs `body` instead, with `$OCTOBOARD_TEST_MARKER` available for it to print when it wants
     /// to simulate a complete dump (see `fake_shell_dispatcher`).
     struct FakeShell {
+        _dir: ScratchDir,
         path: std::path::PathBuf,
     }
 
     impl FakeShell {
         fn new(body: &str) -> Self {
-            let path = temp_path("shell");
-            std::fs::write(format!("{}.body", path.display()), body)
-                .expect("write fake shell body");
+            let dir = ScratchDir::new("env-shell-test-shell");
+            let path = dir.join("shell");
+            std::fs::write(dir.join("shell.body"), body).expect("write fake shell body");
             std::os::unix::fs::symlink(fake_shell_dispatcher(), &path).expect("symlink fake shell");
-            Self { path }
+            Self { _dir: dir, path }
         }
 
         fn path(&self) -> &str {
             self.path.to_str().expect("utf8 path")
-        }
-    }
-
-    impl Drop for FakeShell {
-        fn drop(&mut self) {
-            std::fs::remove_file(&self.path).ok();
-            std::fs::remove_file(format!("{}.body", self.path.display())).ok();
         }
     }
 
@@ -848,10 +805,10 @@ mod tests {
         // `a_shell_exiting_cleanly_without_a_complete_snapshot_and_nothing_holding_the_pipes_fails_fast`
         // below, and from the exit-timeout path
         // `a_shell_that_hangs_is_killed_along_with_its_backgrounded_child` exercises.
-        let child_pid_path = TempFile::new("drain-timeout-bg-pid");
+        let child_pid_path = ScratchFile::new("env-shell-test-drain-timeout-bg-pid", "pid");
         let shell = FakeShell::new(&format!(
             "sleep 300 & echo $! > '{path}'\nprintf 'FOO=ba'",
-            path = child_pid_path.path().display(),
+            path = child_pid_path.display(),
         ));
         let timeout = Duration::from_secs(1);
         let started = Instant::now();
@@ -867,10 +824,8 @@ mod tests {
         // Confirms the drain-timeout branch's group kill reached the backgrounded process too —
         // this is exactly the path whose `-pid` validity is subtlest (the group is diagnosed as
         // still populated by this very process holding the pipe open).
-        let bg_pid = read_pid_file_when_ready(
-            child_pid_path.path(),
-            Instant::now() + Duration::from_secs(2),
-        );
+        let bg_pid =
+            read_pid_file_when_ready(&child_pid_path, Instant::now() + Duration::from_secs(2));
         assert_gone_by(bg_pid, Instant::now() + Duration::from_secs(2));
     }
 
@@ -922,12 +877,12 @@ mod tests {
         // test can confirm after the timeout that killing the shell did not leave the
         // backgrounded process behind — the exact failure mode the process-group kill exists to
         // prevent.
-        let shell_pid_path = TempFile::new("shell-pid");
-        let child_pid_path = TempFile::new("child-pid");
+        let shell_pid_path = ScratchFile::new("env-shell-test-shell-pid", "pid");
+        let child_pid_path = ScratchFile::new("env-shell-test-child-pid", "pid");
         let shell = FakeShell::new(&format!(
             "echo $$ > '{shell_pid}'\nsleep 300 &\necho $! > '{child_pid}'\nwait",
-            shell_pid = shell_pid_path.path().display(),
-            child_pid = child_pid_path.path().display(),
+            shell_pid = shell_pid_path.display(),
+            child_pid = child_pid_path.display(),
         ));
 
         // Generous enough for the shell to reliably write both pid files before the timeout
@@ -943,8 +898,8 @@ mod tests {
         // above firing, and an unflushed file on a loaded machine is this suite's one real
         // wall-clock race.
         let poll_deadline = Instant::now() + timeout;
-        let shell_pid = read_pid_file_when_ready(shell_pid_path.path(), poll_deadline);
-        let child_pid = read_pid_file_when_ready(child_pid_path.path(), poll_deadline);
+        let shell_pid = read_pid_file_when_ready(&shell_pid_path, poll_deadline);
+        let child_pid = read_pid_file_when_ready(&child_pid_path, poll_deadline);
 
         // SIGKILL is near-instant; this is a generous margin on a loaded CI box, not evidence the
         // kill is slow.

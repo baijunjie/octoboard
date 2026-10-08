@@ -63,6 +63,7 @@ the repository root and cover both crates; `-p octoboardd` narrows either to thi
 | `src/instance_lock.rs` | Enforces one daemon per data directory |
 | `src/paths.rs` | Where Octoboard keeps its own files, under `~/.octoboard` |
 | `src/adapter/` | One adapter per agent CLI — see below |
+| `src/test_support.rs` | Test-only (`#[cfg(test)]`, not part of the binary): the fixtures the modules' unit tests share — a self-removing scratch directory and file, an `AppState` over a fresh store in one, and a stand-in live session on a PTY that ends itself |
 
 ### `src/mcp/`
 

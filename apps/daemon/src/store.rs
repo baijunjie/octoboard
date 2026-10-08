@@ -1069,16 +1069,10 @@ fn enum_from_text<T: DeserializeOwned>(text: &str) -> Result<T, serde_json::Erro
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::ScratchFile;
 
-    fn temp_db(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "octoboardd-store-{name}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        std::fs::remove_dir_all(&dir).ok();
-        std::fs::create_dir_all(&dir).expect("temporary directory");
-        dir.join("octoboard.db")
+    fn temp_db(name: &str) -> ScratchFile {
+        ScratchFile::new(&format!("store-{name}"), "octoboard.db")
     }
 
     fn console(claude: Option<&str>, codex: Option<&str>, grok: Option<&str>) -> Console {
@@ -1179,8 +1173,6 @@ mod tests {
                 .any(|name| name.starts_with("octoboard.db.superseded-")),
             "the old file should have been moved aside, not deleted: found {siblings:?}"
         );
-
-        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
     /// A reporter whose conclusion only holds while the session has not moved on writes through
@@ -1188,7 +1180,8 @@ mod tests {
     /// it expected, and says which happened.
     #[test]
     fn a_conditional_status_write_moves_the_session_only_from_the_status_it_expected() {
-        let store = Store::open(&temp_db("conditional-status")).expect("store");
+        let path = temp_db("conditional-status");
+        let store = Store::open(&path).expect("store");
         store
             .insert_console(&console(None, None, None))
             .expect("console");
@@ -1262,8 +1255,6 @@ mod tests {
         pinned.pinned = true;
         store.update_project(&pinned).unwrap();
         assert!(store.get_project("project-1").unwrap().unwrap().pinned);
-
-        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
     /// A session record read before the user pinned it, written back afterwards, does not undo
@@ -1287,7 +1278,6 @@ mod tests {
         assert!(store.delete_session_if_archived("session-1").unwrap());
         assert!(!store.update_session(&stale).unwrap());
         drop(store);
-        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
     /// The consent is its own statement: a project starts without it, recording it survives a read
@@ -1325,8 +1315,6 @@ mod tests {
             .set_project_claude_trust_consent("project-1", false)
             .expect("withdrawn");
         assert!(!consented(&store));
-
-        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
     /// A project stored before paths were normalised is the same project as the normalised one.
@@ -1353,7 +1341,6 @@ mod tests {
         assert!(!store
             .project_exists_at("console-2", "/work/project")
             .unwrap());
-        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
     /// A fresh database starts with no trusted directories, and what is added survives opening it
@@ -1377,8 +1364,6 @@ mod tests {
         assert!(store.remove_trusted_directory("/work").unwrap());
         assert!(!store.remove_trusted_directory("/work").unwrap());
         assert_eq!(store.trusted_directories().unwrap(), ["/another"]);
-
-        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
     /// A console's references round-trip as written, and a session keeps its own copy of its
@@ -1441,8 +1426,6 @@ mod tests {
             .set_session_account("missing", None, None)
             .unwrap()
             .is_none());
-
-        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
     #[test]
@@ -1471,8 +1454,6 @@ mod tests {
             store.update_console(&stored).expect("update");
             assert_eq!(read(&store), account_id.map(str::to_string));
         }
-
-        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
     /// Removing an account clears every console's reference to it, in the same step, so no reader
@@ -1501,8 +1482,6 @@ mod tests {
             let console = store.get_console(id).unwrap().unwrap();
             assert_eq!(console.claude_account_id, None);
         }
-
-        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
     /// An account's name and directory round-trip, and `update_account` can change either
@@ -1530,7 +1509,6 @@ mod tests {
         assert_eq!(after_repoint.config_dir, "/home/u/.codex-work");
 
         assert_eq!(store.list_accounts().unwrap(), [after_repoint]);
-        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
     /// A freshly created project has no tags, and tags round-trip through an update.
@@ -1551,7 +1529,6 @@ mod tests {
             store.get_project("project-1").unwrap().unwrap().tags,
             ["backend", "Rust"]
         );
-        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
     #[test]
@@ -1573,7 +1550,6 @@ mod tests {
             "a repeat write changes nothing"
         );
         assert!(store.get_settings().unwrap().auto_sync_repositories);
-        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
     /// A console session to feed [`Store::insert_console_session`]: a plain `role: Console` record
@@ -1589,7 +1565,8 @@ mod tests {
     /// palette in sequence.
     #[test]
     fn a_console_sessions_colour_is_the_first_palette_entry_not_already_held() {
-        let store = Store::open(&temp_db("colour-assignment")).expect("store");
+        let path = temp_db("colour-assignment");
+        let store = Store::open(&path).expect("store");
         store
             .insert_console(&console(None, None, None))
             .expect("console");
@@ -1611,7 +1588,8 @@ mod tests {
     /// uniqueness once the console runs more console sessions at once than the palette has room for.
     #[test]
     fn a_console_sessions_colour_wraps_back_to_the_start_once_every_entry_is_taken() {
-        let store = Store::open(&temp_db("colour-wrap")).expect("store");
+        let path = temp_db("colour-wrap");
+        let store = Store::open(&path).expect("store");
         store
             .insert_console(&console(None, None, None))
             .expect("console");
@@ -1632,7 +1610,8 @@ mod tests {
     /// sessions currently showing side by side.
     #[test]
     fn an_archived_console_sessions_colour_is_free_for_reuse() {
-        let store = Store::open(&temp_db("colour-archive-frees")).expect("store");
+        let path = temp_db("colour-archive-frees");
+        let store = Store::open(&path).expect("store");
         store
             .insert_console(&console(None, None, None))
             .expect("console");
@@ -1660,7 +1639,8 @@ mod tests {
     /// that held the highest ordinal does not let a later console session reuse it.
     #[test]
     fn a_console_sessions_ordinal_is_never_reused_even_after_its_session_is_deleted() {
-        let store = Store::open(&temp_db("ordinal-high-water-mark")).expect("store");
+        let path = temp_db("ordinal-high-water-mark");
+        let store = Store::open(&path).expect("store");
         store
             .insert_console(&console(None, None, None))
             .expect("console");
@@ -1695,7 +1675,8 @@ mod tests {
     /// title is kept instead.
     #[test]
     fn a_console_sessions_default_title_names_its_ordinal() {
-        let store = Store::open(&temp_db("console-session-title")).expect("store");
+        let path = temp_db("console-session-title");
+        let store = Store::open(&path).expect("store");
         store
             .insert_console(&console(None, None, None))
             .expect("console");
@@ -1770,7 +1751,6 @@ mod tests {
         store.delete_console("console-1").unwrap();
         assert!(ids("session-b").is_empty());
         assert!(store.get_page("b-1").unwrap().is_none());
-        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
     /// A database already in the current shape is opened in place, and one whose `pages` table
@@ -1802,7 +1782,6 @@ mod tests {
                     .to_string_lossy()
                     .starts_with("octoboard.db.superseded-")
             });
-            std::fs::remove_dir_all(path.parent().unwrap()).ok();
             moved
         };
         assert!(!moved_aside(false));

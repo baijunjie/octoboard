@@ -474,7 +474,7 @@ mod tests {
     use std::net::TcpStream;
 
     use super::*;
-    use crate::state::tests::app_state;
+    use crate::test_support::app_state;
 
     /// Serves the real router on an ephemeral loopback port and returns the port.
     async fn serve(name: &str) -> u16 {
@@ -482,8 +482,11 @@ mod tests {
             .await
             .expect("a loopback port");
         let port = listener.local_addr().expect("a bound address").port();
-        let state = Arc::new(app_state(name));
-        tokio::spawn(async move { axum::serve(listener, router(state)).await });
+        let (state, dir) = app_state(&format!("server-{name}"));
+        tokio::spawn(async move {
+            let _dir = dir;
+            axum::serve(listener, router(state)).await
+        });
         port
     }
 

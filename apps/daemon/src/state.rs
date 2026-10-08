@@ -956,65 +956,16 @@ pub fn install_panic_hook() {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+mod tests {
     use super::*;
-
-    pub(crate) fn app_state(name: &str) -> AppState {
-        let dir = std::env::temp_dir().join(format!(
-            "octoboardd-state-{name}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        std::fs::create_dir_all(&dir).expect("temporary directory");
-        let store = Store::open(&dir.join("octoboard.db")).expect("store");
-        AppState::new(store, 1234, "/opt/octoboardd".to_string())
-    }
-
-    /// A stand-in live session on a real PTY, with `/bin/sh` running `script` behind it instead of
-    /// a real agent: enough for whatever the caller needs a `LiveSession` to write into, read from,
-    /// or just stay alive on until dropped. Shared by `transcript.rs`, `reporting.rs` and
-    /// `trust.rs`'s tests, which used to each keep a near-identical copy of this.
-    pub(crate) fn fake_live_session(
-        id: &str,
-        agent: crate::protocol::Agent,
-        cols: u16,
-        rows: u16,
-        script: &str,
-    ) -> Arc<LiveSession> {
-        use portable_pty::{native_pty_system, CommandBuilder, PtySize};
-
-        let pty = native_pty_system()
-            .openpty(PtySize {
-                rows,
-                cols,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .expect("a PTY");
-        let mut cmd = CommandBuilder::new("/bin/sh");
-        cmd.args(["-c", script]);
-        let child = pty.slave.spawn_command(cmd).expect("the stand-in");
-        let pid = child.process_id().expect("a pid");
-        let fd = pty.master.as_raw_fd().expect("a descriptor");
-        crate::ptyio::set_nonblocking(fd).expect("non-blocking");
-        Arc::new(LiveSession::new(crate::session::NewSession {
-            id: id.to_string(),
-            agent,
-            pid,
-            fd,
-            master: pty.master,
-            child,
-            scratch_dir: None,
-            resolves_approvals_itself: false,
-        }))
-    }
+    use crate::test_support::app_state;
 
     /// Only one report may come out of one turn, and only when the session did not report for
     /// itself. The repeat case is not hypothetical: Grok fires its `idle_prompt` backstop about a
     /// minute after every turn, whether or not a `Stop` already reported it.
     #[test]
     fn a_turn_can_only_be_closed_once() {
-        let state = app_state("turns");
+        let (state, _dir) = app_state("state-turns");
         // Nothing has started, so nothing is owed a report — a stop event arriving before any turn
         // start (an agent's own teardown, a slash command) must not produce one.
         assert_eq!(state.close_turn("s", false), TurnClose::NoTurn);
@@ -1037,7 +988,7 @@ pub(crate) mod tests {
     /// open.
     #[test]
     fn a_clock_attributed_end_is_refused_while_the_open_turn_is_still_active() {
-        let state = app_state("backstop");
+        let (state, _dir) = app_state("state-backstop");
         state.turn_started("s");
         assert_eq!(state.close_turn("s", true), TurnClose::NotThisTurn);
         // Still open, so its own end is still reportable.
@@ -1049,7 +1000,7 @@ pub(crate) mod tests {
     /// quiet and the previous turn's echo would close it. The echo has to be consumed instead.
     #[test]
     fn the_echo_of_an_ending_already_acted_on_is_consumed_not_acted_on() {
-        let state = app_state("echo");
+        let (state, _dir) = app_state("state-echo");
         state.turn_started("s");
         assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
         assert!(state.echo_pending("s"));
@@ -1067,7 +1018,7 @@ pub(crate) mod tests {
     /// and that turn may be one Grok reports no stop event for, whose echo is its only ending.
     #[test]
     fn an_echo_that_arrives_with_no_turn_open_is_still_spent() {
-        let state = app_state("echo-idle");
+        let (state, _dir) = app_state("state-echo-idle");
         state.turn_started("s");
         assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
         // The echo of that ending, with nothing open.
@@ -1080,7 +1031,7 @@ pub(crate) mod tests {
     /// session gets nothing at all.
     #[test]
     fn credit_for_reporting_can_be_taken_back() {
-        let state = app_state("reported");
+        let (state, _dir) = app_state("state-reported");
         state.turn_started("s");
         state.mark_reported("s");
         state.clear_reported("s");
@@ -1091,7 +1042,7 @@ pub(crate) mod tests {
     /// one for it.
     #[test]
     fn an_abandoned_turn_is_closed_without_owing_a_report() {
-        let state = app_state("abandon");
+        let (state, _dir) = app_state("state-abandon");
         state.turn_started("s");
         state.abandon_turn("s");
         assert_eq!(state.close_turn("s", false), TurnClose::NoTurn);
@@ -1101,7 +1052,7 @@ pub(crate) mod tests {
     /// a stale child act on the session.
     #[test]
     fn issuing_a_token_retires_the_sessions_previous_one() {
-        let state = app_state("tokens");
+        let (state, _dir) = app_state("state-tokens");
         let first = state.issue_mcp_token("s");
         assert_eq!(state.session_for_mcp_token(&first).as_deref(), Some("s"));
 
@@ -1116,7 +1067,7 @@ pub(crate) mod tests {
     /// test; what matters here is that the status gate and the live-session check come first.
     #[test]
     fn a_flush_with_nowhere_to_write_leaves_the_queue_alone() {
-        let state = app_state("outbox");
+        let (state, _dir) = app_state("state-outbox");
         state.queue_message("s", "first");
         state.queue_message("s", "second");
 
@@ -1137,7 +1088,7 @@ pub(crate) mod tests {
     /// unwinding through the claim's `Drop` rather than an explicit `end_git_check` call.
     #[test]
     fn a_git_check_claim_is_released_even_if_the_check_panics() {
-        let state = Arc::new(app_state("git-claim-panic"));
+        let (state, _dir) = app_state("state-git-claim-panic");
         let claim = state.claim_git_check("p1").expect("the first claim");
         assert!(state.claim_git_check("p1").is_none());
 
@@ -1156,7 +1107,7 @@ pub(crate) mod tests {
     /// the gap `DeleteConsole` leaves for every project of a deleted console.
     #[test]
     fn publishing_a_status_for_a_project_no_longer_in_the_store_drops_it() {
-        let state = app_state("git-status-missing-project");
+        let (state, _dir) = app_state("state-git-status-missing-project");
         state.publish_git_status(GitStatus {
             project: "ghost".to_string(),
             repository: true,
@@ -1179,7 +1130,7 @@ pub(crate) mod tests {
     /// it again.
     #[test]
     fn a_completion_recorded_then_published_for_a_gone_project_leaves_no_entry() {
-        let state = app_state("git-status-missing-project-completion");
+        let (state, _dir) = app_state("state-git-status-missing-project-completion");
         state.record_git_check_completed("ghost");
         state.publish_git_status(GitStatus {
             project: "ghost".to_string(),
