@@ -3,17 +3,17 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronsUpDown,
-  FoldVertical,
   FolderOpen,
   FolderPlus,
   LayoutDashboard,
+  ListChevronsDownUp,
+  ListChevronsUpDown,
   MessageSquarePlus,
   Pencil,
   Pin,
   Plus,
   SearchX,
   Trash2,
-  UnfoldVertical,
 } from "lucide-react";
 import { setInteractionModality } from "react-aria";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -40,6 +40,7 @@ import { GitBadge } from "./GitBadge";
 import { type FilterUpdate, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterTag, ProjectFilterTags } from "./ProjectFilter";
 import { archiveSubmenu, projectMenu, sessionMenu } from "./menus";
 import { archivedSessions, consoleActivity, isInactiveProject, liveSessions, sortProjects, type Activity } from "./order";
+import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
 import { RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
 import type { SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
@@ -84,9 +85,20 @@ export function Sidebar({
 }: SidebarProps): React.ReactElement {
   const t = useT();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Per console. Set when the Projects heading's fold button should keep offering Expand until
+  // every project of that console is expanded again. A mixed list does not change it; only
+  // collapsing or expanding all of them, or pressing the button, does.
+  const [expandPinned, setExpandPinned] = useState<Map<string, boolean>>(new Map());
   // Each console's project filter (keyword and tags), held here rather than in the project list so
   // that focus mode, which replaces the list, and switching consoles both leave it in place.
   const [filters, setFilters] = useState<Map<string, ProjectFilter>>(new Map());
+
+  // Opening or closing the last project, or a project arriving or leaving, can make a console
+  // uniformly open or shut without a press of the heading's button. The pin follows that; a
+  // mixed console is left as it was.
+  useEffect(() => {
+    setExpandPinned((prev) => reconcileExpandPins(prev, projects, collapsed) ?? prev);
+  }, [projects, collapsed]);
 
   const toggle = (id: string) =>
     setCollapsed((prev) => {
@@ -188,6 +200,14 @@ export function Sidebar({
       />
     );
   } else {
+    const consoleProjects = projects.filter((p) => p.console_id === currentConsole.id);
+    // Every project of the console, including any a filter is hiding: the button press changes
+    // only the listed ones, but the action it offers follows the whole console.
+    const foldControl = projectFoldControl(
+      expandPinned.get(currentConsole.id) ?? false,
+      consoleProjects.map((project) => project.id),
+      collapsed,
+    );
     content = (
       <>
         <ConsoleSwitcher handlers={handlers} consoles={consoles} sessions={sessions} current={currentConsole} />
@@ -195,13 +215,24 @@ export function Sidebar({
           <ConsoleBody
             handlers={handlers}
             console={currentConsole}
-            projects={projects.filter((p) => p.console_id === currentConsole.id)}
+            projects={consoleProjects}
             sessions={consoleSessions}
             owners={owners}
             selectedSessionId={selectedSessionId}
             collapsed={collapsed}
             toggle={toggle}
             setCollapsedFor={setCollapsedFor}
+            foldControl={foldControl}
+            onFold={() => {
+              const consoleId = currentConsole.id;
+              const pin = pinAfterFoldAction(foldControl);
+              setExpandPinned((prev) => {
+                if ((prev.get(consoleId) ?? false) === pin) return prev;
+                const next = new Map(prev);
+                next.set(consoleId, pin);
+                return next;
+              });
+            }}
             filter={filters.get(currentConsole.id) ?? NO_FILTER}
             setFilter={(update) =>
               setFilters((prev) => new Map(prev).set(currentConsole.id, update(prev.get(currentConsole.id) ?? NO_FILTER)))
@@ -353,6 +384,8 @@ function ConsoleBody({
   collapsed,
   toggle,
   setCollapsedFor,
+  foldControl,
+  onFold,
   filter: stored,
   setFilter,
 }: {
@@ -367,13 +400,17 @@ function ConsoleBody({
   collapsed: Set<string>;
   toggle: (id: string) => void;
   setCollapsedFor: (ids: string[], value: boolean) => void;
+  /** The action the Projects heading's fold button offers. */
+  foldControl: ProjectFoldControl;
+  /** Records that press. The listed projects are collapsed or expanded here, beside it. */
+  onFold: () => void;
   filter: ProjectFilter;
   setFilter: (update: FilterUpdate) => void;
 }): React.ReactElement {
   const t = useT();
   const listRef = useFlip<HTMLDivElement>();
   const filterButton = useRef<HTMLDivElement>(null);
-  const collapseButton = useRef<HTMLSpanElement>(null);
+  const foldButton = useRef<HTMLSpanElement>(null);
   const sessionsOf = (project: Project) => sessions.filter((s) => s.project_id === project.id);
   // The tags to pick from are the ones the console's projects carry now; a picked tag none of them
   // carries any more is dropped here, so it neither filters nor shows, yet it stays in the stored
@@ -391,10 +428,13 @@ function ConsoleBody({
   // focus would drop to `<body>` with no blur event and the terminal would stop receiving
   // keystrokes. It is handed to the button that did it, with its ring showing, since whoever was
   // down there got there from the keyboard. The project rows themselves stay, so focus on one of
-  // them, or on its controls, is left where it is.
-  const collapseAll = () => {
-    handFocusOff(document.activeElement?.closest("[data-sessions]"), collapseButton.current, true);
-    setCollapsedFor(orderedIds, true);
+  // them, or on its controls, is left where it is. Expanding adds rows, so it has nothing to hand off.
+  const foldAll = () => {
+    if (foldControl === "collapse") {
+      handFocusOff(document.activeElement?.closest("[data-sessions]"), foldButton.current, true);
+    }
+    setCollapsedFor(orderedIds, foldControl === "collapse");
+    onFold();
   };
 
   return (
@@ -424,12 +464,16 @@ function ConsoleBody({
               {/* Only with something listed: a filter matching nothing leaves them nothing to act
                   on, while the filter button beside them stays, as the way back. */}
               {ordered.length > 0 && (
-                <>
-                  <RowIconButton icon={UnfoldVertical} label={t("sidebar.expandAll")} onPress={() => setCollapsedFor(orderedIds, false)} />
-                  <span ref={collapseButton} className="flex">
-                    <RowIconButton icon={FoldVertical} label={t("sidebar.collapseAll")} onPress={collapseAll} />
-                  </span>
-                </>
+                <span ref={foldButton} className="flex">
+                  {/* Lines of the list sit on the leading side, so the glyph mirrors under
+                      right-to-left. The chevrons stay vertical: inward to collapse, outward to expand. */}
+                  <RowIconButton
+                    icon={foldControl === "collapse" ? ListChevronsDownUp : ListChevronsUpDown}
+                    iconClassName="rtl:-scale-x-100"
+                    label={t(foldControl === "collapse" ? "sidebar.collapseAll" : "sidebar.expandAll")}
+                    onPress={foldAll}
+                  />
+                </span>
               )}
             </>
           )
@@ -632,7 +676,7 @@ function ProjectNode({
       </TreeRow>
       {!isCollapsed && (
         // Marked so collapsing every project at once can tell whether keyboard focus is standing in
-        // a part about to go away (see `collapseAll`).
+        // a part about to go away (see `foldAll`).
         <div data-sessions className="ms-3 mt-0.5 border-s border-separator ps-1">
           {live.length === 0 ? (
             <EmptyPanel

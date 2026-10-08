@@ -110,11 +110,14 @@ export function RowIconButton({
   label,
   onPress,
   isDisabled,
+  iconClassName,
 }: {
   icon: LucideIcon;
   label: string;
   onPress: () => void;
   isDisabled?: boolean;
+  /** Extra classes on the glyph itself, such as a right-to-left mirror. */
+  iconClassName?: string;
 }): React.ReactElement {
   return (
     <div className="flex" onClick={(e) => e.stopPropagation()}>
@@ -129,7 +132,7 @@ export function RowIconButton({
           isDisabled={isDisabled}
           className="size-6 min-w-0 rounded-md text-muted hover:text-foreground"
         >
-          <Icon aria-hidden="true" className="size-4" />
+          <Icon aria-hidden="true" className={iconClassName ? `size-4 ${iconClassName}` : "size-4"} />
         </Button>
       </TitledControl>
     </div>

@@ -96,21 +96,34 @@ alone. Opening and closing it with the mouse leaves keyboard focus where it was.
 
 ### Expanding and collapsing the listed projects
 
-Two icon-only buttons, **Expand all projects** and **Collapse all projects**, follow the filter button, so the
-controls at the end of the Projects heading run: Clear filter (only while a filter is in force), Filter projects,
-Expand all projects, Collapse all projects.
+One icon-only button follows the filter button. Its name is whichever action it will take, **Collapse all projects**
+or **Expand all projects**. The controls at the end of the Projects heading run: Clear filter (only while a filter is
+in force), Filter projects, then this button.
 
-- They show while the console has projects **and** the list shows at least one of them. With a filter matching no
-  project they are not there — there is nothing to act on — while the filter button beside them stays, as the way
-  back.
-- Each acts on the projects the list shows and on those alone, so with a filter in force the projects it hides keep
-  whatever expanded or collapsed state they had. What they change is the same state a project row's own chevron
-  changes (see "Project rows" below).
-- Pressing one while every listed project is already expanded, or already collapsed, changes nothing.
-- Pressing either with the mouse leaves keyboard focus where it was, as the sidebar's other controls do. The one
-  exception: Collapse all projects takes away what the projects it collapses hold below them, so when keyboard focus
-  is standing anywhere in there it is handed to the Collapse all projects button, its focus ring showing, rather than
-  dropped. The project rows themselves stay, so focus on one of them is left where it is.
+- It shows while the console has projects **and** the list shows at least one of them. With a filter matching no
+  project it is not there — there is nothing to act on — while the filter button beside it stays, as the way back.
+- It offers one action at a time. Pressing it collapses or expands every project the list is showing, and only those,
+  so with a filter in force the projects it hides keep whatever expanded or collapsed state they had. What it changes
+  is the same state a project row changes (see "Project rows" below). The press flips the button to the other action
+  even when a filter kept it from reaching every project of the console, and even when every listed project is already
+  in the state it asks for.
+- Projects start expanded, and whether a project is collapsed is kept per window and is not stored (see "Project
+  rows" below). The button's choice is kept the same way, separately for each console: switching to another console
+  shows that console's own, and switching back, or entering and leaving focus mode, keeps it. It is not stored, so
+  reloading the window starts each console's button over. On first show, if any project of the console is expanded
+  the button offers Collapse all projects; if every project of the console is collapsed it offers Expand all
+  projects. The usual start is Collapse all projects.
+- Expanding or collapsing a project from its own row does not change the button while the console still has both
+  expanded and collapsed projects. The button changes on its own only when every project of the console is expanded,
+  when it offers Collapse all projects, or every project of the console is collapsed, when it offers Expand all
+  projects. Projects a filter is hiding count, and changing the filter does not itself flip the button. The same
+  holds once the button is offering Collapse all projects again: collapsing some projects from their rows leaves it,
+  and collapsing the last expanded project of the console makes it offer Expand all projects.
+- A mouse press leaves keyboard focus where it was, as the sidebar's other controls do. The one exception: Collapse
+  all projects takes away the session rows under the projects it collapses, so when keyboard focus is standing in one
+  of those it is handed to this button, its focus ring showing, rather than dropped. Expand all projects does not
+  take rows away, so it does not move focus. The project rows themselves stay, so focus already on a project row is
+  left where it is.
 
 ## Project rows
 
