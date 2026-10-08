@@ -3,11 +3,14 @@
 //!
 //! The calling session is resolved from the token the call arrived with, never from an argument,
 //! so a child that rewrote its own arguments still cannot act on another session. Which tools it
-//! may call follows from that session's role, checked here as well as in the child: the child is a
-//! separate process and its announcement is not something the daemon can rely on.
+//! may call follows from that session's role and whether it is bound, checked here as well as in
+//! the child: the child is a separate process and its announcement is not something the daemon can
+//! rely on.
 //!
 //! Every tool goes through the same coordinator functions the control socket uses. The console
-//! session is a second client of the same operations, not a second implementation of them.
+//! session is a second client of the same operations, not a second implementation of them, and an
+//! unbound project session is a third that runs the same implementations scoped to its own
+//! project.
 
 use std::sync::Arc;
 
@@ -23,7 +26,7 @@ use crate::reporting::{self, Delivery, Report, ReportStatus, WhenBlocked};
 use crate::state::AppState;
 
 /// How much of a session's output `get_session` hands back. Enough to see what it is doing and how
-/// it got there, short of handing the console session a transcript to wade through.
+/// it got there, short of handing the caller a transcript to wade through.
 const OUTPUT_TAIL: usize = 8 * 1024;
 
 /// Runs one tool call. The `Err` case is what the model is shown as the reason the call failed, so
@@ -35,7 +38,7 @@ pub async fn call(
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
     let session = state.session_record(session_id)?;
-    if super::tool_by_name(session.role, tool).is_none() {
+    if super::tool_by_name(session.role, session.bound_to.is_some(), tool).is_none() {
         bail!("`{tool}` is not a tool this session can call");
     }
 
@@ -56,23 +59,23 @@ pub async fn call(
     }
 }
 
-// -- console session tools ----------------------------------------------------
+// -- orchestration tools -----------------------------------------------------
 
 fn list_projects(state: &Arc<AppState>, console_session: &Session) -> Result<Value> {
     let projects = console_projects(state, &console_session.console_id)?;
     let sessions = state.store.list_sessions()?;
-    let entries: Vec<Value> = projects
+    let entries = projects
         .iter()
         .map(|project| {
-            let live: Vec<Value> = sessions
+            let live = sessions
                 .iter()
                 .filter(|session| {
                     session.project_id.as_deref() == Some(&project.id)
                         && !session.status.is_dormant()
                 })
-                .map(|session| describe_session(session, console_session))
-                .collect();
-            json!({
+                .map(|session| describe_session(state, session, console_session))
+                .collect::<Result<Vec<Value>>>()?;
+            Ok(json!({
                 "project": project.id,
                 "name": project.name,
                 "host": project.host_id,
@@ -80,9 +83,9 @@ fn list_projects(state: &Arc<AppState>, console_session: &Session) -> Result<Val
                 "default_agent": project.default_agent,
                 "tags": project.tags,
                 "sessions": live,
-            })
+            }))
         })
-        .collect();
+        .collect::<Result<Vec<Value>>>()?;
     Ok(json!({ "projects": entries }))
 }
 
@@ -126,14 +129,17 @@ async fn add_project(
 
 async fn start_session(
     state: &Arc<AppState>,
-    console_session: &Session,
+    caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let project = resolve_project(
-        state,
-        &console_session.console_id,
-        required_str(arguments, "project")?,
-    )?;
+    let project = match caller.role {
+        Role::Console => resolve_project(
+            state,
+            &caller.console_id,
+            required_str(arguments, "project")?,
+        )?,
+        Role::Project => own_project(state, caller, optional_string(arguments, "project"))?,
+    };
     let brief = arguments
         .get("brief")
         .and_then(Value::as_object)
@@ -154,18 +160,18 @@ async fn start_session(
     let session = coordinator::open_session(
         state,
         OpenRequest {
-            console_id: console_session.console_id.clone(),
+            console_id: caller.console_id.clone(),
             project_id: Some(project.id),
             agent: optional_agent(arguments, "agent")?,
-            // A session the console session starts takes the console's account for its agent.
+            // A session a session starts takes the console's account for its agent.
             account: None,
             task: Some(task),
             // Named for the task, not the project: several sessions dispatched into one project
             // would otherwise all carry the project's name and be indistinguishable in the menu.
             title: Some(reporting::title_from_goal(goal)),
             origin: Origin::Console,
-            // A session the console session starts always reports to it.
-            bound_to: Some(console_session.id.clone()),
+            // A session a session starts always reports to it.
+            bound_to: Some(caller.id.clone()),
         },
     )
     .await?;
@@ -174,18 +180,17 @@ async fn start_session(
 
 async fn send_message(
     state: &Arc<AppState>,
-    console_session: &Session,
+    caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let target =
-        resolve_owned_session(state, console_session, required_str(arguments, "session")?)?;
+    let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
     let text = required_str(arguments, "text")?.to_string();
     let delivery = write_off_runtime(state, &target.id, text, WhenBlocked::Queue).await?;
     Ok(json!({
         "delivered": delivery == Delivery::Written,
         "note": match delivery {
             Delivery::Written => "Delivered.",
-            // The console session is told rather than refused: queuing is the designed behaviour
+            // The caller is told rather than refused: queuing is the designed behaviour
             // for a session that is waiting for the user, and nagging it is exactly what it must
             // not do.
             Delivery::Queued =>
@@ -211,14 +216,14 @@ async fn write_off_runtime(
 
 fn get_session(
     state: &Arc<AppState>,
-    console_session: &Session,
+    caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let target = resolve_session(state, console_session, required_str(arguments, "session")?)?;
+    let target = resolve_session(state, caller, required_str(arguments, "session")?)?;
     let output = state
         .live_session(&target.id)
         .map(|live| readable_output(&live.recent_output(OUTPUT_TAIL)));
-    let mut description = describe_session(&target, console_session);
+    let mut description = describe_session(state, &target, caller)?;
     description["recent_output"] = json!(output);
     if target.status == SessionStatus::WaitingUser {
         description["note"] = json!(
@@ -231,11 +236,10 @@ fn get_session(
 
 fn archive_session(
     state: &Arc<AppState>,
-    console_session: &Session,
+    caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let target =
-        resolve_owned_session(state, console_session, required_str(arguments, "session")?)?;
+    let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
     coordinator::archive_session(state, &target.id)?;
     Ok(json!({ "session": target.id, "status": SessionStatus::Archived }))
 }
@@ -250,7 +254,7 @@ fn list_archived(
         &console_session.console_id,
         required_str(arguments, "project")?,
     )?;
-    let sessions: Vec<Value> = state
+    let sessions = state
         .store
         .list_sessions()?
         .iter()
@@ -258,18 +262,17 @@ fn list_archived(
             session.project_id.as_deref() == Some(&project.id)
                 && session.status == SessionStatus::Archived
         })
-        .map(|session| describe_session(session, console_session))
-        .collect();
+        .map(|session| describe_session(state, session, console_session))
+        .collect::<Result<Vec<Value>>>()?;
     Ok(json!({ "sessions": sessions }))
 }
 
 async fn reopen_session(
     state: &Arc<AppState>,
-    console_session: &Session,
+    caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let target =
-        resolve_owned_session(state, console_session, required_str(arguments, "session")?)?;
+    let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
     // The instruction travels with the relaunch rather than being written after it: whichever hook
     // would release it can fire the moment the agent starts, so the queueing belongs inside the
     // launch, where a refusal also undoes it.
@@ -302,7 +305,7 @@ fn show_page(
     Ok(json!({ "page": page.id }))
 }
 
-// -- project session tools ---------------------------------------------------
+// -- reporting ---------------------------------------------------------------
 
 async fn report(
     state: &Arc<AppState>,
@@ -326,18 +329,18 @@ async fn report(
         })
         .unwrap_or_default();
 
-    // Recorded before delivery: the session is credited with having reported even if the console
-    // session cannot take the message yet, so its stop does not also produce a synthesised report.
+    // Recorded before delivery: the session is credited with having reported even if its owner
+    // cannot take the message yet, so its stop does not also produce a synthesised report.
     state.mark_reported(&session.id);
 
     let summary = summary.to_string();
-    let project_session_id = session.id.clone();
+    let reporter_id = session.id.clone();
     let owned_state = state.clone();
-    // Delivery writes into the console session's PTY, which blocks.
+    // Delivery writes into the owner's PTY, which blocks.
     let note = tokio::task::spawn_blocking(move || {
         reporting::deliver_report(
             &owned_state,
-            &project_session_id,
+            &reporter_id,
             Report {
                 summary: &summary,
                 status,
@@ -347,9 +350,9 @@ async fn report(
         )
     })
     .await?;
-    // Taken back whenever `deliver_report` failed, so the console session gets a synthesised report
-    // instead of neither. A failure after the console session already has the report would make
-    // that a duplicate, which is the better way round.
+    // Taken back whenever `deliver_report` failed, so the owner gets a synthesised report instead
+    // of neither. A failure after the owner already has the report would make that a duplicate,
+    // which is the better way round.
     let note = note.inspect_err(|_| state.clear_reported(&session.id))?;
     Ok(json!({ "note": note }))
 }
@@ -417,89 +420,141 @@ fn resolve_project(state: &Arc<AppState>, console_id: &str, wanted: &str) -> Res
     }
 }
 
-/// Finds a session the console session is allowed to act on: one of its own console's. A session
-/// id from another console is refused rather than acted on, so a console session cannot reach
-/// into another console's.
-fn resolve_session(
-    state: &Arc<AppState>,
-    console_session: &Session,
-    wanted: &str,
-) -> Result<Session> {
+/// The project an unbound project session starts sessions in: its own, always. A `project` it
+/// names must be that one, by id or by name, so a call aimed at another project is refused rather
+/// than quietly run in this one.
+fn own_project(state: &Arc<AppState>, caller: &Session, named: Option<String>) -> Result<Project> {
+    let project = caller
+        .project_id
+        .as_deref()
+        .map(|id| state.store.get_project(id))
+        .transpose()?
+        .flatten()
+        .ok_or_else(|| anyhow!("this session's project is no longer on record"))?;
+    if let Some(named) = named {
+        if named != project.id && named != project.name {
+            bail!(
+                "you can start sessions only in your own project, `{}` (\"{}\"), not in `{named}`",
+                project.id,
+                project.name
+            );
+        }
+    }
+    Ok(project)
+}
+
+/// Finds a session the caller is allowed to read: for a console session, any of its own console's;
+/// for a project session, any of its own project's. A session id from another console, or from
+/// another project of a project session's, is refused rather than acted on, so neither can reach
+/// into somebody else's.
+fn resolve_session(state: &Arc<AppState>, caller: &Session, wanted: &str) -> Result<Session> {
     let session = state
         .store
         .get_session(wanted)?
         .ok_or_else(|| anyhow!("there is no session `{wanted}`"))?;
-    if session.console_id != console_session.console_id {
+    if session.console_id != caller.console_id {
         bail!("session `{wanted}` belongs to another console");
+    }
+    if caller.role == Role::Project && session.role == Role::Console {
+        bail!(
+            "session `{wanted}` is a console session, which a project session cannot reach; if \
+             you meant to say something to the user, say it in this terminal"
+        );
+    }
+    if caller.role == Role::Project && session.project_id != caller.project_id {
+        bail!(
+            "session `{wanted}` belongs to another project; you can reach only your own project's"
+        );
     }
     Ok(session)
 }
 
-/// Finds a session the console session may act on: one of its own console's that is bound to it.
-/// Every tool that writes into another session goes through this and nothing else, so the rule
-/// that reads are console-wide and writes are the caller's own is kept in one place. A session that
-/// is unbound, or bound to another console session, is refused with a reason (naming the owner when
-/// there is one), so the model leaves it alone rather than retrying.
-fn resolve_owned_session(
-    state: &Arc<AppState>,
-    console_session: &Session,
-    wanted: &str,
-) -> Result<Session> {
-    let session = resolve_session(state, console_session, wanted)?;
+/// Finds a session the caller may act on: one it can read that is bound to it. Every tool that
+/// writes into another session goes through this and nothing else, so the rule that reads are wide
+/// and writes are the caller's own is kept in one place. A session that is unbound, or bound to
+/// another session, is refused with a reason (naming the owner when there is one), so the model
+/// leaves it alone rather than retrying.
+fn resolve_owned_session(state: &Arc<AppState>, caller: &Session, wanted: &str) -> Result<Session> {
+    let session = resolve_session(state, caller, wanted)?;
+    // Including a console session's own: one that ended itself would leave its console's project
+    // sessions reporting to nothing.
+    if wanted == caller.id {
+        bail!(
+            "session `{wanted}` is your own session, which is not yours to act on; if you meant \
+             to say something, say it to the user"
+        );
+    }
     if session.role == Role::Console {
-        // Including the caller's own: a console session that ended itself would leave its
-        // console's project sessions reporting to nothing.
-        if wanted == console_session.id {
-            bail!(
-                "session `{wanted}` is your own session. A console session is not yours to act \
-                 on; if you meant to say something, say it to the user"
-            );
-        }
         bail!(
             "session `{wanted}` is another console session; acting on one is the user's to do, \
              not yours"
         );
     }
     match session.bound_to.as_deref() {
-        Some(owner) if owner == console_session.id => Ok(session),
+        Some(owner) if owner == caller.id => Ok(session),
         Some(owner) => {
-            let title = state
-                .store
-                .get_session(owner)?
+            let owner_record = state.store.get_session(owner)?;
+            // "Another" only when the owner is the caller's own kind: a project session is not
+            // told that a console session is another one of its kind.
+            let kind = owner_record
+                .as_ref()
+                .map_or("session".to_string(), |owner| {
+                    let article = if owner.role == caller.role {
+                        "another"
+                    } else {
+                        "a"
+                    };
+                    format!("{article} {} session", owner_kind(owner))
+                });
+            let title = owner_record
                 .map(|owner| format!(" (\"{}\")", owner.title))
                 .unwrap_or_default();
             bail!(
-                "session `{wanted}` is bound to another console session, `{owner}`{title}. It is \
-                 that console session's to drive, not yours; leave it alone"
+                "session `{wanted}` is bound to {kind}, `{owner}`{title}. It is that session's \
+                 to drive, not yours; leave it alone"
             )
         }
         None => bail!(
-            "session `{wanted}` is not bound to any console session: the user opened it themselves \
-             and kept it outside the orchestration. It is theirs, not yours; leave it alone"
+            "session `{wanted}` is not bound to any session: the user opened it themselves and \
+             kept it outside the orchestration. It is theirs, not yours; leave it alone"
         ),
     }
 }
 
-/// `caller` is the console session asking. Everything here is the same whoever asks except `yours`,
-/// which is relative to `caller`: a console may hold several console sessions, and each reads a
+/// What kind of session an owner is, as `owner_kind` reports it.
+fn owner_kind(owner: &Session) -> &'static str {
+    match owner.role {
+        Role::Console => "console",
+        Role::Project => "project",
+    }
+}
+
+/// `caller` is the session asking. Everything here is the same whoever asks except `yours`, which
+/// is relative to `caller`: a console may hold several console sessions, and each reads a
 /// session's owner alike but is told only of its own that they are its to act on.
-fn describe_session(session: &Session, caller: &Session) -> Value {
-    json!({
+fn describe_session(state: &Arc<AppState>, session: &Session, caller: &Session) -> Result<Value> {
+    let owner_kind = match &session.bound_to {
+        Some(owner) => state.store.get_session(owner)?.as_ref().map(owner_kind),
+        None => None,
+    };
+    Ok(json!({
         "session": session.id,
         "title": session.title,
         "agent": session.agent,
         "status": session.status,
         "role": session.role,
         "project": session.project_id,
-        // The console session this one reports to. Null for a project session means unbound: the
-        // user opened it themselves and kept it outside the orchestration. It is also null for a
+        // The session this one reports to. Null for a project session means unbound: the user
+        // opened it themselves and kept it outside the orchestration. It is also null for a
         // console session, which is never bound, so `role` is what tells the two apart. Only a
         // session whose owner is the caller is the caller's to act on.
         "owner": session.bound_to,
+        // Whether that owner is a console session or a project session; null with no owner.
+        "owner_kind": owner_kind,
         "yours": session.bound_to.as_deref() == Some(caller.id.as_str()),
         "started_at": session.started_at,
         "ended_at": session.ended_at,
-    })
+    }))
 }
 
 /// Makes raw PTY output readable: escape sequences and the cursor-control bytes an agent's
@@ -751,6 +806,7 @@ mod tests {
                 .find(|session| session["session"] == other_owner_session)
                 .unwrap();
             assert_eq!(theirs["owner"], other_owner);
+            assert_eq!(theirs["owner_kind"], "console");
             assert_eq!(theirs["yours"], false);
 
             let fetched = call(
@@ -815,7 +871,7 @@ mod tests {
                 "of-b",
                 "bound to another console session, `b`",
             ),
-            ("send_message", "loose", "not bound to any console session"),
+            ("send_message", "loose", "not bound to any session"),
             ("send_message", "b", "another console session;"),
             ("send_message", "foreign", "belongs to another console"),
             (
@@ -823,11 +879,7 @@ mod tests {
                 "of-b",
                 "bound to another console session, `b`",
             ),
-            (
-                "archive_session",
-                "loose",
-                "not bound to any console session",
-            ),
+            ("archive_session", "loose", "not bound to any session"),
             ("archive_session", "a", "your own session"),
             (
                 "reopen_session",
@@ -863,6 +915,229 @@ mod tests {
         .await
         .unwrap();
         let archived = state.store.get_session("of-a").unwrap().unwrap();
+        assert_eq!(archived.status, SessionStatus::Archived);
+    }
+
+    /// `shared_console_state` plus an unbound project session, `starter`, in `project-1` with one
+    /// session bound to it, `mine`, and a second project of the same console with a session of its
+    /// own.
+    fn peer_state(name: &str) -> (Arc<AppState>, ScratchDir) {
+        let (state, dir) = shared_console_state(name);
+        state
+            .store
+            .insert_project(&Project {
+                id: "project-3".to_string(),
+                console_id: "console-1".to_string(),
+                host_id: LOCAL_HOST_ID.to_string(),
+                name: "project-3".to_string(),
+                path: "/tmp/project-3".to_string(),
+                default_agent: None,
+                source: ProjectSource::Local,
+                remote_url: None,
+                claude_trust_consent: false,
+                pinned: false,
+                tags: Vec::new(),
+            })
+            .unwrap();
+        for session in [
+            project_session("starter", "console-1", None),
+            project_session("mine", "console-1", Some("starter")),
+            Session {
+                project_id: Some("project-3".to_string()),
+                ..project_session("other-project", "console-1", None)
+            },
+        ] {
+            state.store.insert_session(&session).unwrap();
+        }
+        (state, dir)
+    }
+
+    /// What a session is offered follows from its role and binding, and the daemon holds to it:
+    /// a session bound to another session has only `report`, whatever its child announced.
+    #[tokio::test]
+    async fn only_an_unbound_project_session_may_call_the_orchestration_tools() {
+        let (state, _dir) = peer_state("peer-tool-gating");
+        for (caller, tool) in [
+            ("mine", "start_session"),
+            ("mine", "send_message"),
+            ("of-a", "archive_session"),
+            ("starter", "list_projects"),
+            ("starter", "add_project"),
+            ("starter", "show_page"),
+            ("a", "report"),
+        ] {
+            let err = call(
+                &state,
+                caller,
+                tool,
+                &arguments(json!({ "session": "mine", "text": "x" })),
+            )
+            .await
+            .expect_err("not offered");
+            assert!(
+                err.to_string().contains("is not a tool"),
+                "{caller} {tool}: {err}"
+            );
+        }
+    }
+
+    /// An unbound project session starts sessions only in its own project: another project of the
+    /// same console is refused, by id or by name, before anything is launched.
+    #[tokio::test]
+    async fn an_unbound_project_session_cannot_start_a_session_in_another_project() {
+        let (state, _dir) = peer_state("peer-start-scope");
+        let before = state.store.list_sessions().unwrap().len();
+        for project in ["project-3", "project-2"] {
+            let err = call(
+                &state,
+                "starter",
+                "start_session",
+                &arguments(json!({ "project": project, "brief": { "goal": "x" } })),
+            )
+            .await
+            .expect_err("refused");
+            assert!(
+                err.to_string().contains("only in your own project"),
+                "{project}: {err}"
+            );
+        }
+        assert_eq!(state.store.list_sessions().unwrap().len(), before);
+    }
+
+    /// Without a `project`, or naming the one the caller is in, the call gets as far as the launch
+    /// the console session's tool uses: an unavailable agent is refused there, in prose.
+    #[tokio::test]
+    async fn an_unbound_project_sessions_start_session_reaches_the_launch_in_its_own_project() {
+        let (state, _dir) = peer_state("peer-start-launch");
+        state.set_agent_availability(vec![AgentAvailability {
+            agent: Agent::Claude,
+            availability: Availability::Unavailable,
+            default_account_dir: Some("/home/user/.claude".to_string()),
+        }]);
+        for project in [None, Some("project-1")] {
+            let mut input = arguments(json!({ "brief": { "goal": "x" }, "agent": "claude" }));
+            if let Some(project) = project {
+                input.insert("project".to_string(), json!(project));
+            }
+            let err = call(&state, "starter", "start_session", &input)
+                .await
+                .expect_err("agent unavailable");
+            assert!(
+                err.to_string().contains("Claude Code"),
+                "{project:?}: {err}"
+            );
+        }
+    }
+
+    /// Reads reach the caller's own project and say who owns what, including a project session as
+    /// owner; another project's sessions, and console sessions, are out of reach.
+    #[tokio::test]
+    async fn an_unbound_project_session_reads_its_own_project() {
+        let (state, _dir) = peer_state("peer-reads");
+        let read = |session: &'static str| {
+            let state = state.clone();
+            async move {
+                call(
+                    &state,
+                    "starter",
+                    "get_session",
+                    &arguments(json!({ "session": session })),
+                )
+                .await
+            }
+        };
+        let mine = read("mine").await.unwrap();
+        assert_eq!(mine["owner"], "starter");
+        assert_eq!(mine["owner_kind"], "project");
+        assert_eq!(mine["yours"], true);
+        let theirs = read("of-a").await.unwrap();
+        assert_eq!(theirs["owner_kind"], "console");
+        assert_eq!(theirs["yours"], false);
+        assert!(read("loose").await.unwrap()["owner_kind"].is_null());
+        for (outside, reason) in [
+            ("other-project", "belongs to another project"),
+            ("a", "is a console session"),
+            ("foreign", "belongs to another console"),
+        ] {
+            let err = read(outside).await.expect_err(outside);
+            assert!(err.to_string().contains(reason), "{outside}: {err}");
+        }
+
+        // A console session sees the same session with the project session as its owner.
+        let from_console = call(
+            &state,
+            "a",
+            "get_session",
+            &arguments(json!({ "session": "mine" })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(from_console["owner_kind"], "project");
+        assert_eq!(from_console["yours"], false);
+    }
+
+    /// The ownership rule is the same one for a project session as owner: only what is bound to
+    /// the caller may be acted on, and everything else is refused with who owns it.
+    #[tokio::test]
+    async fn an_unbound_project_session_acts_only_on_the_sessions_bound_to_it() {
+        let (state, _dir) = peer_state("peer-writes");
+        let cases = [
+            ("send_message", "of-a", "bound to a console session, `a`"),
+            ("send_message", "loose", "not bound to any session"),
+            ("send_message", "starter", "your own session"),
+            (
+                "send_message",
+                "other-project",
+                "belongs to another project",
+            ),
+            ("send_message", "a", "is a console session"),
+            ("archive_session", "of-b", "bound to a console session, `b`"),
+            ("archive_session", "loose", "not bound to any session"),
+            (
+                "reopen_session",
+                "archived-of-a",
+                "bound to a console session, `a`",
+            ),
+        ];
+        for (tool, target, reason) in cases {
+            let before = state.store.get_session(target).unwrap().unwrap();
+            let err = call(
+                &state,
+                "starter",
+                tool,
+                &arguments(json!({ "session": target, "text": "hello" })),
+            )
+            .await
+            .expect_err("refused");
+            assert!(err.to_string().contains(reason), "{tool} {target}: {err}");
+            let after = state.store.get_session(target).unwrap().unwrap();
+            assert_eq!(before.status, after.status, "{tool} {target}");
+        }
+
+        // A project session owns nobody else's: `mine` is `starter`'s and not `loose`'s.
+        let err = call(
+            &state,
+            "loose",
+            "archive_session",
+            &arguments(json!({ "session": "mine" })),
+        )
+        .await
+        .expect_err("another owner's session");
+        assert!(
+            err.to_string()
+                .contains("bound to another project session, `starter`"),
+            "{err}"
+        );
+
+        call(
+            &state,
+            "starter",
+            "archive_session",
+            &arguments(json!({ "session": "mine" })),
+        )
+        .await
+        .unwrap();
+        let archived = state.store.get_session("mine").unwrap().unwrap();
         assert_eq!(archived.status, SessionStatus::Archived);
     }
 

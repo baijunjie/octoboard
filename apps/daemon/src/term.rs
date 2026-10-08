@@ -52,8 +52,8 @@ pub struct LaunchRequest {
     pub session_id: String,
     pub agent: Agent,
     pub role: Role,
-    /// Whether the session reports to a console session; see `LaunchSpec::bound`.
-    pub bound: bool,
+    /// Who the session reports to, if anyone; see `LaunchSpec::owner`.
+    pub owner: Option<crate::mcp::Owner>,
     pub cwd: PathBuf,
     /// Initial task, only on a fresh launch.
     pub task: Option<String>,
@@ -80,7 +80,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         session_id,
         agent,
         role,
-        bound,
+        owner,
         cwd,
         task,
         resume_agent_session_id,
@@ -125,7 +125,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     let spec = LaunchSpec {
         session_id,
         role,
-        bound,
+        owner,
         new_agent_session_id: &new_agent_session_id,
         resume_agent_session_id: resume_agent_session_id.as_deref(),
         cwd,

@@ -37,6 +37,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
+use crate::mcp::Owner;
 use crate::protocol::{error_code, Agent, CodedError, Notice, Role};
 
 /// Everything an adapter needs to assemble one launch.
@@ -47,9 +48,9 @@ pub struct LaunchSpec<'a> {
     /// Which side of the orchestration this session is on, which decides both the role text and
     /// the tools its MCP server announces.
     pub role: Role,
-    /// Whether this session reports to a console session, which decides whether its role text
-    /// tells it one is waiting. Never true for a console session.
-    pub bound: bool,
+    /// Who this session reports to, if anyone, which decides what its role text tells it is
+    /// waiting on it and which tools its MCP server announces. Never set for a console session.
+    pub owner: Option<Owner>,
     /// The id to give an agent that can pre-allocate one for a *new* conversation. Freshly
     /// generated per launch: both Claude Code and Grok refuse an id that already has a stored
     /// conversation, so reusing one would make relaunching a session that was opened and never
@@ -93,20 +94,21 @@ pub fn mcp_server_command(spec: &LaunchSpec<'_>) -> (String, Vec<String>) {
         Role::Console => "console",
         Role::Project => "project",
     };
-    (
-        spec.self_exe.to_string(),
-        vec![
-            "mcp".to_string(),
-            "--session".to_string(),
-            spec.session_id.to_string(),
-            "--role".to_string(),
-            role.to_string(),
-            "--port".to_string(),
-            spec.daemon_port.to_string(),
-            "--token".to_string(),
-            spec.mcp_token.to_string(),
-        ],
-    )
+    let mut args = vec![
+        "mcp".to_string(),
+        "--session".to_string(),
+        spec.session_id.to_string(),
+        "--role".to_string(),
+        role.to_string(),
+        "--port".to_string(),
+        spec.daemon_port.to_string(),
+        "--token".to_string(),
+        spec.mcp_token.to_string(),
+    ];
+    if spec.owner.is_some() {
+        args.push("--bound".to_string());
+    }
+    (spec.self_exe.to_string(), args)
 }
 
 /// The session's pinned configuration directory, refused when it has gone and this launch is
@@ -263,13 +265,14 @@ pub mod tests {
     use std::path::PathBuf;
 
     use super::LaunchSpec;
+    use crate::mcp::Owner;
 
     /// A launch to plan against, with a real temporary directory standing in for the session's
     /// scratch space — the Grok adapter writes into it, so it cannot be a fiction.
     pub struct SpecFixture {
         pub session_id: String,
         pub role: crate::protocol::Role,
-        pub bound: bool,
+        pub owner: Option<Owner>,
         pub new_agent_session_id: String,
         pub cwd: PathBuf,
         pub scratch: crate::test_support::ScratchDir,
@@ -285,7 +288,7 @@ pub mod tests {
             LaunchSpec {
                 session_id: &self.session_id,
                 role: self.role,
-                bound: self.bound,
+                owner: self.owner.clone(),
                 new_agent_session_id: &self.new_agent_session_id,
                 resume_agent_session_id: None,
                 cwd: &self.cwd,
@@ -313,7 +316,7 @@ pub mod tests {
         SpecFixture {
             session_id: "session-1".to_string(),
             role: crate::protocol::Role::Project,
-            bound: true,
+            owner: Some(Owner::Console),
             new_agent_session_id: format!("agent-{}", std::process::id()),
             cwd,
             scratch: root,
@@ -323,5 +326,17 @@ pub mod tests {
             self_exe: "/opt/octoboard/octoboardd".to_string(),
             mcp_token: "token-1".to_string(),
         }
+    }
+
+    /// The child announces its catalogue from its own arguments, so a bound session has to say so
+    /// there and an unbound one must not.
+    #[test]
+    fn the_mcp_child_is_told_whether_the_session_is_bound() {
+        let mut fixture = spec_fixture();
+        let (_, bound) = super::mcp_server_command(&fixture.spec());
+        assert!(bound.contains(&"--bound".to_string()));
+        fixture.owner = None;
+        let (_, unbound) = super::mcp_server_command(&fixture.spec());
+        assert!(!unbound.contains(&"--bound".to_string()));
     }
 }

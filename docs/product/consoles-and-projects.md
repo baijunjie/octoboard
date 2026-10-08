@@ -254,7 +254,8 @@ Removing a project asks for confirmation. **Sessions of the project that are sti
   many sessions are still running and will be ended, and its button reads **End and remove**. The list follows
   sessions starting or stopping while the confirmation is open. Confirming ends each running session's process the way
   archiving does (see "Archiving, interruption and resuming" in `docs/product/sessions.md`), then removes the project
-  with all its sessions and the last output Octoboard kept for each.
+  with all its sessions and the last output Octoboard kept for each. Sessions bound to another session of the project
+  are ended before the session they are bound to, so ending that one is never refused over them.
 
 Removal is refused only while a session of the project is being launched or resumed at that moment, since that
 session has no process yet that could be ended; the error names the reason, and nothing is ended or removed.

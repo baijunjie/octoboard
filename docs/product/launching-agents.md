@@ -50,14 +50,15 @@ Three things, and nothing else:
 - **Octoboard's own MCP server** — the tools described in `docs/product/hub-orchestration.md`. It is
   a child process of the agent, started fresh per session, and each session's tools are reachable
   only by that session. The agent's own and the project's own MCP servers keep working alongside it.
-- **A role description** — whether this session is a console session or a project session,
-  and the reporting conventions that go with that. A project session bound to a console session is
-  told that console session is waiting on its result and how to `report` to it; one the user opened
-  without a console session to report to is told that it was opened directly, that nobody is waiting
-  on it, and not to call `report`. Both follow from what is fixed for the session's lifetime, so the
-  text never changes under it. The role alone decides which tools the session is offered, so an
-  unbound project session still has `report`, and calling it is refused (see "Reporting" in
-  `docs/product/hub-orchestration.md`).
+- **A role description** — whether this session is a console session or a project session, and the reporting conventions
+  that go with that. A project session bound to a console session is told that console session is waiting on its result
+  and how to `report` to it; one bound to a project session is told which project session, by its id, dispatched it and
+  that it reports there. One the user opened without a console session to report to is told that it was opened directly,
+  that nobody is waiting on it, and not to call `report`, and that it may start sessions in its own project and drive
+  them, which report back to it. All of this follows from what is fixed for the session's lifetime, so the text never
+  changes under it. The role and whether the session is bound decide which tools the session is offered, so an unbound
+  project session still has `report`, and calling it is refused (see "Reporting" and "The unbound project session's
+  tools" in `docs/product/hub-orchestration.md`).
 
 The injected hooks are built to be invisible. They never steer the agent, never print anything, never fail the turn,
 and carry a short timeout (3 seconds) so a daemon that is unreachable costs a turn a fraction of a second rather than

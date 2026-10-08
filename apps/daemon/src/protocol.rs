@@ -248,9 +248,11 @@ pub struct Session {
     /// found", and a session the user opened and never typed into is the common case of that. A
     /// resume therefore starts a fresh conversation rather than failing.
     pub has_conversation: bool,
-    /// The console session this session is bound to, or `None` for one outside the orchestration.
-    /// Set when the session is created and never changed afterwards; a console session is never
-    /// bound, so this is always `None` for one of those. Reports are routed by this field
+    /// The session this session is bound to — its owner, which it reports to — or `None` for one
+    /// outside the orchestration. The owner is a console session, or an unbound project session
+    /// of the same project that started this one, so a bound session never owns another. Set when
+    /// the session is created and never changed afterwards; a console session is never bound, so
+    /// this is always `None` for one of those. Reports are routed by this field
     /// (`crate::reporting::deliver_report`): a binding names who to report to directly, rather
     /// than asking whether the console happens to have one console session to find by lookup.
     pub bound_to: Option<String>,
@@ -453,10 +455,11 @@ pub enum RequestBody {
         account: Option<Option<String>>,
         task: Option<String>,
         title: Option<String>,
-        /// The console session this (project) session should report to. Absent means none: a
-        /// session the user opens by hand stays outside the orchestration unless they choose one.
-        /// Ignored for the console session itself, which is never bound. Must name a console
-        /// session of `console_id`, or the request is refused with `unknown_session`.
+        /// The session this (project) session should report to. Absent means none: a session the
+        /// user opens by hand stays outside the orchestration unless they choose one. Ignored for
+        /// the console session itself, which is never bound. Must name a console session of
+        /// `console_id`, or an unbound project session of `project_id`, or the request is refused
+        /// with `unknown_session`.
         #[serde(default)]
         bound_to: Option<String>,
     },
@@ -922,10 +925,10 @@ pub mod error_code {
     pub const SESSION_NOT_RUNNING: &str = "session_not_running";
     /// Only an archived session can be deleted.
     pub const SESSION_NOT_ARCHIVED: &str = "session_not_archived";
-    /// A console session cannot be archived while a session bound to it has a process running,
-    /// whatever its status. `params` names the `count` of those sessions and their `sessions`, by
+    /// A session cannot be archived while a session bound to it has a process running, whatever
+    /// its status. `params` names the `count` of those sessions and their `sessions`, by
     /// title, comma separated.
-    pub const CONSOLE_SESSION_HAS_RUNNING_SESSIONS: &str = "console_session_has_running_sessions";
+    pub const SESSION_HAS_RUNNING_SESSIONS: &str = "session_has_running_sessions";
     pub const SESSION_WAITING_FOR_USER: &str = "session_waiting_for_user";
     pub const QUEUED_MESSAGES_LOST: &str = "queued_messages_lost";
     pub const PAGE_NOT_CURRENT: &str = "page_not_current";

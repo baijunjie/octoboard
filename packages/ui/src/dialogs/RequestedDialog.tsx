@@ -156,10 +156,10 @@ export function RequestedDialog({
         />
       );
     case "archive-session": {
-      // The sessions bound to a console session that go into the archive with it. Read live, like
+      // The sessions bound to an owner that go into the archive with it. Read live, like
       // the running ones above. One that has a process running is not among them: the daemon
       // refuses the archive while there is such a session, and the dialog shows that refusal.
-      const withIt = dialog.session.role === "console" ? boundSessions(Array.from(sessions.values()), dialog.session.id).filter((s) => s.status === "interrupted") : [];
+      const withIt = boundSessions(Array.from(sessions.values()), dialog.session.id).filter((s) => s.status === "interrupted");
       return (
         <ConfirmDialog
           title={t("dialog.archiveSession.title", { title: dialog.session.title })}
@@ -193,8 +193,8 @@ export function RequestedDialog({
         />
       );
     case "delete-session": {
-      // An archived console session takes the archived sessions bound to it along.
-      const withIt = dialog.session.role === "console" ? boundArchivedSessions(Array.from(sessions.values()), dialog.session.id) : [];
+      // An archived owner takes the archived sessions bound to it along.
+      const withIt = boundArchivedSessions(Array.from(sessions.values()), dialog.session.id);
       return (
         <ConfirmDialog
           title={t("dialog.deleteSession.title", { title: dialog.session.title })}

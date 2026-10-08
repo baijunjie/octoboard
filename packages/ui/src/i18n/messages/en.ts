@@ -123,9 +123,9 @@ export const en = {
     "{session} ended as soon as it was relaunched under the new account, so it stays on the account it had.",
   "daemon.session_not_running": "This session is not running.",
   "daemon.session_not_archived": "Only an archived session can be deleted.",
-  "daemon.console_session_has_running_sessions": {
-    one: "This console session cannot be archived while {count} session bound to it is running: {sessions}. Archive that session or let it finish first.",
-    other: "This console session cannot be archived while {count} sessions bound to it are running: {sessions}. Archive those sessions or let them finish first.",
+  "daemon.session_has_running_sessions": {
+    one: "This session cannot be archived while {count} session bound to it is running: {sessions}. Archive that session or let it finish first.",
+    other: "This session cannot be archived while {count} sessions bound to it are running: {sessions}. Archive those sessions or let them finish first.",
   },
   "daemon.session_waiting_for_user": "This session is waiting for you. Answer it in the terminal first.",
   "daemon.queued_messages_lost":

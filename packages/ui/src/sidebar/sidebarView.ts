@@ -56,12 +56,14 @@ export function resolveFocus(
   }
 }
 
-/** Whether `session` is something the focused thing shows: a project's unbound sessions and,
- * archived, all of its sessions; a console session itself and the sessions bound to it. Selecting
- * a session that is not leaves focus mode, so what is selected is always on screen in the sidebar. */
-export function belongsToFocus(target: FocusTarget, session: Session): boolean {
+/** Whether `session` is something the focused thing shows: a project's sessions not bound to a
+ * console session (`sessions` is every session, to tell which owner is one) and, archived, all of
+ * its sessions; a console session itself and the sessions bound to it. Selecting a session that is
+ * not leaves focus mode, so what is selected is always on screen in the sidebar. */
+export function belongsToFocus(target: FocusTarget, session: Session, sessions: Map<string, Session>): boolean {
   if ("project" in target) {
-    return session.project_id === target.project.id && (session.status === "archived" || !session.bound_to);
+    const consoleOwned = !!session.bound_to && sessions.get(session.bound_to)?.role === "console";
+    return session.project_id === target.project.id && (session.status === "archived" || !consoleOwned);
   }
   return session.id === target.consoleSession.id || session.bound_to === target.consoleSession.id;
 }

@@ -172,15 +172,15 @@ saying there are no sessions yet, with a **+** button that opens a new session.
 
 ## Session rows
 
-A session row shows the session's status glyph (see "Session statuses" in `docs/product/sessions.md`), its agent's
-icon, its title, and a pin glyph when it is pinned. A project session bound to a console session also carries that
-console session's **binding badge**: a small dot in the console session's colour, whose tooltip names it (see "The
-binding badge" below). A console session's own row carries no *binding* badge — what it shows there instead is its own
-colour (see "The binding badge" below). Selecting a row
-resumes it when it is interrupted; no menu item does that. The row shows its agent as an icon alone; wherever the agent
-is named in words, the account the session runs under follows it in parentheses — "Claude Code (Work)" — as the
-account's name, "Default" for the agent's default account, or, for a session whose account has since been removed, the
-directory it recorded (or the agent's name alone when it recorded none). Its action menu offers:
+A session row shows the session's status glyph (see "Session statuses" in `docs/product/sessions.md`), its agent's icon,
+its title, and a pin glyph when it is pinned. A project session bound to a console session also carries that console
+session's **binding badge**: a small dot in the console session's colour, whose tooltip names it (see "The binding
+badge" below); one bound to a project session carries none. A console session's own row carries no *binding* badge —
+what it shows there instead is its own colour (see "The binding badge" below). Selecting a row resumes it when it is
+interrupted; no menu item does that. The row shows its agent as an icon alone; wherever the agent is named in words, the
+account the session runs under follows it in parentheses — "Claude Code (Work)" — as the account's name, "Default" for
+the agent's default account, or, for a session whose account has since been removed, the directory it recorded (or the
+agent's name alone when it recorded none). Its action menu offers:
 
 - **Pin** / **Unpin**.
 - **Rename** — see "Renaming a session" in `docs/product/sessions.md`.
@@ -197,19 +197,20 @@ directory it recorded (or the agent's name alone when it recorded none). Its act
   `docs/product/sessions.md`). For a console session this is the only way to archive it, since it cannot archive
   itself (see "The console session's tools" in `docs/product/hub-orchestration.md`); its confirmation lists the
   interrupted sessions bound to it, under a warning with their number, as the ones archived with it, and the archive is
-  refused, with the sessions named, while any session bound to it has a process running.
+  refused, with the sessions named, while any session bound to it has a process running. A project session that has
+  started sessions is archived under the same rule, with the same confirmation.
 
 ## The binding badge
 
-A **bound** project session — one carrying the id of the console session it reports to (see "Console sessions and
-project sessions" in `docs/product/sessions.md`) — carries a small dot in that console session's colour wherever the
-project session is listed: its sidebar row. An unbound session carries no badge. The badge's tooltip names the
-owning console session, and the row's own accessible name carries the same fact in words for assistive technology
-("Bound to …"). The badge itself still carries no information its tooltip does not, so colour alone never
-distinguishes two owners for a user who cannot tell the colours apart. A console session's own row shows the same
-colour, decoratively, since the row's own label already names it, as do its focus mode's header and its chip in a
-project's focus mode. The cards in a focus mode carry no badge: a project's focus mode lists only
-unbound sessions, and a console session's lists only the ones bound to it.
+A project session **bound to a console session** — one carrying the id of the console session it reports to (see
+"Console sessions and project sessions" in `docs/product/sessions.md`) — carries a small dot in that console session's
+colour wherever the project session is listed: its sidebar row. An unbound session carries no badge, and neither does a
+session bound to a project session. The badge's tooltip names the owning console session, and the row's own accessible
+name carries the same fact in words for assistive technology ("Bound to …"). The badge itself still carries no
+information its tooltip does not, so colour alone never distinguishes two owners for a user who cannot tell the colours
+apart. A console session's own row shows the same colour, decoratively, since the row's own label already names it, as
+do its focus mode's header and its chip in a project's focus mode. The cards in a focus mode carry no badge: a project's
+focus mode lists only sessions not bound to a console session, and a console session's lists only the ones bound to it.
 
 **Where the colour comes from.** Octoboard gives each new console session a colour of its own from a fixed palette of
 six, taking the first the console's other console sessions that are not archived do not already have, and starting
@@ -242,10 +243,10 @@ has its own light and dark value (see "What follows the choice" in `docs/product
 - Clicking a row deliberately does not move keyboard focus away from the terminal; a row reached with Tab can be
   activated with Enter or Space.
 - Each row tells assistive technology what its icons show: a session row its title, agent (Claude Code, Codex or Grok
-  Build) and the account it runs under, status, whether it is pinned, and, for a bound project session, the console
-  session it reports to (the binding badge's own fact); a project row whether it is pinned and, while it carries an
-  activity marker, what that marker means, plus its branch badge's facts (see "The branch badge" in
-  `docs/product/project-git-status.md`). A project row also tells it whether it is expanded or collapsed.
+  Build) and the account it runs under, status, whether it is pinned, and, for a project session bound to a console
+  session, the console session it reports to (the binding badge's own fact); a project row whether it is pinned and,
+  while it carries an activity marker, what that marker means, plus its branch badge's facts (see "The branch badge"
+  in `docs/product/project-git-status.md`). A project row also tells it whether it is expanded or collapsed.
 
 ## Order of projects and sessions
 
@@ -323,7 +324,8 @@ title and how long ago it was archived. Clicking one selects it. Its action menu
 
 ### A project's focus mode
 
-- **Sessions (n)**: the project's **unbound** sessions that are not archived. A session bound to a console session is
+- **Sessions (n)**: the project's sessions that are not archived and **not bound to a console session** — unbound
+  ones, and ones bound to a project session, which are listed like any other. A session bound to a console session is
   not listed here, and so no card carries a binding badge. With none, a message and a **New session** button take
   their place.
 - **The sessions bound elsewhere**, under that heading, present only while the project has sessions that are not
@@ -362,14 +364,13 @@ drift, as does going from one focus mode straight to another (following a chip).
 mirrored under a right-to-left language, and nothing moves where the system asks for reduced motion.
 
 **Focus mode is remembered per client** together with the console shown. It is left by the back button, by switching
-console, by selecting a session that does not belong to what is in focus, when the selected session stops belonging
-to it (reopening an archived session of a project makes it live and bound, so the project no longer lists it), and
-when what is in focus no longer exists — a project removed, a console session deleted or, as it has no row any more,
-archived. An archived console session is forgotten rather than remembered: reopening it does not put the sidebar back
-into its focus mode. A session belongs to a
-project's focus mode when it is one of the project's unbound sessions or is archived; to a console session's when it
-is that console session or is bound to it. A remembered focus mode on something that is not in the console shown is
-ignored.
+console, by selecting a session that does not belong to what is in focus, when the selected session stops belonging to
+it (reopening an archived session of a project bound to a console session makes it live and bound, so the project no
+longer lists it), and when what is in focus no longer exists — a project removed, a console session deleted or, as it
+has no row any more, archived. An archived console session is forgotten rather than remembered: reopening it does not
+put the sidebar back into its focus mode. A session belongs to a project's focus mode when it is one of the project's
+sessions not bound to a console session, or is archived; to a console session's when it is that console session or is
+bound to it. A remembered focus mode on something that is not in the console shown is ignored.
 
 **A keyboard shortcut toggles focus mode**: `Shift+Cmd+F` on a Mac (the macOS application, or a browser on a Mac),
 `Ctrl+Shift+F` elsewhere, matched on the physical F key whatever the keyboard layout. The Focus mode items of the

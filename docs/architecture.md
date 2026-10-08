@@ -23,7 +23,7 @@ the retention and cleanup of session data follows each agent's own rules.
 | Console | A management unit for a group of projects, independent of other consoles. It has its own working directory and its own console session agent. |
 | Host | A machine that runs sessions. Only the local machine exists today; every project and session still carries a `host_id`. |
 | Project | A directory on some host, associated with a console. |
-| Session | An agent CLI process running in a project directory, created by the console session or by the user. |
+| Session | An agent CLI process running in a project directory, created by the user, a console session or an unbound project session. |
 | Console session | The agent process running in the console's working directory, given the orchestration tools. |
 | Agent adapter | The layer that plugs an agent CLI in: how to launch it, inject capabilities, report status and resume it. |
 
@@ -195,10 +195,11 @@ Entities: console, host, project, session, account, report, report-panel page, a
 
 - `Session.id` is Octoboard's own and `agent_session_id` the agent's. They are separate because some agents cannot
   pre-allocate an id.
-- `Session.bound_to` is the id of the console session a session reports to, or unset. It is always set to the
-  starting console session for a console-session-started session, and fixed for the session's lifetime; a console
-  session itself is never bound. Reports are routed by this field rather than by a lookup for "the" console session
-  of a console, because a console may hold several at once.
+- `Session.bound_to` is the id of the session a session reports to — a console session, or an unbound project session
+  of the same project — or unset. It is always set to the starting session for a session started through
+  `start_session`, and fixed for the session's lifetime; a console session itself is never bound, and a bound session
+  owns no other. Reports are routed by this field rather than by a lookup for "the" console session of a console,
+  because a console may hold several at once.
 - `Session.colour` and `Session.ordinal` are set only for a console session: a badge colour from a fixed palette,
   assigned on creation and never reused while still in use among the console's other console sessions, and a
   per-console ordinal that is one past the highest ever handed out there — kept on the console record itself

@@ -1,6 +1,7 @@
-//! The channel between a console session and its project sessions: the brief a task is
-//! handed over as, the message writing that carries both directions, the report that comes back,
-//! and the report Octoboard synthesises when a session stops without having sent one.
+//! The channel between an owner — a console session, or an unbound project session that started
+//! sessions — and the project sessions bound to it: the brief a task is handed over as, the
+//! message writing that carries both directions, the report that comes back, and the report
+//! Octoboard synthesises when a session stops without having sent one.
 //!
 //! That is the one concern the console session's tools, the project session's `report` tool and
 //! the hook callback all share, which is why it sits apart from the control-socket handling in
@@ -19,7 +20,7 @@ use std::sync::Arc;
 use anyhow::{bail, Result};
 
 use crate::outbox::Drain;
-use crate::protocol::{error_code, Agent, CodedError, Session, SessionStatus};
+use crate::protocol::{error_code, Agent, CodedError, Role, Session, SessionStatus};
 use crate::state::AppState;
 use crate::{coordinator, hooks, term};
 
@@ -77,8 +78,8 @@ pub enum WhenBlocked {
     /// Refuse, so the sender can be told why. The right answer for the user: they are the one who
     /// has to answer the prompt that is blocking it.
     Refuse,
-    /// Queue it. The right answer for the console session and for a report, neither of which has
-    /// anyone to tell and neither of which may be dropped.
+    /// Queue it. The right answer for an owner and for a report, neither of which has anyone to
+    /// tell and neither of which may be dropped.
     Queue,
 }
 
@@ -148,14 +149,14 @@ pub fn release_after_relaunch(state: &Arc<AppState>, session: &Session) {
     }
 }
 
-/// A report from a project session, as the console session reads it.
+/// A report from a bound project session, as its owner reads it.
 pub struct Report<'a> {
     pub summary: &'a str,
     pub status: ReportStatus,
     pub open_items: &'a [String],
     /// True when Octoboard built this report from the turn's last assistant message rather than the
-    /// session sending one, which the console session has to know: the structured fields are then a
-    /// guess and only the prose is the session's own.
+    /// session sending one, which the owner has to know: the structured fields are then a guess
+    /// and only the prose is the session's own.
     pub synthesised: bool,
 }
 
@@ -185,14 +186,15 @@ impl ReportStatus {
     }
 }
 
-/// Delivers one project session's report to its console session, and wraps the session up when
-/// the report says there is nothing left.
+/// Delivers one project session's report to the session it is bound to — a console session, or the
+/// project session that started it — and wraps the session up when the report says there is
+/// nothing left.
 ///
-/// Archiving happens once the report has been *accepted* for the console session rather than once
-/// the console session has read it: a console session that is merely busy still has the report
-/// queued for it, and leaving a finished session alive until the console session gets round to it
-/// would strand it. A console session that is not running at all is a different matter — the
-/// report fails, and the session stays as it is for the user to deal with.
+/// Archiving happens once the report has been *accepted* for the owner rather than once the owner
+/// has read it: an owner that is merely busy still has the report queued for it, and leaving a
+/// finished session alive until the owner gets round to it would strand it. An owner that is not
+/// running at all is a different matter — the report fails, and the session stays as it is for the
+/// user to deal with.
 pub fn deliver_report(
     state: &Arc<AppState>,
     session_id: &str,
@@ -204,27 +206,31 @@ pub fn deliver_report(
     };
     // A session that reported `done` is archived by the time a second report could arrive, and its
     // process is on its way out. Refusing is what keeps that race from delivering the same round of
-    // work to the console session twice.
+    // work to the owner twice.
     if session.status.is_dormant() {
         bail!("this session has already been wrapped up; there is nothing further to report");
     }
 
-    // The binding names the console session directly, so this is a plain lookup by id rather than
-    // a search for "the" console session of the console — a console may now hold any number of
-    // them, each with its own sessions.
-    let console_session = state
+    // The binding names the owner directly, so this is a plain lookup by id rather than a search
+    // for "the" console session of the console — a console may hold any number of them, each with
+    // its own sessions.
+    let owner = state
         .store
         .get_session(bound_to)?
-        .ok_or_else(|| anyhow::anyhow!("this session's console session is no longer on record"))?;
+        .ok_or_else(|| anyhow::anyhow!("this session's owner is no longer on record"))?;
+    let owner_kind = match owner.role {
+        Role::Console => "console session",
+        Role::Project => "project session",
+    };
 
     let project = match &session.project_id {
         Some(id) => state.store.get_project(id)?.map(|project| project.name),
         None => None,
     };
     let message = render_report(&session, project.as_deref(), &report);
-    // A lost message propagates rather than being treated as delivered: the project session must
-    // not be archived on the strength of a report the console session never got.
-    let delivery = write_message(state, &console_session.id, &message, WhenBlocked::Queue)?;
+    // A lost message propagates rather than being treated as delivered: the session must not be
+    // archived on the strength of a report its owner never got.
+    let delivery = write_message(state, &owner.id, &message, WhenBlocked::Queue)?;
 
     let finished = report.status == ReportStatus::Done && report.open_items.is_empty();
     if finished {
@@ -233,25 +239,23 @@ pub fn deliver_report(
 
     Ok(match (delivery, finished) {
         (Delivery::Written, true) => {
-            "Reported to the console session. This session is now archived.".into()
+            format!("Reported to the {owner_kind}. This session is now archived.")
         }
-        (Delivery::Written, false) => "Reported to the console session.".into(),
-        (Delivery::Queued, true) => {
-            "Report accepted; the console session will see it as soon as it can take a message. \
+        (Delivery::Written, false) => format!("Reported to the {owner_kind}."),
+        (Delivery::Queued, true) => format!(
+            "Report accepted; the {owner_kind} will see it as soon as it can take a message. \
              This session is now archived."
-                .into()
-        }
-        (Delivery::Queued, false) => {
-            "Report accepted; the console session will see it as soon as it can take a message."
-                .into()
-        }
+        ),
+        (Delivery::Queued, false) => format!(
+            "Report accepted; the {owner_kind} will see it as soon as it can take a message."
+        ),
     })
 }
 
-/// Reports for the console session on a session that stopped without reporting for itself. The
+/// Reports to the owner for a session that stopped without reporting for itself. The
 /// caller has already closed the turn and established that a report is owed.
 ///
-/// **Blocks** on writing into the console session.
+/// **Blocks** on writing into the owner.
 pub fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::TurnEnd) {
     match state.store.get_session(session_id) {
         Ok(Some(session)) if session.bound_to.is_some() => {}
@@ -266,7 +270,7 @@ pub fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::T
     let report = Report {
         summary: &summary,
         // A turn that ended in an error failed; a turn that merely ended without a report is the
-        // console session's to judge, which is what `needs_decision` asks it to do.
+        // owner's to judge, which is what `needs_decision` asks it to do.
         status: if turn.failed {
             ReportStatus::Failed
         } else {
@@ -280,9 +284,9 @@ pub fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::T
     }
 }
 
-/// The report as it is written into the console session. Plain prose with the structured fields
-/// spelled out: the console session reads this as a user message, so it has to be readable rather
-/// than a payload, and the session id has to be in it or the console session cannot follow up.
+/// The report as it is written into the owner. Plain prose with the structured fields spelled out:
+/// the owner reads this as a user message, so it has to be readable rather than a payload, and the
+/// session id has to be in it or the owner cannot follow up.
 fn render_report(session: &Session, project: Option<&str>, report: &Report<'_>) -> String {
     let origin = match project.filter(|project| *project != session.title) {
         Some(project) => format!("{} ({})", session.title, project),
@@ -662,7 +666,7 @@ mod tests {
         deliver_report(&state, &worker.id, done_report()).expect("delivered");
 
         let wait_for_output = |live: &crate::session::LiveSession| -> Vec<u8> {
-            let deadline = std::time::Instant::now() + Duration::from_millis(500);
+            let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
             loop {
                 let output = live.recent_output(8 * 1024);
                 if !output.is_empty() || std::time::Instant::now() >= deadline {
@@ -717,6 +721,46 @@ mod tests {
         assert_eq!(status("worker"), SessionStatus::Archived);
         assert_eq!(status("hub"), SessionStatus::Idle);
         assert_eq!(status("sibling"), SessionStatus::Idle);
+    }
+
+    /// A session bound to an unbound project session reports there, as one bound to a console
+    /// session does: the report reaches the starter's terminal, and a `done` one archives the
+    /// reporter and not the starter.
+    #[test]
+    fn a_report_reaches_the_project_session_that_started_the_reporter() {
+        let (state, _dir) = crate::test_support::app_state("reporting-project-session-owner");
+        state.store.insert_console(&console()).unwrap();
+        let starter = Session {
+            id: "starter".to_string(),
+            bound_to: None,
+            ..project_session("starter")
+        };
+        state.store.insert_session(&starter).unwrap();
+        let live = crate::test_support::idle_stand_in("starter");
+        state.register_live(live.clone());
+        crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
+        let worker = Session {
+            id: "worker".to_string(),
+            bound_to: Some("starter".to_string()),
+            ..project_session("worker")
+        };
+        state.store.insert_session(&worker).unwrap();
+
+        let note = deliver_report(&state, "worker", done_report()).expect("delivered");
+
+        assert!(note.contains("project session"), "{note}");
+        let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
+        let output = loop {
+            let output = String::from_utf8_lossy(&live.recent_output(8 * 1024)).into_owned();
+            if output.contains("worker") || std::time::Instant::now() >= deadline {
+                break output;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        assert!(output.contains("Report from session worker"), "{output}");
+        let status = |id: &str| state.store.get_session(id).unwrap().unwrap().status;
+        assert_eq!(status("worker"), SessionStatus::Archived);
+        assert_eq!(status("starter"), SessionStatus::Idle);
     }
 
     /// Several sessions in one project have to be told apart in the menu, and the goal is the only

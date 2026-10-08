@@ -123,7 +123,7 @@ impl AgentAdapter for GrokAdapter {
         args.push("--rules".to_string());
         args.push(mcp::role::role_description(
             spec.role,
-            spec.bound,
+            spec.owner.as_ref(),
             Agent::Grok,
         ));
 
@@ -505,7 +505,7 @@ mod tests {
             .expect("--rules is passed");
         assert_eq!(
             plan.args[at + 1],
-            mcp::role::role_description(fixture.role, fixture.bound, Agent::Grok)
+            mcp::role::role_description(fixture.role, fixture.owner.as_ref(), Agent::Grok)
         );
     }
 

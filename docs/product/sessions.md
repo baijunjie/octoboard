@@ -44,6 +44,13 @@ A project session opened bound to a console session carries that console session
 wherever it is listed, and the console session's own row shows the same colour (see "The binding
 badge" in `docs/product/sidebar.md`).
 
+An **unbound** project session — one the user opened by hand without choosing a console session under **Report to**
+(see "Opening a session" below) — is given a narrower set of the orchestration tools, scoped to its own project: it can
+start sessions there, which are bound to it and report to it, and drive them (see "The unbound project session's
+tools" in `docs/product/hub-orchestration.md`). A session it starts carries no binding badge and cannot start sessions
+of its own. A session's **owner** is the session it is bound to: a console session, or the unbound project session
+that started it.
+
 Selecting a console session also shows its own **report panel** beside the terminal, described
 in `docs/product/report-panel.md`; a project session's terminal has the pane to itself.
 
@@ -77,16 +84,17 @@ A session is opened under a project with:
   will carry (see "The binding badge" in `docs/product/sidebar.md`), or none. A chosen console session receives this
   session's reports, instead of the session staying outside the orchestration. A console with no console session that
   is not archived shows no choice at all, and the session is unbound. The binding is fixed for the session's lifetime
-  once set. A session the console session itself starts is always bound to it; see "Which sessions the console session
-  drives" in `docs/product/hub-orchestration.md`. The choice is offered only from the project list. Opened from a
-  project's focus mode the dialog has no such field and the session is always unbound; opened from a console session's
-  focus mode it has none either, and shows a line saying the session reports to that console session instead, which is
-  the binding it gets (see "Focus mode" in `docs/product/sidebar.md`).
+  once set. A session the console session itself starts is always bound to it, and one an unbound project session
+  starts is bound to that project session; see "Which sessions an owner drives" in
+  `docs/product/hub-orchestration.md`. The choice is offered only from the project list. Opened from a project's focus
+  mode the dialog has no such field and the session is always unbound; opened from a console session's focus mode it
+  has none either, and shows a line saying the session reports to that console session instead, which is the binding
+  it gets (see "Focus mode" in `docs/product/sidebar.md`).
 
 The dialog takes no task: a session the user opens by hand starts in *awaiting instructions*, sitting at the agent's
-prompt, and is given its work by typing into its terminal. Only a session the console session starts is handed an
-opening prompt, the brief it is started with (see "Handing out a task: the brief" in `docs/product/hub-orchestration.md`);
-it starts in *working*.
+prompt, and is given its work by typing into its terminal. Only a session started with `start_session` — by a console
+session or an unbound project session — is handed an opening prompt, the brief it is started with (see "Handing out a
+task: the brief" in `docs/product/hub-orchestration.md`); it starts in *working*.
 
 A Claude Code session in a directory Claude Code has not been trusted with first stops on Claude
 Code's own workspace-trust prompt, before it takes up its task or reaches its prompt. A resumed
@@ -155,18 +163,17 @@ instructions still differ by shape as well as by colour.
 
 Transitions:
 
-- Opening a session puts it in *working* when it is handed an opening prompt (a session the console session starts), and in
-  *awaiting instructions* otherwise (see "Opening a session").
+- Opening a session puts it in *working* when it is handed an opening prompt (a session started with `start_session`),
+  and in *awaiting instructions* otherwise (see "Opening a session").
 - While the process runs, reports from the agent move the session between *working*, *waiting for the user* and
   *awaiting instructions*.
 - The process ending for any reason other than archiving — the agent exiting on its own, a crash, the application
   quitting — leaves the session *interrupted*.
-- Archiving leaves the session *archived*. Archiving a console session also archives the *interrupted* sessions bound to
-  it, and is refused while any session bound to it has a process running (see "Archiving, interruption and
-  resuming").
+- Archiving leaves the session *archived*. Archiving an owner also archives the *interrupted* sessions bound to it,
+  and is refused while any session bound to it has a process running (see "Archiving, interruption and resuming").
 - Resuming an *interrupted* or *archived* session puts it in *awaiting instructions*, whichever of the two it came
   from. A resume that fails to launch leaves the session exactly where it was, archived included. Resuming a session
-  bound to an *archived* console session first does the same to that console session.
+  whose owner is *archived* first does the same to the owner.
 - Switching a session to another account of its agent ends and relaunches its process without archiving it: it reads
   as *interrupted* while the process is down and comes back in *awaiting instructions*, and a switch that fails leaves
   it *interrupted* on the account it had (see "Switching a session's account").
@@ -203,7 +210,7 @@ Grok Build's turn-end backstop carries no turn id, so the daemon attributes it b
 turn, or a cancellation, arms one expected backstop (a flag, not a count), and the next clock-attributed signal spends
 it whether or not a turn is open. When an ending's own backstop never arrives, the flag stays armed, so a later turn
 whose only ending is its backstop would have that backstop discarded: the session would keep reading as working and,
-if it reports to the console session, no report would be synthesized for that turn. Whether Grok produces that sequence in
+if it is bound to an owner, no report would be synthesized for that turn. Whether Grok produces that sequence in
 practice was not checked (in one run an ending followed within a second by a new prompt got no backstop).
 
 ### The raised hand
@@ -238,9 +245,9 @@ own row:
 **The user answers in the session's terminal**, and the status leaves *waiting for the user* on the
 agent's next event — or, where the answer was a decline and no event follows, on the decline showing
 up in the agent's own record of the conversation, which only Claude Code sessions are read for (see
-"Declining a Claude Code prompt or question" below). Nobody can answer for them: the console session
-is told to leave such a session alone, and a message addressed to it is held until the user is done —
-see "Messages held until a session can take them" in `docs/product/hub-orchestration.md`.
+"Declining a Claude Code prompt or question" below). Nobody can answer for them: a session driving others — a console
+session, or an unbound project session — is told to leave such a session alone, and a message addressed to it is held
+until the user is done — see "Messages held until a session can take them" in `docs/product/hub-orchestration.md`.
 
 Where the user's own Codex configuration **resolves approval requests by itself**, Octoboard raises
 no hand at all: the permission event still fires, but Codex resolves the request, no dialog ever
@@ -265,7 +272,7 @@ hand and notifies afresh, as any other does.
 
 - The agent prints that the turn was interrupted, but its process is still running, so the session is
   *awaiting instructions* and not *interrupted*.
-- No turn end was reported, so no report is synthesised for the console session for that turn either (see "When a
+- No turn end was reported, so no report is synthesised for the session's owner for that turn either (see "When a
   session does not report" in `docs/product/hub-orchestration.md`).
 - **Claude Code sessions only.** Codex and Grok Build report a decline through their own hook events,
   and the transcript read here is Claude Code's own format; neither is watched this way.
@@ -297,25 +304,24 @@ project sessions" above). The user archives a session from its row's menu, and i
 first. An archived session keeps its pin, if it had one (see "Order of projects and sessions" in
 `docs/product/sidebar.md`).
 
-Besides the user, two things archive a session: the console session, explicitly, and a project
-session's own report saying the work is finished with nothing left open (see "Automatic archiving" in
-`docs/product/hub-orchestration.md`). Both archive that one project session and nothing else.
+Besides the user, two things archive a session: its owner, explicitly, and a project session's own report saying the
+work is finished with nothing left open (see "Automatic archiving" in `docs/product/hub-orchestration.md`). Both
+archive that one project session and nothing else.
 
-**Archiving a console session goes along its binding, and is decided by whether a process is running — not by the
-status.** An interrupted session has no process but is not archived, and a session at its prompt, at work or waiting
-for the user does have one.
+**Archiving an owner — a console session, or a project session that has started sessions — goes along its binding,
+and is decided by whether a process is running — not by the status.** An interrupted session has no process but is
+not archived, and a session at its prompt, at work or waiting for the user does have one.
 
-- **While any session bound to it has a process running, archiving the console session is refused**, whatever that
-  session's status, and nothing is changed. The refusal says how many sessions it is and names them; the user archives
-  those sessions, or waits for them to finish, and tries again. A session being launched, resumed or switched at that
-  moment counts as running.
-- **With none running, archiving the console session archives its bound sessions too** — every one that is not
-  archived yet, which can only be interrupted ones — so nothing bound to it is left outside the archive. The
+- **While any session bound to it has a process running, archiving the owner is refused**, whatever that session's
+  status, and nothing is changed. The refusal says how many sessions it is and names them; the user archives those
+  sessions, or waits for them to finish, and tries again. A session being launched, resumed or switched at that moment
+  counts as running.
+- **With none running, archiving the owner archives its bound sessions too** — every one that is not archived yet,
+  which can only be interrupted ones — so nothing bound to it is left outside the archive. The
   confirmation says how many will be archived with it.
-- Sessions that are not bound to it, and sessions bound to another console session of the same console, are not
-  touched.
-- Ending a console session's process for a switch of its account is not archiving, and archives nothing (see
-  "Switching a session's account" below).
+- Sessions that are not bound to it, and sessions bound to another session of the same console, are not touched.
+- Ending an owner's process for a switch of its account is not archiving, and archives nothing (see "Switching a
+  session's account" below).
 
 **Resuming** an interrupted session happens by selecting it, or by pressing "Resume" on its terminal's card (see
 "The terminal" below). **Reopening** an archived session is the same relaunch, but selecting an archived session does
@@ -334,13 +340,12 @@ Octoboard injects.
   reference — and is refused if that directory no longer exists, but only when the session has a conversation to
   resume; one that was opened and never typed into launches into the missing directory instead (see "Agent config
   directories" in `docs/product/consoles-and-projects.md`).
-- **Reopening a session bound to an archived console session reopens that console session first**, then the session
-  itself, so what the session reports reaches a running console session. If the console session cannot be reopened, the
-  whole reopen fails with its reason and both stay as they were. A console session that is only interrupted is not
-  relaunched by this. If the console session came back and it is the session's own relaunch that then fails, the
-  console session stays reopened.
-- **Reopening a console session on its own reopens nothing bound to it.** The group comes back one session at a time,
-  from the session the user asked for.
+- **Reopening a session whose owner is archived reopens the owner first**, then the session itself, so what the
+  session reports reaches a running owner. If the owner cannot be reopened, the whole reopen fails with its reason and
+  both stay as they were. An owner that is only interrupted is not relaunched by this. If the owner came back and it
+  is the session's own relaunch that then fails, the owner stays reopened.
+- **Reopening an owner on its own reopens nothing bound to it.** The group comes back one session at a time, from the
+  session the user asked for.
 - Resuming a session whose process is already running is refused. The refusal a double-click produces is not surfaced
   to the user.
 
@@ -358,8 +363,8 @@ account's usage has run out.
 A switch ends the session's process the way archiving does, copies the session's conversation into the target
 account's config directory, records the new account and directory on the session, and relaunches it as a resume does,
 with everything Octoboard injects reassembled. It archives nothing: while the process is down the session reads as
-*interrupted*, and it comes back in *awaiting instructions* like any resumed session. Ending a console session's
-process this way leaves the sessions bound to it as they are.
+*interrupted*, and it comes back in *awaiting instructions* like any resumed session. Ending an owner's process this
+way leaves the sessions bound to it as they are.
 
 - **The conversation continues** where the agent has one stored: the session's own record is copied — added to the
   target directory, or replacing an earlier copy there — and the original stays in the account it came from, so a
@@ -409,15 +414,16 @@ Only an archived session can be deleted: one at a time, or at once every archive
 archived session bound to a console session, or every archived console session of a console. The user is asked to
 confirm either way.
 
-**Deleting an archived console session deletes the archived sessions bound to it.** Left behind, reopening one of them
-would have no console session to come back with, and its binding would point at nothing. The confirmation says how many
-that is before anything is deleted; deleting every archived console session of a console takes their archived bound
-sessions in the same way, and says how many. Deleting an archived bound session on its own leaves its console session
-alone, as does deleting a project's archived sessions or a console session's own archive of bound sessions.
+**Deleting an archived owner deletes the archived sessions bound to it.** Left behind, reopening one of them would
+have no owner to come back with, and its binding would point at nothing. The confirmation says how many that is
+before anything is deleted. Deleting every archived console session of a console takes their archived bound sessions
+in the same way, and says how many. Deleting an archived bound session on its own leaves its owner alone, and neither
+deleting a project's archived sessions nor deleting a console session's own archive of bound sessions touches a
+console session.
 
 - **Deleting removes only Octoboard's record of the session**, for good, and the last output Octoboard kept for it. The
-  session disappears from every client, and the console session's `list_archived` and `reopen_session` no longer find
-  it. The agent's own record of the conversation, in the agent's own configuration directory, and the project's
+  session disappears from every client, and the orchestration tools' `list_archived` and `reopen_session` no longer
+  find it. The agent's own record of the conversation, in the agent's own configuration directory, and the project's
   directory are never touched.
 - Deleting a session that is not archived is refused, saying that only an archived session can be deleted. So is
   deleting an archived session that is being resumed at that moment. An archived session whose process is still on its

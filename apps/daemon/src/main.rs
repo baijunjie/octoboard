@@ -74,6 +74,9 @@ enum Command {
         session: String,
         #[arg(long)]
         role: McpRole,
+        /// The session reports to another session, which narrows what it is offered.
+        #[arg(long)]
+        bound: bool,
         #[arg(long)]
         port: u16,
         #[arg(long)]
@@ -112,11 +115,12 @@ fn main() -> Result<()> {
     if let Some(Command::Mcp {
         session,
         role,
+        bound,
         port,
         token,
     }) = cli.command
     {
-        return mcp::stdio::run(session, role.into(), port, token);
+        return mcp::stdio::run(session, role.into(), bound, port, token);
     }
 
     // stdout carries the port handshake line the application reads, so logs always go to stderr.

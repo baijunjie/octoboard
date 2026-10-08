@@ -1,5 +1,6 @@
-//! The Octoboard MCP server: the orchestration tools the console session drives Octoboard with,
-//! and the one reporting tool a project session answers through.
+//! The Octoboard MCP server: the orchestration tools the console session drives Octoboard with, the
+//! narrower set an unbound project session drives its own project with, and the reporting tool a
+//! bound project session answers through.
 //!
 //! **Transport is a stdio child process, not an HTTP endpoint the agent connects to.** Each
 //! adapter registers `octoboardd mcp --session … --role … --port … --token …` as a `command`-type
@@ -30,7 +31,20 @@ use crate::protocol::{Agent, Role};
 /// spawned.
 pub const SERVER_KEY: &str = "octoboard";
 
+/// Who a bound session reports to, as far as what the session is told depends on it. Fixed for the
+/// session's lifetime, like the binding itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Owner {
+    Console,
+    /// An unbound project session, named by Octoboard's id for it: a title can be renamed after the
+    /// text naming it has been recorded for good.
+    Project {
+        session_id: String,
+    },
+}
+
 /// One tool, as both sides of the stdio bridge see it.
+#[derive(Clone, Copy)]
 pub struct ToolDef {
     pub name: &'static str,
     pub description: &'static str,
@@ -39,17 +53,22 @@ pub struct ToolDef {
     pub schema: fn() -> Value,
 }
 
-/// The tools a session of this role may call. Nothing else is announced to it, so a project
+/// The tools a session of this role may call. Nothing else is announced to it, so a bound project
 /// session cannot start or archive sessions and the console session cannot report to itself.
-pub fn tools_for(role: Role) -> &'static [ToolDef] {
-    match role {
-        Role::Console => CONSOLE_SESSION_TOOLS,
-        Role::Project => PROJECT_SESSION_TOOLS,
+///
+/// `bound` says whether the session reports to another one; it is fixed for the session's
+/// lifetime once set, which is what lets the catalogue follow from it. A console session is never
+/// bound, and it is ignored for one.
+pub fn tools_for(role: Role, bound: bool) -> &'static [ToolDef] {
+    match (role, bound) {
+        (Role::Console, _) => CONSOLE_SESSION_TOOLS,
+        (Role::Project, true) => BOUND_PROJECT_SESSION_TOOLS,
+        (Role::Project, false) => UNBOUND_PROJECT_SESSION_TOOLS,
     }
 }
 
-pub fn tool_by_name(role: Role, name: &str) -> Option<&'static ToolDef> {
-    tools_for(role).iter().find(|tool| tool.name == name)
+pub fn tool_by_name(role: Role, bound: bool, name: &str) -> Option<&'static ToolDef> {
+    tools_for(role, bound).iter().find(|tool| tool.name == name)
 }
 
 /// How the agent presents one of these tools to its model. Only the prefix differs between the
@@ -67,12 +86,12 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
         name: "list_projects",
         description: "List this console's projects: name, host, directory, the tags the user \
                       gave each, and the sessions currently running in each — every session of \
-                      the console, whichever console session owns it. Each carries `owner`, \
-                      the console session it reports to, and `yours`; a project session with \
-                      `owner: null` is unbound, which the user opened themselves and kept \
-                      outside the orchestration. A session with `yours: false` is not this \
-                      caller's to drive — it is unbound, or reports to a different console \
-                      session — leave it alone.",
+                      the console, whichever session owns it. Each carries `owner`, the \
+                      session it reports to, `owner_kind` (a `console` or a `project` session) \
+                      and `yours`; a project session with `owner: null` is unbound, which the user \
+                      opened themselves and kept outside the orchestration. A session with \
+                      `yours: false` is not this caller's to drive — it is unbound, or reports \
+                      to a different session — leave it alone.",
         schema: || object_schema(json!({}), &[]),
     },
     ToolDef {
@@ -124,62 +143,18 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       Returns the new session's id. The brief is rendered into the session's \
                       opening prompt. The new session reports to this console session, \
                       which is its owner.",
-        schema: || {
-            object_schema(
-                json!({
-                    "project": {
-                        "type": "string",
-                        "description": "The project's id, or its name when that is unambiguous.",
-                    },
-                    "brief": {
-                        "type": "object",
-                        "description": "The task, in natural language per field.",
-                        "properties": {
-                            "goal": { "type": "string", "description": "The outcome to achieve." },
-                            "context": { "type": "string", "description": "Background and relevant leads." },
-                            "acceptance": { "type": "string", "description": "Criteria for being done." },
-                            "constraints": {
-                                "type": "string",
-                                "description": "What must not be touched, whether committing or \
-                                                pushing is allowed, and so on.",
-                            },
-                        },
-                        "required": ["goal"],
-                    },
-                    "agent": {
-                        "type": "string",
-                        "enum": ["claude", "codex", "grok"],
-                        "description": "Overrides the agent for this one session.",
-                    },
-                }),
-                &["project", "brief"],
-            )
-        },
+        schema: || start_session_schema(true),
     },
-    ToolDef {
-        name: "send_message",
-        description: "Append an instruction to a running session of yours. Delivered straight \
-                      away when the session is idle or mid-turn; held until the user is done when \
-                      the session is waiting for them. Refused for a session that is not yours \
-                      (`yours: false`): it is somebody else's, to be left alone.",
-        schema: || {
-            object_schema(
-                json!({
-                    "session": { "type": "string", "description": "The session's id." },
-                    "text": { "type": "string", "description": "The instruction, in natural language." },
-                }),
-                &["session", "text"],
-            )
-        },
-    },
+    SEND_MESSAGE,
     ToolDef {
         name: "get_session",
         description: "The session's status, plus a tail of what it has printed. Use it to follow \
                       up; a session that is waiting for the user must be left alone until they \
                       have answered. Any session can be read, but one with `yours: false` is not \
                       this caller's to act on, whether it is unbound (`owner: null` on a project \
-                      session) or reports to a different console session: leave it alone. \
-                      `owner` says whose it is, and `role` says whether it is a console \
+                      session) or reports to a different session, console or project: leave it \
+                      alone. `owner` says whose it is, `owner_kind` whether that is a console or \
+                      a project session, and `role` whether the session itself is a console \
                       session.",
         schema: || {
             object_schema(
@@ -190,26 +165,12 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
             )
         },
     },
-    ToolDef {
-        name: "archive_session",
-        description: "End a session's process and archive it. Use it to wrap a session up \
-                      explicitly; a session that finishes cleanly with nothing left open is \
-                      archived without being asked. Refused for a session that is not yours \
-                      (`yours: false`): it is somebody else's, to be left alone.",
-        schema: || {
-            object_schema(
-                json!({
-                    "session": { "type": "string", "description": "The session's id." },
-                }),
-                &["session"],
-            )
-        },
-    },
+    ARCHIVE_SESSION,
     ToolDef {
         name: "list_archived",
-        description: "List the archived sessions of one project, whichever console session \
-                      owns them. Each carries its `owner` and `yours`, so an earlier one of \
-                      yours can be reopened instead of starting over. A session with \
+        description: "List the archived sessions of one project, whichever session owns \
+                      them. Each carries its `owner`, `owner_kind` and `yours`, so an earlier \
+                      one of yours can be reopened instead of starting over. A session with \
                       `yours: false` is somebody else's: leave it alone.",
         schema: || {
             object_schema(
@@ -223,25 +184,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
             )
         },
     },
-    ToolDef {
-        name: "reopen_session",
-        description: "Relaunch an archived or interrupted session of yours, continuing its \
-                      conversation, and optionally hand it the next instruction. Refused for a \
-                      session that is not yours (`yours: false`): it is somebody else's, to be \
-                      left alone.",
-        schema: || {
-            object_schema(
-                json!({
-                    "session": { "type": "string", "description": "The session's id." },
-                    "text": {
-                        "type": "string",
-                        "description": "An instruction to deliver once it is running.",
-                    },
-                }),
-                &["session"],
-            )
-        },
-    },
+    REOPEN_SESSION,
     ToolDef {
         name: "show_page",
         description: "Push a page to the report panel the user sees beside this session. Every \
@@ -273,12 +216,70 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     },
 ];
 
-const PROJECT_SESSION_TOOLS: &[ToolDef] = &[ToolDef {
+const SEND_MESSAGE: ToolDef = ToolDef {
+    name: "send_message",
+    description: "Append an instruction to a running session of yours. Delivered straight \
+                  away when the session is idle or mid-turn; held until the user is done when \
+                  the session is waiting for them. Refused for a session that is not yours \
+                  (`yours: false`): it is somebody else's, to be left alone.",
+    schema: || {
+        object_schema(
+            json!({
+                "session": { "type": "string", "description": "The session's id." },
+                "text": {
+                    "type": "string",
+                    "description": "The instruction, in natural language.",
+                },
+            }),
+            &["session", "text"],
+        )
+    },
+};
+
+const ARCHIVE_SESSION: ToolDef = ToolDef {
+    name: "archive_session",
+    description: "End a session's process and archive it. Use it to wrap a session up \
+                  explicitly; a session that finishes cleanly with nothing left open is \
+                  archived without being asked. Refused for a session that is not yours \
+                  (`yours: false`): it is somebody else's, to be left alone.",
+    schema: || {
+        object_schema(
+            json!({
+                "session": { "type": "string", "description": "The session's id." },
+            }),
+            &["session"],
+        )
+    },
+};
+
+const REOPEN_SESSION: ToolDef = ToolDef {
+    name: "reopen_session",
+    description: "Relaunch an archived or interrupted session of yours, continuing its \
+                  conversation, and optionally hand it the next instruction. Refused for a \
+                  session that is not yours (`yours: false`): it is somebody else's, to be \
+                  left alone.",
+    schema: || {
+        object_schema(
+            json!({
+                "session": { "type": "string", "description": "The session's id." },
+                "text": {
+                    "type": "string",
+                    "description": "An instruction to deliver once it is running.",
+                },
+            }),
+            &["session"],
+        )
+    },
+};
+
+const REPORT: ToolDef = ToolDef {
     name: "report",
-    description: "Report the round of work back to the console session. `summary` is natural \
-                  language; `status` and `open_items` are what the console session acts on. With \
+    description: "Report the round of work back to the session that dispatched this one, a \
+                  console session or a project session. `summary` is natural language; `status` \
+                  and `open_items` are what the session that dispatched this one acts on. With \
                   `done` and no open items the session is archived once the report is delivered; \
-                  anything else leaves it running and awaiting instructions.",
+                  anything else leaves it running and awaiting instructions. Refused for a \
+                  session nobody dispatched.",
     schema: || {
         object_schema(
             json!({
@@ -290,8 +291,8 @@ const PROJECT_SESSION_TOOLS: &[ToolDef] = &[ToolDef {
                     "type": "string",
                     "enum": ["done", "failed", "needs_decision"],
                     "description": "`done` when the task is finished, `failed` when it could not \
-                                    be, `needs_decision` when the console session has to choose \
-                                    before it can go on.",
+                                    be, `needs_decision` when the session that dispatched this one \
+                                    has to choose before it can go on.",
                 },
                 "open_items": {
                     "type": "array",
@@ -302,7 +303,81 @@ const PROJECT_SESSION_TOOLS: &[ToolDef] = &[ToolDef {
             &["summary", "status"],
         )
     },
-}];
+};
+
+/// A project session that reports to another session has the one tool it answers through.
+const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[REPORT];
+
+/// A project session nobody dispatched drives its own project the way a console session drives
+/// its console's, and what it starts reports back to it. `report` is announced too, though a call
+/// is refused: the catalogue follows from role and binding, and the role text says not to call it.
+const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
+    ToolDef {
+        name: "start_session",
+        description: "Start a session in this project and hand it a task. Any available agent \
+                      can be chosen, not only this session's own. Returns the new session's id. \
+                      The brief is rendered into the session's opening prompt. The new session \
+                      reports to this session, which is its owner, and you can instruct, read, \
+                      archive and reopen it. A session started this way cannot start sessions \
+                      of its own, and only this project is available.",
+        schema: || start_session_schema(false),
+    },
+    SEND_MESSAGE,
+    ToolDef {
+        name: "get_session",
+        description: "The session's status, plus a tail of what it has printed. Any session of \
+                      this project can be read, but one with `yours: false` is not yours to \
+                      act on, whether it is unbound (`owner: null`) or reports to a different \
+                      session: leave it alone. `owner` says whose it is and `owner_kind` \
+                      whether that is a console or a project session.",
+        schema: || {
+            object_schema(
+                json!({
+                    "session": { "type": "string", "description": "The session's id." },
+                }),
+                &["session"],
+            )
+        },
+    },
+    ARCHIVE_SESSION,
+    REOPEN_SESSION,
+    REPORT,
+];
+
+/// The schema of `start_session`. `with_project` is for the console session, which chooses a
+/// project; a project session always starts in its own, so it is not asked.
+fn start_session_schema(with_project: bool) -> Value {
+    let mut properties = json!({
+        "brief": {
+            "type": "object",
+            "description": "The task, in natural language per field.",
+            "properties": {
+                "goal": { "type": "string", "description": "The outcome to achieve." },
+                "context": { "type": "string", "description": "Background and relevant leads." },
+                "acceptance": { "type": "string", "description": "Criteria for being done." },
+                "constraints": {
+                    "type": "string",
+                    "description": "What must not be touched, whether committing or \
+                                    pushing is allowed, and so on.",
+                },
+            },
+            "required": ["goal"],
+        },
+        "agent": {
+            "type": "string",
+            "enum": ["claude", "codex", "grok"],
+            "description": "Overrides the agent for this one session.",
+        },
+    });
+    if !with_project {
+        return object_schema(properties, &["brief"]);
+    }
+    properties["project"] = json!({
+        "type": "string",
+        "description": "The project's id, or its name when that is unambiguous.",
+    });
+    object_schema(properties, &["project", "brief"])
+}
 
 /// Wraps a property map as a tool input schema. Every tool takes an object, so the envelope is the
 /// same each time and only the properties and the required list differ.
@@ -318,26 +393,52 @@ fn object_schema(properties: Value, required: &[&str]) -> Value {
 mod tests {
     use super::*;
 
+    /// What a session is offered follows from its role and whether it is bound: only an unbound
+    /// project session may start sessions, and only a project session can report.
     #[test]
-    fn each_role_sees_only_its_own_tools() {
-        assert!(tool_by_name(Role::Project, "start_session").is_none());
-        assert!(tool_by_name(Role::Project, "report").is_some());
-        assert!(tool_by_name(Role::Console, "report").is_none());
-        for tool in [
-            "list_projects",
-            "start_session",
-            "send_message",
-            "show_page",
-            "report",
-        ] {
-            // Every tool belongs to exactly one role, so a tool added to both lists by mistake is
-            // caught here rather than by a console session reporting to itself.
-            let roles = [Role::Console, Role::Project]
-                .into_iter()
-                .filter(|role| tool_by_name(*role, tool).is_some())
-                .count();
-            assert_eq!(roles, 1, "{tool} belongs to exactly one role");
-        }
+    fn the_tools_offered_follow_from_role_and_binding() {
+        let names = |role, bound| -> Vec<&'static str> {
+            tools_for(role, bound)
+                .iter()
+                .map(|tool| tool.name)
+                .collect()
+        };
+        assert_eq!(names(Role::Project, true), ["report"]);
+        assert_eq!(
+            names(Role::Project, false),
+            [
+                "start_session",
+                "send_message",
+                "get_session",
+                "archive_session",
+                "reopen_session",
+                "report"
+            ]
+        );
+        // Console sessions are never bound, so the flag changes nothing for them.
+        assert_eq!(names(Role::Console, false), names(Role::Console, true));
+        assert!(tool_by_name(Role::Console, false, "start_session").is_some());
+        assert!(tool_by_name(Role::Console, false, "report").is_none());
+        assert!(tool_by_name(Role::Project, true, "start_session").is_none());
+        assert!(tool_by_name(Role::Project, false, "list_projects").is_none());
+    }
+
+    /// An unbound project session starts sessions only in its own project, so it is not asked
+    /// which one.
+    #[test]
+    fn only_the_console_sessions_start_session_asks_for_a_project() {
+        let schema = |tools: &'static [ToolDef]| {
+            let tool = tools
+                .iter()
+                .find(|tool| tool.name == "start_session")
+                .unwrap();
+            (tool.schema)()
+        };
+        let console = schema(tools_for(Role::Console, false));
+        let project = schema(tools_for(Role::Project, false));
+        assert!(console["properties"]["project"].is_object());
+        assert!(project["properties"]["project"].is_null());
+        assert_eq!(project["required"], json!(["brief"]));
     }
 
     /// The prefix is the agent's own, and a role description that names the wrong one points the
@@ -360,8 +461,12 @@ mod tests {
 
     #[test]
     fn every_tool_announces_an_object_schema() {
-        for role in [Role::Console, Role::Project] {
-            for tool in tools_for(role) {
+        for (role, bound) in [
+            (Role::Console, false),
+            (Role::Project, true),
+            (Role::Project, false),
+        ] {
+            for tool in tools_for(role, bound) {
                 let schema = (tool.schema)();
                 assert_eq!(schema["type"], "object", "{}", tool.name);
                 assert!(schema["properties"].is_object(), "{}", tool.name);

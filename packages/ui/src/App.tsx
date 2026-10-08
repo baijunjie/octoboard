@@ -234,7 +234,7 @@ export function App(): React.ReactElement {
     // the session: its console is the one shown, and focus mode on something the session does not
     // belong to is left.
     sidebarView.selectConsole(session.console_id);
-    if (sidebarView.focus && !belongsToFocus(sidebarView.focus, session)) sidebarView.setFocus(undefined);
+    if (sidebarView.focus && !belongsToFocus(sidebarView.focus, session, sessions)) sidebarView.setFocus(undefined);
     if (archiveOpen) {
       setArchiveScope(undefined);
       focusTerminal();
@@ -260,7 +260,7 @@ export function App(): React.ReactElement {
   // archived session of a project, reopened from the archive view, becomes live and bound, and is
   // then not listed there.
   useEffect(() => {
-    if (sidebarView.focus && selectedSession && !belongsToFocus(sidebarView.focus, selectedSession)) {
+    if (sidebarView.focus && selectedSession && !belongsToFocus(sidebarView.focus, selectedSession, sessions)) {
       sidebarView.setFocus(undefined);
     }
   }, [selectedSession?.id, selectedSession?.status, selectedSession?.bound_to]);

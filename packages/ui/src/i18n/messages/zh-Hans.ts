@@ -104,8 +104,8 @@ export const zhHans: Translation<"other"> = {
   "daemon.switch_did_not_come_up": "{session} 在新账户下重新启动后立即结束，因此仍在原账户上。",
   "daemon.session_not_running": "此会话未在运行。",
   "daemon.session_not_archived": "只能删除已归档的会话。",
-  "daemon.console_session_has_running_sessions": {
-    other: "无法归档此控制台会话：绑定到它的会话仍在运行，共 {count} 个（{sessions}）。请先归档运行中的会话，或等待其完成。",
+  "daemon.session_has_running_sessions": {
+    other: "无法归档此会话：绑定到它的会话仍在运行，共 {count} 个（{sessions}）。请先归档运行中的会话，或等待其完成。",
   },
   "daemon.session_waiting_for_user": "此会话正在等你回应。请先在终端中回答。",
   "daemon.queued_messages_lost":

@@ -70,23 +70,26 @@ export function liveConsoleSessions(sessions: Session[], consoleId: string): Ses
     .sort((a, b) => b.started_at - a.started_at);
 }
 
-/** The sessions bound to the console session `consoleSessionId`, in any status, in the sidebar's order. */
-export function boundSessions(sessions: Session[], consoleSessionId: string): Session[] {
-  return sessions.filter((s) => s.bound_to === consoleSessionId).sort(compareSessions);
+/** The sessions bound to the session `ownerId` (a console session, or a project session that started
+ * some), in any status, in the sidebar's order. */
+export function boundSessions(sessions: Session[], ownerId: string): Session[] {
+  return sessions.filter((s) => s.bound_to === ownerId).sort(compareSessions);
 }
 
-/** A console session's own archived bound sessions — the project sessions that are bound to it and
- * have since been archived. This is a third filter over the same session records the archive view
+/** An owner's own archived bound sessions — the project sessions that are bound to it and have
+ * since been archived. This is a third filter over the same session records the archive view
  * already serves for a project (`project_id`) and for a console's console sessions (`role`);
  * `ArchiveScope`'s `consoleSession` selects it. */
-export function boundArchivedSessions(sessions: Session[], consoleSessionId: string): Session[] {
-  return archivedSessions(sessions.filter((s) => s.bound_to === consoleSessionId));
+export function boundArchivedSessions(sessions: Session[], ownerId: string): Session[] {
+  return archivedSessions(sessions.filter((s) => s.bound_to === ownerId));
 }
 
-/** The sessions bound to no console session. A project's focus mode lists only these among its
- * live sessions; its archive is not filtered this way. */
-export function unboundSessions(sessions: Session[]): Session[] {
-  return sessions.filter((s) => !s.bound_to);
+/** The sessions not bound to a console session of `owners`: unbound ones, and ones bound to a
+ * project session, which is listed beside them rather than hidden behind a console session's
+ * focus mode. A project's focus mode lists only these among its live sessions; its archive is not
+ * filtered this way. */
+export function notBoundToConsoleSession(sessions: Session[], owners: Map<string, Session>): Session[] {
+  return sessions.filter((s) => !s.bound_to || !owners.has(s.bound_to));
 }
 
 /** The sessions a project's focus mode leaves out of its list: those of `sessions` (the project's)

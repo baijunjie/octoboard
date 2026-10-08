@@ -9,8 +9,8 @@
 //! - **A role is immutable for a session's lifetime.** Claude Code records an appended system
 //!   prompt on the conversation's first request and replays it verbatim on every resume, so text
 //!   changed later is silently ignored. Nothing here may therefore depend on anything that can
-//!   change after the session starts. Whether a project session is bound to a console session
-//!   may, because a binding is fixed for the session's lifetime once it is set.
+//!   change after the session starts. Whether a project session is bound, and to whom, may,
+//!   because a binding is fixed for the session's lifetime once it is set.
 //! - **A Grok console session gets no instruction file.** Grok locates a project by walking up for
 //!   a `.git` directory and reads no instructions without one, and a console's working directory is
 //!   not a repository. Its guidance travels in `--rules` instead, which is why
@@ -23,7 +23,7 @@ use anyhow::{Context, Result};
 
 use crate::protocol::{Agent, Console, Role};
 
-use super::qualified_tool_name;
+use super::{qualified_tool_name, Owner};
 
 /// The role description injected at launch.
 ///
@@ -34,16 +34,16 @@ use super::qualified_tool_name;
 /// afterwards. A Grok console session has no instruction file to read, so its whole guidance has
 /// to travel in `--rules`.
 ///
-/// `bound` says whether the session reports to a console session; a console session is never
-/// bound, and it is ignored for one.
-pub fn role_description(role: Role, bound: bool, agent: Agent) -> String {
-    match role {
-        Role::Console => match console_session_instruction_filename(agent) {
+/// `owner` says who the session reports to; a console session is never bound, and it is ignored
+/// for one.
+pub fn role_description(role: Role, owner: Option<&Owner>, agent: Agent) -> String {
+    match (role, owner) {
+        (Role::Console, _) => match console_session_instruction_filename(agent) {
             Some(filename) => console_session_pointer(agent, filename),
             None => console_session_instructions(agent),
         },
-        Role::Project if bound => project_session_description(agent),
-        Role::Project => unbound_project_session_description(agent),
+        (Role::Project, Some(owner)) => project_session_description(agent, owner),
+        (Role::Project, None) => unbound_project_session_description(agent),
     }
 }
 
@@ -60,24 +60,32 @@ fn console_session_pointer(agent: Agent, filename: &str) -> String {
     )
 }
 
-/// What a project session bound to a console session is told. It never talks to that console
-/// session directly: the one channel back is `report`, and anything needing a person goes to the
-/// person.
-fn project_session_description(agent: Agent) -> String {
+/// What a project session bound to another session is told. It never talks to its owner directly:
+/// the one channel back is `report`, and anything needing a person goes to the person. Told by
+/// session id which session dispatched it when that is a project session, since a title can change
+/// after this text is recorded for good.
+fn project_session_description(agent: Agent, owner: &Owner) -> String {
     let report = qualified_tool_name(agent, "report");
+    let (dispatcher, owner_noun) = match owner {
+        Owner::Console => ("A console session".to_string(), "console session"),
+        Owner::Project { session_id } => (
+            format!("The project session `{session_id}` of this project"),
+            "project session",
+        ),
+    };
     format!(
         "You are running as a project session under Octoboard, which orchestrates agent sessions \
-         across several projects. A console session dispatched this task and is waiting on its \
+         across several projects. {dispatcher} dispatched this task and is waiting on its \
          result.\n\
          \n\
-         - When you finish a round of work, call `{report}`. `summary` is prose for the console \
-           session to read; `status` and `open_items` are what it acts on. Use `done` only when \
-           nothing is left open, `failed` when the task could not be carried out, and \
-           `needs_decision` when the console session has to choose before you can go on.\n\
+         - When you finish a round of work, call `{report}`. `summary` is prose for the \
+           {owner_noun} to read; `status` and `open_items` are what it acts on. Use `done` only \
+           when nothing is left open, `failed` when the task could not be carried out, and \
+           `needs_decision` when the {owner_noun} has to choose before you can go on.\n\
          - With `done` and no open items the session is wrapped up and archived once the report \
-           reaches the console session, so do not report `done` while anything remains.\n\
+           reaches the {owner_noun}, so do not report `done` while anything remains.\n\
          - Permission prompts and anything you need to ask a person go to the user directly, in \
-           this terminal — not through the console session and not through `{report}`. Ask, then \
+           this terminal — not through the {owner_noun} and not through `{report}`. Ask, then \
            wait.\n\
          - Report once per round of work rather than per step.\n\
          \n\
@@ -86,19 +94,43 @@ fn project_session_description(agent: Agent) -> String {
     )
 }
 
-/// What a project session the user opened without a console session to report to is told. Its
-/// `report` tool is still offered, because the tools follow from the role alone, and calling it is
-/// refused; saying so up front keeps the model from spending its first turn finding that out.
+/// What a project session the user opened by hand is told: nobody dispatched it, so it works with
+/// the user, and it may start sessions of its own in this project and drive them. Everything here
+/// holds for the session's whole life, because the text is recorded once and replayed on every
+/// resume.
 fn unbound_project_session_description(agent: Agent) -> String {
-    let report = qualified_tool_name(agent, "report");
+    let tool = |name: &str| qualified_tool_name(agent, name);
     format!(
         "You are running as a project session under Octoboard, which orchestrates agent sessions \
-         across several projects. The user opened this session directly: no console session \
+         across several projects. The user opened this session directly: no other session \
          dispatched it and none is waiting on its result, so work with the user in this terminal \
          and do not call `{report}` — with nobody to report to, it is refused.\n\
          \n\
+         You may start sessions in this project, with any available agent, and drive them:\n\
+         \n\
+         - `{start_session}` starts a session here and hands it a `brief`; only this project is \
+           available. Fill in `goal`, and `context`, `acceptance` and `constraints` wherever you \
+           have something to say. Returns the new session's id.\n\
+         - A session you start reports back to you: its report arrives here as a message, so do \
+           not poll for one. A session reporting `done` with nothing open has already been \
+           archived by the time you read it.\n\
+         - `{send_message}`, `{get_session}`, `{archive_session}` and `{reopen_session}` act on \
+           the sessions you started (`yours: true`). `{get_session}` also reads any other session \
+           of this project, but one with `yours: false` is somebody else's — the user's own, or \
+           another session's, named in `owner` — and is to be left alone.\n\
+         - A session you start cannot start sessions of its own.\n\
+         - A session waiting for the user is not yours to chase: it is at a permission prompt or \
+           has asked the user something, and only they can clear it. A message you send it is held \
+           until they are done.\n\
+         \n\
          Everything else is the ordinary work of this project: its own instructions, conventions \
-         and configuration apply unchanged."
+         and configuration apply unchanged.",
+        report = tool("report"),
+        start_session = tool("start_session"),
+        send_message = tool("send_message"),
+        get_session = tool("get_session"),
+        archive_session = tool("archive_session"),
+        reopen_session = tool("reopen_session"),
     )
 }
 
@@ -147,8 +179,9 @@ pub fn console_session_instructions(agent: Agent) -> String {
            read it. Anything else leaves it running and awaiting your next instruction.\n\
          - You can read every session of the console, but act only on the ones that report to \
            you (`yours: true`). A session with `yours: false` is somebody else's — the user's own, \
-           or another console session's, named in `owner`. Leave it alone: other console sessions \
-           may be working in the same projects at the same time.\n\
+           or another console session's or a project session's, named in `owner` (`owner_kind` \
+           says which). Leave it alone: other sessions may be working in the same projects at \
+           the same time.\n\
          - **A session waiting for the user is not yours to chase.** It is at a permission prompt \
            or has asked the user something, and only they can clear it. Do not nag it and do not \
            dispatch the same work elsewhere; a message you send it is held until they are done.\n\
@@ -243,10 +276,23 @@ mod tests {
     #[test]
     fn tool_names_in_the_role_text_carry_that_agents_prefix() {
         for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
-            let console_session = role_description(Role::Console, false, agent);
-            let project_session = role_description(Role::Project, true, agent);
+            let console_session = role_description(Role::Console, None, agent);
+            let project_session = role_description(Role::Project, Some(&Owner::Console), agent);
+            let unbound_session = role_description(Role::Project, None, agent);
             assert!(console_session.contains(&qualified_tool_name(agent, "start_session")));
             assert!(project_session.contains(&qualified_tool_name(agent, "report")));
+            for tool in [
+                "start_session",
+                "send_message",
+                "get_session",
+                "archive_session",
+                "reopen_session",
+            ] {
+                assert!(
+                    unbound_session.contains(&qualified_tool_name(agent, tool)),
+                    "{tool}"
+                );
+            }
             assert!(console_session_instructions(agent)
                 .contains(&qualified_tool_name(agent, "start_session")));
             if agent == Agent::Grok {
@@ -254,6 +300,7 @@ mod tests {
                 // rather than a cosmetic difference.
                 assert!(!console_session.contains("mcp__"));
                 assert!(!project_session.contains("mcp__"));
+                assert!(!unbound_session.contains("mcp__"));
             }
         }
     }
@@ -264,25 +311,33 @@ mod tests {
     #[test]
     fn the_detail_goes_in_the_file_where_the_agent_reads_one() {
         for agent in [Agent::Claude, Agent::Codex] {
-            let role = role_description(Role::Console, false, agent);
+            let role = role_description(Role::Console, None, agent);
             assert!(role.len() < console_session_instructions(agent).len() / 2);
             assert!(role.contains(console_session_instruction_filename(agent).expect("a filename")));
         }
         assert_eq!(
-            role_description(Role::Console, false, Agent::Grok),
+            role_description(Role::Console, None, Agent::Grok),
             console_session_instructions(Agent::Grok)
         );
     }
 
     /// A session the user opened by hand has nobody waiting on it, and telling it otherwise sends
-    /// it to `report` on its first turn, only to be refused.
+    /// it to `report` on its first turn, only to be refused. One bound to a project session is
+    /// told which session dispatched it, by id, and not that a console session did.
     #[test]
-    fn only_a_bound_project_session_is_told_a_console_session_is_waiting() {
-        let bound = role_description(Role::Project, true, Agent::Claude);
-        let unbound = role_description(Role::Project, false, Agent::Claude);
-        assert!(bound.contains("A console session dispatched this task"));
-        assert!(!unbound.contains("A console session dispatched this task"));
+    fn what_a_project_session_is_told_follows_who_it_reports_to() {
+        let project_owner = Owner::Project {
+            session_id: "starter-1".to_string(),
+        };
+        let console = role_description(Role::Project, Some(&Owner::Console), Agent::Claude);
+        let project = role_description(Role::Project, Some(&project_owner), Agent::Claude);
+        let unbound = role_description(Role::Project, None, Agent::Claude);
+        assert!(console.contains("A console session dispatched this task"));
+        assert!(project.contains("`starter-1`"));
+        assert!(!project.contains("console session"));
+        assert!(!unbound.contains("dispatched this task"));
         assert!(unbound.contains("do not call"));
+        assert!(unbound.contains("start_session"));
     }
 
     #[test]

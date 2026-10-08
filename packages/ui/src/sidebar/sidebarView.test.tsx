@@ -49,13 +49,14 @@ describe("belongsToFocus", () => {
     ["a project", projectFocus, unbound, true],
     ["a project", projectFocus, bound, false],
     ["a project", projectFocus, archivedBound, true],
+    ["a project", projectFocus, { ...bound, bound_to: unbound.id }, true],
     ["a project", projectFocus, hub, false],
     ["a console session", hubFocus, bound, true],
     ["a console session", hubFocus, hub, true],
     ["a console session", hubFocus, unbound, false],
     ["a console session", hubFocus, { ...bound, bound_to: "s-other" }, false],
   ])("in the focus mode of %s, selecting %#", (_, focus, selected, belongs) => {
-    expect(belongsToFocus(focus, selected)).toBe(belongs);
+    expect(belongsToFocus(focus, selected, sessions)).toBe(belongs);
   });
 });
 

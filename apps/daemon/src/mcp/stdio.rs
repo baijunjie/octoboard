@@ -2,11 +2,11 @@
 //! process per session.
 //!
 //! It owns no state. The tool catalogue it announces comes from [`super::tools_for`] for the role
-//! it was launched with, and every call is forwarded to the running daemon, which is where the
-//! sessions and the store actually are. The session's identity travels in argv rather than in the
-//! environment: Claude Code and Grok do export a session id to an MCP child, but Codex exports
-//! nothing, and Grok's `{{session_id}}` templating does not work — argv is the one route all three
-//! agree on, and the daemon is the one assigning the id anyway.
+//! and binding it was launched with, and every call is forwarded to the running daemon, which is
+//! where the sessions and the store actually are. The session's identity travels in argv rather
+//! than in the environment: Claude Code and Grok do export a session id to an MCP child, but Codex
+//! exports nothing, and Grok's `{{session_id}}` templating does not work — argv is the one route
+//! all three agree on, and the daemon is the one assigning the id anyway.
 //!
 //! The token authenticates the child to the daemon, so the MCP surface is not reachable by any
 //! local process that happens to guess the port.
@@ -34,7 +34,13 @@ use crate::protocol::Role;
 const CALL_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// Runs the server until the agent closes the connection.
-pub fn run(session: String, role: Role, port: u16, token: String) -> anyhow::Result<()> {
+pub fn run(
+    session: String,
+    role: Role,
+    bound: bool,
+    port: u16,
+    token: String,
+) -> anyhow::Result<()> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
@@ -42,6 +48,7 @@ pub fn run(session: String, role: Role, port: u16, token: String) -> anyhow::Res
         let server = OctoboardMcp {
             session: Arc::new(session),
             role,
+            bound,
             port,
             token: Arc::new(token),
         };
@@ -58,6 +65,9 @@ struct OctoboardMcp {
     /// on a session other than its own.
     session: Arc<String>,
     role: Role,
+    /// Whether the session reports to another one, which decides the catalogue along with the
+    /// role. Fixed for the session's lifetime, so a launch argument can carry it.
+    bound: bool,
     port: u16,
     token: Arc<String>,
 }
@@ -83,7 +93,7 @@ impl ServerHandler for OctoboardMcp {
         _request: Option<PaginatedRequestParam>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
-        let tools = super::tools_for(self.role)
+        let tools = super::tools_for(self.role, self.bound)
             .iter()
             .map(|tool| Tool {
                 name: Cow::Borrowed(tool.name),
@@ -114,7 +124,7 @@ impl ServerHandler for OctoboardMcp {
     ) -> Result<CallToolResult, ErrorData> {
         // A name outside this role's catalogue is a protocol-level mistake rather than a tool
         // that failed, so it does not come back as a tool result the model is invited to retry.
-        if super::tool_by_name(self.role, &request.name).is_none() {
+        if super::tool_by_name(self.role, self.bound, &request.name).is_none() {
             return Err(ErrorData::invalid_params(
                 format!("`{}` is not a tool this session can call", request.name),
                 None,

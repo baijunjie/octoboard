@@ -18,7 +18,7 @@ import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
 import { GitBadge } from "./GitBadge";
 import { projectMenu, sessionMenu } from "./menus";
-import { archivedSessions, boundArchivedSessions, boundElsewhere, focusGroups, liveSessions, sortProjects, unboundSessions } from "./order";
+import { archivedSessions, boundArchivedSessions, boundElsewhere, focusGroups, liveSessions, sortProjects, notBoundToConsoleSession } from "./order";
 import { RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
 import type { SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
@@ -104,7 +104,7 @@ export function ProjectFocusView({
   // own entry, which keeps the same `GitStatus` reference until that entry itself changes, so no
   // `useShallow` is needed.
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
-  const live = liveSessions(unboundSessions(sessions));
+  const live = liveSessions(notBoundToConsoleSession(sessions, owners));
   const archived = archivedSessions(sessions);
   const elsewhere = boundElsewhere(sessions, owners);
   const openSession = () =>

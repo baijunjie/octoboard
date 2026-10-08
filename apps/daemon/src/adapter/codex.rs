@@ -151,7 +151,7 @@ impl AgentAdapter for CodexAdapter {
             "developer_instructions={}",
             toml_string(&mcp::role::role_description(
                 spec.role,
-                spec.bound,
+                spec.owner.as_ref(),
                 Agent::Codex
             ))
         ));
@@ -332,7 +332,7 @@ mod tests {
             "developer_instructions={}",
             toml_string(&mcp::role::role_description(
                 fixture.role,
-                fixture.bound,
+                fixture.owner.as_ref(),
                 Agent::Codex
             ))
         ))));

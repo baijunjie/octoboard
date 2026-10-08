@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Project, Session, SessionStatus } from "../protocol";
-import { boundArchivedSessions, boundElsewhere, focusGroups, liveSessions, sortProjects, unboundSessions } from "./order";
+import { boundArchivedSessions, boundElsewhere, focusGroups, liveSessions, sortProjects, notBoundToConsoleSession } from "./order";
 
 const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to?: string): Session => ({
   id,
@@ -73,10 +73,16 @@ describe("sortProjects", () => {
   });
 });
 
-describe("unboundSessions", () => {
-  it("keeps the sessions with no binding, whatever their status", () => {
-    const sessions = [session("unbound", "idle", 1), session("archived", "archived", 2), session("bound", "idle", 3, false, "s-console")];
-    expect(unboundSessions(sessions).map((s) => s.id)).toEqual(["unbound", "archived"]);
+describe("notBoundToConsoleSession", () => {
+  it("keeps the sessions no console session owns, whatever their status", () => {
+    const owners = new Map([["s-console", { ...session("s-console", "idle", 0), role: "console" as const }]]);
+    const sessions = [
+      session("unbound", "idle", 1),
+      session("archived", "archived", 2),
+      session("bound", "idle", 3, false, "s-console"),
+      session("bound-to-project", "idle", 4, false, "unbound"),
+    ];
+    expect(notBoundToConsoleSession(sessions, owners).map((s) => s.id)).toEqual(["unbound", "archived", "bound-to-project"]);
   });
 });
 
