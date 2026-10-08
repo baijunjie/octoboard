@@ -49,12 +49,13 @@ interface UseAppExitResult {
  * listening for the window's close button and for an `exit-requested` event (fired for every other
  * way to quit — Cmd+Q, the app menu, the Dock icon's own Quit, and a system-initiated
  * logout/restart/shutdown — that the Rust side cannot itself ask the user about), asking for
- * confirmation when a session is still live, and the `shutdown`-then-`confirm_quit` sequence that
- * actually ends the process. With `getSessions` and `requestShutdown` omitted it quits straight
- * away, which is what a screen with no daemon behind it needs.
+ * confirmation when a session is still live (bringing the window to the front to do so), and the
+ * `shutdown`-then-`confirm_quit` sequence that actually ends the process. With `getSessions` and
+ * `requestShutdown` omitted it quits straight away, which is what a screen with no daemon behind it
+ * needs.
  */
 export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
-  const { exit } = usePlatform();
+  const { exit, nativeWindow } = usePlatform();
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   // Read through a ref rather than closed over directly: the listener-registration effect below
   // runs once (mount/unmount only), so `requestQuit`/`doQuit` must look up the latest sessions and
@@ -94,6 +95,10 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
     const liveSessions = (optionsRef.current.getSessions?.() ?? []).filter((s) => isLive(s.status));
     if (liveSessions.length > 0) {
       setExitConfirmOpen(true);
+      // A quit from outside the window (the Dock icon's own Quit) leaves it wherever it was, often
+      // behind another app, where the dialog would go unseen. Best effort: the dialog opens
+      // whether or not the window can be raised.
+      await nativeWindow?.bringToFront().catch(() => {});
       return;
     }
     await doQuit();

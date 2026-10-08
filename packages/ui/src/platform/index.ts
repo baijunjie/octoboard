@@ -17,8 +17,9 @@ export interface PlatformAdapter {
   readonly notifications?: NotificationCapability;
   readonly badge?: BadgeCapability;
   /** The native window itself — its appearance (the controls and any native chrome), which CSS
-   * cannot reach, and its own visibility; present only where a shell owns a native window — a
-   * browser tab has neither an appearance to match nor a window to reveal. */
+   * cannot reach, and its own visibility and place in front of other apps; present only where a
+   * shell owns a native window — a browser tab has neither an appearance to match nor a window to
+   * reveal. */
   readonly nativeWindow?: NativeWindowCapability;
   /** Present only where the window draws no titlebar of its own, so the UI's top bar is the
    * window's titlebar: it then carries the drag region and keeps `leftInset` clear for the
@@ -83,6 +84,8 @@ export interface NativeWindowCapability {
    * appearance that creating it hidden exists to avoid. Idempotent: showing an already-visible
    * window, or the shell's own timeout-driven fallback racing this call, is a no-op either way. */
   reveal(): Promise<void>;
+  /** Activates the app and brings the window to the front, restoring it first if minimized. */
+  bringToFront(): Promise<void>;
 }
 
 export interface WindowChromeCapability {

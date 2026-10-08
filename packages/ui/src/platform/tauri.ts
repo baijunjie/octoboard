@@ -184,5 +184,14 @@ function tauriNativeWindow(): NativeWindowCapability {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       await getCurrentWindow().show();
     },
+    async bringToFront() {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const win = getCurrentWindow();
+      // `setFocus` only activates the app for a window that is visible and not minimized, so
+      // those two come first.
+      await win.unminimize();
+      await win.show();
+      await win.setFocus();
+    },
   };
 }

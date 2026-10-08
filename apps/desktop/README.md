@@ -123,7 +123,9 @@ it has pushed the theme; permission identifier `core:window:allow-show`). All of
 architectural rule above: they carry no daemon traffic or session state — only a count, a text, a theme string the
 frontend has already derived or chosen, or no theme at all meaning follow the OS, or a bare reveal with no payload
 at all, or the bare start-of-drag and zoom of the top bar's drag region (`core:window:allow-start-dragging` and
-`core:window:allow-internal-toggle-maximize`).
+`core:window:allow-internal-toggle-maximize`), or the bare raise that brings the window to the front before the exit
+confirmation asks (`core:window:allow-unminimize` and `core:window:allow-set-focus`, used by
+`packages/ui/src/lifecycle/useAppExit.ts` through `nativeWindow.bringToFront`).
 
 The window remembers its size, position and maximized state across launches (`src-tauri/src/window_state.rs`; the
 frontend never calls it, so it needs no capability). What is stored is the window's *normal* frame —
@@ -170,7 +172,7 @@ any IPC call for it. The system's preferred languages travel the same way (`&lan
 | `src-tauri/src/sidecar.rs` | Spawns `octoboardd`, parses its startup port line, reports how it terminated |
 | `src-tauri/src/menu.rs` | Builds the native macOS menu bar from the labels the UI sends (`set_menu_labels`), including the Settings… item that `lib.rs` turns into the `settings-requested` event |
 | `src-tauri/src/window_state.rs` | Remembers the window's frame and maximized state: decides the initial frame from the saved one and the connected displays, follows it from window events, saves it on exit |
-| `src-tauri/capabilities/default.json` | Allowlists the three IPC commands above plus the notification, Dock-badge, window-theme, window-reveal and window-drag/zoom commands |
+| `src-tauri/capabilities/default.json` | Allowlists the three IPC commands above plus the notification, Dock-badge, window-theme, window-reveal, window-raise and window-drag/zoom commands |
 | `src-tauri/tauri.conf.json` | Where the window's UI comes from (`frontendDist` is `packages/ui/dist`; `devUrl` and `beforeDevCommand` are that package's dev server), the `octoboardd` `externalBin`, and the bundle targets; its `productName` mirrors `config/app.json`'s `name`, which `build.rs` checks |
 | `scripts/build-daemon.mjs` | Builds `octoboardd` in release mode and copies it into `src-tauri/binaries/` under the target-triple name Tauri's `externalBin` requires |
 | `scripts/build-app.mjs` | Builds the app for local verification with every `APPLE_*` variable stripped, and fails if the result carries a Developer ID authority; see "Release builds" above |

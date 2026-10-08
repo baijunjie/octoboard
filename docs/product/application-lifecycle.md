@@ -84,7 +84,9 @@ everything running. The Dock icon's own Quit and a system logout were not tried 
 through the same `applicationShouldTerminate:` path, was, and asked the same way.
 
 - **While any session has a running process, quitting asks for confirmation.** The message says that quitting
-  interrupts those sessions and that each stays resumable next time.
+  interrupts those sessions and that each stays resumable next time. Asking brings Octoboard to the front first,
+  restoring its window if it was minimized, so a quit from outside the window — the Dock icon's own Quit while another
+  application covers it — does not leave the question unseen behind that application. Not yet tried by hand.
 - Once confirmed, every session process is ended and every one of those sessions is left **interrupted**, never
   archived. Clicking one next time resumes it (see "Archiving, interruption and resuming" in
   `docs/product/sessions.md`).
