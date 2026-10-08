@@ -131,7 +131,7 @@ back, which requires the daemon's events to be replayable by sequence number.
 
 ## Known pitfalls of the Tauri / Rust approach
 
-Each has an established solution unless noted; two are not yet confirmed by hand, as said where they appear.
+Each has an established solution unless noted; any outstanding manual verification is stated in its entry.
 
 - **PATH and environment.** A macOS application launched from Finder does not inherit the shell's `PATH`, so `claude`
   and `codex` (under `~/.local/bin` or a node-version manager's shims) cannot be found and API keys are missing. A login
@@ -156,13 +156,14 @@ Each has an established solution unless noted; two are not yet confirmed by hand
   below Rust 1.88 (its `idna`/ICU chain), so loopback traffic uses a small hand-rolled HTTP client; Tauri 2 builds on
   older toolchains only with exact pins on a chain of transitive crates. Carry the pins deliberately or raise the
   toolchain; drifting into it by accident costs a day.
-- **Full-width punctuation from a CJK input method needs two key presses.** A mark such as `？`, which an input method
-  emits without a candidate window, is swallowed on the first press by `xterm.js` 5.5.0 in WKWebView. The library arms
+- **Full-width punctuation from a CJK input method needs a workaround.** A mark such as `？`, which an input method
+  emits without a candidate window, is swallowed on the first press by unmodified `xterm.js` 6.0.0 in WKWebView. The library arms
   a "key down seen" flag on every keydown, a bare `Shift` included, and drops the commit while it is set, but WebKit
-  delivers the commit before the mark's own keydown. No released version fixes it, so the terminal's key handler
+  delivers the commit before the mark's own keydown. With the pinned version, the terminal's key handler
   restores the flag after a modifier-only keydown (`TerminalController`), reaching into a private field that must be
   rechecked on every `xterm.js` upgrade. Composed CJK text is unaffected.
-  Not yet confirmed by hand with a real input method.
+  The user confirmed the workaround with a real input method on 5.5.0; its private-field contract was rechecked
+  against 6.0.0, but that upgrade has not had a separate manual input-method check.
 - **Mouse reports past column 95.** The encoded byte exceeds 127, so `onData` never sees it; only `onBinary` does, as a
   string of raw code units, hence a mask back to bytes rather than a UTF-8 encode. Not yet confirmed by hand: the
   forwarding was read line by line but never exercised with a mouse-aware TUI, and none is reachable from Grok's bash
