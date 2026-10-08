@@ -310,10 +310,13 @@ function BoundElsewhere({
           preventFocusOnPress
           aria-label={t("sidebar.focus.enterConsoleSession", { name: owner.title })}
           onPress={() => handlers.onFocus({ consoleSession: owner })}
-          className="h-auto min-h-0 min-w-0 gap-1 px-1 py-0 align-baseline text-xs font-medium"
+          className="h-auto min-h-0 min-w-0 max-w-full gap-1 px-1 py-0 align-baseline text-xs font-medium"
         >
           <BindingBadge owner={owner} decorative />
-          <bdi dir="auto">{part.value}</bdi>
+          {/* A name longer than the line is cut rather than pushed past the sidebar's edge. */}
+          <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={owner.title}>
+            {part.value}
+          </FadeOverflow>
         </Button>
       );
     });

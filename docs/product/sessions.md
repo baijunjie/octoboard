@@ -64,7 +64,8 @@ A session is opened under a project with:
   first, each entry named by the account alone. It opens on the agent and account chosen as below, and any other entry
   can be picked for this session only. All three agents are listed every time; one Octoboard has determined
   unavailable (its binary does not resolve on the user's login shell `PATH`) keeps its group, headed as not installed,
-  with none of its entries selectable, and the list opens on a selectable entry whenever there is one. Before that
+  with none of its entries selectable — they are still reached with the arrow keys and announced as disabled — and the
+  list opens on a selectable entry whenever there is one. Before that
   determination has landed every group is selectable and none is labelled as not installed. Until accounts have been
   added an agent's group holds its default account alone.
 - **Title** (optional) — defaults to the project's name. A console session's title defaults to
@@ -93,12 +94,12 @@ selected or resumed, that is when its prompt appears. Octoboard answers that pro
 they have agreed — for that project, or for a folder its directory lies under — or asks them first;
 see "Claude Code's workspace-trust prompt" in `docs/product/launching-agents.md`.
 
-If the launch itself fails — the directory cannot be reached, the agent binary is not on the user's `PATH`, the
-user's shell environment could not be captured (see "The launch environment" in `docs/product/launching-agents.md`),
-or, for Grok Build only, the account the session would hold pins a directory that is not an initialized Grok home
-(see "Agent config directories" in `docs/product/consoles-and-projects.md`) — no session appears in the sidebar and
-the failure is reported. A missing config directory does not fail a brand new session for the other two agents: it
-has no conversation to lose, so the agent is left to create the directory itself.
+If the launch itself fails — the directory cannot be reached, the agent binary is not on the user's `PATH`, the user's
+shell environment could not be captured (see "The launch environment" in `docs/product/launching-agents.md`), or, for
+Grok Build only, the account the session would hold pins a directory that is not an initialized Grok home (see "Agent
+config directories" in `docs/product/consoles-and-projects.md`) — no session appears in the sidebar and the failure is
+reported. A missing config directory does not fail a brand new session for the other two agents: it has no conversation
+to lose, so Claude Code creates the directory itself and Octoboard creates it for Codex.
 
 **With every agent determined unavailable, opening a session is refused outright, before any of that**: the dialog
 cannot be submitted, the console sessions section's own new-session action is disabled, and a console session's
@@ -375,8 +376,10 @@ process this way leaves the sessions bound to it as they are.
   switch, with nothing copied and nothing recorded, and that process may still be running. Once the process has been
   ended, a copy that does not complete, a relaunch the launch rules refuse and a relaunch whose process ends at once
   are each reported as a failed switch, not as a success: the session is left *interrupted* on its old account,
-  resumable as before. Octoboard tells that last case from a success by the process ending within a few seconds of the
-  relaunch, never by reading what the agent printed.
+  resumable as before, and already reads so everywhere by the time the failure is shown. Octoboard tells that last case from a success by the process ending within a few seconds of the
+  relaunch, never by reading what the agent printed. An account that is not signed in is therefore not a failed
+  switch: every agent, Grok Build included, comes up on its own sign-in rather than exiting, so the switch succeeds
+  and the session's terminal shows that agent's sign-in, which may start its sign-in flow.
 - **It can take a few seconds**, the time the agent is given to exit and the time the relaunched process is watched; the
   confirmation stays open, its button reading "Switching account…" and the session's terminal "Resuming session…",
   until the result is known, and shows a failure in place. The confirmation cannot be dismissed meanwhile, and the

@@ -199,7 +199,9 @@ interface FadeOverflowProps {
  * nearest ancestor marked `data-marquee-scope` (a row), so all of it can be read without a tooltip.
  *
  * It sets `overflow` and `whitespace-nowrap` itself, so the caller supplies only the sizing
- * (`min-w-0 flex-1` inside a flex row). The first measurement is made before the first paint, so a
+ * (`min-w-0 flex-1` inside a flex row). It has to lay out as a block or a flex item: rendered
+ * `as="span"` in running text it stays inline, never overflows, and so never clips, fades or sets
+ * its title. The first measurement is made before the first paint, so a
  * label that does not fit never shows a hard cut.
  */
 export function FadeOverflow({

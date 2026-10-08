@@ -108,6 +108,8 @@ Reporting fails, and leaves the session exactly as it was, when:
 
 - the session is unbound, so there is nobody to report to;
 - the console session it is bound to is no longer on record;
+- the console session it is bound to has no process running — it is interrupted or archived. The binding names that
+  console session by its id and outlives this, so once it is resumed or reopened the session's reports reach it again;
 - the session has already been wrapped up — a session archived by its own `done` report cannot
   report a second time.
 

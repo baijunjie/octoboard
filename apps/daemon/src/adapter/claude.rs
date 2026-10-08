@@ -125,7 +125,11 @@ impl AgentAdapter for ClaudeAdapter {
         args.push("--mcp-config".to_string());
         args.push(Self::mcp_config_json(spec));
         args.push("--append-system-prompt".to_string());
-        args.push(mcp::role::role_description(spec.role, Agent::Claude));
+        args.push(mcp::role::role_description(
+            spec.role,
+            spec.bound,
+            Agent::Claude,
+        ));
 
         let mut env = Vec::new();
         if let Some(dir) = pinned {
@@ -171,17 +175,35 @@ fn global_config_file(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> PathBuf {
 /// Deliberately silent unless the trust state is explicitly negative: the field is only read, so
 /// an absent project entry or a renamed key must leave the user alone rather than warn them on
 /// every launch about something that may not be true.
+///
+/// A directory's own entry saying `false` is not enough on its own. Claude Code creates that entry
+/// with `false` the first time it runs in a directory, and also counts a directory as trusted when
+/// a directory above it carries an accepted trust flag — so a directory under a trusted one never
+/// shows the trust screen and keeps its `false` (read out of Claude Code 2.1.294). Claude Code
+/// stops that walk at the repository root inside a git repository; it is not stopped here, which
+/// can only leave a notice out, the side this notice errs on.
 fn untrusted_workspace_notice(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Option<Notice> {
     let config: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(global_config_file(spec, pinned)).ok()?)
             .ok()?;
 
     let canonical = std::fs::canonicalize(spec.cwd).unwrap_or_else(|_| spec.cwd.to_path_buf());
-    let project = config
-        .get("projects")?
-        .get(canonical.to_string_lossy().as_ref())?;
-    match project.get("hasTrustDialogAccepted") {
-        Some(serde_json::Value::Bool(false)) => Some(Notice::new(
+    let projects = config.get("projects")?;
+    let accepted = |dir: &Path| {
+        projects
+            .get(dir.to_string_lossy().as_ref())
+            .and_then(|entry| entry.get("hasTrustDialogAccepted"))
+            .and_then(serde_json::Value::as_bool)
+    };
+    if canonical
+        .ancestors()
+        .skip(1)
+        .any(|dir| accepted(dir) == Some(true))
+    {
+        return None;
+    }
+    match accepted(&canonical) {
+        Some(false) => Some(Notice::new(
             notice_code::CLAUDE_WORKSPACE_UNTRUSTED,
             format!(
                 "Claude Code has not been trusted with this directory, so this project's own `allow` \
@@ -253,6 +275,21 @@ mod tests {
             "projects": { canonical.to_string_lossy(): { "hasTrustDialogAccepted": true } }
         });
         std::fs::write(&config, trusted.to_string()).expect("config");
+        assert!(ClaudeAdapter
+            .plan(&fixture.spec())
+            .expect("plan")
+            .notice
+            .is_none());
+
+        // Claude Code trusts a directory below a trusted one without asking, and leaves the
+        // directory's own entry at `false`.
+        let under_trusted = serde_json::json!({
+            "projects": {
+                canonical.to_string_lossy(): { "hasTrustDialogAccepted": false },
+                canonical.parent().expect("a parent").to_string_lossy(): { "hasTrustDialogAccepted": true },
+            }
+        });
+        std::fs::write(&config, under_trusted.to_string()).expect("config");
         assert!(ClaudeAdapter
             .plan(&fixture.spec())
             .expect("plan")
@@ -457,7 +494,7 @@ mod tests {
             .expect("--append-system-prompt is passed");
         assert_eq!(
             plan.args[at + 1],
-            mcp::role::role_description(fixture.role, Agent::Claude)
+            mcp::role::role_description(fixture.role, fixture.bound, Agent::Claude)
         );
     }
 }

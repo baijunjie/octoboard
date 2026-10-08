@@ -157,9 +157,10 @@ pub struct Account {
     /// agents.
     pub name: String,
     /// Absolute, lexically normalised, exactly as a console's pinned directory is stored today.
-    /// Existence is not checked when this is set: the agent creates its own config directory on
-    /// first run, so a user pointing an account at a directory they are about to create should
-    /// not be stopped — this may therefore name a directory that does not exist yet.
+    /// Existence is not checked when this is set: the directory is created on first launch (by
+    /// Claude Code itself, by the Codex adapter for Codex), so a user pointing an account at a
+    /// directory they are about to create should not be stopped — this may therefore name a
+    /// directory that does not exist yet.
     pub config_dir: String,
 }
 

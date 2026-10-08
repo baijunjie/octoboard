@@ -4,9 +4,11 @@ import React from "react";
 
 import { TitledControl } from "./TitledControl";
 
-/** HeroUI's `EmptyState` with the shape every empty list in the app takes: a glyph, a line saying
- * what is missing, and the action that fills it when there is one. `compact` is a single line with the
- * action as an icon button, for a list nested inside another (a project with no sessions). */
+/** HeroUI's `EmptyState` with the shape every empty list in the app takes: a glyph, a line
+ * saying what is missing, and the action that fills it when there is one. `compact` is a row with
+ * the action as an icon button, for a list nested inside another (a project with no sessions); a
+ * message too long for the row wraps rather than being cut, since some (the install prompt) are
+ * instructions to act on. */
 export function EmptyPanel({
   icon: Icon,
   message,
@@ -23,7 +25,7 @@ export function EmptyPanel({
     return (
       <EmptyState className="flex items-center gap-2 py-1 ps-2 pe-1">
         <Icon aria-hidden="true" className="size-4 shrink-0" />
-        <p className="min-w-0 flex-1 truncate">{message}</p>
+        <p className="min-w-0 flex-1 break-words">{message}</p>
         {action && (
           <TitledControl title={action.label}>
             <Button

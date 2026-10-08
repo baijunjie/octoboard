@@ -30,23 +30,24 @@ export function OptionSelect<T extends string>({
       aria-label={inline ? label : undefined}
       value={value}
       onChange={(key) => key !== null && onChange(key as T)}
+      // react-aria's keyboard delegate defaults to skipping a disabled item in arrow-key traversal
+      // (`disabledBehavior="all"`), which would make the reason a user cannot pick it invisible to
+      // anyone not reading the popover by mouse or in screen-reader browse mode. `"selection"`
+      // keeps it focusable and announced while still refusing the choice. It belongs on the
+      // `Select`, not the `ListBox`: the list renders the state the `Select` builds
+      // (`useSelectState`) and ignores its own. Neither HeroUI's nor react-aria's `SelectProps`
+      // declares it, though `useSelectState` passes its props through to react-stately's
+      // `useListState`, which reads it — hence the cast.
+      {...({ disabledBehavior: "selection" } as React.ComponentProps<typeof Select>)}
     >
       {!inline && <Label>{label}</Label>}
       <Select.Trigger>
         {/* Renders the chosen item's own content, its icon included, so it lays that out in a row. */}
-        <Select.Value className="flex items-center gap-2" />
+        <Select.Value className="flex min-w-0 items-center gap-2" />
         <Select.Indicator />
       </Select.Trigger>
       <Select.Popover>
-        {/* react-aria's keyboard delegate defaults to skipping a disabled item in arrow-key
-            traversal (`disabledBehavior="all"`), which would make the reason a user cannot pick
-            it invisible to anyone not reading the popover by mouse or in screen-reader browse
-            mode. `"selection"` keeps it focusable and announced while still refusing the choice.
-            HeroUI's `ListBoxRootProps` omits this prop from its typings in the installed version,
-            though the runtime spreads it straight through to react-stately's `useListState`
-            (confirmed in `react-aria-components/dist/private/ListBox.mjs`), which does read it —
-            hence the cast. */}
-        <ListBox {...({ disabledBehavior: "selection" } as React.ComponentProps<typeof ListBox>)}>
+        <ListBox>
           {options.map((option) => (
             <ListBox.Item key={option.value} id={option.value} textValue={option.label} isDisabled={option.isDisabled}>
               {option.icon && (
@@ -54,7 +55,7 @@ export function OptionSelect<T extends string>({
                   {option.icon}
                 </span>
               )}
-              <span lang={option.lang} dir="auto" className="truncate">
+              <span lang={option.lang} dir="auto" className="min-w-0 truncate">
                 {option.label}
               </span>
               <ListBox.ItemIndicator />

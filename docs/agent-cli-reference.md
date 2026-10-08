@@ -265,13 +265,16 @@ built from, never the per-session home itself, which is discarded with the proce
   `session_index.jsonl` is not consulted. Control: a thread id with no record in the home answers `thread/resume:
   thread/resume failed: no rollout found for thread id <id>`. Resolution precedes the login check here too.
 - **Grok Build** — the session directory copied under a different working directory's encoded name resumed with the
-  conversation intact; `sessions/session_search.sqlite` is not consulted. Two differences from the others: **the login
-  check comes first** (an unauthenticated home refuses with `Not signed in` before it looks for the session, so a
-  relocation cannot be verified without a login, and a failed switch cannot be told from a login problem by the message
-  alone), and **a session missing locally is fetched from a remote registry** (`Session "<id>" not found locally,
-  restoring conversation from remote...`, then a 404 in the control), so a switch between two homes of the same account
-  might not need a copy at all; across two different accounts the registry is the other account's and will not serve
-  the session.
+  conversation intact; `sessions/session_search.sqlite` is not consulted. **An unauthenticated home does not refuse**:
+  measured with Grok Build 1.0.46, `grok --resume <id>` against a home with no login stays up on a browser device-code
+  sign-in (`Approve in your browser to finish signing in`, then `Waiting for approval`) instead of exiting. So, as with
+  Claude Code and Codex, a switch to an account that is not signed in comes up and counts as a success, and the
+  relaunched session can start the agent's own sign-in flow. Whether the session is looked up before or after that
+  sign-in was not measured, so a relocation cannot be verified without a login. One difference from the others: **a
+  session missing locally is fetched from a remote registry** (`Session "<id>" not found locally, restoring
+  conversation from remote...`, then a 404 in the control), so a switch between two homes of the same account might not
+  need a copy at all; across two different accounts the registry is the other account's and will not serve the
+  session.
 
 **The session comes up under the target directory's whole setup.** A config directory holds the agent's global
 configuration, not only its login: the same Codex thread resumed in a fresh home came up with that home's own defaults
@@ -284,10 +287,14 @@ reports `Not logged in` while the default directory is logged in, and copying th
 record into it changes nothing. Read out of the 2.1.289 executable and not measured: the service name appears to be
 `Claude Code-credentials`, with `-<first 8 hex of sha256(config directory)>` appended when `CLAUDE_CONFIG_DIR` is set.
 Codex and Grok Build keep the login in a file inside the directory (`auth.json` in both), which is inferred from the
-layout, not measured.
+layout, not measured. A fresh Grok home is signed in without a terminal by `GROK_HOME=<dir> grok login` (a browser
+device code; plain `grok` needs a TTY and fails with `Device not configured` without one), and one turn of
+`grok -p "<prompt>"` then creates its `sessions/`, which is what makes it an initialized Grok home (measured with Grok
+Build 1.0.46).
 
-**Not established**: whether Codex creates its home directory when pointed at one that does not exist; the measurement
-created the target by copying into it. Claude Code was measured to create it.
+Claude Code was measured to create a config directory that does not exist yet. Codex 0.161.0 does not: it exits with
+`CODEX_HOME points to "<dir>", but that path does not exist`, so the daemon creates a pinned Codex directory itself
+before launching.
 
 **The trap a verification has to rule out** is an agent that resumes *successfully* into an empty conversation. None of
 the three did that here, each refusing distinctly, but a future version could introduce it and it would look like a

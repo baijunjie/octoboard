@@ -103,7 +103,7 @@ pub fn list_dir(path: &Path) -> Result<Vec<DirEntry>> {
             is_git_repo: is_git_repo(&entry_path),
         });
     }
-    entries.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    entries.sort_by_key(|entry| entry.name.to_lowercase());
     Ok(entries)
 }
 

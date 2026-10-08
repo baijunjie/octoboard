@@ -121,7 +121,11 @@ impl AgentAdapter for GrokAdapter {
         // passed on every launch anyway, so a session whose record predates the current text is
         // not left without a role.
         args.push("--rules".to_string());
-        args.push(mcp::role::role_description(spec.role, Agent::Grok));
+        args.push(mcp::role::role_description(
+            spec.role,
+            spec.bound,
+            Agent::Grok,
+        ));
 
         if spec.resume_agent_session_id.is_none() {
             if let Some(task) = spec.task {
@@ -501,7 +505,7 @@ mod tests {
             .expect("--rules is passed");
         assert_eq!(
             plan.args[at + 1],
-            mcp::role::role_description(fixture.role, Agent::Grok)
+            mcp::role::role_description(fixture.role, fixture.bound, Agent::Grok)
         );
     }
 

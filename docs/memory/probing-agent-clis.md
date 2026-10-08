@@ -124,9 +124,11 @@ Use a dedicated scratch directory as cwd, never a shared one such as `/tmp`: eac
 decision in the user's own config (Claude Code in the `.claude.json` of the config directory in effect, under
 `projects[<path>].hasTrustDialogAccepted`), so probing directly in `/tmp` marks `/tmp` itself trusted and every later
 probe run with `/tmp` as its own cwd silently starts out trusted, quietly invalidating any test of untrusted-workspace
-behaviour. That decision is keyed on the exact path and reaches nothing below it: a parent directory carrying an
-accepted trust flag leaves a fresh subdirectory of it untrusted, so never carry "that directory is already trusted"
-over to a path beneath it. Probes also leave session records behind in the user's agent directories.
+behaviour. Below a trusted directory it depends on git (read out of the Claude Code 2.1.294 executable): a directory
+that is not in a git repository is trusted through any trusted directory above it, without a trust screen and with its
+own entry left at `false`, while inside a repository only directories up to the repository root count. So a fresh
+scratch subdirectory of a trusted `/tmp` starts out trusted too unless it is a repository. Probes also leave session
+records behind in the user's agent directories.
 
 A fresh scratch directory is by definition untrusted, and Claude Code stops there on its folder-trust dialog and
 does nothing else — a probe that looks like it produced no output at all is usually sitting on that dialog. Grepping
@@ -139,15 +141,24 @@ its own — a pasted line's trailing CR included — ends the session instead.
 When several probes run concurrently, each needs its own distinct scratch directory, and expect to see the other
 probes' trust entries and session records — that residue is not evidence of a defect.
 
-## A probe that goes through the daemon runs against the user's live Octoboard data unless it needs no logged-in agent
+## A probe that goes through the daemon runs against the user's live Octoboard data unless its `HOME` is a throwaway one
 
 The daemon derives its data directory, its database and its single-instance lock from `$HOME`, and writes its port file
 to `$TMPDIR`. So a probe that does not need a logged-in agent — the protocol, the terminal socket, the window's
 connection — runs the daemon, or a copy of the app, with a throwaway `HOME` and `TMPDIR`: the user's board is untouched
 and it runs alongside their own Octoboard. For a session that draws real output there without a model turn, open a
-Codex session: with no login under that `HOME` it stops at its sign-in screen. Make sure `CODEX_HOME` is not set in
-the environment it is launched from, or Codex reads the user's own configuration and login after all. Do not count on
-a changed `HOME` hiding Claude Code's login, which lives in the macOS keychain.
+Codex session: with no login under that `HOME` it stops at its sign-in screen.
+
+Launch it from an emptied environment, `env -i HOME=<dir> TMPDIR=<dir> … /usr/bin/open -n <app>`, never with
+`open --env` overrides alone: `open` hands the app the calling shell's whole environment besides the variables it
+names, so a `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `GROK_HOME` exported there — an agent session exports
+`CLAUDE_CONFIG_DIR` routinely — points the run's agents at the user's own configuration and login despite the
+throwaway `HOME`. The same goes for a daemon started straight from the shell.
+
+A throwaway `HOME` hides Claude Code's keychain login as well: the login keychain is looked up under
+`$HOME/Library/Keychains`, so there Claude Code comes up logged out. When a run needs it logged in, symlink
+`<throwaway HOME>/Library/Keychains` to the real `~/Library/Keychains`, which brings back every account's login
+without copying a credential.
 
 A fake agent CLI for such a daemon goes on `PATH` from the throwaway `HOME`'s shell rc file (`.zshrc` when `$SHELL`
 is zsh), never by prepending it to the `PATH` the daemon is started with. The daemon launches every agent with the
@@ -155,13 +166,15 @@ environment of `$SHELL -l -i -c env`, and on macOS that login shell's `/etc/zpro
 the system paths (`/etc/paths`, `/etc/paths.d`, where Homebrew's `bin` usually sits) ahead of everything inherited. An
 inherited prepend therefore loses to an installed agent of the same name, and the *real* CLI launches under the
 throwaway `HOME` with nothing on screen saying so; the rc file is sourced after `/etc/zprofile`, so an
-`export PATH=<fake bin>:$PATH` there wins. Confirm from the session's process (`ps`) which executable actually ran
-before reading anything off the screen.
+`export PATH=<fake bin>:$PATH` there wins. For the same reason, making an agent unavailable in such a run takes
+removing from `PATH` in that rc file every directory that holds it (`which -a <cli>`), Homebrew's `bin` included,
+since the same CLI is often installed in more than one. Confirm from the session's process (`ps`) which executable
+actually ran before reading anything off the screen.
 
-A probe that does need a logged-in agent cannot be isolated this way, because the agents need the real `$HOME` to find
-their credentials and trust state. Expect it to create consoles and sessions in the user's real board and to run any
-pending schema migration against the user's live database — copy that database aside first whenever the change being
-probed touches the schema, and plan the cleanup as part of the probe rather than after the fact.
+A probe that needs a logged-in agent whose login cannot be brought into the throwaway `HOME` has to run on the real
+one. Expect it to create consoles and sessions in the user's real board and to run any pending schema migration
+against the user's live database — copy that database aside first whenever the change being probed touches the
+schema, and plan the cleanup as part of the probe rather than after the fact.
 
 Clean up in the order the daemon enforces, and leave time between the steps: archiving a session returns as soon as its
 record is written, while the agent process is still only being asked to exit, so deleting the console straight

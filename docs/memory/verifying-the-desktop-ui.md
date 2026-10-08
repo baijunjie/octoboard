@@ -105,6 +105,11 @@ Keystrokes go to whichever application is frontmost, and a click at screen coord
 at that point, not to Octoboard. Activate it and confirm it is the frontmost process immediately before every
 keystroke and every click: a `Cmd+Q` or `Cmd+W` that lands on another application closes the user's own work.
 
+It cuts the other way too: whatever is typed while Octoboard sits frontmost lands in it. Left frontmost on an agent's
+sign-in screen, stray keystrokes completed a real Codex sign-in through the default browser, which was already
+signed in to the account. So hand focus back after each GUI step, and never leave the window frontmost on a sign-in
+screen.
+
 ## Input-method and reduced-motion checks need the user's hands
 
 Injected keystrokes bypass macOS input methods entirely, so a scripted CJK composition test passes without ever

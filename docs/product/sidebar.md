@@ -65,7 +65,8 @@ from the section, not from a row. With no console session at all, a line says so
 
 With no agent available on the machine at all, the section instead carries a line saying which agents Octoboard
 supports and that one of them has to be on the user's `PATH`, without saying how to install one, and the **+** button
-is disabled, since starting one would only be refused. That line shows whatever the section lists — a console session
+is disabled, since starting one would only be refused. The line wraps onto as many lines as the sidebar's width needs
+rather than being cut, since it is an instruction to act on. It shows whatever the section lists — a console session
 left interrupted from before an agent went off the `PATH` still has its row — and it takes the place of the "no
 console session" line.
 

@@ -15,9 +15,10 @@
 //! - **A role cannot be changed after the first turn.** Claude Code records an appended system
 //!   prompt on the conversation's first request and replays it verbatim afterwards, so different
 //!   text passed on a later launch is silently ignored; Grok persists `--rules` into the session
-//!   record. The role text is therefore a function of the session's role and agent alone, and a
-//!   session's role is immutable for its lifetime. It is still passed on every launch, because
-//!   Claude Code re-renders its snapshot from whatever *that* launch passed after a compaction.
+//!   record. The role text is therefore a function of the session's role, its binding and its
+//!   agent alone, all three fixed for the session's lifetime. It is still passed on every launch,
+//!   because Claude Code re-renders its snapshot from whatever *that* launch passed after a
+//!   compaction.
 //! - **Hooks must fail fast and silently.** Every agent surfaces a failing hook to the user, and a
 //!   hook with no timeout blocks the turn for its full duration. Octoboard owns the hook script
 //!   (`hook_script` below, generated per session), which exits 0 unconditionally and writes
@@ -46,6 +47,9 @@ pub struct LaunchSpec<'a> {
     /// Which side of the orchestration this session is on, which decides both the role text and
     /// the tools its MCP server announces.
     pub role: Role,
+    /// Whether this session reports to a console session, which decides whether its role text
+    /// tells it one is waiting. Never true for a console session.
+    pub bound: bool,
     /// The id to give an agent that can pre-allocate one for a *new* conversation. Freshly
     /// generated per launch: both Claude Code and Grok refuse an id that already has a stored
     /// conversation, so reusing one would make relaunching a session that was opened and never
@@ -109,11 +113,12 @@ pub fn mcp_server_command(spec: &LaunchSpec<'_>) -> (String, Vec<String>) {
 /// resuming a conversation the agent actually has — `spec.resume_agent_session_id` is set only
 /// then (see `protocol::Session::has_conversation` and `coordinator::resume_session`), never for a
 /// fresh launch or for resuming a session that never had a turn. Those two launch into the missing
-/// directory instead, which is what lets the agent create it, same as an unpinned launch would.
+/// directory instead: Claude Code creates it itself, as it would for an unpinned launch, and the
+/// Codex adapter creates it before launching.
 ///
-/// Checked here rather than left to the agent, which would quietly create the missing directory
-/// and come up logged out, without the conversation the resume was meant to continue — an outcome
-/// that looks like success.
+/// Checked here rather than left to the agent: Claude Code would quietly create the missing
+/// directory and come up logged out, without the conversation the resume was meant to continue —
+/// an outcome that looks like success — and Codex would exit.
 pub fn pinned_config_dir<'a>(spec: &LaunchSpec<'a>, agent: Agent) -> Result<Option<&'a Path>> {
     match spec.config_dir {
         Some(dir) if !dir.is_dir() && spec.resume_agent_session_id.is_some() => {
@@ -264,6 +269,7 @@ pub mod tests {
     pub struct SpecFixture {
         pub session_id: String,
         pub role: crate::protocol::Role,
+        pub bound: bool,
         pub new_agent_session_id: String,
         pub cwd: PathBuf,
         pub scratch: crate::test_support::ScratchDir,
@@ -279,6 +285,7 @@ pub mod tests {
             LaunchSpec {
                 session_id: &self.session_id,
                 role: self.role,
+                bound: self.bound,
                 new_agent_session_id: &self.new_agent_session_id,
                 resume_agent_session_id: None,
                 cwd: &self.cwd,
@@ -306,6 +313,7 @@ pub mod tests {
         SpecFixture {
             session_id: "session-1".to_string(),
             role: crate::protocol::Role::Project,
+            bound: true,
             new_agent_session_id: format!("agent-{}", std::process::id()),
             cwd,
             scratch: root,

@@ -21,6 +21,8 @@ This is the guarantee the whole design rests on:
   same record. It builds the copy in a transient `.octoboard-switch` directory at the root of the target directory,
   which it removes again, so a failure never leaves a half-written record among the agent's own. It touches no settings
   file of the agent's, none of the other records in either directory, and it leaves the original where it was.
+  Creating a Codex account's directory that does not exist yet, empty, before its first launch is not an exception:
+  Codex refuses to start without it, and nothing of the user's is in it.
 
 Where Claude Code stops to ask whether to trust a folder, Octoboard does not touch a file either: it
 answers the prompt on Claude Code's own screen, with the keystrokes a person would type — for a project
@@ -49,8 +51,13 @@ Three things, and nothing else:
   a child process of the agent, started fresh per session, and each session's tools are reachable
   only by that session. The agent's own and the project's own MCP servers keep working alongside it.
 - **A role description** — whether this session is a console session or a project session,
-  and the reporting conventions that go with that. The same role decides which tools the session is
-  offered.
+  and the reporting conventions that go with that. A project session bound to a console session is
+  told that console session is waiting on its result and how to `report` to it; one the user opened
+  without a console session to report to is told that it was opened directly, that nobody is waiting
+  on it, and not to call `report`. Both follow from what is fixed for the session's lifetime, so the
+  text never changes under it. The role alone decides which tools the session is offered, so an
+  unbound project session still has `report`, and calling it is refused (see "Reporting" in
+  `docs/product/hub-orchestration.md`).
 
 The injected hooks are built to be invisible. They never steer the agent, never print anything, never fail the turn,
 and carry a short timeout (3 seconds) so a daemon that is unreachable costs a turn a fraction of a second rather than
@@ -131,7 +138,9 @@ config directories" in `docs/product/consoles-and-projects.md`.
 **Whether an agent is installed at all is worked out once, not per launch.** Right after the daemon starts it takes
 one login-shell snapshot of its own — the same kind described above — resolves each agent's binary against that
 snapshot's `PATH`, and reads what each agent's default account resolves to from it (see "Agent config directories" in
-`docs/product/consoles-and-projects.md`). This does not hold up the daemon's start: the application is served
+`docs/product/consoles-and-projects.md`). A binary that resolves is all "available" means: whether an account's
+directory holds a login is never checked, since a user may sign in through an API key from their shell, a credential
+helper or an organization's gateway, none of which shows in the directory. This does not hold up the daemon's start: the application is served
 immediately, and the result follows once it lands, typically within a couple of seconds and budgeted the same ten
 seconds a launch's own snapshot is. Until it lands every agent reads as *not yet determined*, during which nothing is
 refused for being unavailable — a launch whose agent turns out to have no binary is refused by the ordinary path
@@ -151,7 +160,9 @@ naming the project it is in: the `allow` rules stay ignored until Claude Code's 
 answered, and Octoboard answers that prompt once the user has agreed to it (see "Claude Code's
 workspace-trust prompt" below). It stays silent unless the user's own configuration says
 explicitly that the directory is untrusted, so a configuration it cannot read leaves them alone
-rather than warning on every launch. The trust state is read from the global config file this launch's Claude Code
+rather than warning on every launch; and it stays silent when a directory above the session's is
+recorded as trusted, which Claude Code honours without asking while leaving the directory's own
+record saying untrusted. The trust state is read from the global config file this launch's Claude Code
 will itself read: `.claude.json` inside the Claude Code config directory in effect — the session's own, or else a
 `CLAUDE_CONFIG_DIR` the user's shell exports — and `~/.claude.json` when there is none. A config directory without
 that file yet produces no warning; `~/.claude.json` is not consulted in its place.

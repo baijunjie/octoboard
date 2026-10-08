@@ -84,7 +84,8 @@ function switchAccountSubmenu(
       ...entries.map(({ account, name, current, isPath }) => ({
         label: name,
         // A directory is a path, so it reads left to right and shows its end, as it does elsewhere.
-        ...(isPath ? { content: <PathText path={name} as="span" />, ariaLabel: name } : {}),
+        // `block` gives the span the label's width to clip against; inline, it never overflows.
+        ...(isPath ? { content: <PathText path={name} as="span" className="block" />, ariaLabel: name } : {}),
         icon: KeyRound,
         selected: current,
         onClick: current

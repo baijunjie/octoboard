@@ -35,15 +35,18 @@ export function AccountSelect({
         const entry = key === null ? undefined : findEntry(groups, String(key));
         if (entry) onChange({ agent: entry.agent, account: entry.account });
       }}
+      // Keeps a disabled entry focusable and announced in arrow-key traversal while still refusing
+      // the choice; see `OptionSelect` for why it sits on the `Select` and needs the cast.
+      {...({ disabledBehavior: "selection" } as React.ComponentProps<typeof Select>)}
     >
       <Label>{label}</Label>
       <Select.Trigger>
-        <Select.Value className="flex items-center gap-2">
+        <Select.Value className="flex min-w-0 items-center gap-2">
           {() =>
             current && (
               <>
                 <AgentIcon agent={current.agent} />
-                <span className="truncate">
+                <span className="min-w-0 truncate">
                   <AgentAccountText agent={AGENT_LABEL[current.agent]} account={current.name} />
                 </span>
               </>
@@ -53,9 +56,7 @@ export function AccountSelect({
         <Select.Indicator />
       </Select.Trigger>
       <Select.Popover>
-        {/* `"selection"` keeps a disabled entry focusable and announced in arrow-key traversal while
-            still refusing the choice; see `OptionSelect` for why this needs the cast. */}
-        <ListBox {...({ disabledBehavior: "selection" } as React.ComponentProps<typeof ListBox>)}>
+        <ListBox>
           {groups.map((group) => (
             <ListBox.Section key={group.agent}>
               <Header className="flex items-center gap-2">

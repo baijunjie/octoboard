@@ -46,7 +46,7 @@ use serde_json::json;
 
 use super::{AgentAdapter, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS};
 use crate::mcp;
-use crate::protocol::Agent;
+use crate::protocol::{error_code, Agent, CodedError};
 
 /// The events Octoboard's session states are derived from. `Interrupt` is included because it is
 /// mutually exclusive with `Stop` and is the only signal of a cancelled turn any of the three
@@ -75,6 +75,24 @@ impl AgentAdapter for CodexAdapter {
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> anyhow::Result<LaunchPlan> {
         let pinned = super::pinned_config_dir(spec, Agent::Codex)?;
+        // Unlike Claude Code, Codex refuses a `CODEX_HOME` that does not exist rather than creating
+        // it, so an account pointed at a directory the user has yet to create is created here. A
+        // resume that needs the directory's conversation has already been refused above.
+        if let Some(dir) = pinned {
+            std::fs::create_dir_all(dir).map_err(|err| {
+                CodedError::raised(
+                    error_code::CONFIG_DIR_UNREACHABLE,
+                    format!(
+                        "could not create the Codex config directory `{}`: {err}",
+                        dir.display()
+                    ),
+                    &[
+                        ("agent", Agent::Codex.label()),
+                        ("path", &dir.to_string_lossy()),
+                    ],
+                )
+            })?;
+        }
         let mut args = Vec::new();
 
         // `resume` is a subcommand, so it comes before the overrides.
@@ -131,7 +149,11 @@ impl AgentAdapter for CodexAdapter {
         args.push("-c".to_string());
         args.push(format!(
             "developer_instructions={}",
-            toml_string(&mcp::role::role_description(spec.role, Agent::Codex))
+            toml_string(&mcp::role::role_description(
+                spec.role,
+                spec.bound,
+                Agent::Codex
+            ))
         ));
 
         if spec.resume_agent_session_id.is_none() {
@@ -308,7 +330,11 @@ mod tests {
         let overrides = overrides(&plan.args);
         assert!(overrides.iter().any(|o| o.starts_with(&format!(
             "developer_instructions={}",
-            toml_string(&mcp::role::role_description(fixture.role, Agent::Codex))
+            toml_string(&mcp::role::role_description(
+                fixture.role,
+                fixture.bound,
+                Agent::Codex
+            ))
         ))));
         assert!(!overrides.iter().any(|o| o.starts_with("instructions=")));
     }
@@ -439,12 +465,15 @@ mod tests {
     }
 
     /// A fresh session, and one that never had a turn, launch into a vanished pinned directory
-    /// rather than being refused — that is what lets the agent create it.
+    /// rather than being refused, and the directory is created for them: Codex itself exits on a
+    /// `CODEX_HOME` that does not exist.
     #[test]
-    fn a_pinned_codex_home_that_has_gone_is_fine_with_no_conversation_to_resume() {
+    fn a_pinned_codex_home_that_has_gone_is_created_with_no_conversation_to_resume() {
         let mut fixture = spec_fixture();
-        fixture.config_dir = Some(fixture.scratch.join("missing"));
+        let dir = fixture.scratch.join("missing").join("nested");
+        fixture.config_dir = Some(dir.clone());
         CodexAdapter.plan(&fixture.spec()).expect("not refused");
+        assert!(dir.is_dir());
     }
 
     #[test]

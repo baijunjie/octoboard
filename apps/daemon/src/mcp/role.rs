@@ -9,7 +9,8 @@
 //! - **A role is immutable for a session's lifetime.** Claude Code records an appended system
 //!   prompt on the conversation's first request and replays it verbatim on every resume, so text
 //!   changed later is silently ignored. Nothing here may therefore depend on anything that can
-//!   change after the session starts.
+//!   change after the session starts. Whether a project session is bound to a console session
+//!   may, because a binding is fixed for the session's lifetime once it is set.
 //! - **A Grok console session gets no instruction file.** Grok locates a project by walking up for
 //!   a `.git` directory and reads no instructions without one, and a console's working directory is
 //!   not a repository. Its guidance travels in `--rules` instead, which is why
@@ -32,13 +33,17 @@ use super::qualified_tool_name;
 /// instruction file is re-read on every launch — so anything put here can never be corrected
 /// afterwards. A Grok console session has no instruction file to read, so its whole guidance has
 /// to travel in `--rules`.
-pub fn role_description(role: Role, agent: Agent) -> String {
+///
+/// `bound` says whether the session reports to a console session; a console session is never
+/// bound, and it is ignored for one.
+pub fn role_description(role: Role, bound: bool, agent: Agent) -> String {
     match role {
         Role::Console => match console_session_instruction_filename(agent) {
             Some(filename) => console_session_pointer(agent, filename),
             None => console_session_instructions(agent),
         },
-        Role::Project => project_session_description(agent),
+        Role::Project if bound => project_session_description(agent),
+        Role::Project => unbound_project_session_description(agent),
     }
 }
 
@@ -55,8 +60,8 @@ fn console_session_pointer(agent: Agent, filename: &str) -> String {
     )
 }
 
-/// What a project session is told. It is a project session under a console session it never talks
-/// to directly: the one channel back is `report`, and anything needing a person goes to the
+/// What a project session bound to a console session is told. It never talks to that console
+/// session directly: the one channel back is `report`, and anything needing a person goes to the
 /// person.
 fn project_session_description(agent: Agent) -> String {
     let report = qualified_tool_name(agent, "report");
@@ -75,6 +80,22 @@ fn project_session_description(agent: Agent) -> String {
            this terminal — not through the console session and not through `{report}`. Ask, then \
            wait.\n\
          - Report once per round of work rather than per step.\n\
+         \n\
+         Everything else is the ordinary work of this project: its own instructions, conventions \
+         and configuration apply unchanged."
+    )
+}
+
+/// What a project session the user opened without a console session to report to is told. Its
+/// `report` tool is still offered, because the tools follow from the role alone, and calling it is
+/// refused; saying so up front keeps the model from spending its first turn finding that out.
+fn unbound_project_session_description(agent: Agent) -> String {
+    let report = qualified_tool_name(agent, "report");
+    format!(
+        "You are running as a project session under Octoboard, which orchestrates agent sessions \
+         across several projects. The user opened this session directly: no console session \
+         dispatched it and none is waiting on its result, so work with the user in this terminal \
+         and do not call `{report}` — with nobody to report to, it is refused.\n\
          \n\
          Everything else is the ordinary work of this project: its own instructions, conventions \
          and configuration apply unchanged."
@@ -222,8 +243,8 @@ mod tests {
     #[test]
     fn tool_names_in_the_role_text_carry_that_agents_prefix() {
         for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
-            let console_session = role_description(Role::Console, agent);
-            let project_session = role_description(Role::Project, agent);
+            let console_session = role_description(Role::Console, false, agent);
+            let project_session = role_description(Role::Project, true, agent);
             assert!(console_session.contains(&qualified_tool_name(agent, "start_session")));
             assert!(project_session.contains(&qualified_tool_name(agent, "report")));
             assert!(console_session_instructions(agent)
@@ -243,14 +264,25 @@ mod tests {
     #[test]
     fn the_detail_goes_in_the_file_where_the_agent_reads_one() {
         for agent in [Agent::Claude, Agent::Codex] {
-            let role = role_description(Role::Console, agent);
+            let role = role_description(Role::Console, false, agent);
             assert!(role.len() < console_session_instructions(agent).len() / 2);
             assert!(role.contains(console_session_instruction_filename(agent).expect("a filename")));
         }
         assert_eq!(
-            role_description(Role::Console, Agent::Grok),
+            role_description(Role::Console, false, Agent::Grok),
             console_session_instructions(Agent::Grok)
         );
+    }
+
+    /// A session the user opened by hand has nobody waiting on it, and telling it otherwise sends
+    /// it to `report` on its first turn, only to be refused.
+    #[test]
+    fn only_a_bound_project_session_is_told_a_console_session_is_waiting() {
+        let bound = role_description(Role::Project, true, Agent::Claude);
+        let unbound = role_description(Role::Project, false, Agent::Claude);
+        assert!(bound.contains("A console session dispatched this task"));
+        assert!(!unbound.contains("A console session dispatched this task"));
+        assert!(unbound.contains("do not call"));
     }
 
     #[test]

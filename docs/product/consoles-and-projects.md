@@ -23,7 +23,8 @@ the creation form — or, once Claude Code is determined unavailable, to the fir
 starts on an agent that cannot be chosen. Both rows list all three every time, whether or not the machine has each one
 installed: once Octoboard has determined an agent unavailable (its binary does not resolve on the user's login shell
 `PATH`), that row names it rather than leaving it out, labels it as not installed, and will not let it be chosen — it is
-shown rather than hidden so the reason it cannot be picked is on screen. Before that determination has landed every
+shown rather than hidden so the reason it cannot be picked is on screen, and it is still reached with the arrow keys
+and announced as disabled. Before that determination has landed every
 agent is offered normally; an agent already chosen before it was found unavailable is left exactly as it is.
 
 Multiple consoles can exist side by side and are independent of each other.
@@ -89,8 +90,9 @@ with nothing saved:
 - it is normalized lexically — a trailing `/`, `.` components and `..` components are resolved; a symlink is kept as
   typed.
 
-Existence is **not** checked: a directory that does not exist yet is accepted, since the agent (Grok Build excepted)
-creates it on first run. What is stored, and shown for the account, is its expanded absolute path.
+Existence is **not** checked: a directory that does not exist yet is accepted, and is created on first launch — by
+Claude Code itself, and by Octoboard for Codex, which refuses a missing one (Grok Build excepted, see below). What is
+stored, and shown for the account, is its expanded absolute path.
 
 **A session keeps the account and the directory it last recorded until the user switches it.** A session takes its
 account when it is opened — the one picked for it, else the console's reference for its own agent, else the default
@@ -103,12 +105,13 @@ holds no directory and resumes under whatever the user's shell exports at that m
 
 If a session's directory no longer exists when it is launched or resumed, the launch is refused rather than
 started — but only for a session that has a conversation on the agent's side to resume. A new session, and one that
-was opened but never had a turn, launches into the missing directory instead, which is what lets the agent create
-it. This narrower refusal holds for all three agents, and the message names the agent and the directory and says to
-recreate it or to point the account at a different one. Grok Build is refused on this same path whenever its pinned
-directory is not an initialized Grok home — one Grok has actually been run against — whether or not there is a
-conversation to resume, since it cannot safely create one the way the other two agents can; see "Per-agent specifics
-a user will notice" in `docs/product/launching-agents.md`.
+was opened but never had a turn, launches into the missing directory instead, and the directory is created as above;
+a Codex session whose directory Octoboard cannot create is refused on this same path. This narrower refusal holds for
+all three agents, and the message names the agent and the directory and says to recreate it or to point the account at
+a different one. Grok Build is refused on this same path whenever its pinned directory is not an initialized Grok
+home — one Grok has actually been run against — whether or not there is a conversation to resume, since an empty
+directory would keep neither its login nor its conversation; see "Per-agent specifics a user will notice" in
+`docs/product/launching-agents.md`.
 
 ### Editing a console
 

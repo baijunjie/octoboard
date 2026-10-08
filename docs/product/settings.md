@@ -74,9 +74,11 @@ directory, which can be typed or picked with the directory browser (see "Browsin
 directory belongs to one agent's layout. The directory is checked for being absolute (or starting with `~/`) and for
 nothing else: one that does not exist yet is accepted, and the form says that Octoboard does not require it to exist.
 For a Grok Build account the form adds that the directory has to be a Grok home that Grok has already been run
-against, which is checked when a session launches. A name already taken by another account of the same agent, or by
-the default account — its name in the current language, and the English word "Default", which is reserved in every
-language — is reported under the name field. Removing an account asks first and says that consoles referring to it go
+against, which is checked when a session launches. Every account is named by the user, and the name is required: it is
+stored trimmed, and one left blank is refused. A name has to be unique within its agent, compared trimmed and ignoring
+letter case; accounts of different agents may share a name. A name already taken by another account of the same agent,
+or by the default account — its name in the current language, and the English word "Default", which is reserved in
+every language — is reported under the name field. Removing an account asks first and says that consoles referring to it go
 back to the agent's default account and that sessions already open are not affected. What an account is and how
 consoles and sessions use one are in "Agent config directories" in `docs/product/consoles-and-projects.md`.
 

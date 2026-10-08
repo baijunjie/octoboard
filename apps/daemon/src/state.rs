@@ -772,14 +772,11 @@ impl AppState {
     /// under one: either way nothing resurrects a status for a project that no longer exists, and
     /// `PROTOCOL.md` promises no `project_git_status` for one either.
     pub fn publish_git_status(&self, status: GitStatus) {
-        match self.store.get_project(&status.project) {
-            Ok(None) => {
-                self.remove_git_status(&status.project);
-                return;
-            }
-            // A store error says nothing about whether the project is actually gone, so this
-            // fails open rather than risk dropping a status that is still perfectly valid.
-            Ok(Some(_)) | Err(_) => {}
+        // A store error says nothing about whether the project is actually gone, so this fails
+        // open rather than risk dropping a status that is still perfectly valid.
+        if let Ok(None) = self.store.get_project(&status.project) {
+            self.remove_git_status(&status.project);
+            return;
         }
         self.git_statuses
             .write()

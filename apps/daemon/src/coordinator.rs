@@ -908,6 +908,7 @@ async fn start_process(
         session_id: session.id.clone(),
         agent: session.agent,
         role: session.role,
+        bound: session.bound_to.is_some(),
         cwd: cwd.to_path_buf(),
         task: task.map(str::to_string),
         resume_agent_session_id: resume_agent_session_id.map(str::to_string),
@@ -1039,6 +1040,10 @@ fn stop_process(live: Arc<LiveSession>) -> tokio::task::JoinHandle<()> {
 /// switch's own copy means Grok finds the session locally; and if a relaunch did fail after the
 /// window, the session would be interrupted on the new account, where the copy is, and so
 /// resumable.
+///
+/// An account that is not signed in is not caught here, for any of the three agents: each comes up
+/// on its own sign-in instead of exiting — Grok Build included, which waits on a browser
+/// device-code approval — so a switch to such an account counts as having come up.
 const SWITCH_SETTLE: Duration = Duration::from_secs(4);
 
 /// How long a switch waits for the process it ended to be seen gone and recorded as interrupted,
@@ -1115,8 +1120,9 @@ fn prepare_switch(
 /// already holds the copy, so the conversation resumes there. And a switch to the *default* Grok
 /// account is not checked for being an initialized home (`refuse_unlaunchable_account` is a no-op
 /// for an account that pins nothing, by design: that directory is the user's own setup), so an
-/// uninitialized `~/.grok` gets the copy and the relaunch comes up signed out or dies, which is
-/// reported as a failed switch and put back.
+/// uninitialized `~/.grok` gets the copy, and the relaunch either comes up on Grok's own sign-in,
+/// which counts as a switch made like any target that is not signed in, or dies, which is reported
+/// as a failed switch and put back.
 ///
 /// It archives nothing: the process is ended by [`stop_process`], not by [`archive_session`], and
 /// the status the session passes through is the interrupted one the exit watcher gives any
@@ -1175,19 +1181,9 @@ pub async fn switch_session_account(
         tokio::task::spawn_blocking(move || relocate::copy(&from, &to, &relative)).await??;
     }
     state.set_session_account(id, target_account.as_deref(), target_dir.as_deref())?;
-    // A revert that fails is logged, never allowed to hide the reason the switch failed.
-    let back_where_it_was = || {
-        if let Err(revert) = state.set_session_account(
-            id,
-            before.account_id.as_deref(),
-            before.config_dir.as_deref(),
-        ) {
-            tracing::warn!(session = %id, %revert, "putting the session back on its account failed");
-        }
-    };
 
     if let Err(err) = relaunch_session(state, &claim, id, None, false, plan.shell_env).await {
-        back_where_it_was();
+        put_back_on_account(state, &before);
         return Err(err);
     }
     let came_up = match state.live_session(id) {
@@ -1195,7 +1191,7 @@ pub async fn switch_session_account(
         None => false,
     };
     if !came_up {
-        back_where_it_was();
+        put_back_once_down(state, &before).await;
         return Err(CodedError::raised(
             error_code::SWITCH_DID_NOT_COME_UP,
             "the session ended as soon as it was relaunched, so it stays on the account it had",
@@ -1203,6 +1199,31 @@ pub async fn switch_session_account(
         ));
     }
     Ok(())
+}
+
+/// Records the account and directory a switched session had before, `before`'s. A revert that
+/// fails is logged, never allowed to hide the reason the switch failed.
+fn put_back_on_account(state: &Arc<AppState>, before: &Session) {
+    if let Err(revert) = state.set_session_account(
+        &before.id,
+        before.account_id.as_deref(),
+        before.config_dir.as_deref(),
+    ) {
+        tracing::warn!(session = %before.id, %revert, "putting the session back on its account failed");
+    }
+}
+
+/// [`put_back_on_account`] for a relaunched process that has already ended, once the exit watcher
+/// has recorded the session interrupted. The watcher does that on its own schedule, so reverting
+/// first would let every client see the session idle on its old account with no process until the
+/// watcher caught up — after the reply saying the switch failed — and a watcher that read the
+/// record just before the revert would publish it with the new account. Waiting first means the
+/// restored record is broadcast before the caller replies.
+async fn put_back_once_down(state: &Arc<AppState>, before: &Session) {
+    if let Err(err) = wait_until_down(state, &before.id).await {
+        tracing::warn!(session = %before.id, %err, "the relaunched process was not recorded as ended");
+    }
+    put_back_on_account(state, before);
 }
 
 fn session_archived(id: &str) -> anyhow::Error {
@@ -1446,10 +1467,10 @@ fn checked_account_reference(
 
 /// What the user typed for one agent's config directory, as the absolute, lexically normalised
 /// path an account's own directory is stored as. Required and non-blank: an account always has a
-/// directory. Existence is
-/// not checked: the agent creates its own config directory on first run, so a user pointing an
-/// account at a directory they are about to create should not be stopped; the agent that needs one
-/// to already exist (Grok Build, against a *pinned* source home) checks that itself, at launch.
+/// directory. Existence is not checked: the directory is created on first launch (by Claude Code
+/// itself, by the Codex adapter for Codex), so a user pointing an account at a directory they are
+/// about to create should not be stopped; the agent that needs one to already exist (Grok Build,
+/// against a *pinned* source home) checks that itself, at launch.
 fn normalize_account_dir(agent: Agent, text: &str) -> Result<String> {
     let text = text.trim();
     if text.is_empty() {
@@ -1797,7 +1818,7 @@ mod tests {
 
     /// An account directory is stored absolute and lexically normalised or not at all; unlike a
     /// console's pinned path before accounts existed, it is accepted even when it does not exist,
-    /// since the agent (Grok Build excepted, checked at launch instead) creates it on first run.
+    /// since it is created on first launch (Grok Build excepted, checked at launch instead).
     #[test]
     fn an_account_dir_is_stored_absolute_or_not_at_all_and_existence_is_not_checked() {
         let dir = temp_dir("config-dir");
@@ -2861,6 +2882,42 @@ mod tests {
 
         assert!(!came_up(&gone, settle).await);
         assert!(came_up(&up, settle).await);
+    }
+
+    /// A switched session whose relaunched process ended at once is broadcast interrupted on its
+    /// old account before the switch returns its error, and nothing the exit watcher publishes
+    /// afterwards puts the new account back in a client's copy.
+    #[tokio::test]
+    async fn a_switch_that_did_not_come_up_is_restored_before_it_returns() {
+        let (state, _dir) = switch_fixture("switch-restored-first");
+        let before = project_session("s", Agent::Claude, SessionStatus::Interrupted);
+        state.store.insert_session(&before).unwrap();
+        state
+            .set_session_account("s", Some("claude-a"), Some("/elsewhere"))
+            .unwrap();
+        state
+            .store
+            .update_session(&Session {
+                status: SessionStatus::Idle,
+                ..before.clone()
+            })
+            .unwrap();
+        let mut events = state.subscribe();
+        let live = fake_live_session("s", Agent::Claude, 80, 24, "exit 1");
+        state.register_live(live.clone());
+        state.watch_exit(live.clone());
+
+        put_back_once_down(&state, &before).await;
+
+        let mut last = None;
+        while let Ok(event) = events.try_recv() {
+            if let Event::SessionUpserted { session } = event {
+                last = Some(session);
+            }
+        }
+        let last = last.expect("the session was published");
+        assert_eq!(last.status, SessionStatus::Interrupted);
+        assert_eq!((last.account_id, last.config_dir), (None, None));
     }
 
     /// The claim a switch holds outlives the relaunched process being registered as live, and it
