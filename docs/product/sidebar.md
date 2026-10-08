@@ -24,8 +24,8 @@ only added to the list.
 
 Each console is shown by its avatar (see "Avatar" in `docs/product/consoles-and-projects.md`), here and in the list.
 
-Every console in the list carries a marker of what is going on in it, taken from all its sessions, the console
-session included:
+Every console in the list carries a marker of what is going on in it, taken from all its sessions, its console
+sessions included:
 
 | Marker | Shown when |
 |---|---|
@@ -52,16 +52,22 @@ With no console at all, the sidebar shows a message saying so and a **New consol
 
 Under the switcher comes the **console sessions** section: every console session of the console that is not archived,
 each as a session row (see "Session rows" below, which a console session's row otherwise follows exactly — pin, rename,
-focus mode, switch account, archive). What a console session is, what selecting one does, and what its row's menu offers
-are in "Console sessions and project sessions" in `docs/product/sessions.md`. The section's own heading carries a **+**
-button, **New console session**, which opens one with the console's current console session agent and its account for
-that agent, and, while the console has an archived console session, the section's action menu, whose only entry is
-**Archived console sessions** — a submenu of the console's newest archived console sessions, each of which can be
-selected, and the way to the archive view of all of them (see "The archive view" below). This is the one entry a console
-session's own row never carries: archived console sessions are reached from the section, not from a row. With no console
-session at all, a line says so — or, with no agent available on the machine at all, says instead which agents Octoboard
-supports and that one of them has to be on the user's `PATH`, without saying how to install one; the **+** button is
-disabled in that case, since starting one would only be refused.
+focus mode, switch account, archive), in the order of "Order of projects and sessions" below. What a console session is,
+what selecting one does, and what its row's menu offers are in "Console sessions and project sessions" in
+`docs/product/sessions.md`.
+
+The section's own heading carries a **+** button, **New console session**, which opens one with the console's current
+console session agent and its account for that agent, and, while the console has an archived console session, the
+section's action menu, whose only entry is **Archived console sessions** — a submenu of the console's newest archived
+console sessions, each of which can be selected, and the way to the archive view of all of them (see "The archive
+view" below). This is the one entry a console session's own row never carries: archived console sessions are reached
+from the section, not from a row. With no console session at all, a line says so.
+
+With no agent available on the machine at all, the section instead carries a line saying which agents Octoboard
+supports and that one of them has to be on the user's `PATH`, without saying how to install one, and the **+** button
+is disabled, since starting one would only be refused. That line shows whatever the section lists — a console session
+left interrupted from before an agent went off the `PATH` still has its row — and it takes the place of the "no
+console session" line.
 
 Below it, a **Projects** heading and the console's projects (see "Order of projects
 and sessions" below). With no project, a message saying the console has none yet and an **Add project** button take
@@ -150,9 +156,9 @@ At the row's end are a **+** button, **New session**, which opens the new-sessio
 - **Project settings** — the project dialog, see "Editing a project" in `docs/product/consoles-and-projects.md`.
 - **Focus mode** — see "Focus mode" below.
 - **View archive** — a submenu of the project's newest five archived sessions (most recently archived first), each
-  with its agent's icon and its title; choosing one selects it (see "Selecting a session" below). After them, **View all (n)**, with the number of
-  archived sessions, opens the archive view. A project with no archived session shows only a disabled item saying
-  so.
+  with its agent's icon and its title; choosing one selects it (see "Selecting a session" below). After them,
+  **View all (n)**, with the number of archived sessions, opens the archive view. A project with no archived session
+  shows only a disabled item saying so.
 - **Remove project** — see "Removing a project" in `docs/product/consoles-and-projects.md`; it asks for confirmation
   first.
 
@@ -165,7 +171,7 @@ A session row shows the session's status glyph (see "Session statuses" in `docs/
 icon, its title, and a pin glyph when it is pinned. A project session bound to a console session also carries that
 console session's **binding badge**: a small dot in the console session's colour, whose tooltip names it (see "The
 binding badge" below). A console session's own row carries no *binding* badge — what it shows there instead is its own
-colour (see "The console sessions section and the project list" above). Selecting a row
+colour (see "The binding badge" below). Selecting a row
 resumes it when it is interrupted; no menu item does that. The row shows its agent as an icon alone; wherever the agent
 is named in words, the account the session runs under follows it in parentheses — "Claude Code (Work)" — as the
 account's name, "Default" for the agent's default account, or, for a session whose account has since been removed, the
@@ -199,6 +205,13 @@ distinguishes two owners for a user who cannot tell the colours apart. A console
 colour, decoratively, since the row's own label already names it, as does its focus mode's header and the line in a
 project's focus mode that names it. The cards in a focus mode carry no badge: a project's focus mode lists only
 unbound sessions, and a console session's lists only the ones bound to it.
+
+**Where the colour comes from.** Octoboard gives each new console session a colour of its own from a fixed palette of
+six, taking the first the console's other console sessions that are not archived do not already have, and starting
+over from the first once all six are taken. A console session keeps its colour for its lifetime, archiving included,
+so with more than six at once — or with one reopened into a palette that filled up meanwhile — two console sessions
+of one console can share a colour, which is the other reason nothing is ever told apart by colour alone. Each colour
+has its own light and dark value (see "What follows the choice" in `docs/product/appearance.md`).
 
 ## Rows, names and keyboard focus
 
@@ -239,6 +252,8 @@ one, or an open menu in one brings the whole group back to full strength while i
 2. then by status: waiting for the user, working, awaiting instructions, interrupted;
 3. then the most recently started first.
 
+The console sessions section lists its console sessions by that same session scheme.
+
 The order follows status changes as they happen. A row that moves slides to its new place over about a quarter of a
 second, and moves at once where the system asks for reduced motion. The top bar's waiting count walks waiting sessions
 in this same order (see "The raised hand" in `docs/product/sessions.md`).
@@ -252,18 +267,18 @@ is archived and when it is resumed; an archived session's menu offers no Pin or 
 
 Selecting a session shows its terminal; selecting an interrupted one resumes it. Selecting an archived one does not
 reopen it: it is shown still archived, and typing into its terminal or pressing Reopen reopens it (see "Archiving,
-interruption and resuming" and "The terminal" in `docs/product/sessions.md`). Whatever it is selected from — a sidebar row, a "View
-archive" or "Archived console sessions" submenu, focus mode, the archive view, or the top bar's waiting count — **the sidebar
-follows it**: it switches to the session's console, and leaves focus mode when the session does not belong to what
-focus mode is on (see "Focus mode" below).
+interruption and resuming" and "The terminal" in `docs/product/sessions.md`). Whatever it is selected from — a sidebar
+row, a "View archive" or "Archived console sessions" submenu, focus mode, the archive view, or the top bar's waiting
+count — **the sidebar follows it**: it switches to the session's console, and leaves focus mode when the session does
+not belong to what focus mode is on (see "Focus mode" below).
 
 A session is selected automatically only when this application is the one that opened it — through the console
-session row or the new-session dialog — and that closes the archive view if it is open. A session that appears any
-other way, such as one the console session started or one another client of the daemon opened, is listed unselected
-and is put on screen by the user selecting it.
+sessions section's New console session button or the new-session dialog — and that closes the archive view if it is
+open. A session that appears any other way, such as one the console session started or one another client of the
+daemon opened, is listed unselected and is put on screen by the user selecting it.
 
-When the selected session stops existing — deleted from the archive, by this client or another, for instance — nothing is
-selected in its place, and the terminal's area shows its empty state.
+When the selected session stops existing — deleted from the archive, by this client or another, for instance — nothing
+is selected in its place, and the terminal's area shows its empty state.
 
 ## Focus mode
 
@@ -280,7 +295,7 @@ console session row's own (pin, rename, switch account, archive).
 
 **Session cards**, in both: the status glyph with the status in words, a pin glyph when pinned, the session's action
 menu (always shown), its title over up to two lines, its agent's icon and name with its account, and how long ago it
-was started. Clicking a card selects the session. They are in the order of "Order of projects and sessions" below.
+was started. Clicking a card selects the session. They are in the order of "Order of projects and sessions" above.
 
 **Archived (n)**, in both: the ten most recently archived sessions of the view, each showing its agent's icon, its
 title and how long ago it was archived. Clicking one selects it. Its action menu offers **Rename** and **Delete**
@@ -296,8 +311,8 @@ title and how long ago it was archived. Clicking one selects it. Its action menu
   not archived: how many sessions in this project are bound to which console sessions — "2 sessions in this project
   are bound to Hub 1 and Hub 2" — with each console session named as a control, after its colour, that enters that
   console session's focus mode. It is one line for the whole project, not one per console session.
-- **New session** (the **+** and the empty message's button) opens the new-session dialog with no owner choice: the
-  session is always unbound.
+- **New session** (the **+** and the empty message's button) opens the new-session dialog with no "Report to" choice:
+  the session is always unbound.
 - **Archived (n)** is the project's archived sessions with the bound ones included. The archive is not filtered by
   binding; only the list of live sessions is.
 
@@ -306,12 +321,15 @@ title and how long ago it was archived. Clicking one selects it. Its action menu
 - **Sessions (n)**: the projects of the console that have a session bound to this console session which is not
   archived, in the order of the project list, and under each project's name only the sessions bound to this console
   session, as cards. A session bound to another console session, or to none, is not shown, and neither is a project
-  with nothing bound to this one. With none, a message says so. Each project's name carries its own **+**, which opens
-  a new session in that project, and its action menu, which is the project list's without its Focus mode item: a
-  project has no focus mode to be entered from here. The project list's filter is not part of this view.
+  with nothing bound to this one. With none, a message says so. Each project's name carries a pin glyph while it is
+  pinned, its own **+**, which opens a new session in that project, and its action menu, which is the project list's
+  without its Focus mode item: a project has no focus mode to be entered from here. The project list's filter is not
+  part of this view.
 - **New session**: the header's **+** opens a menu of the console's projects, so that a project with nothing bound yet
-  can be reached; choosing one opens the new-session dialog for it. The dialog has no owner field, and shows a line
-  saying the session reports to this console session, which it will be bound to.
+  can be reached; choosing one opens the new-session dialog for it. The dialog has no "Report to" field, and shows a
+  line saying the session reports to this console session, which it will be bound to.
+- **With no project in the console at all** there is nothing to open a session in: the header's **+** is disabled, and
+  in place of the sessions a message says the console has no projects yet, with an **Add project** button.
 - **Archived (n)** is this console session's archived bound sessions, and **View all** opens the archive view
   scoped to them (see "The archive view" below).
 

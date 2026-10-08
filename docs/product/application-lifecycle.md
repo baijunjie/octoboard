@@ -137,7 +137,7 @@ after the table:
 | Path | Contents |
 |---|---|
 | `~/.octoboard/octoboard.db` | Consoles, projects, session records, the report panel pages of every console session, the folders trusted for Claude Code's workspace-trust prompt (see "Trusted folders" in `docs/product/launching-agents.md`), and the settings the daemon keeps for every client (see "Git" in `docs/product/settings.md`). Octoboard has not shipped, so its schema still changes in place: a database written by an older build is not upgraded. The daemon instead moves it aside, beside itself, with a `.superseded-<timestamp>` suffix, and starts a fresh one at the usual path — the data in the old file is not read back into the new one, and the user re-enters their consoles, projects and accounts by hand. |
-| `~/.octoboard/consoles/<console id>/` | A console's working directory, where its console session runs, including the console session instruction file Octoboard generates there (see "The console session's instruction file" in `docs/product/launching-agents.md`). Removed when the console is deleted. |
+| `~/.octoboard/consoles/<console id>/` | A console's working directory, where its console sessions run, including the console session instruction file Octoboard generates there (see "The console session's instruction file" in `docs/product/launching-agents.md`). Removed when the console is deleted. |
 | `~/.octoboard/run/<session id>/` | Per-session scratch space for what a launch injects. Removed when the session's process is gone, and cleared wholesale on daemon start. |
 | `~/.octoboard/daemon.lock` | Enforces one daemon per data directory. |
 

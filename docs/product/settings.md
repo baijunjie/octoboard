@@ -65,15 +65,20 @@ determined is headed plainly.
 Each group starts with the agent's **default account**, said to be the setup a session runs under when nothing is
 pinned, with the directory it currently resolves to. It has no actions: its name is Octoboard's own and it cannot be
 edited or removed. The accounts the user owns follow, each with its name, its directory (cut from its start when too
-long, the full path as the tooltip), an **Edit** button and a **Remove** button. **Add account** opens a form for the
-agent, a name and a directory; editing offers the name and the directory, never the agent. The directory is checked
-for being absolute (or starting with `~/`) and for nothing else: one that does not exist yet is accepted, and the form
-says that Octoboard does not require it to exist. For a Grok Build account the form adds that the directory has to be a
-Grok home that Grok has already been run against, which is checked when a session launches. A name already taken by
-another account of the same agent, or by the default account's name in the current language, is reported under the
-name field. Removing an account asks first and says that consoles referring to it go back to the agent's default
-account and that sessions already open are not affected. What an account is and how consoles and sessions use one are
-in "Agent config directories" in `docs/product/consoles-and-projects.md`.
+long, the full path as the tooltip), an **Edit** button and a **Remove** button.
+
+One **Add account** button, above the groups, serves every agent: its form asks for the agent — every agent can be
+picked, one that is not installed included, since an account may be set up before its agent is — then a name and a
+directory, which can be typed or picked with the directory browser (see "Browsing directories" in
+`docs/product/consoles-and-projects.md`). Editing an account offers its name and its directory, never its agent: a
+directory belongs to one agent's layout. The directory is checked for being absolute (or starting with `~/`) and for
+nothing else: one that does not exist yet is accepted, and the form says that Octoboard does not require it to exist.
+For a Grok Build account the form adds that the directory has to be a Grok home that Grok has already been run
+against, which is checked when a session launches. A name already taken by another account of the same agent, or by
+the default account — its name in the current language, and the English word "Default", which is reserved in every
+language — is reported under the name field. Removing an account asks first and says that consoles referring to it go
+back to the agent's default account and that sessions already open are not affected. What an account is and how
+consoles and sessions use one are in "Agent config directories" in `docs/product/consoles-and-projects.md`.
 
 ## Trusted folders
 

@@ -68,7 +68,7 @@ that unmounts in the same commit is gone before the effect runs. So either keep 
 its spacing — the tags field in `packages/ui/src/dialogs/TagsInput.tsx` does, a dialog being where focus on `<body>`
 costs Escape and Tab as well — or move focus to a named element before the removal that empties it.
 
-## Inside a dialog, a focused control that unmounts takes Escape and Tab with it
+## Inside a dialog, a focused control that unmounts or turns disabled takes Escape and Tab with it
 
 When the focused element is removed, WebKit and Chrome fire no `focusout` and focus falls to `<body>`. A dialog's
 Escape handling and Tab containment hang off focus being inside it, so both stop working. Whenever a dialog replaces
@@ -80,6 +80,13 @@ Do not switch a dialog to its next subject by re-keying it (`key={item.id}`): th
 outgoing one's soon-detached element as its focus-restore target, so focus is lost again when it closes. Keep it
 mounted and reset the per-item state from `resetKey` instead (`useDialogAction(resetKey)` does that for the error and
 busy state).
+
+A control that stays mounted costs the same when it turns disabled: react-aria's `isDisabled` puts the native
+`disabled` attribute on the element, which blurs the control the user has just pressed. So a button disabled for
+the duration of its own action — the obvious way to keep a slow request from being sent twice — drops focus to
+`<body>` and takes the dialog's Escape and Tab with it until the action ends. Mark it `isPending` instead: that blocks
+press and hover, keeps the control focusable, and announces the pending state. Keep `isDisabled` for a control
+that is unavailable for a reason outside the action itself (a field not filled in yet), where focus is not on it.
 
 ## What is wrong with one field shows under that field, from the first submit on
 

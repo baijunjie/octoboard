@@ -1,10 +1,11 @@
 # Console session orchestration
 
-A **console session** is the one the user brings a request to. It does not change project
-code itself: it works out which project a request belongs to, starts sessions there, follows them up,
-and summarizes what they came back with. The sessions it starts are ordinary project sessions,
-described in `docs/product/sessions.md`. Besides its terminal the console session has one surface of
-its own for showing the user something — the report panel, described in `docs/product/report-panel.md`.
+A **console session** is a session the user brings a request to; a console may run several of them at once (see
+"Several console sessions per console" below). It does not change project code itself: it works out which project a
+request belongs to, starts sessions there, follows them up, and summarizes what they came back with. The sessions it
+starts are ordinary project sessions, described in `docs/product/sessions.md`. Besides its terminal the console session
+has one surface of its own for showing the user something — the report panel, described in
+`docs/product/report-panel.md`.
 
 The console session drives Octoboard through tools Octoboard injects into the session; a project
 session gets one tool back the other way. **Which tools a session sees follows from its role alone**,

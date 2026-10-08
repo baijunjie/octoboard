@@ -71,15 +71,15 @@ A session is opened under a project with:
   "Hub `<ordinal>`", where the ordinal is one past the highest ever used in its console, so a title
   is not reused after a console session is archived or deleted.
 - **Report to** (a choice, "No console session" by default) — one of the console's console sessions that are not
-  archived, each shown beside its colour, the same one the session's binding badge will carry (see "The binding badge"
-  in `docs/product/sidebar.md`), or none. A chosen console session receives this session's reports, instead of the
-  session staying outside the orchestration. A console with no console session that is not archived shows no choice
-  at all, and the session is unbound. The binding is fixed for the session's lifetime once set. A session the
-  console session itself starts is always bound to it; see "Which sessions the console session drives" in
-  `docs/product/hub-orchestration.md`. The choice is offered only from the project list. Opened from a project's
-  focus mode the dialog has no such field and the session is always unbound; opened from a console session's focus
-  mode it has none either, and shows a line saying the session reports to that console session instead, which
-  is the binding it gets (see "Focus mode" in `docs/product/sidebar.md`).
+  archived, the most recently started first, each shown beside its colour, the same one the session's binding badge
+  will carry (see "The binding badge" in `docs/product/sidebar.md`), or none. A chosen console session receives this
+  session's reports, instead of the session staying outside the orchestration. A console with no console session that
+  is not archived shows no choice at all, and the session is unbound. The binding is fixed for the session's lifetime
+  once set. A session the console session itself starts is always bound to it; see "Which sessions the console session
+  drives" in `docs/product/hub-orchestration.md`. The choice is offered only from the project list. Opened from a
+  project's focus mode the dialog has no such field and the session is always unbound; opened from a console session's
+  focus mode it has none either, and shows a line saying the session reports to that console session instead, which is
+  the binding it gets (see "Focus mode" in `docs/product/sidebar.md`).
 
 The dialog takes no task: a session the user opens by hand starts in *awaiting instructions*, sitting at the agent's
 prompt, and is given its work by typing into its terminal. Only a session the console session starts is handed an
@@ -165,6 +165,9 @@ Transitions:
 - Resuming an *interrupted* or *archived* session puts it in *awaiting instructions*, whichever of the two it came
   from. A resume that fails to launch leaves the session exactly where it was, archived included. Resuming a session
   bound to an *archived* console session first does the same to that console session.
+- Switching a session to another account of its agent ends and relaunches its process without archiving it: it reads
+  as *interrupted* while the process is down and comes back in *awaiting instructions*, and a switch that fails leaves
+  it *interrupted* on the account it had (see "Switching a session's account").
 - An agent's report never moves a session out of *interrupted* or *archived*: whether a stopped session is one or the
   other is Octoboard's own record, not the agent's.
 
@@ -221,9 +224,8 @@ own row:
   when none is.
 - The top bar carries the same count, as a raised hand and the number, shown only while at least one
   session is waiting. Pressing it selects the next waiting session after the selected one — console by
-  console in the order the consoles were created, its console session before its projects'
-  sessions, and
-  those in the sidebar's order (see "Order of projects and sessions" in `docs/product/sidebar.md`) —
+  console in the order the consoles were created, its console sessions before its projects' sessions,
+  and both in the sidebar's order (see "Order of projects and sessions" in `docs/product/sidebar.md`) —
   and wraps from the last back to the first; when the selected session is not waiting, it selects the
   first. The sidebar follows the session it selects (see "Selecting a session" in
   `docs/product/sidebar.md`).
@@ -365,15 +367,20 @@ process this way leaves the sessions bound to it as they are.
   directory does not follow the session into another's. The same conversation can come up with different defaults.
 - **A switch that cannot be made leaves the session on the account it had, and says why.** It is refused, with nothing
   recorded, when the session is being launched or resumed at that moment, when it is archived, when it is on that
-  account already, when the target is a Grok Build directory that is not an initialized Grok home, and when the
-  conversation record is not where it should be; the session's process is then left running. Once the process has been
+  account already, when the target is a Grok Build directory that is not an initialized Grok home, when the user's
+  shell environment could not be captured — which is read whenever either side of the switch is the default account,
+  since that is what resolves its directory (see "The launch environment" in `docs/product/launching-agents.md`) — and
+  when the conversation record is not where it should be; the session's process is then left running. The one further
+  refusal comes after the process has been asked to end: a process that has not gone within 30 seconds stops the
+  switch, with nothing copied and nothing recorded, and that process may still be running. Once the process has been
   ended, a copy that does not complete, a relaunch the launch rules refuse and a relaunch whose process ends at once
   are each reported as a failed switch, not as a success: the session is left *interrupted* on its old account,
   resumable as before. Octoboard tells that last case from a success by the process ending within a few seconds of the
   relaunch, never by reading what the agent printed.
 - **It can take a few seconds**, the time the agent is given to exit and the time the relaunched process is watched; the
   confirmation stays open, its button reading "Switching account…" and the session's terminal "Resuming session…",
-  until the result is known, and shows a failure in place. The confirmation cannot be dismissed meanwhile, and the session cannot be resumed or switched again.
+  until the result is known, and shows a failure in place. The confirmation cannot be dismissed meanwhile, and the
+  session cannot be resumed or switched again.
 
 ### Archived sessions
 
@@ -402,8 +409,8 @@ sessions in the same way, and says how many. Deleting an archived bound session 
 alone, as does deleting a project's archived sessions or a console session's own archive of bound sessions.
 
 - **Deleting removes only Octoboard's record of the session**, for good. The session disappears from every client, and
-  the console session's `list_archived` and `reopen_session` no longer find it. The agent's own record of the conversation, in the
-  agent's own configuration directory, and the project's directory are never touched.
+  the console session's `list_archived` and `reopen_session` no longer find it. The agent's own record of the
+  conversation, in the agent's own configuration directory, and the project's directory are never touched.
 - Deleting a session that is not archived is refused, saying that only an archived session can be deleted. So is
   deleting an archived session that is being resumed at that moment. An archived session whose process is still on its
   way out can be deleted.
@@ -457,6 +464,6 @@ focus between regions with F6" in `docs/product/window-layout.md`).
 - **Typing into an archived session's terminal reopens it.** The first input starts the relaunch, and what is typed
   until the session is connected is held and handed to the agent once it is, so it reaches the agent's prompt.
 - **A session's last output stays on screen once its process has ended**, behind that card, so what
-  the agent printed last — why it stopped, what it was waiting for — can still be read. The kept screen belongs to that one session: selecting a different dormant session clears the screen rather than showing the
-  previous session's output, and resuming re-attaches and redraws from the daemon's replay rather than appending to
-  what was kept.
+  the agent printed last — why it stopped, what it was waiting for — can still be read. The kept screen belongs to
+  that one session: selecting a different dormant session clears the screen rather than showing the previous session's
+  output, and resuming re-attaches and redraws from the daemon's replay rather than appending to what was kept.

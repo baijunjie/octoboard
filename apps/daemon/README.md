@@ -4,8 +4,8 @@ A headless Rust binary that plays two roles in one process:
 
 - **Host role**: owns PTYs and agent processes, receives hook callbacks, lists directories, finds the git repositories
   under a parent directory, clones a repository, and checks a project's git status against its remote.
-- **Coordinator role**: stores consoles, projects, sessions and report panel pages in SQLite, and routes requests to
-  the host role.
+- **Coordinator role**: stores consoles, projects, sessions, report panel pages and the agent accounts in SQLite, and
+  routes requests to the host role.
 
 The desktop application (`apps/desktop/`) is purely a client of this process. It never shares state or an IPC channel with it —
 everything it can do goes through the external interface below.
@@ -40,11 +40,11 @@ the repository root and cover both crates; `-p octoboardd` narrows either to thi
 | `src/access.rs` | The middleware every route sits behind: turns away, with `403`, a request whose `Host` or `Origin` is not one a local client or the application's own UI would send; the rule is in `PROTOCOL.md` |
 | `src/server.rs` | The HTTP/WebSocket router described in `PROTOCOL.md`, including `POST /mcp/:token` |
 | `src/protocol.rs` | Rust types for the wire protocol; kept in sync with `PROTOCOL.md` and with `packages/ui/src/protocol.ts` by hand |
-| `src/coordinator.rs` | Coordinator role: what each control-socket request does to the stored consoles/projects/sessions/pages, and which host-role work it triggers, including the launch flow a resume and a switch of a session's account share; projects are stored with absolute, lexically normalised paths |
+| `src/coordinator.rs` | Coordinator role: what each control-socket request does to the stored consoles/projects/sessions/pages/accounts, and which host-role work it triggers, including the launch flow a resume and a switch of a session's account share; projects are stored with absolute, lexically normalised paths |
 | `src/reporting.rs` | The channel between a console session and its project sessions: the brief a task is handed over as, writing a message into a running session, a report reaching the console session, the report synthesised when a session stops without sending one, automatic archiving, and rendering a report panel form submission into the console session's message |
 | `src/relocate.rs` | Copying one session's conversation record from one account's config directory into another's, for a switch of the session's account: finding the record by name under the agent's root, and copying it to the same path relative to the directory, staged and checked before it replaces anything |
 | `src/outbox.rs` | The per-session queue every message Octoboard writes into an agent passes through: order-preserving, one drainer per session, and what happens to a message the session only partly accepted |
-| `src/store.rs` | Coordinator's SQLite storage for consoles, projects, sessions, pages, the trusted folders, the user settings and the host table |
+| `src/store.rs` | Coordinator's SQLite storage for consoles, projects, sessions, pages, agent accounts, the trusted folders, the user settings and the host table |
 | `src/state.rs` | Shared daemon state: the session status transitions, each project's live git status and check claim, and every agent's current availability and resolved default account |
 | `src/availability.rs` | Working out, once per daemon start, which agents are available and what each one's default account resolves to |
 | `src/git_status.rs` | Checks one project's git status against its remote and, with auto-sync on, fast-forwards it — see `PROTOCOL.md`'s "Daemon behaviour, per project" |

@@ -14,8 +14,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   sessions bound to it, where archived sessions are kept, and the terminal.
 - [Sidebar](product/sidebar.md) — one console at a time and the switcher with its activity markers, the console
   sessions section and the project list, project and session rows and their menus, the binding badge a bound session
-  carries, keyboard focus on rows, the order of projects and sessions and pinning, how the sidebar follows the
-  selected session, the two focus modes (a project's and a console session's), and the archive view.
+  carries, keyboard focus on rows, the order of projects and sessions and pinning, filtering the project list and
+  folding every project from its heading, how the sidebar follows the selected session, the two focus modes (a
+  project's and a console session's), and the archive view.
 - [Project git status](product/project-git-status.md) — the branch badge on a project's row and in focus mode's header:
   its glyphs for a branch, a detached `HEAD`, a check in flight and a fast-forward in flight, the ahead and behind
   counts, the marker a failed check leaves and what it tells assistive technology; when and how often the shown
@@ -77,6 +78,12 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 
 ## Development memory
 
+- [Catching a branch up with its target](memory/catching-a-branch-up-with-its-target.md) — which branches the revert
+  gate guards, why a guarded branch that has been pushed cannot be rebased onto a target branch that has moved, and
+  merging as the way through.
+- [Line wrapping](memory/line-wrapping.md) — the widths committed text is wrapped at, why nothing in the toolchain
+  catches an over-long line (and so why an edit re-wraps the whole paragraph it touched), and why a width is counted
+  in characters rather than bytes.
 - [Probing agent CLIs](memory/probing-agent-clis.md) — how to establish what the three agent CLIs actually do, and how to
   probe a live Octoboard session that launches them: which session markers to strip and why enumerating them beats
   matching a prefix, why neither `--help`, the binary's own strings, nor a config file's silent acceptance of a
@@ -108,18 +115,22 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   HeroUI 3 already provides is used rather than hand-built, where to check what it provides, and what a justified
   hand-built one is built on and where its reason is written, why a HeroUI control pressed with the mouse takes
   keyboard focus off the terminal, when `preventFocusOnPress` is needed, and why "⋯" menus are built on `ActionMenu`,
-  why a dialog must not lose focus to `<body>` when a focused control unmounts, so its subject is switched with a reset
-  key rather than by re-keying it, why a Tailwind class name has to stand in the source as literal text, why every
+  why a dialog must not lose focus to `<body>` when a focused control unmounts or turns disabled, so its subject is
+  switched with a reset key rather than by re-keying it and an action that takes seconds marks its button pending
+  rather than disabled, why a Tailwind class name has to stand in the source as literal text, why every
   icon-only control also gets a tooltip through `TitledControl`, how user-facing text goes through the message catalog
   (`useT` over the module-level `t()`, a helper taking the translator, `PlainMessageKey` tables, placeholders and plural
   messages instead of joined fragments), how layout follows the reading direction (logical utilities, mirrored
-  directional icons, two-glyph chevrons, `dir` on paths and typed names, `docked:rtl:` twins), and the WCAG 2.2 AA bar the UI is held to (keyboard,
+  directional icons, two-glyph chevrons, `dir` on paths and typed names, `docked:rtl:` twins), and the WCAG 2.2 AA
+  bar the UI is held to (keyboard,
   visible focus, names, roles and states (`aria-current` only on hand-built rows), contrast — which token an outline
   meant to be seen is built from, and why HeroUI's own text colours are measured rather than trusted — colour,
   motion).
 - [Writing automated tests](memory/writing-automated-tests.md) — how lean unit tests are kept (one case per rule,
-  table-driven), then the fixture conventions this project's tests need on macOS: why an executable written fresh per test flakes only under a parallel run, and how to verify behaviour the
-  daemon derives from an agent's own output by replaying a committed capture rather than staging a live session.
+  table-driven), then the fixture conventions this project's tests need on macOS: why an executable written fresh per
+  test flakes only under a parallel run, how to verify behaviour the daemon derives from an agent's own output by
+  replaying a committed capture rather than staging a live session, and why a test that spawns a stand-in session's
+  process has to end it itself.
 - [Writing daemon code](memory/writing-daemon-code.md) — conventions for the Rust daemon: live state the daemon
   derives held on `AppState` and published by its own event rather than as a field on a stored record, with the
   cleanups that follow from there being no deletion event for it; why a repeating refresh is timed by the client and

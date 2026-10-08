@@ -2,7 +2,7 @@
 
 The window has a **top bar** across its whole width and, under it, up to three panes, left to right (right to left
 under a right-to-left language, see "Right-to-left layout" below): the **sidebar**, showing one console's console
-session, projects and sessions (see `docs/product/sidebar.md`), the selected session's **terminal**, which the archive
+sessions, projects and sessions (see `docs/product/sidebar.md`), the selected session's **terminal**, which the archive
 view covers while it is open (see "The archive view" in `docs/product/sidebar.md`), and — only while the selected
 session is a console session — that console session's **report panel** (see `docs/product/report-panel.md`). The
 connection banner, while the daemon connection is down, is a full-width strip along the window's bottom edge, under
@@ -30,11 +30,12 @@ It has three parts:
   two read as one column; it follows the sidebar's width while the sidebar is being resized. Otherwise it is only as
   wide as its controls.
 - **Middle**: the selected session's breadcrumb — *console › project › session title* for a project session,
-  *console › Console session* for a console session — followed by the session's status icon. A trail too long for
-  the bar fades out at its right edge, as in "Names too long for their space" below, and the status icon always
-  stays visible. With no session selected the middle is empty. While the archive view is open (see "The archive view"
-  in `docs/product/sidebar.md`) the breadcrumb shows where that is instead, with no status icon: *console › project ›
-  Archived sessions*, *console › console session › Archived bound sessions*, or *console › Archived console sessions*.
+  *console › session title* for a console session, which belongs to no project — followed by the session's status
+  icon. A trail too long for the bar fades out at its right edge, as in "Names too long for their space" below, and
+  the status icon always stays visible. With no session selected the middle is empty. While the archive view is open
+  (see "The archive view" in `docs/product/sidebar.md`) the breadcrumb shows where that is instead, with no status
+  icon: *console › project › Archived sessions*, *console › console session › Archived bound sessions*, or
+  *console › Archived console sessions*.
 - **Right**, left to right:
   - the **waiting count**, a raised hand with the number of sessions waiting for the user in a badge on its corner,
     shown only while at least one is (99+ beyond 99); pressing it goes to the next waiting session (see "The raised
@@ -254,8 +255,8 @@ It works wherever focus is, the terminal included: there `Tab` and `Shift+Tab` s
 
 **A region not on screen is skipped**: a docked pane the user has hidden, a drawer that is closed, a hidden pane that
 is only floating in, the report panel when there is none or it has no controls (before its pages have arrived, or
-with no pages yet), and the terminal when no session is selected or while the archive view covers it. A pane counts as shown when it is docked in the row
-at 1100 px and wider, or its drawer is open below that.
+with no pages yet), and the terminal when no session is selected or while the archive view covers it. A pane counts as
+shown when it is docked in the row at 1100 px and wider, or its drawer is open below that.
 
 Where focus lands in each region:
 

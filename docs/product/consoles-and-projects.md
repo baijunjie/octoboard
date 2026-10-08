@@ -114,9 +114,10 @@ conversation to resume, since it cannot safely create one the way the other two 
 
 The name, the console session agent, the default agent and the accounts the dialog shows can be changed, and an account
 can be put back on the agent's default account. Changing an agent or an account affects sessions opened afterwards; a
-session that already exists keeps the agent and the account and directory it was started with. For the console session,
-the change therefore takes effect once the existing console session is archived and a fresh one is started from the
-console sessions section (see "Console sessions and project sessions" in `docs/product/sessions.md`).
+session that already exists keeps the agent and the account and directory it was started with. A change to the console
+session agent therefore shows in the next console session started from the console sessions section, while the console
+sessions already running keep the agent they were started with (see "Console sessions and project sessions" in
+`docs/product/sessions.md`).
 
 An account is saved only when it is changed: saving a console with a picker untouched succeeds regardless of what has
 happened to the account it refers to since. Removing an account in Settings puts every console that referred to it back
