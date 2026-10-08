@@ -77,8 +77,8 @@ set, Claude Code reads its global config file from `.claude.json` inside that di
 already covers it.
 
 For Grok Build, the directory does not have to already be a Grok home when it is set; whether it is one is checked
-later, at launch, rather than here. What happens then is under "Grok Build" in "Per-agent specifics a user will
-notice" in `docs/product/launching-agents.md`.
+later, at launch, rather than here. What happens then is in "Per-agent specifics a user will notice" in
+`docs/product/launching-agents.md`.
 
 An account's directory is checked when the account is added or edited, in Settings, and a failure is shown in the form
 with nothing saved:
@@ -107,8 +107,8 @@ was opened but never had a turn, launches into the missing directory instead, wh
 it. This narrower refusal holds for all three agents, and the message names the agent and the directory and says to
 recreate it or to point the account at a different one. Grok Build is refused on this same path whenever its pinned
 directory is not an initialized Grok home — one Grok has actually been run against — whether or not there is a
-conversation to resume, since it cannot safely create one the way the other two agents can; see "Grok Build" in
-`docs/product/launching-agents.md`.
+conversation to resume, since it cannot safely create one the way the other two agents can; see "Per-agent specifics
+a user will notice" in `docs/product/launching-agents.md`.
 
 ### Editing a console
 

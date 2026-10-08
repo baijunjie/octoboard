@@ -115,8 +115,8 @@ Besides the terminal type, the variables set over the snapshot are:
   Code, `CODEX_HOME` for Codex, each set to that directory and replacing any value the user's shell exports. A session
   that holds none gets the snapshot's own value, if there is one, unchanged; Octoboard sets `CODEX_HOME` for nothing
   else;
-- for every Grok Build session, `GROK_HOME`, set to the session's own Grok home (see "Grok Build" below). A Grok Build
-  config directory is not passed as `GROK_HOME` itself.
+- for every Grok Build session, `GROK_HOME`, set to the session's own Grok home (see "Per-agent specifics a user will
+  notice" below). A Grok Build config directory is not passed as `GROK_HOME` itself.
 
 The agent binary is resolved from that same snapshot's `PATH`, which is that login + interactive shell's `PATH`, not the
 one a terminal happens to have. So when the shell lists an old install of an agent before a newer one, the old one is
@@ -229,13 +229,13 @@ buttons:
   project's consent recorded, so the project's later Claude Code sessions are answered without a
   dialog; an answer that fails records nothing.
 - **Trust parent folder** — shown only when the daemon offers a folder for this project
-  (see "Which folder" under "Trusted folders" below); a project with none to offer gets only the other
+  (see "Trusted folders" below for which folder that is); a project with none to offer gets only the other
   two buttons. The button's tooltip gives the full path of the folder offered. Octoboard answers this
   session's screen, and only if that succeeded is that folder added to the trusted folders. The
   project's own consent is not recorded; an answer that fails records nothing. If the folder can no
-  longer be offered by the time the button is chosen (see "Which folder" under "Trusted folders"
-  below), it is refused before anything is answered: the dialog stays open and shows why, and the user
-  can still choose another button.
+  longer be offered by the time the button is chosen (see "Trusted folders" below), it is refused
+  before anything is answered: the dialog stays open and shows why, and the user can still choose
+  another button.
 - **Not now** — also what Escape, the dialog's close button and a click outside it do. Nothing is sent
   and nothing is recorded; the screen stays for the user to answer in the session's terminal. The same
   session is asked about again only if the application reloads its state (a reconnect, or catching up
@@ -250,13 +250,14 @@ answered, whether from another client, in the terminal or by Octoboard itself �
 without any message when it was "Trust and continue", since nothing went wrong. For "Trust parent folder" it shows a
 message saying the folder was not trusted, because that choice was not carried out.
 
-Prompts are shown one at a time, oldest first; closing one brings up the next. A prompt still waiting
-is dropped, without being answered, when its session stops running. When a folder becomes trusted,
-the prompts waiting for projects under it are dropped as well, because Octoboard answers those screens
-itself; prompts for other projects stay queued. Whenever the application reloads
-its state (a connect, a reconnect, or catching up after falling behind), the daemon asks again about every screen still waiting, so a prompt the user never saw
-comes back; with no client connected the screen simply waits for the user to answer it in the
-terminal. Once one client has answered, a go-ahead from another changes nothing.
+Prompts are shown one at a time, oldest first; closing one brings up the next. A prompt still
+waiting is dropped, without being answered, when its session stops running. When a folder becomes
+trusted, the prompts waiting for projects under it are dropped as well, because Octoboard answers
+those screens itself; prompts for other projects stay queued. Whenever the application reloads its
+state (a connect, a reconnect, or catching up after falling behind), the daemon asks again about
+every screen still waiting, so a prompt the user never saw comes back; with no client connected the
+screen simply waits for the user to answer it in the terminal. Once one client has answered, a
+go-ahead from another changes nothing.
 
 **Consent** comes in two forms, and either one is enough for Octoboard to answer without asking:
 
@@ -341,17 +342,18 @@ clean-up (`.` dropped, `..` folded into the component before it, trailing slashe
 **Trusting a folder answers what is already waiting.** At the moment a folder is added, every trust
 screen still waiting in a project under it is answered, including one the user put off with "Not
 now"; screens of projects outside it stay as they were and are still asked about. Each of these
-answers is checked and reported exactly as described in "How the screen is answered" above.
+answers is sent under the same checks, and reported the same way when a check fails, as any other
+screen Octoboard answers.
 
 **The list in Settings.** The Trusted folders section of Settings (see `docs/product/settings.md`)
 explains what trusting a folder grants, as above, and lists every trusted folder, sorted by path. A
 path too long for the row is cut from its start and fades out there, so the folder's own name stays
 visible, and the full path is then the entry's tooltip. Each folder has a Remove button that stops
 trusting it at once, without a confirmation. With no folder trusted, the section says so and that a
-folder is trusted from a session's trust prompt. Removing a folder leaves every project's own consent as it is and leaves running
-sessions alone, a screen already answered included; a trust screen that comes up afterwards in a
-project under it, without consent of its own and not under another trusted folder, is asked about
-again.
+folder is trusted from a session's trust prompt. Removing a folder leaves every project's own
+consent as it is and leaves running sessions alone, a screen already answered included; a trust
+screen that comes up afterwards in a project under it, without consent of its own and not under
+another trusted folder, is asked about again.
 
 ## Agent session data
 
