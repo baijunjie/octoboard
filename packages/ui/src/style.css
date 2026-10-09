@@ -445,3 +445,17 @@ html.pane-resizing * {
 [dir="rtl"] {
   --view-shift: -24px;
 }
+
+/* The ground under an image in the file viewer (`src/viewer/FileViewer.tsx`): a checkerboard, so a
+   transparent image's own transparent areas read as such in either appearance. Built from
+   gradients, since the window's Content Security Policy loads no image for it. */
+.viewer-checkerboard {
+  background-color: var(--surface-secondary);
+  background-image:
+    linear-gradient(45deg, var(--default) 25%, transparent 25%, transparent 75%, var(--default) 75%),
+    linear-gradient(45deg, var(--default) 25%, transparent 25%, transparent 75%, var(--default) 75%);
+  background-position:
+    0 0,
+    8px 8px;
+  background-size: 16px 16px;
+}

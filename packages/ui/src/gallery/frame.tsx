@@ -60,7 +60,9 @@ function Crash(): never {
   throw new Error("Gallery: a component threw while rendering.");
 }
 
-const daemon = scenario && !scenario.startup ? createFixtureDaemon(scenario) : undefined;
+const daemon = scenario && !scenario.startup && !scenario.viewer ? createFixtureDaemon(scenario) : undefined;
+const { ViewerGallery } = scenario?.viewer ? await import("./viewerGallery") : { ViewerGallery: undefined };
+const viewerSubjects = scenario?.viewer ? await scenario.viewer.subjects() : undefined;
 
 function screen(): React.ReactElement {
   if (!scenario) return <p className="p-4">Unknown scenario “{params.get("scenario")}”.</p>;
@@ -72,6 +74,7 @@ function screen(): React.ReactElement {
     case "crash":
       return <Crash />;
   }
+  if (viewerSubjects && ViewerGallery) return <ViewerGallery subjects={viewerSubjects} loadDelay={scenario.viewer?.loadDelay} />;
   return (
     <store.DaemonProvider value={daemon!}>
       <App />

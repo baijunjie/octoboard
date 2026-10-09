@@ -229,12 +229,15 @@ marked as it is, and do not add a new exception without the user's say. Concrete
   reaches), or what it focuses draws no ring when the previous input was a pointer.
 - **Name**: every control has an accessible name — its visible text, or an `aria-label` when it has none. An icon
   beside a name is `aria-hidden="true"`; an icon that is the only carrier of a meaning gets `role="img"` and an
-  `aria-label`.
+  `aria-label`. An element that takes an `aria-label` without being a control — a scrolling `div` or `pre` made
+  focusable with `tabIndex={0}` — also gets a role that can be named (`role="region"`): ARIA prohibits naming a
+  generic element, so the name may never be spoken.
 - **Roles and states**: a control that shows or hides a region carries `aria-expanded`; the selected row of a
   hand-built list or tree carries `aria-current` (as the sidebar rows do), while HeroUI's `Tabs` and `ListBox` mark
   their selection themselves with `aria-selected` and get no `aria-current` on top; state that changes without the
   user acting (connection, a terminal problem) is announced from a `role="status"` element, an error from
-  `role="alert"`.
+  `role="alert"`. HeroUI's `Alert` renders no role at all, its name notwithstanding, so an error that can appear in
+  one after the user has moved on puts `role="alert"` on an element of your own inside it.
 - **Contrast**: text at least 4.5:1 against its background (3:1 for large text); an icon or a state indicator at
   least 3:1 against what it sits on, and a boundary too when it alone shows where a control is. Contrast is not a
   reason to change how a HeroUI component looks: the user had the `style.css` overrides that gave every field and

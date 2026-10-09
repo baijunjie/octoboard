@@ -57,6 +57,9 @@ Depends on [project file browsing](03-project-file-browser.md); all reads follow
   (`file` / `symlink` / `submodule`, a type change being one change whose sides differ), the patch and change-entry
   budgets with their `patch_bytes` / `change_entries` limits (declared there, no Rust constant yet), and the diff
   reply's own worst-case reservation. Adjust the contract where serving it proves it wrong.
+- `git diff` writes a file↔symlink type change as two file sections in one patch, which the viewer's diff library
+  renders as one combined change. Check this against a real type change and present it as the contract's single
+  change whose sides differ in `kind`.
 
 ## Notes for the developer
 

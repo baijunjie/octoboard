@@ -17,6 +17,13 @@ round trips or agent terminal, and it is not the app's WKWebView. A pointer inte
 is still checked with the gallery page loaded in Playwright's `webkit`, a paint defect still in the real window, and
 behaviour that depends on the daemon, the shell or how the window starts up still in the real app.
 
+How the bundle loads what it fetches at run time — lazy chunks, a worker, WebAssembly, assets — and anything a
+build-only Vite plugin changes are not settled there either: the gallery runs Vite's unbundled dev modules from
+`http://localhost`, while the app loads the built `dist/` from `tauri://localhost`. Check those in a packaged build
+(`pnpm build:app`). For UI the app does not render yet, build that from a temporary detached worktree (the
+`git worktree add --detach` case in the "Creating" section of `.claude/skills/git-worktree/SKILL.md`) whose `main.tsx`
+renders the gallery's scenarios in place of the app.
+
 ## Check the page in WebKit with real pointer input, and with long and CJK text
 
 The app renders in WKWebView, so a pass in Chrome says nothing: a HeroUI tag's remove button that ignored the mouse

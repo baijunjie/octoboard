@@ -1,4 +1,5 @@
 import type { DirEntry, MessageParams } from "../protocol";
+import type { ViewerSubject } from "../viewer/content";
 import type { State, ToastRequest } from "../store";
 import type { TerminalBehaviour } from "./fakeTerminal";
 import type { Ui } from "./interact";
@@ -55,4 +56,8 @@ export interface Scenario {
   /** What `list_dir` answers per path; a path not listed gets a generic listing. */
   directories?: Record<string, DirEntry[]>;
   steps?: Step[];
+  /** Renders the file viewer over the subjects `subjects` builds, in place of the app; built only
+   * when the scenario opens. `loadDelay` shows each one's loading state for that many milliseconds
+   * first. */
+  viewer?: { subjects: () => Promise<ViewerSubject[]>; loadDelay?: number };
 }

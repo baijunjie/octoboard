@@ -67,12 +67,83 @@ With none of these the page shows a "no daemon address" screen. A daemon started
 isolated `HOME` and `TMPDIR`: its instance lock (`daemon.lock`) and database live under `$HOME/.octoboard`, and the
 port file under the temp directory, so the defaults would touch the real data and collide with a running instance.
 
+## The file viewer
+
+`src/viewer/` is a read-only modal that shows one subject: a file's text or image, a change between two versions, or
+the loading or failed state of either. It is for the project file browser and its change views; no edit or save
+interaction exists, and repository content is only ever displayed as data, never inserted as markup. `App` does not
+import it itself; the gallery's "File viewer" group exercises it (see "The UI state gallery").
+
+**Interface.** The application owns it and no rendering-library type crosses it, so the renderer can be replaced
+without touching the daemon contract or the callers.
+
+- `ViewerSubject` (`content.ts`): `key` (its identity, which the caller composes from project, source and path; a new
+  key drops what was shown before), the wire `path`, an optional `source` wording and a `ViewerContent`: `loading`,
+  `error`, `file` (a `ViewerBody`: text, image or binary) or `change` (a `ViewerChange`: an old and a new side, each
+  `present`, `absent` or `out_of_scope`, mirroring the protocol's change sides, plus the change's unified patch).
+- `bodyFromFileContent` turns the daemon's file reply into a `ViewerBody`; `changeStatus` and `changePresentation`
+  are the pure rules that word a change and choose how it is shown.
+- `FileViewer({ subject, onClose, navigation? })` (`FileViewer.tsx`): stays mounted while its subject changes, with
+  `subject.key` as the dialog's reset key; `navigation` gives Previous / Next callbacks, a missing one disabling its
+  button. It reads the theme from `useOctoboardTheme`, so it must sit under `ThemeProvider`. Arrow keys are not bound.
+- `Dialog` (`src/dialogs/`) gained `size="viewer"` (the window less a margin, up to 1440px wide), `footer={null}` and
+  an element `title` for it.
+- `src/wirePath.ts`: `displayWirePath` / `wireBaseName` decode the daemon's wire paths for display only; a request
+  always sends the wire form back unchanged.
+
+**Files.** `CodeSurface.tsx` holds the code and diff surfaces and lazy-loads `renderer.tsx`, the only module that
+imports `@pierre/diffs`; `budgets.ts` the renderer budgets; `format.ts` file-size wording; `themeShim.ts` the theme
+shim below.
+
+**Renderer.** `@pierre/diffs` 1.5.2 over Shiki 4.5.0, with the library's default JavaScript regex engine, so nothing
+depends on WebAssembly (the CSP does not block it, but the viewer does not use it). It tokenizes in a pool of two
+workers kept for as long as any viewer is open. `@pierre/diffs`, `@pierre/theming`, `@shikijs/themes` and `shiki` are
+exact-pinned in `package.json`, since the theme shim below reaches into the first two's internals. Shiki's themes are
+`github-light-high-contrast` / `github-dark-high-contrast`, the only bundled pair whose every token meets 4.5:1.
+`react-diff-view` is the recorded fallback should `@pierre/diffs` regress. A change is drawn from its patch only:
+the library's two-body line diff runs on the main thread and cannot be stopped, so the viewer never compares bodies,
+and a text change without a patch says there is no diff to show. Long lines wrap, since the library's own sideways
+scroller sits in a shadow root and cannot take keyboard focus; the one scroller is the viewer's focusable frame.
+
+**Images.** PNG, JPEG, GIF, WebP, BMP, ICO and SVG are guaranteed; AVIF shows only where the system's WebKit decodes
+it (macOS 13 and later). They render through `<img>` from `data:` URLs, which is what the window's `img-src data:`
+admits, so an SVG's scripts never run and its external references are never fetched. An image counts as undecodable
+by its `error` event, not by its size or `img.decode()`; an SVG that cannot be decoded is shown as its text. An image
+change shows Before and After panes side by side, with no pixel diff. A restricted (`out_of_scope`) side is shown
+alone, as a file, under a warning naming the other side's repository path; it is never drawn as a diff or as an
+empty side, which only an `absent` side is.
+
+**Budgets and fallbacks** (`budgets.ts`, separate from the daemon's read budgets). A file past 10,000 lines or
+1,000,000 UTF-16 units is shown as plain preformatted text; a line past 1,000 characters is left untokenized inside
+highlighted code; a patch past 10,000 lines or 1,000,000 UTF-16 units is shown as the plain patch. A grammar or theme
+that fails to load, or an unknown language, shows plain text with a notice; a patch the library cannot read, a
+renderer that throws or a renderer chunk that fails to load is caught by an error boundary and shows the raw patch
+(or plain text) with a notice; a non-image binary shows "cannot be displayed" with its size.
+
+**Theme shim.** The library reaches every bundled theme through `@pierre/theming/themes` and Shiki's internal
+`themes.mjs`, which would put about 1.8 MB of theme chunks in a build. The `octoboard-viewer-themes` plugin in
+`vite.config.ts` redirects both to `src/viewer/themeShim.ts`, which offers only the two themes in use under both
+modules' exports, and fails the build if either real module still enters it, as a dependency update renaming one
+would otherwise bring every theme back unnoticed. The dev server's pre-bundled dependencies and the tests keep every
+theme. Once the app imports the viewer, a build also carries about 250 lazy grammar chunks (`dist/` grows from about
+1.7 MB to about 12 MB) plus the renderer chunk and the worker, which load on first use.
+
+**What was verified where.** The CSP is unchanged. In the packaged WebView (origin `tauri://localhost`), grammar and
+theme chunks load as `script-src 'self'` module chunks, the worker loads as a `self` module worker and answers, images
+load from `data:`, and the library's injected styles in its shadow roots apply under `style-src 'unsafe-inline'`; every
+gallery subject rendered as described above, focus stayed inside the dialog across subject changes, light and dark
+rendered, and no content ran. In a plain WebKit browser over the gallery, with real pointer and keyboard input:
+selecting and copying code (line numbers and diff markers are not copied), the Tab order, closing with focus restored
+to the opener, narrow widths and right-to-left controls (code and paths keep their own direction); Chromium rendered
+the same subjects. Real-input copying, the Tab order, narrow widths and right-to-left were not exercised in the
+packaged window.
+
 ## Layout
 
 | Path | Role |
 |---|---|
 | `index.html` | The window's only Content Security Policy, delivered as a `<meta>` tag, and the inline bootstrap script that resolves and applies the theme class before the first paint; the file's own comment has the reasoning for both |
-| `gallery.html`, `gallery-frame.html`, `src/gallery/` | The dev-only UI state gallery, not part of a build (see "The UI state gallery" above): the shell page (`gallery.html`, `shell.tsx`), the page one scenario renders in (`gallery-frame.html`, `frame.tsx`, which mirrors `main.tsx` over a fixture daemon and gets `index.html`'s Content Security Policy through `vite.config.ts`), the scenario type (`scenario.ts`), the steps' helpers (`interact.ts`), the fake terminal sockets (`fakeTerminal.ts`), the fixture daemon (`fixtureDaemon.ts`), the storage a scenario starts from (`prepare.ts`) and the scenarios (`fixtures/`, with `fixtures/builders.ts` building their state) |
+| `gallery.html`, `gallery-frame.html`, `src/gallery/` | The dev-only UI state gallery, not part of a build (see "The UI state gallery" above): the shell page (`gallery.html`, `shell.tsx`), the page one scenario renders in (`gallery-frame.html`, `frame.tsx`, which mirrors `main.tsx` over a fixture daemon and gets `index.html`'s Content Security Policy through `vite.config.ts`), the scenario type (`scenario.ts`), the steps' helpers (`interact.ts`), the fake terminal sockets (`fakeTerminal.ts`), the fixture daemon (`fixtureDaemon.ts`), the storage a scenario starts from (`prepare.ts`) and the scenarios (`fixtures/`, with `fixtures/builders.ts` building their state), and the "File viewer" group, whose scenarios set `viewer` and render `viewerGallery.tsx` over the real `FileViewer` in place of the app (`fixtures/viewer.ts`, `viewerImages.ts`) |
 | `src/preferenceKeys.ts` | The `localStorage` key of every persisted preference, apart from the modules that read them so the gallery's storage reset can name a key without loading them |
 | `src/main.tsx` | Startup: picks the platform, locates the daemon, creates the connection, pushes the resolved theme and reveals the native window, installs `contextMenuGuard`, marks the page when the window is translucent behind it (`style.css`), and renders either the app or `StartupScreen` |
 | `src/platform/` | The `PlatformAdapter` interface (optional `exit`, `notifications`, `badge`, `nativeWindow`, `windowChrome` (macOS only: the window has no native titlebar, so the top bar is its titlebar; how much of its left edge the traffic lights cover right now, none in fullscreen; it is also what says the window shortcuts exist), `translucentWindow` (a plain flag, set on macOS only: the shell puts a translucent native material behind a transparent webview) `appMenu` (the native menu's Settings… item, and the labels the UI hands the menu) and `statusItem` (the menu bar icon's menu, which the UI words, and the session chosen in it) capabilities; `nativeWindow` also says whether the window is visible and brings it back from the background; an absent one means the feature is absent) and its two implementations, `tauri.ts` and `browser.ts`; `react.tsx` exposes it to components. Only `tauri.ts` may import `@tauri-apps/*`, and only dynamically, so the browser path never loads them |
@@ -101,6 +172,7 @@ port file under the temp directory, so the defaults would touch the real data an
 | `src/gitStatusLabel.ts` | The git twin of `sessionLabel.ts`: a project's git badge wording as the accessible name of its own (`gitBadgeAriaLabel`) or folded into a tree row's (`withGitBadge`, since a row's own `role="button"` would otherwise swallow a descendant's) |
 | `src/projectFiltering.ts` | The sidebar project filter's pure rules: the tags in use across projects, the picked tags narrowed to them, whether a project matches the keyword and tags, and adding or dropping a tag in the stored selection |
 | `src/pathDisplay.ts` | `abbreviateHome(path, home)`: a path under the daemon host's home directory written as `~/...`, for display only (`home` comes from the store's `homeDir`) |
+| `src/wirePath.ts` | `displayWirePath` / `wireBaseName`: the daemon's wire paths (see "Wire paths" in `apps/daemon/PROTOCOL.md`) decoded for display |
 | `src/relativeTime.ts` | `formatRelativeTime`: "5 minutes ago" for a past instant, in a given language |
 | `src/avatarImage.ts` | `imageToAvatar`: an image file as a 128 x 128 centre-cropped `data:` URL (WebP, PNG where the browser cannot encode it), the form a console's avatar is stored in |
 | `src/persistedPreference.ts` | `createPersistedPreference(key, parse, serialize)`: a user preference kept in `localStorage` (every access guarded) and shared module-wide, the store under `panelVisibility.ts`, `paneWidth.ts` and the language choice in `i18n/language.ts` |
@@ -115,4 +187,5 @@ port file under the temp directory, so the defaults would touch the real data an
 | `src/settings/` | The settings modal (`SettingsDialog`: a section list on the left, the selected section's rows on the right, over the window with everything under it left mounted), `useSettingsDialog` (whether it is open and on which section it was asked to open, including from the app menu's Settings… item (ignored while another modal or an action menu is open, or before the first snapshot), and returning focus to the terminal on close), and its sections: `GeneralSection` (the `AppearanceSetting` Light/Dark/System row, the `LanguageSetting` row, one of the offered languages, and the `CloneDirSetting` row, the default clone directory with its Browse button), `GitSection` (the automatically-sync-repositories switch), `AgentAccountsSection` (the accounts grouped by agent, with `AccountDialog` for adding and editing and `agentAccounts.ts` for the name-collision and absolute-path rules), `TrustedFoldersSection`, `NotificationsSection`, on the shared `SettingRow`; a section that can unmount a focused control calls `useSectionRefocus` (`useSectionRefocus.ts`) so focus returns to the dialog |
 | `src/terminal/` | `TerminalController` (the xterm.js instance, a session's socket, status and focus, and the read-only output a dormant session's last process left), `TerminalPane` (its React boundary, reconnect backoff, reporting connection trouble to the rail, the Not running overlay with Resume) and `xtermThemes.ts` (the light/dark xterm palettes the controller switches between) |
 | `src/report/` | A console session's report panel: `ReportPanel` (paging through one console session's pages, the form-submission and Escape-relay listener) and `pageDocument` (the sandboxed frame's `srcdoc`: the page's CSP with a per-frame script nonce, DOMPurify, and the page itself as a string literal) with `pageBridge.js` (runs in the frame: sanitizes and renders the page, relays native form submissions and Escape / F6 and, in the desktop app, ⌘[ / ⌘] and ⌃Tab, disables the controls of a history page, and in the desktop app suppresses the frame's own right-click menu outside text fields). A page is a static document with native forms; its own scripts are removed and never run |
+| `src/viewer/` | The read-only file viewer: `FileViewer` (the modal), the application-owned `ViewerSubject` model in `content.ts`, `CodeSurface` with the lazily loaded `renderer.tsx` (the only module importing `@pierre/diffs`), `budgets.ts`, `format.ts` and `themeShim.ts` (see "The file viewer" above) |
 | `src/dialogs/` | The dialogs (console, project, session, rename, confirmation, directory picker, workspace-trust prompt), on a shared `Dialog` frame over HeroUI's `Modal` with its `useDialogAction` and `useRefocusIfLost` hooks, plus the form controls they share (`TextInput`, `OptionSelect`, `TagsInput`, the project dialog's tags field, a combo box that offers the tags in use and makes a tag of what is typed, and `AccountSelect`, the session dialog's one drop-down for an agent and its account, grouped by agent); `dialogRequest.ts` is the request the sidebar's menus and the rail's console menus and New console raise, which `App` holds and `RequestedDialog` renders. Escape and an outside click close one, and closing returns focus to where a menu took it from |

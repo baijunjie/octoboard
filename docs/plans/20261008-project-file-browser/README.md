@@ -56,8 +56,7 @@ right-pane space.
 ## Milestones
 
 1. 01 Source identities and bounded read contracts (closed)
-2. [Validate the read-only renderers](02-renderer-validation.md) — verify file, image and diff adapters against
-   the real packaged environment before committing to a rendering dependency.
+2. 02 Validate the read-only renderers (closed)
 3. [Project file browsing and navigation](03-project-file-browser.md) — ship a real project entry point, tree,
    daemon reads, modal and previous/next navigation together.
 4. [Uncommitted changes across worktrees](04-worktree-changes.md) — add scoped worktree selection and staged,
@@ -67,16 +66,14 @@ right-pane space.
 6. [Final confirmation](06-final-confirmation.md) — checks that could not be run when their milestone closed and that
    nothing later depends on.
 
-Each milestone is independently verifiable and mergeable after its dependencies. Milestone 02 can be verified with
-fixtures; milestone 03 must work with real project files. Milestones 04 and 05 extend that working surface rather
-than deferring panel integration until after Git review is built.
+Each milestone is independently verifiable and mergeable after its dependencies. Milestone 03 must work with real
+project files. Milestones 04 and 05 extend that working surface rather than deferring panel integration until after
+Git review is built.
 
 ## Open
 
 These choices do not block the milestone split, but must be resolved before the named milestone is complete:
 
-- **02:** renderer and pinned dependency version, guaranteed image formats, unified/split default, image-change
-  presentation and renderer-specific limits. Zoom/pan can be deferred without blocking fit-to-view images.
 - **03:** exact tree sorting convention, ignored-file visibility, refresh cadence and which per-project preferences
   persist across client restarts. Collapsed-directory exclusion and non-wrapping navigation are already fixed.
 - **04:** whether diff navigation crosses staged/unstaged groups. A path in both groups always has two distinct

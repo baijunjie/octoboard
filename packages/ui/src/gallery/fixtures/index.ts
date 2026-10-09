@@ -14,6 +14,7 @@ import { reportScenarios } from "./report";
 import { settingsScenarios } from "./settings";
 import { startupScenarios } from "./startup";
 import { statusScenarios } from "./statuses";
+import { viewerScenarios } from "./viewer";
 
 /** Every scenario, in the order the gallery lists them; a group is its scenarios' shared `group`. */
 export const SCENARIOS: Scenario[] = [
@@ -30,6 +31,7 @@ export const SCENARIOS: Scenario[] = [
   ...reportScenarios,
   ...settingsScenarios,
   ...dialogScenarios,
+  ...viewerScenarios,
   ...layoutScenarios,
   ...startupScenarios,
 ];

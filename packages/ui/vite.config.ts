@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -28,6 +29,31 @@ const galleryFrameCsp: Plugin = {
   },
 };
 
+// Keeps a build to the two highlighting themes the file viewer uses (see
+// `src/viewer/themeShim.ts`) by giving it the shim for the two modules that list them all: the
+// renderer library's `@pierre/theming/themes`, and Shiki's own `themes.mjs`, which Shiki's entry
+// points import by that relative name. A dependency update that renames either would leave it
+// unredirected and quietly bring every theme back, so a build that still contains either real
+// module fails instead. The dev server's pre-bundled dependencies and the tests keep every theme.
+const themeShim = fileURLToPath(new URL("./src/viewer/themeShim.ts", import.meta.url));
+const THEME_LISTS = [/[\\/]@pierre[\\/]theming[\\/]dist[\\/]themes\.js$/, /[\\/]shiki[\\/]dist[\\/]themes\.mjs$/];
+const viewerThemes: Plugin = {
+  name: "octoboard-viewer-themes",
+  enforce: "pre",
+  resolveId(source, importer) {
+    if (source === "@pierre/theming/themes") return themeShim;
+    if (source === "./themes.mjs" && importer && /[\\/]shiki[\\/]dist[\\/][^\\/]+\.mjs$/.test(importer)) return themeShim;
+    return null;
+  },
+  buildEnd() {
+    for (const id of this.getModuleIds()) {
+      if (THEME_LISTS.some((list) => list.test(id))) {
+        this.error(`${id} is in the build: the file viewer's theme shim no longer replaces it (see src/viewer/themeShim.ts)`);
+      }
+    }
+  },
+};
+
 export default defineConfig(({ command }) => {
   // A daemon started by hand binds an OS-assigned port, so `OCTOBOARD_DAEMON_PORT` names it for the
   // dev server's proxy: the page then reaches `/ws/...` on its own origin, which is what the UI does
@@ -47,7 +73,7 @@ export default defineConfig(({ command }) => {
     // Relative asset URLs, so the build loads from any static directory: a shell's bundled assets, or
     // a path the daemon serves it under.
     base: "./",
-    plugins: [react(), tailwindcss(), appName, galleryFrameCsp],
+    plugins: [react(), tailwindcss(), appName, galleryFrameCsp, viewerThemes],
     define: { __OCTOBOARD_DEV_PROXY__: JSON.stringify(Boolean(daemonPort)) },
     clearScreen: false,
     server: {

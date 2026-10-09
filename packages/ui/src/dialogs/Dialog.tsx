@@ -120,17 +120,27 @@ export function Dialog({
   alert,
   resetKey,
 }: {
-  title: string;
+  /** Text, or an element for a title that needs markup of its own (a file name kept left to right). */
+  title: string | React.ReactElement;
   onClose: () => void;
   children: BodyChildren;
-  size?: "sm" | "md" | "lg";
+  /** `viewer` is a frame for content rather than a form: it fills the window inside a margin, up to
+   * a width that still reads as a dialog over the app. */
+  size?: "sm" | "md" | "lg" | "viewer";
   /** A confirmation that interrupts the user: HeroUI's `AlertDialog`, announced as an alert dialog. */
   alert?: boolean;
   /** Names what a dialog reused across subjects currently asks about; when it changes and focus
    * was lost with the old content, it is put back on the dialog. */
   resetKey?: string;
 } & (
-  | { footer: BodyChildren; submitLabel?: never; busy?: never; submitDisabled?: never; onSubmit?: () => void }
+  | {
+      /** `null` for a dialog without a footer. */
+      footer: BodyChildren | null;
+      submitLabel?: never;
+      busy?: never;
+      submitDisabled?: never;
+      onSubmit?: () => void;
+    }
   | { footer?: never; submitLabel: string; busy?: boolean; submitDisabled?: boolean; onSubmit: () => void }
 )): React.ReactElement {
   const t = useT();
@@ -165,32 +175,44 @@ export function Dialog({
       <Frame.Body id={bodyId} className="flex flex-col gap-4 p-1">
         {children}
       </Frame.Body>
-      <Frame.Footer className="flex-wrap">
-        {footer ?? (
-          <>
-            <Button type="button" variant="secondary" onPress={onClose} isDisabled={busy}>
-              {t("common.cancel")}
-            </Button>
-            <Button type="submit" isPending={busy} isDisabled={submitDisabled}>
-              {submitLabel}
-            </Button>
-          </>
-        )}
-      </Frame.Footer>
+      {footer !== null && (
+        <Frame.Footer className="flex-wrap">
+          {footer ?? (
+            <>
+              <Button type="button" variant="secondary" onPress={onClose} isDisabled={busy}>
+                {t("common.cancel")}
+              </Button>
+              <Button type="submit" isPending={busy} isDisabled={submitDisabled}>
+                {submitLabel}
+              </Button>
+            </>
+          )}
+        </Frame.Footer>
+      )}
     </>
   );
 
   return (
     <Frame.Backdrop isOpen isDismissable isKeyboardDismissDisabled={false} onOpenChange={(open) => !open && onClose()}>
-      <Frame.Container size={size}>
-        <Frame.Dialog aria-describedby={alert ? bodyId : undefined}>
+      {/* HeroUI pads the container 40px from `sm` up, which below the `docked` breakpoint leaves too
+          little of a narrow window for code; the viewer keeps a 16px margin there and the 40px one
+          above it. */}
+      <Frame.Container size={size === "viewer" ? "lg" : size} className={size === "viewer" ? "sm:p-4 docked:p-10" : undefined}>
+        <Frame.Dialog
+          aria-describedby={alert ? bodyId : undefined}
+          className={
+            size === "viewer"
+              ? "h-[calc(100dvh-32px)] w-[calc(100vw-32px)] max-w-none docked:h-[calc(100dvh-80px)] docked:w-[min(1440px,calc(100vw-80px))]"
+              : undefined
+          }
+        >
           <span ref={markerRef} hidden />
           <TitledControl title={t("common.close")}>
             {/* Named explicitly so it always matches the tooltip. */}
             <Frame.CloseTrigger aria-label={t("common.close")} />
           </TitledControl>
           <Frame.Header>
-            <Frame.Heading>{title}</Frame.Heading>
+            <Frame.Heading>{title as BodyChildren}</Frame.Heading>
           </Frame.Header>
           {onSubmit ? (
             <form

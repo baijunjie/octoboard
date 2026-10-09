@@ -1,0 +1,173 @@
+// The one module that touches the rendering library (`@pierre/diffs`, over Shiki). It is loaded
+// lazily by `CodeSurface.tsx`, so the library and its grammars stay out of the startup bundle, and
+// nothing outside it sees a library type: callers hand it plain text and patches.
+import { getFiletypeFromFileName, preloadHighlighter, processFile, type FileContents, type FileDiffMetadata } from "@pierre/diffs";
+import { File, FileDiff, WorkerPoolContext } from "@pierre/diffs/react";
+import { getOrCreateWorkerPoolSingleton, terminateWorkerPoolSingleton } from "@pierre/diffs/worker";
+import DiffsWorker from "@pierre/diffs/worker/worker.js?worker";
+import React, { memo, useEffect, useMemo, useState } from "react";
+
+import { RENDER_BUDGETS } from "./budgets";
+
+// GitHub's high-contrast palettes: of the bundled themes measured, the ones whose every token
+// reaches WCAG AA's 4.5:1 on the code background in both appearances.
+const THEMES = { light: "github-light-high-contrast", dark: "github-dark-high-contrast" } as const;
+
+/**
+ * Diff colours that keep every token at 4.5:1 and mark a change by more than colour. The library
+ * marks a changed word with a tint over the changed line's tint, and in the light appearance the
+ * palette's grey comments fall short under either tint; so a changed word is underlined instead of
+ * tinted in both appearances, and in the light one the line tints are the lightest that still read
+ * as a tint. The dark palette meets the ratio on the library's own line tints. The `+` / `-`
+ * indicators mark changed lines.
+ */
+function diffCss(theme: "light" | "dark"): string {
+  const [added, removed] = theme === "light" ? ["#1a7f37", "#cf222e"] : ["#3fb950", "#f85149"];
+  const lineTints =
+    theme === "light"
+      ? `[data-line][data-line-type="change-addition"] { background-color: #ebf7ed !important; }
+         [data-line][data-line-type="change-deletion"] { background-color: #fdf0f0 !important; }`
+      : "";
+  return `${lineTints}
+    [data-line-type="change-addition"] [data-diff-span],
+    [data-line-type="change-deletion"] [data-diff-span] {
+      background-color: transparent;
+      text-decoration: underline 2px;
+      text-underline-offset: 3px;
+    }
+    [data-line-type="change-addition"] [data-diff-span] { text-decoration-color: ${added}; }
+    [data-line-type="change-deletion"] [data-diff-span] { text-decoration-color: ${removed}; }`;
+}
+
+/**
+ * Options shared by every rendering. The library's own header is off (the viewer's title names the
+ * file), and so is everything interactive it can add inside the code — line selection, hover
+ * utilities, hunk expansion — so the rendered code holds no control that keyboard access would
+ * have to reach. Long lines wrap: the library would otherwise scroll them sideways inside its
+ * shadow root, in an element that cannot take focus, so they could not be scrolled from the
+ * keyboard; wrapped, the one scrolling element is the caller's focusable frame.
+ * `disableErrorHandling` makes a failure throw to the caller's error boundary instead of printing
+ * the library's English stack trace into the page.
+ */
+const BASE_OPTIONS = {
+  theme: THEMES,
+  disableFileHeader: true,
+  disableErrorHandling: true,
+  overflow: "wrap",
+  tokenizeMaxLineLength: RENDER_BUDGETS.tokenizeLineLength,
+} as const;
+
+/**
+ * The worker pool. Highlighting runs in workers so a large file cannot stall the window; when they
+ * cannot start, the library highlights on the main thread instead, within the same budgets. The
+ * library's own provider ends its pool whenever the last renderer using it unmounts, which would
+ * restart the workers and reload every theme and grammar each time the viewer moved from code to
+ * an image and back; so the pool is created once here and ended only by `endRendererPool`, when
+ * the last viewer closes.
+ */
+function rendererPool(): ReturnType<typeof getOrCreateWorkerPoolSingleton> {
+  return getOrCreateWorkerPoolSingleton({
+    poolOptions: { workerFactory: () => new DiffsWorker(), poolSize: 2 },
+    highlighterOptions: { theme: THEMES, langs: [] },
+  });
+}
+
+export function endRendererPool(): void {
+  terminateWorkerPoolSingleton();
+}
+
+/** Resolves the grammar for `name`, and the themes, before anything is rendered with them. One
+ * that fails to load (a chunk that cannot be fetched, a grammar that does not compile under the
+ * JavaScript regex engine) would otherwise leave the library waiting on a rejected promise with
+ * nothing on screen; here it turns into plain text. */
+function useLanguage(name: string): { lang: FileContents["lang"]; failed: boolean } | undefined {
+  const detected = getFiletypeFromFileName(name);
+  const [result, setResult] = useState<{ for: string; lang: FileContents["lang"]; failed: boolean }>();
+  useEffect(() => {
+    let current = true;
+    preloadHighlighter({ themes: [THEMES.light, THEMES.dark], langs: [detected] }).then(
+      () => current && setResult({ for: detected, lang: detected, failed: false }),
+      (error: unknown) => {
+        console.warn(`Viewer: cannot highlight ${detected}, showing plain text`, error);
+        if (current) setResult({ for: detected, lang: "text", failed: true });
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [detected]);
+  return result?.for === detected ? result : undefined;
+}
+
+export interface FileRenderProps {
+  /** The file's name, which picks the grammar. */
+  name: string;
+  text: string;
+  theme: "light" | "dark";
+  /** Told whether the file is shown without highlighting because its grammar or a theme failed to
+   * load; the caller passes a new callback for each file, so a second file in the same failing
+   * language is reported too. */
+  onPlainChange?: (plain: boolean) => void;
+}
+
+// Memoised, with every object handed to the library memoised too: the library compares its inputs
+// by reference, and a new one re-parses and redraws the whole file, which at the budget's size
+// holds the window for most of a second on any unrelated re-render above.
+export const HighlightedFile = memo(function HighlightedFile({ name, text, theme, onPlainChange }: FileRenderProps): React.ReactElement | null {
+  const language = useLanguage(name);
+  const failed = language?.failed;
+  useEffect(() => {
+    if (failed !== undefined) onPlainChange?.(failed);
+  }, [failed, onPlainChange]);
+  // The library numbers the empty line after a final newline as a line of its own.
+  const file = useMemo<FileContents | undefined>(
+    () => (language ? { name, contents: text.endsWith("\n") ? text.slice(0, -1) : text, lang: language.lang } : undefined),
+    [name, text, language?.lang],
+  );
+  const options = useMemo(() => ({ ...BASE_OPTIONS, themeType: theme }), [theme]);
+  return (
+    <WorkerPoolContext.Provider value={rendererPool()}>
+      {file && <File file={file} options={options} disableWorkerPool={file.lang === "text"} />}
+    </WorkerPoolContext.Provider>
+  );
+});
+
+export interface DiffRenderProps {
+  /** The file's name, which picks the grammar. */
+  name: string;
+  /** One change's unified patch, as `git` writes it. */
+  patch: string;
+  layout: "unified" | "split";
+  theme: "light" | "dark";
+}
+
+/** A change rendered from its patch. Memoised for the same reason as `HighlightedFile`. */
+export const RenderedDiff = memo(function RenderedDiff({ name, patch, layout, theme }: DiffRenderProps): React.ReactElement | null {
+  const language = useLanguage(name);
+  const lang = language?.lang;
+  const fileDiff = useMemo<FileDiffMetadata | undefined>(() => {
+    if (!lang) return undefined;
+    // Throws on a patch it cannot read, which the caller's boundary turns into the raw patch.
+    const metadata = processFile(patch, { throwOnError: true });
+    if (!metadata) throw new Error("The patch holds no file change");
+    return { ...metadata, lang };
+  }, [patch, lang]);
+  const options = useMemo(
+    () =>
+      ({
+        ...BASE_OPTIONS,
+        themeType: theme,
+        diffStyle: layout,
+        diffIndicators: "classic",
+        hunkSeparators: "line-info-basic",
+        lineDiffType: "word",
+        unsafeCSS: diffCss(theme),
+      }) as const,
+    [theme, layout],
+  );
+  return (
+    <WorkerPoolContext.Provider value={rendererPool()}>
+      {fileDiff && <FileDiff fileDiff={fileDiff} options={options} disableWorkerPool={lang === "text"} />}
+    </WorkerPoolContext.Provider>
+  );
+});

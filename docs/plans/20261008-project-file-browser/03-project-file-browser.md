@@ -7,7 +7,8 @@
 > Report behavior, terminal focus and narrow layouts remain usable. Fixture-only viewing does not complete this
 > milestone.
 
-Depends on [renderer validation](02-renderer-validation.md). The daemon side it reads through is the contract in
+The modal it opens is the read-only viewer in `packages/ui/src/viewer/` (`packages/ui/README.md`'s "The file viewer":
+its interface, budgets and fallbacks). The daemon side it reads through is the contract in
 `apps/daemon/PROTOCOL.md`'s "Browsing a project" (`get_project_source`, `list_project_dir`, `read_project_file`).
 
 ## Technical design
@@ -32,7 +33,7 @@ Depends on [renderer validation](02-renderer-validation.md). The daemon side it 
 - [ ] Refresh preserves selection by identity, not by list position. A removed or unavailable selection is shown
   explicitly. Changing the active owner closes the old viewer; obsolete reads cannot populate a new context.
 - [ ] Reconnect invalidates source-dependent content and reloads the active view. Refresh work is tied to visible
-  client context and remains within the source contract's bounds; manual refresh is available.
+  client context and remains within the daemon's browse budgets; manual refresh is available.
 
 ## Implementation plan
 
@@ -59,6 +60,10 @@ Depends on [renderer validation](02-renderer-validation.md). The daemon side it 
 - `list_project_dir` returns entries in byte order of their wire forms and includes ignored files; the tree's own
   sort and ignored-file rule (the "Open" item for 03) are decided client-side.
 - `media_type` is set only on binary bodies; an SVG arrives as text with `media_type: null`.
+- `FileViewer` takes `navigation: { onPrevious?, onNext? }` for its footer buttons but binds no arrow keys yet.
+- `packages/ui/README.md`'s "The file viewer" says the app does not import the viewer yet and gives the build size
+  without it; once the browser imports it, both sentences change (the built `dist/` grows from about 1.7 MB to about
+  12 MB of lazily loaded grammar chunks).
 
 ## Notes for the developer
 

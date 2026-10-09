@@ -60,6 +60,7 @@ Per-package commands are in that package's doc.
   daemon client, store and platform adapter, the window chrome (the top bar and the left rail with the console
   switcher), the content panel with the sidebar (projects and sessions, the project and console session focus modes),
   the archive view, the xterm.js terminal pane, the pane-layout state, Back/Forward navigation history, the settings
-  dialog, the other dialogs, the console session's report panel and the internationalization (language choice and
+  dialog, the other dialogs, the read-only file viewer (code, image and diff rendering behind an application-owned
+  interface), the console session's report panel and the internationalization (language choice and
   message catalogs), and a dev-only gallery of UI states over a fixture daemon (`src/gallery/`, served by the dev
   server, not part of the build). Loaded by the `apps/desktop/` shell and also runs in a plain browser.
