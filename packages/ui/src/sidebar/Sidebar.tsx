@@ -576,7 +576,14 @@ function ConsoleSessionsSection({
         {t("sidebar.consoleSessions.heading")}
       </SectionHeading>
       {blocked && <EmptyPanel compact icon={MessageSquarePlus} message={t("agents.installPrompt")} />}
-      {live.length === 0 && !blocked && <EmptyPanel compact icon={MessageSquarePlus} message={t("sidebar.consoleSessions.empty")} />}
+      {live.length === 0 && !blocked && (
+        <EmptyPanel
+          compact
+          icon={MessageSquarePlus}
+          message={t("sidebar.consoleSessions.empty")}
+          action={{ label: t("sidebar.consoleSessions.new"), onPress: openNew }}
+        />
+      )}
       {live.length > 0 && (
         <div ref={listRef} className="relative flex flex-col gap-0.5">
           {live.map((session) => (
@@ -676,7 +683,7 @@ function ProjectNode({
               compact
               icon={MessageSquarePlus}
               message={t("sidebar.noSessions")}
-              action={{ label: t("sidebar.project.openSession"), icon: Plus, onPress: openSession }}
+              action={{ label: t("sidebar.project.openSession"), onPress: openSession }}
             />
           ) : (
             <div ref={listRef} className="relative flex flex-col gap-0.5">
