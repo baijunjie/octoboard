@@ -148,8 +148,9 @@ pressed by Octoboard, or answered by the person in the terminal — Octoboard co
 it, into `trusted_folders.toml` in the session's source home, adding it or replacing that folder's entry there, and
 leaving every other entry as it is. It holds the store's lock file, `trusted_folders.toml.lock`, while it reads and
 writes. Octoboard writes only an entry Grok itself wrote, never one of its own. An answer that writes no entry — a
-decline — changes nothing and is not reported. A person's answer in the terminal is carried the same way but records
-no permission of Octoboard's.
+decline — changes nothing and is not reported. A person's answer in the terminal is carried the same way, so Grok
+keeps it as Claude Code and Codex keep an answer given in their own terminal, but it records no permission of
+Octoboard's.
 
 When the entry does not reach the user's store, nothing is written there, no permission is recorded, and a notice on
 the session says that Octoboard could not copy Grok's trust for this folder into that file, so Grok will ask again the

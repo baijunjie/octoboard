@@ -163,7 +163,9 @@ permission or approval configuration for an injected one to collide with.
 until next version" prompt (seen as an "Update available!" banner in the probe on 0.161.0). Octoboard passes
 `-c check_for_update_on_startup=false` on every launch, the setting Codex's own config defines for whether it checks
 for updates at startup and shows that prompt, so nothing sits in front of the folder-trust confirmation; it applies to
-that launch only. That it suppresses the prompt entirely has not yet been verified against a live Codex.
+that launch only. Measured on 0.160.0, with an update made available by raising `latest_version` in Codex's cached
+`version.json`: a plain launch opened with the update prompt, and a launch with the override went straight to the
+folder-trust confirmation and showed no update prompt after it either.
 
 **Two visible side effects of passing any `-c` override**: it forces embedded mode, so the TUI carries a permanent
 `⚠ 1 warning` badge explaining that command-line overrides require it, and the session is invisible to `codex agents`.
@@ -398,9 +400,11 @@ Octoboard recognizes it in the terminal output and presses it; what pressing it 
   `$GROK_HOME/trusted_folders.toml`, saving by replacing the file, so against Octoboard's per-session `GROK_HOME` the
   entry lands only in the session's copy and a symlink there is replaced rather than followed; no setting moves the
   store. Octoboard therefore carries that one entry, unchanged, into the user's own store, after its own press and after
-  the person answers in the terminal alike, holding the `trusted_folders.toml.lock` Grok keeps beside it. `SessionStart`
-  fires right after the press. While it waits, Grok animates its logo at about 2 KB/s, so the first drawing soon leaves
-  any window of recent output and the terminal is never quiet.
+  the person answers in the terminal alike, holding the `trusted_folders.toml.lock` Grok keeps beside it. Grok locks
+  that same file before it replaces the store (measured on 1.0.50: with an exclusive `flock` held on it elsewhere, an
+  accepted confirmation wrote nothing until it was released), and Octoboard's lock is exclusive, so the two writes
+  exclude each other. `SessionStart` fires right after the press. While it waits, Grok animates its logo at about
+  2 KB/s, so the first drawing soon leaves any window of recent output and the terminal is never quiet.
 
 ### Writing into a running session
 
