@@ -50,9 +50,9 @@ pub(super) fn answer(live: &LiveSession) -> Result<()> {
         Err(err)
             if screen.input_ends_wait
                 && live.trust.input_since_sighting(live.input_writes())
-                && !err
+                && err
                     .downcast_ref::<CodedError>()
-                    .is_some_and(|coded| coded.code == error_code::TRUST_NOT_CARRIED_OVER) =>
+                    .is_none_or(|coded| coded.code != error_code::TRUST_NOT_CARRIED_OVER) =>
         {
             Err(not_waiting())
         }
