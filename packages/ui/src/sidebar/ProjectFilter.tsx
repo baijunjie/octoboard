@@ -1,7 +1,5 @@
 import {
   Button,
-  Chip,
-  CloseButton,
   Popover,
   SearchField,
   Tag,
@@ -12,7 +10,7 @@ import type { Key } from "react-aria";
 import React, { type RefObject, useRef, useState } from "react";
 
 import { handFocusOff } from "../components/handFocusOff";
-import { PICKED_TAG_CLASS, PICKED_TAG_REMOVE_CLASS } from "../components/tagStyle";
+import { PickedTag } from "../components/PickedTag";
 import { TitledControl } from "../components/TitledControl";
 import { usePointerFocusReturn } from "../components/usePointerFocusReturn";
 import { useTrimmedField } from "../dialogs/useTrimmedField";
@@ -33,18 +31,17 @@ export type FilterUpdate = (stored: ProjectFilter) => ProjectFilter;
 export const NO_FILTER: ProjectFilter = { keyword: "", tags: [] };
 
 /** Whether `filter` is narrowing the list at all. */
-function isFiltering(filter: ProjectFilter): boolean {
+export function isFiltering(filter: ProjectFilter): boolean {
   return filter.keyword !== "" || filter.tags.length > 0;
 }
 
 /** The filter button by the Projects heading: it opens a popover with a field whose keyword
  * filters the project list as it is typed, and the tags in use (`vocabulary`) to pick from; a
  * project must carry every one picked. Escape closes it and keeps the filter, and so does Enter in
- * the field (on a tag, Enter picks or drops it). While a filter is in force, a button beside it
- * clears the keyword and the tags together. `filter.tags` is already narrowed to the vocabulary,
+ * the field (on a tag, Enter picks or drops it). `filter.tags` is already narrowed to the vocabulary,
  * so changes go up as updates to apply to the stored filter, which still holds the tags no project
- * carries. `holderRef` is the element around the filter button, for the chips on the heading to
- * hand focus to. */
+ * carries. `holderRef` is the element around the filter button, for the keyword, the tags and the
+ * Clear filter button under the heading to hand focus to. */
 export function ProjectFilterButton({
   filter,
   vocabulary,
@@ -62,7 +59,6 @@ export function ProjectFilterButton({
   // closes, which would pull it off the terminal; the element the press came from gets it back.
   const pointerFocus = usePointerFocusReturn();
   const buttonHolder = holderRef;
-  const clearHolder = useRef<HTMLSpanElement>(null);
   const keywordField = useTrimmedField(filter.keyword, (keyword) => onChange((f) => ({ ...f, keyword })));
 
   const onOpenChange = (isOpen: boolean) => {
@@ -90,87 +86,91 @@ export function ProjectFilterButton({
     setTimeout(() => listeners.abort(), 500);
   };
 
+  return (
+    <div
+      ref={buttonHolder}
+      className="flex"
+      onPointerDownCapture={pointerFocus.onPointerDownCapture}
+    >
+      <Popover isOpen={open} onOpenChange={onOpenChange}>
+        <TitledControl title={t("sidebar.filter.open")}>
+          <Button
+            isIconOnly
+            size="sm"
+            variant="ghost"
+            aria-label={t("sidebar.filter.open")}
+            preventFocusOnPress
+            className="size-6 min-w-0 rounded-md text-muted hover:text-foreground"
+          >
+            <ListFilter aria-hidden="true" className="size-4" />
+          </Button>
+        </TitledControl>
+        <Popover.Content placement="bottom end" className="w-64">
+          <Popover.Dialog aria-label={t("sidebar.filter.open")}>
+            {/* The field clears itself on Escape; here Escape closes the popover and keeps the filter. */}
+            <div
+              className="flex flex-col gap-3"
+              onKeyDownCapture={(e) => {
+                if (e.key !== "Escape") return;
+                e.preventDefault();
+                e.stopPropagation();
+                onOpenChange(false);
+              }}
+            >
+              <SearchField
+                aria-label={t("sidebar.filter.field")}
+                {...keywordField}
+                onSubmit={() => onOpenChange(false)}
+                autoFocus
+                fullWidth
+                variant="secondary"
+              >
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input
+                    placeholder={t("sidebar.filter.placeholder")}
+                  />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
+              <TagPicker
+                vocabulary={vocabulary}
+                selected={filter.tags}
+                onChange={(added, removed) =>
+                  onChange((f) => ({
+                    ...f,
+                    tags: added.reduce(withTag, withoutTags(f.tags, removed)),
+                  }))
+                }
+              />
+            </div>
+          </Popover.Dialog>
+        </Popover.Content>
+      </Popover>
+    </div>
+  );
+}
+
+/** The button that clears the keyword and the tags together, at the end of the row they sit on
+ * under the Projects heading. It goes away with the filter, so it hands keyboard focus to
+ * `returnFocusTo`, the element around the filter button, before it does. */
+export function ProjectFilterClear({
+  onChange,
+  returnFocusTo,
+}: {
+  onChange: (update: FilterUpdate) => void;
+  returnFocusTo: RefObject<HTMLElement | null>;
+}): React.ReactElement {
+  const t = useT();
+  const holder = useRef<HTMLSpanElement>(null);
   const clear = () => {
-    // The clear button goes away with the filter, taking keyboard focus with it.
-    handFocusOff(clearHolder.current, buttonHolder.current, true);
+    handFocusOff(holder.current, returnFocusTo.current, true);
     onChange(() => NO_FILTER);
   };
-
-  // No wrapper of its own: `SectionHeading` already lays its action controls out in a row and
-  // spaces them, so these two sit directly among the buttons that follow them.
   return (
-    <>
-      {isFiltering(filter) && (
-        <span ref={clearHolder} className="flex">
-          <RowIconButton
-            icon={BrushCleaning}
-            label={t("sidebar.filter.clear")}
-            onPress={clear}
-          />
-        </span>
-      )}
-      <div
-        ref={buttonHolder}
-        className="flex"
-        onPointerDownCapture={pointerFocus.onPointerDownCapture}
-      >
-        <Popover isOpen={open} onOpenChange={onOpenChange}>
-          <TitledControl title={t("sidebar.filter.open")}>
-            <Button
-              isIconOnly
-              size="sm"
-              variant="ghost"
-              aria-label={t("sidebar.filter.open")}
-              preventFocusOnPress
-              className="size-6 min-w-0 rounded-md text-muted hover:text-foreground"
-            >
-              <ListFilter aria-hidden="true" className="size-4" />
-            </Button>
-          </TitledControl>
-          <Popover.Content placement="bottom end" className="w-64">
-            <Popover.Dialog aria-label={t("sidebar.filter.open")}>
-              {/* The field clears itself on Escape; here Escape closes the popover and keeps the filter. */}
-              <div
-                className="flex flex-col gap-3"
-                onKeyDownCapture={(e) => {
-                  if (e.key !== "Escape") return;
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onOpenChange(false);
-                }}
-              >
-                <SearchField
-                  aria-label={t("sidebar.filter.field")}
-                  {...keywordField}
-                  onSubmit={() => onOpenChange(false)}
-                  autoFocus
-                  fullWidth
-                  variant="secondary"
-                >
-                  <SearchField.Group>
-                    <SearchField.SearchIcon />
-                    <SearchField.Input
-                      placeholder={t("sidebar.filter.placeholder")}
-                    />
-                    <SearchField.ClearButton />
-                  </SearchField.Group>
-                </SearchField>
-                <TagPicker
-                  vocabulary={vocabulary}
-                  selected={filter.tags}
-                  onChange={(added, removed) =>
-                    onChange((f) => ({
-                      ...f,
-                      tags: added.reduce(withTag, withoutTags(f.tags, removed)),
-                    }))
-                  }
-                />
-              </div>
-            </Popover.Dialog>
-          </Popover.Content>
-        </Popover>
-      </div>
-    </>
+    <span ref={holder} className="flex">
+      <RowIconButton icon={BrushCleaning} label={t("sidebar.filter.clear")} onPress={clear} />
+    </span>
   );
 }
 
@@ -223,15 +223,13 @@ function TagPicker({
   );
 }
 
-/** The keyword in force, beside the Projects heading, with a button that drops just the keyword
- * (the Clear filter button by the filter button clears it with the tags). The chip goes away with
- * the keyword, so a removal that leaves focus on its button moves focus to `returnFocusTo`, the
- * element around the filter button, rather than let it drop to `<body>`; the button's focus ring
- * follows whatever modality the interaction had already set, so after Tabbing into the chip a
- * click on its button also shows the ring, as the browser treats the scripted `focus()` as
- * focus-visible. HeroUI's `Chip` has no remove part
- * of its own, so this is `CloseButton`, the part `Tag.RemoveButton` is built on. Outside a
- * collection row nothing composes its name, so the label stands on its own. */
+/** The keyword in force, first on the row under the Projects heading, as a tag in the neutral look
+ * that drops just the keyword (the Clear filter button at that row's end clears it with the tags). A group of
+ * its own, so it has a name of its own and is one tab stop apart from the picked tags. It goes
+ * away with the keyword, so a removal while it holds focus moves focus to `returnFocusTo`, the
+ * element around the filter button, rather than let it drop to `<body>`. The ring
+ * there follows the modality already set; after Tabbing in, a click on the remove button also
+ * shows it, as the browser treats the scripted `focus()` as focus-visible. */
 export function ProjectFilterTag({
   keyword,
   onRemove,
@@ -242,41 +240,39 @@ export function ProjectFilterTag({
   returnFocusTo: RefObject<HTMLElement | null>;
 }): React.ReactElement {
   const t = useT();
-  const chip = useRef<HTMLSpanElement>(null);
-  const label = t("sidebar.filter.removeKeyword", { keyword });
-  const remove = () => {
-    handFocusOff(chip.current, returnFocusTo.current, false);
-    onRemove();
-  };
+  const group = useRef<HTMLDivElement>(null);
   return (
-    <Chip
-      ref={chip}
+    <TagGroup
+      ref={group}
+      aria-label={t("sidebar.filter.keyword")}
       size="sm"
-      variant="soft"
-      className="min-w-0 max-w-full"
+      // No box of its own, so the tag is an item of the wrapping row under the heading.
+      className="contents"
+      // Clicking the tag must not take keyboard focus off the terminal; the remove button still gets its click.
+      onMouseDownCapture={keepFocus}
+      onRemove={() => {
+        handFocusOff(group.current, returnFocusTo.current, false);
+        onRemove();
+      }}
     >
-      <Chip.Label dir="auto" className="truncate">
-        {keyword}
-      </Chip.Label>
-      <TitledControl title={label}>
-        <CloseButton
-          aria-label={label}
+      <TagGroup.List className="contents">
+        <PickedTag
+          id="keyword"
+          tag={keyword}
+          tone="neutral"
+          removeTitle={t("sidebar.filter.removeKeyword", { keyword })}
+          removeLabel={t("common.remove")}
           preventFocusOnPress
-          onPress={remove}
-          // The hover fill is a tint of the foreground, not HeroUI's `bg-default-hover`, which is a
-          // translucent fill about as strong as the chip's own (`.sidebar-fills`) and so adds little on it.
-          // `bg-transparent` cancels `.close-button--default`'s own fill, so the resting look is the chip's.
-          className="touch-target size-3 shrink-0 rounded-full bg-transparent hover:bg-foreground/10 hover:text-foreground [&_svg]:size-[inherit]"
         />
-      </TitledControl>
-    </Chip>
+      </TagGroup.List>
+    </TagGroup>
   );
 }
 
-/** The tags picked in the filter, on the Projects heading right after the keyword and wrapping
- * onto further lines when they do not fit, each removable on its own. They are filled with the
- * soft accent colour, which sets them apart from the keyword chip. The heading's Clear filter button
- * clears them with the keyword. The group goes away with its last tag, so a removal that empties
+/** The tags picked in the filter, on the row under the Projects heading right after the keyword,
+ * wrapping onto further lines when they do not fit, each removable on its own. They are filled with
+ * the soft accent colour, which sets them apart from the keyword's neutral tag. The Clear filter
+ * button at that row's end clears them with the keyword. The group goes away with its last tag, so a removal that empties
  * it while it holds focus moves focus to `returnFocusTo`, the element around the filter button;
  * the tag unmounting would drop it to `<body>`, and the terminal would stop receiving keystrokes.
  * The button's focus ring follows whatever modality the interaction had already set, so it shows
@@ -306,8 +302,8 @@ export function ProjectFilterTags({
       ref={group}
       aria-label={t("sidebar.filter.picked")}
       size="sm"
-      // The group and its list take no box of their own, so each tag is an item of the heading's
-      // wrapping row and flows on right after the keyword.
+      // The group and its list take no box of their own, so each tag is an item of the wrapping
+      // row under the heading and flows on right after the keyword.
       className="contents"
       // Clicking a tag must not take keyboard focus off the terminal; the remove button still gets its click.
       onMouseDownCapture={keepFocus}
@@ -315,27 +311,12 @@ export function ProjectFilterTags({
     >
       <TagGroup.List className="contents">
         {tags.map((tag) => (
-          <Tag
+          <PickedTag
             key={tag}
-            id={tag}
-            textValue={tag}
-            className={PICKED_TAG_CLASS}
-          >
-            {() => (
-              <>
-                <span dir="auto" className="truncate">
-                  {tag}
-                </span>
-                <TitledControl title={t("sidebar.filter.removeTag", { tag })}>
-                  <Tag.RemoveButton
-                    aria-label={t("common.removeTag")}
-                    preventFocusOnPress
-                    className={PICKED_TAG_REMOVE_CLASS}
-                  />
-                </TitledControl>
-              </>
-            )}
-          </Tag>
+            tag={tag}
+            removeTitle={t("sidebar.filter.removeTag", { tag })}
+            preventFocusOnPress
+          />
         ))}
       </TagGroup.List>
     </TagGroup>

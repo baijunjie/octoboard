@@ -4,15 +4,11 @@ import {
   Input,
   Label,
   ListBox,
-  Tag,
   TagGroup,
 } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
-import {
-  PICKED_TAG_CLASS,
-  PICKED_TAG_REMOVE_CLASS,
-} from "../components/tagStyle";
+import { PickedTag } from "../components/PickedTag";
 import { TitledControl } from "../components/TitledControl";
 import { useT } from "../i18n/react";
 
@@ -114,32 +110,11 @@ export function TagsInput({
         >
           <TagGroup.List className="contents">
             {value.map((tag) => (
-              <Tag
+              <PickedTag
                 key={tag}
-                id={tag}
-                textValue={tag}
-                className={PICKED_TAG_CLASS}
-              >
-                {/* The function form: TagRoot only finds a remove button among its direct children, and
-                    would add a default one beside a wrapped button. */}
-                {() => (
-                  <>
-                    <span dir="auto" className="min-w-0 break-words">
-                      {tag}
-                    </span>
-                    {/* The label gives only the verb: the name's tag part comes from the row, through
-                        react-aria's `aria-labelledby`, so the tag is not announced twice. */}
-                    <TitledControl
-                      title={t("dialog.project.removeTag", { tag })}
-                    >
-                      <Tag.RemoveButton
-                        aria-label={t("common.removeTag")}
-                        className={PICKED_TAG_REMOVE_CLASS}
-                      />
-                    </TitledControl>
-                  </>
-                )}
-              </Tag>
+                tag={tag}
+                removeTitle={t("dialog.project.removeTag", { tag })}
+              />
             ))}
           </TagGroup.List>
         </TagGroup>

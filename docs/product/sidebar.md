@@ -116,20 +116,23 @@ anywhere in the popover, and Enter in the search field close it and keep the fil
 drops that tag and the popover stays open. A picked tag also shows a check mark, so it is not told apart by colour
 alone. Opening and closing it with the mouse leaves keyboard focus where it was.
 
-- While a keyword is in force it shows as a tag right after the "Projects" label, with a small remove button that drops
-  just the keyword and leaves the picked tags. The picked tags follow it on the heading, in the same light accent tint
-  as the tags in a project's Tags field (see "Editing a project" in `docs/product/consoles-and-projects.md`), so they
-  are told apart from the keyword, and wrap onto further lines when they do not fit, while the label and the heading's
-  controls stay on the first line. Each picked tag has a small remove button that drops just that tag from the filter;
-  clicking a tag, the keyword's remove button or a tag's remove button with the mouse leaves keyboard focus where it
-  was, and removing the keyword, or the last tag, with the keyboard moves focus to the filter button. A **Clear filter**
-  button appears just before the filter button and clears the keyword and the picked tags together; the search field's
-  own clear button clears only the keyword.
+- While a filter is in force, a row under the Projects heading, across the sidebar's whole width, shows it; with no
+  filter the row is not there. The keyword, if there is one, comes first, as a tag in a neutral grey which otherwise
+  looks and behaves as the tags in a project's Tags field (see "Picked tags" in
+  `docs/product/consoles-and-projects.md`); removing it drops just the keyword and leaves the picked tags. The picked
+  tags follow it, in the accent look of those tags, so they are told apart from the keyword, and the row wraps onto
+  further lines when they do not fit. Removing a picked tag drops just that tag from the filter. A **Clear filter**
+  button at the row's end, on its first line, clears the keyword and the picked tags together; the search field's own
+  clear button clears only the keyword.
+- Clicking the keyword, a tag, either's remove button or Clear filter with the mouse leaves keyboard focus where it
+  was. Removing the keyword, or the last tag, with the keyboard (Backspace or Delete while it has focus), or pressing
+  Clear filter with the keyboard, moves focus to the filter button. In Tab order the row comes after the heading's
+  controls: the keyword, the picked tags, then Clear filter.
 - The tags offered are the distinct tags of the console's projects, in alphabetical order, so a tag that no project
   carries any more disappears from the choices, and from the filter if it was picked, without emptying the list. The
   pick is only hidden, not forgotten: if a project carries that tag again, it filters again.
 - The filtered list keeps the order and the dimming of "Order of projects and sessions" below.
-- With no project matching, a single line says so; the heading's Clear filter button clears the filter.
+- With no project matching, a single line says so; the Clear filter button under the heading clears the filter.
 - Each console has its own filter: switching to another console shows that console's own, and switching back, or
   entering and leaving focus mode, keeps it. Filters are not stored, so reloading the window shows every list
   unfiltered.
@@ -137,8 +140,8 @@ alone. Opening and closing it with the mouse leaves keyboard focus where it was.
 ### Expanding and collapsing the listed projects
 
 One icon-only button follows the filter button. Its name is whichever action it will take, **Collapse all projects**
-or **Expand all projects**. The controls at the end of the Projects heading run: Clear filter (only while a filter is
-in force), Filter projects, then this button.
+or **Expand all projects**. The Projects heading holds only its "Projects" label and, at its end, Filter projects
+followed by this button.
 
 - It shows while the console has projects **and** the list shows at least one of them. With a filter matching no
   project it is not there — there is nothing to act on — while the filter button beside it stays, as the way back.

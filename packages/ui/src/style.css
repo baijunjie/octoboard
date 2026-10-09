@@ -162,7 +162,7 @@
 }
 
 /* The fills of HeroUI's `--default` family inside the sidebar. A ghost button's hover and pressed
-   fill, a tertiary button's fill and the keyword chip's all come from `--default`, which is the
+   fill, a tertiary button's fill and the filter keyword's tag all come from `--default`, which is the
    sidebar's own colour in dark (L 0.274 against 0.27) and a step from it in light (1.08:1), so a
    control would show no fill at all. The sidebar takes its own translucent tints, stronger than a
    row's (`--panel-hover`): 1.19:1 (resting) and 1.31:1 (hovered) against the light sidebar, 1.24:1

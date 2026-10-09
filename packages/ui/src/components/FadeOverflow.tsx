@@ -237,11 +237,18 @@ export function FadeOverflow({
     };
     update();
     const stopObserving = observe(element, update);
-    const onScroll = () => scheduleMeasure(element);
-    element.addEventListener("scroll", onScroll, { passive: true });
+    const remeasure = () => scheduleMeasure(element);
+    element.addEventListener("scroll", remeasure, { passive: true });
+    // What the label holds can change with the pointer over its scope (a tag's hover-only spacer)
+    // without its box changing, which the observer never reports.
+    const scope = marqueeScope(element);
+    scope.addEventListener("pointerenter", remeasure);
+    scope.addEventListener("pointerleave", remeasure);
     return () => {
       stopObserving();
-      element.removeEventListener("scroll", onScroll);
+      element.removeEventListener("scroll", remeasure);
+      scope.removeEventListener("pointerenter", remeasure);
+      scope.removeEventListener("pointerleave", remeasure);
     };
   }, [clip]);
 

@@ -255,6 +255,7 @@ export const en = {
   "sidebar.filter.picked": "Selected tags",
   "sidebar.filter.noTags": "No project has a tag yet. Add tags in a project's settings.",
   "sidebar.filter.removeTag": "Remove tag {tag}",
+  "sidebar.filter.keyword": "Filter keyword",
   "sidebar.filter.removeKeyword": "Remove keyword {keyword}",
   "sidebar.expandAll": "Expand all projects",
   "sidebar.collapseAll": "Collapse all projects",

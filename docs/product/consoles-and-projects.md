@@ -171,6 +171,28 @@ console's projects carry, so a tag no project carries any more is gone from the 
 tags as the user likes. A tag is trimmed, an empty one is dropped, and one that matches another of the project's tags
 ignoring case is dropped, the first spelling staying.
 
+### Picked tags
+
+A tag the user has picked and can remove — in a project's Tags field, and under the sidebar's Projects heading while a
+tag filter is in force (see "Filtering the project list" in `docs/product/sidebar.md`) — looks and behaves the same in
+both places. The sidebar filter's keyword is shown as the same kind of tag, in a neutral grey instead of the accent
+tint (same section).
+
+- It is filled with a light accent tint and has accent-coloured text.
+- Its label is always one line. A label too long for its space fades out at its cut end and, while the mouse pointer is
+  over the tag, runs as a marquee through its whole text (see "Names too long for their space" in
+  `docs/product/labels-and-tooltips.md`); its full text is then also the tag's tooltip.
+- Its remove button is hidden at rest. It shows while the mouse pointer is over the tag or the tag has keyboard focus,
+  laid over the tag's end, the label fading out ahead of it. The tag's width never changes as the button shows or
+  hides. A label whose end the button then covers counts as cut, and its marquee scrolls until that end is clear of
+  the button; a label that ends well short of the button does not move.
+- Every picked tag is at least 3rem wide.
+- The tag takes the direction of its own text, decided by its first letter, whatever the UI language: a tag whose
+  first letter is Hebrew, Arabic, Syriac, Thaana or N'Ko runs right to left, any other left to right, and a tag with no
+  letter follows the UI language's direction. The remove button and the fade sit at the end the text runs to, so a
+  Latin tag under the Arabic UI has its button on the right, and an Arabic tag under the English UI on the left.
+- With keyboard focus on it, Backspace or Delete removes it.
+
 ### Associating a project
 
 There are three sources:
@@ -265,12 +287,14 @@ changed from the project's Rename or Project settings, the default agent and the
 "Project rows" in `docs/product/sidebar.md`). The tags field sits between the name and the default agent: typing in it
 offers the tags already in use that the project lacks, in a list that opens below the field and stays open after a pick
 so several can be added in a row, and Enter adds what was typed as a tag, or the highlighted suggestion if there is one;
-leaving the field adds it too. The tags the project carries show inside the field, ahead of the text input, in a
-light accent tint with accent-coloured text, and wrap onto more lines as they grow, the field growing with them; each
-has a remove button, and removing one puts the focus in the text input. Backspace in the empty text input removes the last tag, one per key press (holding it down does not
-keep removing). Clicking the field's empty area puts the focus in the text input. The same field is in the dialog that associates a project, and the tags chosen there go on every
-project that association creates. The association itself — the source, the directory, the remote URL — is fixed once the
-project exists; a project that should point somewhere else is removed and associated again.
+leaving the field adds it too. The tags the project carries show inside the field, ahead of the text input, and wrap
+onto more lines as they grow, the field growing with them. Each is a picked tag (see "Picked tags" above), and
+removing one, with its remove button or with Backspace or Delete while it has focus, puts the focus in the text input.
+Backspace in the empty text input removes the last tag, one per key press (holding it down does not keep removing).
+Clicking the field's empty area puts the focus in the text input. The same field is in the dialog that associates a
+project, and the tags chosen there go on every project that association creates. The association itself — the source,
+the directory, the remote URL — is fixed once the project exists; a project that should point somewhere else is
+removed and associated again.
 
 The name cannot be cleared: saving an empty name is rejected. The default agent can be cleared, which puts the project
 back to inheriting the console's default.

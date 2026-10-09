@@ -20,8 +20,9 @@ consoles' avatars, the ⋮ buttons and the pin buttons below. These are:
   focus mode. Its tooltip is a short "More actions", while the name announced for it also names what it belongs to
   ("Actions for session …" and the like), so that each ⋮ can be told apart;
 - the sidebar's other icon buttons — a project's **+** (New session), wherever it appears, the Projects heading's
-  Filter projects, the Clear filter beside it, and the Expand all projects or Collapse all projects button (see
-  "Expanding and collapsing the listed projects" in `docs/product/sidebar.md`), and focus mode's Leave focus mode;
+  Filter projects and its Expand all projects or Collapse all projects button (see "Expanding and collapsing the
+  listed projects" in `docs/product/sidebar.md`), the Clear filter under that heading (see "Filtering the project
+  list" in the same doc), and focus mode's Leave focus mode;
 - the pin button of a pinned project or session, whose tooltip is a short "Unpin", while the name announced for it
   also names what it unpins (see "Pinning" in `docs/product/sidebar.md`);
 - the archive view's Close button and each of its rows' Delete button, whose tooltip names the session;
@@ -55,12 +56,14 @@ badge they sit in, or the text beside them. These are:
 A single-line name or label too long for its space — a sidebar row's name, the top bar's breadcrumb, a session listed
 in a confirmation, the report panel's page timestamp, a name in a project pane's file tree or its header, a name or
 what follows it in the Git mode's change list, a worktree's name or path in its worktree selector, a branch's name in
-its branch selectors — fades out where it is cut off rather than ending in an ellipsis. A name, unlike the timestamp,
-then has its full text as its tooltip.
+its branch selectors, a picked tag's label and the sidebar filter's keyword (see "Picked tags" in
+`docs/product/consoles-and-projects.md`) — fades out where it is cut off rather than ending in an ellipsis. A name,
+unlike the timestamp, then has its full text as its tooltip.
 
 **While the pointer is over it, such a label runs as a marquee**, so all of it can be read:
 
-- For a sidebar row the pointer only has to be over the row; elsewhere it has to be over the label itself.
+- For a sidebar row the pointer only has to be over the row, and for a picked tag over the tag; elsewhere it has to be
+  over the label itself.
 - After a short pause the text scrolls through at reading speed, about 60 px a second, pauses at its end, scrolls
   quickly back to its start and goes round again for as long as the pointer stays.
 - When the pointer leaves, the text scrolls back to its start.
@@ -68,3 +71,5 @@ then has its full text as its tooltip.
   of the text is in view.
 - Nothing moves where the system asks for reduced motion, and a label that is cut at its start, such as a path
   (see "Right-to-left layout" in `docs/product/window-layout.md`), never runs.
+- On a picked tag, where the remove button covers the label's end while the pointer is over the tag, the text scrolls
+  until its end is clear of the button (see "Picked tags" in `docs/product/consoles-and-projects.md`).

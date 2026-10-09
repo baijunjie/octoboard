@@ -33,7 +33,7 @@ import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
-import { type FilterUpdate, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterTag, ProjectFilterTags } from "./ProjectFilter";
+import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterClear, ProjectFilterTag, ProjectFilterTags } from "./ProjectFilter";
 import { archiveSubmenu, consoleMenu, projectMenu, sessionMenu } from "./menus";
 import { archivedSessions, consoleActivity, isInactiveProject, liveSessions, sortProjects } from "./order";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
@@ -426,9 +426,11 @@ function ConsoleBody({
     <>
       <ConsoleSessionsSection handlers={handlers} console={thisConsole} sessions={sessions} selectedSessionId={selectedSessionId} />
       <SectionHeading
-        after={
-          // Only while the filter button is there (below): the chips hand focus to it when removed.
-          projects.length > 0 && (
+        below={
+          // Only while the filter button is there (above): the keyword, tags and clear button hand focus
+          // to it when removed.
+          projects.length > 0 &&
+          isFiltering(filter) && (
             <>
               {filter.keyword !== "" && (
                 <ProjectFilterTag
@@ -447,6 +449,7 @@ function ConsoleBody({
             </>
           )
         }
+        belowAction={<ProjectFilterClear onChange={setFilter} returnFocusTo={filterButton} />}
         action={
           projects.length > 0 && (
             <>
