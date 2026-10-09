@@ -134,9 +134,8 @@ select:focus-visible {
   align-items: center;
 }
 .brand img {
-  width: 120px;
-  height: 40px;
-  object-fit: contain;
+  width: 113px;
+  height: auto;
 }
 .desktop-nav {
   display: flex;
@@ -318,8 +317,7 @@ select:focus-visible {
   gap: 24px;
 }
 .menu-top .brand img {
-  width: 144px;
-  height: 48px;
+  width: 136px;
 }
 .overlay-links {
   width: min(960px, 100%);
@@ -1258,16 +1256,29 @@ h3 {
   margin-top: 16px;
 }
 .cta-brand {
-  display: block;
-  max-width: 680px;
-  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
 }
-.cta-brand img {
+.cta-brand-mascot {
+  width: 176px;
+  height: auto;
+}
+.cta-brand-name {
+  width: 360px;
+}
+.cta-brand-name img {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 3650 / 1382;
-  object-fit: contain;
+}
+.cta-brand-slogan {
+  margin-top: 16px;
+  text-align: start;
+  font-size: 18px;
+  line-height: 24px;
+  color: var(--muted);
 }
 .site-footer {
   padding-block: 48px 32px;
@@ -1283,8 +1294,7 @@ h3 {
   margin-inline: auto;
 }
 .footer-brand img {
-  width: 160px;
-  height: auto;
+  width: 151px;
 }
 .footer-identity > p {
   max-width: 320px;
@@ -1481,8 +1491,7 @@ h3 {
     gap: 12px;
   }
   .brand img {
-    width: 104px;
-    height: 32px;
+    width: 98px;
   }
   .nav-actions {
     margin-inline-start: auto;
@@ -1748,11 +1757,22 @@ h3 {
     line-height: 40px;
   }
   .cta-brand {
-    max-width: 320px;
+    flex-direction: column;
+    gap: 16px;
+    text-align: center;
   }
-  .cta-brand img {
-    aspect-ratio: 1;
-    object-fit: contain;
+  .cta-brand-mascot {
+    width: 160px;
+  }
+  .cta-brand-name {
+    width: 260px;
+    max-width: 100%;
+  }
+  .cta-brand-slogan {
+    margin-top: 12px;
+    text-align: center;
+    font-size: 15px;
+    line-height: 22px;
   }
   :lang(zh) .final-cta h2 {
     font-size: 30px;
@@ -1805,7 +1825,7 @@ h3 {
     max-width: 56px;
   }
   .brand img {
-    width: 96px;
+    width: 90px;
   }
 }
 [dir="rtl"] h1,
@@ -2110,4 +2130,13 @@ h3 {
     font-size: 36px;
     line-height: 40px;
   }
+}
+/* Letter-spacing breaks the joined or stacked letterforms of these scripts. */
+:lang(ar) .eyebrow,
+:lang(ar) .section-index,
+:lang(hi) .eyebrow,
+:lang(hi) .section-index,
+:lang(th) .eyebrow,
+:lang(th) .section-index {
+  letter-spacing: 0;
 }

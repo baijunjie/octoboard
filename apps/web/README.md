@@ -86,9 +86,9 @@ Run these commands from the repository root:
   and the supported language list.
 - [`apps/web/scripts/generate-og-images.py`](scripts/generate-og-images.py) writes one committed 1200×630 PNG per
   route code in [`apps/web/seo/site-seo.ts`](seo/site-seo.ts) (`zh`, not `zh-Hans`) to
-  `apps/web/public/og-image-<code>.png`. It reads
-  [`apps/web/public/branding/brand-slogan.png`](public/branding/brand-slogan.png) for the wordmark.
-  `nuxt generate` does not run this script.
+  `apps/web/public/og-image-<code>.png`. It draws
+  [`apps/web/public/wordmark.png`](public/wordmark.png) and each catalog's `brandSlogan` and
+  title lines. `nuxt generate` does not run this script.
   [`apps/web/nuxt.config.ts`](nuxt.config.ts) throws when the config loads if any of those files is missing,
   and the error tells you to run `python3 apps/web/scripts/generate-og-images.py`.
 - [`apps/web/scripts/preview.mjs`](scripts/preview.mjs) serves the static output on loopback at the configured base

@@ -36,6 +36,12 @@ Per-package commands are in that package's doc.
   the release credentials, read by `apps/desktop/scripts/release.mjs` alone.
   Root `scripts/` holds the helpers the build scripts share.
 
+## Brand artwork
+
+- [`assets/branding/`](../assets/branding/) — brand source artwork that no app serves, including the logo the root
+  README shows. The website's wordmark image is `apps/web/public/wordmark.png`; the slogan is localized text
+  and is not baked into any image.
+
 ## Deliverables
 
 - [`apps/daemon/`](../apps/daemon/README.md) — `octoboardd`, the Rust daemon and the core of the system rather than one

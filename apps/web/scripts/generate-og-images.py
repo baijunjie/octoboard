@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """Draw one 1200×630 share image for each website language.
 
-The card is the large-card size (1.91:1). Layout: the mascot on the left, the
-brand artwork and the three homepage title lines on the right, and the site
-hostname along the bottom of that text. A right-to-left title moves the mascot
-to the right and aligns the text to its inner edge. The mascot and the brand
-artwork are not mirrored.
+The card is the large-card size (1.91:1). Layout: the mascot on the left; on
+the right the wordmark, the localized slogan, and the three homepage title
+lines, with the site hostname along the bottom of that text. A right-to-left
+title moves the mascot to the right and aligns the text to its inner edge. The
+mascot and the wordmark are not mirrored.
 
-The brand artwork is public/branding/brand-slogan.png: the wordmark and the
-English slogan. It is the same on every card. The title lines come from each
-locale catalog, {appName} is filled from config/app.json, and the hostname
-comes from the origin written in site.config.ts. The filename uses the route
-code (zh, not zh-Hans), which is the code in seo/site-seo.ts. A line that does
-not fit, or a character the face cannot draw, fails the run.
+The wordmark is public/wordmark.png, the same on every card. The slogan and
+the title lines come from each locale catalog, and {appName} is filled from
+config/app.json. The hostname comes from the origin written in site.config.ts.
+The filename uses the route code (zh, not zh-Hans), which is the code in
+seo/site-seo.ts. A line that does not fit, or a character the face cannot
+draw, fails the run.
 
 Arabic, Devanagari, and Thai have to be shaped. Pillow's wheels do not ship
 libraqm, so this requires `brew install libraqm` and then finds it at import.
@@ -40,7 +40,7 @@ from PIL import Image, ImageDraw, ImageFont, features
 WEB = Path(__file__).resolve().parents[1]
 REPO = WEB.parents[1]
 LOGO = WEB / "public/logo.png"
-BRAND = WEB / "public/branding/brand-slogan.png"
+WORDMARK = WEB / "public/wordmark.png"
 
 WIDTH, HEIGHT = 1200, 630
 BACKGROUND = (0x00, 0x00, 0x00)
@@ -49,15 +49,17 @@ TEXT_TERTIARY = (0x77, 0x77, 0x77)
 GLOW = (0xFF, 0x4B, 0x3E)
 
 # Both sources use an integer divisor so the pixel grid stays intact.
-# The mascot is 1254×1254. The brand artwork is 2172×724.
+# The mascot is 1254×1254. The wordmark is 2044×344.
 ICON_SCALE = 3
-BRAND_SCALE = 4
+WORDMARK_SCALE = 4
 ICON_LEFT = 72
 TEXT_GAP = 64
 TEXT_RIGHT_MARGIN = 80
 DOMAIN_TOP_FROM_BOTTOM = 72
 TAGLINE_SIZES = (42, 28)
-NAME_TAGLINE_GAP = 36
+NAME_SLOGAN_GAP = 20
+SLOGAN_TITLE_GAP = 28
+SLOGAN_SIZES = (26, 20)
 TEXT_BLOCK_LIFT = 12
 DOMAIN_CLEARANCE = 24
 HERO_LINES = ("heroTitle", "heroTitleSecond", "heroTitleAccent")
@@ -137,9 +139,9 @@ def fill(template: str, name: str, code: str, key: str) -> str:
     return result
 
 
-def title_lines(catalog: dict[str, str], name: str, code: str) -> list[str]:
+def catalog_lines(catalog: dict[str, str], name: str, code: str, keys: tuple[str, ...]) -> list[str]:
     lines = []
-    for key in HERO_LINES:
+    for key in keys:
         value = catalog.get(key)
         if not isinstance(value, str):
             raise SystemExit(f"{code} is missing {key}")
@@ -252,12 +254,8 @@ def mascot() -> Image.Image:
     return scaled(LOGO, ICON_SCALE)
 
 
-def brand_lockup() -> tuple[Image.Image, tuple[int, int, int, int]]:
-    image = scaled(BRAND, BRAND_SCALE)
-    box = image.getbbox()
-    if box is None:
-        raise SystemExit(f"{BRAND.name} has no pixels")
-    return image, box
+def wordmark() -> Image.Image:
+    return scaled(WORDMARK, WORDMARK_SCALE)
 
 
 def glow(diameter: int) -> Image.Image:
@@ -269,7 +267,7 @@ def glow(diameter: int) -> Image.Image:
     return orb
 
 
-def render(lines: list[str], face: str, domain: str, *, rtl: bool) -> Image.Image:
+def render(slogan: str, lines: list[str], face: str, domain: str, *, rtl: bool) -> Image.Image:
     image = Image.new("RGBA", (WIDTH, HEIGHT), (*BACKGROUND, 255))
     icon = mascot()
     icon_size = icon.width
@@ -289,31 +287,38 @@ def render(lines: list[str], face: str, domain: str, *, rtl: bool) -> Image.Imag
         text_x = icon_x + icon_size + TEXT_GAP
         max_width = WIDTH - text_x - TEXT_RIGHT_MARGIN
     anchor = "ra" if rtl else "la"
-    brand, (ink_left, ink_top, ink_right, ink_bottom) = brand_lockup()
-    ink_width = ink_right - ink_left
-    ink_height = ink_bottom - ink_top
-    if ink_width > max_width:
-        raise SystemExit(f"{BRAND.name} is {ink_width}px wide and the column is {max_width}px")
+    brand = wordmark()
+    if brand.width > max_width:
+        raise SystemExit(f"{WORDMARK.name} is {brand.width}px wide and the column is {max_width}px")
     line_font = fit_size(face, lines, max_width, TAGLINE_SIZES, 500)
+    slogan_font = fit_size(face, [slogan], max_width, SLOGAN_SIZES, 500)
     domain_font = load_font("Geist", 28, 500)
     check_glyphs(line_font, lines, face)
+    check_glyphs(slogan_font, [slogan], face)
     check_glyphs(domain_font, [domain], "Geist")
 
     # Gaps are measured on ink, not on the pen origin. Faces sit on that
     # origin by different amounts, and a fixed origin gap changes with the face.
+    slogan_top = slogan_font.getbbox(slogan)[1]
+    slogan_height = slogan_font.getbbox(slogan)[3] - slogan_top
     line_top = line_font.getbbox(lines[0])[1]
     line_bottom = line_font.getbbox(lines[-1])[3]
     line_height = int(line_font.size * 1.35)
-    block_height = ink_height + NAME_TAGLINE_GAP + line_height * (len(lines) - 1) + (line_bottom - line_top)
+    block_height = (
+        brand.height + NAME_SLOGAN_GAP + slogan_height + SLOGAN_TITLE_GAP
+        + line_height * (len(lines) - 1) + (line_bottom - line_top)
+    )
     top = (HEIGHT - block_height) // 2 - TEXT_BLOCK_LIFT
     domain_top = HEIGHT - DOMAIN_TOP_FROM_BOTTOM
     if top + block_height > domain_top - DOMAIN_CLEARANCE:
         raise SystemExit(f"{lines!r} reaches the hostname; shorten the title or the type")
 
-    brand_x = text_x - ink_right if rtl else text_x - ink_left
-    image.alpha_composite(brand, (brand_x, top - ink_top))
+    brand_x = text_x - brand.width if rtl else text_x
+    image.alpha_composite(brand, (brand_x, top))
     draw = ImageDraw.Draw(image)
-    y = top + ink_height + NAME_TAGLINE_GAP - line_top
+    slogan_y = top + brand.height + NAME_SLOGAN_GAP - slogan_top
+    draw.text((text_x, slogan_y), slogan, font=slogan_font, fill=TEXT_TERTIARY, anchor=anchor)
+    y = top + brand.height + NAME_SLOGAN_GAP + slogan_height + SLOGAN_TITLE_GAP - line_top
     for line in lines:
         draw.text((text_x, y), line, font=line_font, fill=TEXT_SECONDARY, anchor=anchor)
         y += line_height
@@ -327,8 +332,9 @@ def main() -> None:
     for code, filename in locales():
         face = FONT_BY_CODE.get(code, "Geist")
         catalog = json.loads((WEB / "i18n/locales" / filename).read_text("utf-8"))
-        lines = title_lines(catalog, name, code)
-        image = render(lines, face, domain, rtl=is_rtl(lines))
+        lines = catalog_lines(catalog, name, code, HERO_LINES)
+        (slogan,) = catalog_lines(catalog, name, code, ("brandSlogan",))
+        image = render(slogan, lines, face, domain, rtl=is_rtl(lines))
         destination = WEB / "public" / f"og-image-{code}.png"
         image.save(destination, "PNG", optimize=True)
         print(f"  public/og-image-{code}.png")

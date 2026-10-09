@@ -48,9 +48,8 @@ useSeoMeta({
   ogImage: shareImage,
   ogImageWidth: 1200,
   ogImageHeight: 630,
-  // brand-slogan.png carries this English slogan on every language's card.
   ogImageAlt: () =>
-    `${config.public.appName} — The Programming Terminator — ${[t("heroTitle"), t("heroTitleSecond"), t("heroTitleAccent")].join(" ")}`,
+    `${config.public.appName} — ${t("brandSlogan")} — ${[t("heroTitle"), t("heroTitleSecond"), t("heroTitleAccent")].join(" ")}`,
   ogType: "website",
   ogSiteName: config.public.appName,
   twitterCard: "summary_large_image",

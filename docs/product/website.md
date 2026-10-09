@@ -70,16 +70,16 @@ title and description.
 
 Each language has one share image, 1200 by 630, at the deployment root as `og-image-<route code>.png`.
 The route code is the URL code in "Pages and languages", so Simplified Chinese is `og-image-zh.png`,
-not `zh-Hans`. The image shows the mascot published as `logo.png` at the deployment root, the brand
-artwork published as `branding/brand-slogan.png` at the deployment root, the three lines of the homepage
-title, and the hostname `octoboard.dev`. The brand artwork is the pixel wordmark and the English slogan
-"The Programming Terminator"; see "Brand slogan". It is the same on every language and is not translated.
-Those lines are the title on the homepage, not the SEO title sentence. Arabic places the mascot on the
-right and aligns the text to that inner edge. Neither the mascot nor the brand artwork is mirrored.
+not `zh-Hans`. The image shows the mascot published as `logo.png` at the deployment root, the pixel
+wordmark published as `wordmark.png` at the deployment root, that language's brand slogan drawn as text
+under the wordmark (see "Brand slogan"), the three lines of the homepage title, and the hostname `octoboard.dev`.
+The wordmark, the slogan and the title lines share one start edge. Those lines are the title on the homepage,
+not the SEO title sentence. Arabic places the mascot on the right and aligns the text to that inner edge. Neither
+the mascot nor the wordmark is mirrored.
 
 `og:image` and `twitter:image` are the absolute URL of that language's image. `og:image:width` is 1200 and
 `og:image:height` is 630. `twitter:card` is `summary_large_image`. `og:image:alt` is the application name,
-an em dash, "The Programming Terminator", an em dash, then the three homepage title lines joined with
+an em dash, that language's brand slogan, an em dash, then the three homepage title lines joined with
 spaces, with a space on each side of each dash.
 The privacy page uses the same image and the same alt text as that language's homepage. The unlocalized 404
 page uses the English image and the same alt text as the English homepage. It is not a separate card.
@@ -185,8 +185,9 @@ terms, and the operator's email address.
 The footer forms a compact centered group: the wordmark and localized tagline, followed by navigation links and
 copyright. On small screens, the wordmark and tagline stack vertically.
 
-The closing section displays the original combined mascot, wordmark, and slogan: a horizontal arrangement on wider
-screens and a vertical arrangement on small screens. Decorative graphics do not act as slide or pagination controls.
+The closing section displays the mascot and the wordmark with the localized brand slogan as text under it: a
+horizontal arrangement on wider screens, with the slogan starting at the wordmark's start edge, and a centered
+vertical arrangement on small screens. Decorative graphics do not act as slide or pagination controls.
 
 The floating header stays visible while scrolling and links to benefits, the coordination explanation, and questions
 from either page. Following a section link leaves space for the header above the destination. Its inline links
@@ -200,10 +201,16 @@ destination or another language closes the dialog as well.
 
 ## Brand slogan
 
-The brand slogan is "The Programming Terminator". Its two intended meanings are the ambition to hand programming work
-over to agents, and the image of a powerful Terminator in the programming world, reflected in the mechanical mascot.
-It is not a pun on "terminal". The slogan expresses a vision and a brand identity; it does not claim that fully
-autonomous development is already implemented.
+The brand slogan is "The Programming Terminator" in English. Its two intended meanings are the ambition to hand
+programming work over to agents, and the image of a powerful Terminator in the programming world, reflected in the
+mechanical mascot. It is not a pun on "terminal". The slogan expresses a vision and a brand identity; it does not
+claim that fully autonomous development is already implemented.
+
+Every language has its own translation, which keeps those meanings and uses the film's title in that language where
+one is established (Brazilian Portuguese "O Exterminador", Thai "คนเหล็ก", Vietnamese "Kẻ hủy diệt"). Translations use
+sentence case. The slogan appears as the eyebrow above the homepage title, as text under the wordmark in the closing
+section, under the wordmark on the share image, and in the language's Markdown page. On the website no image
+carries the slogan; the wordmark is the only brand image the pages use.
 
 ## Platform availability
 

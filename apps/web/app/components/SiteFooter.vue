@@ -12,10 +12,10 @@ const localePath = useLocalePath();
         class="brand footer-brand"
         :aria-label="config.public.appName"
         ><img
-          :src="`${config.app.baseURL}brand.png`"
+          :src="`${config.app.baseURL}wordmark.png`"
           alt=""
-          width="160"
-          height="54"
+          width="151"
+          height="25"
           loading="lazy"
       /></NuxtLink>
       <p>{{ t("footerTagline") }}</p>

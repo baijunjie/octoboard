@@ -21,10 +21,10 @@ useSeoMeta({
   <main class="error-page">
     <a :href="homeHref" class="brand" :aria-label="config.public.appName"
       ><img
-        :src="`${config.app.baseURL}brand.png`"
+        :src="`${config.app.baseURL}wordmark.png`"
         alt=""
-        width="160"
-        height="54"
+        width="151"
+        height="25"
     /></a>
     <div class="error-layout wrap">
       <div>

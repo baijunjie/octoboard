@@ -105,10 +105,10 @@ onBeforeUnmount(() => {
         :aria-label="config.public.appName"
       >
         <img
-          :src="`${config.app.baseURL}brand.png`"
+          :src="`${config.app.baseURL}wordmark.png`"
           alt=""
-          width="120"
-          height="40"
+          width="113"
+          height="19"
         />
       </NuxtLink>
       <nav class="desktop-nav" :aria-label="t('navMenu')">
@@ -160,10 +160,10 @@ onBeforeUnmount(() => {
                     class="brand"
                     @click="closeMenu(false)"
                     ><img
-                      :src="`${config.app.baseURL}brand.png`"
+                      :src="`${config.app.baseURL}wordmark.png`"
                       :alt="config.public.appName"
-                      width="144"
-                      height="48" /></NuxtLink
+                      width="136"
+                      height="23" /></NuxtLink
                   ><span class="menu-close-space" aria-hidden="true" />
                 </div>
                 <nav class="overlay-links" :aria-label="t('navMenu')">

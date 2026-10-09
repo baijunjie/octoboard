@@ -114,7 +114,7 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
       `${text("heroTitle")} ${text("heroTitleSecond")} ${text("heroTitleAccent")}`,
     ),
     `Canonical: ${canonical}`,
-    text("heroEyebrow"),
+    text("brandSlogan"),
     text("heroDescription"),
     text("heroStatus"),
     text("heroNote"),

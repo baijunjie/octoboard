@@ -29,7 +29,7 @@ useSeoMeta({
       <div class="hero-layout wrap">
         <div class="hero-copy">
           <p class="eyebrow">
-            <span class="red-square" />{{ t("heroEyebrow") }}
+            <span class="red-square" />{{ t("brandSlogan") }}
           </p>
           <h1>
             <span>{{ t("heroTitle") }}</span
@@ -146,7 +146,7 @@ useSeoMeta({
           </div>
           <div class="emblem-core">
             <img
-              :src="`${config.app.baseURL}branding/logo.png`"
+              :src="`${config.app.baseURL}logo-640.png`"
               alt=""
               width="160"
               height="160"
@@ -248,7 +248,7 @@ useSeoMeta({
             </div>
             <div class="remote-device remote-device-host">
               <img
-                :src="`${config.app.baseURL}branding/logo.png`"
+                :src="`${config.app.baseURL}logo-640.png`"
                 alt=""
                 width="96"
                 height="96"
@@ -315,21 +315,26 @@ useSeoMeta({
 
     <section class="final-cta section-frame">
       <div class="wrap final-cta-content" data-reveal>
-        <picture class="cta-brand">
-          <source
-            media="(max-width: 700px)"
-            width="3000"
-            height="3000"
-            :srcset="`${config.app.baseURL}branding/logo-brand-slogan-v.png`"
-          />
+        <div class="cta-brand">
           <img
-            :src="`${config.app.baseURL}branding/logo-brand-slogan-h.png`"
-            :alt="`${config.public.appName} — The Programming Terminator`"
-            width="3650"
-            height="1382"
+            class="cta-brand-mascot"
+            :src="`${config.app.baseURL}logo-640.png`"
+            alt=""
+            width="640"
+            height="640"
             loading="lazy"
           />
-        </picture>
+          <div class="cta-brand-name">
+            <img
+              :src="`${config.app.baseURL}wordmark.png`"
+              :alt="config.public.appName"
+              width="2044"
+              height="344"
+              loading="lazy"
+            />
+            <p class="cta-brand-slogan">{{ t("brandSlogan") }}</p>
+          </div>
+        </div>
         <p class="eyebrow">{{ t("ctaEyebrow") }}</p>
         <h2 class="preserve-lines">{{ t("ctaTitle") }}</h2>
         <p class="cta-description">{{ t("ctaDescription") }}</p>
