@@ -5,7 +5,7 @@ import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import { LANGUAGES, LANGUAGE_NAMES, isLanguage, type Language } from "../i18n/languages";
-import { SCENARIOS } from "./fixtures";
+import { GROUPS, SCENARIOS } from "./fixtures";
 
 const WIDTHS = [
   { label: "Wide", width: 1440 },
@@ -77,15 +77,17 @@ function Gallery(): React.ReactElement {
   }, [view]);
 
   const frameQuery = `?${new URLSearchParams({ scenario: scenario.id, theme: view.theme, lang: view.language })}`;
-  const groups = Array.from(new Set(SCENARIOS.map((s) => s.group)));
 
   return (
     <>
       <nav aria-label="Scenarios">
-        {groups.map((group) => (
-          <React.Fragment key={group}>
-            <h2>{group}</h2>
-            {SCENARIOS.filter((s) => s.group === group).map((s) => (
+        {GROUPS.map(({ title, icon: Icon }, index) => (
+          <section key={title} aria-labelledby={`group-${index}`}>
+            <h2 id={`group-${index}`}>
+              <Icon aria-hidden size={14} />
+              {title}
+            </h2>
+            {SCENARIOS.filter((s) => s.group === title).map((s) => (
               <a
                 key={s.id}
                 href={viewQuery({ ...view, scenario: s.id })}
@@ -98,7 +100,7 @@ function Gallery(): React.ReactElement {
                 {s.title}
               </a>
             ))}
-          </React.Fragment>
+          </section>
         ))}
       </nav>
       <main>

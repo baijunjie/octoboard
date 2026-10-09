@@ -7,7 +7,7 @@ import type { Scenario } from "../scenario";
 import { SAMPLE, snapshotState } from "./builders";
 import { IMAGES } from "./viewerImages";
 
-const GROUP = "Project files";
+const GROUP = "Project pane: files";
 
 /** The daemon error a request for a fixture path is answered with. */
 export interface FixtureError {

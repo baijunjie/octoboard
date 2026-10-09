@@ -26,15 +26,4 @@ export const emptyScenarios: Scenario[] = [
       projects: [projectOf("p-1", "c-1", "Website")],
     }),
   },
-  {
-    id: "empty-filter-no-tags",
-    group: GROUP,
-    title: "Project filter with no tags in use",
-    description: "No project carries a tag, so the filter's tag picker says where tags come from.",
-    state: snapshotState({
-      consoles: [consoleOf("c-1", "Main")],
-      projects: [projectOf("p-1", "c-1", "Website"), projectOf("p-2", "c-1", "Search API")],
-    }),
-    steps: [(ui) => ui.press(ui.t("sidebar.filter.open"))],
-  },
 ];

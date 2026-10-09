@@ -1,5 +1,6 @@
 import type { Agent, DirEntry, MessageParams } from "../protocol";
 import type { FixtureError, FixtureFiles } from "./fixtures/projectFiles";
+import type { GroupTitle } from "./fixtures/groups";
 import type { FixtureGit } from "./fixtures/projectGit";
 import type { ViewerSubject } from "../viewer/content";
 import type { State, ToastRequest } from "../store";
@@ -41,7 +42,7 @@ export type Step = (ui: Ui) => Promise<void>;
 export interface Scenario {
   id: string;
   /** The heading it is listed under. */
-  group: string;
+  group: GroupTitle;
   title: string;
   /** Said under the title in the gallery; what to look at. */
   description?: string;

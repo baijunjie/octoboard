@@ -2,7 +2,7 @@ import type { Agent, Project, Session, SessionStatus } from "../../protocol";
 import type { Scenario } from "../scenario";
 import { consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
 
-const GROUP = "Busy";
+const GROUP = "Sidebar sessions";
 
 const AGENTS: Agent[] = ["claude", "codex", "grok"];
 const STATUSES: SessionStatus[] = ["working", "idle", "waiting_user", "interrupted", "archived", "idle"];

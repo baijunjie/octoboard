@@ -1,7 +1,7 @@
 import type { Scenario } from "../scenario";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "./builders";
 
-const GROUP = "Console sessions";
+const GROUP = "Sidebar sessions";
 
 const console_ = consoleOf("c-1", "Main");
 const web = projectOf("p-web", console_.id, "Website");
@@ -12,13 +12,6 @@ const api = projectOf("p-api", console_.id, "Search API");
 const hub1 = sessionOf("s-hub-1", console_.id, undefined, "Hub", "idle", { colour: "olive" });
 const hub2 = sessionOf("s-hub-2", console_.id, undefined, "Hub 2", "working", { colour: "jade" });
 const hub3 = sessionOf("s-hub-3", console_.id, undefined, "Hub 3", "waiting_user", { colour: "teal" });
-
-// A console session whose bound sessions are all interrupted, so archiving it takes them along.
-const hub4 = sessionOf("s-hub-4", console_.id, undefined, "Hub 4", "idle", { colour: "azure" });
-const dormant = [
-  sessionOf("s-web-3", console_.id, web.id, "Tidy the changelog", "interrupted", { bound_to: hub4.id }),
-  sessionOf("s-api-3", console_.id, api.id, "Rename the index", "interrupted", { bound_to: hub4.id }),
-];
 
 const sessions = [
   hub1,
@@ -39,24 +32,5 @@ export const consoleSessionsScenarios: Scenario[] = [
       "The section above the project list lists every console session, each in its own colour. A bound project " +
       "session carries that colour as a binding badge in its sidebar row; an unbound one carries none.",
     state: snapshotState({ consoles: [console_], projects: [web, api], sessions }),
-  },
-  {
-    id: "console-sessions-focus-bound",
-    group: GROUP,
-    title: "A console session's focus mode",
-    description: "Only the sessions bound to Hub, in the project they are in; an unbound session and another owner's are left out.",
-    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    state: snapshotState({ consoles: [console_], projects: [web, api], sessions }),
-  },
-  {
-    id: "console-sessions-archive-cascade",
-    group: GROUP,
-    title: "Confirm archiving a console session with bound sessions",
-    description: "The confirmation lists the interrupted sessions bound to it, which are archived with it.",
-    state: snapshotState({ consoles: [console_], projects: [web, api], sessions: [hub4, ...dormant] }),
-    steps: [
-      (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 4" })),
-      (ui) => ui.press(ui.t("sidebar.session.archive")),
-    ],
   },
 ];

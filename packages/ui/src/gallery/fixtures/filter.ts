@@ -66,4 +66,15 @@ export const filterScenarios: Scenario[] = [
       (ui) => ui.wait(500),
     ],
   },
+  {
+    id: "filter-no-tags",
+    group: GROUP,
+    title: "No tags in use",
+    description: "No project carries a tag, so the filter's tag picker says where tags come from.",
+    state: snapshotState({
+      consoles: [console_],
+      projects: [projectOf("p-1", console_.id, "Website"), projectOf("p-2", console_.id, "Search API")],
+    }),
+    steps: [openFilter],
+  },
 ];

@@ -68,7 +68,7 @@ export const layoutScenarios: Scenario[] = [
   {
     id: "layout-rail-narrow",
     group: GROUP,
-    title: "Narrow window with the rail",
+    title: "Narrow window, sessions drawer open",
     description: "The rail and the top bar stay; the sidebar is a drawer over the terminal, starting right of the rail.",
     width: 800,
     state: railState,
@@ -77,7 +77,7 @@ export const layoutScenarios: Scenario[] = [
   {
     id: "layout-rail-narrow-report",
     group: GROUP,
-    title: "Narrow window, report drawer with the rail",
+    title: "Narrow window, report drawer open",
     width: 800,
     state: railState,
     steps: [
@@ -108,16 +108,6 @@ export const layoutScenarios: Scenario[] = [
     steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500)],
   },
   {
-    id: "layout-sidebar-hidden",
-    group: GROUP,
-    title: "Docked sidebar hidden",
-    description: "Hover the console's avatar on the rail to float the sidebar in.",
-    width: 1440,
-    preferences: { sidebarVisible: false },
-    state,
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout"))],
-  },
-  {
     id: "layout-report-hidden",
     group: GROUP,
     title: "Docked report panel hidden",
@@ -134,21 +124,5 @@ export const layoutScenarios: Scenario[] = [
     preferences: { sidebarWidth: 480, asideWidth: 720 },
     state,
     steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500)],
-  },
-  {
-    id: "layout-narrow-sidebar",
-    group: GROUP,
-    title: "Narrow window, sessions drawer open",
-    width: 800,
-    state,
-    steps: [(ui) => ui.press(ui.t("titleBar.sidebar.show"))],
-  },
-  {
-    id: "layout-narrow-report",
-    group: GROUP,
-    title: "Narrow window, report drawer open",
-    width: 800,
-    state,
-    steps: [(ui) => ui.press(ui.t("titleBar.sidebar.show")), (ui) => ui.press(ui.session("Hub")), (ui) => ui.press(ui.t("rail.report.show")), (ui) => ui.wait(500)],
   },
 ];

@@ -1,7 +1,7 @@
 import type { Scenario } from "../scenario";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "./builders";
 
-const GROUP = "Session statuses";
+const GROUP = "Sidebar sessions";
 
 const console_ = consoleOf("c-1", "Main");
 const second = consoleOf("c-2", "Second");

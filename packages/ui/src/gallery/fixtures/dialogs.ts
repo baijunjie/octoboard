@@ -25,6 +25,18 @@ const twoHubsState = snapshotState({
   ],
 });
 
+// A console session whose bound sessions are all interrupted, so archiving it takes them along.
+const cascadeHub = sessionOf("s-hub-4", console_.id, undefined, "Hub 4", "idle", { colour: "azure" });
+const cascadeState = snapshotState({
+  consoles: [console_],
+  projects: [web, api],
+  sessions: [
+    cascadeHub,
+    sessionOf("s-web-3", console_.id, web.id, "Tidy the changelog", "interrupted", { bound_to: cascadeHub.id }),
+    sessionOf("s-api-3", console_.id, api.id, "Rename the index", "interrupted", { bound_to: cascadeHub.id }),
+  ],
+});
+
 const consoleActions = (ui: Ui) =>
   ui.press(ui.t("sidebar.console.actions", { name: console_.name }));
 const projectActions = (ui: Ui, name: string) =>
@@ -191,12 +203,15 @@ export const dialogScenarios: Scenario[] = [
     ],
   },
   {
-    id: "dialog-edit-project-tags",
+    id: "dialog-archive-console-session",
     group: GROUP,
-    title: "Edit project with tags",
-    description: "The tags field of a project that carries tags, each removable.",
-    state: taggedState,
-    steps: editTaggedProject,
+    title: "Confirm archiving a console session with bound sessions",
+    description: "The confirmation lists the interrupted sessions bound to it, which are archived with it.",
+    state: cascadeState,
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 4" })),
+      (ui) => ui.press(ui.t("sidebar.session.archive")),
+    ],
   },
   {
     id: "dialog-edit-project-tag-suggestions",

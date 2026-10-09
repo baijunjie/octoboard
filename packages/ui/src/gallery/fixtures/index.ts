@@ -18,7 +18,9 @@ import { startupScenarios } from "./startup";
 import { statusScenarios } from "./statuses";
 import { viewerScenarios } from "./viewer";
 
-/** Every scenario, in the order the gallery lists them; a group is its scenarios' shared `group`. */
+export { GROUPS } from "./groups";
+
+/** Every scenario; within a group the gallery lists them in this order. */
 export const SCENARIOS: Scenario[] = [
   ...emptyScenarios,
   ...busyScenarios,
@@ -27,6 +29,7 @@ export const SCENARIOS: Scenario[] = [
   ...consoleSessionsScenarios,
   ...gitScenarios,
   ...filterScenarios,
+  ...startupScenarios,
   ...connectionScenarios,
   ...noticeScenarios,
   ...archiveScenarios,
@@ -37,5 +40,4 @@ export const SCENARIOS: Scenario[] = [
   ...dialogScenarios,
   ...viewerScenarios,
   ...layoutScenarios,
-  ...startupScenarios,
 ];

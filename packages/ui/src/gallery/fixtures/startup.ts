@@ -1,6 +1,6 @@
 import type { Scenario } from "../scenario";
 
-const GROUP = "Startup screens";
+const GROUP = "Startup and connection";
 
 export const startupScenarios: Scenario[] = [
   { id: "startup-no-address", group: GROUP, title: "No daemon address", startup: { kind: "noAddress" } },

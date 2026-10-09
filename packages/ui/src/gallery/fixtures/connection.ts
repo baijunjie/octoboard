@@ -12,26 +12,26 @@ const sessions = [
 const connected = (connectionState: "open" | "reconnecting" | "closed") =>
   snapshotState({ consoles: [console_], projects: [project], sessions, connectionState });
 
-const DAEMON = "Daemon connection";
+const STARTUP_AND_CONNECTION = "Startup and connection";
 const TERMINAL = "Terminal";
 
 export const connectionScenarios: Scenario[] = [
   {
     id: "daemon-connecting",
-    group: DAEMON,
+    group: STARTUP_AND_CONNECTION,
     title: "Connecting, no snapshot yet",
     state: { connectionState: "connecting" },
   },
   {
     id: "daemon-closed-before-snapshot",
-    group: DAEMON,
+    group: STARTUP_AND_CONNECTION,
     title: "Never connected, attempts spent",
     description: "The banner with Try again over a window with nothing to show.",
     state: { connectionState: "closed" },
   },
   {
     id: "daemon-reconnecting",
-    group: DAEMON,
+    group: STARTUP_AND_CONNECTION,
     title: "Reconnecting",
     description: "The connection banner along the bottom over the last known state.",
     state: connected("reconnecting"),
@@ -39,7 +39,7 @@ export const connectionScenarios: Scenario[] = [
   },
   {
     id: "daemon-lost",
-    group: DAEMON,
+    group: STARTUP_AND_CONNECTION,
     title: "Reconnect budget spent",
     description: "The banner offers Try again.",
     state: connected("closed"),

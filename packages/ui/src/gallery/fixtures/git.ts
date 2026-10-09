@@ -1,7 +1,7 @@
 import type { Scenario } from "../scenario";
 import { consoleOf, gitStatusOf, projectOf, sessionOf, snapshotState } from "./builders";
 
-const GROUP = "Git";
+const GROUP = "Branch badges";
 
 const console_ = consoleOf("c-1", "Main");
 

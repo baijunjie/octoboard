@@ -8,7 +8,7 @@ import type { FixtureError } from "./projectFiles";
 import { SAMPLE, snapshotState } from "./builders";
 import { IMAGES } from "./viewerImages";
 
-const GROUP = "Project Git";
+const GROUP = "Project pane: Git";
 
 /** One change of a fixture worktree: the entry its list carries, and what reading it answers — its
  * patch and its sides' bodies, or an error. */

@@ -1,7 +1,7 @@
 import type { Scenario } from "../scenario";
 import { SAMPLE, sessionOf, snapshotState } from "./builders";
 
-const TRUST = "Trust and toasts";
+const TRUST = "Trust prompts and toasts";
 
 const { console: console_, web, api } = SAMPLE;
 // A session of each of the other two agents, for the prompts and notices that name the agent.
