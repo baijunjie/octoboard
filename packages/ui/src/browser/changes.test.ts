@@ -21,8 +21,13 @@ it("orders sections as git status does, and paths within one as the file tree do
     "staged b.ts renamed",
     "conflicted z.txt conflicted",
     "unstaged src/a.ts modified",
-    "untracked new.txt added",
+    "untracked new.txt untracked",
   ]);
+});
+
+it("calls a staged change with an absent old side added, and only the untracked group untracked", () => {
+  expect(changeItem({ group: "staged", old: absent, new: at("n.txt") }).status).toBe("added");
+  expect(changeItem({ group: "untracked", old: absent, new: at("n.txt") }).status).toBe("untracked");
 });
 
 it("tells one path's staged and unstaged changes apart", () => {

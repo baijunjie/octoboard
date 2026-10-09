@@ -27,14 +27,16 @@ export type Comparison =
  * answers with stays until it is asked for again: a branch that moves meanwhile never repoints it.
  * Choosing other branches is another comparison, whose state starts afresh; a reply is taken only
  * for the latest request and the branches it was asked for. A request lost with the connection is
- * sent again once the connection is back; a comparison already held is kept as it is.
+ * sent again once the connection is back; a comparison already held is kept as it is. `refresh`
+ * settles once the comparison has been answered or has failed, or when a newer request has taken
+ * its place.
  */
 export function useBranchComparison(
   project: string,
   left: string | undefined,
   right: string | undefined,
   active: boolean,
-): { comparison: Comparison; refresh: () => void } {
+): { comparison: Comparison; refresh: () => Promise<void> } {
   const t = useT();
   const language = useCurrentLanguage();
   const { request, store } = useDaemon();
@@ -45,9 +47,9 @@ export function useBranchComparison(
   const live = useRef({ alive: true, sequence: 0, pair, lost: false, sent: undefined as string | undefined });
   live.current.pair = pair;
 
-  const send = (background: boolean) => {
+  const send = (background: boolean): Promise<void> => {
     const s = live.current;
-    if (left === undefined || right === undefined) return;
+    if (left === undefined || right === undefined) return Promise.resolve();
     const sequence = ++s.sequence;
     const asked = s.pair;
     s.sent = asked;
@@ -57,7 +59,7 @@ export function useBranchComparison(
       setHeld((now) => ({ pair: asked, comparison: change(now.pair === asked ? now.comparison : { state: "loading" }) }));
     setComparison((comparison) => (comparison.state === "loaded" || (comparison.state === "error" && background) ? comparison : { state: "loading" }));
     const slot = `comparison:${project}`;
-    sendGitRequest(slot, () => (current() ? request({ type: "compare_project_branches", project, left, right, slot }) : undefined))
+    return sendGitRequest(slot, () => (current() ? request({ type: "compare_project_branches", project, left, right, slot }) : undefined))
       .then((reply) => {
         if (!reply || !current() || reply.type !== "project_comparison" || reply.project !== project) return;
         if (reply.left.branch !== left || reply.right.branch !== right) return;
@@ -101,8 +103,6 @@ export function useBranchComparison(
   const comparison: Comparison = pair === undefined ? { state: "idle" } : held.pair === pair ? held.comparison : { state: "loading" };
   return {
     comparison,
-    refresh: () => {
-      if (pair !== undefined) send(false);
-    },
+    refresh: () => (pair !== undefined ? send(false) : Promise.resolve()),
   };
 }

@@ -344,8 +344,13 @@ const newSession = text("src/session.ts", NEW_SESSION);
 const before = binary("assets/logo.png", IMAGES.before_png);
 const after = binary("assets/logo.png", IMAGES.after_png);
 
-function change(path: string, oldSide: ViewerChangeSide, newSide: ViewerChangeSide, patch?: string, source = "Unstaged"): ViewerSubject {
-  return { key: `${source}:${path}`, path, source, content: { state: "change", change: { old: oldSide, new: newSide, patch } } };
+function change(path: string, oldSide: ViewerChangeSide, newSide: ViewerChangeSide, patch?: string, stage = "Unstaged"): ViewerSubject {
+  return { key: `${stage}:${path}`, path, stage, content: { state: "change", change: { old: oldSide, new: newSide, patch } } };
+}
+
+// An untracked file is shown alone, with the Untracked chip and no stage tag.
+function untracked(path: string, body: ViewerBody): ViewerSubject {
+  return { key: `Untracked:${path}`, path, status: "untracked", content: { state: "change", change: { old: { state: "absent" }, new: present(path, body) } } };
 }
 
 async function changes(): Promise<ViewerSubject[]> {
@@ -358,7 +363,24 @@ async function changes(): Promise<ViewerSubject[]> {
     change("src/moved-in.ts", { state: "out_of_scope", repositoryPath: "packages/shared/src/moved-in.ts" }, present("src/moved-in.ts", newSession)),
     change("src/moved-out.ts", present("src/moved-out.ts", oldSession), { state: "out_of_scope", repositoryPath: "packages/shared/src/moved-out.ts" }),
     change("assets/logo.png", present("assets/logo.png", before), present("assets/logo.png", after)),
-    change("assets/new.png", { state: "absent" }, present("assets/new.png", after)),
+    untracked("assets/new.png", after),
+    untracked("src/scratch.ts", text("src/scratch.ts", NEW_SESSION)),
+    {
+      key: "Conflicted:src/merge.ts",
+      path: "src/merge.ts",
+      content: {
+        state: "conflict",
+        conflict: "Both sides modified this file. The file on disk is shown below with its conflict markers.",
+        body: text("src/merge.ts", "<<<<<<< ours\nconst a = 1;\n=======\nconst a = 2;\n>>>>>>> theirs\n"),
+      },
+    },
+    {
+      key: "Compare:src/session.ts",
+      path: "src/session.ts",
+      source: "main at 1234567 to feature at fedcba0",
+      sourceText: "main at 1234567 to feature at fedcba0",
+      content: { state: "change", change: { old: present("src/session.ts", oldSession), new: present("src/session.ts", newSession), patch: MODIFIED_PATCH } },
+    },
     change("bin/tool.wasm", present("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAA=" })), present("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAABBAFgAAA=" }))),
     change("data/table.ts", present("data/table.ts"), present("data/table.ts"), largePatch()),
     // A hunk header that promises three lines per side and delivers two: the renderer rejects it,
@@ -377,7 +399,7 @@ async function changes(): Promise<ViewerSubject[]> {
       "diff --git a/src/empty.ts b/src/empty.ts\nnew file mode 100644\nindex 0000000..e69de29\n",
       "Staged",
     ),
-    { key: "Unstaged:src/offline.ts", path: "src/offline.ts", source: "Unstaged", content: { state: "disconnected", what: "change" } },
+    { key: "Unstaged:src/offline.ts", path: "src/offline.ts", stage: "Unstaged", status: "modified", content: { state: "disconnected", what: "change" } },
     // A change that arrived without a patch, which has no diff to draw.
     change("src/session.ts", present("src/session.ts", oldSession), present("src/session.ts", newSession), undefined, "Staged"),
   ];

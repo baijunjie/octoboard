@@ -10,6 +10,7 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "
 
 import { RENDER_BUDGETS } from "./budgets";
 import { CODE_THEMES } from "./codeTheme";
+import type { DiffLayout } from "./diffLayout";
 
 // GitHub's high-contrast palettes: of the bundled themes measured, the ones whose every token
 // reaches WCAG AA's 4.5:1 on the code background in both appearances.
@@ -160,7 +161,7 @@ export interface DiffRenderProps {
   name: string;
   /** One change's unified patch, as `git` writes it. */
   patch: string;
-  layout: "unified" | "split";
+  layout: DiffLayout;
   theme: "light" | "dark";
   /** As `FileRenderProps.onDrawn`. */
   onDrawn?: () => void;

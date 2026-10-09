@@ -29,13 +29,14 @@ export type ChangeList =
  *
  * A reply is taken only for the latest request, of this project and of the worktree it was asked
  * for, and only while the hook is mounted. The list has one slot per project, so a newer request
- * cancels the older one in the daemon too.
+ * cancels the older one in the daemon too. `refresh` settles once the list it asked for has been
+ * taken or has failed, or when a newer request has taken its place.
  */
 export function useChangeList(
   project: string,
   worktree: string | undefined,
   active: boolean,
-): { list: ChangeList; refresh: () => void } {
+): { list: ChangeList; refresh: () => Promise<void> } {
   const t = useT();
   const language = useCurrentLanguage();
   const { request, store } = useDaemon();
@@ -48,7 +49,7 @@ export function useChangeList(
 
   /** Asks for the list. In the `background` a held list or failure stays on screen meanwhile;
    * otherwise a failure gives way to `loading`, as the user asked again. */
-  const send = (background: boolean, attempt = 0) => {
+  const send = (background: boolean, attempt = 0): Promise<void> => {
     const s = live.current;
     const sequence = ++s.sequence;
     const asked = s.worktree;
@@ -61,7 +62,7 @@ export function useChangeList(
       list.state === "loading" || (list.state === "error" && !background) ? { state: "loading" } : list.refreshing ? list : { ...list, refreshing: true },
     );
     const slot = `changes:${project}`;
-    sendGitRequest(slot, () =>
+    return sendGitRequest(slot, () =>
       current() ? request({ type: "list_project_changes", project, ...(asked === undefined ? {} : { worktree: asked }), slot }) : undefined,
     )
       .then((reply) => {
@@ -134,8 +135,6 @@ export function useChangeList(
 
   return {
     list: held.worktree === worktree ? held.list : { state: "loading" },
-    refresh: () => {
-      if (live.current.active) send(false);
-    },
+    refresh: () => (live.current.active ? send(false) : Promise.resolve()),
   };
 }

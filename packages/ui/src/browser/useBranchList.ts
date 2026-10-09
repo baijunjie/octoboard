@@ -22,9 +22,10 @@ export type BranchList =
  * every `AUTO_REFRESH_MS` while the window is in front, on coming back to it after a while, on
  * `refresh`, and after a reconnect — so a branch created, moved or deleted shows in the selectors,
  * and a comparison can tell that a branch it compared has moved since. A reply is taken only for
- * the latest request, and only while the hook is mounted.
+ * the latest request, and only while the hook is mounted. `refresh` settles once the request has
+ * been answered or has failed, or when a newer request has taken its place.
  */
-export function useBranchList(project: string, active: boolean): { branches: BranchList; refresh: () => void } {
+export function useBranchList(project: string, active: boolean): { branches: BranchList; refresh: () => Promise<void> } {
   const t = useT();
   const language = useCurrentLanguage();
   const { request, store } = useDaemon();
@@ -33,7 +34,7 @@ export function useBranchList(project: string, active: boolean): { branches: Bra
   const live = useRef({ alive: true, active, sequence: 0, inFlight: false, asked: false, lastRefresh: 0 });
   live.current.active = active;
 
-  const send = () => {
+  const send = (): Promise<void> => {
     const s = live.current;
     s.asked = true;
     const sequence = ++s.sequence;
@@ -42,7 +43,7 @@ export function useBranchList(project: string, active: boolean): { branches: Bra
     s.lastRefresh = Date.now();
     const slot = `branches:${project}`;
     let sentAt = 0;
-    sendGitRequest(slot, () => {
+    return sendGitRequest(slot, () => {
       if (!current()) return undefined;
       sentAt = performance.now();
       return request({ type: "list_project_branches", project, slot });
@@ -102,8 +103,6 @@ export function useBranchList(project: string, active: boolean): { branches: Bra
 
   return {
     branches,
-    refresh: () => {
-      if (live.current.active) send();
-    },
+    refresh: () => (live.current.active ? send() : Promise.resolve()),
   };
 }

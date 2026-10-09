@@ -229,6 +229,33 @@
   --danger-foreground: var(--eclipse);
 }
 
+/* The colour of an untracked file's chip (`StatusChip.tsx`), after the IDEs' "unversioned files": a
+   muted coral, hue 38 against danger's 27 (light) and 24 (dark) and warning's 72 (light) and 76
+   (dark), and a little over half of danger's chroma, so it reads as neither a deletion nor a
+   conflict. The chip is HeroUI's
+   soft shape, a 15% fill of the colour under a label that is a darker (light) or paler (dark) step
+   of it. Label on the fill as drawn (15% fill composited in sRGB over the surface, then WCAG
+   contrast), on `--panel`, `--panel-sidebar`, a selected row on each, a hovered row on each (sidebar
+   first, then panel) and a dialog's `--overlay`: light 5.86 / 5.55 / 5.08 / 4.83 / 5.13 / 5.43 /
+   6.12, dark 10.24 / 9.44 / 8.30 / 7.65 / 8.27 / 9.10 / 11.09. */
+:root {
+  --untracked: oklch(0.55 0.12 38);
+  --untracked-foreground: oklch(0.46 0.1 38);
+}
+
+.dark,
+[data-theme="dark"] {
+  --untracked: oklch(0.66 0.11 38);
+  --untracked-foreground: oklch(0.92 0.05 38);
+}
+
+/* Unlayered, so it wins over HeroUI's `.chip--default.chip--soft`, which sits in `@layer components`,
+   whatever the specificity. */
+.chip.chip-untracked {
+  --chip-bg: color-mix(in oklab, var(--untracked) 15%, transparent);
+  --chip-fg: var(--untracked-foreground);
+}
+
 /* The colours of the status glyphs (`StatusIcon.tsx`: a waiting session's hand, a working one's
    dot; the rail's waiting count; and the top bar's terminal connection), which carry meaning and so
    need 3:1 on every surface they sit on: the panel, the sidebar, a selected row, the chrome, and on
@@ -437,9 +464,9 @@ html.pane-resizing * {
 }
 
 @theme {
-  /* A spinning glyph showing work in progress (`ConnectionBanner.tsx`, `Rail.tsx`,
-     `GitBadge.tsx`): the stock spin, slower. Defined as a whole animation because `animate-spin`
-     is a shorthand that resets any duration set beside it. */
+  /* A spinning glyph showing work in progress (`ConnectionBanner.tsx`, `GitBadge.tsx`,
+     `ProjectBrowser.tsx`, `TerminalConnection.tsx`): the stock spin, slower. Defined as a whole
+     animation because `animate-spin` is a shorthand that resets any duration set beside it. */
   --animate-spin-slow: spin 2s linear infinite;
   --animate-status-wave: status-wave 2.4s ease-in-out infinite;
   --animate-sync-nudge: sync-nudge 1s ease-in-out infinite;

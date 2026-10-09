@@ -95,17 +95,75 @@ it("follows a comparison made again with the change still in it, and closes on o
   expect((await answer("read_project_comparison_change", read)) as object).toMatchObject({ right: { commit: "c2" } });
 
   // Made again at another commit, with the change still in it: read again from the new pair.
-  act(() => latest.git.refresh());
+  act(() => void latest.git.refresh());
   await sourceAndBranches();
   await answer("compare_project_branches", comparison("c3", ["a.txt"]));
   expect((await answer("read_project_comparison_change", read)) as object).toMatchObject({ right: { commit: "c3" } });
   expect(latest.git.viewer?.subject.key).toContain("c3");
 
   // Made again without it: no such change between those commits, so the viewer closes.
-  act(() => latest.git.refresh());
+  act(() => void latest.git.refresh());
   await sourceAndBranches();
   await answer("compare_project_branches", comparison("c4", ["b.txt"]));
   expect(latest.git.viewer).toBeUndefined();
   expect(latest.browser.selectedComparedChange).toBeUndefined();
   expect(pending.some((request) => request.body.type === "read_project_comparison_change")).toBe(false);
+});
+
+it("follows the list's status for an open worktree change whose key did not change", async () => {
+  let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
+  const Probe = () => {
+    const browser = useProjectBrowserState("p");
+    latest = { browser, git: useGitReview("p", browser, true) };
+    return null;
+  };
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  act(() =>
+    root.render(
+      <DaemonProvider value={daemon}>
+        <Probe />
+      </DaemonProvider>,
+    ),
+  );
+  act(() => latest.browser.setGitView("worktree"));
+  const worktree = { id: "w", root: "/r", main: true, head: "c1", branch: "main", scope_present: true };
+  await answer("get_project_source", () => ({
+    type: "project_source",
+    source: { project: "p", root: "/r", resolved_root: "/r", root_id: "r", git_error: null, git: { repository: "repo", common_dir: "/r/.git", worktree: "w", scope: "", worktrees: [worktree] } },
+  }));
+  // A key names a present side by its path alone, so a file turning into a link keeps its key.
+  const source = { kind: "index", worktree: "w", blob: "b" } as const;
+  const listed = (kind: "file" | "symlink", version: string) => () =>
+    ({
+      type: "project_changes",
+      project: "p",
+      worktree: null,
+      head: "c1",
+      changes: [
+        {
+          group: "unstaged",
+          old: { state: "present", path: "a.txt", kind: "file", source },
+          new: { state: "present", path: "a.txt", kind, source: { kind: "live", root_id: "r", version } },
+        },
+      ],
+      complete: true,
+    }) satisfies Event;
+  await answer("list_project_changes", listed("file", "1"));
+  const items = latest.git.view.worktree.list;
+  if (items.state !== "loaded") throw new Error(items.state);
+  act(() => latest.git.view.worktree.onOpen(items.items[0]));
+  const side = { state: "absent" } as const;
+  const readBack = (): Event => ({ type: "project_change", project: "p", worktree: null, group: "unstaged", head: null, old: side, new: side, patch: null });
+  await answer("read_project_change", readBack);
+  expect(latest.git.viewer?.subject.status).toBe("modified");
+
+  act(() => void latest.git.refresh());
+  await answer("get_project_source", () => ({
+    type: "project_source",
+    source: { project: "p", root: "/r", resolved_root: "/r", root_id: "r", git_error: null, git: { repository: "repo", common_dir: "/r/.git", worktree: "w", scope: "", worktrees: [worktree] } },
+  }));
+  await answer("list_project_changes", listed("symlink", "2"));
+  await answer("read_project_change", readBack);
+  expect(latest.git.viewer?.subject.status).toBe("typeChanged");
 });

@@ -3,7 +3,8 @@
 // are two readings of one order and can never disagree, as the tree's are (`tree.ts`).
 import type { PlainMessageKey } from "../i18n/catalog";
 import type { ChangeEntry, ChangeGroup, ChangeSide, ConflictKind } from "../protocol";
-import { changeStatus, type ChangeStatus as SideStatus } from "../viewer/content";
+import { changeStatus } from "../viewer/content";
+import type { StatusKey } from "../viewer/statusMarks";
 import { compareFilePaths } from "./tree";
 
 /** A part of the change list: one of a worktree's change groups, the paths in conflict, or the one
@@ -14,10 +15,8 @@ export type ChangeSection = ChangeGroup | "conflicted" | "committed";
  * stops one, then the rest. */
 export const SECTION_ORDER: readonly ChangeSection[] = ["staged", "conflicted", "unstaged", "untracked", "committed"];
 
-/** How a change reads in the list: as the viewer words its two sides, or in conflict. */
-export type ChangeStatus = SideStatus | "conflicted";
-
-/** Each section's name, which is also the viewer's wording of where a change's content is from. */
+/** Each section's name, which is what the list heads it with and, for a staged or unstaged change,
+ * what the viewer tags it with. */
 export const SECTION_LABELS: Record<ChangeSection, PlainMessageKey> = {
   staged: "git.group.staged",
   unstaged: "git.group.unstaged",
@@ -46,7 +45,7 @@ export interface ChangeItem {
   /** The wire path the change is named and ordered by: its new side's, or its old side's when the
    * new one is absent or outside the project. */
   path: string;
-  status: ChangeStatus;
+  status: StatusKey;
   /**
    * The versions the listing gave, as one string: a listing that changes it has news of the change.
    */
@@ -71,8 +70,11 @@ export function changeKey(entry: ChangeEntry): string {
   return JSON.stringify([entry.group, sideKey(entry.old), sideKey(entry.new)]);
 }
 
-function entryStatus(entry: ChangeEntry): ChangeStatus {
-  return entry.group === "conflicted" ? "conflicted" : changeStatus(entry);
+// An untracked file has an absent old side, which `changeStatus` would call added; it is a status of
+// its own, here once for the list and the viewer both.
+function entryStatus(entry: ChangeEntry): StatusKey {
+  if (entry.group === "conflicted") return "conflicted";
+  return entry.group === "untracked" ? "untracked" : changeStatus(entry);
 }
 
 function entryPath(entry: ChangeEntry): string {

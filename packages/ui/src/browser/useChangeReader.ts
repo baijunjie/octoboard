@@ -43,7 +43,8 @@ export interface ChangeReader {
   origin?: ChangeOrigin;
   /** What is shown of the change, for telling from a listing whether to read it again. */
   shown: ShownChange;
-  /** Shows `item`, reading it from `origin`. */
+  /** Shows `item`, reading it from `origin`; opening the change already shown keeps what is shown
+   * until the answer is in, as `reload` does. */
   open: (item: ChangeItem, origin: ChangeOrigin) => void;
   /** Reads the change shown again, keeping what is shown until the answer is in. */
   reload: () => void;
@@ -234,6 +235,12 @@ export function useChangeReader(project: string): ChangeReader {
   const key = subjectKey(opened.item, origin);
   const current = shown?.key === key ? shown : undefined;
   const content = current?.content ?? { state: "loading" };
+  const isolate = (name: string) => `\u2068${displayWirePath(name)}\u2069`;
+  // A worktree's change says where it is from in two ways: the stage of a staged or unstaged one, as
+  // a tag of its own; and nothing for the rest, which their status chip already says (untracked,
+  // in conflict). Only a comparison has a source to word.
+  const { section } = opened.item;
+  const stage = section === "staged" || section === "unstaged" ? t(SECTION_LABELS[section]) : undefined;
   // A comparison's change says which branches, at which commits, it is read from.
   const source =
     origin.kind === "comparison"
@@ -246,9 +253,20 @@ export function useChangeReader(project: string): ChangeReader {
             toCommit: shortCommit(origin.right.commit),
           },
         })
-      : t(SECTION_LABELS[opened.item.section]);
+      : undefined;
+  // The same wording as `source`, as plain text for the description's tooltip, each branch name
+  // isolated by U+2068/U+2069 the way the `<bdi>`s isolate it in `source`.
+  const sourceText =
+    origin.kind === "comparison"
+      ? t("git.compare.source", {
+          from: isolate(origin.left.branch),
+          fromCommit: shortCommit(origin.left.commit),
+          to: isolate(origin.right.branch),
+          toCommit: shortCommit(origin.right.commit),
+        })
+      : undefined;
   return {
-    subject: { key, path: opened.item.path, source, content },
+    subject: { key, path: opened.item.path, source, sourceText, stage, status: opened.item.status, content },
     item: opened.item,
     origin,
     shown: current?.failed ? { state: "error", changing: current.failed.changing } : content.state === "loading" ? { state: "loading" } : { state: "read" },

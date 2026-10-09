@@ -1,32 +1,22 @@
-import { Chip, Header, ListBox } from "@heroui/react";
+import { Header, ListBox } from "@heroui/react";
 import React, { useMemo } from "react";
 import { Collection, ListLayout, Virtualizer, type Key } from "react-aria-components";
 
 import { FadeOverflow } from "../components/FadeOverflow";
+import { useScrollFade } from "../components/useScrollFade";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useCurrentLanguage, useT } from "../i18n/react";
+import { StatusChip } from "../viewer/StatusChip";
+import { STATUS_MARKS, type StatusKey } from "../viewer/statusMarks";
 import { displayWirePath, wireBaseName } from "../wirePath";
-import { SECTION_LABELS, sections, type ChangeItem, type ChangeSection, type ChangeStatus } from "./changes";
+import { SECTION_LABELS, sections, type ChangeItem, type ChangeSection } from "./changes";
 
 /** Every row is one line of this height, and every section heading one of its own, which is what
  * lets the list be virtualized. */
 export const CHANGE_ROW_HEIGHT = 28;
 const HEADING_HEIGHT = 30;
 
-/** Each status's letter and its colour; the row's name says it in words. A, M, D, R and T are
- * `git status --short`'s; there an untracked file is `??` and a conflict `U`, here they are U
- * (untracked) and C (conflicted), one letter each like the rest. */
-const STATUS_MARKS: Record<ChangeStatus | "untracked", { letter: string; color: "success" | "danger" | "warning" | "accent" }> = {
-  added: { letter: "A", color: "success" },
-  untracked: { letter: "U", color: "success" },
-  deleted: { letter: "D", color: "danger" },
-  modified: { letter: "M", color: "warning" },
-  renamed: { letter: "R", color: "accent" },
-  typeChanged: { letter: "T", color: "accent" },
-  conflicted: { letter: "C", color: "danger" },
-};
-
-const STATUS_WORDS: Record<ChangeStatus | "untracked", PlainMessageKey> = {
+const STATUS_WORDS: Record<StatusKey, PlainMessageKey> = {
   added: "git.status.added",
   untracked: "git.status.untracked",
   deleted: "git.status.deleted",
@@ -35,10 +25,6 @@ const STATUS_WORDS: Record<ChangeStatus | "untracked", PlainMessageKey> = {
   typeChanged: "git.status.typeChanged",
   conflicted: "git.status.conflicted",
 };
-
-function statusOf(item: ChangeItem): ChangeStatus | "untracked" {
-  return item.section === "untracked" ? "untracked" : item.status;
-}
 
 /** What a row says beside its file's name: where a rename came from or went, and otherwise the
  * folder the file is in. */
@@ -91,6 +77,7 @@ export function ChangeList({
   listRef: React.Ref<HTMLDivElement>;
 }): React.ReactElement {
   const language = useCurrentLanguage();
+  const fade = useScrollFade(listRef);
   // A section's `id` is what the collection keys it by; a change's own `key` keys its row.
   const groups = useMemo(() => sections(items).map((group) => ({ id: group.section, ...group })), [items]);
   const byKey = useMemo(() => new Map(items.map((item) => [item.key, item])), [items]);
@@ -99,14 +86,18 @@ export function ChangeList({
     if (item) onOpen(item);
   };
   return (
+    // No side padding on the scroll container (`px-0` clears HeroUI's own): the virtualized layout
+    // makes each row as wide as the list's inner width and places it inside that padding, so the
+    // list would overflow sideways. The rows and headings carry the inset themselves.
     <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: CHANGE_ROW_HEIGHT, headingHeight: HEADING_HEIGHT }}>
       <ListBox
-        ref={listRef}
+        ref={fade.ref}
+        {...fade.props}
         aria-label={label}
         items={groups}
         onAction={onAction}
         dependencies={[language, selected]}
-        className="min-h-0 flex-1 overflow-auto px-1 py-1 outline-none"
+        className={`${fade.className} min-h-0 flex-1 overflow-auto px-0 py-1 outline-none`}
       >
         {(group) => <ChangeSectionView key={group.section} section={group.section} items={group.items} selected={selected} />}
       </ListBox>
@@ -127,7 +118,7 @@ function ChangeSectionView({
   const language = useCurrentLanguage();
   return (
     <ListBox.Section id={section}>
-      <Header className="flex h-[30px] items-center gap-2 px-2 text-xs font-medium text-muted">
+      <Header className="flex h-[30px] items-center gap-2 px-3 text-xs font-medium text-muted">
         {t(SECTION_LABELS[section])}
         <span>{new Intl.NumberFormat(language).format(items.length)}</span>
       </Header>
@@ -141,8 +132,7 @@ function ChangeSectionView({
 function ChangeRow({ item, isSelected }: { item: ChangeItem; isSelected: boolean }): React.ReactElement {
   const t = useT();
   const name = wireBaseName(item.path);
-  const status = statusOf(item);
-  const mark = STATUS_MARKS[status];
+  const { status } = item;
   const detail = rowDetail(t, item);
   const word = t(STATUS_WORDS[status]);
   const ariaLabel =
@@ -157,11 +147,11 @@ function ChangeRow({ item, isSelected }: { item: ChangeItem; isSelected: boolean
       textValue={name}
       aria-label={ariaLabel}
       data-current={isSelected || undefined}
-      className="h-7 min-h-0 gap-2 rounded-md px-2 py-0 text-sm data-[current]:bg-panel-selected"
+      className="mx-1 h-7 min-h-0 w-auto gap-2 rounded-md px-2 py-0 text-sm data-[current]:bg-panel-selected"
     >
-      <Chip aria-hidden="true" size="sm" variant="soft" color={mark.color} className="w-5 shrink-0 justify-center px-0 font-mono">
-        {mark.letter}
-      </Chip>
+      <StatusChip aria-hidden="true" status={status} className="w-5 shrink-0 justify-center px-0 font-mono">
+        {STATUS_MARKS[status].letter}
+      </StatusChip>
       <FadeOverflow as="span" dir="auto" className="min-w-0 shrink" titleWhenClipped={name}>
         {name}
       </FadeOverflow>

@@ -214,8 +214,8 @@ export function Dialog({
             <Frame.CloseTrigger aria-label={t("common.close")} />
           </TitledControl>
           {/* HeroUI places the close button over the header's end without reserving room for it, so
-              the heading is padded clear of it; a long title (a file's name in the viewer, say) has
-              to wrap anywhere, since a name with no place to break would run out of the dialog. */}
+              the heading is padded clear of it; a long title (a session's name, say) has to wrap
+              anywhere, since a name with no place to break would run out of the dialog. */}
           <Frame.Header className="pe-6">
             <Frame.Heading className="[overflow-wrap:anywhere]">{title as BodyChildren}</Frame.Heading>
           </Frame.Header>

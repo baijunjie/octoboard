@@ -3,8 +3,10 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { PREFERENCE_KEYS } from "../preferenceKeys";
 import { ThemeProvider } from "../theme";
-import type { ViewerChangeSide, ViewerSubject } from "./content";
+import type { ViewerChangeSide, ViewerContent, ViewerSubject } from "./content";
+import { diffLayout } from "./diffLayout";
 import { FileViewer, type ViewerNavigation } from "./FileViewer";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -50,6 +52,9 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  // The layout choice outlives a viewer, so a test that makes one must not leave it for the next.
+  diffLayout.set("unified");
+  localStorage.clear();
   container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
 });
@@ -273,4 +278,97 @@ it("keeps focus in the dialog when the subject's content is replaced", () => {
   act(() => dialog()!.querySelector<HTMLElement>("[role=region]")!.focus());
   show({ ...code, content: { state: "disconnected", what: "file" } });
   expect(dialog()?.contains(document.activeElement)).toBe(true);
+});
+
+const modified = (path = "src/c.ts"): ViewerSubject => {
+  const side: ViewerChangeSide = { state: "present", path, kind: "file" };
+  return { key: `m:${path}`, path, stage: "Unstaged", content: { state: "change", change: { old: side, new: side, patch: "@@ -1 +1 @@\n-a\n+b\n" } } };
+};
+
+// The kind of change and the stage are tags before the name in the title, the kind coloured and the
+// stage neutral; the description line has the path, where the change is from, and the layout choice at its end.
+it("puts the status and the stage in the title and the layout choice on the description's row", () => {
+  show(modified());
+  const heading = dialog()!.querySelector("h2")!;
+  expect(heading.textContent).toBe("Modified, Unstaged: c.ts");
+  const tags = heading.querySelectorAll(".chip");
+  expect([...tags].map((tag) => tag.textContent)).toEqual(["Modified", "Unstaged"]);
+  const row = dialog()!.querySelector<HTMLElement>("[aria-label='Diff layout']")!.closest<HTMLElement>("[data-viewer-description]")!;
+  expect(row.textContent).toContain("src/c.ts");
+  expect(row.textContent).not.toMatch(/Modified|staged/i);
+});
+
+// Before the change is read, a staged or unstaged one has only its stage to show, and the title's
+// accessible name has no tag separator, since there is no status tag to separate it from.
+it("names a title that has only a stage tag without a tag separator", () => {
+  show({ ...modified(), content: { state: "disconnected", what: "change" } });
+  expect(dialog()!.querySelector("h2")!.textContent).toBe("Unstaged: c.ts");
+});
+
+it("shows no stage tag for an untracked, conflicted or compared change, and the branches for the last", () => {
+  const row = () => dialog()!.querySelector<HTMLElement>("[data-viewer-description]")!;
+  const body = { kind: "text", text: "x\n", size: 2 } as const;
+  show({ ...modified(), stage: undefined, status: "untracked" });
+  expect(dialog()!.querySelector("h2")!.textContent).toBe("Untracked: c.ts");
+  show({ key: "c", path: "src/m.ts", content: { state: "conflict", conflict: "Both sides modified this file.", body } });
+  expect(dialog()!.querySelector("h2")!.textContent).toBe("Conflicted: m.ts");
+  expect(row().textContent).not.toMatch(/staged/i);
+  show({ ...modified(), stage: undefined, source: "main at 1234567 to feature at fedcba0" });
+  expect(dialog()!.querySelector("h2")!.textContent).toBe("Modified: c.ts");
+  expect(row().textContent).toContain("main at 1234567 to feature at fedcba0");
+});
+
+// An untracked file has no old side, which reads as added; the list says untracked, and so does the
+// chip, with no note repeating that there is nothing to compare it with.
+it("marks an untracked file Untracked, with no note that it is new content", () => {
+  const body = { kind: "text", text: "x\n", size: 2 } as const;
+  const content: ViewerContent = {
+    state: "change",
+    change: { old: { state: "absent" }, new: { state: "present", path: "src/n.ts", kind: "file", body } },
+  };
+  show({ key: "u", path: "src/n.ts", status: "untracked", content });
+  expect(dialog()!.querySelector("h2")!.textContent).toBe("Untracked: n.ts");
+  expect(dialog()!.querySelector("h2 .chip")!.classList).toContain("chip-untracked");
+  expect(dialog()!.textContent).not.toMatch(/new content/i);
+  show({ key: "a", path: "src/n.ts", content });
+  expect(dialog()!.querySelector("h2")!.textContent).toBe("Added: n.ts");
+  expect(dialog()!.querySelector("h2 .chip")!.classList).not.toContain("chip-untracked");
+  // The status the list gave holds while the content is not read, and when reading it failed.
+  show({ key: "l", path: "src/n.ts", status: "untracked", content: { state: "loading" } });
+  expect(dialog()!.querySelector("h2")!.textContent).toBe("Untracked: n.ts");
+  const unavailable: ViewerContent = { state: "change", change: { old: { state: "absent" }, new: { state: "absent" }, unavailable: "Could not read it." } };
+  show({ key: "f", path: "src/n.ts", status: "untracked", content: unavailable });
+  expect(dialog()!.querySelector("h2")!.textContent).toBe("Untracked: n.ts");
+  show({ key: "d", path: "src/n.ts", status: "untracked", content: { state: "disconnected", what: "change" } });
+  expect(dialog()!.querySelector("h2")!.textContent).toBe("Untracked: n.ts");
+});
+
+it("has no status chip for a file, and none for a loading change whose caller gives no status", () => {
+  show(binary);
+  expect(dialog()!.querySelector("h2")!.textContent).toBe("b.wasm");
+  show({ ...modified(), stage: undefined, content: { state: "loading" } });
+  expect(dialog()!.querySelector("h2")!.textContent).toBe("c.ts");
+});
+
+// The choice is the user's preference: it holds for the next diff, and is stored for the next run.
+it("opens later diffs in the layout last chosen, and stores it", () => {
+  const layout = () => dialog()?.querySelector("[data-layout]")?.getAttribute("data-layout");
+  show(modified("src/a.ts"));
+  expect(layout()).toBe("unified");
+  act(() => {
+    [...dialog()!.querySelectorAll("button")].find((b) => b.textContent === "Split")!.click();
+  });
+  expect(localStorage.getItem(PREFERENCE_KEYS.diffLayout)).toBe("split");
+  show(modified("src/b.ts"));
+  expect(layout()).toBe("split");
+});
+
+it("reads the stored layout, and falls back to unified for anything else", async () => {
+  const read = async (raw: string) => {
+    vi.resetModules();
+    localStorage.setItem(PREFERENCE_KEYS.diffLayout, raw);
+    return (await import("./diffLayout")).diffLayout.get();
+  };
+  expect(await read("split")).toBe("split");
+  expect(await read("sideways")).toBe("unified");
 });

@@ -33,8 +33,9 @@ export interface DirectoryListings {
   want: (dirs: readonly string[]) => void;
   /** Lists `dirs` again, showing what is held meanwhile; for an expanded directory and a retry. */
   refresh: (dirs: readonly string[]) => void;
-  /** Lists every directory on screen again: the manual refresh, and the periodic one. */
-  refreshAll: () => void;
+  /** Lists every directory on screen again: the manual refresh, and the periodic one. Settles once
+   * each has been listed or has failed. */
+  refreshAll: () => Promise<void>;
 }
 
 /**
@@ -65,6 +66,8 @@ export function useDirectoryListings(project: string, active: boolean): Director
     connected,
     rootId: undefined as string | undefined,
     sequence: new Map<string, number>(),
+    // Who waits for each directory's listing, resolved when the latest one asked for settles.
+    waiting: new Map<string, (() => void)[]>(),
     queue: [] as string[],
     inFlight: 0,
     // A browser lists what it wants as it first appears, which counts as its first refresh.
@@ -86,6 +89,7 @@ export function useDirectoryListings(project: string, active: boolean): Director
     s.inFlight += 1;
     shared.inFlight += 1;
     const current = () => s.alive && s.sequence.get(dir) === sequence;
+    let retried = false;
     request({ type: "list_project_dir", project, path: dir, slot: `list:${project}:${dir}` })
       .then((reply) => {
         if (!current() || reply.type !== "project_dir" || reply.project !== project || reply.path !== dir) return;
@@ -104,7 +108,10 @@ export function useDirectoryListings(project: string, active: boolean): Director
         const root = state.projects.get(project)?.path;
         const failure = browseFailure(t, language, err, state, root && abbreviateHome(root, state.homeDir));
         if (failure.kind === "superseded") return;
-        if (failure.kind === "changed" && attempt < CHANGED_RETRIES) return void send(dir, attempt + 1);
+        if (failure.kind === "changed" && attempt < CHANGED_RETRIES) {
+          retried = true;
+          return void send(dir, attempt + 1);
+        }
         if (failure.kind === "disconnected") {
           // Left as it is; the reconnect lists it again.
           return commit((next) => {
@@ -118,6 +125,12 @@ export function useDirectoryListings(project: string, active: boolean): Director
       .finally(() => {
         s.inFlight -= 1;
         shared.inFlight -= 1;
+        // A listing that was asked for again meanwhile, or is being tried again, settles the
+        // waiters when it does.
+        if (current() && !retried) {
+          for (const resolve of s.waiting.get(dir) ?? []) resolve();
+          s.waiting.delete(dir);
+        }
         for (const other of [...shared.pumps]) other();
       });
   };
@@ -130,10 +143,10 @@ export function useDirectoryListings(project: string, active: boolean): Director
 
   /** Asks for `dir`'s listing, keeping a loaded one on screen meanwhile. In the `background` (the
    * periodic refresh, a reconnect) a failure stays on screen too, and its Try again with it; asked
-   * by the user, it gives way to `loading`. */
-  const enqueue = (dir: string, background = false) => {
+   * by the user, it gives way to `loading`. The promise settles with that listing. */
+  const enqueue = (dir: string, background = false): Promise<void> => {
     const s = state.current;
-    if (!s.connected) return;
+    if (!s.connected) return Promise.resolve();
     const held = s.listings.get(dir);
     if (held?.state === "loaded") {
       if (!held.refreshing) commit((next) => next.set(dir, { ...held, refreshing: true }));
@@ -144,13 +157,15 @@ export function useDirectoryListings(project: string, active: boolean): Director
     // out is not taken in its place.
     s.sequence.set(dir, (s.sequence.get(dir) ?? 0) + 1);
     if (!s.queue.includes(dir)) s.queue.push(dir);
+    const settled = new Promise<void>((resolve) => s.waiting.set(dir, [...(s.waiting.get(dir) ?? []), resolve]));
     pump.current();
+    return settled;
   };
 
   const refresh = useCallback((dirs: readonly string[]) => dirs.forEach((dir) => enqueue(dir)), []);
-  const refreshWanted = (background: boolean) => {
+  const refreshWanted = async (background: boolean) => {
     state.current.lastRefresh = Date.now();
-    state.current.wanted.forEach((dir) => enqueue(dir, background));
+    await Promise.all(state.current.wanted.map((dir) => enqueue(dir, background)));
   };
   const refreshAll = useCallback(() => refreshWanted(false), []);
 

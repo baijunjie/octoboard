@@ -2,30 +2,36 @@ import { Alert, Button, Chip } from "@heroui/react";
 import { ChevronLeft, ChevronRight, FileQuestion, Unplug } from "lucide-react";
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
+import { FadeOverflow } from "../components/FadeOverflow";
 import { PathText } from "../components/PathText";
 import { TitledControl } from "../components/TitledControl";
 import { Dialog, useRefocusIfLost } from "../dialogs/Dialog";
+import { joinPhrases } from "../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useOctoboardTheme } from "../theme";
 import { displayWirePath, wireBaseName } from "../wirePath";
 import { arrowNavigation } from "./arrowKeys";
 import { diffPlan } from "./budgets";
-import { CodeSurface, DiffSurface, LayoutToggle, Loading, Unreadable, useRendererScope } from "./CodeSurface";
+import { CodeSurface, DiffSurface, Loading, Unreadable, useRendererScope } from "./CodeSurface";
 import {
   changePresentation,
   changeStatus,
   hasTwoSides,
-  type ChangeStatus,
   type ViewerBody,
   type ViewerChange,
   type ViewerChangeSide,
   type ViewerSubject,
 } from "./content";
+import { diffLayout, LayoutSlot, LayoutToggle, type DiffLayout } from "./diffLayout";
 import { formatFileSize, formatSideSize } from "./format";
+import { StatusChip } from "./StatusChip";
+import type { StatusKey } from "./statusMarks";
 
-const STATUS_LABELS: Record<ChangeStatus, PlainMessageKey> = {
+const STATUS_LABELS: Record<StatusKey, PlainMessageKey> = {
   added: "viewer.change.added",
+  untracked: "viewer.change.untracked",
+  conflicted: "viewer.change.conflicted",
   deleted: "viewer.change.deleted",
   renamed: "viewer.change.renamed",
   typeChanged: "viewer.change.typeChanged",
@@ -59,7 +65,9 @@ export function FileViewer({
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
-  const [layout, setLayout] = useState<"unified" | "split">("unified");
+  // The user's last choice, kept across files and restarts (`diffLayout`).
+  const layout = diffLayout.useValue();
+  const [layoutSlot, setLayoutSlot] = useState<HTMLElement | null>(null);
   const name = wireBaseName(subject.path);
   const { content } = subject;
   useRendererScope();
@@ -127,21 +135,71 @@ export function FileViewer({
     </>
   ) : null;
 
+  // The header is two rows of fixed height, whatever the subject is: the title, with the tags of what
+  // the change is before the name, and under it one row of path and description with the diff layout
+  // choice at its end. Every part that only some subjects have (the tags, the choice, the size) sits
+  // in a row that is as tall without it, and each row is one line cut by a fade, never wrapped, so
+  // moving between files cannot move the code below.
+  // An untracked file is a change with an absent old side, which `changeStatus` calls added; the
+  // list marks it untracked and says so in `subject.status`, which also holds while the content is
+  // not read (yet). Without one, a change's sides give it, and a path in conflict has none to compare.
+  const status: StatusKey | undefined =
+    subject.status ?? (content.state === "change" ? changeStatus(content.change) : content.state === "conflict" ? "conflicted" : undefined);
+  // The description's parts as the one string that is its tooltip when it is cut, in the order drawn.
+  const renamedFrom = content.state === "change" ? renamedFromPath(content.change) : undefined;
+  const description = joinPhrases(
+    language,
+    [
+      subject.sourceText ?? (typeof subject.source === "string" ? subject.source : undefined),
+      content.state === "file" ? formatFileSize(language, content.body.size) : undefined,
+      // LRI…PDI is the plain-text form of the `dir="ltr"` the drawn path carries.
+      renamedFrom === undefined ? undefined : t("viewer.change.renamedFrom", { path: `\u2066${displayWirePath(renamedFrom)}\u2069` }),
+    ].filter((part): part is string => typeof part === "string"),
+  );
   return (
     <Dialog
       size="viewer"
-      title={<span dir="ltr">{name}</span>}
+      title={
+        <span className="flex min-w-0 items-center gap-2">
+          {/* What the change is, coloured, then where it is from, neutral: both tags come before the name,
+              whichever the subject has, and never shrink, so the name is what the fade cuts. */}
+          {status && (
+            <StatusChip status={status}>
+              {t(STATUS_LABELS[status])}
+            </StatusChip>
+          )}
+          {/* The tags and the name are boxes with only a gap between them, which reads as one run
+              ("Modified" "Unstaged" "c.ts" as "ModifiedUnstagedc.ts") in the dialog's accessible name. */}
+          {status && subject.stage && <span className="sr-only">{t("viewer.tagSeparator")}</span>}
+          {subject.stage && (
+            <Chip size="sm" variant="soft">
+              {subject.stage}
+            </Chip>
+          )}
+          {(status || subject.stage) && <span className="sr-only">{t("viewer.titleSeparator")}</span>}
+          <FadeOverflow as="span" dir="ltr" className="min-w-0" titleWhenClipped={name}>
+            {name}
+          </FadeOverflow>
+        </span>
+      }
       onClose={onClose}
       footer={footer}
       resetKey={subject.key}
     >
-      <div ref={headerRef} className="flex min-w-0 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted">
-        <PathText path={displayWirePath(subject.path)} className="min-w-0 max-w-full" />
-        {subject.source && <span>{subject.source}</span>}
-        {content.state === "file" && <span>{formatFileSize(language, content.body.size)}</span>}
-        {content.state === "change" && <ChangeSummary change={content.change} />}
+      <div ref={headerRef} data-viewer-description="" className="flex h-8 min-w-0 shrink-0 items-center gap-3 text-xs text-muted">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <PathText path={displayWirePath(subject.path)} className="min-w-0 shrink" />
+          <FadeOverflow as="span" className="flex min-w-0 shrink items-center gap-3" titleWhenClipped={description}>
+            {subject.source && <span>{subject.source}</span>}
+            {content.state === "file" && <span>{formatFileSize(language, content.body.size)}</span>}
+            {renamedFrom !== undefined && <RenamedFrom path={renamedFrom} />}
+          </FadeOverflow>
+        </div>
+        <div ref={setLayoutSlot} className="shrink-0" />
       </div>
-      <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={setLayout} />
+      <LayoutSlot value={layoutSlot}>
+        <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} />
+      </LayoutSlot>
     </Dialog>
   );
 }
@@ -180,22 +238,16 @@ function NavigationButton({
   );
 }
 
-/** The change's status, and for a rename within the project the path it came from. */
-function ChangeSummary({ change }: { change: ViewerChange }): React.ReactElement {
-  const t = useT();
-  const status = changeStatus(change);
-  const from = change.old.state === "present" && change.new.state === "present" && change.old.path !== change.new.path ? change.old.path : undefined;
+/** For a rename within the project, the path it came from. */
+function renamedFromPath(change: ViewerChange): string | undefined {
+  return change.old.state === "present" && change.new.state === "present" && change.old.path !== change.new.path ? change.old.path : undefined;
+}
+
+function RenamedFrom({ path }: { path: string }): React.ReactElement {
   return (
-    <>
-      <Chip size="sm" variant="soft">
-        {t(STATUS_LABELS[status])}
-      </Chip>
-      {from !== undefined && (
-        <span>
-          <Message id="viewer.change.renamedFrom" params={{ path: <span dir="ltr">{displayWirePath(from)}</span> }} />
-        </span>
-      )}
-    </>
+    <span>
+      <Message id="viewer.change.renamedFrom" params={{ path: <span dir="ltr">{displayWirePath(path)}</span> }} />
+    </span>
   );
 }
 
@@ -207,8 +259,8 @@ function ViewerContentView({
 }: {
   subject: ViewerSubject;
   name: string;
-  layout: "unified" | "split";
-  onLayoutChange: (layout: "unified" | "split") => void;
+  layout: DiffLayout;
+  onLayoutChange: (layout: DiffLayout) => void;
 }): React.ReactElement {
   const { resolved: theme } = useOctoboardTheme();
   const { content, key } = subject;
@@ -376,8 +428,8 @@ function ChangeView({
   resetKey: string;
   name: string;
   change: ViewerChange;
-  layout: "unified" | "split";
-  onLayoutChange: (layout: "unified" | "split") => void;
+  layout: DiffLayout;
+  onLayoutChange: (layout: DiffLayout) => void;
   theme: "light" | "dark";
 }): React.ReactElement {
   const t = useT();
@@ -407,12 +459,9 @@ function ChangeView({
       );
     }
     case "single":
-      return (
-        <>
-          <p className="shrink-0 text-xs text-muted">{t("viewer.change.alone")}</p>
-          <BodyView resetKey={resetKey} name={name} body={presentation.body} theme={theme} />
-        </>
-      );
+      // No note that there is nothing to compare it with: this relies on the caller marking an untracked
+      // file's change `untracked` (`subject.status`), whose chip then says so.
+      return <BodyView resetKey={resetKey} name={name} body={presentation.body} theme={theme} />;
     case "text": {
       const twoSides = hasTwoSides(presentation.patch);
       return (

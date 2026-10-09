@@ -15,9 +15,10 @@ export type SourceState = { state: "loading" } | { state: "loaded"; source: Proj
  * A project's source — whether it is in a Git repository, and that repository's worktrees — asked
  * of the daemon once `wanted` first holds, again on `refresh`, and after a reconnect while wanted.
  * A reply is taken only for the latest request, and only while the hook is mounted; the caller
- * mounts one per project.
+ * mounts one per project. `refresh` settles once the request has been answered or has failed, or
+ * when a newer request has taken its place.
  */
-export function useProjectSource(project: string, wanted: boolean): { source: SourceState; refresh: () => void } {
+export function useProjectSource(project: string, wanted: boolean): { source: SourceState; refresh: () => Promise<void> } {
   const t = useT();
   const language = useCurrentLanguage();
   const { request, store } = useDaemon();
@@ -25,13 +26,13 @@ export function useProjectSource(project: string, wanted: boolean): { source: So
   const [source, setSource] = useState<SourceState>({ state: "loading" });
   const live = useRef({ alive: true, sequence: 0, asked: false });
 
-  const refresh = () => {
+  const refresh = (): Promise<void> => {
     const s = live.current;
     s.asked = true;
     const sequence = ++s.sequence;
     const current = () => s.alive && s.sequence === sequence;
     const slot = `source:${project}`;
-    sendGitRequest(slot, () => (current() ? request({ type: "get_project_source", project, slot }) : undefined))
+    return sendGitRequest(slot, () => (current() ? request({ type: "get_project_source", project, slot }) : undefined))
       .then((reply) => {
         if (!reply || !current() || reply.type !== "project_source" || reply.source.project !== project) return;
         setSource({ state: "loaded", source: reply.source });

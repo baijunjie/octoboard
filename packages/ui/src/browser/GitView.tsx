@@ -205,8 +205,10 @@ function WorktreeSelect({
               const name = worktreeName(t, worktree);
               const shownName = worktree.id === own ? t("git.worktree.own", { name }) : name;
               const path = abbreviateHome(displayWirePath(worktree.root), homeDir);
+              // `pe-7` restores the room HeroUI reserves for the check mark, which its Select styles
+              // override with a narrower padding, so a long name would run under the mark.
               return (
-                <ListBox.Item key={worktree.id} id={worktree.id} textValue={name}>
+                <ListBox.Item key={worktree.id} id={worktree.id} textValue={name} className="pe-7">
                   <span className="flex min-w-0 flex-1 flex-col">
                     <FadeOverflow as="span" dir="auto" titleWhenClipped={shownName}>
                       {shownName}

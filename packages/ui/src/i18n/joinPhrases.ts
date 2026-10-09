@@ -9,9 +9,7 @@ const listFormats = new Map<Language, Intl.ListFormat>();
  * `Intl.ListFormat` rather than a hardcoded separator, since the right punctuation between list
  * items differs by language (a plain ASCII comma reads wrong in a Chinese sentence, for one).
  * `narrow` drops the joining word before the last item ("and" / "、"), since these are independent
- * facts read off a status or a row, not items in a conjunction. Shared by `gitStatusLabel.ts`,
- * which folds a git status's facts this way, and `sessionLabel.ts`, which folds a session row's
- * binding fact in the same way. */
+ * facts read off a status or a row, not items in a conjunction. */
 export function joinPhrases(language: Language, phrases: string[]): string {
   let format = listFormats.get(language);
   if (!format) {

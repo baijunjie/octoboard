@@ -1,4 +1,4 @@
-import { Spinner, ToggleButton, ToggleButtonGroup } from "@heroui/react";
+import { Spinner } from "@heroui/react";
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { useFocusRing } from "react-aria";
 
@@ -6,6 +6,7 @@ import { useT } from "../i18n/react";
 import { diffPlan, textPlan } from "./budgets";
 import { CODE_THEMES } from "./codeTheme";
 import { hasHunks, withoutNoNewlineMarkers } from "./content";
+import { LayoutToggle, type DiffLayout } from "./diffLayout";
 import { isSelectAll, selectCode } from "./selectAll";
 
 // The renderer module, with the library and its grammars, loads the first time code is shown.
@@ -208,35 +209,6 @@ export function CodeSurface({
   );
 }
 
-/** The choice between a unified and a split diff. */
-export function LayoutToggle({
-  layout,
-  onLayoutChange,
-}: {
-  layout: "unified" | "split";
-  onLayoutChange: (layout: "unified" | "split") => void;
-}): React.ReactElement {
-  const t = useT();
-  return (
-    <div className="flex shrink-0 justify-end">
-      <ToggleButtonGroup
-        aria-label={t("viewer.layout")}
-        size="sm"
-        selectionMode="single"
-        disallowEmptySelection
-        selectedKeys={[layout]}
-        onSelectionChange={(keys) => {
-          const [picked] = [...keys];
-          if (picked === "unified" || picked === "split") onLayoutChange(picked);
-        }}
-      >
-        <ToggleButton id="unified">{t("viewer.layout.unified")}</ToggleButton>
-        <ToggleButton id="split">{t("viewer.layout.split")}</ToggleButton>
-      </ToggleButtonGroup>
-    </div>
-  );
-}
-
 /**
  * A change as a diff, rendered from its patch within the budget, with the choice of layout (left to
  * the caller when `onLayoutChange` is absent, for several diffs sharing one); past the budget, or
@@ -256,8 +228,8 @@ export function DiffSurface({
   resetKey: string;
   name: string;
   patch: string;
-  layout: "unified" | "split";
-  onLayoutChange?: (layout: "unified" | "split") => void;
+  layout: DiffLayout;
+  onLayoutChange?: (layout: DiffLayout) => void;
   theme: "light" | "dark";
 }): React.ReactElement {
   const t = useT();

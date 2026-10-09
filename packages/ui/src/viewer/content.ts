@@ -4,6 +4,7 @@
 import type { ReactNode } from "react";
 
 import type { FileContent } from "../protocol";
+import type { StatusKey } from "./statusMarks";
 
 /**
  * A file body classified for display. `text` is shown as code; `image` through an image element,
@@ -59,12 +60,20 @@ export type ViewerContent =
  * project, the source and the path (a path alone is not an identity) — and a new key is a new
  * subject: what was shown for the previous one is dropped. `path` is the wire path the title
  * names; `source` is the caller's own wording of where the content came from, with any name in
- * it isolated from the text around it.
+ * it isolated from the text around it. `sourceText` is the same wording as plain text (names
+ * isolated with U+2068/U+2069), for where only a string fits, such as a tooltip. `stage` names the
+ * stage a change is in (staged or not) where that is part of what it is, shown as a tag of its own
+ * apart from the source. `status` is how the change is marked, known before its content is read
+ * and kept when that fails; without it a change's own sides give it one (an untracked file's absent
+ * old side would read as added, so a caller that lists it as untracked says so here).
  */
 export interface ViewerSubject {
   key: string;
   path: string;
   source?: ReactNode;
+  sourceText?: string;
+  stage?: string;
+  status?: StatusKey;
   content: ViewerContent;
 }
 

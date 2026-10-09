@@ -111,7 +111,7 @@ and for a rename across the project's boundary, where it came from or went, outs
 | D | deleted |
 | R | renamed |
 | T | type changed — a file that became a symbolic link, say |
-| U | untracked |
+| U | untracked — in a muted coral of its own, not Added's green |
 | C | in conflict |
 
 The letter is decoration: assistive technology hears a row as its name, its status in words and what follows the
@@ -260,11 +260,18 @@ has them (see "Errors" below).
 
 ## Opening a change
 
-A change opens in the project pane's file viewer (see "The file viewer" in `docs/product/project-pane.md`). Its title
-is the file's name; under it are its path within the project, its section (Staged, Unstaged, Untracked or Conflicted)
-and its status — Added, Deleted, Modified, Renamed, with the path it was renamed from, or Type changed. An untracked
-file is Added; a path in conflict has its section alone. A change from the Compare view names, in place of its section,
-the two branches and the commit each was at — "main at 4f2a9c1 to feature at 9e8d7c6", say — and its status.
+A change opens in the project pane's file viewer (see "The file viewer" in `docs/product/project-pane.md`). Its title is
+the file's name, with the kind of change before it as a tag — Added, Deleted, Modified, Renamed or Type changed —
+coloured as the change's letter in the list is (green, red, amber, blue; the same colours for the same kind). A staged
+or unstaged change has its stage — Staged or Unstaged — as a second, neutral tag between the kind and the name: the two
+things a change says, what kind it is and whether it is staged, are kept apart, the first coloured and the second not.
+Both tags are in front of the name, and read with it as "Modified, Unstaged: server.ts". An untracked file is always
+new, so its only tag is Untracked, in the muted coral the list's U has, which is no kind of change and shares no colour
+with Added or Deleted; a path in conflict has only a Conflicted tag, coloured as its C is. Neither has a stage tag, its
+status tag already saying where it is from. Under the title, in one row, are the path within the project and, for a
+rename, the path it was renamed from. A change from the Compare view has no stage tag either; it names, after the path,
+the two branches and the commit each was at — "main at 4f2a9c1 to feature at 9e8d7c6", say. The tags never shrink; the
+name fades out when there is no room for it.
 
 A change from the Compare view is read from the two commits of the comparison on screen, its old side from From's
 commit and its new side from To's, and is shown as a staged change is below; it is never untracked or in conflict.
@@ -272,12 +279,13 @@ commit and its new side from To's, and is shown as a staged change is below; it 
 ### What it shows
 
 - **A text change** is a diff, drawn from the patch Git makes for it: unified at first, or split into its two sides
-  side by side, chosen above it. The choice is offered only for a diff with lines on both sides: an added or a
-  deleted file reads the same either way, so it has none. The choice holds while the viewer moves from change to
-  change, until it closes. A change whose patch has no lines — an empty file added or removed, say — says it has no
-  diff to show. Long lines wrap. A patch of more than 1,000,000 characters or 10,000 lines is shown as the plain patch,
-  with a line saying it is shown that way because the change is large; so is a patch the diff could not be drawn from.
-  A patch that is not valid UTF-8 — of a file in another encoding — is shown with replacement characters.
+  side by side, chosen at the end of the row under the title. The choice is offered only for a diff with lines on both
+  sides: an added or a deleted file reads the same either way, so it has none. The choice is remembered: later diffs
+  open in the layout last chosen, across changes and after the app restarts. A change whose patch has no lines — an
+  empty file added or removed, say — says it has no diff to show. Long lines wrap. A patch of more than 1,000,000
+  characters or 10,000 lines is shown as the plain patch, with a line saying it is shown that way because the change
+  is large; so is a patch the diff could not be drawn from. A patch that is not valid UTF-8 — of a file in another
+  encoding — is shown with replacement characters.
 - **A missing newline at the end** of either version is said in a line above the diff — the old version, the new one,
   or neither has one — rather than as a line of it. A symbolic link's change never says so, a link's target having
   no newline at its end anyway. A plain patch keeps Git's own marker lines.
@@ -288,9 +296,9 @@ commit and its new side from To's, and is shown as a staged change is below; it 
   says so.
 - **Any other binary change**, or an image changed to or from text, says it cannot be shown as a diff, with the size
   before and after.
-- **An untracked file** is shown as new content: the file itself, as the file viewer shows a file, with a line saying
-  there is no earlier version to compare it with. An untracked symbolic link, or an untracked repository of its own,
-  says what it is, having no content to show.
+- **An untracked file** is shown as new content: the file itself, as the file viewer shows a file; its Untracked tag
+  says there is no earlier version to compare it with. An untracked symbolic link, or an untracked repository of its
+  own, says what it is, having no content to show.
 - **A rename across the project's boundary** shows only the version inside the project, as a file rather than a diff,
   under a warning that the previous or the new version is outside the project, with its path from the repository's
   root. Nothing of the version outside is read.

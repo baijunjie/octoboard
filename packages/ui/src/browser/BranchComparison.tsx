@@ -131,11 +131,11 @@ function ComparisonContent({
   const notices = comparisonNotices(branches, comparison);
   return (
     <>
-      <p className="shrink-0 px-3 pt-2 text-xs text-muted">
+      <p className="shrink-0 px-3 py-2 text-xs text-muted">
         {t("git.compare.commits", { from: shortCommit(left.commit), to: shortCommit(right.commit) })}
       </p>
       {/* Mounted for as long as the comparison is, so a notice appearing in it is announced. */}
-      <div role="status" className="flex shrink-0 flex-col gap-1 px-3 text-xs text-muted not-empty:pt-2">
+      <div role="status" className="flex shrink-0 flex-col gap-1 px-3 text-xs text-muted not-empty:pb-2">
         {notices.map((notice) => (
           <p key={notice.branch} className="flex items-start gap-1.5">
             <TriangleAlert aria-hidden="true" className="mt-px size-3.5 shrink-0" />
@@ -214,11 +214,16 @@ function BranchSelect({
           the window. */}
       <Select.Popover className="w-(--trigger-width)">
         <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: BRANCH_ROW_HEIGHT }}>
-          <ListBox items={branches} className="max-h-80 overflow-auto">
+          {/* The side inset moves from the scroll container onto the rows: the virtualized layout
+              makes each row as wide as the list's inner width and places it inside the list's own
+              padding, so a padded list overflows sideways and clips the rows' focus ring. `pe-7` on
+              a row restores the room HeroUI reserves for the check mark, which its Select styles
+              override with a narrower padding, so the commit would run under the mark. */}
+          <ListBox items={branches} className="max-h-80 overflow-auto px-0">
             {(branch) => {
               const branchName = displayWirePath(branch.name);
               return (
-                <ListBox.Item id={branch.name} textValue={branchName} className="h-8 min-h-0 py-0">
+                <ListBox.Item id={branch.name} textValue={branchName} className="mx-1.5 h-8 min-h-0 w-auto py-0 pe-7">
                   <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={branchName}>
                     {branchName}
                   </FadeOverflow>

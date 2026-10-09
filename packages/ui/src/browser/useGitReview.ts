@@ -1,6 +1,7 @@
 import type React from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 
+import { FADE_SIZE } from "../components/useScrollFade";
 import type { ComparisonEndpoint } from "../protocol";
 import type { ViewerSubject } from "../viewer/content";
 import type { ViewerNavigation } from "../viewer/FileViewer";
@@ -18,8 +19,9 @@ import { useProjectSource } from "./useProjectSource";
 export interface GitReview {
   /** What the Git mode's view shows and does, but for asking again after a failure. */
   view: Omit<React.ComponentProps<typeof GitView>, "onRetry">;
-  /** Asks again for what the Git mode shows: the worktrees, and the view on screen. */
-  refresh: () => void;
+  /** Asks again for what the Git mode shows: the worktrees, and the view on screen. Settles once
+   * those have been answered or have failed. */
+  refresh: () => Promise<void>;
   /** The change the viewer shows, when one is open. */
   viewer?: { subject: ViewerSubject; onClose: () => void; navigation?: ViewerNavigation };
 }
@@ -99,11 +101,11 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
     browser.setBranches(left, right);
   };
 
-  const refresh = () => {
-    source.refresh();
-    if (gitView === "worktree") return changes.refresh();
-    branches.refresh();
-    comparison.refresh();
+  const refresh = async () => {
+    await Promise.all([
+      source.refresh(),
+      ...(gitView === "worktree" ? [changes.refresh()] : [branches.refresh(), comparison.refresh()]),
+    ]);
   };
 
   // The change lists' selections are kept in view, while the viewer moves through the changes.
@@ -137,7 +139,14 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
     if (viewedChange === undefined || viewedOrigin?.kind !== "worktree" || changeReader.shown.state === "loading") return;
     const evidence = changeEvidence(evidenceList, viewedChange.key);
     const last = lastChangeEvidence.current?.key === viewedChange.key ? lastChangeEvidence.current : undefined;
-    if (rereadChange(changeReader.shown, evidence, last?.evidence, evidenceList !== last?.list)) changeReader.reload();
+    if (rereadChange(changeReader.shown, evidence, last?.evidence, evidenceList !== last?.list)) {
+      // A change keeps its key through a status change (modified to type changed: the key names a
+      // present side by path only), so the reread opens the list's item, not the one held from
+      // the first open, whose status the chip would keep showing.
+      const listedItem = evidence.state === "listed" ? evidenceList?.items.find((item) => item.key === viewedChange.key) : undefined;
+      if (listedItem) changeReader.open(listedItem, viewedOrigin);
+      else changeReader.reload();
+    }
     if (evidence.state !== "unknown") lastChangeEvidence.current = { key: viewedChange.key, evidence, list: evidenceList };
   }, [evidenceList, viewedChange?.key, changeReader.shown.state]);
 
@@ -206,7 +215,8 @@ function scrollToChange(list: HTMLElement | null, items: readonly ChangeItem[], 
   if (key === undefined || !list) return false;
   const top = changeRowOffset(items, key);
   if (top === undefined) return false;
-  if (top < list.scrollTop) list.scrollTop = top;
-  else if (top + CHANGE_ROW_HEIGHT > list.scrollTop + list.clientHeight) list.scrollTop = top + CHANGE_ROW_HEIGHT - list.clientHeight;
+  // Clear of the list's fade at its edges, as `scroll-padding` keeps the rows react-aria scrolls.
+  if (top - FADE_SIZE < list.scrollTop) list.scrollTop = top - FADE_SIZE;
+  else if (top + CHANGE_ROW_HEIGHT + FADE_SIZE > list.scrollTop + list.clientHeight) list.scrollTop = top + CHANGE_ROW_HEIGHT + FADE_SIZE - list.clientHeight;
   return true;
 }

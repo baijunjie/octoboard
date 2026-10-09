@@ -144,6 +144,23 @@ on a state attribute, check in that same file that the hook setting it is not di
 it is, use the CSS pseudo-class through Tailwind (`hover:`, `group-hover/<name>:`). The jsdom tests never hover, so
 only a real pointer in the running page shows the miss.
 
+## A HeroUI `ListBox` or a `Tree`: where its padding and its fade go
+
+For a list rendered inside react-aria's `Virtualizer` with `ListLayout` (a HeroUI `ListBox`, one in a `Select`'s
+popover included, or a react-aria `Tree`):
+
+- `ListLayout` makes every row as wide as the scroll container's inner width and then places it inside the
+  container's padding, so any side padding on the list — HeroUI's own `p-1` on `ListBox`, `p-1.5` on a `Select`
+  popover's list — makes it overflow sideways (a horizontal scrollbar) and clips the rows' focus rings. Clear it with
+  `px-0` on the list and give the inset to the rows and headings instead (`mx-1 w-auto` on an item, padding on a
+  `Header`). HeroUI corrects this only inside its `Autocomplete`.
+- The list has to be the element that scrolls, so a HeroUI `ScrollShadow` wrapped around it fades nothing. Put the
+  fade on the list itself through `useScrollFade` (`packages/ui/src/components/useScrollFade.ts`).
+
+Virtualized or not, a `Select` whose items show `ListBox.ItemIndicator` needs `pe-7` on each item: the `Select`
+popover's styles give its items `px-2.5`, which overrides the `pe-7` `ListBox.Item` reserves for the check mark, so a
+long label otherwise runs under the mark.
+
 ## A Tailwind class name has to stand in the source as literal text
 
 Tailwind 4 reads the source as plain text and emits a utility only for a class name it can find spelled out there, so
@@ -306,7 +323,10 @@ marked as it is, and do not add a new exception without the user's say. Concrete
   appearances (the user rejected a re-theme whose contrast had been spot-checked), and it measures what a pass over
   text and glyphs misses: every fill — a chip, a tertiary button, a ghost button's hover — against the surface it sits
   on, and an animated state at its faintest frame (an `animate-pulse` glyph sank to about 2:1; animate such a glyph
-  without lowering its opacity). A region given a surface colour of its own needs HeroUI's `--default`-filled
+  without lowering its opacity). A translucent fill (HeroUI's soft chip is 15% of its colour) is measured as drawn:
+  composite it over each surface it actually lands on — a selected and a hovered row, a dialog's `--overlay` — and
+  measure the label against that; measuring against the bare surface or the fill's own colour overstated one chip's
+  contrast and missed a 4.5:1 failure on selected rows. A region given a surface colour of its own needs HeroUI's `--default`-filled
   controls checked on it in particular: the dark sidebar landed on `--default`'s own lightness and every such control
   vanished. Override the whole `--default` family on that subtree, as `.sidebar-fills` in `packages/ui/src/style.css`
   does, since `--default-hover` and `--default-soft` are computed on `<html>` and `--default` alone does not reach

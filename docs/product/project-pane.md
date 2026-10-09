@@ -35,9 +35,13 @@ mode it was last left in.
 Only the mode on screen is kept up to date on its own: the Files mode as "Keeping the tree up to date" below says, the
 Git mode as "Uncommitted and Compare" in `docs/product/project-pane-git-mode.md` says. Switching to a mode counts as
 showing it again, so what it keeps up to date is refreshed when its last refresh is more than 5 seconds old. The
-header's **Refresh** refreshes the mode on screen: in Files every folder on screen is listed again, in Git the
-worktrees are read again, and so are the changes of the Uncommitted view, or the branches and their comparison in the
-Compare view, whichever is on screen.
+header's **Refresh** refreshes the mode on screen: in Files every folder on screen is listed again, in Git the worktrees
+are read again, and so are the changes of the Uncommitted view, or the branches and their comparison in the Compare
+view, whichever is on screen. While a refresh the button started is out, its icon turns, slowly, and it keeps turning
+for at least a moment, so a refresh that finishes at once still shows it happened. It spins until the reads the press
+sent have been answered or have failed, or the connection drops; a folder that does not answer keeps it spinning,
+because a read from disk has no deadline. The periodic refreshes do not turn it, and the icon stays still under the
+system's Reduce motion setting.
 
 "The file tree", "The selected file" and "Keeping the tree up to date" below are about the Files mode.
 
@@ -135,6 +139,12 @@ stored.
 Opening a file shows it in the **file viewer**, a dialog nearly as large as the window (at most 1440 px wide). Its title
 is the file's name; under it are the file's path within the project and its size. The Git mode opens a change in the
 same viewer; what it shows of a change is in "Opening a change" in `docs/product/project-pane-git-mode.md`.
+
+The header is two rows, and the same height for every file, a change, or one still loading or failed: the title row, and
+under it a single row for the path, the size or the branches of a comparison and, at its end, the diff layout choice
+where there is one. A title or a row that is too long for the window fades out at its end rather than wrapping (the path
+from its start, so the name of its folder stays visible, and the full text is the tooltip); the layout choice keeps its
+place, and the description gives way first. Moving from file to file therefore never moves the code below it.
 
 ### What it shows
 

@@ -11,7 +11,7 @@ import type { DirListing } from "./tree";
 import { useChangeList, type ChangeList } from "./useChangeList";
 import { useBranchComparison } from "./useBranchComparison";
 import { useBranchList } from "./useBranchList";
-import { useChangeReader, type ChangeOrigin, type ChangeReader } from "./useChangeReader";
+import { shortCommit, useChangeReader, type ChangeOrigin, type ChangeReader } from "./useChangeReader";
 import { useDirectoryListings, type DirectoryListings } from "./useDirectoryListings";
 import { useFileReader, type FileReader } from "./useFileReader";
 
@@ -225,6 +225,46 @@ it("shows the change moved to loading until its own reply, and never a change of
   expect(hook.current().subject?.content).toEqual({ state: "loading" });
 });
 
+it("words a comparison's source as plain text too, each branch isolated, for a tooltip", () => {
+  const { daemon } = controlledDaemon();
+  const hook = mount<ChangeReader>(daemon, () => useChangeReader("p"));
+  act(() =>
+    hook.current().open(item("a.ts"), {
+      kind: "comparison",
+      left: { branch: "main", commit: "1234567890abcdef" },
+      right: { branch: "feature", commit: "fedcba0987654321" },
+    }),
+  );
+  expect(hook.current().subject?.sourceText).toBe(`\u2068main\u2069 at ${shortCommit("1234567890abcdef")} to \u2068feature\u2069 at ${shortCommit("fedcba0987654321")}`);
+});
+
+it("tags a staged or unstaged change with its stage, and marks the rest by their status", () => {
+  const { daemon } = controlledDaemon();
+  const hook = mount<ChangeReader>(daemon, () => useChangeReader("p"));
+  act(() => hook.current().open(item("a.ts", "staged"), OWN));
+  expect(hook.current().subject).toMatchObject({ stage: "Staged", source: undefined, sourceText: undefined, status: "deleted" });
+  act(() => hook.current().open(item("a.ts", "unstaged"), OWN));
+  expect(hook.current().subject).toMatchObject({ stage: "Unstaged", status: "deleted" });
+  act(() => hook.current().open(item("b.ts", "untracked"), OWN));
+  expect(hook.current().subject).toMatchObject({ stage: undefined, source: undefined, sourceText: undefined, status: "untracked" });
+});
+
+it("gives a conflicted or compared change no stage tag, and its status as the list had it", () => {
+  const { daemon } = controlledDaemon();
+  const hook = mount<ChangeReader>(daemon, () => useChangeReader("p"));
+  act(() => hook.current().open(changeItem({ group: "conflicted", path: "c.ts", conflict: "both_modified" }), OWN));
+  expect(hook.current().subject).toMatchObject({ stage: undefined, status: "conflicted" });
+  const compared = changeItem({ group: "committed", old: { state: "absent" }, new: { state: "present", path: "d.ts", kind: "file", source: { kind: "index", worktree: "w", blob: "b" } } });
+  act(() =>
+    hook.current().open(compared, {
+      kind: "comparison",
+      left: { branch: "main", commit: "1234567890abcdef" },
+      right: { branch: "feature", commit: "fedcba0987654321" },
+    }),
+  );
+  expect(hook.current().subject).toMatchObject({ stage: undefined, status: "added" });
+});
+
 it("keeps a failed change list on screen through a background refresh, and shows loading when asked again", async () => {
   const { daemon, pending } = controlledDaemon();
   const hook = mount(daemon, () => useChangeList("p", undefined, true));
@@ -235,7 +275,7 @@ it("keeps a failed change list on screen through a background refresh, and shows
   act(() => daemon.store.setState((state) => ({ snapshotEpoch: state.snapshotEpoch + 1 })));
   expect(hook.current().list).toMatchObject({ state: "error", refreshing: true });
   await act(async () => pending.splice(0)[0].reject(new DaemonRequestError(failed.message, failed.code, failed.params)));
-  act(() => hook.current().refresh());
+  act(() => void hook.current().refresh());
   expect(hook.current().list).toEqual({ state: "loading" });
 });
 
@@ -245,7 +285,7 @@ it("sends a request replacing one in its own slot at once, past the window's bou
   mount(daemon, () => useChangeList("b", undefined, true));
   mount(daemon, () => useChangeList("c", undefined, true));
   expect(pending.map((p) => "project" in p.body && p.body.project)).toEqual(["a", "b"]);
-  act(() => a.current().refresh());
+  act(() => void a.current().refresh());
   expect(pending.map((p) => "project" in p.body && p.body.project)).toEqual(["a", "b", "a"]);
 });
 

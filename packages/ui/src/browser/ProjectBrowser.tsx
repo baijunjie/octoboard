@@ -1,10 +1,11 @@
 import { Button, Spinner, Tabs } from "@heroui/react";
 import { FolderOpen, FolderX, RefreshCw, TriangleAlert } from "lucide-react";
-import React, { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Key } from "react-aria-components";
 
 import { EmptyPanel } from "../components/EmptyPanel";
 import { handFocusOff } from "../components/handFocusOff";
+import { FADE_SIZE } from "../components/useScrollFade";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
 import { useT } from "../i18n/react";
@@ -22,6 +23,11 @@ import { useGitReview } from "./useGitReview";
 
 /** The vertical padding the tree's scroller adds above its first row (`py-1`). */
 const TREE_PADDING = 4;
+
+/** How long the header's Refresh icon spins at least, so a refresh that settles at once still reads
+ * as having happened: half a turn of the slow spin (2 s per turn). The icon looks the same every
+ * half turn, so stopping there does not visibly jump. */
+const MIN_SPIN_MS = 1000;
 
 /**
  * A project's browser, the aside's content while the project owns it (`asideOwner.ts`), in two
@@ -86,6 +92,15 @@ export function ProjectBrowser({
 
   const refresh = () => (mode === "files" ? dirs.refreshAll() : git.refresh());
 
+  // The Refresh icon spins while a refresh the button started is out, and for at least
+  // `MIN_SPIN_MS`. Only the button's own refreshes count: the periodic ones would keep it turning.
+  // Pressing again while it spins starts another refresh, and the icon spins until the last settles.
+  const [spinning, setSpinning] = useState(0);
+  const pressRefresh = () => {
+    setSpinning((n) => n + 1);
+    void Promise.all([refresh(), new Promise((resolve) => setTimeout(resolve, MIN_SPIN_MS))]).finally(() => setSpinning((n) => n - 1));
+  };
+
   // The selection is kept in view, so moving through files in the viewer moves the tree along
   // behind it, and its row is there to take focus when the viewer closes. Rows are one height, so
   // where a row is follows from its place in the list.
@@ -98,8 +113,9 @@ export function ProjectBrowser({
     if (index === -1) return;
     scrolledTo.current = selected;
     const top = TREE_PADDING + index * ROW_HEIGHT;
-    if (top < element.scrollTop) element.scrollTop = top;
-    else if (top + ROW_HEIGHT > element.scrollTop + element.clientHeight) element.scrollTop = top + ROW_HEIGHT - element.clientHeight;
+    // Clear of the fade at the tree's edges, as `scroll-padding` keeps the rows react-aria scrolls.
+    if (top - FADE_SIZE < element.scrollTop) element.scrollTop = top - FADE_SIZE;
+    else if (top + ROW_HEIGHT + FADE_SIZE > element.scrollTop + element.clientHeight) element.scrollTop = top + ROW_HEIGHT + FADE_SIZE - element.clientHeight;
   }, [browser.selected, tree.rows]);
 
   // What the listings say of the file in the viewer decides whether it is read again (`rereadFor`):
@@ -151,8 +167,8 @@ export function ProjectBrowser({
             </Tabs.Tab>
           </Tabs.List>
           <TitledControl title={t("browser.refresh")}>
-            <Button isIconOnly size="sm" variant="ghost" aria-label={t("browser.refresh")} preventFocusOnPress onPress={refresh}>
-              <RefreshCw aria-hidden="true" className="size-4" />
+            <Button isIconOnly size="sm" variant="ghost" aria-label={t("browser.refresh")} preventFocusOnPress onPress={pressRefresh}>
+              <RefreshCw aria-hidden="true" className={spinning > 0 ? "size-4 motion-safe:animate-spin-slow" : "size-4"} />
             </Button>
           </TitledControl>
         </div>
