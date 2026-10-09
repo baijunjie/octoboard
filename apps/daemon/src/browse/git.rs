@@ -2,13 +2,13 @@
 //! configuration that could point it at another repository, worktree or index, or run a helper
 //! program in the middle of a read, and bounded in time and output.
 //!
-//! The environment starts from the user's own shell environment, as every other `git` the daemon
-//! runs does (so it is their `git`, their global configuration and their `safe.directory` list),
-//! but with every `GIT_*` variable removed apart from the three that only say where the user's own
-//! configuration files are. That takes out `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`,
-//! `GIT_OBJECT_DIRECTORY`, `GIT_COMMON_DIR`, `GIT_CONFIG_PARAMETERS` and the rest of what
-//! git(1)'s "Environment Variables" lists as redirecting a repository, wholesale rather than by a
-//! list that a later `git` release would outgrow. What is then set is fixed:
+//! The environment starts from the user's own shell environment (so it is their `git`, their
+//! global configuration and their `safe.directory` list), but with every `GIT_*` variable removed
+//! apart from the three that only say where the user's own configuration files are. That takes out
+//! `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`, `GIT_COMMON_DIR`,
+//! `GIT_CONFIG_PARAMETERS` and the rest of what git(1)'s "Environment Variables" lists as
+//! redirecting a repository, wholesale rather than by a list that a later `git` release would
+//! outgrow. What browse then sets on top of the shared non-interactive, read-only base is fixed:
 //!
 //! - `GIT_LITERAL_PATHSPECS=1`: a path is a path; `*`, `?`, `[` and `:(magic)` in a filename are
 //!   never patterns. [`GitEnv::run_exact`] is the one exception: it spells its paths out with
@@ -17,26 +17,24 @@
 //!   so the id a reply reports is the content it carries.
 //! - `GIT_NO_LAZY_FETCH=1`: a partial clone's missing object fails the read instead of reaching
 //!   the network in the middle of it.
-//! - `GIT_OPTIONAL_LOCKS=0`: `git status` never takes the index lock to write back the stat
-//!   information it refreshed, so it cannot get in the way of an agent writing to the same
-//!   repository. It does not reach `git diff`, which is held back separately (below).
-//! - `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND=ssh -oBatchMode=yes`, with the askpass helpers
-//!   removed, for the reason every daemon `git` has them: nobody can answer a prompt.
 //! - `GIT_CEILING_DIRECTORIES` set to the home directory, so discovery never climbs into it: a
 //!   home directory kept under version control is never taken for the repository of a project
 //!   below it.
 //!
+//! That base is what leaves a command unable to prompt for anything nobody is there to answer,
+//! and unable to write back to the index of the repository it reads and fail an agent's `git add`
+//! on the lock it would hold.
+//!
 //! Every command also gets `--no-pager`, `-c core.fsmonitor=false` (a configured monitor is a
-//! program `git` would run on a read), `-c core.quotePath=false` (a patch's headers name a path by
-//! its bytes, apart from the few characters `git` always escapes, whatever the user configured) and
-//! `-c diff.autoRefreshIndex=false`: comparing the index with the disk, `git diff` otherwise takes
-//! the index lock and rewrites the index whenever a file's timestamps moved but its content did
-//! not, whatever `GIT_OPTIONAL_LOCKS` says — a write in the middle of a read, and an agent's `git
-//! add` failing on the lock it holds. A diff-family command (`diff*`, `log`, `show`) gets
+//! program `git` would run on a read) and `-c core.quotePath=false` (a patch's headers name a path
+//! by its bytes, apart from the few characters `git` always escapes, whatever the user
+//! configured), alongside the `-c` the base contributes — all of them before the subcommand, which
+//! is where a `-c` has to stand. A diff-family command (`diff*`, `log`, `show`) gets
 //! `--no-ext-diff --no-textconv --no-color` right after its name: an external diff or a textconv
 //! filter is a configured program that would both run and rewrite the bytes the reply claims to
-//! carry. Clean and smudge filters are left alone — they define what a file's content is in the
-//! repository, which is not a presentation choice. Output is read as bytes, never as text.
+//! carry. Clean and smudge filters
+//! are left alone — they define what a file's content is in the repository, which is not a
+//! presentation choice. Output is read as bytes, never as text.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -165,23 +163,13 @@ impl GitEnv {
     pub fn command(&self, dir: &Path, subcommand: &str, args: &[&[u8]]) -> Command {
         use std::os::unix::ffi::OsStrExt;
 
-        let mut command = Command::new(&self.git);
-        command.env_clear();
-        for (key, value) in &self.env {
-            if key.starts_with("GIT_") && !KEPT_GIT_VARIABLES.contains(&key.as_str()) {
-                continue;
-            }
-            if key == "SSH_ASKPASS" {
-                continue;
-            }
-            command.env(key, value);
-        }
+        let kept = self.env.iter().filter(|(key, _)| {
+            !key.starts_with("GIT_") || KEPT_GIT_VARIABLES.contains(&key.as_str())
+        });
+        let mut command = crate::git_env::non_interactive(&self.git, kept);
         command.env("GIT_LITERAL_PATHSPECS", "1");
         command.env("GIT_NO_REPLACE_OBJECTS", "1");
         command.env("GIT_NO_LAZY_FETCH", "1");
-        command.env("GIT_OPTIONAL_LOCKS", "0");
-        command.env("GIT_TERMINAL_PROMPT", "0");
-        command.env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes");
         if let Some(ceiling) = &self.ceiling {
             command.env("GIT_CEILING_DIRECTORIES", ceiling);
         }
@@ -192,10 +180,9 @@ impl GitEnv {
             "core.fsmonitor=false",
             "-c",
             "core.quotePath=false",
-            "-c",
-            "diff.autoRefreshIndex=false",
-            subcommand,
         ]);
+        crate::git_env::read_only(&mut command);
+        command.arg(subcommand);
         if is_diff_family(subcommand) {
             command.args(DIFF_SAFETY);
         }

@@ -22,7 +22,7 @@ use crate::protocol::{GitActivity, GitStatus, Project};
 use crate::state::AppState;
 
 /// Upper bound on one `git` subprocess (`fetch`, `status`, `merge`). `GIT_TERMINAL_PROMPT=0` and
-/// `ssh -oBatchMode=yes` (see `git_command`) turn a missing credential or an unknown host key
+/// `ssh -oBatchMode=yes` (see `crate::git_env`) turn a missing credential or an unknown host key
 /// into an immediate failure rather than a prompt neither of them ever shows on a headless daemon,
 /// but a slow network can still legitimately take tens of seconds on a fetch; two minutes leaves a
 /// wide margin above that while still turning a wedged step into a reported error within one sweep
@@ -373,13 +373,13 @@ fn read_branch_header(path: &Path, status: &mut GitStatus) {
 
 /// Whether a `git` this module runs only reads the project's repository, or is one of the two
 /// steps meant to write to it (the fetch and the fast-forward). A read is held back from writing
-/// the index, which it otherwise does behind the caller's back — see [`git_command`]; a write is
-/// not, since both of those steps legitimately take the locks they need. Which one a step is
-/// follows from the wrapper it is run through, each named for its access, rather than from an
-/// argument a call site passes and can get wrong. A read whose only interesting output is its exit
-/// status — a dirty-worktree `git diff --quiet`, say — therefore still goes through
-/// [`run_git_read`] and drops what it returns, never through [`run_git_write`]: it is exactly such
-/// a command that the index guard matters most for.
+/// the index, which it otherwise does behind the caller's back — see
+/// [`crate::git_env::read_only`]; a write is not, since both of those steps legitimately take the
+/// locks they need. Which one a step is follows from the wrapper it is run through, each named for
+/// its access, rather than from an argument a call site passes and can get wrong. A read whose
+/// only interesting output is its exit status — a dirty-worktree `git diff --quiet`, say —
+/// therefore still goes through [`run_git_read`] and drops what it returns, never through
+/// [`run_git_write`]: it is exactly such a command that the index guard matters most for.
 #[derive(Clone, Copy)]
 enum GitAccess {
     Read,
@@ -419,30 +419,11 @@ fn git_command(
     args: &[&str],
     access: GitAccess,
 ) -> std::process::Command {
-    let mut command = std::process::Command::new(git);
     // `git` runs with the user's shell environment, the same one agents are launched with, rather
     // than the daemon's own minimal one.
-    command.env_clear();
-    command.envs(env);
-    // `git` and `ssh` read a missing credential, an unknown host key or a passphrase-protected
-    // key with no agent from the controlling terminal, not stdin — a null stdin (which
-    // `run_with_timeout` sets) does nothing to stop that prompt. This is what turns all three into
-    // an immediate failure instead of a daemon launched from a terminal blocking forever on them.
-    command.env("GIT_TERMINAL_PROMPT", "0");
-    command.env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes");
-    command.env_remove("GIT_ASKPASS");
-    command.env_remove("SSH_ASKPASS");
+    let mut command = crate::git_env::non_interactive(git, env);
     if matches!(access, GitAccess::Read) {
-        // A porcelain read is not read-only on its own: `git status` refreshes the stat
-        // information of a tracked file whose timestamps moved while its content did not, and
-        // rewrites `.git/index` to keep it — holding `index.lock` while it does, which is what
-        // fails the `git add` or `git commit` an agent is running in that same repository.
-        // `GIT_OPTIONAL_LOCKS=0` drops that write-back, and nothing of what the read reports.
-        // `-c diff.autoRefreshIndex=false` is the same guarantee for a diff-family read, which
-        // refreshes the index whatever `GIT_OPTIONAL_LOCKS` says; both go on every read, so one
-        // added later cannot take half of the guarantee.
-        command.env("GIT_OPTIONAL_LOCKS", "0");
-        command.args(["-c", "diff.autoRefreshIndex=false"]);
+        crate::git_env::read_only(&mut command);
     }
     command.current_dir(path);
     command.args(args);

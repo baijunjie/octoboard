@@ -9,6 +9,7 @@ mod availability;
 mod browse;
 mod coordinator;
 mod env_shell;
+mod git_env;
 mod git_status;
 mod hook_mode;
 mod hooks;

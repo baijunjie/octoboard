@@ -175,14 +175,7 @@ const CLONE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30 * 6
 /// gives it a deadline.
 fn git_command(shell_env: &HashMap<String, String>) -> Result<std::process::Command> {
     let git = crate::env_shell::resolve_binary("git", shell_env)?;
-    let mut command = std::process::Command::new(git);
-    command.env_clear();
-    command.envs(shell_env);
-    command.env("GIT_TERMINAL_PROMPT", "0");
-    command.env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes");
-    command.env_remove("GIT_ASKPASS");
-    command.env_remove("SSH_ASKPASS");
-    Ok(command)
+    Ok(crate::git_env::non_interactive(git, shell_env))
 }
 
 /// Clones `remote_url` into a new directory under `parent` and returns that directory. Blocking:

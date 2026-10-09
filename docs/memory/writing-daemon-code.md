@@ -36,38 +36,35 @@ A claim like that is a guard released on `Drop`, never a `begin`/`end` pair: the
 can panic, and an entity whose claim is never released is excluded from every later refresh for the rest of the
 daemon's life.
 
-## Every `git` subprocess the daemon spawns needs a non-interactive environment and a deadline
+## Build every `git` the daemon spawns from `git_env.rs`, and give it a deadline
 
-`git` and `ssh` ask for a missing credential, an unknown host key or a locked key's passphrase on the controlling
-terminal, not on stdin, so giving the child a null stdin does nothing to stop it. Nobody can answer that prompt
-whatever triggered the call — the daemon has no terminal the user is looking at — and a daemon that does have a
-controlling terminal (every dev run, and any launch from a shell) then blocks on it forever, with nothing on screen
-to say which call is stuck.
+`apps/daemon/src/git_env.rs` assembles every `git` command the daemon runs: `non_interactive` is the base, and a
+command that only reads a repository adds `read_only` on top of it, before the subcommand is pushed, since it
+contributes a `-c` argument. Start from there rather than from `Command::new`, and set none of those variables at a
+call site; the module header carries the reason for each one, and a call site that assembles its own takes some of
+them and misses the rest.
 
-So on every `git` command the daemon builds: set `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND=ssh -oBatchMode=yes`,
-remove `GIT_ASKPASS` and `SSH_ASKPASS` (the command runs with the user's own shell environment copied in, which may
-define them), and run it through `subprocess::run_with_timeout` — or `subprocess::run_bounded` when its output also
-needs a ceiling or it must be cancellable — rather than `Command::output`. The deadline matters on its own: it kills
-the whole process group, not the direct child, which is what also reaps the `ssh` that `git` forked.
+Two of those reasons are worth having in advance, because the symptom turns up nowhere near the call. A `git` child
+that can prompt hangs the daemon with nothing on screen to say which call is stuck: `git` and `ssh` read a missing
+credential, an unknown host key or a locked key's passphrase from the controlling terminal rather than stdin, so a
+null stdin does not stop them, and a daemon launched from a shell has a terminal to block on. And a read is not
+read-only — `git status` and `git diff` rewrite `.git/index` for a tracked file whose timestamps moved while its
+content did not, and the `index.lock` they hold is what fails the `git add` an agent is running in that same
+repository.
 
-## A `git` read in a user's repository must be kept from rewriting the index
+The deadline stays the call site's own: run the command through `subprocess::run_with_timeout`, or
+`subprocess::run_bounded` when its output also needs a ceiling or it must be cancellable, rather than
+`Command::output`. It kills the whole process group rather than the direct child, which is what also reaps the
+`ssh` that `git` forked.
 
-Porcelain `git status` and `git diff` are not read-only: when a tracked file's timestamps moved but its content did
-not, both refresh the stat information and rewrite `.git/index`, holding `index.lock` while they do. Against a
-repository an agent is working in, that makes the agent's own `git add` or `git commit` fail with "index.lock
-exists". `GIT_OPTIONAL_LOCKS=0` stops `git status` from writing but not `git diff`; `git diff` also needs
-`-c diff.autoRefreshIndex=false`. Set both on any `git` the daemon runs only to read. No one place builds the
-daemon's `git` commands — several modules each assemble their own, and a builder that never reads a working
-repository carries neither — so grep `GIT_OPTIONAL_LOCKS` for the builder your read goes through instead of
-assuming either way; when it lacks the pair, add it there for every read that builder makes rather than at your
-one call site.
+## A test that a `git` read leaves the repository alone needs a fixture whose stat information is stale
 
-A test claiming a read writes nothing to the repository proves it only if the fixture first leaves a tracked file
-with a new modification time and unchanged content; without that, nothing triggers the refresh and the test passes
-whatever the command does. Compare every file under `.git` before and after on both its content and its modification
-time, holding the content as a digest rather than the bytes so that a failure names the file that changed instead of
-printing the whole directory. When unsure what a `git` command writes, try it in a scratch repository outside the
-project first.
+A tracked file whose modification time moved while its content did not is the only thing that makes a read want to
+refresh the index. Against a freshly built repository the read writes nothing whatever its environment says, so a
+test over that fixture passes with the guard removed as well, and proves nothing about the guard. The fixture has
+to produce the stale state, and the test needs a positive control beside it — the same read with the guard off,
+asserted to write. `apps/daemon/src/git_status.rs`'s
+`reading_the_branch_header_leaves_the_repository_untouched`, with the control that follows it, is the worked pair.
 
 ## Type-check Linux-only code in a scratch crate, since no check on macOS compiles it
 

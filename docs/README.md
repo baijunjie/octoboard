@@ -194,8 +194,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   held on `AppState` and published by its own event rather than as a field on a stored record, with the cleanups that
   follow from there being no deletion event for it; why a repeating refresh is timed by the client and has to be bounded
   in the daemon by a drop-guard claim and a completion floor, since an in-flight claim alone never fires across clients
-  polling on their own phases; the non-interactive environment and deadline every `git` subprocess needs, because `git`
-  and `ssh` ask on a terminal the daemon does not have; why a `git` read in a user's repository needs
-  `GIT_OPTIONAL_LOCKS=0` and `-c diff.autoRefreshIndex=false` to keep it from rewriting the index (and failing an
-  agent's `git add` on `index.lock`), and what a test proving a read writes nothing has to set up first; and how to
-  type-check Linux-only code from macOS (a scratch crate, since bundled SQLite blocks a cross-check of the daemon).
+  polling on their own phases; why every `git` the daemon spawns is built from the one shared base in `git_env.rs`
+  rather than at the call site and bounded in time there, with the two consequences that make a call site reach for
+  it — a `git` that can prompt hangs the daemon with nothing naming the stuck call, and a read that rewrites the index
+  fails an agent's `git add` on `index.lock`; what a test proving a read leaves the repository alone has to set up
+  first; and how to type-check Linux-only code from macOS (a scratch crate, since bundled SQLite blocks a cross-check
+  of the daemon).
