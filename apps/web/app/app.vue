@@ -1,8 +1,10 @@
 <script setup lang="ts">
 const { locale } = useI18n();
+const { t } = useSiteCopy();
 const config = useRuntimeConfig();
 const route = useRoute();
 const head = useLocaleHead({ seo: true });
+useSiteSeo();
 function directoryUrl(value: unknown) {
   const url = new URL(String(value));
   if (!url.pathname.endsWith("/")) url.pathname += "/";
@@ -23,23 +25,36 @@ useHead(() => ({
           hreflang: String(link.hreflang || ""),
         },
   ),
-  meta: (head.value.meta || []).map((meta) => ({
-    property: meta.property ? String(meta.property) : undefined,
-    content:
-      meta.property === "og:url"
-        ? directoryUrl(meta.content)
-        : String(meta.content),
-  })),
+  // i18n turns zh-Hans into og:locale zh_Hans. Open Graph only accepts
+  // language_TERRITORY, so those tags are replaced in useSiteSeo.
+  meta: (head.value.meta || [])
+    .filter(
+      (meta) =>
+        meta.property !== "og:locale" &&
+        meta.property !== "og:locale:alternate",
+    )
+    .map((meta) => ({
+      property: meta.property ? String(meta.property) : undefined,
+      content:
+        meta.property === "og:url"
+          ? directoryUrl(meta.content)
+          : String(meta.content),
+    })),
 }));
+// One card per route code, drawn by scripts/generate-og-images.py.
+// The site build does not redraw them.
+const shareImage = () => `${config.public.siteUrl}og-image-${locale.value}.png`;
 useSeoMeta({
-  ogImage: `${config.public.siteUrl}branding/logo.png`,
-  ogImageWidth: 640,
-  ogImageHeight: 640,
-  ogImageAlt: config.public.appName,
+  ogImage: shareImage,
+  ogImageWidth: 1200,
+  ogImageHeight: 630,
+  // brand-slogan.png carries this English slogan on every language's card.
+  ogImageAlt: () =>
+    `${config.public.appName} — The Programming Terminator — ${[t("heroTitle"), t("heroTitleSecond"), t("heroTitleAccent")].join(" ")}`,
   ogType: "website",
   ogSiteName: config.public.appName,
-  twitterCard: "summary",
-  twitterImage: `${config.public.siteUrl}branding/logo.png`,
+  twitterCard: "summary_large_image",
+  twitterImage: shareImage,
 });
 </script>
 

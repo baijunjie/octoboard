@@ -1,33 +1,18 @@
 <script setup lang="ts">
+import {
+  developedPlatform,
+  heroAgents,
+  homeFeatures,
+  homeQuestions,
+  homeSteps,
+  plannedPlatforms,
+} from "../../seo/page-outline";
+
 const { t } = useSiteCopy();
 const config = useRuntimeConfig();
 const localePath = useLocalePath();
 const page = ref<HTMLElement | null>(null);
 const releasesUrl = `${config.public.repositoryUrl}/releases`;
-const steps = ["One", "Two", "Three"];
-const questions = [
-  "One",
-  "Two",
-  "Three",
-  "Four",
-  "Five",
-  "Six",
-  "Seven",
-  "Eight",
-  "Nine",
-];
-const features = [
-  { key: "One", icon: "tree-structure" },
-  { key: "Two", icon: "terminal-window" },
-  { key: "Three", icon: "plugs-connected" },
-  { key: "Four", icon: "chat-circle-dots" },
-] as const;
-const plannedPlatforms = [
-  { name: "Linux", icon: "linux-logo" },
-  { name: "Windows", icon: "windows-logo" },
-  { name: "iOS", icon: "apple-logo" },
-  { name: "Android", icon: "android-logo" },
-] as const;
 useSectionReveal(page);
 useSeoMeta({
   title: () => t("seoTitle"),
@@ -75,32 +60,14 @@ useSeoMeta({
         <div class="agent-rail">
           <span class="eyebrow">{{ t("heroAgentLabel") }}</span>
           <div>
-            <span>
+            <span v-for="agent in heroAgents" :key="agent.icon">
               <img
-                :src="`${config.app.baseURL}agents/claude.svg`"
+                :src="`${config.app.baseURL}agents/${agent.icon}.svg`"
                 alt=""
                 width="24"
                 height="24"
               />
-              Claude Code
-            </span>
-            <span>
-              <img
-                :src="`${config.app.baseURL}agents/codex.svg`"
-                alt=""
-                width="24"
-                height="24"
-              />
-              Codex
-            </span>
-            <span>
-              <img
-                :src="`${config.app.baseURL}agents/grok.svg`"
-                alt=""
-                width="24"
-                height="24"
-              />
-              Grok Build
+              {{ agent.name }}
             </span>
           </div>
         </div>
@@ -128,7 +95,7 @@ useSeoMeta({
           </div>
         </div>
         <div class="benefits-list">
-          <article v-for="feature in features" :key="feature.key">
+          <article v-for="feature in homeFeatures" :key="feature.key">
             <SiteIcon :name="feature.icon" class="benefit-icon" />
             <div>
               <h3>{{ t(`feature${feature.key}Title`) }}</h3>
@@ -208,7 +175,7 @@ useSeoMeta({
       </div>
       <WorkflowDemo />
       <div class="workflow-steps">
-        <article v-for="(step, index) in steps" :key="step">
+        <article v-for="(step, index) in homeSteps" :key="step">
           <span class="step-number">0{{ index + 1 }}</span>
           <h3>{{ t(`step${step}Title`) }}</h3>
           <p>{{ t(`step${step}Description`) }}</p>
@@ -306,9 +273,11 @@ useSeoMeta({
       <p>{{ t("platformsDescription") }}</p>
       <ul class="platform-list">
         <li class="platform-current">
-          <div class="platform-emblem"><SiteIcon name="apple-logo" /></div>
+          <div class="platform-emblem">
+            <SiteIcon :name="developedPlatform.icon" />
+          </div>
           <div class="platform-copy">
-            <h3>macOS</h3>
+            <h3>{{ developedPlatform.name }}</h3>
             <p>{{ t("platformsMacStatus") }}</p>
           </div>
         </li>
@@ -330,7 +299,7 @@ useSeoMeta({
       <h2>{{ t("faqTitle") }}</h2>
       <div class="faq-list">
         <details
-          v-for="question in questions"
+          v-for="question in homeQuestions"
           :key="question"
           :open="question === 'One'"
         >

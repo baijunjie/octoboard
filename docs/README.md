@@ -82,7 +82,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   running", Open, Quit), choosing a session from it, and its Quit.
 
 - [Website](product/website.md) — the localized homepage, privacy and error pages, keyboard navigation, motion,
-  illustrative workflow, release download links, platform roadmap, privacy disclosures, and planned remote host support.
+  illustrative workflow, release download links, platform roadmap, privacy disclosures, planned remote host support,
+  search indexing, and the agent-readable Markdown copies.
 
 ## Reference
 

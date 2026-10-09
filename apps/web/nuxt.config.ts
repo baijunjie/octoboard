@@ -1,49 +1,34 @@
+import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import appConfig from "../../config/app.json";
+import { readLocaleMessages, renderAgentFiles } from "./seo/agent-documents";
+import {
+  locales,
+  localizedPath,
+  pagePaths,
+  robotsTxt,
+  sitemapXml,
+} from "./seo/site-seo";
 import site from "./site.config";
 
-const locales = [
-  { code: "ar", language: "ar", file: "ar.json", name: "العربية", dir: "rtl" },
-  { code: "de", language: "de", file: "de.json", name: "Deutsch" },
-  { code: "en", language: "en", file: "en.json", name: "English" },
-  { code: "es", language: "es", file: "es.json", name: "Español" },
-  { code: "fr", language: "fr", file: "fr.json", name: "Français" },
-  { code: "hi", language: "hi", file: "hi.json", name: "हिन्दी" },
-  { code: "id", language: "id", file: "id.json", name: "Bahasa Indonesia" },
-  { code: "it", language: "it", file: "it.json", name: "Italiano" },
-  { code: "ja", language: "ja", file: "ja.json", name: "日本語" },
-  { code: "ko", language: "ko", file: "ko.json", name: "한국어" },
-  {
-    code: "pt-BR",
-    language: "pt-BR",
-    file: "pt-BR.json",
-    name: "Português (Brasil)",
-  },
-  { code: "ru", language: "ru", file: "ru.json", name: "Русский" },
-  { code: "th", language: "th", file: "th.json", name: "ไทย" },
-  { code: "tr", language: "tr", file: "tr.json", name: "Türkçe" },
-  { code: "vi", language: "vi", file: "vi.json", name: "Tiếng Việt" },
-  { code: "zh", language: "zh-Hans", file: "zh-Hans.json", name: "简体中文" },
-  {
-    code: "zh-Hant",
-    language: "zh-Hant",
-    file: "zh-Hant.json",
-    name: "繁體中文",
-  },
-] as const;
-
-const pagePaths = ["", "privacy/"];
-const localizedPath = (code: string, path: string) =>
-  `${code === "en" ? "" : `${code}/`}${path}`;
 const prerenderRoutes = locales.flatMap(({ code }) =>
   pagePaths.map((path) => `/${localizedPath(code, path)}`),
 );
-const xmlEscape = (text: string) =>
-  text
-    .replaceAll("&", "&amp;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("<", "&lt;");
+
+// The cards are committed. This build does not draw them, so a missing file
+// would publish a page whose share image 404s.
+for (const { code } of locales) {
+  const image = fileURLToPath(
+    new URL(`./public/og-image-${code}.png`, import.meta.url),
+  );
+  if (!existsSync(image)) {
+    throw new Error(
+      `Missing share image public/og-image-${code}.png. Run python3 apps/web/scripts/generate-og-images.py.`,
+    );
+  }
+}
 
 export default defineNuxtConfig({
   compatibilityDate: "2026-10-08",
@@ -91,7 +76,13 @@ export default defineNuxtConfig({
     strategy: "prefix_except_default",
     defaultLocale: "en",
     langDir: "locales",
-    locales: [...locales],
+    locales: locales.map(({ code, language, file, name, dir }) => ({
+      code,
+      language,
+      file,
+      name,
+      ...(dir ? { dir } : {}),
+    })),
     baseUrl: site.origin,
     trailingSlash: true,
     detectBrowserLanguage: false,
@@ -99,26 +90,17 @@ export default defineNuxtConfig({
   hooks: {
     "nitro:init"(nitro) {
       nitro.hooks.hook("prerender:done", async () => {
-        const entries = pagePaths.flatMap((path) => {
-          const alternate =
-            locales
-              .map(
-                ({ code, language }) =>
-                  `<xhtml:link rel="alternate" hreflang="${language}" href="${xmlEscape(site.url + localizedPath(code, path))}"/>`,
-              )
-              .join("") +
-            `<xhtml:link rel="alternate" hreflang="x-default" href="${xmlEscape(site.url + path)}"/>`;
-          return locales.map(
-            ({ code }) =>
-              `<url><loc>${xmlEscape(site.url + localizedPath(code, path))}</loc>${alternate}</url>`,
-          );
+        const messages = await readLocaleMessages(
+          fileURLToPath(new URL("./i18n/locales/", import.meta.url)),
+        );
+        const agentFiles = renderAgentFiles({
+          siteUrl: site.url,
+          appName: appConfig.name,
+          operatorName: appConfig.author.name,
+          contactEmail: appConfig.support.email,
+          repositoryUrl: appConfig.repositoryUrl,
+          messages,
         });
-        const sitemap =
-          '<?xml version="1.0" encoding="UTF-8"?>\n' +
-          '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" ' +
-          'xmlns:xhtml="http://www.w3.org/1999/xhtml">\n' +
-          entries.join("\n") +
-          "\n</urlset>\n";
         // GitHub Pages serves this document at arbitrary missing URLs. Hydrating
         // its prerendered route would replace that URL with /404/.
         const fallback = (
@@ -136,11 +118,14 @@ export default defineNuxtConfig({
           ),
           writeFile(
             resolve(nitro.options.output.publicDir, "sitemap.xml"),
-            sitemap,
+            sitemapXml(site.url),
           ),
           writeFile(
             resolve(nitro.options.output.publicDir, "robots.txt"),
-            `User-agent: *\nAllow: /\n\nSitemap: ${site.url}sitemap.xml\n`,
+            robotsTxt(site.url),
+          ),
+          ...Object.entries(agentFiles).map(([name, body]) =>
+            writeFile(resolve(nitro.options.output.publicDir, name), body),
           ),
         ]);
       });

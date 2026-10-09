@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { githubPrivacyUrl, privacySections } from "../../seo/page-outline";
+
 const { t } = useSiteCopy();
 const config = useRuntimeConfig();
 const localePath = useLocalePath();
-const sections = ["Local", "Agents", "Sharing", "Website", "Contact", "Future"];
 useSeoMeta({
   title: () => t("privacySeoTitle"),
   description: () => t("privacySeoDescription"),
@@ -24,7 +25,7 @@ useSeoMeta({
     </header>
     <div class="privacy-sections">
       <section
-        v-for="(section, index) in sections"
+        v-for="(section, index) in privacySections"
         :key="section"
         class="privacy-section"
       >
@@ -35,7 +36,7 @@ useSeoMeta({
           <a
             v-if="section === 'Website'"
             class="text-link"
-            href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement"
+            :href="githubPrivacyUrl"
             >{{ t("privacyGithubLink") }} ↗</a
           ><a
             v-if="section === 'Contact'"

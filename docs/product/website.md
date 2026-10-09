@@ -37,6 +37,107 @@ preference in a cookie. The language selector names each language in that langua
 version of the current page: switching from a privacy page stays on a privacy page. Arabic uses a right-to-left
 layout. Page URLs remain usable directly, including after a reload.
 
+## Search indexing and agent-readable copies
+
+Search indexing, live retrieval by agents, and use of the pages for model training are allowed.
+`robots.txt` at the deployment root allows the whole site and does not disallow the Markdown copies.
+It sets `Content-Usage` to `train-ai=y` and `Content-Signal` to `search=yes, ai-input=yes, ai-train=yes`,
+and points `Sitemap` at the absolute URL of `sitemap.xml`.
+
+The published host does not send `X-Robots-Tag`, `Link`, or `Vary`, and it does not negotiate
+`Accept: text/markdown`. A Markdown copy is its own URL. The response is not marked `noindex`, so the
+copy can be indexed beside its HTML page.
+
+`sitemap.xml` lists each homepage and each privacy URL once, for every language, and nothing else.
+Each entry carries an alternate for every language and an `x-default` alternate. The language value is
+the BCP-47 tag identified in "Pages and languages": Simplified Chinese is `zh-Hans` while its route
+prefix stays `zh`. `x-default` is the unprefixed English URL of that page. Every listed URL ends with
+a slash. The error page is not listed; see "Missing pages and errors".
+
+Each HTML homepage and privacy page, in every language, has an absolute canonical URL with a trailing slash, and
+hreflang alternates for the HTML versions, also with trailing slashes. `x-default` is again the
+unprefixed English URL of that page. Those alternates use the same BCP-47 tags as the sitemap, and the
+HTML page adds two tags that repeat an existing URL: `zh` is the Simplified Chinese page, the same URL
+as `zh-Hans`, and `pt` is the Brazilian Portuguese page, the same URL as `pt-BR`. The sitemap does not
+include `zh` or `pt`.
+
+Open Graph locale is `language_TERRITORY`. The current page uses `og:locale`; every other language uses
+`og:locale:alternate`. The values are `ar_AR`, `de_DE`, `en_US`, `es_ES`, `fr_FR`, `hi_IN`, `id_ID`,
+`it_IT`, `ja_JP`, `ko_KR`, `pt_BR`, `ru_RU`, `th_TH`, `tr_TR`, `vi_VN`, `zh_CN`, and `zh_TW`. A value
+such as `zh_Hans` is not left on the page. `og:type` is `website`, `og:site_name` is the application
+name, and `og:url` is the canonical URL. `og:title` and `og:description` are that page's localized SEO
+title and description.
+
+Each language has one share image, 1200 by 630, at the deployment root as `og-image-<route code>.png`.
+The route code is the URL code in "Pages and languages", so Simplified Chinese is `og-image-zh.png`,
+not `zh-Hans`. The image shows the mascot published as `logo.png` at the deployment root, the brand
+artwork published as `branding/brand-slogan.png` at the deployment root, the three lines of the homepage
+title, and the hostname `octoboard.dev`. The brand artwork is the pixel wordmark and the English slogan
+"The Programming Terminator"; see "Brand slogan". It is the same on every language and is not translated.
+Those lines are the title on the homepage, not the SEO title sentence. Arabic places the mascot on the
+right and aligns the text to that inner edge. Neither the mascot nor the brand artwork is mirrored.
+
+`og:image` and `twitter:image` are the absolute URL of that language's image. `og:image:width` is 1200 and
+`og:image:height` is 630. `twitter:card` is `summary_large_image`. `og:image:alt` is the application name,
+an em dash, "The Programming Terminator", an em dash, then the three homepage title lines joined with
+spaces, with a space on each side of each dash.
+The privacy page uses the same image and the same alt text as that language's homepage. The unlocalized 404
+page uses the English image and the same alt text as the English homepage. It is not a separate card.
+An error within the running site does not set a share image.
+Indexing exclusions for the 404 page and that error are in "Missing pages and errors".
+
+The homepage and privacy pages also link `rel="alternate"` with type `text/markdown` to that page's Markdown
+file, and `rel="describedby"` to the absolute URL of `llms.txt`. Each of them carries one JSON-LD graph.
+
+The graph always includes a person and a website. The person is the origin plus `#identity`, with
+the operator name and email in "Privacy disclosures", and its URL is the deployment root. The website
+is that language's homepage URL plus `#website`: the homepage URL, the application name, the homepage
+SEO description, and that page's language, published by the person.
+
+A homepage also includes an FAQ page and a software application. The FAQ page is that page's canonical
+URL plus `#webpage`. It contains the nine questions and, as part of that page, an item list of the four
+localized benefit titles. The software application is the origin plus `#app` on every
+language. Its category is `DeveloperApplication`, its operating system is `macOS`, and its URL is the
+deployment root, the English homepage, not the localized homepage. It names the repository and the MIT
+license linked from the site. Its image is the mascot file `logo.png` at the deployment root, not the
+share image and not the brand artwork. It lists every language the website publishes, using the BCP-47
+tags. It has no description, no feature list, no offer, no install URL, and no rating. The benefit titles stay on that
+page's FAQ page, not on the shared application entry. The application entry does not say that a package can be
+downloaded; availability is described in "Platform availability".
+
+A privacy page has a web page entry at that page's canonical URL plus `#webpage`. It does not include
+the FAQ page or the software application.
+
+Agent-readable files are published at the deployment root and are crawlable:
+
+- One Markdown file for each homepage and privacy page. The English homepage is `index.md` and the
+  English privacy page is `privacy.md`. Another language's homepage is `<route code>.md`, so Simplified
+  Chinese is `zh.md`, not `zh-Hans.md`. Another language's privacy page is `<route code>/privacy.md`.
+- `llms.txt`, in English. Its notes cover local data handling, planned remote host support, the nine
+  questions and answers, the support email, and the repository. It then lists every language, each
+  linking to that language's homepage Markdown and stating that the language has two pages. The English
+  entry is the one whose pages are listed in the file; each other language is listed as pages to open.
+  The page list names only the two English pages, with their SEO titles and descriptions, and the file
+  links to `sitemap.md`.
+- `llms-full.txt` contains every language and both pages. English comes first, then the other languages
+  in the order in "Pages and languages", homepage before privacy page. Each part gives the page's SEO
+  title, the HTML URL as its source, the SEO description, and the Markdown body.
+- `sitemap.md` lists every Markdown URL with that page's localized SEO title. The unprefixed homepage
+  stands alone, the unprefixed privacy page stands alone, and each other language's two pages are
+  listed together.
+
+Each page file states `Canonical:` and then that page's HTML URL. A link from one of these copies to
+another page of the site points at the Markdown file. Links that leave the site — the releases page,
+the repository, the license, the GitHub privacy statement, and email — stay on those targets.
+
+The Markdown carries the page's localized wording. It includes the visible text, including the license
+caption and the illustrative workflow's Working and Awaiting instructions labels. Download links are
+the releases links in "Homepage and navigation" and sit beside the statement that the macOS app is an
+early prototype still in development. The workflow is identified as an illustration. The copies omit
+the header, the footer, decorative art, the labels and numbers that mark a section, the scroll cue,
+the MIT badge, and the replay control. The brand slogan, the privacy page's introductory line, and
+the workflow's participant labels stay.
+
 ## Homepage and navigation
 
 The homepage uses Octoboard's original silver mechanical octopus, red eyes, and pixel wordmark on a dark surface.
@@ -149,11 +250,12 @@ main content, and interactive controls, including questions, show keyboard focus
 An unknown address receives a branded 404 page with the original mascot, an explanation, and a link back to the
 homepage. The static GitHub Pages fallback is in English, works without JavaScript, and preserves the requested
 missing address rather than replacing it with a different URL. Its return-home link opens the English homepage under
-the site's deployment root.
+the site's deployment root. Its share image is the English one in "Search indexing and agent-readable copies".
 
 Errors encountered within the running site use localized messages, distinguishing missing pages from other loading
-errors. These error views also provide a return-home link. Error pages request exclusion from search indexing; the
-static error route is not included in the sitemap.
+errors. These error views also provide a return-home link. Error pages request exclusion from search indexing
+and from following their links (`noindex, nofollow`). The static error route is not included in the
+sitemap, and error pages do not link a Markdown copy, point at `llms.txt`, or carry structured data.
 
 ## Privacy disclosures
 

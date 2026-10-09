@@ -10,6 +10,8 @@
 node_modules/
 
 # Build output
+__pycache__/
+*.py[cod]
 dist/
 build/
 out/

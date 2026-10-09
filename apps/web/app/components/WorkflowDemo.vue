@@ -1,17 +1,9 @@
 <script setup lang="ts">
+import { workflowProjects as projects } from "../../seo/page-outline";
+
 const { t } = useSiteCopy();
 const { locale } = useI18n();
 const config = useRuntimeConfig();
-const projects = [
-  { key: "Frontend", agent: "Codex", icon: "codex", path: "apps/web" },
-  {
-    key: "Backend",
-    agent: "Claude Code",
-    icon: "claude",
-    path: "services/api",
-  },
-  { key: "Docs", agent: "Grok Build", icon: "grok", path: "docs" },
-] as const;
 const diagramId = useId();
 const markerId = `workflow-arrow-${diagramId}`;
 const body = ref<HTMLElement | null>(null);
