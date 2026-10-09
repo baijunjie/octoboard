@@ -6,8 +6,8 @@
 > open their correct sources. Concurrent staging/committing and unavailable worktrees produce coherent results or
 > explicit stale/unavailable states. The complete flow works through the real project pane.
 
-Depends on [project file browsing](03-project-file-browser.md); all reads follow
-[the source contract](01-source-contracts.md).
+Depends on [project file browsing](03-project-file-browser.md); all reads follow the browse contract in
+`apps/daemon/PROTOCOL.md`'s "Browsing a project".
 
 ## Technical design
 
@@ -49,6 +49,14 @@ Depends on [project file browsing](03-project-file-browser.md); all reads follow
   and displayed bodies must identify the same accepted versions.
 - [ ] Verify large change sets, oversized patches and overlapping refreshes against declared budgets. Run affected
   checks and update the shipped protocol, product and module documentation.
+
+## Handoff
+
+- Serve and verify the change identity recorded as a contract ahead of its requests in `apps/daemon/PROTOCOL.md`'s
+  "Changes and comparisons": group, old/new sides with `present` / `absent` / `out_of_scope` states, side `kind`
+  (`file` / `symlink` / `submodule`, a type change being one change whose sides differ), the patch and change-entry
+  budgets with their `patch_bytes` / `change_entries` limits (declared there, no Rust constant yet), and the diff
+  reply's own worst-case reservation. Adjust the contract where serving it proves it wrong.
 
 ## Notes for the developer
 

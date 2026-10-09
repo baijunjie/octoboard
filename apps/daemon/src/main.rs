@@ -6,6 +6,7 @@
 mod access;
 mod adapter;
 mod availability;
+mod browse;
 mod coordinator;
 mod env_shell;
 mod git_status;
@@ -28,6 +29,7 @@ mod session;
 mod sharing;
 mod state;
 mod store;
+mod subprocess;
 mod term;
 #[cfg(test)]
 mod test_support;

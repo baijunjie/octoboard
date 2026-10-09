@@ -31,6 +31,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 uuid = { version = "=1.26.1", features = ["v4", "serde"] }
 bytes = "1"
+# Encodes a binary file body for the JSON control socket; the version the lockfile already
+# resolves for other dependencies.
+base64 = "0.22"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4", features = ["derive"] }
@@ -44,3 +47,8 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 # version is found by compiling, not by reading manifests.
 rmcp = { version = "=0.9.1", features = ["server", "transport-io"] }
 toml = { version = "1.1.6", default-features = false, features = ["parse", "display", "serde"] }
+
+[dev-dependencies]
+# A WebSocket client for tests that drive the control socket end to end; the version axum's own
+# server side already resolves, with only the client handshake added.
+tokio-tungstenite = { version = "=0.24.0", default-features = false, features = ["connect"] }

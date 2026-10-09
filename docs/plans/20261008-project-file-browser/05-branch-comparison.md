@@ -6,8 +6,8 @@
 > the result is not a merge-base comparison. Moving a branch during review cannot mix commit versions, and the flow
 > preserves the browser's source isolation and resource limits.
 
-Depends on [worktree change inspection](04-worktree-changes.md) for the integrated Git review surface and on
-[source contracts](01-source-contracts.md) for bounded, version-aware reads.
+Depends on [worktree change inspection](04-worktree-changes.md) for the integrated Git review surface; bounded,
+version-aware reads follow `apps/daemon/PROTOCOL.md`'s "Browsing a project".
 
 ## Technical design
 
@@ -39,6 +39,12 @@ Depends on [worktree change inspection](04-worktree-changes.md) for the integrat
   All parts of an accepted comparison must retain the same resolved commit pair.
 - [ ] Verify large lists and patches against the established budgets, complete browser and packaged-WebView checks,
   and update the shipped product, protocol and module documentation.
+
+## Handoff
+
+- Serve and verify the comparison reply recorded as a contract in `apps/daemon/PROTOCOL.md`'s "Changes and
+  comparisons" (`left` / `right` each `{branch, commit}`, and the versions used for its patch and bodies), together
+  with the Git version-race cases.
 
 ## Notes for the developer
 

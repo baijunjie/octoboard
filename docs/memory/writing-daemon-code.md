@@ -46,5 +46,17 @@ to say which call is stuck.
 
 So on every `git` command the daemon builds: set `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND=ssh -oBatchMode=yes`,
 remove `GIT_ASKPASS` and `SSH_ASKPASS` (the command runs with the user's own shell environment copied in, which may
-define them), and run it through `env_shell::run_with_timeout` rather than `Command::output`. The deadline matters on
-its own: it kills the whole process group, not the direct child, which is what also reaps the `ssh` that `git` forked.
+define them), and run it through `subprocess::run_with_timeout` — or `subprocess::run_bounded` when its output also
+needs a ceiling or it must be cancellable — rather than `Command::output`. The deadline matters on its own: it kills
+the whole process group, not the direct child, which is what also reaps the `ssh` that `git` forked.
+
+## Type-check Linux-only code in a scratch crate, since no check on macOS compiles it
+
+Applies to daemon code under `#[cfg(target_os = "linux")]` (the daemon is meant to run on a Linux host too) when you
+are developing on macOS. `cargo check`, `cargo clippy` and the test suite on macOS skip that code entirely, so a clean
+run says nothing about it. Checking the daemon itself with `--target x86_64-unknown-linux-gnu` does not get there
+either: rusqlite's `bundled` feature compiles SQLite from C in a build script, which fails without a Linux C
+cross-compiler (`x86_64-linux-gnu-gcc`). So copy the Linux-only functions into a scratch crate outside the repository
+that depends only on what they use (typically `libc`), and run `cargo check --target x86_64-unknown-linux-gnu` there
+after `rustup target add x86_64-unknown-linux-gnu`. That proves it compiles, not how it behaves; say so when
+reporting the change.

@@ -1,4 +1,6 @@
-//! Capturing the user's real shell environment, which every agent is then launched with.
+//! Capturing the user's real shell environment, which every agent is then launched with, and
+//! resolving a binary on its `PATH`. Running a subprocess the daemon spawns directly, within a
+//! deadline and output bounds, is `crate::subprocess`'s.
 //!
 //! `$SHELL -l -c ...` is not enough: tool paths such as `grok`, `codex` and a node-version
 //! manager's shims are set up in `~/.zshrc`, which a login-only non-interactive zsh never sources.
@@ -23,12 +25,14 @@
 use std::collections::HashMap;
 use std::io::{self, Read};
 use std::os::unix::process::CommandExt;
-use std::process::{Child, Command, ExitStatus, Output, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::{mpsc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
+
+use crate::subprocess::{PIPE_CHUNK_SIZE, REAP_GRACE};
 
 use crate::protocol::{error_code, CodedError};
 
@@ -77,18 +81,6 @@ pub fn cached_snapshot() -> Result<HashMap<String, String>> {
 /// resolves on its own) into a reported failure within a single human-noticeable wait instead of
 /// a launch that hangs forever.
 const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// Upper bound on the bounded reap attempted after a timeout's `SIGKILL`. A process wedged in an
-/// uninterruptible kernel wait (a dead network mount under `/Volumes` is the realistic trigger
-/// here) can leave the signal pending indefinitely, and nothing short of the kernel itself can
-/// force that reap to finish — so this is a best effort, not a guarantee, and giving up after it
-/// elapses risks at most one leaked zombie.
-const REAP_GRACE: Duration = Duration::from_millis(500);
-
-/// Size of each chunk a pipe reader thread forwards over its channel. Arbitrary beyond "comfortably
-/// smaller than the pipe's own OS buffer", since the channel is unbounded and nothing here needs
-/// the chunking to line up with any particular boundary in the data.
-const PIPE_CHUNK_SIZE: usize = 8192;
 
 /// Variables that belong to the snapshot shell rather than to the agent, and are stripped from the
 /// snapshot before it is handed to a PTY command.
@@ -477,91 +469,6 @@ fn kill_group_after_timeout(
     )
 }
 
-/// Kills the whole process group behind `child` and waits, bounded by `REAP_GRACE`, for it to be
-/// reaped — the two steps `run_with_timeout`'s timeout path and its drain-error path both need,
-/// pulled out so neither one can apply only the first and leave the child running unreaped.
-fn kill_process_group(child: &mut Child) {
-    let pid = child.id();
-    // SAFETY: a plain signal to a process group number. Both call sites reach here only while
-    // `child` is still known to be running (the timeout path just checked with `try_wait`, and
-    // the drain-error path has not seen it exit yet), the same condition `kill_group_after_timeout`
-    // relies on for `-pid` to stay valid.
-    unsafe {
-        libc::kill(-(pid as i32), libc::SIGKILL);
-    }
-    let reap_deadline = Instant::now() + REAP_GRACE;
-    while Instant::now() < reap_deadline {
-        match child.try_wait() {
-            Ok(Some(_)) | Err(_) => break,
-            Ok(None) => thread::sleep(Duration::from_millis(20)),
-        }
-    }
-}
-
-/// Runs an already-configured `command` to completion, killing its whole process group and
-/// returning a timeout error if it is still running after `timeout`. The shape mirrors
-/// `wait_with_timeout` above — poll `try_wait` rather than block on it, so the deadline can act
-/// without a second thread, and kill the group rather than only the direct child, so anything it
-/// forked (`ssh`, an askpass helper) goes with it — but completion itself is simpler: the caller
-/// here is one subprocess the daemon spawned directly, never a login shell that can leave a
-/// background process of its own holding a pipe open, so ordinary EOF on both pipes is a safe
-/// signal and there is no marker to hunt for.
-pub fn run_with_timeout(command: &mut Command, timeout: Duration) -> Result<Output> {
-    command.process_group(0);
-    command.stdin(Stdio::null());
-    command.stdout(Stdio::piped());
-    command.stderr(Stdio::piped());
-    let mut child = command.spawn().context("spawning the bounded command")?;
-
-    let mut stdout_pipe = child.stdout.take().expect("stdout was piped");
-    let mut stderr_pipe = child.stderr.take().expect("stderr was piped");
-    let (stdout_tx, stdout_rx) = mpsc::channel();
-    let (stderr_tx, stderr_rx) = mpsc::channel();
-    thread::spawn(move || pipe_reader(&mut stdout_pipe, &stdout_tx));
-    thread::spawn(move || pipe_reader(&mut stderr_pipe, &stderr_tx));
-
-    let deadline = Instant::now() + timeout;
-    let mut stdout = Vec::new();
-    let mut stderr = Vec::new();
-    let status = loop {
-        // A pipe io error returns early, same as the timeout below — the child is not yet known
-        // to have exited, so leaving it be would leak it running and unreaped, same as a wedged
-        // deadline would.
-        if let Err(err) = drain_available(&stdout_rx, &mut stdout, "stdout", "the subprocess") {
-            kill_process_group(&mut child);
-            return Err(err);
-        }
-        drain_stderr_best_effort(&stderr_rx, &mut stderr, "the subprocess");
-        if let Some(status) = child.try_wait()? {
-            break status;
-        }
-        if Instant::now() >= deadline {
-            kill_process_group(&mut child);
-            bail!("did not finish within {timeout:?}");
-        }
-        thread::sleep(Duration::from_millis(20));
-    };
-
-    // The process has exited, so both pipes close on their own; drain whatever is left, bounded by
-    // `REAP_GRACE` rather than waited on unconditionally, in case something unrelated still holds
-    // one open.
-    let drain_deadline = Instant::now() + REAP_GRACE;
-    loop {
-        let stdout_state = drain_available(&stdout_rx, &mut stdout, "stdout", "the subprocess")?;
-        drain_stderr_best_effort(&stderr_rx, &mut stderr, "the subprocess");
-        if matches!(stdout_state, DrainOutcome::Disconnected) || Instant::now() >= drain_deadline {
-            break;
-        }
-        thread::sleep(Duration::from_millis(5));
-    }
-
-    Ok(Output {
-        status,
-        stdout,
-        stderr,
-    })
-}
-
 /// Resolves a bare binary name to an absolute path by searching the snapshot's `PATH`, mirroring
 /// what the login shell would have found. Deliberately does not leave resolution to
 /// `portable_pty`, whose own search tries `cwd.join(exe)` first and accepts it on `.exists()`
@@ -595,56 +502,13 @@ mod tests {
     use std::sync::OnceLock;
 
     use super::*;
-    use crate::test_support::{ScratchDir, ScratchFile, PATIENCE};
+    use crate::test_support::{
+        assert_gone_by, read_pid_file, until_the_shell_ran, ScratchDir, ScratchFile, PATIENCE,
+    };
 
     /// The elapsed time above which a test treats a snapshot as having waited out a `sleep 300`
     /// instead of returning. It only rules that wait out, so it sits well beyond any exec stall.
     const NOT_THE_SLEEP: Duration = Duration::from_secs(60);
-
-    /// The pid `path` holds, if the fixture shell has written one. Read once, without waiting:
-    /// the shell writes it within moments of starting, and the tests that read it do so after a
-    /// timeout of seconds.
-    fn read_pid_file(path: &std::path::Path) -> Option<i32> {
-        std::fs::read_to_string(path).ok()?.trim().parse().ok()
-    }
-
-    /// Runs `attempt` until it returns a value, for up to [`PATIENCE`]. An attempt returns `None`
-    /// when its fixture shell was killed by the timeout under test before it got as far as
-    /// recording the pids the test checks: when an exec stalls for longer than that timeout, as it
-    /// can on a machine running endpoint-security software, nothing was tested, so the scenario is
-    /// run again from scratch instead.
-    fn until_the_shell_ran<T>(mut attempt: impl FnMut() -> Option<T>) -> T {
-        let deadline = Instant::now() + PATIENCE;
-        loop {
-            if let Some(done) = attempt() {
-                return done;
-            }
-            assert!(
-                Instant::now() < deadline,
-                "the fixture shell was killed before it recorded its pids, again and again"
-            );
-        }
-    }
-
-    fn errno_is_esrch() -> bool {
-        std::io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH)
-    }
-
-    /// Waits for `pid` to no longer exist, failing the test if it outlives `deadline`. Used to
-    /// confirm a process the fixture backgrounded was actually reaped rather than leaked, whether
-    /// by the production code's own group kill or by a test cleaning up after a successful
-    /// snapshot that (correctly) never touched it.
-    fn assert_gone_by(pid: i32, deadline: Instant) {
-        loop {
-            if unsafe { libc::kill(pid, 0) } == -1 && errno_is_esrch() {
-                return;
-            }
-            if Instant::now() >= deadline {
-                panic!("pid {pid} outlived the test's deadline");
-            }
-            thread::sleep(Duration::from_millis(20));
-        }
-    }
 
     /// The one executable every `FakeShell` ultimately execs, written once and reused for the
     /// rest of the process's tests. macOS serializes code-signing evaluation across concurrent

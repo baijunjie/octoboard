@@ -7,7 +7,8 @@
 > Report behavior, terminal focus and narrow layouts remain usable. Fixture-only viewing does not complete this
 > milestone.
 
-Depends on [source contracts](01-source-contracts.md) and [renderer validation](02-renderer-validation.md).
+Depends on [renderer validation](02-renderer-validation.md). The daemon side it reads through is the contract in
+`apps/daemon/PROTOCOL.md`'s "Browsing a project" (`get_project_source`, `list_project_dir`, `read_project_file`).
 
 ## Technical design
 
@@ -47,6 +48,17 @@ Depends on [source contracts](01-source-contracts.md) and [renderer validation](
   oversized files, partial listings and reconnect. Each result must retain its correct source and limit status.
 - [ ] Verify browser and packaged WebView behavior at narrow and docked widths, keyboard-only access, focus
   restoration, light/dark appearance and RTL layout. Run the affected checks and update the shipped behavior docs.
+
+## Handoff
+
+- The browse error codes (`invalid_path`, `source_unavailable`, `file_not_found`, `permission_denied`,
+  `outside_scope`, `unsupported_file_type`, `source_changed`, `limit_exceeded`, `not_a_git_repository`,
+  `git_unavailable`, `worktree_unavailable`, `invalid_branch_name`, `unknown_branch`, `invalid_commit`,
+  `unknown_commit`, `git_failed`, `request_superseded`) have no `daemon.<code>` catalog messages yet; the UI would
+  show the daemon's English `message`. Add the messages for every code the browser can surface.
+- `list_project_dir` returns entries in byte order of their wire forms and includes ignored files; the tree's own
+  sort and ignored-file rule (the "Open" item for 03) are decided client-side.
+- `media_type` is set only on binary bodies; an SVG arrives as text with `media_type: null`.
 
 ## Notes for the developer
 

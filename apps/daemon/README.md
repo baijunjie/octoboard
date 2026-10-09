@@ -3,7 +3,8 @@
 A headless Rust binary that plays two roles in one process:
 
 - **Host role**: owns PTYs and agent processes, receives hook callbacks, lists directories, finds the git repositories
-  under a parent directory, clones a repository, and checks a project's git status against its remote.
+  under a parent directory, clones a repository, checks a project's git status against its remote, and serves bounded,
+  source-aware reads of a project's files (on disk, in the index, in a branch or commit).
 - **Coordinator role**: stores consoles, projects, sessions, report panel pages and the agent accounts in SQLite, and
   routes requests to the host role.
 
@@ -56,16 +57,18 @@ the repository root and cover both crates; `-p octoboardd` narrows either to thi
 | `src/ringbuf.rs` | Fixed-capacity ring buffer holding a session's recent terminal output, replayed to a client that attaches or reconnects |
 | `src/saved_output.rs` | The ring buffer's contents kept as one file per session once its process ends (`paths::saved_output_dir`), replayed by the terminal socket for a session with no process; written atomically, removed with the session's record, and swept at startup |
 | `src/hostfs.rs` | Host role's filesystem work: browsing directories, finding git repositories under a parent directory, cloning one, lexical path normalisation |
-| `src/env_shell.rs` | Captures the user's real shell environment (`$SHELL -l -i -c 'env -0 && printf <marker>'`) that every agent is launched with; also a cached variant for a caller on its own repeating schedule (`cached_snapshot`) and a generic timeout-bounded subprocess runner (`run_with_timeout`), both used by `git_status.rs` |
+| `src/env_shell.rs` | Captures the user's real shell environment (`$SHELL -l -i -c 'env -0 && printf <marker>'`) that every agent is launched with; also a cached variant for a caller on its own repeating schedule (`cached_snapshot`, used by `git_status.rs`) and resolving a binary on that environment's `PATH` |
+| `src/subprocess.rs` | Running one subprocess the daemon spawned directly to completion within bounds — a deadline, a ceiling on its output, a cancel, the whole process group killed on any stop: `run_bounded` (output bounded while it is read) and `run_with_timeout` (a thin wrapper over it); used by `hostfs.rs`, `git_status.rs` and `browse/` |
 | `src/hooks.rs` | Turns one agent's hook event payload into a session status; each agent's events and payload shape differ |
 | `src/transcript.rs` | Watches a Claude Code session's own transcript JSONL for the one status change its hooks never report — a declined permission prompt or `AskUserQuestion` — and lowers the raised hand when found; the only place a session's status comes from something other than a hook event |
 | `src/hook_mode.rs` | The `octoboardd hook` CLI mode itself |
 | `src/loopback.rs` | A minimal HTTP client for the daemon's own loopback address, shared by `hook_mode.rs` and `mcp/stdio.rs` — the two CLI modes that call the running daemon from a separate process |
 | `src/mcp/` | The Octoboard MCP server — see below |
+| `src/browse/` | Bounded, source-aware reads of a project's files over the control socket — see below |
 | `src/instance_lock.rs` | Enforces one daemon per data directory |
 | `src/paths.rs` | Where Octoboard keeps its own files, under `~/.octoboard`, and the host's home directory when it is really known (`known_home_dir`), as reported to clients |
 | `src/adapter/` | One adapter per agent CLI — see below |
-| `src/test_support.rs` | Test-only (`#[cfg(test)]`, not part of the binary): the fixtures the modules' unit tests share — a self-removing scratch directory and file, an `AppState` over a fresh store in one, and a stand-in live session on a PTY that ends itself |
+| `src/test_support.rs` | Test-only (`#[cfg(test)]`, not part of the binary): the fixtures the modules' unit tests share — a self-removing scratch directory and file, an `AppState` over a fresh store in one, a stand-in live session on a PTY that ends itself, and the helpers for tests that run a fixture shell and check the processes it left (`env_shell` and `subprocess` tests) |
 
 ### `src/mcp/`
 
@@ -84,6 +87,29 @@ in `docs/product/hub-orchestration.md` list the tools and what each one does.
 | `role.rs` | The role description injected at launch, and the console session instruction file written into a console's working directory |
 | `exec.rs` | Runs one tool call against the real consoles, projects and sessions, through the same coordinator/reporting functions the control socket uses; the project-scoped reads and `share_info` resolve their targets within the caller's own project |
 | `stdio.rs` | `octoboardd mcp` itself: the stdio child process each adapter registers, forwarding every call to the daemon over loopback |
+
+### `src/browse/`
+
+Serves the project-browsing requests of the control socket (`get_project_source`, `list_project_dir`,
+`read_project_file`): where a project's files live (the directory itself, its repository and worktree, the same place in
+the repository's other worktrees), and then a bounded read of a directory listing or one file from the disk, the index,
+a branch or a commit. A request is re-resolved from the store and the repository each time; nothing a client names is
+used as a directory. The wire contract, the identities handed to clients, the Git invocation rules and the budget values
+are in "Browsing a project" in [`PROTOCOL.md`](PROTOCOL.md) and are not restated here. `mod.rs`'s `serve` is the entry
+point, called from `server.rs`, which also owns the connection's lane wiring and the writer that puts control events
+before browse replies; `state.rs` holds the daemon-wide `Gate` (concurrent reads and retained bytes) the lanes draw on.
+
+| File | Role |
+|---|---|
+| `mod.rs` | `serve`: turns one request into a reply or a coded error, and the marker error a cancelled read ends with |
+| `source.rs` | Resolving a project to its root, repository, worktree and sibling worktrees; minting and re-checking the identities clients hold; repository discovery that stops below the home directory |
+| `wire_path.rs` | The canonical text form a path takes on the wire so no byte of a file name is lost (`RelPath`) |
+| `live.rs` | Reading and listing files on disk under a scope, bounded while reading, refusing symlink escapes, links in a path's components and non-regular files |
+| `blob.rs` | Reading a file's blob from the index or a commit, and resolving and verifying a branch or commit |
+| `git.rs` | The one way browse runs `git`: isolated from the environment and configuration, bounded, output kept as bytes (`GitEnv`) |
+| `budget.rs` | The limits every browse read is held to, in one place |
+| `lane.rs` | Per-connection lane: the bound on outstanding requests, slots whose newer request supersedes the older, and the reservation of retained bytes against the daemon-wide `Gate` |
+| `tests.rs` | End-to-end tests over real directories and repositories (test-only) |
 
 ### `src/adapter/`
 

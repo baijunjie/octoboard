@@ -205,9 +205,84 @@ export interface Settings {
   accounts: Account[];
 }
 
+/** Where a project's files are read from — the reply to `get_project_source`. Every path-like
+ * string here is a wire path (see "Wire paths" in `apps/daemon/PROTOCOL.md`): canonical text that
+ * is the name's identity, shown by decoding it to bytes and reading those as UTF-8. */
+export interface ProjectSourceInfo {
+  project: string;
+  /** The project's path as stored (a wire path too). */
+  root: string;
+  /** The directory it resolves to with its symbolic links followed. */
+  resolved_root: string;
+  /** That directory's identity; it changes when the directory is replaced. */
+  root_id: string;
+  /** Null when the directory is in no Git repository, or `git` cannot read it or list its
+   * worktrees (`git_error`). */
+  git: GitSourceInfo | null;
+  git_error: string | null;
+}
+
+export interface GitSourceInfo {
+  repository: string;
+  common_dir: string;
+  /** The worktree holding the project's directory. */
+  worktree: string;
+  /** The project's directory relative to that worktree's root; empty at the root. */
+  scope: string;
+  /** Every worktree of the repository, the one holding the project included. */
+  worktrees: WorktreeInfo[];
+}
+
+export interface WorktreeInfo {
+  /** Checked again on every request that names it: `worktree_unavailable` once the worktree is gone. */
+  id: string;
+  root: string;
+  main: boolean;
+  head: string | null;
+  branch: string | null;
+  /** Whether the project's scope is a directory in this worktree, reached through no symbolic link. */
+  scope_present: boolean;
+}
+
+/** One entry of `project_dir`, in byte order of the names' wire forms. */
+export interface BrowseEntry {
+  name: string;
+  kind: "file" | "directory" | "symlink" | "other";
+  size: number | null;
+  target: "file" | "directory" | "other" | "missing" | "outside" | null;
+}
+
+/** Which content `read_project_file` reads; absent means `live`. A branch is the name below
+ * `refs/heads/`, as a wire path; a commit is a full object id. */
+export type ReadFrom =
+  | { kind: "live" }
+  | { kind: "index" }
+  | { kind: "branch"; branch: string }
+  | { kind: "commit"; commit: string };
+
+/** What a body was read from: the identity a client compares to decide whether a reply is still
+ * the one it is showing. `version` changes whenever a live file may have; `blob` and `commit` name
+ * immutable objects. */
+export type ContentSource =
+  | { kind: "live"; root_id: string; version: string }
+  | { kind: "index"; worktree: string; blob: string }
+  | { kind: "commit"; commit: string; branch: string | null; blob: string };
+
+/** A file body: valid UTF-8 without NUL that JSON escaping at most doubles in `text`, anything else
+ * base64-encoded in `data`. `media_type` is an image-format hint from a binary body's first bytes;
+ * it is null for every text body, an SVG included. */
+export interface FileContent {
+  size: number;
+  kind: "text" | "binary";
+  media_type: string | null;
+  text: string | null;
+  data: string | null;
+}
+
 /**
  * The body of a client request, without the envelope's `id`. One variant per `RequestBody` case
- * in `protocol.rs`, tagged the same way (`type`, snake_case).
+ * in `protocol.rs` and per `BrowseBody` case (the browse requests, whose envelope also carries
+ * `slot`), tagged the same way (`type`, snake_case).
  */
 export type RequestBody =
   | {
@@ -330,6 +405,21 @@ export type RequestBody =
    * agent's default account, then removes the account. Broadcasts `settings_updated`, and a
    * `console_upserted` for every console whose reference was cleared. */
   | { type: "delete_account"; account: string }
+  /** The browse requests (see "Browsing a project" in `apps/daemon/PROTOCOL.md`), answered with
+   * `project_source`, `project_dir` and `project_file`. A newer browse request on this connection
+   * with the same `slot` supersedes an older one still outstanding, which is answered
+   * `request_superseded`; one that finished first still gets its real reply, so a reply is also
+   * discarded by its `id`. */
+  | { type: "get_project_source"; project: string; slot?: string }
+  | { type: "list_project_dir"; project: string; path: string; worktree?: string; slot?: string }
+  | {
+      type: "read_project_file";
+      project: string;
+      path: string;
+      worktree?: string;
+      from?: ReadFrom;
+      slot?: string;
+    }
   | { type: "shutdown" };
 
 /** A client request as sent on the wire: the body's fields plus an optional correlation id. */
@@ -403,10 +493,33 @@ export type Event =
   | { type: "page_list"; id?: string; console_session_id: string; pages: Page[] }
   /** A page the console session just pushed. The panel showing that console session refreshes to it. */
   | { type: "page_created"; page: Page }
+  | { type: "project_source"; id?: string; source: ProjectSourceInfo }
+  /** `project`, `worktree` and `path` echo the request; `complete` is false when the listing was
+   * cut at a budget or an entry could not be read. */
+  | {
+      type: "project_dir";
+      id?: string;
+      project: string;
+      worktree: string | null;
+      path: string;
+      root_id: string;
+      entries: BrowseEntry[];
+      complete: boolean;
+    }
+  | {
+      type: "project_file";
+      id?: string;
+      project: string;
+      worktree: string | null;
+      path: string;
+      source: ContentSource;
+      file: FileContent;
+    }
   | { type: "ack"; id?: string }
   /** A failure, worded from `code` and `params` (see `daemonMessage.ts`); `message` is the English
    * text, shown for a code the client does not know. A client also branches on some codes — see
-   * `ALREADY_RUNNING_CODES`, `TRUST_REFUSED_CODES` and `CLAUDE_TRUST_NOT_WAITING`. */
+   * `ALREADY_RUNNING_CODES`, `TRUST_REFUSED_CODES`, `CLAUDE_TRUST_NOT_WAITING`, `REQUEST_SUPERSEDED` and
+   * `SOURCE_CHANGED`. */
   | { type: "error"; id?: string; code: string; params: MessageParams; message: string };
 
 /** The named values a daemon message is filled with. `console`, `project` and `session` are record
@@ -427,6 +540,12 @@ export const TRUST_REFUSED_CODES: readonly string[] = [
 
 /** The go-ahead was for a trust screen no longer waiting: nothing is wrong, so nothing is shown. */
 export const CLAUDE_TRUST_NOT_WAITING = "claude_trust_not_waiting";
+
+/** A browse request given up for a newer one in its slot, as the client asked: nothing is shown. */
+export const REQUEST_SUPERSEDED = "request_superseded";
+
+/** What was being read changed while it was read: reading it again gets a consistent copy. */
+export const SOURCE_CHANGED = "source_changed";
 
 /** Client-sent text frame on `/ws/term/:session`. Binary frames on that socket are raw PTY input. */
 export type TermControl = { type: "resize"; cols: number; rows: number };

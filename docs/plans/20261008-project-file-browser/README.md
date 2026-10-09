@@ -55,8 +55,7 @@ right-pane space.
 
 ## Milestones
 
-1. [Source identities and bounded read contracts](01-source-contracts.md) — establish roots, source versions,
-   errors and resource budgets, with independently testable daemon foundations.
+1. 01 Source identities and bounded read contracts (closed)
 2. [Validate the read-only renderers](02-renderer-validation.md) — verify file, image and diff adapters against
    the real packaged environment before committing to a rendering dependency.
 3. [Project file browsing and navigation](03-project-file-browser.md) — ship a real project entry point, tree,
@@ -65,6 +64,8 @@ right-pane space.
    unstaged and untracked inspection to the usable project pane.
 5. [Local branch comparison](05-branch-comparison.md) — compare selected branch tips through the same bounded,
    source-aware review surface.
+6. [Final confirmation](06-final-confirmation.md) — checks that could not be run when their milestone closed and that
+   nothing later depends on.
 
 Each milestone is independently verifiable and mergeable after its dependencies. Milestone 02 can be verified with
 fixtures; milestone 03 must work with real project files. Milestones 04 and 05 extend that working surface rather
@@ -74,8 +75,6 @@ than deferring panel integration until after Git review is built.
 
 These choices do not block the milestone split, but must be resolved before the named milestone is complete:
 
-- **01:** numerical budgets for directory/change entries, file and patch bytes, subprocess output, in-flight reads
-  and cached content. Bounds and explicit limit outcomes are mandatory; values need representative measurements.
 - **02:** renderer and pinned dependency version, guaranteed image formats, unified/split default, image-change
   presentation and renderer-specific limits. Zoom/pan can be deferred without blocking fit-to-view images.
 - **03:** exact tree sorting convention, ignored-file visibility, refresh cadence and which per-project preferences

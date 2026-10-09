@@ -353,6 +353,180 @@ pub struct Settings {
     pub accounts: Vec<Account>,
 }
 
+/// Where a project's files are read from, as `project_source` reports it. See "Project sources" in
+/// `apps/daemon/PROTOCOL.md`.
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectSourceInfo {
+    pub project: String,
+    /// The project's path as stored.
+    pub root: String,
+    /// The directory that path resolves to, symbolic links followed, as a wire path.
+    pub resolved_root: String,
+    /// The resolved directory's identity; it changes when the directory is replaced.
+    pub root_id: String,
+    /// The repository holding the project's directory; `null` when it is in none.
+    pub git: Option<GitSourceInfo>,
+    /// Why the repository could not be read, verbatim, when its directory looks like one but `git`
+    /// failed on it; `null` otherwise.
+    pub git_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GitSourceInfo {
+    /// The repository's identity: that of its common git directory.
+    pub repository: String,
+    pub common_dir: String,
+    /// The worktree holding the project's directory.
+    pub worktree: String,
+    /// The project's directory relative to that worktree's root, as a wire path; empty at the root.
+    pub scope: String,
+    pub worktrees: Vec<WorktreeInfo>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorktreeInfo {
+    pub id: String,
+    pub root: String,
+    pub main: bool,
+    /// The commit checked out; `null` in a repository with no commit yet.
+    pub head: Option<String>,
+    /// The branch checked out, as a wire path; `null` when `HEAD` is detached or unborn.
+    pub branch: Option<String>,
+    /// Whether the project's scope exists as a directory in this worktree.
+    pub scope_present: bool,
+}
+
+/// One entry of a project directory listing.
+#[derive(Debug, Clone, Serialize)]
+pub struct BrowseEntry {
+    /// The entry's name, as a wire path.
+    pub name: String,
+    pub kind: EntryKind,
+    /// A regular file's size in bytes; `null` for anything else.
+    pub size: Option<u64>,
+    /// What a symbolic link resolves to; `null` for anything else.
+    pub target: Option<LinkTarget>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EntryKind {
+    File,
+    Directory,
+    Symlink,
+    /// A FIFO, socket or device: listed, never read.
+    Other,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LinkTarget {
+    File,
+    Directory,
+    Other,
+    /// The link resolves to nothing.
+    Missing,
+    /// The link resolves outside the scope, and is never followed.
+    Outside,
+}
+
+/// Which content a `read_project_file` reads. Absent means `live`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ReadFrom {
+    #[default]
+    Live,
+    Index,
+    /// A local branch's tip; `branch` is the name below `refs/heads/`, as a wire path.
+    Branch {
+        branch: String,
+    },
+    /// A commit, by its full object id.
+    Commit {
+        commit: String,
+    },
+}
+
+/// What a file body was actually read from, so a reply identifies the content it carries.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ContentSource {
+    /// The file on disk; `version` changes whenever its content may have.
+    /// `root_id` is the identity of the directory the read was scoped to.
+    Live { root_id: String, version: String },
+    /// The blob staged in a worktree's index.
+    Index { worktree: String, blob: String },
+    /// The blob in a commit; `branch` is the branch it was resolved from, when it was.
+    Commit {
+        commit: String,
+        branch: Option<String>,
+        blob: String,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContentKind {
+    /// Valid UTF-8 with no NUL byte; carried in `text`.
+    Text,
+    /// Anything else; carried base64-encoded in `data`.
+    Binary,
+}
+
+/// A file body. Exactly one of `text` and `data` is set, by `kind`.
+#[derive(Debug, Clone, Serialize)]
+pub struct FileContent {
+    pub size: u64,
+    pub kind: ContentKind,
+    /// The image type the bytes start like (`image/png`, …), a hint only; `null` when none.
+    pub media_type: Option<&'static str>,
+    pub text: Option<String>,
+    pub data: Option<String>,
+}
+
+/// One browse request frame: the envelope's id, the optional slot a newer request supersedes an
+/// older one in, and the request itself. Kept apart from [`Request`] because these are served
+/// under their own budgets and on their own outbound lane — see "Browsing a project" in
+/// `apps/daemon/PROTOCOL.md`.
+#[derive(Debug, Deserialize)]
+pub struct BrowseRequest {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub slot: Option<String>,
+    #[serde(flatten)]
+    pub body: BrowseBody,
+}
+
+/// The `type`s that are browse requests rather than [`RequestBody`] ones.
+pub const BROWSE_REQUEST_TYPES: &[&str] = &[
+    "get_project_source",
+    "list_project_dir",
+    "read_project_file",
+];
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum BrowseBody {
+    GetProjectSource {
+        project: String,
+    },
+    ListProjectDir {
+        project: String,
+        #[serde(default)]
+        worktree: Option<String>,
+        path: String,
+    },
+    ReadProjectFile {
+        project: String,
+        #[serde(default)]
+        worktree: Option<String>,
+        path: String,
+        #[serde(default)]
+        from: ReadFrom,
+    },
+}
+
 /// One control-socket frame from the client: an optional request id the daemon echoes back, plus
 /// the request itself. The id lets the UI pair a reply with the request that caused it; state
 /// changes are broadcast to every client instead and carry no id.
@@ -685,6 +859,31 @@ pub enum Event {
     PageCreated {
         page: Page,
     },
+    /// The reply to `get_project_source`.
+    ProjectSource {
+        id: Option<String>,
+        source: ProjectSourceInfo,
+    },
+    /// The reply to `list_project_dir`. `complete` is false when the listing was cut at a budget.
+    ProjectDir {
+        id: Option<String>,
+        project: String,
+        worktree: Option<String>,
+        path: String,
+        /// The identity of the directory the listing was scoped to.
+        root_id: String,
+        entries: Vec<BrowseEntry>,
+        complete: bool,
+    },
+    /// The reply to `read_project_file`; `project`, `worktree` and `path` echo the request.
+    ProjectFile {
+        id: Option<String>,
+        project: String,
+        worktree: Option<String>,
+        path: String,
+        source: ContentSource,
+        file: FileContent,
+    },
     Ack {
         id: Option<String>,
     },
@@ -961,6 +1160,30 @@ pub mod error_code {
     /// compared ignoring letter case — the default account's name takes part. `params` names
     /// `agent` and the `name` of the account it collides with.
     pub const ACCOUNT_NAME_TAKEN: &str = "account_name_taken";
+
+    // -- browse requests ---------------------------------------------------------------------
+
+    pub const INVALID_PATH: &str = "invalid_path";
+    /// The directory a read is scoped to — the project's own, or its scope in another worktree —
+    /// does not exist or is not a directory.
+    pub const SOURCE_UNAVAILABLE: &str = "source_unavailable";
+    pub const FILE_NOT_FOUND: &str = "file_not_found";
+    pub const PERMISSION_DENIED: &str = "permission_denied";
+    pub const OUTSIDE_SCOPE: &str = "outside_scope";
+    pub const UNSUPPORTED_FILE_TYPE: &str = "unsupported_file_type";
+    /// What was being read changed while it was read; reading again gets a consistent copy.
+    pub const SOURCE_CHANGED: &str = "source_changed";
+    pub const LIMIT_EXCEEDED: &str = "limit_exceeded";
+    pub const NOT_A_GIT_REPOSITORY: &str = "not_a_git_repository";
+    pub const GIT_UNAVAILABLE: &str = "git_unavailable";
+    pub const WORKTREE_UNAVAILABLE: &str = "worktree_unavailable";
+    pub const INVALID_BRANCH_NAME: &str = "invalid_branch_name";
+    pub const UNKNOWN_BRANCH: &str = "unknown_branch";
+    pub const INVALID_COMMIT: &str = "invalid_commit";
+    pub const UNKNOWN_COMMIT: &str = "unknown_commit";
+    pub const GIT_FAILED: &str = "git_failed";
+    /// A browse request was given up because a newer one took its slot. A client shows nothing.
+    pub const REQUEST_SUPERSEDED: &str = "request_superseded";
 }
 
 /// The `reason_code` param of a failed answer to a trust screen, in the `error` and in the

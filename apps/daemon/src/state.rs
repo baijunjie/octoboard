@@ -75,6 +75,9 @@ pub struct AppState {
     /// Each ended session's last terminal output, written as its process ends and removed with its
     /// record.
     saved_output: SavedOutput,
+    /// The bounds every connection's browse requests share: how many reads run at once, and how
+    /// many bytes their replies may hold before they are written.
+    pub browse_gate: Arc<crate::browse::lane::Gate>,
     events: broadcast::Sender<Event>,
     shutdown: tokio::sync::Notify,
 }
@@ -153,6 +156,7 @@ impl AppState {
                     .collect(),
             ),
             saved_output: SavedOutput::new(saved_output_dir),
+            browse_gate: Arc::new(crate::browse::lane::Gate::with_budget()),
             events,
             shutdown: tokio::sync::Notify::new(),
         }

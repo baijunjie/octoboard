@@ -55,7 +55,7 @@
   packaged build. Inspect the application policy and the report frame's separate policy before changing either.
 - Do not select a library based on advertised virtualization alone: content replacement, copying, focus and
   resource-loading behavior need verification in the actual WebView.
-- Renderer budgets and daemon read budgets are separate; this milestone does not replace the source contract's
+- Renderer budgets and daemon read budgets are separate; this milestone does not replace the daemon's browse
   bounds on reading, transport or concurrency.
 
 **Reference docs**

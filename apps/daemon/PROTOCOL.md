@@ -50,6 +50,9 @@ the request id as if it were a record id.
 | `update_project` | `project`, `name?`, `default_agent?`, `pinned?`, `tags?` | An absent `default_agent` leaves it alone; an explicit `null` clears it, so the project inherits the console's default again. An absent `pinned` leaves the pin alone. An absent `tags` leaves the tags alone; a present array, even an empty one, replaces them wholesale; an explicit `null` is the same as absent |
 | `delete_project` | `project`, `stop_sessions?` | Removes the association and the project's session records, archived ones included; never touches the directory. Refused with `project_has_running_sessions` while the project has live sessions, unless `stop_sessions` (absent means false) is true: the running ones are then ended first, exactly as `archive_session` ends one (sessions bound to another session of the project are ended first, so an owner is never refused over them, and a console session belongs to no project), and the project goes with them. A session being launched or resumed at that moment is not stoppable, so it refuses either way |
 | `list_dir` | `path` | Answered with `dir_listing` on the asking socket |
+| `get_project_source` | `project`, `slot?` | Where the project's files are read from: its resolved directory and, when it is inside a Git repository, the repository, the worktree holding it, its place in that worktree and every worktree of the repository, that one included. Answered with `project_source`. A browse request: see "Browsing a project" below for the rules every browse request shares (`slot`, budgets, its own outbound queue) |
+| `list_project_dir` | `project`, `path`, `worktree?`, `slot?` | Lists one directory of the project's files on disk, `path` being a wire path relative to the project's directory (empty for the directory itself). With `worktree`, the same place in that worktree of the project's repository is listed instead. Answered with `project_dir`. A browse request |
+| `read_project_file` | `project`, `path`, `worktree?`, `from?`, `slot?` | Reads one file of the project, `path` being a wire path relative to the project's directory. `from` picks the content: `{"kind":"live"}` (the default) the file on disk, `{"kind":"index"}` the blob staged for it, `{"kind":"branch","branch":…}` the blob at a local branch's tip, `{"kind":"commit","commit":…}` the blob in a commit given by its full id. With `worktree`, the disk and the index read are that worktree's. Answered with `project_file`. A browse request |
 | `open_session` | `console_id`, `project_id?`, `agent?`, `account?`, `task?`, `title?`, `bound_to?` | Omit `project_id` for a console session; a console may hold any number of them at once. `agent` follows the priority in the "Which agent a session uses" section of `docs/product/sessions.md` when omitted. `account` is the account the session's agent reads, by id: absent leaves it to the console's reference for the session's agent, else the agent's default account; an explicit `null` chooses the default account outright, whatever the console refers to. An id that names no account of the session's agent is refused with `unknown_account`. `bound_to` names the session this (project) session should report to; absent means none. Ignored for a console session, which is never bound. A `bound_to` that names neither a console session of `console_id` nor an unbound project session of `project_id` is refused with `unknown_session` |
 | `resume_session` | `session` | Relaunches an `interrupted` or `archived` session through the agent's own resume mechanism, re-injecting everything. A session bound to an archived owner (a console session, or a project session that started it) relaunches that owner first, and the whole request fails with the owner's own refusal if it cannot, leaving both as they were; an owner that is only `interrupted` is left alone. Resuming an owner relaunches nothing bound to it |
 | `archive_session` | `session` | Ends the process and archives the session. Archiving a session that has sessions bound to it (a console session, or a project session that started some) goes by whether a process is running, not by status: refused with `session_has_running_sessions`, and nothing changed, while any session bound to it has a process (or is being launched, resumed or switched), and otherwise it archives every bound session that is not archived yet — the interrupted ones — along with the session itself, so nothing bound to it is left outside the archive. Archiving a session with nothing bound to it reaches no other session |
@@ -85,6 +88,9 @@ the request id as if it were a record id.
 | `claude_trust_prompt` | `session`, `project`, `path`, `trust_dir` — a running Claude Code session of a project is at Claude Code's workspace-trust screen, which is asking whether `path` is trusted, and the project has no consent of its own (`claude_trust_consent`) and does not lie under any of `trusted_directories`. `trust_dir` is the directory `confirm_claude_trust` with `trust_parent_dir` would trust — the project's parent — or null when there is none to offer (it would be the filesystem root, the home directory or one containing it, the home directory cannot be determined, or `path` is not absolute); a client offers the button only when it is not null. Broadcast once per screen, when it is recognised in the session's terminal output. Each client is also sent one for every screen still waiting under the same condition, with the same fields, right after every `snapshot` (on connect and on lag recovery), so a client that missed the broadcast is still asked; a client already holding the prompt ignores the repeat. A client that declines ("Not now") drops the prompt locally, and a later `snapshot` may ask again. With no client connected the screen simply stays for the person to answer in the terminal. The client answers with `confirm_claude_trust`, or leaves the screen alone. A console session's screen is answered by the daemon without a prompt, because its working directory is the console's own; a project session's is when it meets the condition above the other way round. A client whose queue holds prompts for projects under a directory that has just become trusted drops them |
 | `session_opened` | `id`, `session` — the reply to `open_session`, naming the session it started |
 | `dir_listing` | `id`, `path`, `entries`: `[{name, path, is_git_repo}]` — only directories are listed |
+| `project_source` | `id`, `source` — the reply to `get_project_source`; `source` is a `ProjectSourceInfo` (see "Browsing a project") |
+| `project_dir` | `id`, `project`, `worktree`, `path`, `root_id`, `entries`, `complete` — the reply to `list_project_dir`. `project`, `worktree` and `path` echo the request; `root_id` is the identity of the directory the listing was scoped to; `entries` are `BrowseEntry` records in byte order of their names' wire forms; `complete` is false when the listing was cut at a budget or an entry could not be read |
+| `project_file` | `id`, `project`, `worktree`, `path`, `source`, `file` — the reply to `read_project_file`. `project`, `worktree` and `path` echo the request; `source` is the `ContentSource` the body was read from and `file` the `FileContent` |
 | `page_list` | `id`, `console_session_id`, `pages` — oldest first. Pages are not in `snapshot`: one carries a whole HTML document, and only the console session on screen needs its pages, so the panel asks. Asking again after every `snapshot` is what keeps it correct across a `page_created` a lagging client never received: such a client is sent a fresh snapshot in place of the events it missed, on the socket it already has |
 | `page_created` | `page` — the whole record. The console session pushed a page with `show_page` |
 | `ack` | `id` |
@@ -113,6 +119,9 @@ A client also branches on some codes, instead of only showing them:
 - `trust_directory_too_broad`, `trust_path_not_absolute` and `trust_home_unknown` all mean no parent directory can be
   offered to trust: nothing was answered and the dialog stays open.
 - `claude_trust_not_waiting` means nothing is wrong: the screen is no longer waiting, and a client shows nothing.
+- `request_superseded` means a browse request was given up for a newer one in its slot, which the client asked for;
+  a client shows nothing.
+- `source_changed` means what was being read changed while it was read; reading it again gets a consistent copy.
 
 `error` codes:
 
@@ -165,6 +174,23 @@ A client also branches on some codes, instead of only showing them:
 | `binary_not_found` | `binary` | The agent's binary (or `git`) is not on the shell's `PATH` |
 | `shell_environment_timeout` | `shell`, `command`, `timeout` | The login shell did not finish printing its environment in time |
 | `agent_not_available` | `agent` | `open_session`'s resolved agent has been determined unavailable (its binary does not resolve on the login shell's `PATH`); never raised while that determination is still pending. The console session's own `start_session` tool is refused the same way, as a tool error carrying this same text |
+| `invalid_path` | `path` | A browse path is not a canonical wire path relative to the project (see "Wire paths"), or is too long for the operating system |
+| `source_unavailable` | `path`, `detail` | The directory a browse request is scoped to — the project's own, or its place in another worktree — does not exist, is not a directory, or (in another worktree) is reached through a symbolic link; `path` is that directory's absolute path |
+| `file_not_found` | `path` | Nothing is at the path in that source: no file on disk (a link leading nowhere or round in a loop included), no entry in the index or the commit |
+| `permission_denied` | `path`, `detail` | The operating system refused to read the path or a directory on the way to it. `path` is absolute when the directory a request is scoped to cannot be read, and otherwise the request's own |
+| `outside_scope` | `path` | The path, with its symbolic links followed, leads outside the project's directory (or the worktree), and is not read |
+| `unsupported_file_type` | `path`, `file_type` | The path is not a regular file: `file_type` is `directory`, `file` (listing a file), `symlink` and `submodule` (in the index or a commit), `unmerged` (an index entry with conflicting stages), `fifo`, `socket`, `device` or `other`. A FIFO, socket or device is never opened |
+| `source_changed` | `path` | What was being read changed while it was read — the file, or the directory being listed — or a symbolic link appeared on its resolved path; nothing that was read is returned |
+| `limit_exceeded` | `limit`, `max`, `size?` | A browse budget was reached: `limit` is `file_bytes` (`size` the file's size, when known), `git_output`, `reply_bytes` or `pending_requests` — and, once the requests that use them are served, `patch_bytes` and `change_entries`; `max` is the budget. See "Browse budgets" |
+| `not_a_git_repository` | `project` | An index, branch or commit read, or a `worktree`, for a project that is in no Git repository |
+| `git_unavailable` | `detail` | The project's directory is inside a Git repository that `git` cannot read; `detail` is its message |
+| `worktree_unavailable` | `worktree` | The worktree id names no worktree of the project's repository any more: removed, or its path now holds something else |
+| `invalid_branch_name` | `branch` | Not a valid local branch name (a revision expression such as `main~1` or `@{-1}` is not one) |
+| `unknown_branch` | `branch` | No local branch has that name |
+| `invalid_commit` | `commit` | Not a full, lower-case hexadecimal object id |
+| `unknown_commit` | `commit` | No commit has that id in the repository |
+| `git_failed` | `detail` | `git` failed on a browse read, or did not finish within its deadline; `detail` is its message |
+| `request_superseded` | — | A browse request was given up because a newer one took its slot |
 
 `session_notice` codes:
 
@@ -365,6 +391,238 @@ broadcasts.
 
 Because a status is dropped only when its project or console is deleted, an `error` this pass records for a project
 of a console no client is showing stays in the daemon's status for it until that console is refreshed again.
+
+### Browsing a project
+
+The browse requests — `get_project_source`, `list_project_dir` and `read_project_file` — read a project's files and
+their Git versions on demand, for a client showing them. Their replies go to the asking socket only: nothing about
+them is broadcast, nothing is kept for a later client, and none of it is part of `snapshot`, which carries no file
+content at all.
+
+Every browse request re-resolves its project from the store and its worktree from the repository as they stand at
+that moment. A client names a project by id and a worktree by the id `project_source` gave it, never by a directory:
+nothing a client sends is used as a path to read from, apart from the relative `path` inside the project.
+
+```
+ProjectSourceInfo { project, root, resolved_root, root_id, git: GitSourceInfo?, git_error? }
+GitSourceInfo     { repository, common_dir, worktree, scope, worktrees: WorktreeInfo[] }
+WorktreeInfo      { id, root, main, head?, branch?, scope_present }
+BrowseEntry       { name, kind: "file"|"directory"|"symlink"|"other", size?,
+                    target?: "file"|"directory"|"other"|"missing"|"outside" }
+ContentSource     = { kind: "live", root_id, version }
+                  | { kind: "index", worktree, blob }
+                  | { kind: "commit", commit, branch?, blob }
+FileContent       { size, kind: "text"|"binary", media_type?, text?, data? }
+```
+
+#### Project sources
+
+`root` is the project's path as stored, as a wire path; `resolved_root` is the directory it resolves to with its
+symbolic links followed, which is the directory every live read of the project is held inside. A project associated
+through a link therefore reads where the link points, and the stored path stays as the user chose it. `root_id` is
+that directory's identity on its filesystem — its device and inode numbers, with its creation time where the
+filesystem records one: it stays the same across a rename and changes when the directory is removed and another put in
+its place. The other identities below are built the same way.
+
+`git` describes the Git repository holding the project's directory, or is null when there is none. The daemon looks
+for a `.git` entry in the directory and then in each directory above it, stopping below the home directory: the
+home directory itself is never taken for a project's repository unless it is the project's own directory, so a home
+directory kept under version control does not turn every ordinary project under it into a subdirectory of that
+repository. When a `.git` is found but `git` cannot read the repository or list its worktrees (it is not installed,
+the directory belongs to another user, the repository is damaged), `git` is null and `git_error` carries the reason,
+`git`'s own message where there is one; a client shows Git review as unavailable either way, and the files can still be
+browsed.
+
+- `repository` is the repository's identity (that of its common git directory, `common_dir`), the same for every
+  worktree of it.
+- `worktree` is the identity of the worktree holding the project's directory — the checkout the directory is in,
+  which may be a linked worktree, never whichever one has some branch checked out.
+- `scope` is the project's directory relative to that worktree's root, as a wire path: empty for a project at the
+  root, `packages/ui` for a project associated with that subdirectory. Git review of the project stays inside it.
+- `worktrees` lists every worktree of the repository that is there now, the one holding the project included: each
+  one's `id`, its `root`, whether it is the `main` worktree, the commit at its `HEAD` (null before the first commit),
+  the branch checked out (a wire path, null when `HEAD` is detached or unborn), and `scope_present`, whether the
+  project's scope is a directory in it reached through no symbolic link (see below). A bare main repository, and a
+  worktree `git` reports as prunable, are not listed.
+
+A worktree's id is the identity of its own git directory — the common directory for the main worktree,
+`<common>/worktrees/<name>` for a linked one — and is checked against the repository again on every request that
+names it: the worktree must still be listed and its `.git` must still lead back to that git directory. A worktree
+that was removed, one whose path now holds another checkout, and one removed and added again (which gets a new git
+directory) are all `worktree_unavailable` under their old id. With `worktree`, a live read or listing is scoped to
+the project's `scope` inside that worktree, never to the worktree's root. The scope there must be exactly that
+directory: one that does not exist, and one reached through a symbolic link (`packages/ui` a link to `.` in that
+worktree, which would otherwise widen the scope to the whole worktree without anyone choosing it), are both
+`source_unavailable`. Choosing a worktree changes only where that request reads: it checks nothing out and moves no
+session.
+
+#### Wire paths
+
+A path inside a project, an entry name, a branch name and the paths shown in `ProjectSourceInfo` all travel in one
+canonical text form, because a Unix file name is bytes and a JSON string is not: valid UTF-8 as itself, except that
+`%` is written `%25`, and each byte that is not part of valid UTF-8 as `%XX` in upper-case hexadecimal. The form is
+the name's identity — two names are equal exactly when their forms are — and it is not display text: a client shows
+a name by decoding the form to bytes and reading them as UTF-8 with replacement characters, and sends back the form
+it was given. The daemon refuses with `invalid_path` a path not in the canonical form (a lower-case escape, an escape
+of a byte that needed none), an absolute one, and one with an empty, `.` or `..` component; the empty path is the
+project's directory itself. On macOS the file system stores only UTF-8 names, so a name that is not UTF-8 is met only
+inside Git — in the index or a commit — and is read from there like any other.
+
+The `path` param of a browse `error` is the request's own `path`, relative to the project's directory, whatever source
+was read — except where the error is about the directory the request is scoped to (`source_unavailable`, and a
+`permission_denied` on that directory), whose `path` is that directory's absolute path.
+
+#### Reading
+
+A live read or listing resolves the path inside its scope directory with every symbolic link followed. A link that
+stays inside is read through; one that leads outside is `outside_scope` and nothing behind it is read; one that leads
+nowhere, or round in a loop, is `file_not_found`. The resolved path has no link left in it, and it is opened refusing a
+link in any of its components, so a link swapped in after the check makes the request `source_changed` instead of
+redirecting it; a listing reads the directory it opened, not the path again. This holds on macOS and on Linux 5.6 and
+later; elsewhere only the last component is held to it. A FIFO, a socket or a device is `unsupported_file_type` from
+its metadata and is never read; one swapped in after that check is opened without blocking and refused before anything
+is read from it. The file's identity, size, modification and change times are compared before and after the read, and
+a file that changed in between is `source_changed`, never a body stitched from bytes on either side of the change. A
+program writing the file in place can still leave it, for a moment, half written; a read in that moment returns the
+file as it then is, as any reader would. `version` is those values at the read, as one opaque string: two equal
+versions mean nothing about the file changed between the two reads. A read from disk has no deadline of its own: a
+volume that stops answering holds the read until it answers or fails.
+
+An index read looks up the path's entry in the worktree's index, and a branch or commit read looks up the path in the
+commit's tree, both by listing exactly that path — never through a revision expression a file name could take part
+in. A path that is a directory there, a symbolic link, a submodule, or an index entry with conflicting stages is
+`unsupported_file_type`. A branch is a name below `refs/heads/`; it is checked as a reference name before anything is
+read, so `main~1`, `main^`, `@{-1}` and the like are `invalid_branch_name`, not revisions, and it is looked up as
+exactly `refs/heads/<name>` — never another reference that happens to end the same way — and resolved to the commit at
+its tip, which the reply reports. A commit is accepted only as the full object id of a commit in the repository's
+object format: a shorter prefix and the id of a tag are `invalid_commit`. `blob` is the id of the object whose bytes
+were returned, and no replacement object stands in for it: the same id always names the same content.
+
+`file` carries the body whole. `kind` is `text` when the bytes are valid UTF-8 with no NUL byte and JSON escaping at
+most doubles them, and the body is then in `text`, as a string; anything else is `binary`, its bytes base64-encoded in
+`data`, and the daemon never decodes it as text. The doubling rule keeps a file made mostly of control characters —
+each of which JSON writes as six bytes — out of `text`; a log with colour escapes stays text. `media_type` is set only
+for a binary body, as a hint from its first bytes, for the image formats the daemon recognises (`image/png`,
+`image/jpeg`, `image/gif`, `image/webp`, `image/bmp`, `image/x-icon`, `image/avif`), and is null otherwise — an SVG,
+being text, arrives as text with no `media_type`. `size` is the body's length in bytes.
+
+A listing names each entry once, in byte order of the names' wire forms, with its `kind`. `size` is a regular file's
+size; `target` says what a symbolic link resolves to — a file, a directory, something else, nothing (`missing`) or
+something outside the scope (`outside`, not looked at further). `complete` is false when the listing stopped at a
+budget, and the entries then are those read before it stopped, not a chosen subset; it is false too when an entry
+could not be read, which is then left out.
+
+#### Telling a stale reply from a current one
+
+A reply says exactly what it answers: `project`, `worktree` and `path` echo the request, and `source` (or `root_id`)
+identifies the directory, the index or the commit the content came from and the version or object read. A client that
+has since moved to another project, worktree, mode, file or comparison discards a reply that no longer matches what it
+shows, and discards by request `id` as well: a request that finished just before a newer one in its slot arrived is
+still answered with its real reply. Two kinds of change stay distinct: a reconnect, after which a client asks again
+for everything it shows because the daemon keeps nothing from an earlier connection; and a change of content, which no
+`snapshot` reports — an agent staging, committing or overwriting a file changes `version`, `blob` or `commit` in the
+next reply, and nothing else.
+
+#### Changes and comparisons
+
+The requests that list a worktree's changes and compare two branches are not served yet. Their replies will identify
+content in the terms above, and this is the shape they take:
+
+```
+ChangeIdentity { group: "staged"|"unstaged"|"untracked"|"committed", old: ChangeSide, new: ChangeSide }
+ChangeSide     = { state: "present", path, kind: "file"|"symlink"|"submodule", source: ContentSource }
+               | { state: "absent" }
+               | { state: "out_of_scope", repository_path }
+```
+
+- A change is identified by its group and both of its sides, not by a path alone: a file both staged and changed
+  again since has two changes, one per group.
+- A present side's `path` is a wire path relative to the project's directory, as every browse `path` is.
+- An absent side — the old side of an added file, the new side of a deleted one — carries no path at all, so it can
+  never be resolved to a live file of the same name.
+- A side whose path lies outside the project's scope (a rename into the project from elsewhere in the repository) is
+  `out_of_scope`, distinct from absent, and carries its `repository_path` — relative to the repository's root, since
+  no path relative to the project can name it — for display only: no body is read for it and no patch content from it
+  is returned.
+- A present side's `kind` says what is there: a regular file, a symbolic link or a submodule. Only a file side's body
+  can be read; the patch shows a link's target as text and a submodule as its commit, the way `git` writes them. A
+  type change — a file that became a link, say — is one change whose two sides have different kinds.
+- A diff reply carries the `ContentSource` of both sides, and the patch and both bodies come from those same versions.
+  When a live side changes between reading the patch and reading its body, the reply is `source_changed` rather than a
+  patch from one version beside a body from another.
+- A patch over its budget is refused with `limit_exceeded` (`patch_bytes`), never cut: an incomplete patch is not
+  presented as a diff. A change list over its budget is cut and carries `complete: false`, as a listing does, its
+  limit being `change_entries`.
+- A branch comparison is the left branch's tip as the old side against the right branch's tip as the new side, each
+  resolved to its commit as above. Its reply echoes both and what they resolved to — `left: { branch, commit }`,
+  `right: { branch, commit }` — beside `project`, the `changes` and `complete`, so every change in it is identified
+  against exactly those two commits.
+
+#### Git invocation
+
+Every `git` a browse request runs gets the same controlled environment, starting from the user's own shell environment
+as every other `git` the daemon runs does:
+
+- Every `GIT_*` variable is removed except `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM` and `GIT_CONFIG_NOSYSTEM`, which
+  only say where the user's own configuration is. That takes out everything that could point `git` at another
+  repository, worktree, index or object store, and configuration passed through the environment.
+- `GIT_LITERAL_PATHSPECS=1`, so a file name is never a pattern; `GIT_NO_REPLACE_OBJECTS=1`, so an object id names the
+  object stored under it; `GIT_NO_LAZY_FETCH=1`, so a partial clone's missing object fails the read instead of going to
+  the network; `GIT_OPTIONAL_LOCKS=0`, so a read never takes the index lock from under an agent; the non-interactive
+  settings every daemon `git` has; and discovery capped at the home directory as above.
+- Every command runs with `--no-pager -c core.fsmonitor=false`, and every diff-family command with
+  `--no-ext-diff --no-textconv --no-color`: a configured external diff, textconv filter or file-system monitor is a
+  program that would run during the read and, for the first two, rewrite what is returned. Clean and smudge filters
+  stay in effect, since they define what a file's content in the repository is.
+- Output is read as bytes, bounded while it is read, under a deadline, and the whole process group is killed on a
+  deadline, an output budget or a cancel. A `git` whose output is still held open by something it started after it
+  has exited fails rather than handing back output that may stop short.
+
+This needs Git 2.36 or later, for `git worktree list -z`. `GIT_NO_LAZY_FETCH` came with Git 2.45; an older Git ignores
+it, and can still fetch a partial clone's missing object during a read.
+
+#### Browse budgets
+
+| Budget | Value | Why |
+|---|---|---|
+| File body | 4 MiB | Of the tracked files measured across seven real projects (about 3,000 files), 99.9 % were under 2.4 MB; the largest text file was a 2.3 MB string catalog and the largest image 2.6 MB. Only one file was larger than this budget, a 13 MB `.wasm` — not something anyone opens in a viewer |
+| Patch, per change | 4 MiB | 99 % of the measured commits' whole patches were under about 1.2 MB, so one file's patch under this is the overwhelming case |
+| Directory entries | 10,000 | Counted on disk across the same projects' worktrees, ignored directories included: the largest held 6,418 entries (a Gradle cache) and 4,536 (an icon package in `node_modules`); 99.99 % held under 1,600 |
+| Listing names | 2 MiB, as sent | Bounds a listing whose names are few but long, counted as JSON writes them; 10,000 names of typical length are a small fraction of it |
+| Change entries | 10,000 | The largest measured commit changed 704 files and 99 % changed under 170; a worktree's pending changes are smaller still |
+| `git` metadata output | 1 MiB | A `worktree list` entry is about 200 bytes; one path's index or tree entry is one line |
+| `git` stderr kept | 64 KiB | A `git` message is a few hundred bytes; the rest of a longer one is read and dropped |
+| `git` deadline | 30 s | Browse reads are local, so this only catches a wedged repository (a dead network volume, a held lock) |
+| Reads at once, daemon-wide | 4 | A viewer, its neighbour and a couple of directory expansions in parallel; more waits its turn. A read from disk has no deadline, so a volume that stops answering can hold these |
+| Outstanding requests, per connection | 16 | Waiting, being read, or queued until their reply is written. One more is refused with `limit_exceeded` at once, so a flooding client cannot grow the daemon's backlog |
+| Reserved per request | about 12 MiB for a file or a project source, about 7.8 MiB for a listing | Each request reserves its worst case before it starts. For a file that is three times the file body (a text body held as read and serialized, JSON escaping at most doubling it; a binary body held base64-encoded and serialized again) and room for the rest of the frame; for a listing, its names and the rest of its entries, each held as read and serialized. The reservation shrinks to the serialized reply and is given back once the reply is written to the socket. A reply that would be larger than its reservation is refused (`reply_bytes`) |
+| Bytes held for replies, per connection | about 48 MiB | Four file reads at their worst, so one window gets every read the daemon runs at a time |
+| Bytes held for replies, daemon-wide | about 96 MiB | Twice one connection's share, so a client that stops reading cannot hold every other connection's reads up |
+| Writing one frame | 30 s | Any frame on the control socket, not only a browse reply. On a loopback connection a client that takes no bytes for this long has stopped reading; its connection is closed, giving back what its queued replies held, and it reconnects to a fresh `snapshot` and asks again |
+
+The patch and change-entry budgets apply to the change and comparison requests once they are served. A diff reply
+holds a patch and two bodies, and reserves its own worst case on the same principle.
+
+#### Transport
+
+Browse replies leave on a queue of their own, and a connection's writer sends a control event (a broadcast, the reply
+to any other request, any `error`) before a browse reply waiting at the same moment, so a burst of file bodies delays a
+status change by at most the one frame being written. Every failure of a browse request is an `error` on the control
+queue, carrying the request's `id`. A request refused for being past the outstanding bound waits for room on that
+queue before the next frame of the connection is read, so a client flooding the socket without reading it is slowed
+down rather than buffered for. A failure, like a reply, keeps its place among the connection's outstanding requests
+until it is on the queue.
+
+A client whose socket accepts none of a frame's bytes for 30 seconds is disconnected, whether or not it asked for
+anything: a client that stopped reading would otherwise hold every frame queued for it, and the reply bytes those hold,
+for as long as its socket stays open. A client that is only slow loses nothing it cannot get back — it reconnects, and the `snapshot` it
+is sent then carries the current state.
+
+A browse request may carry a `slot`, any string the client picks; slots belong to one connection. A newer browse
+request in the same slot cancels the older one still outstanding — its file read stops, its `git` is killed — and the
+older one is answered `request_superseded`. A client gives one slot to each thing that shows one result at a time (the
+file a viewer shows, say) and none to requests that should all complete. Closing the connection cancels whatever it
+had outstanding.
 
 ## `GET /ws/term/:session` — terminal stream
 

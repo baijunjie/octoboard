@@ -1,14 +1,16 @@
 //! Fixtures the daemon's tests share: a scratch directory that removes itself, an `AppState` over
-//! a store in one, and a stand-in live session on a PTY that ends itself. Each is a guard, so a
-//! test that fails part-way cleans up as surely as one that passes. Compiled only for tests, and
-//! one module rather than a `tests/` directory because the fixtures reach private items
-//! (`LiveSession::new`, `AppState::new`).
+//! a store in one, and a stand-in live session on a PTY that ends itself — each a guard, so a test
+//! that fails part-way cleans up as surely as one that passes — and the waits on a fixture
+//! process a test spawned: the pid it recorded, running a scenario again when it was killed
+//! before recording one, and its being gone. Compiled only for tests, and one module rather than
+//! a `tests/` directory because the fixtures reach private items (`LiveSession::new`,
+//! `AppState::new`).
 
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::protocol::Agent;
 use crate::session::{LiveSession, NewSession};
@@ -182,4 +184,49 @@ pub(crate) fn fake_live_session(
         scratch_dir: None,
         resolves_approvals_itself: false,
     })))
+}
+
+/// The pid `path` holds, if the fixture shell has written one. Read once, without waiting:
+/// the shell writes it within moments of starting, and the tests that read it do so after a
+/// timeout of seconds.
+pub(crate) fn read_pid_file(path: &std::path::Path) -> Option<i32> {
+    std::fs::read_to_string(path).ok()?.trim().parse().ok()
+}
+
+/// Runs `attempt` until it returns a value, for up to [`PATIENCE`]. An attempt returns `None`
+/// when its fixture shell was killed by the timeout under test before it got as far as
+/// recording the pids the test checks: when an exec stalls for longer than that timeout, as it
+/// can on a machine running endpoint-security software, nothing was tested, so the scenario is
+/// run again from scratch instead.
+pub(crate) fn until_the_shell_ran<T>(mut attempt: impl FnMut() -> Option<T>) -> T {
+    let deadline = Instant::now() + PATIENCE;
+    loop {
+        if let Some(done) = attempt() {
+            return done;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the fixture shell was killed before it recorded its pids, again and again"
+        );
+    }
+}
+
+fn errno_is_esrch() -> bool {
+    std::io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH)
+}
+
+/// Waits for `pid` to no longer exist, failing the test if it outlives `deadline`. Used to
+/// confirm a process the fixture backgrounded was actually reaped rather than leaked, whether
+/// by the production code's own group kill or by a test cleaning up after a successful
+/// snapshot that (correctly) never touched it.
+pub(crate) fn assert_gone_by(pid: i32, deadline: Instant) {
+    loop {
+        if unsafe { libc::kill(pid, 0) } == -1 && errno_is_esrch() {
+            return;
+        }
+        if Instant::now() >= deadline {
+            panic!("pid {pid} outlived the test's deadline");
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
 }

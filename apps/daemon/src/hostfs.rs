@@ -160,7 +160,7 @@ pub fn clone_repo(remote_url: &str, parent: &Path) -> Result<PathBuf> {
     command.env_remove("GIT_ASKPASS");
     command.env_remove("SSH_ASKPASS");
     command.arg("clone").arg(remote_url).arg(&target);
-    let output = crate::env_shell::run_with_timeout(&mut command, CLONE_TIMEOUT)
+    let output = crate::subprocess::run_with_timeout(&mut command, CLONE_TIMEOUT)
         .context("running `git clone`")?;
     if !output.status.success() {
         let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();

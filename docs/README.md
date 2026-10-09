@@ -164,5 +164,6 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   derives held on `AppState` and published by its own event rather than as a field on a stored record, with the
   cleanups that follow from there being no deletion event for it; why a repeating refresh is timed by the client and
   has to be bounded in the daemon by a drop-guard claim and a completion floor, since an in-flight claim alone never
-  fires across clients polling on their own phases; and the non-interactive environment and deadline every `git`
-  subprocess needs, because `git` and `ssh` ask on a terminal the daemon does not have.
+  fires across clients polling on their own phases; the non-interactive environment and deadline every `git`
+  subprocess needs, because `git` and `ssh` ask on a terminal the daemon does not have; and how to type-check
+  Linux-only code from macOS (a scratch crate, since bundled SQLite blocks a cross-check of the daemon).

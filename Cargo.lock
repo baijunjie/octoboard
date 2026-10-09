@@ -2678,6 +2678,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "base64 0.22.1",
  "bytes",
  "clap",
  "futures-util",
@@ -2688,6 +2689,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tokio-tungstenite",
  "toml 1.1.6+spec-1.1.0",
  "tracing",
  "tracing-subscriber",

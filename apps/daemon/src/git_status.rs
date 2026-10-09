@@ -398,7 +398,7 @@ fn run_git_output(path: &Path, args: &[&str]) -> Result<String, String> {
     // `run_with_timeout` is generic over whatever bounded subprocess it is given, so neither its
     // pipe-read errors nor its timeout message name `git` on their own — this is where that
     // subject is added.
-    let output = env_shell::run_with_timeout(&mut command, GIT_COMMAND_TIMEOUT)
+    let output = crate::subprocess::run_with_timeout(&mut command, GIT_COMMAND_TIMEOUT)
         .context("running git")
         .map_err(|err| format!("{err:#}"))?;
     if !output.status.success() {

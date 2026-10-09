@@ -11,8 +11,14 @@ use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{broadcast, mpsc};
 
+use crate::browse::budget;
+use crate::browse::git::GitEnv;
+use crate::browse::lane::{Frame, Lane};
 use crate::hooks;
-use crate::protocol::{Agent, CodedError, Event, Request, SessionStatus, TermControl};
+use crate::protocol::{
+    Agent, BrowseBody, BrowseRequest, CodedError, Event, Request, SessionStatus, TermControl,
+    BROWSE_REQUEST_TYPES,
+};
 use crate::reporting;
 use crate::state::{AppState, TurnClose};
 use crate::transcript;
@@ -50,17 +56,18 @@ async fn handle_control(socket: WebSocket, state: Arc<AppState>) {
     // every session until the clone finished — and a stall long enough to overrun the broadcast
     // channel costs the client its place in it. Replies are correlated by request id, so they do
     // not have to come back in the order they were asked.
-    let (mut sink, mut stream) = socket.split();
-    let (outbound, mut outbox) = mpsc::channel::<Event>(OUTBOX_CAPACITY);
+    let (sink, mut stream) = socket.split();
+    let (outbound, outbox) = mpsc::channel::<Event>(OUTBOX_CAPACITY);
+    let (content_tx, content) = mpsc::channel::<Frame>(CONTENT_QUEUE_CAPACITY);
+    let lane = Arc::new(Lane::new(
+        state.browse_gate.clone(),
+        budget::MAX_PENDING_REQUESTS,
+        budget::MAX_RETAINED_PER_CONNECTION,
+        outbound.clone(),
+        content_tx,
+    ));
 
-    let writer = tokio::spawn(async move {
-        while let Some(event) = outbox.recv().await {
-            let text = serde_json::to_string(&event).expect("protocol events always serialize");
-            if sink.send(Message::Text(text)).await.is_err() {
-                break;
-            }
-        }
-    });
+    let mut writer = tokio::spawn(write_frames(sink, outbox, content, WRITE_DEADLINE));
 
     // Subscribed before anything is collected, so that a broadcast between collecting the state and
     // listening for changes is not lost. A repeat is harmless: the records are whole and the
@@ -94,9 +101,35 @@ async fn handle_control(socket: WebSocket, state: Arc<AppState>) {
         outbound.clone(),
     ));
 
-    while let Some(incoming) = stream.next().await {
+    // The writer ends early when the client has stopped reading, or its socket failed; the
+    // connection is then dropped, here, rather than left reading requests it can no longer answer.
+    // A request this loop is awaiting on the way (a refusal waiting for room on the control queue)
+    // returns as soon as the writer is gone, since that closes the queue.
+    let mut writer_done = false;
+    loop {
+        let incoming = tokio::select! {
+            incoming = stream.next() => incoming,
+            _ = &mut writer => {
+                writer_done = true;
+                break;
+            }
+        };
+        let Some(incoming) = incoming else {
+            break;
+        };
         match incoming {
             Ok(Message::Text(text)) => {
+                match browse_request(&text) {
+                    Some(Ok(request)) => {
+                        submit_browse(&state, &lane, request).await;
+                        continue;
+                    }
+                    Some(Err(detail)) => {
+                        let _ = outbound.send(Event::unreadable_request(&detail)).await;
+                        continue;
+                    }
+                    None => {}
+                }
                 let state = state.clone();
                 let outbound = outbound.clone();
                 tokio::spawn(async move {
@@ -115,8 +148,105 @@ async fn handle_control(socket: WebSocket, state: Arc<AppState>) {
     }
 
     forwarder.abort();
+    lane.close();
+    drop(lane);
     drop(outbound);
-    let _ = writer.await;
+    if !writer_done {
+        let _ = writer.await;
+    }
+}
+
+/// Browse replies queued for one client's socket, as frames; each also holds its share of the
+/// retained-bytes budget, so this only bounds how many wait, not how much.
+const CONTENT_QUEUE_CAPACITY: usize = 16;
+
+/// How long the socket may take to accept one frame. On a loopback connection a client that takes
+/// no bytes for this long has stopped reading, and holding its frames — browse replies above all,
+/// which keep their share of the retained bytes until written — would hold up every other
+/// connection; it is disconnected instead, and reconnects to a fresh `snapshot`.
+const WRITE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// The one writer of a control socket. A control event (a broadcast, a reply to an ordinary
+/// request, any `error`) is always written before a browse reply that is waiting at the same
+/// moment, so a queue of file bodies delays a status change by at most the one frame already being
+/// written. Ends when the control queue closes, which happens once the connection is done with,
+/// when a send fails, or when the socket has not taken a frame within `deadline`.
+async fn write_frames<S>(
+    mut sink: S,
+    mut control: mpsc::Receiver<Event>,
+    mut content: mpsc::Receiver<Frame>,
+    deadline: std::time::Duration,
+) where
+    S: futures_util::Sink<Message> + Unpin,
+{
+    let mut content_open = true;
+    loop {
+        // A browse reply's frame is held until its text has been written, so its share of the
+        // retained bytes is given back only then.
+        let mut written = None;
+        let text = tokio::select! {
+            biased;
+            event = control.recv() => match event {
+                Some(event) => {
+                    serde_json::to_string(&event).expect("protocol events always serialize")
+                }
+                None => break,
+            },
+            frame = content.recv(), if content_open => match frame {
+                Some(mut frame) => {
+                    let text = std::mem::take(&mut frame.text);
+                    written = Some(frame);
+                    text
+                }
+                None => {
+                    content_open = false;
+                    continue;
+                }
+            },
+        };
+        let sent = match tokio::time::timeout(deadline, sink.send(Message::Text(text))).await {
+            Ok(result) => result.is_ok(),
+            Err(_) => {
+                tracing::debug!("the control client stopped reading");
+                false
+            }
+        };
+        if !sent {
+            break;
+        }
+        drop(written);
+    }
+}
+
+/// The frame as a browse request, when its `type` is one: `Some(Ok)` to serve, `Some(Err)` with
+/// why its fields do not read. Anything else, malformed frames included, is `None` and left to the
+/// ordinary request path and its own error reply.
+fn browse_request(text: &str) -> Option<Result<BrowseRequest, String>> {
+    #[derive(serde::Deserialize)]
+    struct Kind<'a> {
+        #[serde(rename = "type", borrow)]
+        kind: Option<std::borrow::Cow<'a, str>>,
+    }
+    let kind = serde_json::from_str::<Kind>(text).ok()?.kind?;
+    if !BROWSE_REQUEST_TYPES.contains(&kind.as_ref()) {
+        return None;
+    }
+    Some(serde_json::from_str::<BrowseRequest>(text).map_err(|err| err.to_string()))
+}
+
+async fn submit_browse(state: &Arc<AppState>, lane: &Arc<Lane>, request: BrowseRequest) {
+    let state = state.clone();
+    let id = request.id.clone();
+    let reservation = match request.body {
+        BrowseBody::ListProjectDir { .. } => budget::LISTING_RESERVATION,
+        BrowseBody::GetProjectSource { .. } | BrowseBody::ReadProjectFile { .. } => {
+            budget::READ_RESERVATION
+        }
+    };
+    lane.submit(request.id, request.slot, reservation, move |cancel| {
+        crate::browse::serve(&state, id, request.body, &GitEnv::from_shell, cancel)
+    })
+    .await;
 }
 
 /// Forwards state broadcasts to one client. A client that fell behind cannot repair itself from
@@ -487,6 +617,90 @@ mod tests {
 
     use super::*;
     use crate::test_support::{app_state, PATIENCE};
+
+    /// A sink that records what it is sent, or — `stalled` — never takes anything.
+    struct RecordingSink {
+        sent: Arc<std::sync::Mutex<Vec<String>>>,
+        stalled: bool,
+    }
+
+    impl futures_util::Sink<Message> for RecordingSink {
+        type Error = axum::Error;
+
+        fn poll_ready(
+            self: std::pin::Pin<&mut Self>,
+            _: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), Self::Error>> {
+            if self.stalled {
+                std::task::Poll::Pending
+            } else {
+                std::task::Poll::Ready(Ok(()))
+            }
+        }
+
+        fn start_send(self: std::pin::Pin<&mut Self>, item: Message) -> Result<(), Self::Error> {
+            if let Message::Text(text) = item {
+                self.sent.lock().unwrap().push(text);
+            }
+            Ok(())
+        }
+
+        fn poll_flush(
+            self: std::pin::Pin<&mut Self>,
+            _: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), Self::Error>> {
+            std::task::Poll::Ready(Ok(()))
+        }
+
+        fn poll_close(
+            self: std::pin::Pin<&mut Self>,
+            _: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), Self::Error>> {
+            std::task::Poll::Ready(Ok(()))
+        }
+    }
+
+    #[tokio::test]
+    async fn the_writer_sends_a_waiting_control_event_before_waiting_browse_replies() {
+        let (control_tx, control) = mpsc::channel(8);
+        let (content_tx, content) = mpsc::channel(8);
+        for n in 0..3 {
+            content_tx
+                .send(Frame::standalone(&format!("reply-{n}")))
+                .await
+                .unwrap();
+        }
+        control_tx
+            .send(Event::Ack {
+                id: Some("control".into()),
+            })
+            .await
+            .unwrap();
+        drop((control_tx, content_tx));
+        let sent = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = RecordingSink {
+            sent: sent.clone(),
+            stalled: false,
+        };
+        write_frames(sink, control, content, PATIENCE).await;
+        let sent = sent.lock().unwrap();
+        assert!(sent[0].contains("\"control\""), "{sent:?}");
+    }
+
+    #[tokio::test]
+    async fn the_writer_gives_up_on_a_client_that_stops_reading() {
+        let (control_tx, control) = mpsc::channel::<Event>(8);
+        let (_content_tx, content) = mpsc::channel::<Frame>(8);
+        control_tx.send(Event::Ack { id: None }).await.unwrap();
+        let sink = RecordingSink {
+            sent: Default::default(),
+            stalled: true,
+        };
+        let deadline = std::time::Duration::from_millis(50);
+        tokio::time::timeout(PATIENCE, write_frames(sink, control, content, deadline))
+            .await
+            .expect("the writer ends at its deadline while the control queue is still open");
+    }
 
     /// Serves the real router on an ephemeral loopback port and returns the port.
     async fn serve(name: &str) -> u16 {
