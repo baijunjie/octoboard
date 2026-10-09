@@ -1,5 +1,5 @@
-import type { DirEntry, MessageParams } from "../protocol";
-import type { FixtureFiles } from "./fixtures/projectFiles";
+import type { Agent, DirEntry, MessageParams } from "../protocol";
+import type { FixtureError, FixtureFiles } from "./fixtures/projectFiles";
 import type { FixtureGit } from "./fixtures/projectGit";
 import type { ViewerSubject } from "../viewer/content";
 import type { State, ToastRequest } from "../store";
@@ -57,6 +57,10 @@ export interface Scenario {
   terminal?: TerminalBehaviour;
   /** What `list_dir` answers per path; a path not listed gets a generic listing. */
   directories?: Record<string, DirEntry[]>;
+  /** What `detect_directory_agent` and `probe_git_remote` answer per path or URL: an agent (or null
+   * for none), a daemon error, or `"pending"` for a request that is never answered. One not listed
+   * answers with no agent. */
+  detections?: Record<string, { agent: Agent | null } | FixtureError | "pending">;
   /** The files every project's browser shows (`list_project_dir`, `read_project_file`); without it,
    * `SAMPLE_FILES`. */
   files?: FixtureFiles;

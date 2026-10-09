@@ -200,6 +200,13 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const listed = scenario.directories?.[body.path];
           return { type: "dir_listing", ...(listed ? { path: body.path, entries: listed } : genericListing(body.path)) };
         }
+        case "detect_directory_agent":
+        case "probe_git_remote": {
+          const detected = scenario.detections?.[body.type === "probe_git_remote" ? body.remote_url : body.path];
+          if (detected === "pending") return new Promise<Event>(() => {});
+          if (detected && "code" in detected) return fail(detected);
+          return { type: "agent_detected", agent: detected?.agent ?? null };
+        }
         case "list_pages": {
           // As the real client's reply reaches the reducer, so a console session with no fixture
           // pages ends up listed as empty rather than not listed yet.

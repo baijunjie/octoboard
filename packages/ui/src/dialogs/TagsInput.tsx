@@ -16,6 +16,13 @@ import {
 import { TitledControl } from "../components/TitledControl";
 import { useT } from "../i18n/react";
 
+const GROUP_CLASS =
+  "relative flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-field border border-(--field-border) bg-default py-1 ps-2 pe-8 [border-width:var(--border-width-field)] transition-[background-color,border-color,box-shadow] has-[input:focus]:border-(--field-border-focus) has-[input:focus]:ring-2 has-[input:focus]:ring-focus not-has-[input:focus]:hover:bg-default-hover not-has-[input:focus]:hover:border-(--field-border-hover) motion-reduce:transition-none";
+
+/** A veil of the surface colour rather than `opacity`, which blanks the tags' GPU-layer buttons in WebKit. */
+const DISABLED_CLASS =
+  "pointer-events-none cursor-not-allowed after:pointer-events-none after:absolute after:inset-0 after:rounded-field after:bg-surface/55";
+
 /** A labelled field for a list of free-form tags, in HeroUI's variant for a field on a surface,
  * since it is always in a dialog. The tags picked sit inside the field's box, each removable, ahead
  * of the text input, and wrap onto more lines as they grow, so the suggestions list, which opens
@@ -34,6 +41,7 @@ export function TagsInput({
   suggestions,
   placeholder,
   description,
+  isDisabled,
 }: {
   label: string;
   value: string[];
@@ -41,6 +49,7 @@ export function TagsInput({
   suggestions: string[];
   placeholder?: string;
   description?: string;
+  isDisabled?: boolean;
 }): React.ReactElement {
   const t = useT();
   const [input, setInput] = useState("");
@@ -66,6 +75,7 @@ export function TagsInput({
       variant="secondary"
       fullWidth
       allowsCustomValue
+      isDisabled={isDisabled}
       // An option picked is added to the tags at once, so nothing stays selected in the field.
       // Nothing being selected is also what keeps the list open after a pick, so several can be added in
       // a row; it closes itself once no suggestion is left.
@@ -81,7 +91,7 @@ export function TagsInput({
           one HeroUI positions at the end edge, hence the end padding. HeroUI's input-group styles are not
           used for the frame: they key on their own input slot, which the combo box's input is not. */}
       <ComboBox.InputGroup
-        className="relative flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-field border border-(--field-border) bg-default py-1 ps-2 pe-8 [border-width:var(--border-width-field)] transition-[background-color,border-color,box-shadow] has-[input:focus]:border-(--field-border-focus) has-[input:focus]:ring-2 has-[input:focus]:ring-focus not-has-[input:focus]:hover:bg-default-hover not-has-[input:focus]:hover:border-(--field-border-hover) motion-reduce:transition-none"
+        className={isDisabled ? `${GROUP_CLASS} ${DISABLED_CLASS}` : GROUP_CLASS}
         // A press on the box's own padding, not on a tag or the input, goes to the input, as in a text field.
         onMouseDown={(e) => {
           if (e.target !== e.currentTarget) return;
@@ -96,6 +106,7 @@ export function TagsInput({
           aria-label={t("dialog.project.tagsPicked")}
           size="sm"
           className="contents"
+          disabledKeys={isDisabled ? value : undefined}
           onRemove={(keys) => {
             onChange(value.filter((tag) => !keys.has(tag)));
             inputRef.current?.focus();

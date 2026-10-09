@@ -381,8 +381,8 @@ fn run_git_output(path: &Path, args: &[&str]) -> Result<String, String> {
     let env = env_shell::cached_snapshot().map_err(|err| format!("{err:#}"))?;
     let git = env_shell::resolve_binary("git", &env).map_err(|err| format!("{err:#}"))?;
     let mut command = std::process::Command::new(git);
-    // Mirrors `hostfs::clone_repo`'s subprocess pattern: `git` runs with the user's shell
-    // environment, the same one agents are launched with, rather than the daemon's own minimal one.
+    // `git` runs with the user's shell environment, the same one agents are launched with, rather
+    // than the daemon's own minimal one.
     command.env_clear();
     command.envs(&env);
     // `git` and `ssh` read a missing credential, an unknown host key or a passphrase-protected key

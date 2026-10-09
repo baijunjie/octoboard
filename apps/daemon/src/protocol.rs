@@ -767,6 +767,12 @@ pub enum RequestBody {
         remote_url: Option<String>,
         name: Option<String>,
         default_agent: Option<Agent>,
+        /// Whether an absent `default_agent` is filled in from the directory's marker files (see
+        /// `hostfs::detect_agent`). Absent is true; a client that has already shown the user the
+        /// detection, and so sends what it showed, sends false to have "inherit from console"
+        /// kept as chosen.
+        #[serde(default = "detect_by_default")]
+        detect_default_agent: bool,
         /// Absent means no tags.
         tags: Option<Vec<String>>,
     },
@@ -793,6 +799,17 @@ pub enum RequestBody {
     },
     ListDir {
         path: String,
+    },
+    /// Which agent the directory at `path` is set up for, answered with `agent_detected`, or
+    /// refused as `add_project` refuses a `local` path that is not an existing directory.
+    DetectDirectoryAgent {
+        path: String,
+    },
+    /// Whether the git remote `remote_url` can be read with the user's credentials, and which
+    /// agent its top level is set up for, answered with `agent_detected` or, when it cannot be
+    /// read, `git_remote_unreachable`.
+    ProbeGitRemote {
+        remote_url: String,
     },
     OpenSession {
         console_id: String,
@@ -1020,6 +1037,12 @@ pub enum Event {
         path: String,
         entries: Vec<DirEntry>,
     },
+    /// The reply to `detect_directory_agent` and `probe_git_remote`: the one agent the directory
+    /// or remote is set up for, or `null` for none, several, or one known not to be installed.
+    AgentDetected {
+        id: Option<String>,
+        agent: Option<Agent>,
+    },
     /// The reply to `list_pages`, oldest first. Pages are not in `snapshot`: a page carries a whole
     /// HTML document, and only the console session the user is looking at needs its pages, so the
     /// panel asks for them instead — and asks again after every `snapshot`, which is what keeps it
@@ -1189,6 +1212,10 @@ pub enum TermControl {
     Resize { cols: u16, rows: u16 },
 }
 
+fn detect_by_default() -> bool {
+    true
+}
+
 /// Deserializes a present field — `null` included — as `Some`, leaving `None` to mean "the field
 /// was not sent at all". Used for the fields where clearing a value and leaving it alone are
 /// different requests.
@@ -1340,6 +1367,7 @@ pub mod error_code {
     pub const ALL_PROJECTS_ALREADY_ADDED: &str = "all_projects_already_added";
     pub const REPOSITORY_NAME_MISSING: &str = "repository_name_missing";
     pub const GIT_CLONE_FAILED: &str = "git_clone_failed";
+    pub const GIT_REMOTE_UNREACHABLE: &str = "git_remote_unreachable";
     /// Also used for an account's directory, which goes through the same normalisation minus the
     /// existence check below.
     pub const CONFIG_DIR_NOT_ABSOLUTE: &str = "config_dir_not_absolute";
@@ -1453,6 +1481,18 @@ pub fn now_millis() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::{ProjectSource, Request, RequestBody};
+
+    #[test]
+    fn an_absent_detect_default_agent_means_true() {
+        let json = r#"{"type":"add_project","console_id":"c","source":"local"}"#;
+        match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::AddProject {
+                detect_default_agent,
+                ..
+            } => assert!(detect_default_agent),
+            _ => panic!("not add_project"),
+        }
+    }
 
     /// `github` is the old name of the `git` source; a request still naming it must be accepted,
     /// and the source is emitted as `git`.

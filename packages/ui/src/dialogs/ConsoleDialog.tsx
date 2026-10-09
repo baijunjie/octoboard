@@ -69,7 +69,7 @@ export function ConsoleDialog({
 
   // The avatar's own failure is not a field's, and stays at the foot of the dialog.
   const { shown, attempt } = useSubmitValidation();
-  const nameError = name.trim() ? undefined : t("dialog.nameRequired");
+  const nameError = name ? undefined : t("dialog.nameRequired");
 
   const submit = () => {
     if (decoding) return;

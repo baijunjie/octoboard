@@ -114,6 +114,7 @@ async fn add_project(
             remote_url: optional_string(arguments, "remote_url"),
             name: optional_string(arguments, "name"),
             default_agent: optional_agent(arguments, "default_agent")?,
+            detect_default_agent: true,
             tags: None,
         },
     )

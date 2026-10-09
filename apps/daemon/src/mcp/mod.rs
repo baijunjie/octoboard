@@ -131,7 +131,10 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                         "type": "string",
                         "enum": ["claude", "codex", "grok"],
                         "description": "The agent sessions in this project use by default. \
-                                        Defaults to the console's.",
+                                        When omitted, the agent the directory is set up for \
+                                        (from its top-level marker files) if exactly one is \
+                                        found and not known to be missing from PATH; \
+                                        otherwise the project inherits the console's.",
                     },
                 }),
                 &["source"],

@@ -34,6 +34,8 @@ const editTaggedProject = [
   (ui: Ui) => ui.press(ui.t("sidebar.project.edit")),
 ];
 
+const addProject = [consoleActions, (ui: Ui) => ui.press(ui.t("sidebar.console.addProject"))];
+
 export const dialogScenarios: Scenario[] = [
   {
     id: "dialog-new-console",
@@ -74,6 +76,69 @@ export const dialogScenarios: Scenario[] = [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
       (ui) => ui.press(ui.t("common.add")),
+    ],
+  },
+  {
+    id: "dialog-add-project-checking",
+    group: GROUP,
+    title: "Add project while the directory is checked",
+    description: "The daemon has not answered for the path yet: the form says so and keeps what is below the path disabled.",
+    state,
+    detections: { "~/code/slow": "pending" },
+    steps: [...addProject, (ui) => ui.focus(ui.t("dialog.project.directory")), (ui) => ui.type("~/code/slow"), (ui) => ui.wait(700)],
+  },
+  {
+    id: "dialog-add-project-detected",
+    group: GROUP,
+    title: "Add project with a detected agent",
+    description: "The directory's agent is preselected in the Default agent field, which stays changeable.",
+    state,
+    detections: { "~/code/site": { agent: "codex" } },
+    steps: [...addProject, (ui) => ui.focus(ui.t("dialog.project.directory")), (ui) => ui.type("~/code/site"), (ui) => ui.wait(700)],
+  },
+  {
+    id: "dialog-add-project-path-refused",
+    group: GROUP,
+    title: "Add project with a path that is no directory",
+    description: "The refusal shows under the path field and keeps the fields below it disabled.",
+    state,
+    detections: {
+      "~/code/missing": { code: "path_not_found", params: { path: "/Users/me/code/missing" }, message: "`/Users/me/code/missing` does not exist" },
+    },
+    steps: [...addProject, (ui) => ui.focus(ui.t("dialog.project.directory")), (ui) => ui.type("~/code/missing"), (ui) => ui.wait(700)],
+  },
+  {
+    id: "dialog-add-project-git-unreachable",
+    group: GROUP,
+    title: "Add project from a repository that cannot be read",
+    description: "The probe failed: git's reason shows under the URL, and everything below it stays disabled.",
+    state,
+    detections: {
+      "git@example.com:o/private.git": {
+        code: "git_remote_unreachable",
+        params: { detail: "Permission denied (publickey)." },
+        message: "the repository could not be read: Permission denied (publickey).",
+      },
+    },
+    steps: [
+      ...addProject,
+      (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.local"))),
+      (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.git"))),
+      (ui) => ui.focus(ui.t("dialog.project.repositoryUrl")),
+      (ui) => ui.type("git@example.com:o/private.git"),
+      (ui) => ui.wait(1100),
+    ],
+  },
+  {
+    id: "dialog-add-project-parent",
+    group: GROUP,
+    title: "Add the repositories under a parent directory",
+    description: "\"Detect from files\" is preselected, with the helper text saying what it reads.",
+    state,
+    steps: [
+      ...addProject,
+      (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.local"))),
+      (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.parent"))),
     ],
   },
   {

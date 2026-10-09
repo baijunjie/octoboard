@@ -3,6 +3,7 @@ import { Folder } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
+import { useTrimmedField } from "../dialogs/useTrimmedField";
 import { useT } from "../i18n/react";
 import { abbreviateHome } from "../pathDisplay";
 import { useDaemon, useDaemonStore } from "../store";
@@ -28,15 +29,16 @@ export function CloneDirSetting(): React.ReactElement {
   const latest = useRef(stored);
   latest.current = stored;
 
-  const save = (value: string) => {
-    const typed = value.trim();
+  const draftField = useTrimmedField(draft, setDraft);
+
+  const save = (typed: string) => {
     // An untouched field shows the abbreviated form, which the daemon would only expand back to
     // what it already holds; the full form typed or picked is the same value, shown the usual way.
     if (typed === stored || typed === storedFull) {
       setDraft(stored);
       return;
     }
-    void request({ type: "update_settings", default_clone_dir: value })
+    void request({ type: "update_settings", default_clone_dir: typed })
       .catch((err) => toastError((err as Error).message))
       .finally(() => setDraft(latest.current));
   };
@@ -48,9 +50,11 @@ export function CloneDirSetting(): React.ReactElement {
           <TextField
             aria-label={t("settings.cloneDir.label")}
             variant="secondary"
-            value={draft}
-            onChange={setDraft}
-            onBlur={() => save(draft)}
+            {...draftField}
+            onBlur={() => {
+              draftField.onBlur();
+              save(draft);
+            }}
             onKeyDown={(event) => event.key === "Enter" && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229 && save(draft)}
             className="min-w-0 flex-1"
           >

@@ -39,6 +39,8 @@ export interface Ui {
   press: (matcher: Matcher) => Promise<void>;
   /** Presses `key` on the focused control, for what a user closes or confirms with the keyboard. */
   key: (key: string) => Promise<void>;
+  /** Focuses the text field labelled `label`, waiting for it to appear, so `type` has one to fill. */
+  focus: (label: string) => Promise<void>;
   /** Types `text` into the focused field, waiting for a field to take focus, and replaces what it holds. */
   type: (text: string) => Promise<void>;
   /** Waits for `ms`, for an animation to settle. */
@@ -81,6 +83,19 @@ export function createUi(doc: Document, language: Language): Ui {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, text);
       field.dispatchEvent(new Event("input", { bubbles: true }));
       await wait(150);
+    },
+    async focus(label) {
+      for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {
+        const field = Array.from(doc.querySelectorAll("input")).find(
+          (input) => (input.labels?.[0]?.textContent ?? input.getAttribute("aria-label")) === label,
+        );
+        if (field) {
+          field.focus();
+          return;
+        }
+        await wait(POLL_MS);
+      }
+      throw new Error(`No text field labelled ${label}`);
     },
     async press(matcher) {
       for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {

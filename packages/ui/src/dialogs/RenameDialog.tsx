@@ -26,7 +26,7 @@ export function RenameDialog({
   const [value, setValue] = useState(initialValue);
   const { error, busy, run } = useDialogAction();
   const { shown, attempt } = useSubmitValidation();
-  const valueError = value.trim() ? undefined : requiredMessage;
+  const valueError = value ? undefined : requiredMessage;
 
   const submit = () => {
     if (!attempt(valueError)) return;

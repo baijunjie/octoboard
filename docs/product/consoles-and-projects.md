@@ -183,6 +183,21 @@ There are three sources:
 | A parent directory | a path | Every git repository **directly beneath** that path becomes its own project. Only one level down is scanned; a checkout nested deeper belongs to the repository above it. Associating nothing is an error: if no git repository is found directly beneath the path, the request is refused and names the directory. |
 | A git repository URL | a repository URL plus a parent directory | The repository, from any git remote and not only GitHub, is cloned into a new directory beneath the parent, and the clone is then associated. The parent directory is filled in with the default clone directory (see below), which can be changed in the form or left blank to use that directory anyway. |
 
+For a single directory, the form asks the daemon about the path as soon as it is entered or picked (after a short pause
+when typed): the path must be an existing directory, and its agent is read and preselected in the Default agent field,
+which stays changeable; see "The project's default agent". While the answer for the current path is outstanding the
+form says it is checking, and the fields below the path (name, tags, default agent) and the submit button are disabled;
+a refusal such as "not a directory" is shown under the path field and keeps them disabled. Only the latest path's
+answer counts, and a changed path is read again and its result preselected anew.
+
+For a git URL, the form first checks the repository: once the URL stops changing, the daemon fetches the remote's tip
+commit without file contents or history into a scratch directory, which proves the remote can be read with the user's
+credentials and shows its top-level names. Every field below the URL (clone into, name, tags, default agent) and the
+submit button stay disabled until that check has succeeded for the URL as it stands, an empty one included; while it
+runs the form says it is checking, and a failure is shown under the URL field with git's own reason and keeps them
+disabled. A success enables them and preselects the detected agent. The check is bounded by a timeout, and its scratch
+directory is removed when it ends.
+
 A path may be entered by hand or picked with the directory browser. A leading `~` is expanded to the home directory
 of the host the daemon runs on. The path must then be absolute: a relative path is refused, for every source. It is
 recorded lexically normalised — `.` components dropped, each `..` folded into the component before it, no trailing
@@ -223,10 +238,27 @@ for every project a parent-directory association produces, the name is the direc
 A project may carry its own default agent, or leave it unset to inherit the console's. The selection order for a new
 session is in "Which agent a session uses" in `docs/product/sessions.md`.
 
-The project dialog, both when associating and when editing a project, offers "unset" as an "Auto" choice listed first
-and preselected for a new project; it names the agent the console's default currently resolves to, shown with that
-agent's icon dimmed, or is a bare "Auto" when the console is not known. Choosing a specific agent stores it as the
-project's own default.
+The project dialog, both when associating and when editing a project, offers "unset" as an "Inherit from console"
+choice listed first and preselected for a new project (a parent directory preselects "Detect from files" instead); it
+names the agent the console's default currently resolves to, shown with that agent's icon dimmed, or is a bare "Inherit
+from console" when the console is not known. Choosing a specific agent stores it as the project's own default.
+
+Associating a project with no default agent given looks at the directory's top level once and stores the agent it is
+set up for as the project's own default, shown and editable in Project settings like any chosen one. For a single
+directory or a git URL the form has already done this before submitting and shows the result preselected in the field
+(a choice made by hand stays only until the path or URL changes, which reads it again); "Inherit from console" chosen
+after that means none, and the project inherits the console's default. For a parent directory there is no pre-read, and
+the field offers one more choice, "Detect from files", listed first and selected on arriving at that source (and given
+up when the source changes): each repository found is detected on its own at association, and one that cannot be
+decided follows the console's default. "Inherit from console" keeps its meaning of following the console's default with
+no detection, and choosing an agent applies it to every repository found. The form explains the detect choice under the
+field. The same rules apply to what is read: `CLAUDE.md` or `.claude` means Claude Code, `.codex` means Codex, and
+`.grok` means Grok Build; `AGENTS.md` or `.agents` mean Codex too, but only when `.grok` is absent, since Grok Build
+reads them as well. When no marker is found, or markers of more than one agent are (a directory with both `CLAUDE.md`
+and `AGENTS.md`, say), nothing is stored and the project keeps inheriting the console's default. Nothing is stored
+either when the detected agent is known not to be on the login shell's `PATH`. A default chosen by the user is never
+replaced by detection, and this holds for every association source and for projects the console session associates,
+which always detect when they give none.
 
 ### Editing a project
 

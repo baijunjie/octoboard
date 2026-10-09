@@ -13,12 +13,17 @@ import { DirectoryPicker } from "./DirectoryPicker";
 import { OptionSelect } from "./OptionSelect";
 import { TagsInput } from "./TagsInput";
 import { TextInput } from "./TextInput";
+import { useDetectedAgent } from "./useDetectedAgent";
 
 const SOURCE_OPTIONS: { value: ProjectSource; label: PlainMessageKey }[] = [
   { value: "local", label: "dialog.project.source.local" },
   { value: "parent", label: "dialog.project.source.parent" },
   { value: "git", label: "dialog.project.source.git" },
 ];
+
+/** How long the path or URL must stay unchanged before the daemon is asked about it; a repository
+ * is asked about later, since each ask reaches over the network. */
+const DETECT_DELAY_MS = { local: 400, git: 800 };
 
 export function ProjectDialog({
   consoleId,
@@ -44,7 +49,14 @@ export function ProjectDialog({
   const setPath = source === "git" ? setCloneDir : setDirectory;
   const [remoteUrl, setRemoteUrl] = useState(editing?.remote_url ?? "");
   const [name, setName] = useState(editing?.name ?? "");
-  const [defaultAgent, setDefaultAgent] = useState<Agent | "">(editing?.default_agent ?? "");
+  const [defaultAgent, setDefaultAgent] = useState<Agent | "" | "detect">(editing?.default_agent ?? "");
+  // `"detect"` is the choice only a parent directory offers: each repository found is detected on
+  // its own. It is selected on arriving at that source and given up on leaving it.
+  const changeSource = (next: ProjectSource) => {
+    setSource(next);
+    if (next === "parent") setDefaultAgent("detect");
+    else if (defaultAgent === "detect") setDefaultAgent("");
+  };
   const [tags, setTags] = useState<string[]>(editing?.tags ?? []);
   // The tags to offer are the ones this console's projects carry now; there is no registry of them.
   const projects = useDaemonStore((s) => s.projects);
@@ -55,28 +67,49 @@ export function ProjectDialog({
   const [pickingDirectory, setPickingDirectory] = useState(false);
   const { error, busy, run } = useDialogAction();
 
-  // `path` is required for the `local` and `parent` sources, and `remote_url` for `git`, whose own
-  // `path` the daemon defaults when blank. Checked here so an obviously incomplete request never
-  // reaches the daemon only to come back as a raw "`path` is required" field-name error.
-  const pathError = !editing && source !== "git" && !path.trim() ? t("dialog.project.directoryRequired") : undefined;
-  const urlError = !editing && source === "git" && !remoteUrl.trim() ? t("dialog.project.urlRequired") : undefined;
+  // A single directory's agent is read as its path is entered, a git remote's by probing it, which
+  // also checks the remote can be read. A parent directory has no pre-read: each repository found
+  // is detected on adding.
+  const detection = useDetectedAgent(
+    request,
+    editing
+      ? undefined
+      : source === "local" && path
+        ? { type: "detect_directory_agent", path }
+        : source === "git" && remoteUrl
+          ? { type: "probe_git_remote", remote_url: remoteUrl }
+          : undefined,
+    source === "git" ? DETECT_DELAY_MS.git : DETECT_DELAY_MS.local,
+    setDefaultAgent,
+  );
+  // Whatever the form asks the daemon about locks the fields below it until the answer for what is
+  // entered now has arrived: a failure keeps them locked, and a git URL is asked about from the
+  // first character, so it stays locked while empty too.
+  const locked = !editing && (source === "git" ? detection.status !== "ready" : detection.status === "checking" || detection.status === "failed");
+
+  // `path` is required for the `local` and `parent` sources; `git` needs no check here, since its
+  // `path` the daemon defaults when blank and a blank URL keeps the form locked. Checked here so an
+  // obviously incomplete request never reaches the daemon only to come back as a raw "`path` is
+  // required" field-name error.
+  const pathError = !editing && source !== "git" && !path ? t("dialog.project.directoryRequired") : undefined;
   // `name: name || undefined` below means "blank leaves it alone" everywhere else this pattern is
   // used (the field is genuinely optional on creation), but here blanking it out and saving would
   // silently keep the old name instead of doing what the empty field visually suggests.
-  const nameError = editing && !name.trim() ? t("dialog.nameRequired") : undefined;
+  const nameError = editing && !name ? t("dialog.nameRequired") : undefined;
   const { shown, attempt } = useSubmitValidation();
 
   const submit = () => {
-    if (!attempt(pathError, urlError, nameError)) return;
+    if (locked || !attempt(pathError, nameError)) return;
     void run(async () => {
       if (editing) {
         await request({
           type: "update_project",
           project: editing.id,
           name: name || undefined,
-          // "" ("Auto") means following the console's default, which on the wire is an explicit `null` (clear),
-          // never an omitted field — omitting it means "leave whatever was there alone" instead.
-          default_agent: defaultAgent === "" ? null : defaultAgent,
+          // "" ("Inherit from console") means following the console's default, which on the wire
+          // is an explicit `null` (clear), never an omitted field — omitting it means "leave
+          // whatever was there alone" instead.
+          default_agent: defaultAgent === "" || defaultAgent === "detect" ? null : defaultAgent,
           // Always sent, the whole list: a present array replaces the tags, and the field shows them all.
           tags,
         });
@@ -85,10 +118,13 @@ export function ProjectDialog({
           type: "add_project",
           console_id: consoleId,
           source,
-          path: path.trim() || undefined,
+          path: path || undefined,
           remote_url: source === "git" ? remoteUrl : undefined,
           name: name || undefined,
-          default_agent: defaultAgent || undefined,
+          default_agent: defaultAgent === "" || defaultAgent === "detect" ? undefined : defaultAgent,
+          // What the form shows is what is stored: "Inherit from console" is not detected again,
+          // whether it was preselected after a pre-read or chosen; only "Detect from files" is.
+          detect_default_agent: defaultAgent === "detect" ? undefined : false,
           tags,
         });
       }
@@ -96,13 +132,14 @@ export function ProjectDialog({
     });
   };
 
-  // `""` is "Auto": the project sets none and follows its console's default agent (the "Which agent
-  // a session uses" section of docs/product/sessions.md); the option names that agent, its icon
-  // faded, so it says what it resolves to.
-  const defaultAgentOptions: { value: Agent | ""; label: string; icon?: React.ReactNode }[] = [
+  // `""` is "Inherit from console": the project sets none and follows its console's default agent
+  // (the "Which agent a session uses" section of docs/product/sessions.md); the option names that
+  // agent, its icon faded, so it says what it resolves to.
+  const defaultAgentOptions: { value: Agent | "" | "detect"; label: string; icon?: React.ReactNode }[] = [
+    ...(!editing && source === "parent" ? [{ value: "detect" as const, label: t("dialog.project.agentDetect") }] : []),
     {
       value: "",
-      label: consoleAgent ? t("dialog.project.agentAuto", { agent: AGENT_LABEL[consoleAgent] }) : t("dialog.project.agentAutoBare"),
+      label: consoleAgent ? t("dialog.project.agentInherit", { agent: AGENT_LABEL[consoleAgent] }) : t("dialog.project.agentInheritBare"),
       icon: consoleAgent && <AgentIcon agent={consoleAgent} className="size-4 opacity-50" />,
     },
     ...AGENT_ICON_OPTIONS,
@@ -115,9 +152,10 @@ export function ProjectDialog({
         onClose={onClose}
         submitLabel={editing ? t("common.save") : t("common.add")}
         busy={busy}
+        submitDisabled={locked}
         onSubmit={submit}
       >
-        {!editing && <OptionSelect label={t("dialog.project.source")} options={SOURCE_OPTIONS.map((option) => ({ ...option, label: t(option.label) }))} value={source} onChange={setSource} />}
+        {!editing && <OptionSelect label={t("dialog.project.source")} options={SOURCE_OPTIONS.map((option) => ({ ...option, label: t(option.label) }))} value={source} onChange={changeSource} />}
         {!editing && source === "git" && (
           <TextInput
             label={t("dialog.project.repositoryUrl")}
@@ -125,7 +163,8 @@ export function ProjectDialog({
             onChange={setRemoteUrl}
             dir="ltr"
             placeholder={t("dialog.project.urlExample")}
-            errorMessage={shown(urlError)}
+            description={detection.status === "checking" ? t("dialog.project.urlChecking") : undefined}
+            errorMessage={detection.status === "failed" ? detection.error : undefined}
           />
         )}
         {!editing && (
@@ -135,9 +174,11 @@ export function ProjectDialog({
             onChange={setPath}
             dir="ltr"
             placeholder={source === "git" ? defaultCloneDir : t("dialog.project.directoryExample")}
-            errorMessage={shown(pathError)}
+            description={source === "local" && detection.status === "checking" ? t("dialog.project.pathChecking") : undefined}
+            errorMessage={shown(pathError) ?? (source === "local" && detection.status === "failed" ? detection.error : undefined)}
+            isDisabled={source === "git" && locked}
             trailing={
-              <Button type="button" variant="secondary" onPress={() => setPickingDirectory(true)}>
+              <Button type="button" variant="secondary" isDisabled={source === "git" && locked} onPress={() => setPickingDirectory(true)}>
                 {t("common.browse")}
               </Button>
             }
@@ -150,6 +191,7 @@ export function ProjectDialog({
           placeholder={editing ? undefined : t("dialog.project.nameExample")}
           description={editing ? undefined : t("dialog.project.nameHint")}
           errorMessage={shown(nameError)}
+          isDisabled={locked}
         />
         <TagsInput
           label={t("dialog.project.tags")}
@@ -158,12 +200,15 @@ export function ProjectDialog({
           suggestions={knownTags}
           placeholder={t("dialog.project.tagsExample")}
           description={t("dialog.project.tagsHint")}
+          isDisabled={locked}
         />
         <OptionSelect
           label={t("dialog.project.defaultAgent")}
           options={defaultAgentOptions}
           value={defaultAgent}
           onChange={setDefaultAgent}
+          description={!editing && source === "parent" ? t("dialog.project.agentDetectHint") : undefined}
+          isDisabled={locked}
         />
         <DialogError message={error} />
       </Dialog>

@@ -92,6 +92,16 @@ the duration of its own action — the obvious way to keep a slow request from b
 press and hover, keeps the control focusable, and announces the pending state. Keep `isDisabled` for a control
 that is unavailable for a reason outside the action itself (a field not filled in yet), where focus is not on it.
 
+## A single-line field hands its form the trimmed value
+
+Leading and trailing whitespace is never meant, so a form never holds it: every single-line text field in
+`packages/ui` goes through `useTrimmedField` (`packages/ui/src/dialogs/useTrimmedField.ts`), which `TextInput` already
+does. The form's state, its validation, its submit (Enter included) and any request fired from it see the trimmed value
+at once, while the field keeps what was typed until it loses focus, so a space between two words is not stripped on its
+way to the next one. A new field that is not a `TextInput` takes the hook's result as its `value`, `onChange` and
+`onBlur`, and its form does not call `.trim()` on the value. Left alone on purpose: a free-text area, the project
+filter's search field and the tags field's input, which trims what it adds as a tag itself.
+
 ## What is wrong with one field shows under that field, from the first submit on
 
 In a `packages/ui` dialog, a message about one field's value — empty, malformed, not allowed — belongs to that

@@ -33,7 +33,7 @@ export function AccountDialog({
   const { shown, attempt } = useSubmitValidation();
 
   const collision = nameCollision(name, agent, accounts, t("settings.accounts.defaultName"), editing?.id);
-  const nameError = !name.trim()
+  const nameError = !name
     ? t("dialog.nameRequired")
     : collision?.kind === "default"
       ? t("settings.accounts.nameTakenDefault", { name: collision.name, agent: AGENT_LABEL[agent] })
@@ -42,13 +42,11 @@ export function AccountDialog({
 
   const submit = () => {
     if (!attempt(nameError, dirError)) return;
-    const trimmedName = name.trim();
-    const trimmedDir = configDir.trim();
     void run(async () => {
       if (editing) {
-        await request({ type: "update_account", account: editing.id, name: trimmedName, config_dir: trimmedDir });
+        await request({ type: "update_account", account: editing.id, name, config_dir: configDir });
       } else {
-        await request({ type: "create_account", agent, name: trimmedName, config_dir: trimmedDir });
+        await request({ type: "create_account", agent, name, config_dir: configDir });
       }
       onClose();
     });
@@ -104,7 +102,7 @@ export function AccountDialog({
       {pickingDirectory && (
         <DirectoryPicker
           title={t("dialog.chooseDirectory")}
-          initialPath={isAbsoluteConfigDir(configDir) ? configDir.trim() : "~"}
+          initialPath={isAbsoluteConfigDir(configDir) ? configDir : "~"}
           onPick={(picked) => {
             setConfigDir(picked);
             setPickingDirectory(false);

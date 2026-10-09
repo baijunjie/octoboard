@@ -3,8 +3,9 @@
 A headless Rust binary that plays two roles in one process:
 
 - **Host role**: owns PTYs and agent processes, receives hook callbacks, lists directories, finds the git repositories
-  under a parent directory, clones a repository, checks a project's git status against its remote, and serves bounded,
-  source-aware reads of a project's files (on disk, in the index, in a branch or commit).
+  under a parent directory, clones a repository, probes a git remote and detects which agent a project is set up for,
+  checks a project's git status against its remote, and serves bounded, source-aware reads of a project's files (on
+  disk, in the index, in a branch or commit).
 - **Coordinator role**: stores consoles, projects, sessions, report panel pages and the agent accounts in SQLite, and
   routes requests to the host role.
 
@@ -56,7 +57,7 @@ the repository root and cover both crates; `-p octoboardd` narrows either to thi
 | `src/ptyio.rs` | Non-blocking read/write on a PTY master fd (a blocking write can park forever behind a modal dialog) |
 | `src/ringbuf.rs` | Fixed-capacity ring buffer holding a session's recent terminal output, replayed to a client that attaches or reconnects |
 | `src/saved_output.rs` | The ring buffer's contents kept as one file per session once its process ends (`paths::saved_output_dir`), replayed by the terminal socket for a session with no process; written atomically, removed with the session's record, and swept at startup |
-| `src/hostfs.rs` | Host role's filesystem work: browsing directories, finding git repositories under a parent directory, cloning one, lexical path normalisation |
+| `src/hostfs.rs` | Host role's filesystem work: browsing directories, finding git repositories under a parent directory, cloning one, probing a remote, detecting which agent a directory or remote is set up for, lexical path normalisation |
 | `src/env_shell.rs` | Captures the user's real shell environment (`$SHELL -l -i -c 'env -0 && printf <marker>'`) that every agent is launched with; also a cached variant for a caller on its own repeating schedule (`cached_snapshot`, used by `git_status.rs`) and resolving a binary on that environment's `PATH` |
 | `src/subprocess.rs` | Running one subprocess the daemon spawned directly to completion within bounds — a deadline, a ceiling on its output, a cancel, the whole process group killed on any stop: `run_bounded` (output bounded while it is read) and `run_with_timeout` (a thin wrapper over it); used by `hostfs.rs`, `git_status.rs` and `browse/` |
 | `src/hooks.rs` | Turns one agent's hook event payload into a session status; each agent's events and payload shape differ |

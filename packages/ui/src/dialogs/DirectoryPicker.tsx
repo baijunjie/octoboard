@@ -7,6 +7,7 @@ import { useT } from "../i18n/react";
 import type { DirEntry, Event } from "../protocol";
 import { useDaemon } from "../store";
 import { Dialog, DialogError, useRefocusIfLost } from "./Dialog";
+import { useTrimmedField } from "./useTrimmedField";
 
 /** The ids of the list's two entries that are not a directory. A real entry's id is its absolute
  * path, which neither of these can be. */
@@ -46,6 +47,7 @@ export function DirectoryPicker({
   const t = useT();
   const { request } = useDaemon();
   const [path, setPath] = useState(initialPath ?? "~");
+  const pathField = useTrimmedField(path, setPath);
   const [entries, setEntries] = useState<DirEntry[]>();
   const [resolvedPath, setResolvedPath] = useState<string>();
   const [error, setError] = useState<string>();
@@ -111,7 +113,7 @@ export function DirectoryPicker({
   return (
     <Dialog title={title} onClose={onClose} footer={footer} onSubmit={() => void load(path)}>
       <div className="flex gap-2">
-        <Input fullWidth variant="secondary" dir="ltr" aria-label={t("directoryPicker.path")} value={path} onChange={(e) => setPath(e.target.value)} />
+        <Input fullWidth variant="secondary" dir="ltr" aria-label={t("directoryPicker.path")} {...pathField} />
         <Button type="submit" variant="secondary">
           {t("directoryPicker.go")}
         </Button>

@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { TitledControl } from "../components/TitledControl";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
+import { useTrimmedField } from "./useTrimmedField";
 
 interface ConfirmDialogProps {
   title: string;
@@ -49,8 +50,9 @@ export function ConfirmDialog({
   const language = useCurrentLanguage();
   const { error, busy, run } = useDialogAction(resetKey);
   const [typed, setTyped] = useState("");
+  const typedField = useTrimmedField(typed, setTyped);
   const word = typeToConfirm?.toLocaleUpperCase(language);
-  const confirmed = word === undefined || typed.trim().toLocaleUpperCase(language) === word;
+  const confirmed = word === undefined || typed.toLocaleUpperCase(language) === word;
 
   const footer = (
     <>
@@ -83,8 +85,7 @@ export function ConfirmDialog({
         <TextField
           fullWidth
           variant="secondary"
-          value={typed}
-          onChange={setTyped}
+          {...typedField}
           autoFocus
         >
           <Label>

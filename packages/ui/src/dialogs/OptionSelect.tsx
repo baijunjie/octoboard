@@ -1,4 +1,4 @@
-import { Label, ListBox, Select } from "@heroui/react";
+import { Description, Label, ListBox, Select } from "@heroui/react";
 import React from "react";
 
 /** A single-choice dropdown over a fixed list of options. An option's `lang` marks its text as
@@ -7,19 +7,24 @@ import React from "react";
  * cannot be chosen — the current `value` may still be one, so the reason it cannot be changed
  * away *to* is on screen without taking away what is already picked. With `inline` it is only as
  * wide as its value and `label` is its accessible name alone, for a control whose own row already
- * shows the name (a setting). A label too long for the control is cut with an ellipsis, as in `AccountSelect`. */
+ * shows the name (a setting). `isDisabled` locks it, and `description` is a note under it. A label too long for the control is cut with an ellipsis, as in `AccountSelect`. */
 export function OptionSelect<T extends string>({
   label,
   options,
   value,
   onChange,
   inline,
+  isDisabled,
+  description,
 }: {
   label: string;
   options: { value: T; label: string; lang?: string; icon?: React.ReactNode; isDisabled?: boolean }[];
   value: T;
   onChange: (value: T) => void;
   inline?: boolean;
+  isDisabled?: boolean;
+  /** Extra explanation shown under the field. */
+  description?: string;
 }): React.ReactElement {
   return (
     // HeroUI's variant for a field on a surface: every one of these sits in a dialog.
@@ -28,6 +33,7 @@ export function OptionSelect<T extends string>({
       fullWidth={!inline}
       className={inline ? "w-48" : undefined}
       aria-label={inline ? label : undefined}
+      isDisabled={isDisabled}
       value={value}
       onChange={(key) => key !== null && onChange(key as T)}
       // react-aria's keyboard delegate defaults to skipping a disabled item in arrow-key traversal
@@ -63,6 +69,7 @@ export function OptionSelect<T extends string>({
           ))}
         </ListBox>
       </Select.Popover>
+      {description && <Description>{description}</Description>}
     </Select>
   );
 }

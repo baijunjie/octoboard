@@ -188,6 +188,7 @@ pub async fn handle(
             remote_url,
             name,
             default_agent,
+            detect_default_agent,
             tags,
         } => {
             add_project(
@@ -199,6 +200,7 @@ pub async fn handle(
                     remote_url,
                     name,
                     default_agent,
+                    detect_default_agent,
                     tags,
                 },
             )
@@ -297,6 +299,31 @@ pub async fn handle(
                 id: request_id,
                 path: expanded.to_string_lossy().into_owned(),
                 entries,
+            }))
+        }
+
+        RequestBody::DetectDirectoryAgent { path } => {
+            let directory = absolute_path(&path)?;
+            hostfs::require_directory(&directory)?;
+            let agent = detect_project_agent(state, &directory);
+            Ok(Some(Event::AgentDetected {
+                id: request_id,
+                agent,
+            }))
+        }
+
+        RequestBody::ProbeGitRemote { remote_url } => {
+            // Asked as the user types, so the shell environment is the cached one rather than a
+            // fresh login shell per probe.
+            let probed = tokio::task::spawn_blocking(move || {
+                let shell_env = crate::env_shell::cached_snapshot()
+                    .context("snapshotting the shell environment")?;
+                hostfs::probe_remote_agent(&remote_url, &shell_env)
+            })
+            .await??;
+            Ok(Some(Event::AgentDetected {
+                id: request_id,
+                agent: probed.filter(|agent| agent_is_available(state, *agent)),
             }))
         }
 
@@ -508,6 +535,8 @@ pub struct AddProjectRequest {
     pub remote_url: Option<String>,
     pub name: Option<String>,
     pub default_agent: Option<Agent>,
+    /// Whether an absent `default_agent` is detected from each directory; false stores none.
+    pub detect_default_agent: bool,
     pub tags: Option<Vec<String>>,
 }
 
@@ -522,6 +551,7 @@ pub async fn add_project(
         remote_url,
         name,
         default_agent,
+        detect_default_agent,
         tags,
     } = request;
     state
@@ -532,9 +562,7 @@ pub async fn add_project(
     let directories: Vec<PathBuf> = match source {
         ProjectSource::Local => {
             let path = absolute_path(&path.ok_or_else(|| field_required("path"))?)?;
-            if !path.is_dir() {
-                return Err(hostfs::not_a_directory(&path));
-            }
+            hostfs::require_directory(&path)?;
             vec![path]
         }
         ProjectSource::Parent => {
@@ -590,7 +618,11 @@ pub async fn add_project(
             host_id: LOCAL_HOST_ID.to_string(),
             name: project_name,
             path: path_text,
-            default_agent,
+            default_agent: default_agent.or_else(|| {
+                detect_default_agent
+                    .then(|| detect_project_agent(state, &directory))
+                    .flatten()
+            }),
             source,
             remote_url: remote_url.clone(),
             claude_trust_consent: false,
@@ -611,6 +643,19 @@ pub async fn add_project(
         ));
     }
     Ok(added)
+}
+
+/// The agent to store for a project associated with no default agent chosen: the one its
+/// directory is set up for (see `hostfs::detect_agent`), unless that agent has been determined
+/// unavailable. Decided once, at association, and stored like any chosen default; while
+/// availability is still undetermined the detected agent is kept.
+fn detect_project_agent(state: &Arc<AppState>, directory: &Path) -> Option<Agent> {
+    hostfs::detect_agent(directory).filter(|agent| agent_is_available(state, *agent))
+}
+
+/// Whether `agent` is not known to be missing; while availability is still undetermined it is kept.
+fn agent_is_available(state: &Arc<AppState>, agent: Agent) -> bool {
+    state.agent_availability_of(agent).availability != Availability::Unavailable
 }
 
 /// What a new session should be bound to: always `None` for a console session, which is never
@@ -2188,6 +2233,60 @@ mod tests {
             assert!(state.store.get_session("s").unwrap().is_none(), "{label}");
             assert!(!saved.exists(), "{label}");
         }
+    }
+
+    /// An explicit default agent is kept as given; an absent one takes the one the directory is
+    /// set up for, unless that agent is determined unavailable or the client asked for no
+    /// detection.
+    #[tokio::test]
+    async fn add_project_detects_the_agent_only_when_none_is_given() {
+        let (state, dir) = crate::test_support::app_state("coordinator-add-project-detect");
+        let workdir = console_workdir(&dir);
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &workdir))
+            .unwrap();
+        let add = |name: &str, default_agent: Option<Agent>, detect_default_agent: bool| {
+            let repo = dir.join(name);
+            std::fs::create_dir(&repo).expect("repo");
+            std::fs::write(repo.join("AGENTS.md"), "").expect("marker");
+            add_project(
+                &state,
+                AddProjectRequest {
+                    console_id: "console-1".to_string(),
+                    source: ProjectSource::Local,
+                    path: Some(repo.to_string_lossy().into_owned()),
+                    remote_url: None,
+                    name: None,
+                    default_agent,
+                    detect_default_agent,
+                    tags: None,
+                },
+            )
+        };
+
+        assert_eq!(
+            add("auto", None, true).await.unwrap()[0].default_agent,
+            Some(Agent::Codex)
+        );
+        assert_eq!(
+            add("explicit", Some(Agent::Grok), true).await.unwrap()[0].default_agent,
+            Some(Agent::Grok)
+        );
+        // A client that has shown the detection and was told to keep "inherit" gets none stored.
+        assert_eq!(
+            add("kept-auto", None, false).await.unwrap()[0].default_agent,
+            None
+        );
+        state.set_agent_availability(vec![crate::protocol::AgentAvailability {
+            agent: Agent::Codex,
+            availability: Availability::Unavailable,
+            default_account_dir: None,
+        }]);
+        assert_eq!(
+            add("missing", None, true).await.unwrap()[0].default_agent,
+            None
+        );
     }
 
     /// A session whose resolved agent has been determined unavailable is refused before anything

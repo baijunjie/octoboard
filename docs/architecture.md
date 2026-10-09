@@ -47,7 +47,8 @@ agent without hook support would degrade to an ordinary terminal session with no
 `octoboardd` is a headless, long-running Rust process with two roles:
 
 - **Host role**, present on every machine that runs sessions: manages PTYs and agent processes, receives hook reports,
-  serves MCP for local sessions, lists directories and clones repositories.
+  serves MCP for local sessions, lists directories, clones repositories, and probes remotes and directories for the
+  agent a project is set up for.
 - **Coordinator role**, on the user's own machine: stores console, project, session and report-page data, executes the
   console session's orchestration requests and routes them to the right host, and handles report delivery and
   synthesis.

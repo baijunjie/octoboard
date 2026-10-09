@@ -379,6 +379,9 @@ export type RequestBody =
       remote_url?: string;
       name?: string;
       default_agent?: Agent;
+      /** Whether an absent `default_agent` is detected from each directory's marker files; absent
+       * means true. Sent false by a client that has already shown the detection to the user. */
+      detect_default_agent?: boolean;
       /** Absent means no tags. */
       tags?: string[];
     }
@@ -399,6 +402,10 @@ export type RequestBody =
    * of being refused with `project_has_running_sessions`; default false. */
   | { type: "delete_project"; project: string; stop_sessions?: boolean }
   | { type: "list_dir"; path: string }
+  /** Answered with `agent_detected`, or an error when `path` is not an existing directory. */
+  | { type: "detect_directory_agent"; path: string }
+  /** Answered with `agent_detected`, or `git_remote_unreachable` when the remote cannot be read. */
+  | { type: "probe_git_remote"; remote_url: string }
   | {
       type: "open_session";
       console_id: string;
@@ -565,6 +572,9 @@ export type Event =
       trust_dir: string | null;
     }
   | { type: "dir_listing"; id?: string; path: string; entries: DirEntry[] }
+  /** The reply to `detect_directory_agent` and `probe_git_remote`: the one agent the project is set
+   * up for, or null for none, several, or one known not to be installed. */
+  | { type: "agent_detected"; id?: string; agent: Agent | null }
   /** The reply to `list_pages`, oldest first. Pages are not in `snapshot` — a page carries a whole
    * HTML document — so the panel asks for them, and asks again after every `snapshot`: a client
    * that falls too far behind the daemon's broadcasts is sent a fresh snapshot in place of the
