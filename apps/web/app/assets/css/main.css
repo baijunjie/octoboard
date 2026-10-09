@@ -399,7 +399,6 @@ select:focus-visible {
 }
 .hero {
   position: relative;
-  min-height: 900px;
   padding-block: 96px 40px;
   overflow: hidden;
   background: #000;
@@ -409,7 +408,6 @@ select:focus-visible {
   grid-template-columns: 1fr 1fr;
   align-items: center;
   position: relative;
-  min-height: 640px;
 }
 .hero-copy {
   position: relative;
@@ -417,9 +415,11 @@ select:focus-visible {
   max-width: 680px;
   padding-block: 24px 48px;
 }
+/* One size for every language. A wider viewport must not enlarge this:
+   Latin lines wrap and CJK stays on one line, so the layouts diverge. */
 .hero h1 {
   max-width: 680px;
-  font-size: 72px;
+  font-size: 60px;
   line-height: 1;
   font-weight: 600;
   letter-spacing: -0.06em;
@@ -430,7 +430,7 @@ select:focus-visible {
 }
 .hero h1 .metal-type {
   font-size: 36px;
-  line-height: 1;
+  line-height: 40px;
   margin-top: 8px;
 }
 .metal-type {
@@ -458,14 +458,15 @@ select:focus-visible {
 }
 .hero-art {
   position: relative;
-  width: 720px;
-  height: 720px;
-  margin-inline-start: -48px;
-  margin-top: -48px;
+  width: min(520px, 100%);
+  aspect-ratio: 1;
+  margin: 0;
+  justify-self: center;
 }
 .hero-mascot {
+  display: block;
   width: 100%;
-  height: 100%;
+  height: auto;
   object-fit: contain;
   image-rendering: pixelated;
 }
@@ -1333,22 +1334,6 @@ h3 {
   opacity: 1;
   transform: translateY(0);
 }
-@media (min-width: 1600px) {
-  .hero-layout {
-    min-height: 720px;
-  }
-  .hero-art {
-    width: 800px;
-    height: 800px;
-    margin-inline-start: -48px;
-  }
-  .hero h1 {
-    font-size: 96px;
-  }
-  .hero h1 .metal-type {
-    font-size: 36px;
-  }
-}
 @media (max-width: 1200px) {
   .wrap {
     width: calc(100% - 64px);
@@ -1363,11 +1348,7 @@ h3 {
     gap: 12px;
   }
   .hero {
-    min-height: 800px;
     padding-top: 96px;
-  }
-  .hero-layout {
-    min-height: 560px;
   }
   .hero h1 {
     font-size: 60px;
@@ -1379,10 +1360,6 @@ h3 {
     font-size: 16px;
     line-height: 24px;
     max-width: 400px;
-  }
-  .hero-art {
-    width: 640px;
-    height: 640px;
   }
   .benefits-layout,
   .proof-layout,
@@ -1404,23 +1381,15 @@ h3 {
   .nav-pill {
     gap: 32px;
   }
-  .hero {
-    min-height: 0;
-  }
   .hero-layout {
     grid-template-columns: 1fr 1fr;
-    min-height: 560px;
   }
   .hero h1 {
     font-size: 48px;
   }
   .hero h1 .metal-type {
-    font-size: 36px;
-  }
-  .hero-art {
-    width: 560px;
-    height: 560px;
-    margin-inline-start: -80px;
+    font-size: 30px;
+    line-height: 36px;
   }
   .hero-description {
     max-width: 360px;
@@ -1571,7 +1540,6 @@ h3 {
   .hero-layout {
     display: flex;
     flex-direction: column;
-    min-height: 0;
   }
   .hero-copy {
     width: 100%;
@@ -1612,8 +1580,8 @@ h3 {
     width: 100%;
     height: auto;
     aspect-ratio: 1;
-    margin: 16px 0 0;
-    max-width: 560px;
+    margin: 16px auto 0;
+    max-width: 420px;
   }
   .hero-mascot {
     width: 100%;
@@ -1849,16 +1817,8 @@ h3 {
 [dir="rtl"] .menu-section-arrow {
   transform: scaleX(-1);
 }
-[dir="rtl"] .hero-art {
-  margin-inline-start: -48px;
-}
 [dir="rtl"] .privacy-back > span {
   transform: scaleX(-1);
-}
-@media (max-width: 700px) {
-  [dir="rtl"] .hero-art {
-    margin-inline-start: 0;
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   html {
@@ -1888,22 +1848,6 @@ h3 {
 }
 .hero h1 .metal-type {
   background: none;
-}
-:lang(zh) .hero h1 {
-  font-size: 60px;
-}
-:lang(zh) .hero h1 .metal-type {
-  font-size: 36px;
-  line-height: 40px;
-}
-@media (max-width: 960px) {
-  :lang(zh) .hero h1 {
-    font-size: 48px;
-  }
-  :lang(zh) .hero h1 .metal-type {
-    font-size: 30px;
-    line-height: 36px;
-  }
 }
 @media (max-width: 700px) {
   .hero-layout {
