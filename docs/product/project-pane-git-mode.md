@@ -272,10 +272,12 @@ commit and its new side from To's, and is shown as a staged change is below; it 
 ### What it shows
 
 - **A text change** is a diff, drawn from the patch Git makes for it: unified at first, or split into its two sides
-  side by side, chosen above it. The choice holds while the viewer moves from change to change, until it closes. Long
-  lines wrap. A patch of more than 1,000,000 characters or 10,000 lines is shown as the plain patch, with a line
-  saying it is shown that way because the change is large; so is a patch the diff could not be drawn from. A patch
-  that is not valid UTF-8 — of a file in another encoding — is shown with replacement characters.
+  side by side, chosen above it. The choice is offered only for a diff with lines on both sides: an added or a
+  deleted file reads the same either way, so it has none. The choice holds while the viewer moves from change to
+  change, until it closes. A change whose patch has no lines — an empty file added or removed, say — says it has no
+  diff to show. Long lines wrap. A patch of more than 1,000,000 characters or 10,000 lines is shown as the plain patch,
+  with a line saying it is shown that way because the change is large; so is a patch the diff could not be drawn from.
+  A patch that is not valid UTF-8 — of a file in another encoding — is shown with replacement characters.
 - **A missing newline at the end** of either version is said in a line above the diff — the old version, the new one,
   or neither has one — rather than as a line of it. A symbolic link's change never says so, a link's target having
   no newline at its end anyway. A plain patch keeps Git's own marker lines.
@@ -293,7 +295,7 @@ commit and its new side from To's, and is shown as a staged change is below; it 
   under a warning that the previous or the new version is outside the project, with its path from the repository's
   root. Nothing of the version outside is read.
 - **A type change** — a file that became a symbolic link, or the reverse — is shown as two diffs, Before and After,
-  one per side, sharing one choice of unified or split, which is left out when both are shown as plain patches. A
+  one per side. Each has lines on one side only, so no choice of unified or split is offered for them. A
   rename into or out of a path below itself (`foo` to `foo/bar`, or back) is shown the same way: its old path's
   removal and its new path's addition, under Renamed.
 - **No differences**, when the two sides now hold the same content: the change was staged, committed or undone since
@@ -338,8 +340,8 @@ change is selected, and keyboard focus goes to the first row of the list, or to 
 rows. The viewer never shows a change from other commits than the list's.
 
 When the connection to the daemon is lost, what is shown stays until the connection is back, and then the change is
-read again; a change that had nothing on screen yet says the connection was lost and that it is read again once it is
-back.
+read again; a change that had nothing on screen yet says, in plain text rather than as an error, that the connection
+was lost and that it is read again once the connection is back.
 
 ### Errors
 

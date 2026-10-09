@@ -4,18 +4,37 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "../theme";
-import type { ViewerSubject } from "./content";
+import type { ViewerChangeSide, ViewerSubject } from "./content";
 import { FileViewer, type ViewerNavigation } from "./FileViewer";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // The rendering library does not run under jsdom; a stand-in shows the text it is handed, which is
-// what these tests look at. That the library itself escapes repository text is checked in WebKit.
-vi.mock("./renderer", () => ({
-  HighlightedFile: ({ text }: { text: string }) => <pre data-renderer="">{text}</pre>,
-  RenderedDiff: ({ patch }: { patch: string }) => <pre data-renderer="">{patch}</pre>,
-  endRendererPool: () => {},
-}));
+// what these tests look at, and reports it drawn as soon as it is mounted unless `drawing.held`.
+// That the library itself escapes repository text is checked in WebKit.
+const drawing = vi.hoisted(() => ({ held: false }));
+vi.mock("./renderer", async () => {
+  const { useEffect } = await import("react");
+  const Stand = ({ text, onDrawn }: { text: string; onDrawn?: () => void }) => {
+    useEffect(() => {
+      if (!drawing.held) onDrawn?.();
+    }, [text, onDrawn]);
+    return <pre data-renderer="">{text}</pre>;
+  };
+  return {
+    HighlightedFile: ({ text, onDrawn }: { text: string; onDrawn?: () => void }) => <Stand text={text} onDrawn={onDrawn} />,
+    // A patch marked "unrenderable" stands for one the library rejects.
+    RenderedDiff: ({ patch, layout, onDrawn }: { patch: string; layout: string; onDrawn?: () => void }) => {
+      if (patch.includes("unrenderable")) throw new Error("The patch cannot be read");
+      return (
+        <div data-layout={layout}>
+          <Stand text={patch} onDrawn={onDrawn} />
+        </div>
+      );
+    },
+    endRendererPool: () => {},
+  };
+});
 
 // jsdom has neither, and the path line (FadeOverflow) and the theme need them.
 class StubResizeObserver {
@@ -150,4 +169,108 @@ it("moves to the previous and next subject with Left and Right, as its buttons d
     });
   }
   expect([onPrevious.mock.calls.length, onNext.mock.calls.length]).toEqual([1, 1]);
+});
+
+// The library draws nothing until its worker pool has started; the frame says it is loading until
+// the renderer reports the code drawn, rather than standing blank.
+it("says it is loading until the renderer has drawn the code", async () => {
+  const code: ViewerSubject = {
+    key: "t",
+    path: "src/t.ts",
+    content: { state: "file", body: { kind: "text", text: "const a = 1;\n", size: 13 } },
+  };
+  const loading = () => dialog()?.querySelector("[role=region] [role=status]") ?? null;
+  drawing.held = true;
+  try {
+    show(code);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(document.querySelector("[data-renderer]")).not.toBeNull();
+    expect(loading()).not.toBeNull();
+  } finally {
+    drawing.held = false;
+  }
+  show({ ...code, key: "u", path: "src/u.ts" });
+  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  expect(loading()).toBeNull();
+});
+
+it.each([
+  ["an added file, which has one side", "@@ -0,0 +1 @@\n+a\n", false],
+  ["a modified file", "@@ -1 +1 @@\n-a\n+b\n", true],
+])("offers the diff layout for %s", (_, patch, offered) => {
+  const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
+  show({
+    key: patch,
+    path: "src/c.ts",
+    content: { state: "change", change: { old: offered ? side : { state: "absent" }, new: side, patch } },
+  });
+  expect(dialog()?.querySelector('[aria-label="Diff layout"]') !== null).toBe(offered);
+});
+
+// The layout the viewer remembers is for diffs with two sides; one without is drawn unified, with
+// no empty column and no choice to make.
+it("draws a one-sided diff unified even when split was chosen for another", () => {
+  const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
+  const change = (patch: string, old: ViewerChangeSide): ViewerSubject => ({
+    key: patch,
+    path: "src/c.ts",
+    content: { state: "change", change: { old, new: side, patch } },
+  });
+  const layout = () => dialog()?.querySelector("[data-layout]")?.getAttribute("data-layout");
+  show(change("@@ -1 +1 @@\n-a\n+b\n", side));
+  act(() => {
+    [...dialog()!.querySelectorAll("button")].find((b) => b.textContent === "Split")!.click();
+  });
+  expect(layout()).toBe("split");
+  show(change("@@ -0,0 +1 @@\n+a\n", { state: "absent" }));
+  expect(layout()).toBe("unified");
+});
+
+it("shows the raw patch when the diff cannot be rendered", () => {
+  const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    show({
+      key: "g",
+      path: "src/c.ts",
+      content: { state: "change", change: { old: side, new: side, patch: "@@ -1,3 +1,3 @@ unrenderable\n a\n+b\n" } },
+    });
+    expect(dialog()?.textContent).toContain("Shown as a plain patch because the diff could not be rendered.");
+    expect(dialog()?.querySelector("pre")?.textContent).toContain("unrenderable");
+  } finally {
+    error.mockRestore();
+  }
+});
+
+it("says a lost connection in neutral text, not as a failure", () => {
+  show({ key: "d", path: "src/d.ts", content: { state: "disconnected", what: "file" } });
+  expect(document.querySelector("[role=alert]")).toBeNull();
+  expect(dialog()?.textContent).not.toContain("Could not open this file");
+  expect(dialog()?.querySelector("[role=status]")?.textContent).toBe(
+    "The connection to the daemon was lost. This file is read again when the connection is back.",
+  );
+});
+
+// A patch with no hunk (an empty file added, a mode change) gives the renderer no line to draw, so
+// it would never report the code drawn and the frame would say it is loading for good.
+it("says a change whose patch has no lines has no diff, rather than loading for good", () => {
+  const patch = "diff --git a/e b/e\nnew file mode 100644\nindex 0000000..e69de29\n";
+  show({
+    key: "e",
+    path: "e",
+    content: { state: "change", change: { old: { state: "absent" }, new: { state: "present", path: "e", kind: "file" }, patch } },
+  });
+  expect(dialog()?.textContent).toContain("This change has no diff to show.");
+  expect(dialog()?.querySelector("[role=status], [data-renderer], [aria-label='Diff layout']")).toBeNull();
+});
+
+// The same subject's content can be replaced under the viewer — read again, or the connection lost
+// before anything was read — and the code region holding focus goes with it; focus stays in the
+// dialog, where Escape and Tab work, instead of falling to `<body>`.
+it("keeps focus in the dialog when the subject's content is replaced", () => {
+  const code: ViewerSubject = { key: "k", path: "src/k.ts", content: { state: "file", body: { kind: "text", text: "a\n", size: 2 } } };
+  show(code);
+  act(() => dialog()!.querySelector<HTMLElement>("[role=region]")!.focus());
+  show({ ...code, content: { state: "disconnected", what: "file" } });
+  expect(dialog()?.contains(document.activeElement)).toBe(true);
 });

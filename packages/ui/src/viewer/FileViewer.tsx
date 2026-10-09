@@ -1,20 +1,21 @@
 import { Alert, Button, Chip } from "@heroui/react";
-import { ChevronLeft, ChevronRight, FileQuestion } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileQuestion, Unplug } from "lucide-react";
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { PathText } from "../components/PathText";
 import { TitledControl } from "../components/TitledControl";
-import { Dialog } from "../dialogs/Dialog";
+import { Dialog, useRefocusIfLost } from "../dialogs/Dialog";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useOctoboardTheme } from "../theme";
 import { displayWirePath, wireBaseName } from "../wirePath";
 import { arrowNavigation } from "./arrowKeys";
 import { diffPlan } from "./budgets";
-import { CodeSurface, DiffSurface, LayoutToggle, Loading, useRendererScope } from "./CodeSurface";
+import { CodeSurface, DiffSurface, LayoutToggle, Loading, Unreadable, useRendererScope } from "./CodeSurface";
 import {
   changePresentation,
   changeStatus,
+  hasTwoSides,
   type ChangeStatus,
   type ViewerBody,
   type ViewerChange,
@@ -83,6 +84,10 @@ export function FileViewer({
     const other = which === "previous" ? (hasNext ? nextRef.current : null) : hasPrevious ? previousRef.current : null;
     (other ?? headerRef.current?.closest<HTMLElement>("[role=dialog]"))?.focus();
   }, [subject.key, hasPrevious, hasNext]);
+  // The subject's content can be replaced under the same subject — read again, or the connection
+  // lost — taking the code region that held focus with it; the dialog takes focus back, or its
+  // Escape and Tab would stop working.
+  useRefocusIfLost(() => headerRef.current?.closest<HTMLElement>("[role=dialog]"), [content]);
   // The latest callbacks, for a listener added once.
   const latestNavigation = useRef(navigation);
   latestNavigation.current = navigation;
@@ -212,6 +217,8 @@ function ViewerContentView({
       return <Loading />;
     case "error":
       return <Failure message={content.message} />;
+    case "disconnected":
+      return <Disconnected what={content.what} />;
     case "file":
       return <BodyView resetKey={key} name={name} body={content.body} theme={theme} />;
     case "conflict":
@@ -243,6 +250,21 @@ function ViewerContentView({
         />
       );
   }
+}
+
+/**
+ * Nothing read yet while the connection to the daemon is lost: a passing state, not a failure of
+ * the file or change, so it is said in neutral text, announced as a status, rather than as an
+ * error. The subject is read again once the connection is back.
+ */
+function Disconnected({ what }: { what: "file" | "change" }): React.ReactElement {
+  const t = useT();
+  return (
+    <div role="status" className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-center text-sm text-muted">
+      <Unplug aria-hidden="true" className="size-8" />
+      <p>{t(what === "file" ? "viewer.disconnected.file" : "viewer.disconnected.change")}</p>
+    </div>
+  );
 }
 
 /** Why the subject cannot be shown. */
@@ -306,7 +328,7 @@ function ImageView({
   if (failed) {
     return body.text !== undefined ? (
       <>
-        <p className="shrink-0 px-1 pb-2 text-xs text-muted">{t("viewer.image.asText")}</p>
+        <p className="shrink-0 text-xs text-muted">{t("viewer.image.asText")}</p>
         <CodeSurface resetKey={body.url} name={name} text={body.text} theme={theme} />
       </>
     ) : (
@@ -387,29 +409,32 @@ function ChangeView({
     case "single":
       return (
         <>
-          <p className="shrink-0 px-1 pb-2 text-xs text-muted">{t("viewer.change.alone")}</p>
+          <p className="shrink-0 text-xs text-muted">{t("viewer.change.alone")}</p>
           <BodyView resetKey={resetKey} name={name} body={presentation.body} theme={theme} />
         </>
       );
-    case "text":
+    case "text": {
+      const twoSides = hasTwoSides(presentation.patch);
       return (
         <DiffSurface
           resetKey={resetKey}
           name={name}
           patch={presentation.patch}
-          layout={layout}
-          onLayoutChange={onLayoutChange}
+          layout={twoSides ? layout : "unified"}
+          onLayoutChange={twoSides ? onLayoutChange : undefined}
           theme={theme}
         />
       );
+    }
     case "sections":
       // Each section drawn on its own, so a type change's removal and addition are never merged
       // into one diff; with two, they are its old and its new side.
       // One layout choice serves every section.
       return (
         <>
-          {/* Not when every section is shown as its plain patch, which has no layout. */}
-          {presentation.sections.some((section) => diffPlan(section) === "render") && (
+          {/* Only when some section is drawn as a diff with two sides: a plain patch has no layout,
+              and a one-sided diff reads the same in both. */}
+          {presentation.sections.some((section) => diffPlan(section) === "render" && hasTwoSides(section)) && (
             <LayoutToggle layout={layout} onLayoutChange={onLayoutChange} />
           )}
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
@@ -422,7 +447,13 @@ function ChangeView({
                       {t(i === 0 ? "viewer.change.before" : "viewer.change.after")}
                     </h3>
                   )}
-                  <DiffSurface resetKey={`${resetKey}:${i}`} name={name} patch={section} layout={layout} theme={theme} />
+                  <DiffSurface
+                    resetKey={`${resetKey}:${i}`}
+                    name={name}
+                    patch={section}
+                    layout={hasTwoSides(section) ? layout : "unified"}
+                    theme={theme}
+                  />
                 </section>
               );
             })}
@@ -449,11 +480,7 @@ function ChangeView({
       return <Unsupported message={t("viewer.change.binary")} sizes={[size(change.old), size(change.new)]} />;
     }
     case "unreadable":
-      return presentation.message !== undefined ? (
-        <Failure message={presentation.message} />
-      ) : (
-        <p className="text-sm text-muted">{t("viewer.change.unreadable")}</p>
-      );
+      return presentation.message !== undefined ? <Failure message={presentation.message} /> : <Unreadable />;
   }
 }
 

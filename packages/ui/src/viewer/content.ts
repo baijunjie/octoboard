@@ -45,6 +45,9 @@ export interface ViewerChange {
 export type ViewerContent =
   | { state: "loading" }
   | { state: "error"; message: string }
+  /** Nothing has been read yet and the connection to the daemon is lost; it is read again once the
+   * connection is back. Not a failure of the file or change itself. */
+  | { state: "disconnected"; what: "file" | "change" }
   | { state: "file"; body: ViewerBody }
   | { state: "change"; change: ViewerChange }
   /** A path in conflict, which is no two-sided change: `conflict` says how, in the caller's
@@ -141,6 +144,24 @@ export function withoutNoNewlineMarkers(patch: string): { patch: string; old: bo
   if (!marked.old && !marked.new) return { patch, ...marked };
   const link = /^((new|deleted) file mode|old mode|new mode) 120000$|^index \S+ 120000$/m.test(patch);
   return { patch: kept.join("\n"), old: marked.old && !link, new: marked.new && !link };
+}
+
+/** The line counts of each hunk of a patch, old side then new. */
+function hunkCounts(patch: string): [number, number][] {
+  return [...patch.matchAll(/^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/gm)].map(([, old, next]) => [Number(old ?? 1), Number(next ?? 1)]);
+}
+
+/** Whether a patch has any line to draw: one with no hunk — an empty file added or removed, a mode
+ * change — has none, and the viewer says so rather than draw an empty diff. */
+export function hasHunks(patch: string): boolean {
+  return hunkCounts(patch).length > 0;
+}
+
+/** Whether a patch has two sides to set side by side: some hunk has lines on both. One where every
+ * hunk adds to nothing or removes everything — an added or a deleted file, each section of a type
+ * change — reads the same unified and split, so the viewer offers no choice between them. */
+export function hasTwoSides(patch: string): boolean {
+  return hunkCounts(patch).some(([old, next]) => old > 0 && next > 0);
 }
 
 /** A patch split into its sections, one per `diff --git` header, each a patch of its own. No line

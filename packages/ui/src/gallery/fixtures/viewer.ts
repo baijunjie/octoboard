@@ -316,6 +316,7 @@ async function files(): Promise<ViewerSubject[]> {
     file("dist/app.min.js", text("dist/app.min.js", minified())),
     file("src/generated/table.ts", text("src/generated/table.ts", nearBudget())),
     file("logs/server.log", text("logs/server.log", largeLog())),
+    file("src/empty.ts", text("src/empty.ts", "")),
     { key: "live:src/pending.ts", path: "src/pending.ts", source: "Working tree", content: { state: "loading" } },
     {
       key: "live:src/gone.ts",
@@ -323,6 +324,18 @@ async function files(): Promise<ViewerSubject[]> {
       source: "Working tree",
       content: { state: "error", message: "src/gone.ts no longer exists in this project." },
     },
+    { key: "live:src/offline.ts", path: "src/offline.ts", source: "Working tree", content: { state: "disconnected", what: "file" } },
+    // Names too long for the header, in Latin and in CJK script.
+    file(
+      "packages/settings/src/components/notification-preferences/an-extraordinarily-long-component-file-name-that-keeps-going.tsx",
+      text("an-extraordinarily-long-component-file-name-that-keeps-going.tsx", NEW_SESSION),
+    ),
+    file("docs/设计说明/交互与视觉/项目文件浏览器的交互与视觉设计说明（最终评审版，请勿直接修改）.md", text("说明.md", MARKDOWN)),
+    // A generated name with no place to break a line.
+    file(
+      "dist/assets/chunk.3f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c.js",
+      text("chunk.js", JSON_TEXT),
+    ),
   ];
 }
 
@@ -348,7 +361,23 @@ async function changes(): Promise<ViewerSubject[]> {
     change("assets/new.png", { state: "absent" }, present("assets/new.png", after)),
     change("bin/tool.wasm", present("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAA=" })), present("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAABBAFgAAA=" }))),
     change("data/table.ts", present("data/table.ts"), present("data/table.ts"), largePatch()),
-    change("src/garbled.ts", present("src/garbled.ts"), present("src/garbled.ts"), "@@ this is not a patch @@\n+++\n"),
+    // A hunk header that promises three lines per side and delivers two: the renderer rejects it,
+    // and the viewer falls back to the raw patch.
+    change(
+      "src/garbled.ts",
+      present("src/garbled.ts"),
+      present("src/garbled.ts"),
+      "diff --git a/src/garbled.ts b/src/garbled.ts\n--- a/src/garbled.ts\n+++ b/src/garbled.ts\n@@ -1,3 +1,3 @@\n a\n+b\n",
+    ),
+    // An empty file staged as added: its patch has no hunk, so the diff draws no line.
+    change(
+      "src/empty.ts",
+      { state: "absent" },
+      present("src/empty.ts", text("src/empty.ts", "")),
+      "diff --git a/src/empty.ts b/src/empty.ts\nnew file mode 100644\nindex 0000000..e69de29\n",
+      "Staged",
+    ),
+    { key: "Unstaged:src/offline.ts", path: "src/offline.ts", source: "Unstaged", content: { state: "disconnected", what: "change" } },
     // A change that arrived without a patch, which has no diff to draw.
     change("src/session.ts", present("src/session.ts", oldSession), present("src/session.ts", newSession), undefined, "Staged"),
   ];

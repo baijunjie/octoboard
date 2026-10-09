@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 
 import type { FileContent } from "../protocol";
-import { bodyFromFileContent, changePresentation, changeStatus, patchSections, withoutNoNewlineMarkers, type ViewerChange, type ViewerChangeSide } from "./content";
+import { bodyFromFileContent, changePresentation, changeStatus, hasHunks, hasTwoSides, patchSections, withoutNoNewlineMarkers, type ViewerChange, type ViewerChangeSide } from "./content";
 
 const textFile = (text: string): FileContent => ({ size: text.length, kind: "text", media_type: null, text, data: null });
 const binaryFile = (media_type: string | null): FileContent => ({ size: 3, kind: "binary", media_type, text: null, data: "AAEC" });
@@ -73,4 +73,14 @@ it.each([
   const result = withoutNoNewlineMarkers(`@@ -1 +1 @@\n${hunk}`);
   expect(result).toMatchObject(marked);
   expect(result.patch).not.toContain("No newline");
+});
+
+it.each([
+  ["an added file", "@@ -0,0 +1,3 @@\n+a\n+b\n+c\n", true, false],
+  ["a deleted file", "@@ -1,2 +0,0 @@\n-a\n-b\n", true, false],
+  ["a modified file, even one only added to", "@@ -1,2 +1,3 @@\n a\n b\n+c\n", true, true],
+  ["one-line sides, whose counts are left out", "@@ -1 +1 @@\n-a\n+b\n", true, true],
+  ["an empty file added, with no hunk", "diff --git a/x b/x\nnew file mode 100644\nindex 0000000..e69de29\n", false, false],
+])("tells the lines and sides of %s", (_, patch, lines, sides) => {
+  expect([hasHunks(patch), hasTwoSides(patch)]).toEqual([lines, sides]);
 });

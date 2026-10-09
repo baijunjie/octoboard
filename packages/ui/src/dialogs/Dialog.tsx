@@ -4,6 +4,7 @@ import React, { useEffect, useId, useRef, useState } from "react";
 import { takeMenuFocusToRestore } from "../components/ActionMenu";
 import { TitledControl } from "../components/TitledControl";
 import { useT } from "../i18n/react";
+import { useToastClearance } from "./useToastClearance";
 
 /** The inline error and busy state every dialog that talks to the daemon needs. The error is the
  * request's own failure, shown at the foot of the dialog; what is wrong with a single field goes to
@@ -163,6 +164,7 @@ export function Dialog({
   // HeroUI's `Modal.Dialog` takes no ref, so the dialog element is found from a marker inside it.
   const markerRef = useRef<HTMLSpanElement>(null);
   useRefocusIfLost(() => markerRef.current?.closest<HTMLElement>("[role=dialog], [role=alertdialog]"), [resetKey]);
+  useToastClearance(markerRef, footer !== null);
 
   const Frame = alert ? AlertDialog : Modal;
   // An alert dialog is described by its whole body, so a screen reader announces what is asked
@@ -211,8 +213,11 @@ export function Dialog({
             {/* Named explicitly so it always matches the tooltip. */}
             <Frame.CloseTrigger aria-label={t("common.close")} />
           </TitledControl>
-          <Frame.Header>
-            <Frame.Heading>{title as BodyChildren}</Frame.Heading>
+          {/* HeroUI places the close button over the header's end without reserving room for it, so
+              the heading is padded clear of it; a long title (a file's name in the viewer, say) has
+              to wrap anywhere, since a name with no place to break would run out of the dialog. */}
+          <Frame.Header className="pe-6">
+            <Frame.Heading className="[overflow-wrap:anywhere]">{title as BodyChildren}</Frame.Heading>
           </Frame.Header>
           {onSubmit ? (
             <form

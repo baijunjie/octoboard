@@ -3,10 +3,14 @@
 Failures and notices that need no answer are shown as **toasts**; which ones are, and how they name the session they
 are about, is in "Losing the daemon connection" in `docs/product/application-lifecycle.md`.
 
-- **Always at the window's bottom right** (bottom left under a right-to-left language), floating over whatever is there,
-  on the main screen and on the screen shown while connecting to the daemon alike, whether or not Settings or another
-  dialog is open. They never move the layout; the stack rides above the connection banner while that is shown. The
-  newest is at the front.
+- **At the window's bottom right** (bottom left under a right-to-left language), or, in a window narrower than 640 px,
+  **at the top, centred, just below the top bar**: there the footers of dialogs and the connection banner span the
+  width, and a phone's on-screen keyboard, which the terminal is typed into, covers the bottom edge. They float over
+  whatever is there, on the main screen and on the screen shown while connecting to the daemon alike, whether or not
+  Settings or another dialog is open. They never move the layout; at the bottom the stack rides above the connection
+  banner while that is shown, and above the buttons along the foot of a dialog while one is open and its footer reaches
+  that corner, such as the file viewer's Previous file and Next file; a small centred dialog leaves them where they
+  are. A toast slides in from the edge it sits at, and the newest is at the front.
 - A toast about a particular session is titled with where that session is — the project it runs in, or the console
   whose console session it is — with the message under it; any other toast is just the message. An error is marked
   as one; a notice is not.

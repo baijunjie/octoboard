@@ -333,10 +333,17 @@
 }
 
 /* HeroUI's toast region sits 1rem above the window bottom; lifted by the bottom chrome, it floats
-   over the content above the connection banner instead of over the banner. Unlayered, so it wins
-   over HeroUI's layered rule. */
+   over the content above the connection banner instead of over the banner, and while a dialog whose
+   footer reaches this corner is open, above that footer (`dialogs/useToastClearance.ts`), whose
+   buttons would otherwise sit under it. Unlayered, so it wins over HeroUI's layered rule. */
 .toast-region--bottom-end {
-  bottom: calc(1rem + var(--bottom-chrome-height));
+  bottom: calc(1rem + max(var(--bottom-chrome-height), var(--dialog-footer-clearance, 0px)));
+}
+
+/* In a window narrower than HeroUI's 40rem toast breakpoint the region is at the top, centred, and
+   starts below the top bar so the bar's controls stay reachable. */
+.toast-region--top {
+  top: calc(1rem + var(--top-chrome-height));
 }
 
 /* HeroUI's light `--muted` (L 0.5517) is secondary text everywhere, but it reaches 4.5:1 only on

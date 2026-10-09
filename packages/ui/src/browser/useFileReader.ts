@@ -71,13 +71,16 @@ export function useFileReader(project: string): FileReader {
         const failure = browseFailure(t, language, err, state, root && abbreviateHome(root, state.homeDir));
         if (failure.kind === "superseded") return;
         if (failure.kind === "changed" && attempt < CHANGED_RETRIES) return read(target, attempt + 1);
-        const message =
-          failure.kind === "failed" ? failure.message : failure.kind === "disconnected" ? t("browser.error.disconnected") : t("browser.error.fileChanged");
-        setContent((shown) =>
-          failure.kind === "disconnected" && shown?.path === target && shown.content.state === "file"
-            ? shown
-            : { path: target, content: { state: "error", message }, changing: failure.kind === "changed" },
-        );
+        if (failure.kind === "disconnected") {
+          setContent((shown) =>
+            shown?.path === target && shown.content.state === "file"
+              ? shown
+              : { path: target, content: { state: "disconnected", what: "file" } },
+          );
+          return;
+        }
+        const message = failure.kind === "failed" ? failure.message : t("browser.error.fileChanged");
+        setContent({ path: target, content: { state: "error", message }, changing: failure.kind === "changed" });
       });
   };
 
@@ -121,7 +124,7 @@ export function useFileReader(project: string): FileReader {
     shown:
       shown?.content.state === "file" && shown.version !== undefined
         ? { state: "file", version: shown.version }
-        : shown?.content.state === "error"
+        : shown?.content.state === "error" || shown?.content.state === "disconnected"
           ? { state: "error", changing: shown.changing }
           : { state: "loading" },
     open,

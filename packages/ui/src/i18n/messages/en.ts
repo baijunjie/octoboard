@@ -371,7 +371,6 @@ export const en = {
   "browser.error.root": "Could not list the files of this project",
   "browser.error.fileTooLarge": "This file is {size}, more than the {max} that can be opened here.",
   "browser.error.fileTooLargeNoSize": "This file is larger than the {max} that can be opened here.",
-  "browser.error.disconnected": "The connection to the daemon was lost. The file is read again once it is back.",
   "browser.error.fileChanged": "This file kept changing while it was being read. It is read again at the next refresh.",
   "browser.error.folderChanged": "This folder kept changing while it was being listed. Refresh to try again.",
   "browser.partial": "Not every entry of this folder is shown.",
@@ -460,6 +459,8 @@ export const en = {
   // The read-only file viewer (`src/viewer/`).
   "viewer.loading": "Loading…",
   "viewer.error": "Could not open this file",
+  "viewer.disconnected.file": "The connection to the daemon was lost. This file is read again when the connection is back.",
+  "viewer.disconnected.change": "The connection to the daemon was lost. This change is read again when the connection is back.",
   "viewer.previous": "Previous file",
   "viewer.next": "Next file",
   "viewer.contents": "Contents of {name}",

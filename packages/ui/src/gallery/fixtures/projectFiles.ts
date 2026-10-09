@@ -101,6 +101,16 @@ export const projectFilesScenarios: Scenario[] = [
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600)],
   },
   {
+    id: "files-viewer-toast",
+    group: GROUP,
+    title: "A toast while the viewer is open",
+    description: "The toast stack rides above the viewer's footer, clear of Previous file and Next file.",
+    width: 1148,
+    state,
+    toasts: [{ kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "" }],
+    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600)],
+  },
+  {
     id: "files-no-session",
     group: GROUP,
     title: "Browsing a project with no session",

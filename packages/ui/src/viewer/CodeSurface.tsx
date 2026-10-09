@@ -4,7 +4,8 @@ import { useFocusRing } from "react-aria";
 
 import { useT } from "../i18n/react";
 import { diffPlan, textPlan } from "./budgets";
-import { withoutNoNewlineMarkers } from "./content";
+import { CODE_THEMES } from "./codeTheme";
+import { hasHunks, withoutNoNewlineMarkers } from "./content";
 import { isSelectAll, selectCode } from "./selectAll";
 
 // The renderer module, with the library and its grammars, loads the first time code is shown.
@@ -60,13 +61,14 @@ export function useRendererScope(): void {
 
 /** A line saying why the content below is shown the way it is. */
 function Notice({ children }: { children: React.ReactNode }): React.ReactElement {
-  return <p className="shrink-0 px-1 pb-2 text-xs text-muted">{children}</p>;
+  return <p className="shrink-0 text-xs text-muted">{children}</p>;
 }
 
 /** Text as it is, laid out by the browser as one preformatted node: what the viewer falls back to
  * past a budget or when the renderer fails, and cheap at any size the daemon sends. */
-export function PlainText({ text, label }: { text: string; label: string }): React.ReactElement {
+export function PlainText({ text, label, theme }: { text: string; label: string; theme: "light" | "dark" }): React.ReactElement {
   const frame = useCodeFrame();
+  const colours = CODE_THEMES[theme];
   return (
     <pre
       dir="ltr"
@@ -74,7 +76,8 @@ export function PlainText({ text, label }: { text: string; label: string }): Rea
       role="region"
       aria-label={label}
       {...frame}
-      className="min-h-0 flex-1 overflow-auto rounded-xl bg-surface-secondary p-3 font-mono text-xs leading-5 break-words whitespace-pre-wrap text-foreground outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
+      style={{ backgroundColor: colours.background, color: colours.foreground }}
+      className="min-h-0 flex-1 overflow-auto rounded-xl p-3 font-mono text-xs leading-5 break-words whitespace-pre-wrap outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
     >
       {text}
     </pre>
@@ -101,10 +104,30 @@ function useCodeFrame(): React.HTMLAttributes<HTMLElement> & { "data-focus-visib
   };
 }
 
-/** The scrolling frame around rendered code. It takes focus so the code can be scrolled from the
- * keyboard, and keeps the code in its own reading direction under a right-to-left language. */
-function CodeFrame({ label, children }: { label: string; children: React.ReactNode }): React.ReactElement {
+/**
+ * The scrolling frame around rendered code. It takes focus so the code can be scrolled from the
+ * keyboard, and keeps the code in its own reading direction under a right-to-left language.
+ *
+ * It says it is loading until the renderer reports the subject's code drawn (`onDrawn`), not only
+ * while the renderer's module loads: the library draws nothing until its worker pool has started,
+ * which the pool does again each time the viewer opens, and a large file would otherwise stand blank
+ * for seconds.
+ */
+function CodeFrame({
+  label,
+  resetKey,
+  theme,
+  children,
+}: {
+  label: string;
+  resetKey: string;
+  theme: "light" | "dark";
+  children: (onDrawn: () => void) => React.ReactNode;
+}): React.ReactElement {
   const frame = useCodeFrame();
+  const [drawnFor, setDrawnFor] = useState<string>();
+  const onDrawn = useCallback(() => setDrawnFor(resetKey), [resetKey]);
+  const drawn = drawnFor === resetKey;
   return (
     <div
       dir="ltr"
@@ -112,11 +135,25 @@ function CodeFrame({ label, children }: { label: string; children: React.ReactNo
       role="region"
       aria-label={label}
       {...frame}
-      className="min-h-0 flex-1 overflow-auto rounded-xl outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
+      style={{ backgroundColor: CODE_THEMES[theme].background }}
+      className="relative min-h-0 flex-1 overflow-auto rounded-xl outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
     >
-      <Suspense fallback={<Loading />}>{children}</Suspense>
+      {/* Laid over the code rather than beside it, so taking it away does not lay out a large file
+          once more. */}
+      {!drawn && (
+        <div className="absolute inset-0 flex">
+          <Loading />
+        </div>
+      )}
+      <Suspense fallback={null}>{children(onDrawn)}</Suspense>
     </div>
   );
+}
+
+/** The line standing in for a change with nothing to draw: no patch, or a patch with no lines. */
+export function Unreadable(): React.ReactElement {
+  const t = useT();
+  return <p className="text-sm text-muted">{t("viewer.change.unreadable")}</p>;
 }
 
 export function Loading(): React.ReactElement {
@@ -149,22 +186,22 @@ export function CodeSurface({
     return (
       <>
         <Notice>{t("viewer.plain.large")}</Notice>
-        <PlainText text={text} label={label} />
+        <PlainText text={text} label={label} theme={theme} />
       </>
     );
   }
   const fallback = (
     <>
       <Notice>{t("viewer.plain.failed")}</Notice>
-      <PlainText text={text} label={label} />
+      <PlainText text={text} label={label} theme={theme} />
     </>
   );
   return (
     <>
       {plainFor === resetKey && <Notice>{t("viewer.plain.failed")}</Notice>}
       <RendererBoundary resetKey={resetKey} fallback={fallback}>
-        <CodeFrame label={label}>
-          <HighlightedFile name={name} text={text} theme={theme} onPlainChange={onPlainChange} />
+        <CodeFrame label={label} resetKey={resetKey} theme={theme}>
+          {(onDrawn) => <HighlightedFile name={name} text={text} theme={theme} onPlainChange={onPlainChange} onDrawn={onDrawn} />}
         </CodeFrame>
       </RendererBoundary>
     </>
@@ -229,17 +266,18 @@ export function DiffSurface({
   const asText = (reason: string) => (
     <>
       <Notice>{reason}</Notice>
-      <PlainText text={patch} label={label} />
+      <PlainText text={patch} label={label} theme={theme} />
     </>
   );
+  if (!hasHunks(patch)) return <Unreadable />;
   if (diffPlan(patch) === "patch") return asText(t("viewer.change.patchLarge"));
   const ending = marked.old && marked.new ? "viewer.change.noNewlineBoth" : marked.old ? "viewer.change.noNewlineOld" : marked.new ? "viewer.change.noNewlineNew" : undefined;
   return (
     <RendererBoundary resetKey={resetKey} fallback={asText(t("viewer.change.patchFailed"))}>
       {onLayoutChange && <LayoutToggle layout={layout} onLayoutChange={onLayoutChange} />}
       {ending && <Notice>{t(ending)}</Notice>}
-      <CodeFrame label={label}>
-        <RenderedDiff name={name} patch={marked.patch} layout={layout} theme={theme} />
+      <CodeFrame label={label} resetKey={resetKey} theme={theme}>
+        {(onDrawn) => <RenderedDiff name={name} patch={marked.patch} layout={layout} theme={theme} onDrawn={onDrawn} />}
       </CodeFrame>
     </RendererBoundary>
   );

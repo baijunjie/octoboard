@@ -2,17 +2,18 @@
 // lazily by `CodeSurface.tsx`, so the library and its grammars stay out of the startup bundle, and
 // nothing outside it sees a library type: callers hand it plain text and patches. The one thing
 // read from the library's rendered DOM elsewhere is `rendererDom.ts`, which cannot live here.
-import { getFiletypeFromFileName, preloadHighlighter, processFile, type FileContents, type FileDiffMetadata } from "@pierre/diffs";
+import { getFiletypeFromFileName, preloadHighlighter, processFile, type FileContents, type FileDiffMetadata, type PostRenderPhase } from "@pierre/diffs";
 import { File, FileDiff, WorkerPoolContext } from "@pierre/diffs/react";
 import { getOrCreateWorkerPoolSingleton, terminateWorkerPoolSingleton } from "@pierre/diffs/worker";
 import DiffsWorker from "@pierre/diffs/worker/worker.js?worker";
-import React, { memo, useEffect, useMemo, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { RENDER_BUDGETS } from "./budgets";
+import { CODE_THEMES } from "./codeTheme";
 
 // GitHub's high-contrast palettes: of the bundled themes measured, the ones whose every token
 // reaches WCAG AA's 4.5:1 on the code background in both appearances.
-const THEMES = { light: "github-light-high-contrast", dark: "github-dark-high-contrast" } as const;
+const THEMES = { light: CODE_THEMES.light.name, dark: CODE_THEMES.dark.name } as const;
 
 /**
  * Diff colours that keep every token at 4.5:1 and mark a change by more than colour. The library
@@ -100,6 +101,17 @@ function useLanguage(name: string): { lang: FileContents["lang"]; failed: boolea
   return result?.for === detected ? result : undefined;
 }
 
+/** The library's post-render callback, telling `onDrawn` each time code is in its DOM: the library
+ * also reports a render of an empty frame while its worker pool starts, which does not count. Stable
+ * for the life of the component, so it never changes the options object the library compares. */
+function useDrawnCallback(onDrawn: (() => void) | undefined): (node: HTMLElement, instance: unknown, phase: PostRenderPhase) => void {
+  const latest = useRef(onDrawn);
+  latest.current = onDrawn;
+  return useCallback((node, _instance, phase) => {
+    if (phase !== "unmount" && (node.shadowRoot ?? node).querySelector("[data-code]")) latest.current?.();
+  }, []);
+}
+
 export interface FileRenderProps {
   /** The file's name, which picks the grammar. */
   name: string;
@@ -109,12 +121,21 @@ export interface FileRenderProps {
    * load; the caller passes a new callback for each file, so a second file in the same failing
    * language is reported too. */
   onPlainChange?: (plain: boolean) => void;
+  /** Told once the library has put the file's code in its DOM, which can be seconds after it is
+   * handed the text while the worker pool starts. */
+  onDrawn?: () => void;
 }
 
 // Memoised, with every object handed to the library memoised too: the library compares its inputs
 // by reference, and a new one re-parses and redraws the whole file, which at the budget's size
 // holds the window for most of a second on any unrelated re-render above.
-export const HighlightedFile = memo(function HighlightedFile({ name, text, theme, onPlainChange }: FileRenderProps): React.ReactElement | null {
+export const HighlightedFile = memo(function HighlightedFile({
+  name,
+  text,
+  theme,
+  onPlainChange,
+  onDrawn,
+}: FileRenderProps): React.ReactElement | null {
   const language = useLanguage(name);
   const failed = language?.failed;
   useEffect(() => {
@@ -125,7 +146,8 @@ export const HighlightedFile = memo(function HighlightedFile({ name, text, theme
     () => (language ? { name, contents: text.endsWith("\n") ? text.slice(0, -1) : text, lang: language.lang } : undefined),
     [name, text, language?.lang],
   );
-  const options = useMemo(() => ({ ...BASE_OPTIONS, themeType: theme }), [theme]);
+  const onPostRender = useDrawnCallback(onDrawn);
+  const options = useMemo(() => ({ ...BASE_OPTIONS, themeType: theme, onPostRender }), [theme, onPostRender]);
   return (
     <WorkerPoolContext.Provider value={rendererPool()}>
       {file && <File file={file} options={options} disableWorkerPool={file.lang === "text"} />}
@@ -140,10 +162,18 @@ export interface DiffRenderProps {
   patch: string;
   layout: "unified" | "split";
   theme: "light" | "dark";
+  /** As `FileRenderProps.onDrawn`. */
+  onDrawn?: () => void;
 }
 
 /** A change rendered from its patch. Memoised for the same reason as `HighlightedFile`. */
-export const RenderedDiff = memo(function RenderedDiff({ name, patch, layout, theme }: DiffRenderProps): React.ReactElement | null {
+export const RenderedDiff = memo(function RenderedDiff({
+  name,
+  patch,
+  layout,
+  theme,
+  onDrawn,
+}: DiffRenderProps): React.ReactElement | null {
   const language = useLanguage(name);
   const lang = language?.lang;
   const fileDiff = useMemo<FileDiffMetadata | undefined>(() => {
@@ -153,6 +183,7 @@ export const RenderedDiff = memo(function RenderedDiff({ name, patch, layout, th
     if (!metadata) throw new Error("The patch holds no file change");
     return { ...metadata, lang };
   }, [patch, lang]);
+  const onPostRender = useDrawnCallback(onDrawn);
   const options = useMemo(
     () =>
       ({
@@ -163,8 +194,9 @@ export const RenderedDiff = memo(function RenderedDiff({ name, patch, layout, th
         hunkSeparators: "line-info-basic",
         lineDiffType: "word",
         unsafeCSS: diffCss(theme),
+        onPostRender,
       }) as const,
-    [theme, layout],
+    [theme, layout, onPostRender],
   );
   return (
     <WorkerPoolContext.Provider value={rendererPool()}>

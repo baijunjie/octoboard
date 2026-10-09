@@ -148,8 +148,8 @@ same viewer; what it shows of a change is in "Opening a change" in `docs/product
   never run and nothing it refers to is fetched. An image that cannot be decoded says so; an SVG that cannot be
   decoded is shown as its text instead.
 - **Any other binary file** says it cannot be displayed, with its size.
-- **While a file is being read** the viewer says it is loading. It never shows another file's content under this file's
-  name, not even for a moment while moving between files.
+- **While a file is being read**, and until its code is drawn, the viewer says it is loading. It never shows another
+  file's content under this file's name, not even for a moment while moving between files.
 - **A file that cannot be shown** says why (see "Errors" below).
 
 ### Selecting and copying
@@ -199,7 +199,8 @@ changes on disk:
 
 A read that finds the file unchanged leaves what is shown as it is. When the connection to the daemon is lost, the
 content shown stays until the connection is back, and then the file is read again; a file that had nothing on screen
-yet says the connection was lost and that it is read again once it is back.
+yet says, in plain text rather than as an error, that the connection was lost and that it is read again once the
+connection is back.
 
 ## Errors
 

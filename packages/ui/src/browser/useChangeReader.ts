@@ -101,9 +101,10 @@ type Opened = { item: ChangeItem; origin: ChangeOrigin };
  * through changes quickly cancels the reads left behind in the daemon as well; a reply is taken
  * only for the latest read of the change shown, and only for the worktree or the two commits it was
  * asked of. A change in conflict is no two-sided change, and is shown as its file on disk with its
- * conflict markers. A failed read keeps what the list named of the change — its status and paths —
- * beside why; one lost with the connection keeps what was shown until the reconnect, which reads
- * it again from the same place.
+ * conflict markers. A read that fails for another reason than the connection keeps what the list
+ * named of the change — its status and paths — beside why; one lost with the connection keeps what
+ * was shown until the reconnect, which reads it again from the same place, and says only that the
+ * connection is lost when nothing was shown yet.
  *
  * The subject's key is the project, where the change is read from (the worktree, or the two
  * commits) and the change's own key (its group and both sides), so a file staged and changed again
@@ -178,10 +179,16 @@ export function useChangeReader(project: string): ChangeReader {
         const failure = browseFailure(t, language, err, state, root && abbreviateHome(root, state.homeDir));
         if (failure.kind === "superseded") return;
         if (failure.kind === "changed" && attempt < CHANGED_RETRIES) return read(item, origin, attempt + 1);
-        const message =
-          failure.kind === "failed" ? failure.message : failure.kind === "disconnected" ? t("browser.error.disconnected") : t("git.error.changeChanging");
-        setShown((held) => {
-          if (failure.kind === "disconnected" && held?.key === key && !held.failed && held.content.state !== "loading") return held;
+        if (failure.kind === "disconnected") {
+          setShown((held) =>
+            held?.key === key && !held.failed && held.content.state !== "loading"
+              ? held
+              : { key, failed: { changing: false }, content: { state: "disconnected", what: "change" } },
+          );
+          return;
+        }
+        const message = failure.kind === "failed" ? failure.message : t("git.error.changeChanging");
+        setShown(() => {
           const failed = { changing: failure.kind === "changed" };
           if (entry.group === "conflicted") return { key, failed, content: { state: "conflict", conflict: conflictText(t, entry.conflict), message } };
           return { key, failed, content: { state: "change", change: { old: listedSide(entry.old), new: listedSide(entry.new), unavailable: message } } };

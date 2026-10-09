@@ -1,17 +1,30 @@
 import { Toast, toast, type ToastContentValue } from "@heroui/react";
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import type { QueuedToast } from "react-aria-components";
 
 import { t } from "../i18n/language";
 import { useT } from "../i18n/react";
 import { sessionLocation } from "../sessionLabel";
 import { useDaemon, type ToastRequest } from "../store";
+import { TOAST_BREAKPOINT } from "./toastGeometry";
 import { TitledControl } from "./TitledControl";
 
 /** How long a toast stays before it dismisses itself. An error gets longer: it says something went
  * wrong, where a notice only says something happened. */
 const NOTICE_DURATION_MS = 5000;
 const ERROR_DURATION_MS = 8000;
+
+/** Matches a window at least as wide as HeroUI's toast breakpoint (its `sm:`); the narrow window is
+ * the one it does not match. */
+const WIDE_QUERY = `(min-width: ${TOAST_BREAKPOINT}px)`;
+
+function subscribeNarrow(onChange: () => void): () => void {
+  const query = window.matchMedia(WIDE_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+const isNarrow = () => !window.matchMedia(WIDE_QUERY).matches;
 
 /** The toasts on screen, by what makes two of them identical (kind, message, session), to the
  * queue's key for each. Module-level because the queue is: the stack unmounts and remounts when
@@ -21,13 +34,14 @@ const shownToasts = new Map<string, string>();
 /**
  * Surfaces the daemon's errors and notices, and what callers hand to `toastError`, in HeroUI's own
  * toast stack (`Toast.Provider` over its queue), floating over the bottom end corner (above the
- * connection banner while that is shown, see `style.css`) so it does not move the layout. An error
- * is the danger variant; a notice, which is something the user has to know rather than something
- * that went wrong, is the accent one. The stack dismisses toasts by itself
- * after a few seconds and pauses while the pointer is over it or focus is inside it, which is what
- * WCAG 2.2.1 (timing adjustable) asks for. The stack's own Alt+T hotkey is off (`hotkey={[]}`): it
- * would swallow Option+T typed into the terminal and pull focus into the stack. The region is
- * marked `data-region="toast"`, which makes it a stop of the window's F6 cycle while a toast is shown.
+ * connection banner while that is shown, see `style.css`) or, in a window narrower than 640 px,
+ * over the top centre (below the top bar), so it does not move the layout. An error is the danger
+ * variant; a notice, which is something the user has to know rather than something that went wrong,
+ * is the accent one. The stack dismisses toasts by itself after a few seconds and pauses while the
+ * pointer is over it or focus is inside it, which is what WCAG 2.2.1 (timing adjustable) asks for.
+ * The stack's own Alt+T hotkey is off (`hotkey={[]}`): it would swallow Option+T typed into the
+ * terminal and pull focus into the stack. The region is marked `data-region="toast"`, which makes it
+ * a stop of the window's F6 cycle while a toast is shown.
  *
  * A toast that carries a session is titled with where that session is and carries the message as
  * its description: the daemon's own messages say "this session" without naming it, since it has no
@@ -56,11 +70,18 @@ const shownToasts = new Map<string, string>();
  * to `<body>`, so its toast-layer z-index is not capped by a stacking context somewhere in the
  * app's tree; react-aria already keeps it out of the set made inert while a dialog or menu is open.
  *
- * The stack always sits at the bottom end corner, so it never moves with what is open; only the
- * connection banner lifts it, riding above the banner while that is shown (`style.css`). The top of
- * the window is where the controls are — the top bar, the report panel's pager, the settings
- * dialog's end column and its close button — while the bottom end corner is terminal or page
- * content, or the settings dialog's empty padding; the smaller dialogs are centred, well clear of it.
+ * In a narrow window the stack goes to the top instead: there the footers of dialogs and the
+ * connection banner span the width, and the on-screen keyboard of a phone, which the terminal is
+ * typed into, covers the bottom edge. A toast then slides in from above, and the newest is still at
+ * the front.
+ *
+ * Otherwise the stack sits at the bottom end corner and moves only for what would otherwise sit
+ * under it: it rides above the connection banner while that is shown, and above the footer of an
+ * open dialog whose footer reaches that corner, the file viewer's Previous and Next (`style.css`,
+ * `useToastClearance`). The top of the window is where the controls are — the top bar, the report
+ * panel's pager, the settings dialog's end column and its close button — while the bottom end corner
+ * is terminal or page content, or the settings dialog's empty padding; the smaller dialogs are
+ * centred, well clear of it, and leave the stack where it is.
  */
 export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.ReactElement {
   const { store, onToast } = useDaemon();
@@ -155,8 +176,10 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
     }
   }, []);
 
+  const narrow = useSyncExternalStore(subscribeNarrow, isNarrow);
+
   return (
-    <Toast.Provider ref={keepFocus} hotkey={[]} placement="bottom end">
+    <Toast.Provider ref={keepFocus} hotkey={[]} placement={narrow ? "top" : "bottom end"}>
       {renderToast}
     </Toast.Provider>
   );
