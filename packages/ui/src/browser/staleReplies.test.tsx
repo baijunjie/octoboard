@@ -3,9 +3,13 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it } from "vitest";
 
-import type { BrowseEntry, Event, FileContent, RequestBody } from "../protocol";
+import { DaemonRequestError } from "../daemon-client";
+import type { BrowseEntry, ChangeGroup, Event, FileContent, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { changeItem, type ChangeItem } from "./changes";
 import type { DirListing } from "./tree";
+import { useChangeList, type ChangeList } from "./useChangeList";
+import { useChangeReader, type ChangeReader } from "./useChangeReader";
 import { useDirectoryListings, type DirectoryListings } from "./useDirectoryListings";
 import { useFileReader, type FileReader } from "./useFileReader";
 
@@ -129,4 +133,115 @@ it("reads the file again after a reconnect, keeping what is shown through a lost
   await act(async () => pending.splice(0)[0].resolve(file("a.ts", "a")));
   expect(hook.current().subject?.content).toBe(shown);
   expect(hook.current().shown).toEqual({ state: "file", version: "1" });
+});
+
+/** Mounts `use` over arguments the test changes later, as a parent re-rendering with new props does. */
+function mountWith<A, T>(daemon: Daemon, initial: A, use: (args: A) => T): { current: () => T; set: (args: A) => void } {
+  let latest: T;
+  let args = initial;
+  const Probe = () => {
+    latest = use(args);
+    return null;
+  };
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  const render = () =>
+    act(() =>
+      root.render(
+        <DaemonProvider value={daemon}>
+          <Probe />
+        </DaemonProvider>,
+      ),
+    );
+  render();
+  return {
+    current: () => latest,
+    set: (next) => {
+      args = next;
+      render();
+    },
+  };
+}
+
+const changes = (worktree: string | null, path: string): Event => ({
+  type: "project_changes",
+  project: "p",
+  worktree,
+  head: "c1",
+  changes: [{ group: "untracked", old: { state: "absent" }, new: { state: "present", path, kind: "file", source: { kind: "live", root_id: "r", version: "1" } } }],
+  complete: true,
+});
+const listed = (list: ChangeList) => (list.state === "loaded" ? list.items.map((item) => item.path) : list.state);
+
+it("shows the changes of the worktree chosen last, whichever worktree's list answers last", async () => {
+  const { daemon, pending } = controlledDaemon();
+  const hook = mountWith(daemon, undefined as string | undefined, (worktree) => useChangeList("p", worktree, true));
+  hook.set("side");
+  const [own, side] = pending.splice(0);
+  expect(side.body).toMatchObject({ type: "list_project_changes", worktree: "side" });
+  await act(async () => side.resolve(changes("side", "side.txt")));
+  await act(async () => own.resolve(changes(null, "own.txt")));
+  expect(listed(hook.current().list)).toEqual(["side.txt"]);
+});
+
+it("keeps at most two Git list requests out in the window, sending the next as one finishes", async () => {
+  const { daemon, pending } = controlledDaemon();
+  for (const project of ["a", "b", "c"]) mount(daemon, () => useChangeList(project, undefined, true));
+  expect(pending.map((p) => "project" in p.body && p.body.project)).toEqual(["a", "b"]);
+  await act(async () => pending.splice(0, 1)[0].resolve(changes(null, "a.txt")));
+  expect(pending.map((p) => "project" in p.body && p.body.project)).toEqual(["b", "c"]);
+});
+
+const item = (path: string, group: ChangeGroup = "unstaged"): ChangeItem =>
+  changeItem({ group, old: { state: "present", path, kind: "file", source: { kind: "index", worktree: "w", blob: "b" } }, new: { state: "absent" } });
+const change = (path: string, patch: string): Event => ({
+  type: "project_change",
+  project: "p",
+  worktree: null,
+  group: "unstaged",
+  head: null,
+  old: { state: "present", path, kind: "file", source: { kind: "index", worktree: "w", blob: "b" }, file: null },
+  new: { state: "absent" },
+  patch: { size: patch.length, kind: "text", media_type: null, text: patch, data: null },
+});
+
+it("shows the change moved to loading until its own reply, and never a change of another group under its key", async () => {
+  const { daemon, pending } = controlledDaemon();
+  const hook = mount<ChangeReader>(daemon, () => useChangeReader("p"));
+  act(() => hook.current().open(item("a.ts"), undefined));
+  act(() => hook.current().open(item("b.ts"), undefined));
+  const [readA, readB] = pending.splice(0);
+  expect(readB.body).toMatchObject({ type: "read_project_change", slot: "viewer", change: { group: "unstaged", old: { path: "b.ts" } } });
+  await act(async () => readA.resolve(change("a.ts", "-a\n")));
+  expect(hook.current().subject).toMatchObject({ path: "b.ts", content: { state: "loading" } });
+  await act(async () => readB.resolve(change("b.ts", "-b\n")));
+  expect(hook.current().subject).toMatchObject({ path: "b.ts", content: { state: "change", change: { patch: "-b\n" } } });
+  const unstagedKey = hook.current().subject?.key;
+  act(() => hook.current().open(item("b.ts", "staged"), undefined));
+  expect(hook.current().subject?.key).not.toBe(unstagedKey);
+  expect(hook.current().subject?.content).toEqual({ state: "loading" });
+});
+
+it("keeps a failed change list on screen through a background refresh, and shows loading when asked again", async () => {
+  const { daemon, pending } = controlledDaemon();
+  const hook = mount(daemon, () => useChangeList("p", undefined, true));
+  const failed = { code: "git_failed", params: { detail: "boom" }, message: "boom" };
+  await act(async () => pending.splice(0)[0].reject(new DaemonRequestError(failed.message, failed.code, failed.params)));
+  expect(hook.current().list).toMatchObject({ state: "error", refreshing: false });
+  // A reconnect asks again in the background: the failure, and its Try again, stay.
+  act(() => daemon.store.setState((state) => ({ snapshotEpoch: state.snapshotEpoch + 1 })));
+  expect(hook.current().list).toMatchObject({ state: "error", refreshing: true });
+  await act(async () => pending.splice(0)[0].reject(new DaemonRequestError(failed.message, failed.code, failed.params)));
+  act(() => hook.current().refresh());
+  expect(hook.current().list).toEqual({ state: "loading" });
+});
+
+it("sends a request replacing one in its own slot at once, past the window's bound", async () => {
+  const { daemon, pending } = controlledDaemon();
+  const a = mount(daemon, () => useChangeList("a", undefined, true));
+  mount(daemon, () => useChangeList("b", undefined, true));
+  mount(daemon, () => useChangeList("c", undefined, true));
+  expect(pending.map((p) => "project" in p.body && p.body.project)).toEqual(["a", "b"]);
+  act(() => a.current().refresh());
+  expect(pending.map((p) => "project" in p.body && p.body.project)).toEqual(["a", "b", "a"]);
 });

@@ -58,22 +58,19 @@ right-pane space.
 1. 01 Source identities and bounded read contracts (closed)
 2. 02 Validate the read-only renderers (closed)
 3. 03 Project file browsing and navigation (closed)
-4. [Uncommitted changes across worktrees](04-worktree-changes.md) — add scoped worktree selection and staged,
-   unstaged and untracked inspection to the usable project pane.
+4. 04 Uncommitted changes across worktrees (closed)
 5. [Local branch comparison](05-branch-comparison.md) — compare selected branch tips through the same bounded,
    source-aware review surface.
 6. [Final confirmation](06-final-confirmation.md) — checks that could not be run when their milestone closed and that
    nothing later depends on.
 
-Each milestone is independently verifiable and mergeable after its dependencies. Milestones 04 and 05 extend the
-working project pane rather than deferring panel integration until after Git review is built.
+Each milestone is independently verifiable and mergeable after its dependencies. Milestone 05 extends the working
+project pane's Git mode rather than building a review surface of its own.
 
 ## Open
 
 These choices do not block the milestone split, but must be resolved before the named milestone is complete:
 
-- **04:** whether diff navigation crosses staged/unstaged groups. A path in both groups always has two distinct
-  change identities, regardless of that interaction choice.
 
 ## Notes for the developer
 

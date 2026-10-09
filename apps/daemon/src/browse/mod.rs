@@ -1,6 +1,7 @@
 //! Browsing a project's files and their Git versions, for the browse requests in
 //! `apps/daemon/PROTOCOL.md`'s "Browsing a project": where a project's files are (`source`), the
-//! files on disk (`live`), the files in Git (`blob`, through the isolated invocation in `git`),
+//! files on disk (`live`), the files in Git (`blob`, through the isolated invocation in `git`), a
+//! worktree's uncommitted changes and one change's diff (`changes`),
 //! how a path travels on the wire (`wire_path`), the limits all of it is held to (`budget`), and
 //! the per-connection lane its replies take back to the client (`lane`).
 //!
@@ -9,12 +10,15 @@
 
 pub mod blob;
 pub mod budget;
+pub mod changes;
 pub mod git;
 pub mod lane;
 pub mod live;
 pub mod source;
 pub mod wire_path;
 
+#[cfg(test)]
+mod change_tests;
 #[cfg(test)]
 mod tests;
 
@@ -185,6 +189,38 @@ pub fn serve(
                 file: file_content(bytes),
             })
         }
+        BrowseBody::ListProjectChanges { project, worktree } => {
+            let record = stored_project(state, &project)?;
+            let at = locate(&record, worktree.as_deref(), &git, cancel)?;
+            let list = changes::list(git.env()?, &at, cancel)?;
+            Ok(Event::ProjectChanges {
+                id,
+                project,
+                worktree,
+                head: list.head,
+                changes: list.changes,
+                complete: list.complete,
+            })
+        }
+        BrowseBody::ReadProjectChange {
+            project,
+            worktree,
+            change,
+        } => {
+            let record = stored_project(state, &project)?;
+            let at = locate(&record, worktree.as_deref(), &git, cancel)?;
+            let read = changes::read(git.env()?, &at, &change, cancel)?;
+            Ok(Event::ProjectChange {
+                id,
+                project,
+                worktree,
+                group: change.group,
+                head: read.head,
+                old: Box::new(read.old),
+                new: Box::new(read.new),
+                patch: read.patch.map(file_content),
+            })
+        }
     }
 }
 
@@ -293,6 +329,42 @@ fn scope_for(
     source::scope_root(&found.root, &repository.scope)
 }
 
+/// The repository a Git read of a project works in and the worktree it reads: the one holding the
+/// project's directory, or — with `worktree` — that worktree of the same repository, checked
+/// against it now.
+pub struct Located {
+    pub repository: Repository,
+    /// The worktree's id, as `project_source` reports it.
+    pub worktree: String,
+    /// The worktree's root directory.
+    pub root: std::path::PathBuf,
+}
+
+fn locate(
+    record: &Project,
+    worktree: Option<&str>,
+    git: &Git,
+    cancel: &AtomicBool,
+) -> Result<Located> {
+    let root = source::resolve_root(&record.path)?;
+    let repository = repository(&root, &record.id, git, cancel)?;
+    let (worktree, root) = match worktree {
+        None => (
+            repository.worktree.clone(),
+            repository.worktree_root.clone(),
+        ),
+        Some(id) => {
+            let found = source::find_worktree(git.env()?, &repository, id, cancel)?;
+            (found.id, found.root)
+        }
+    };
+    Ok(Located {
+        repository,
+        worktree,
+        root,
+    })
+}
+
 /// The sources `read_from_git` reads: [`ReadFrom`] without the file on disk.
 enum GitRead {
     Index,
@@ -314,19 +386,12 @@ fn read_from_git(
     if path.is_root() {
         return Err(live::unsupported(path, "directory"));
     }
-    let root = source::resolve_root(&record.path)?;
-    let repository = repository(&root, &record.id, git, cancel)?;
+    let Located {
+        repository,
+        worktree: worktree_id,
+        root: worktree_root,
+    } = locate(record, worktree, git, cancel)?;
     let env = git.env()?;
-    let (worktree_id, worktree_root) = match worktree {
-        None => (
-            repository.worktree.clone(),
-            repository.worktree_root.clone(),
-        ),
-        Some(id) => {
-            let found = source::find_worktree(env, &repository, id, cancel)?;
-            (found.id, found.root)
-        }
-    };
     let entry = blob::Entry {
         scope: &repository.scope,
         path,
@@ -380,7 +445,7 @@ pub(crate) fn json_escaped_len(text: &[u8]) -> usize {
 /// doubles it — so a file of control characters, which escaping would sextuple, travels as
 /// binary — and is sent as a string; anything else is base64-encoded and never decoded as text
 /// here. That doubling is the ceiling the reply's memory reservation is sized by.
-fn file_content(bytes: Vec<u8>) -> FileContent {
+pub(crate) fn file_content(bytes: Vec<u8>) -> FileContent {
     let size = bytes.len() as u64;
     let textual = !bytes.contains(&0) && json_escaped_len(&bytes) <= 2 * bytes.len();
     let bytes = if textual {

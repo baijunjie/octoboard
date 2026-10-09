@@ -35,9 +35,9 @@ rail" in `docs/product/sidebar.md`).
 ## Names too long for their space
 
 A single-line name or label too long for its space — a sidebar row's name, the top bar's breadcrumb, a session listed
-in a confirmation, the report panel's page timestamp, a name in a project pane's file tree or its header — fades out
-where it is cut off rather than ending in an ellipsis. A name, unlike the timestamp, then has its full text as its
-tooltip.
+in a confirmation, the report panel's page timestamp, a name in a project pane's file tree or its header, a name or
+what follows it in the Git mode's change list, a worktree's path in its worktree selector — fades out where it is cut
+off rather than ending in an ellipsis. A name, unlike the timestamp, then has its full text as its tooltip.
 
 **While the pointer is over it, such a label runs as a marquee**, so all of it can be read:
 

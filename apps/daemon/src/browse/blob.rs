@@ -149,6 +149,98 @@ pub fn read_commit(
     Err(not_found(entry.path))
 }
 
+/// One path's entry in a worktree's index: its mode, its object id and its stage (0 for an entry
+/// with no conflict), as `ls-files --stage` writes them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IndexEntry {
+    pub path: Vec<u8>,
+    pub mode: Vec<u8>,
+    pub oid: String,
+    pub stage: Vec<u8>,
+}
+
+/// The index entries of exactly `paths` (relative to the repository's root) in the worktree at
+/// `root`, in the index's order; a path with no entry has none here, and nothing below a path is
+/// listed even where the index holds a directory there.
+pub fn index_entries(
+    env: &GitEnv,
+    root: &Path,
+    paths: &[&[u8]],
+    cancel: &AtomicBool,
+) -> Result<Vec<IndexEntry>> {
+    let args: &[&[u8]] = &[b"--stage", b"-z"];
+    let limit = budget::GIT_METADATA_STDOUT;
+    let stdout = env
+        .run_exact(root, "ls-files", args, paths, limit, cancel)
+        .map_err(git_error)?;
+    let mut entries = Vec::new();
+    for record in stdout.split(|&b| b == 0).filter(|r| !r.is_empty()) {
+        // `<mode> <oid> <stage>\t<path>`
+        let Some(tab) = record.iter().position(|&b| b == b'\t') else {
+            continue;
+        };
+        let path = &record[tab + 1..];
+        if !paths.contains(&path) {
+            continue;
+        }
+        if let [mode, oid, stage] = record[..tab].split(|&b| b == b' ').collect::<Vec<_>>()[..] {
+            entries.push(IndexEntry {
+                path: path.to_vec(),
+                mode: mode.to_vec(),
+                oid: String::from_utf8_lossy(oid).into_owned(),
+                stage: stage.to_vec(),
+            });
+        }
+    }
+    Ok(entries)
+}
+
+/// The mode and object id commit `commit` holds at exactly `path` (relative to the repository's
+/// root), or `None` when it holds nothing there.
+pub fn tree_entry(
+    env: &GitEnv,
+    root: &Path,
+    commit: &str,
+    path: &[u8],
+    cancel: &AtomicBool,
+) -> Result<Option<(Vec<u8>, String)>> {
+    let args: &[&[u8]] = &[b"-z", b"--full-tree", commit.as_bytes(), b"--", path];
+    let stdout = env
+        .run(root, "ls-tree", args, budget::GIT_METADATA_STDOUT, cancel)
+        .map_err(git_error)?;
+    for record in stdout.split(|&b| b == 0).filter(|r| !r.is_empty()) {
+        // `<mode> <type> <oid>\t<path>`
+        let Some(tab) = record.iter().position(|&b| b == b'\t') else {
+            continue;
+        };
+        if &record[tab + 1..] != path {
+            continue;
+        }
+        if let [mode, _, oid] = record[..tab].split(|&b| b == b' ').collect::<Vec<_>>()[..] {
+            return Ok(Some((
+                mode.to_vec(),
+                String::from_utf8_lossy(oid).into_owned(),
+            )));
+        }
+    }
+    Ok(None)
+}
+
+/// The bytes of blob `oid`, refused past the file budget.
+pub fn read_blob(env: &GitEnv, root: &Path, oid: &str, cancel: &AtomicBool) -> Result<Vec<u8>> {
+    let stdout = env
+        .run(
+            root,
+            "cat-file",
+            &[b"-s", oid.as_bytes()],
+            budget::GIT_METADATA_STDOUT,
+            cancel,
+        )
+        .map_err(git_error)?;
+    let size = parse_size(&stdout)?;
+    Ok(read_object(env, root, oid.to_string(), size, cancel)?.bytes)
+}
+
 /// Refuses a link or a submodule entry: their "content" is not a file body.
 fn check_mode(path: &RelPath, mode: &[u8]) -> Result<()> {
     match mode {

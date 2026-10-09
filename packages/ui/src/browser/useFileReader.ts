@@ -10,8 +10,9 @@ import type { ShownFile } from "./tree";
 /** How many times a read is asked again when the file changed while it was read. */
 const CHANGED_RETRIES = 2;
 
-/** The one slot every viewer read goes in: a window shows one file at a time, whichever project it
- * is in, so a read left behind by a viewer of another project is cancelled too. */
+/** The one slot every viewer read goes in, the Git mode's change reads included
+ * (`useChangeReader.ts`): a window shows one subject at a time, whichever project and mode it is
+ * from, so a read left behind by a viewer of another project is cancelled too. */
 const READ_SLOT = "viewer";
 
 export interface FileReader {

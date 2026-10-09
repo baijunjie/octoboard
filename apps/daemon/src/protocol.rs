@@ -487,6 +487,117 @@ pub struct FileContent {
     pub data: Option<String>,
 }
 
+/// Which of a worktree's uncommitted changes an entry is: `HEAD` against the index (`staged`), the
+/// index against the files on disk (`unstaged`), or a file on disk Git does not track and does not
+/// ignore (`untracked`). Part of a change's identity, so one path can be a change in two groups.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChangeGroup {
+    Staged,
+    Unstaged,
+    Untracked,
+}
+
+/// What one side of a change is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SideKind {
+    File,
+    Symlink,
+    Submodule,
+}
+
+/// One side of a change in a change listing. See "Changes and comparisons" in
+/// `apps/daemon/PROTOCOL.md`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum ChangeSide {
+    /// `path` is a wire path relative to the project's directory; `source` the version listed.
+    Present {
+        path: String,
+        kind: SideKind,
+        source: ContentSource,
+    },
+    /// No such side: the old side of an addition, the new side of a deletion.
+    Absent,
+    /// A side outside the project's scope; `repository_path` is a wire path relative to the
+    /// repository's root, for display only.
+    OutOfScope { repository_path: String },
+}
+
+/// How a path is in conflict, as `git status` tells the stages apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConflictKind {
+    BothModified,
+    BothAdded,
+    BothDeleted,
+    AddedByUs,
+    AddedByThem,
+    DeletedByUs,
+    DeletedByThem,
+}
+
+/// One entry of a change listing: a change between two sides, or a path in conflict, which is
+/// not a two-sided change at all.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "group", rename_all = "snake_case")]
+pub enum ChangeEntry {
+    Staged {
+        old: ChangeSide,
+        new: ChangeSide,
+    },
+    Unstaged {
+        old: ChangeSide,
+        new: ChangeSide,
+    },
+    Untracked {
+        old: ChangeSide,
+        new: ChangeSide,
+    },
+    /// `path` is a wire path relative to the project's directory.
+    Conflicted {
+        path: String,
+        conflict: ConflictKind,
+    },
+}
+
+/// How a `read_project_change` names one side of the change to read.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum SideRef {
+    /// `path` is a wire path relative to the project's directory.
+    Present {
+        path: String,
+    },
+    Absent,
+    OutOfScope,
+}
+
+/// The change a `read_project_change` reads: its group and its two sides, as the listing gave them.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct ChangeRef {
+    pub group: ChangeGroup,
+    pub old: SideRef,
+    pub new: SideRef,
+}
+
+/// One side of a change as `read_project_change` read it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum SideRead {
+    /// `file` is the side's body, when the reply carries it: only a file side's, and only when no
+    /// patch shows the change's content (a binary change, a side alone).
+    Present {
+        path: String,
+        kind: SideKind,
+        source: ContentSource,
+        file: Option<FileContent>,
+    },
+    Absent,
+    OutOfScope,
+}
+
 /// One browse request frame: the envelope's id, the optional slot a newer request supersedes an
 /// older one in, and the request itself. Kept apart from [`Request`] because these are served
 /// under their own budgets and on their own outbound lane — see "Browsing a project" in
@@ -506,6 +617,8 @@ pub const BROWSE_REQUEST_TYPES: &[&str] = &[
     "get_project_source",
     "list_project_dir",
     "read_project_file",
+    "list_project_changes",
+    "read_project_change",
 ];
 
 #[derive(Debug, Deserialize)]
@@ -527,6 +640,17 @@ pub enum BrowseBody {
         path: String,
         #[serde(default)]
         from: ReadFrom,
+    },
+    ListProjectChanges {
+        project: String,
+        #[serde(default)]
+        worktree: Option<String>,
+    },
+    ReadProjectChange {
+        project: String,
+        #[serde(default)]
+        worktree: Option<String>,
+        change: ChangeRef,
     },
 }
 
@@ -887,6 +1011,30 @@ pub enum Event {
         source: ContentSource,
         file: FileContent,
     },
+    /// The reply to `list_project_changes`. `head` is the commit the staged changes are against,
+    /// `null` before the first commit; `complete` is false when the list was cut at a budget.
+    ProjectChanges {
+        id: Option<String>,
+        project: String,
+        worktree: Option<String>,
+        head: Option<String>,
+        changes: Vec<ChangeEntry>,
+        complete: bool,
+    },
+    /// The reply to `read_project_change`. `head` is the commit a staged change was read against
+    /// (`null` before the first commit, and for the other groups); `patch` is the change's unified
+    /// patch as `git` writes it, `null` when the reply makes none.
+    ProjectChange {
+        id: Option<String>,
+        project: String,
+        worktree: Option<String>,
+        group: ChangeGroup,
+        head: Option<String>,
+        // Boxed: two sides with their bodies would make every `Event` this large.
+        old: Box<SideRead>,
+        new: Box<SideRead>,
+        patch: Option<FileContent>,
+    },
     Ack {
         id: Option<String>,
     },
@@ -1185,6 +1333,8 @@ pub mod error_code {
     pub const INVALID_COMMIT: &str = "invalid_commit";
     pub const UNKNOWN_COMMIT: &str = "unknown_commit";
     pub const GIT_FAILED: &str = "git_failed";
+    /// A `read_project_change` whose change names no side its group can read.
+    pub const INVALID_CHANGE: &str = "invalid_change";
     /// A browse request was given up because a newer one took its slot. A client shows nothing.
     pub const REQUEST_SUPERSEDED: &str = "request_superseded";
 }

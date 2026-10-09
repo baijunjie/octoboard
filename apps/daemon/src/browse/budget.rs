@@ -35,6 +35,37 @@ pub const GIT_STDERR: usize = 64 * 1024;
 /// lock), not a network allowance.
 pub const GIT_READ_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// The most entries one change listing carries before it is cut and marked incomplete. The largest
+/// commit measured across the same projects changed 704 files and 99 % changed under 170; a
+/// worktree's pending changes are smaller still, so this is reached only by something like an
+/// untracked dependency directory nobody ignored.
+pub const MAX_CHANGE_ENTRIES: usize = 10_000;
+
+/// The most path bytes, as sent on the wire, one change listing carries before it is cut and marked
+/// incomplete — the bound that holds when the entries are few but their paths are long.
+pub const MAX_CHANGE_PATH_BYTES: usize = 2 * 1024 * 1024;
+
+/// What one change listing entry takes beyond its paths, counted generously as JSON writes it: two
+/// sides, each with its kind and a source naming a commit, a worktree, a directory or a version and
+/// an object id (64 hex digits in a SHA-256 repository).
+pub const CHANGE_ENTRY_BYTES: usize = 768;
+
+/// The most stdout the `git status` behind a change listing may print. It covers the whole
+/// worktree, since a rename into a project's directory is only found against the rest of the
+/// repository; a record is about 120 bytes plus its path, so this holds tens of thousands of
+/// changes. Past it the listing is refused rather than built from part of the output.
+pub const CHANGE_STATUS_STDOUT: usize = 8 * 1024 * 1024;
+
+/// The largest patch one change's diff returns. 99 % of the measured commits' whole patches were
+/// under about 1.2 MB, so one file's patch under this is the overwhelming case; a larger one is
+/// refused, never cut, since part of a patch is not the change.
+pub const MAX_PATCH_BYTES: usize = 4 * 1024 * 1024;
+
+/// The most a patch may be when a diff reply also carries the bodies of both sides: only a patch
+/// with no content in it — a binary change's, which `git` writes as one line — comes with bodies,
+/// so this is room for its header lines and nothing else.
+pub const BODIES_PATCH_BYTES: usize = 64 * 1024;
+
 /// How many browse reads run at once across the whole daemon, each one a blocking thread doing
 /// file I/O or waiting on one `git`. Enough for a viewer, its neighbour and a couple of directory
 /// expansions in parallel; anything past it waits its turn. A file read has no deadline of its
@@ -62,6 +93,16 @@ pub const READ_RESERVATION: usize = 3 * MAX_FILE_BYTES + 64 * 1024;
 /// the JSON around them, under 200 bytes) likewise.
 pub const LISTING_RESERVATION: usize = 2 * (MAX_LISTING_NAME_BYTES + MAX_DIR_ENTRIES * 200);
 
+/// What a change listing reserves: the `git status` output while it is parsed, and its entries at
+/// [`MAX_CHANGE_ENTRIES`] with [`MAX_CHANGE_PATH_BYTES`] of paths, held as built and as serialized.
+pub const CHANGE_LIST_RESERVATION: usize =
+    CHANGE_STATUS_STDOUT + 2 * (MAX_CHANGE_PATH_BYTES + MAX_CHANGE_ENTRIES * CHANGE_ENTRY_BYTES);
+
+/// What one change's diff reserves: its worst case is two bodies at their worst, each as a file
+/// read reserves, beside a patch of at most [`BODIES_PATCH_BYTES`] held as read and serialized; a
+/// text patch alone, at most [`MAX_PATCH_BYTES`], is held no more than a file body is.
+pub const DIFF_RESERVATION: usize = 2 * READ_RESERVATION + 3 * BODIES_PATCH_BYTES;
+
 /// The part of [`MAX_RETAINED_BYTES`] one connection may hold: enough for
 /// [`MAX_CONCURRENT_READS`] file reads at their worst at once, so one window gets every read the
 /// daemon runs at a time, while a client that stops reading its socket still leaves the rest to
@@ -75,4 +116,7 @@ pub const MAX_RETAINED_BYTES: usize = 2 * MAX_RETAINED_PER_CONNECTION;
 
 const _: () = assert!(LISTING_RESERVATION <= READ_RESERVATION);
 const _: () = assert!(READ_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
+const _: () = assert!(CHANGE_LIST_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
+const _: () = assert!(DIFF_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
+const _: () = assert!(MAX_PATCH_BYTES <= MAX_FILE_BYTES);
 const _: () = assert!(MAX_RETAINED_PER_CONNECTION <= MAX_RETAINED_BYTES);

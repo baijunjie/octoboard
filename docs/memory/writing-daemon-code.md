@@ -50,6 +50,20 @@ define them), and run it through `subprocess::run_with_timeout` — or `subproce
 needs a ceiling or it must be cancellable — rather than `Command::output`. The deadline matters on its own: it kills
 the whole process group, not the direct child, which is what also reaps the `ssh` that `git` forked.
 
+## A `git` read in a user's repository must be kept from rewriting the index
+
+Porcelain `git status` and `git diff` are not read-only: when a tracked file's timestamps moved but its content did
+not, both refresh the stat information and rewrite `.git/index`, holding `index.lock` while they do. Against a
+repository an agent is working in, that makes the agent's own `git add` or `git commit` fail with "index.lock
+exists". `GIT_OPTIONAL_LOCKS=0` stops `git status` from writing but not `git diff`; `git diff` also needs
+`-c diff.autoRefreshIndex=false`. Set both on any `git` the daemon runs only to read. Browse reads get them from
+`GitEnv::command` in `apps/daemon/src/browse/git.rs`; a `git` read built anywhere else has to set them itself.
+
+A test claiming a read writes nothing to the repository proves it only if the fixture first leaves a tracked file
+with a new modification time and unchanged content; without that, nothing triggers the refresh and the test passes
+whatever the command does. Compare every file under `.git` (bytes and modification time) before and after, and when
+unsure what a `git` command writes, try it in a scratch repository outside the project first.
+
 ## Type-check Linux-only code in a scratch crate, since no check on macOS compiles it
 
 Applies to daemon code under `#[cfg(target_os = "linux")]` (the daemon is meant to run on a Linux host too) when you

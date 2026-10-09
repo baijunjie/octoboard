@@ -91,23 +91,26 @@ in `docs/product/hub-orchestration.md` list the tools and what each one does.
 ### `src/browse/`
 
 Serves the project-browsing requests of the control socket (`get_project_source`, `list_project_dir`,
-`read_project_file`): where a project's files live (the directory itself, its repository and worktree, the same place in
-the repository's other worktrees), and then a bounded read of a directory listing or one file from the disk, the index,
-a branch or a commit. A request is re-resolved from the store and the repository each time; nothing a client names is
+`read_project_file`, `list_project_changes`, `read_project_change`): where a project's files live (the directory itself,
+its repository and worktree, the same place in the repository's other worktrees), and then a bounded read of a directory
+listing or one file from the disk, the index, a branch or a commit, or of a worktree's uncommitted changes to the project
+and one change's diff. A request is re-resolved from the store and the repository each time; nothing a client names is
 used as a directory. The wire contract, the identities handed to clients, the Git invocation rules and the budget values
 are in "Browsing a project" in [`PROTOCOL.md`](PROTOCOL.md) and are not restated here. `mod.rs`'s `serve` is the entry
-point, called from `server.rs`, which also owns the connection's lane wiring and the writer that puts control events
-before browse replies; `state.rs` holds the daemon-wide `Gate` (concurrent reads and retained bytes) the lanes draw on.
+point, called from `server.rs`, which also owns the connection's lane wiring, the retained-bytes reservation each request makes and the writer that
+puts control events before browse replies; `state.rs` holds the daemon-wide `Gate` (concurrent reads and retained bytes) the lanes draw on.
 
 | File | Role |
 |---|---|
-| `mod.rs` | `serve`: turns one request into a reply or a coded error, and the marker error a cancelled read ends with |
+| `mod.rs` | `serve`: turns one request into a reply or a coded error, and the marker error a cancelled read ends with; `locate`, the repository and the worktree (the project's own, or another of the same repository, checked now) a Git read works in |
 | `source.rs` | Resolving a project to its root, repository, worktree and sibling worktrees; minting and re-checking the identities clients hold; repository discovery that stops below the home directory |
 | `wire_path.rs` | The canonical text form a path takes on the wire so no byte of a file name is lost (`RelPath`) |
 | `live.rs` | Reading and listing files on disk under a scope, bounded while reading, refusing symlink escapes, links in a path's components and non-regular files |
-| `blob.rs` | Reading a file's blob from the index or a commit, and resolving and verifying a branch or commit |
-| `git.rs` | The one way browse runs `git`: isolated from the environment and configuration, bounded, output kept as bytes (`GitEnv`) |
-| `budget.rs` | The limits every browse read is held to, in one place |
+| `blob.rs` | Reading a file's blob from the index or a commit, and resolving and verifying a branch or commit; the exact-path lookups of the index's entries and of a commit's tree entry, and a blob read by object id, that a change's two sides are read through |
+| `git.rs` | The one way browse runs `git`: isolated from the environment and configuration, bounded, output kept as bytes, and never writing to the repository (`GitEnv`); its exact-path runs (`run_exact`) and the predicate for paths that nest (`paths_nest`) |
+| `changes.rs` | A worktree's uncommitted changes scoped to a project and one change's diff: `list` (one `git status` of the whole worktree, kept to the entries with a side inside the project, a side outside it named by its repository path alone) and `read` (the `Reader`: one change read afresh at the paths it names from its group's two sources, its index entry and disk file re-checked after the patch is made, the change refused as `source_changed` when they moved; a change with a side outside the project gets no patch) |
+| `change_tests.rs` | End-to-end tests of the two change requests over real repositories and worktrees (test-only; shares `tests.rs`'s `Fixture`) |
+| `budget.rs` | The limits every browse read is held to, in one place, with the change listing's and diff's budgets and each request kind's reservation |
 | `lane.rs` | Per-connection lane: the bound on outstanding requests, slots whose newer request supersedes the older, and the reservation of retained bytes against the daemon-wide `Gate` |
 | `tests.rs` | End-to-end tests over real directories and repositories (test-only) |
 

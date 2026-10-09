@@ -1,11 +1,12 @@
 import { DaemonRequestError } from "../daemon-client";
 import { daemonMessage } from "../daemonMessage";
 import { currentLanguage } from "../i18n/language";
-import type { BrowseEntry, DirEntry, Event } from "../protocol";
+import type { BrowseEntry, ChangeSide, DirEntry, Event, FileContent, SideRead, SideRef } from "../protocol";
 import { createStateStore, type Daemon, type ToastRequest } from "../store";
 import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
-import { SAMPLE_FILES, type FixtureFile, type FixtureFiles } from "./fixtures/projectFiles";
+import { SAMPLE_FILES, type FixtureError, type FixtureFile, type FixtureFiles } from "./fixtures/projectFiles";
+import { SAMPLE_GIT } from "./fixtures/projectGit";
 
 /** How long after the app subscribes to toasts the scenario's own are raised, for the stack to be
  * on screen to receive them. */
@@ -63,6 +64,15 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
   };
 
   const files = scenario.files ?? SAMPLE_FILES;
+  const git = scenario.git === undefined ? SAMPLE_GIT : scenario.git;
+  const fail = ({ code, params, message }: FixtureError): never => {
+    throw new DaemonRequestError(daemonMessage(currentLanguage(), code, params, message, store.getState()), code, params);
+  };
+  /** A side of a fixture change as `read_project_change` reads it, with its body when it has one. */
+  const readSide = (side: ChangeSide, body: FileContent | undefined): SideRead =>
+    side.state === "present" ? { ...side, file: body ?? null } : side.state === "absent" ? side : { state: "out_of_scope" };
+  const sameSide = (listed: ChangeSide, asked: SideRef) =>
+    listed.state === asked.state && (listed.state !== "present" || (asked.state === "present" && asked.path === listed.path));
   /** A browse request's path, or the daemon error it is answered with, worded as the store words one. */
   const browsed = (path: string): FixtureFile => {
     const file = files[path];
@@ -96,6 +106,59 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
                 ? { size: Math.floor((file.image.data.length * 3) / 4), kind: "binary" as const, media_type: file.image.mediaType, text: null, data: file.image.data }
                 : { size: 0, kind: "binary" as const, media_type: null, text: null, data: "" };
           return { type: "project_file", project: body.project, worktree: null, path: body.path, source, file: content };
+        }
+        case "get_project_source": {
+          const own = git?.worktrees[0];
+          return {
+            type: "project_source",
+            source: {
+              project: body.project,
+              root: "/Users/dev/code/search-api",
+              resolved_root: "/Users/dev/code/search-api",
+              root_id: "fixture",
+              git:
+                git && !git.gitError && own
+                  ? { repository: "repo", common_dir: "/Users/dev/code/search-api/.git", worktree: own.id, scope: "", worktrees: git.worktrees }
+                  : null,
+              git_error: git?.gitError ?? null,
+            },
+          };
+        }
+        case "list_project_changes": {
+          const worktree = body.worktree ?? git?.worktrees[0]?.id ?? "";
+          const changes = git?.changes[worktree];
+          if (!changes) return fail({ code: "worktree_unavailable", params: { worktree }, message: `worktree ${worktree} is gone` });
+          if (!Array.isArray(changes)) return fail(changes);
+          return {
+            type: "project_changes",
+            project: body.project,
+            worktree: body.worktree ?? null,
+            head: git?.worktrees.find((w) => w.id === worktree)?.head ?? null,
+            changes: changes.map((change) => change.entry),
+            complete: true,
+          };
+        }
+        case "read_project_change": {
+          const worktree = body.worktree ?? git?.worktrees[0]?.id ?? "";
+          const changes = git?.changes[worktree];
+          const found = Array.isArray(changes)
+            ? changes.find(
+                ({ entry }) =>
+                  entry.group === body.change.group && sameSide(entry.old, body.change.old) && sameSide(entry.new, body.change.new),
+              )
+            : undefined;
+          if (!found || found.entry.group === "conflicted") return fail({ code: "file_not_found", params: { path: "" }, message: "no such change" });
+          if (found.error) return fail(found.error);
+          return {
+            type: "project_change",
+            project: body.project,
+            worktree: body.worktree ?? null,
+            group: found.entry.group,
+            head: null,
+            old: readSide(found.entry.old, found.bodies?.old),
+            new: readSide(found.entry.new, found.bodies?.new),
+            patch: found.patch === undefined ? null : { size: found.patch.length, kind: "text", media_type: null, text: found.patch, data: null },
+          };
         }
         case "list_dir": {
           const listed = scenario.directories?.[body.path];

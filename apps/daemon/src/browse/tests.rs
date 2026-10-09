@@ -18,13 +18,13 @@ use crate::protocol::{
 use crate::state::AppState;
 use crate::test_support::{app_state, ScratchDir};
 
-struct Fixture {
-    state: Arc<AppState>,
+pub(super) struct Fixture {
+    pub(super) state: Arc<AppState>,
     _dir: ScratchDir,
 }
 
 impl Fixture {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         let (state, dir) = app_state("browse");
         let workdir = dir.join("workdir");
         std::fs::create_dir(&workdir).unwrap();
@@ -47,7 +47,7 @@ impl Fixture {
     }
 
     /// Registers `path` as project `id`, stored as given.
-    fn project(&self, id: &str, path: &Path) -> String {
+    pub(super) fn project(&self, id: &str, path: &Path) -> String {
         self.state
             .store
             .insert_project(&Project {
@@ -67,7 +67,7 @@ impl Fixture {
         id.to_string()
     }
 
-    fn serve(&self, body: BrowseBody) -> anyhow::Result<Event> {
+    pub(super) fn serve(&self, body: BrowseBody) -> anyhow::Result<Event> {
         serve(&self.state, None, body, &git_env, &AtomicBool::new(false))
     }
 
@@ -77,7 +77,7 @@ impl Fixture {
         })
     }
 
-    fn source(&self, project: &str) -> ProjectSourceInfo {
+    pub(super) fn source(&self, project: &str) -> ProjectSourceInfo {
         match self.serve(BrowseBody::GetProjectSource {
             project: project.to_string(),
         }) {
@@ -86,7 +86,7 @@ impl Fixture {
         }
     }
 
-    fn read(
+    pub(super) fn read(
         &self,
         project: &str,
         worktree: Option<&str>,
@@ -123,7 +123,7 @@ impl Fixture {
         }
     }
 
-    fn list(
+    pub(super) fn list(
         &self,
         project: &str,
         worktree: Option<&str>,
@@ -159,11 +159,11 @@ impl Fixture {
     }
 }
 
-fn git_env() -> anyhow::Result<GitEnv> {
+pub(super) fn git_env() -> anyhow::Result<GitEnv> {
     Ok(test_env(&[]))
 }
 
-fn bytes_of(file: &FileContent) -> Vec<u8> {
+pub(super) fn bytes_of(file: &FileContent) -> Vec<u8> {
     match file.kind {
         ContentKind::Text => file.text.clone().unwrap().into_bytes(),
         ContentKind::Binary => base64::engine::general_purpose::STANDARD
@@ -173,14 +173,14 @@ fn bytes_of(file: &FileContent) -> Vec<u8> {
 }
 
 /// The `code` of the coded error `result` failed with.
-fn code<T: std::fmt::Debug>(result: anyhow::Result<T>) -> &'static str {
+pub(super) fn code<T: std::fmt::Debug>(result: anyhow::Result<T>) -> &'static str {
     let err = result.expect_err("a refusal");
     err.downcast_ref::<CodedError>()
         .unwrap_or_else(|| panic!("not coded: {err:#}"))
         .code
 }
 
-fn canonical(path: &Path) -> String {
+pub(super) fn canonical(path: &Path) -> String {
     wire_path::encode(std::fs::canonicalize(path).unwrap().as_os_str().as_bytes())
 }
 

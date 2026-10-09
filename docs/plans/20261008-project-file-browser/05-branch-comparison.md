@@ -6,8 +6,9 @@
 > the result is not a merge-base comparison. Moving a branch during review cannot mix commit versions, and the flow
 > preserves the browser's source isolation and resource limits.
 
-Depends on [worktree change inspection](04-worktree-changes.md) for the integrated Git review surface; bounded,
-version-aware reads follow `apps/daemon/PROTOCOL.md`'s "Browsing a project".
+It extends the shipped Git mode of the project pane (`docs/product/project-pane-git-mode.md`; code in
+`packages/ui/src/browser/`, see `packages/ui/README.md`); bounded, version-aware reads follow
+`apps/daemon/PROTOCOL.md`'s "Browsing a project".
 
 ## Technical design
 
@@ -45,6 +46,19 @@ version-aware reads follow `apps/daemon/PROTOCOL.md`'s "Browsing a project".
 - Serve and verify the comparison reply recorded as a contract in `apps/daemon/PROTOCOL.md`'s "Changes and
   comparisons" (`left` / `right` each `{branch, commit}`, and the versions used for its patch and bodies), together
   with the Git version-race cases.
+- The worktree change requests (`list_project_changes`, `read_project_change`) and their types (`ChangeEntry`,
+  `ChangeSide`, `SideKind`, `SideRef`, `SideRead`) are the shapes to extend; `ChangeGroup` is a closed enum of the three
+  worktree groups, so a comparison adds its own group (e.g. `committed`) and request. In the daemon,
+  `apps/daemon/src/browse/changes.rs`'s `Reader` pieces (`tree_entry` per side, `patch()` with two commit ids,
+  `carries_bodies`, the out-of-scope rule, exact pathspecs through `GitEnv::run_exact` with nested-path handling) can
+  be reused; both sides of a commit pair are immutable, so no re-check is needed. Size the new reservation against
+  the existing ones (`budget.rs`; a change list's and a diff's worst cases already exceed one connection's share).
+- In the UI, the Git mode's state (`browserState.ts`), the window-wide Git request bound (`gitRequests.ts`, 2) and the
+  listings' window bound (11) were sized so that 11 + 1 viewer read + 2 Git requests + 1 replacement stays under the
+  daemon's 16 per connection; a branch comparison's requests must fit that sum. The viewer's change presentations
+  (`changePresentation`) already handle every side shape.
+- The worktree selector cuts a long name with an ellipsis, where the app fades long names out (`FadeOverflow`, see
+  `docs/product/labels-and-tooltips.md`); align it together with the branch selectors this milestone adds.
 
 ## Notes for the developer
 

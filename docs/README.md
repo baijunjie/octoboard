@@ -56,11 +56,18 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   regions, which ones are skipped, and where focus lands in each, the right pane included.
 - [Window size and position](product/window-size-and-position.md) — how the macOS window's size, position and maximized
   state are remembered and restored across launches.
-- [Project pane](product/project-pane.md) — a project's files in the right pane: opening it with Browse files or by
-  selecting a project session without starting or resuming anything, the file tree (what is listed, its order, rows and
-  the keyboard, the selected file and a removed one), when the tree is listed again, what is remembered per project,
-  the read-only file viewer (what it shows, Previous/Next and the arrow keys, closing it, a file that changes while
-  open), its errors, and a pane that fails to load.
+- [Project pane](product/project-pane.md) — a project's files and Git review in the right pane: its Files and Git modes
+  and what is remembered of the mode, opening it with Browse files or by selecting a project session without starting or
+  resuming anything, the file tree (what is listed, its order, rows and the keyboard, the selected file and a removed
+  one), when the tree is listed again, what is remembered per project, the read-only file viewer (what it shows,
+  Previous/Next and the arrow keys, closing it, a file that changes while open), its errors, and a pane that fails to
+  load.
+- [Project pane: Git mode](product/project-pane-git-mode.md) — the project pane's read-only review of a worktree's
+  uncommitted changes: that it never writes to the repository and how it differs from the branch badge, how the
+  repository and its worktrees are found, the worktree selector and a worktree that goes away, the change list (Staged,
+  Conflicted, Unstaged and Untracked, what is and is not listed, a subdirectory project and renames across its boundary,
+  status letters, keyboard, states and errors, refreshes), opening a change in the file viewer (each kind of change,
+  Previous/Next across sections, following refreshes), and what is kept for the window's lifetime.
 - [Toasts](product/toasts.md) — failures and notices that need no answer: where they appear, how one about a session
   is titled, when they dismiss themselves, how an identical one replaces rather than stacks, copying their text
   without taking focus off the terminal, and reaching them with F6.
@@ -175,10 +182,12 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   (exec stalls of seconds on machines with endpoint-security software) and how to tell that stall apart, and how to
   verify behaviour the daemon derives from an agent's own output by replaying a committed capture rather than staging
   a live session, and why a jsdom test cannot tell where keyboard focus ends after a session is selected.
-- [Writing daemon code](memory/writing-daemon-code.md) — conventions for the Rust daemon: live state the daemon
-  derives held on `AppState` and published by its own event rather than as a field on a stored record, with the
-  cleanups that follow from there being no deletion event for it; why a repeating refresh is timed by the client and
-  has to be bounded in the daemon by a drop-guard claim and a completion floor, since an in-flight claim alone never
-  fires across clients polling on their own phases; the non-interactive environment and deadline every `git`
-  subprocess needs, because `git` and `ssh` ask on a terminal the daemon does not have; and how to type-check
-  Linux-only code from macOS (a scratch crate, since bundled SQLite blocks a cross-check of the daemon).
+- [Writing daemon code](memory/writing-daemon-code.md) — conventions for the Rust daemon: live state the daemon derives
+  held on `AppState` and published by its own event rather than as a field on a stored record, with the cleanups that
+  follow from there being no deletion event for it; why a repeating refresh is timed by the client and has to be bounded
+  in the daemon by a drop-guard claim and a completion floor, since an in-flight claim alone never fires across clients
+  polling on their own phases; the non-interactive environment and deadline every `git` subprocess needs, because `git`
+  and `ssh` ask on a terminal the daemon does not have; why a `git` read in a user's repository needs
+  `GIT_OPTIONAL_LOCKS=0` and `-c diff.autoRefreshIndex=false` to keep it from rewriting the index (and failing an
+  agent's `git add` on `index.lock`), and what a test proving a read writes nothing has to set up first; and how to
+  type-check Linux-only code from macOS (a scratch crate, since bundled SQLite blocks a cross-check of the daemon).

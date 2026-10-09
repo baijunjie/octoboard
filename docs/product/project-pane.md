@@ -1,27 +1,44 @@
 # Project pane
 
-The **project pane** shows a project's files: a tree of the project's directory, read live from disk with whatever an
-agent has written and not committed, and a read-only **file viewer** over it. It is shown in the window's right pane,
-in the place a console session's report panel takes (see "What the right pane shows" in
-`docs/product/window-layout.md`, which also says what puts it there and what takes it away), and it needs no session:
-the project is all it reads from. How wide the right pane is, how it is hidden, floats in and becomes a drawer is in
-`docs/product/window-layout.md`, and where `F6` lands in it in `docs/product/moving-focus-between-regions.md`.
+The **project pane** shows a project's files and its repository's uncommitted changes, in two **modes**: **Files**, a
+tree of the project's directory, read live from disk with whatever an agent has written and not committed, and **Git**,
+the uncommitted changes of a worktree of the project's repository (see `docs/product/project-pane-git-mode.md`). Either
+one opens what it lists in a read-only **file viewer**. It is shown in the window's right pane, in the place a console
+session's report panel takes (see "What the right pane shows" in `docs/product/window-layout.md`, which also says what
+puts it there and what takes it away), and it needs no session: the project is all it reads from. How wide the right
+pane is, how it is hidden, floats in and becomes a drawer is in `docs/product/window-layout.md`, and where `F6` lands
+in it in `docs/product/moving-focus-between-regions.md`.
 
-Nothing in the project pane changes anything: there is no editing, saving, creating, renaming or deleting of files.
+Nothing in the project pane changes anything: there is no editing, saving, creating, renaming or deleting of files,
+and nothing is staged, committed or checked out.
 
 ## Opening a project's files
 
 - **Browse files**, the first item of a project's action menu — on its row and by right-clicking it (see "Project
   rows" in `docs/product/sidebar.md`), in its focus mode's header, and on its heading in a console session's focus mode
-  (see `docs/product/focus-mode.md`) — shows that project's files, selecting, starting and resuming no session.
-- **Selecting a project session** shows its project's files.
+  (see `docs/product/focus-mode.md`) — shows that project's project pane, selecting, starting and resuming no session.
+- **Selecting a project session** shows its project's project pane.
 
-Moving between sessions of one project leaves its tree as it was, its expanded folders and selected file included.
-Another project's session, or another project's Browse files, shows that project's own tree.
+Moving between sessions of one project leaves its pane as it was: its mode, its expanded folders and selected file, and
+in Git its chosen worktree and selected change. Another project's session, or another project's Browse files, shows
+that project's own pane.
 
-The pane's header names the project, with a folder icon, and carries a **Refresh** button that lists every folder on
-screen again (see "Keeping the tree up to date" below). Pressing Refresh with the mouse leaves keyboard focus where it
-was.
+The pane's header names the project, with a folder icon, and carries the **Files** and **Git** tabs (see "Files and
+Git" below) and a **Refresh** button. Pressing Refresh with the mouse leaves keyboard focus where it was.
+
+## Files and Git
+
+The tabs in the pane's header switch between its two modes; a project's pane first opens in Files. The mode is
+remembered per project (see "What is remembered" below), so Browse files or selecting a session shows a project in the
+mode it was last left in.
+
+Only the mode on screen is kept up to date on its own: the Files mode as "Keeping the tree up to date" below says, the
+Git mode as "Keeping the list up to date" in `docs/product/project-pane-git-mode.md` says. Switching to a mode counts
+as showing it again, so it is refreshed when its last refresh is more than 5 seconds old. The header's **Refresh**
+refreshes the mode on screen: in Files every folder on screen is listed again, in Git the worktrees and the changes are
+read again.
+
+"The file tree", "The selected file" and "Keeping the tree up to date" below are about the Files mode.
 
 ## The file tree
 
@@ -84,35 +101,38 @@ still be there.
 The tree is read from the project's directory as it is on disk; nothing tells Octoboard when files change, so it lists
 the folders on screen — the project's own directory and every expanded folder whose parents are expanded — again:
 
-- each time the project pane is put in the right pane, which lists it afresh;
+- the first time the Files mode is shown after the project pane is put in the right pane, which lists it afresh;
 - when a folder is expanded, if it had been listed before;
 - on the header's **Refresh**;
-- **every 10 seconds** while the project pane is on screen — docked, in an open drawer, or floating in — and the window
-  is visible, skipping a turn while a listing of the pane is still out;
-- when the window comes back to the front or becomes visible again, with the pane on screen, or when a hidden pane is
-  shown again — docked by its toggle, its drawer opened, or floating in — either one more than 5 seconds after the last
-  refresh, and unless a listing of the pane is still out;
+- **every 10 seconds** while the Files mode is on screen — the project pane docked, in an open drawer, or floating in
+  — and the window is visible, skipping a turn while a listing of the pane is still out;
+- when the window comes back to the front or becomes visible again, with the Files mode on screen, or when it comes
+  back on screen — a hidden pane docked by its toggle, its drawer opened, or floating in, or the Files tab chosen —
+  either one more than 5 seconds after the last refresh, and unless a listing of the pane is still out;
 - after the connection to the daemon comes back.
 
-While the pane is hidden it is not refreshed on its own, apart from after a reconnect. A folder being listed again
-keeps its rows on screen until the new listing is in. When the project's directory turns out to have been replaced by
-another one at the same path, everything listed from the old one is dropped and listed afresh.
+While the pane is hidden, or shows the Git mode, the tree is not refreshed on its own, apart from after a reconnect. A
+folder being listed again keeps its rows on screen until the new listing is in. When the project's directory turns out
+to have been replaced by another one at the same path, everything listed from the old one is dropped and listed
+afresh.
 
 ## What is remembered
 
 **Per project, per client**, in that client's own browser storage (as the right pane's width is, see "Resizing the
-sidebar and the right pane" in `docs/product/window-layout.md`): which folders are expanded, so the tree comes back as
-it was after a reload or a restart. At most 200 expanded folders are kept per project, the earliest expanded dropped
-first, and the state of at most 50 projects, the one shown least recently dropped first. A removed project's state is
-dropped.
+sidebar and the right pane" in `docs/product/window-layout.md`): the mode, Files or Git, and which folders are
+expanded, so the pane comes back as it was after a reload or a restart. At most 200 expanded folders are kept per
+project, the earliest expanded dropped first, and the state of at most 50 projects, the one shown least recently
+dropped first. A removed project's state is dropped.
 
 The selected file is kept only while the window is open: reloading it, or restarting the application, starts every
-project with no file selected. Listings and file contents are never stored.
+project with no file selected. So are the Git mode's chosen worktree and selected change (see "What is remembered" in
+`docs/product/project-pane-git-mode.md`). Listings, change lists and file contents are never stored.
 
 ## The file viewer
 
 Opening a file shows it in the **file viewer**, a dialog nearly as large as the window (at most 1440 px wide). Its title
-is the file's name; under it are the file's path within the project and its size.
+is the file's name; under it are the file's path within the project and its size. The Git mode opens a change in the
+same viewer; what it shows of a change is in "Opening a change" in `docs/product/project-pane-git-mode.md`.
 
 ### What it shows
 

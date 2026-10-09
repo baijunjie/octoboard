@@ -11,21 +11,28 @@
 //! list that a later `git` release would outgrow. What is then set is fixed:
 //!
 //! - `GIT_LITERAL_PATHSPECS=1`: a path is a path; `*`, `?`, `[` and `:(magic)` in a filename are
-//!   never patterns.
+//!   never patterns. [`GitEnv::run_exact`] is the one exception: it spells its paths out with
+//!   `:(literal)` magic itself, to keep what lies below them out.
 //! - `GIT_NO_REPLACE_OBJECTS=1`: an object id names the object stored under it, not a replacement,
 //!   so the id a reply reports is the content it carries.
 //! - `GIT_NO_LAZY_FETCH=1`: a partial clone's missing object fails the read instead of reaching
 //!   the network in the middle of it.
-//! - `GIT_OPTIONAL_LOCKS=0`: a read never takes the index lock, so it cannot get in the way of an
-//!   agent writing to the same repository.
+//! - `GIT_OPTIONAL_LOCKS=0`: `git status` never takes the index lock to write back the stat
+//!   information it refreshed, so it cannot get in the way of an agent writing to the same
+//!   repository. It does not reach `git diff`, which is held back separately (below).
 //! - `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND=ssh -oBatchMode=yes`, with the askpass helpers
 //!   removed, for the reason every daemon `git` has them: nobody can answer a prompt.
 //! - `GIT_CEILING_DIRECTORIES` set to the home directory, so discovery never climbs into it: a
 //!   home directory kept under version control is never taken for the repository of a project
 //!   below it.
 //!
-//! Every command also gets `--no-pager` and `-c core.fsmonitor=false` (a configured monitor is a
-//! program `git` would run on a read), and a diff-family command (`diff*`, `log`, `show`) gets
+//! Every command also gets `--no-pager`, `-c core.fsmonitor=false` (a configured monitor is a
+//! program `git` would run on a read), `-c core.quotePath=false` (a patch's headers name a path by
+//! its bytes, apart from the few characters `git` always escapes, whatever the user configured) and
+//! `-c diff.autoRefreshIndex=false`: comparing the index with the disk, `git diff` otherwise takes
+//! the index lock and rewrites the index whenever a file's timestamps moved but its content did
+//! not, whatever `GIT_OPTIONAL_LOCKS` says — a write in the middle of a read, and an agent's `git
+//! add` failing on the lock it holds. A diff-family command (`diff*`, `log`, `show`) gets
 //! `--no-ext-diff --no-textconv --no-color` right after its name: an external diff or a textconv
 //! filter is a configured program that would both run and rewrite the bytes the reply claims to
 //! carry. Clean and smudge filters are left alone — they define what a file's content is in the
@@ -50,6 +57,50 @@ const KEPT_GIT_VARIABLES: &[&str] = &[
     "GIT_CONFIG_NOSYSTEM",
 ];
 
+/// Pathspecs that match each of `paths` exactly: the path itself, literally, and nothing below
+/// it (`<path>/**` excluded, the path's own glob characters escaped). A plain path would also match
+/// everything under it when it is a directory on one side — a file replaced by a directory — and
+/// excluding `<path>/` instead would exclude a submodule at the path itself, which a pathspec takes
+/// for a directory. `git` applies an exclusion to every path of the command, so a path with another
+/// of `paths` below it (a rename from `foo` to `foo/bar`) gets none: that would take the other path
+/// out too. What then lies below it is matched as well, and the caller sorts it out.
+fn exact_pathspecs(paths: &[&[u8]]) -> Vec<Vec<u8>> {
+    let mut specs: Vec<Vec<u8>> = Vec::new();
+    for path in paths {
+        let exact = [b":(literal)".as_slice(), path].concat();
+        if specs.contains(&exact) {
+            continue;
+        }
+        specs.push(exact);
+        if holds_another(path, paths) {
+            continue;
+        }
+        let mut below = b":(exclude,glob)".to_vec();
+        for &byte in *path {
+            if matches!(byte, b'*' | b'?' | b'[' | b']' | b'\\') {
+                below.push(b'\\');
+            }
+            below.push(byte);
+        }
+        below.extend_from_slice(b"/**");
+        specs.push(below);
+    }
+    specs
+}
+
+/// Whether another of `paths` lies below `path`.
+fn holds_another(path: &[u8], paths: &[&[u8]]) -> bool {
+    paths.iter().any(|other| {
+        other.len() > path.len() + 1 && other.starts_with(path) && other[path.len()] == b'/'
+    })
+}
+
+/// Whether one of `paths` lies below another (a rename from `foo` to `foo/bar`): the one case
+/// [`exact_pathspecs`] cannot keep what lies below a path out of a command.
+pub(crate) fn paths_nest(paths: &[&[u8]]) -> bool {
+    paths.iter().any(|path| holds_another(path, paths))
+}
+
 /// The subcommands whose output a configured diff driver can change.
 fn is_diff_family(subcommand: &str) -> bool {
     subcommand.starts_with("diff") || subcommand == "log" || subcommand == "show"
@@ -71,6 +122,8 @@ pub struct GitEnv {
 #[derive(Debug)]
 pub struct GitFailed {
     pub stderr: String,
+    /// The exit status, when `git` exited rather than being killed by a signal.
+    pub code: Option<i32>,
 }
 
 /// How a bounded `git` run ended short of an output to use.
@@ -133,7 +186,16 @@ impl GitEnv {
             command.env("GIT_CEILING_DIRECTORIES", ceiling);
         }
         command.current_dir(dir);
-        command.args(["--no-pager", "-c", "core.fsmonitor=false", subcommand]);
+        command.args([
+            "--no-pager",
+            "-c",
+            "core.fsmonitor=false",
+            "-c",
+            "core.quotePath=false",
+            "-c",
+            "diff.autoRefreshIndex=false",
+            subcommand,
+        ]);
         if is_diff_family(subcommand) {
             command.args(DIFF_SAFETY);
         }
@@ -153,20 +215,59 @@ impl GitEnv {
         stdout_limit: usize,
         cancel: &AtomicBool,
     ) -> Result<Vec<u8>, GitError> {
-        let mut command = self.command(dir, subcommand, args);
+        self.run_command(
+            &mut self.command(dir, subcommand, args),
+            stdout_limit,
+            cancel,
+        )
+    }
+
+    /// Runs `command`, built by [`GitEnv::command`] and then adjusted, as [`GitEnv::run`] does.
+    pub fn run_command(
+        &self,
+        command: &mut Command,
+        stdout_limit: usize,
+        cancel: &AtomicBool,
+    ) -> Result<Vec<u8>, GitError> {
         let bounds = Bounds {
             timeout: budget::GIT_READ_TIMEOUT,
             stdout_limit,
             stderr_limit: budget::GIT_STDERR,
         };
         let output =
-            subprocess::run_bounded(&mut command, &bounds, cancel).map_err(GitError::Stopped)?;
+            subprocess::run_bounded(command, &bounds, cancel).map_err(GitError::Stopped)?;
         if !output.status.success() {
             return Err(GitError::Failed(GitFailed {
                 stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+                code: output.status.code(),
             }));
         }
         Ok(output.stdout)
+    }
+
+    /// Runs `git <subcommand> <args> -- <paths>` with each of `paths` (relative to the repository's
+    /// root) matched exactly and nothing below it, as [`exact_pathspecs`] writes them — except where
+    /// `paths` nest ([`paths_nest`]): there everything below the outer path is matched too, and the
+    /// caller keeps only what is its own (an index lookup by its exact match, a patch by its
+    /// sections).
+    pub fn run_exact(
+        &self,
+        dir: &Path,
+        subcommand: &str,
+        args: &[&[u8]],
+        paths: &[&[u8]],
+        stdout_limit: usize,
+        cancel: &AtomicBool,
+    ) -> Result<Vec<u8>, GitError> {
+        let pathspecs = exact_pathspecs(paths);
+        let mut all = args.to_vec();
+        all.push(b"--");
+        all.extend(pathspecs.iter().map(Vec::as_slice));
+        let mut command = self.command(dir, subcommand, &all);
+        // The magic below spells out literal matching itself; under `GIT_LITERAL_PATHSPECS` it
+        // would be read as part of the name.
+        command.env_remove("GIT_LITERAL_PATHSPECS");
+        self.run_command(&mut command, stdout_limit, cancel)
     }
 
     #[cfg(test)]

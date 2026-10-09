@@ -282,6 +282,43 @@ export interface FileContent {
   data: string | null;
 }
 
+/** Which of a worktree's uncommitted changes an entry is: `HEAD` against the index, the index
+ * against the disk, or a file on disk Git neither tracks nor ignores. Part of a change's identity. */
+export type ChangeGroup = "staged" | "unstaged" | "untracked";
+
+/** One side of a listed change (see "Changes and comparisons" in `apps/daemon/PROTOCOL.md`). A
+ * present side's `path` is a wire path relative to the project and `source` the version listed; an
+ * out-of-scope side's `repository_path` is relative to the repository's root, for display only. */
+export type ChangeSide =
+  | { state: "present"; path: string; kind: "file" | "symlink" | "submodule"; source: ContentSource }
+  | { state: "absent" }
+  | { state: "out_of_scope"; repository_path: string };
+
+export type ConflictKind =
+  | "both_modified"
+  | "both_added"
+  | "both_deleted"
+  | "added_by_us"
+  | "added_by_them"
+  | "deleted_by_us"
+  | "deleted_by_them";
+
+/** One entry of `project_changes`: a change between two sides, or a path in conflict, which is no
+ * two-sided change and is read as a live file. */
+export type ChangeEntry =
+  | { group: ChangeGroup; old: ChangeSide; new: ChangeSide }
+  | { group: "conflicted"; path: string; conflict: ConflictKind };
+
+/** How `read_project_change` names one side, as the listing gave it. */
+export type SideRef = { state: "present"; path: string } | { state: "absent" } | { state: "out_of_scope" };
+
+/** One side of a change as `read_project_change` read it. `file` is its body, carried only where no
+ * patch shows the content: a side alone, or both sides of a binary change. */
+export type SideRead =
+  | { state: "present"; path: string; kind: "file" | "symlink" | "submodule"; source: ContentSource; file: FileContent | null }
+  | { state: "absent" }
+  | { state: "out_of_scope" };
+
 /**
  * The body of a client request, without the envelope's `id`. One variant per `RequestBody` case
  * in `protocol.rs` and per `BrowseBody` case (the browse requests, whose envelope also carries
@@ -409,10 +446,10 @@ export type RequestBody =
    * `console_upserted` for every console whose reference was cleared. */
   | { type: "delete_account"; account: string }
   /** The browse requests (see "Browsing a project" in `apps/daemon/PROTOCOL.md`), answered with
-   * `project_source`, `project_dir` and `project_file`. A newer browse request on this connection
-   * with the same `slot` supersedes an older one still outstanding, which is answered
-   * `request_superseded`; one that finished first still gets its real reply, so a reply is also
-   * discarded by its `id`. */
+   * `project_source`, `project_dir`, `project_file`, `project_changes` and `project_change`. A
+   * newer browse request on this connection with the same `slot` supersedes an older one still
+   * outstanding, which is answered `request_superseded`; one that finished first still gets its
+   * real reply, so a reply is also discarded by its `id`. */
   | { type: "get_project_source"; project: string; slot?: string }
   | { type: "list_project_dir"; project: string; path: string; worktree?: string; slot?: string }
   | {
@@ -421,6 +458,14 @@ export type RequestBody =
       path: string;
       worktree?: string;
       from?: ReadFrom;
+      slot?: string;
+    }
+  | { type: "list_project_changes"; project: string; worktree?: string; slot?: string }
+  | {
+      type: "read_project_change";
+      project: string;
+      worktree?: string;
+      change: { group: ChangeGroup; old: SideRef; new: SideRef };
       slot?: string;
     }
   | { type: "shutdown" };
@@ -518,11 +563,36 @@ export type Event =
       source: ContentSource;
       file: FileContent;
     }
+  /** `head` is the commit the staged changes are against, null before the first commit;
+   * `complete` is false when the list was cut at a budget. */
+  | {
+      type: "project_changes";
+      id?: string;
+      project: string;
+      worktree: string | null;
+      head: string | null;
+      changes: ChangeEntry[];
+      complete: boolean;
+    }
+  /** `head` is the commit a staged change was read against (null before the first commit, and for
+   * the other groups); `patch` is the change's unified patch as `git` writes it, null when none is
+   * made (an untracked file, a side outside the project). */
+  | {
+      type: "project_change";
+      id?: string;
+      project: string;
+      worktree: string | null;
+      group: ChangeGroup;
+      head: string | null;
+      old: SideRead;
+      new: SideRead;
+      patch: FileContent | null;
+    }
   | { type: "ack"; id?: string }
   /** A failure, worded from `code` and `params` (see `daemonMessage.ts`); `message` is the English
    * text, shown for a code the client does not know. A client also branches on some codes — see
-   * `ALREADY_RUNNING_CODES`, `TRUST_REFUSED_CODES`, `CLAUDE_TRUST_NOT_WAITING`, `REQUEST_SUPERSEDED` and
-   * `SOURCE_CHANGED`. */
+   * `ALREADY_RUNNING_CODES`, `TRUST_REFUSED_CODES`, `CLAUDE_TRUST_NOT_WAITING`, `REQUEST_SUPERSEDED`,
+   * `SOURCE_CHANGED` and `WORKTREE_UNAVAILABLE`. */
   | { type: "error"; id?: string; code: string; params: MessageParams; message: string };
 
 /** The named values a daemon message is filled with. `console`, `project` and `session` are record
@@ -549,6 +619,9 @@ export const REQUEST_SUPERSEDED = "request_superseded";
 
 /** What was being read changed while it was read: reading it again gets a consistent copy. */
 export const SOURCE_CHANGED = "source_changed";
+
+/** The worktree a browse request named is gone: nothing is read from another one in its place. */
+export const WORKTREE_UNAVAILABLE = "worktree_unavailable";
 
 /** Client-sent text frame on `/ws/term/:session`. Binary frames on that socket are raw PTY input. */
 export type TermControl = { type: "resize"; cols: number; rows: number };

@@ -377,11 +377,12 @@ parts of the window:
   right pane is along the window's left edge too, and 8 px wide there rather than 4 px.
 - Each resize handle stays on its pane's inner edge, the sidebar's left edge and the right pane's right one.
   Dragging toward the terminal still widens the pane, and so does the arrow key pointing away from the pane.
-- Settings and the other dialogs are mirrored the same way, and toasts sit at the bottom left.
+- Settings and the other dialogs are mirrored the same way, and toasts sit at the bottom left. So is the file viewer's
+  layout: an image change's Before and After images, side by side, have Before on the right.
 - A name or breadcrumb too long for its space fades out where it ends in its own direction: a name the user typed
   is laid out in the direction of its own text, so a Latin name in an Arabic window still fades at its right edge.
-- Paths always read left to right, in the fields that take one and in the settings list, where a path too long for its
-  space fades at its start, so its last folder stays readable.
+- Paths always read left to right, in the fields that take one, in the settings list and in a project pane's
+  worktree selector, where a path too long for its space fades at its start, so its last folder stays readable.
 - Icons that point a direction or show a side are mirrored: Back and Forward, the two pane toggles, whose pane is drawn
   on its own side, the breadcrumb's separators, the report panel's previous-page and next-page buttons, the file
   viewer's Previous file and Next file buttons, focus mode's back button, the directory browser's parent-directory
@@ -395,6 +396,8 @@ Not mirrored:
 - **The terminal**, which is never mirrored (see "What follows the language" in `docs/product/language.md`).
 - **A report page**, which keeps its own direction; only the panel around it is mirrored (see "What follows the
   language" in `docs/product/language.md`).
-- **A file's content in the file viewer**: code, and the file's name and path, read left to right; only the viewer
-  around them is mirrored. A file or folder name in the file tree is laid out in the direction of its own text, as a
-  name the user typed is.
+- **A file's content in the file viewer**: code, a diff — whose split layout keeps the old side on the left — the
+  file's name and path, and the paths a change names, read left to right, and a binary change's sizes run from before
+  to after left to right; only the viewer around them is mirrored. A file or folder name in the file tree, and a name
+  and what follows it in the Git mode's change list, are laid out in the direction of their own text, as a name the
+  user typed is.

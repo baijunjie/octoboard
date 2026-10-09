@@ -1,6 +1,6 @@
 import { Alert, Button, Chip } from "@heroui/react";
 import { ChevronLeft, ChevronRight, FileQuestion } from "lucide-react";
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { PathText } from "../components/PathText";
 import { TitledControl } from "../components/TitledControl";
@@ -10,7 +10,8 @@ import type { PlainMessageKey } from "../i18n/catalog";
 import { useOctoboardTheme } from "../theme";
 import { displayWirePath, wireBaseName } from "../wirePath";
 import { arrowNavigation } from "./arrowKeys";
-import { CodeSurface, DiffSurface, Loading, useRendererScope } from "./CodeSurface";
+import { diffPlan } from "./budgets";
+import { CodeSurface, DiffSurface, LayoutToggle, Loading, useRendererScope } from "./CodeSurface";
 import {
   changePresentation,
   changeStatus,
@@ -204,31 +205,32 @@ function ViewerContentView({
   layout: "unified" | "split";
   onLayoutChange: (layout: "unified" | "split") => void;
 }): React.ReactElement {
-  const t = useT();
   const { resolved: theme } = useOctoboardTheme();
   const { content, key } = subject;
   switch (content.state) {
     case "loading":
       return <Loading />;
     case "error":
-      return (
-        <Alert status="danger" className="shrink-0">
-          <Alert.Content>
-            {/* HeroUI's alert carries no role, so a failure that arrives after the user moved on
-                would never be announced. The alert below carries the title too, for screen readers,
-                so the visible title is hidden from them and the title is read once. */}
-            <Alert.Title aria-hidden="true">{t("viewer.error")}</Alert.Title>
-            <Alert.Description>
-              <span role="alert">
-                <span className="sr-only">{t("viewer.error")} </span>
-                {content.message}
-              </span>
-            </Alert.Description>
-          </Alert.Content>
-        </Alert>
-      );
+      return <Failure message={content.message} />;
     case "file":
       return <BodyView resetKey={key} name={name} body={content.body} theme={theme} />;
+    case "conflict":
+      return (
+        <>
+          <Alert status="warning" className="shrink-0 bg-warning/10 shadow-none">
+            <Alert.Content>
+              <Alert.Description>{content.conflict}</Alert.Description>
+            </Alert.Content>
+          </Alert>
+          {content.body ? (
+            <BodyView resetKey={key} name={name} body={content.body} theme={theme} />
+          ) : content.message !== undefined ? (
+            <Failure message={content.message} />
+          ) : (
+            <Loading />
+          )}
+        </>
+      );
     case "change":
       return (
         <ChangeView
@@ -241,6 +243,27 @@ function ViewerContentView({
         />
       );
   }
+}
+
+/** Why the subject cannot be shown. */
+function Failure({ message }: { message: string }): React.ReactElement {
+  const t = useT();
+  return (
+    <Alert status="danger" className="shrink-0">
+      <Alert.Content>
+        {/* HeroUI's alert carries no role, so a failure that arrives after the user moved on
+            would never be announced. The alert below carries the title too, for screen readers,
+            so the visible title is hidden from them and the title is read once. */}
+        <Alert.Title aria-hidden="true">{t("viewer.error")}</Alert.Title>
+        <Alert.Description>
+          <span role="alert">
+            <span className="sr-only">{t("viewer.error")} </span>
+            {message}
+          </span>
+        </Alert.Description>
+      </Alert.Content>
+    </Alert>
+  );
 }
 
 /** One file body, whichever kind it is. */
@@ -336,6 +359,7 @@ function ChangeView({
   theme: "light" | "dark";
 }): React.ReactElement {
   const t = useT();
+  const sectionsId = useId();
   const presentation = changePresentation(change);
   switch (presentation.kind) {
     case "restricted": {
@@ -360,6 +384,13 @@ function ChangeView({
         </>
       );
     }
+    case "single":
+      return (
+        <>
+          <p className="shrink-0 px-1 pb-2 text-xs text-muted">{t("viewer.change.alone")}</p>
+          <BodyView resetKey={resetKey} name={name} body={presentation.body} theme={theme} />
+        </>
+      );
     case "text":
       return (
         <DiffSurface
@@ -370,6 +401,39 @@ function ChangeView({
           onLayoutChange={onLayoutChange}
           theme={theme}
         />
+      );
+    case "sections":
+      // Each section drawn on its own, so a type change's removal and addition are never merged
+      // into one diff; with two, they are its old and its new side.
+      // One layout choice serves every section.
+      return (
+        <>
+          {/* Not when every section is shown as its plain patch, which has no layout. */}
+          {presentation.sections.some((section) => diffPlan(section) === "render") && (
+            <LayoutToggle layout={layout} onLayoutChange={onLayoutChange} />
+          )}
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+            {presentation.sections.map((section, i) => {
+              const heading = presentation.sections.length === 2 ? `${sectionsId}-${i}` : undefined;
+              return (
+                <section key={i} aria-labelledby={heading} className="flex min-h-48 shrink-0 flex-col gap-1">
+                  {heading && (
+                    <h3 id={heading} className="text-xs font-medium text-muted">
+                      {t(i === 0 ? "viewer.change.before" : "viewer.change.after")}
+                    </h3>
+                  )}
+                  <DiffSurface resetKey={`${resetKey}:${i}`} name={name} patch={section} layout={layout} theme={theme} />
+                </section>
+              );
+            })}
+          </div>
+        </>
+      );
+    case "identical":
+      return <p className="text-sm text-muted">{t("viewer.change.identical")}</p>;
+    case "notFile":
+      return (
+        <p className="text-sm text-muted">{t(presentation.sideKind === "symlink" ? "viewer.change.symlink" : "viewer.change.submodule")}</p>
       );
     case "image":
       return (
@@ -385,7 +449,11 @@ function ChangeView({
       return <Unsupported message={t("viewer.change.binary")} sizes={[size(change.old), size(change.new)]} />;
     }
     case "unreadable":
-      return <p className="text-sm text-muted">{t("viewer.change.unreadable")}</p>;
+      return presentation.message !== undefined ? (
+        <Failure message={presentation.message} />
+      ) : (
+        <p className="text-sm text-muted">{t("viewer.change.unreadable")}</p>
+      );
   }
 }
 

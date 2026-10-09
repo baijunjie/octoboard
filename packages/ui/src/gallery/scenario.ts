@@ -1,5 +1,6 @@
 import type { DirEntry, MessageParams } from "../protocol";
 import type { FixtureFiles } from "./fixtures/projectFiles";
+import type { FixtureGit } from "./fixtures/projectGit";
 import type { ViewerSubject } from "../viewer/content";
 import type { State, ToastRequest } from "../store";
 import type { TerminalBehaviour } from "./fakeTerminal";
@@ -59,6 +60,9 @@ export interface Scenario {
   /** The files every project's browser shows (`list_project_dir`, `read_project_file`); without it,
    * `SAMPLE_FILES`. */
   files?: FixtureFiles;
+  /** The repository every project's Git mode shows (`get_project_source`, `list_project_changes`,
+   * `read_project_change`); without it, `SAMPLE_GIT`; `null` for a project in no repository. */
+  git?: FixtureGit | null;
   steps?: Step[];
   /** Renders the file viewer over the subjects `subjects` builds, in place of the app; built only
    * when the scenario opens. `loadDelay` shows each one's loading state for that many milliseconds

@@ -173,7 +173,7 @@ fn version_of(dev: u64, ino: u64, size: u64, mtime: (i64, i64), ctime: (i64, i64
     )
 }
 
-fn version(metadata: &Metadata) -> String {
+pub(super) fn version(metadata: &Metadata) -> String {
     version_of(
         metadata.dev(),
         metadata.ino(),
@@ -492,7 +492,7 @@ fn outside(path: &RelPath) -> anyhow::Error {
     )
 }
 
-fn changed(path: &RelPath) -> anyhow::Error {
+pub(super) fn changed(path: &RelPath) -> anyhow::Error {
     let shown = path.to_wire();
     CodedError::raised(
         error_code::SOURCE_CHANGED,

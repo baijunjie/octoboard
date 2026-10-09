@@ -10,11 +10,13 @@ import { treeEntries, type DirListing } from "./tree";
  * clients, and the viewer's read must never wait behind a burst of directory expansions. */
 const MAX_IN_FLIGHT = 3;
 /** How many listings are out at once in the window, every browser it has mounted counted, those
- * left out by a browser whose project's place was taken included (on a volume slow to answer, say):
- * kept below the daemon's bound of 16 outstanding requests a connection, with room for the viewer's
- * read and the window's other requests, and above one browser's own share, so a browser stalled on
- * one project never starves the next. */
-const MAX_WINDOW_IN_FLIGHT = 12;
+ * left out by a browser whose project's place was taken included (on a volume slow to answer, say),
+ * and above one browser's own share, so a browser stalled on one project never starves the next.
+ * Sized under the daemon's bound of 16 outstanding requests a connection together with the
+ * viewer's read and the Git mode's 2 list requests (`gitRequests.ts`), with room for one request
+ * that replaces another in its slot: the daemon counts the newer one before it gives the older one
+ * up, so for that moment both are outstanding. 11 + 1 + 2 + 1 = 15. */
+const MAX_WINDOW_IN_FLIGHT = 11;
 const shared = { inFlight: 0, pumps: new Set<() => void>() };
 
 /** How often the directories on screen are listed again while the browser is on screen and the
@@ -126,14 +128,16 @@ export function useDirectoryListings(project: string, active: boolean): Director
     }
   };
 
-  /** Asks for `dir`'s listing, keeping a loaded one on screen meanwhile. */
-  const enqueue = (dir: string) => {
+  /** Asks for `dir`'s listing, keeping a loaded one on screen meanwhile. In the `background` (the
+   * periodic refresh, a reconnect) a failure stays on screen too, and its Try again with it; asked
+   * by the user, it gives way to `loading`. */
+  const enqueue = (dir: string, background = false) => {
     const s = state.current;
     if (!s.connected) return;
     const held = s.listings.get(dir);
     if (held?.state === "loaded") {
       if (!held.refreshing) commit((next) => next.set(dir, { ...held, refreshing: true }));
-    } else if (held?.state !== "loading") {
+    } else if (held?.state !== "loading" && !(held?.state === "error" && background)) {
       commit((next) => next.set(dir, { state: "loading" }));
     }
     // Counted from the moment it is asked for: a reply to an earlier listing of `dir` that is still
@@ -143,11 +147,12 @@ export function useDirectoryListings(project: string, active: boolean): Director
     pump.current();
   };
 
-  const refresh = useCallback((dirs: readonly string[]) => dirs.forEach(enqueue), []);
-  const refreshAll = useCallback(() => {
+  const refresh = useCallback((dirs: readonly string[]) => dirs.forEach((dir) => enqueue(dir)), []);
+  const refreshWanted = (background: boolean) => {
     state.current.lastRefresh = Date.now();
-    state.current.wanted.forEach(enqueue);
-  }, []);
+    state.current.wanted.forEach((dir) => enqueue(dir, background));
+  };
+  const refreshAll = useCallback(() => refreshWanted(false), []);
 
   // A directory that comes on screen is listed once; after that only a refresh lists it again.
   const want = useCallback((dirs: readonly string[]) => {
@@ -165,7 +170,7 @@ export function useDirectoryListings(project: string, active: boolean): Director
     commit((next) => {
       for (const dir of [...next.keys()]) if (!state.current.wanted.includes(dir)) next.delete(dir);
     });
-    refreshAll();
+    refreshWanted(true);
   }, [snapshotEpoch]);
 
   // The periodic refresh, and one on coming back to the window, or to a pane that was hidden,
@@ -174,7 +179,7 @@ export function useDirectoryListings(project: string, active: boolean): Director
     if (!active) return;
     const tick = () => {
       if (document.visibilityState !== "visible" || state.current.inFlight > 0) return;
-      refreshAll();
+      refreshWanted(true);
     };
     const timer = setInterval(tick, AUTO_REFRESH_MS);
     const onVisible = () => {

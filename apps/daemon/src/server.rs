@@ -242,6 +242,8 @@ async fn submit_browse(state: &Arc<AppState>, lane: &Arc<Lane>, request: BrowseR
         BrowseBody::GetProjectSource { .. } | BrowseBody::ReadProjectFile { .. } => {
             budget::READ_RESERVATION
         }
+        BrowseBody::ListProjectChanges { .. } => budget::CHANGE_LIST_RESERVATION,
+        BrowseBody::ReadProjectChange { .. } => budget::DIFF_RESERVATION,
     };
     lane.submit(request.id, request.slot, reservation, move |cancel| {
         crate::browse::serve(&state, id, request.body, &GitEnv::from_shell, cancel)

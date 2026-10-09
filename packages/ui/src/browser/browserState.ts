@@ -3,8 +3,8 @@ import { useSyncExternalStore } from "react";
 import { createPersistedPreference } from "../persistedPreference";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 
-/** What a project's browser shows. Files is the first mode; the Git modes join it here. */
-export type BrowserMode = "files";
+/** What a project's browser shows: its files on disk, or a worktree's uncommitted changes. */
+export type BrowserMode = "files" | "git";
 
 /** The part of a project's browser state that outlives the window: its mode and the directories
  * expanded in its tree (wire paths). File bodies and listings are never stored. */
@@ -28,7 +28,8 @@ function parseStored(raw: string | null): Record<string, StoredBrowser> {
     for (const [project, entry] of Object.entries(value as Record<string, Partial<StoredBrowser>>)) {
       if (!entry || typeof entry !== "object") continue;
       const expanded = Array.isArray(entry.expanded) ? entry.expanded.filter((p): p is string => typeof p === "string" && p !== "") : [];
-      result[project] = { mode: "files", expanded: expanded.slice(-MAX_EXPANDED), used: typeof entry.used === "number" ? entry.used : 0 };
+      const mode = entry.mode === "git" ? "git" : "files";
+      result[project] = { mode, expanded: expanded.slice(-MAX_EXPANDED), used: typeof entry.used === "number" ? entry.used : 0 };
     }
     return result;
   } catch {
@@ -40,10 +41,13 @@ const stored = createPersistedPreference<Record<string, StoredBrowser>>(PREFEREN
   Object.keys(value).length === 0 ? null : JSON.stringify(value),
 );
 
-/** The file each project's tree has selected — the one last opened in the viewer. Kept for the
- * window's lifetime only: a selection is about what the user is looking at now, and a file named
- * from an earlier run may well be gone. */
-const selections = new Map<string, string>();
+/** What each project's browser has selected, kept for the window's lifetime only: a selection is
+ * about what the user is looking at now, and what an earlier run named may well be gone — a file,
+ * a worktree, a change. `file` is the tree's selected file (the one last opened in the viewer),
+ * `worktree` the worktree whose changes the Git mode shows (none for the one holding the project's
+ * directory), `change` the key of the change last opened (`changeKey`). */
+type Selection = "file" | "worktree" | "change";
+const selections: Record<Selection, Map<string, string>> = { file: new Map(), worktree: new Map(), change: new Map() };
 const selectionListeners = new Set<() => void>();
 let selectionVersion = 0;
 
@@ -52,10 +56,11 @@ function subscribeSelections(listener: () => void): () => void {
   return () => selectionListeners.delete(listener);
 }
 
-function setSelection(project: string, path: string | undefined): void {
-  if (selections.get(project) === path) return;
-  if (path === undefined) selections.delete(project);
-  else selections.set(project, path);
+function setSelection(kind: Selection, project: string, value: string | undefined): void {
+  const map = selections[kind];
+  if (map.get(project) === value) return;
+  if (value === undefined) map.delete(project);
+  else map.set(project, value);
   selectionVersion += 1;
   for (const listener of selectionListeners) listener();
 }
@@ -79,16 +84,24 @@ export interface ProjectBrowserState {
   mode: BrowserMode;
   expanded: ReadonlySet<string>;
   selected?: string;
+  /** The worktree the Git mode shows the changes of, by its id; none for the one holding the
+   * project's directory. */
+  worktree?: string;
+  /** The key of the change the Git mode's viewer showed last. */
+  selectedChange?: string;
+  setMode: (mode: BrowserMode) => void;
   setExpanded: (expanded: ReadonlySet<string>) => void;
   setSelected: (path: string | undefined) => void;
+  setWorktree: (worktree: string | undefined) => void;
+  setSelectedChange: (key: string | undefined) => void;
   /** Records the project's browser as just shown, which keeps it from being the first dropped. */
   touch: () => void;
 }
 
 /**
  * A project's browser state, owned by the project rather than by any session: the mode, the
- * expanded directories and the selected file. The first two are kept in `localStorage` per client
- * (`PREFERENCE_KEYS.projectBrowsers`), the selection for the window's lifetime.
+ * expanded directories and what is selected. The first two are kept in `localStorage` per client
+ * (`PREFERENCE_KEYS.projectBrowsers`), the selections for the window's lifetime.
  */
 export function useProjectBrowserState(project: string): ProjectBrowserState {
   const entry = stored.useValue()[project];
@@ -101,9 +114,14 @@ export function useProjectBrowserState(project: string): ProjectBrowserState {
   return {
     mode: entry?.mode ?? "files",
     expanded,
-    selected: selections.get(project),
+    selected: selections.file.get(project),
+    worktree: selections.worktree.get(project),
+    selectedChange: selections.change.get(project),
+    setMode: (mode) => update(project, (e) => ({ ...e, mode })),
     setExpanded: (next) => update(project, (e) => ({ ...e, expanded: [...next].slice(-MAX_EXPANDED) })),
-    setSelected: (path) => setSelection(project, path),
+    setSelected: (path) => setSelection("file", project, path),
+    setWorktree: (worktree) => setSelection("worktree", project, worktree),
+    setSelectedChange: (key) => setSelection("change", project, key),
     touch: () => update(project, (e) => ({ ...e, used: Date.now() })),
   };
 }
@@ -118,5 +136,7 @@ export function forgetProjectsOtherThan(projects: ReadonlySet<string>): void {
     for (const project of gone) delete next[project];
     stored.set(next);
   }
-  for (const project of [...selections.keys()]) if (!projects.has(project)) setSelection(project, undefined);
+  for (const kind of ["file", "worktree", "change"] as const) {
+    for (const project of [...selections[kind].keys()]) if (!projects.has(project)) setSelection(kind, project, undefined);
+  }
 }

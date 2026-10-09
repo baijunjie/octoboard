@@ -53,6 +53,8 @@ the request id as if it were a record id.
 | `get_project_source` | `project`, `slot?` | Where the project's files are read from: its resolved directory and, when it is inside a Git repository, the repository, the worktree holding it, its place in that worktree and every worktree of the repository, that one included. Answered with `project_source`. A browse request: see "Browsing a project" below for the rules every browse request shares (`slot`, budgets, its own outbound queue) |
 | `list_project_dir` | `project`, `path`, `worktree?`, `slot?` | Lists one directory of the project's files on disk, `path` being a wire path relative to the project's directory (empty for the directory itself). With `worktree`, the same place in that worktree of the project's repository is listed instead. Answered with `project_dir`. A browse request |
 | `read_project_file` | `project`, `path`, `worktree?`, `from?`, `slot?` | Reads one file of the project, `path` being a wire path relative to the project's directory. `from` picks the content: `{"kind":"live"}` (the default) the file on disk, `{"kind":"index"}` the blob staged for it, `{"kind":"branch","branch":…}` the blob at a local branch's tip, `{"kind":"commit","commit":…}` the blob in a commit given by its full id. With `worktree`, the disk and the index read are that worktree's. Answered with `project_file`. A browse request |
+| `list_project_changes` | `project`, `worktree?`, `slot?` | Lists the uncommitted changes of the worktree holding the project's directory — or, with `worktree`, of that worktree of its repository — that touch the project: staged, unstaged, untracked and in conflict. Answered with `project_changes`. A browse request |
+| `read_project_change` | `project`, `worktree?`, `change`, `slot?` | Reads one of those changes for its diff: `change` is `{group, old, new}`, `group` being `staged`, `unstaged` or `untracked` and each side `{"state":"present","path":…}`, `{"state":"absent"}` or `{"state":"out_of_scope"}` as the listing gave it. Answered with `project_change`. A browse request |
 | `open_session` | `console_id`, `project_id?`, `agent?`, `account?`, `task?`, `title?`, `bound_to?` | Omit `project_id` for a console session; a console may hold any number of them at once. `agent` follows the priority in the "Which agent a session uses" section of `docs/product/sessions.md` when omitted. `account` is the account the session's agent reads, by id: absent leaves it to the console's reference for the session's agent, else the agent's default account; an explicit `null` chooses the default account outright, whatever the console refers to. An id that names no account of the session's agent is refused with `unknown_account`. `bound_to` names the session this (project) session should report to; absent means none. Ignored for a console session, which is never bound. A `bound_to` that names neither a console session of `console_id` nor an unbound project session of `project_id` is refused with `unknown_session` |
 | `resume_session` | `session` | Relaunches an `interrupted` or `archived` session through the agent's own resume mechanism, re-injecting everything. A session bound to an archived owner (a console session, or a project session that started it) relaunches that owner first, and the whole request fails with the owner's own refusal if it cannot, leaving both as they were; an owner that is only `interrupted` is left alone. Resuming an owner relaunches nothing bound to it |
 | `archive_session` | `session` | Ends the process and archives the session. Archiving a session that has sessions bound to it (a console session, or a project session that started some) goes by whether a process is running, not by status: refused with `session_has_running_sessions`, and nothing changed, while any session bound to it has a process (or is being launched, resumed or switched), and otherwise it archives every bound session that is not archived yet — the interrupted ones — along with the session itself, so nothing bound to it is left outside the archive. Archiving a session with nothing bound to it reaches no other session |
@@ -91,6 +93,8 @@ the request id as if it were a record id.
 | `project_source` | `id`, `source` — the reply to `get_project_source`; `source` is a `ProjectSourceInfo` (see "Browsing a project") |
 | `project_dir` | `id`, `project`, `worktree`, `path`, `root_id`, `entries`, `complete` — the reply to `list_project_dir`. `project`, `worktree` and `path` echo the request; `root_id` is the identity of the directory the listing was scoped to; `entries` are `BrowseEntry` records in byte order of their names' wire forms; `complete` is false when the listing was cut at a budget or an entry could not be read |
 | `project_file` | `id`, `project`, `worktree`, `path`, `source`, `file` — the reply to `read_project_file`. `project`, `worktree` and `path` echo the request; `source` is the `ContentSource` the body was read from and `file` the `FileContent` |
+| `project_changes` | `id`, `project`, `worktree`, `head`, `changes`, `complete` — the reply to `list_project_changes`. `project` and `worktree` echo the request; `head` is the commit the staged changes are against, null before the first commit; `changes` are `ChangeEntry` records in the order `git status` gives them; `complete` is false when the list was cut at a budget |
+| `project_change` | `id`, `project`, `worktree`, `group`, `head`, `old`, `new`, `patch` — the reply to `read_project_change`. `project`, `worktree` and `group` echo the request; `head` is the commit a staged change was read against (null before the first commit, and for the other groups); `old` and `new` are `SideRead` records; `patch` is a `FileContent` holding the change's unified patch as `git` writes it, null when none is made |
 | `page_list` | `id`, `console_session_id`, `pages` — oldest first. Pages are not in `snapshot`: one carries a whole HTML document, and only the console session on screen needs its pages, so the panel asks. Asking again after every `snapshot` is what keeps it correct across a `page_created` a lagging client never received: such a client is sent a fresh snapshot in place of the events it missed, on the socket it already has |
 | `page_created` | `page` — the whole record. The console session pushed a page with `show_page` |
 | `ack` | `id` |
@@ -179,9 +183,9 @@ A client also branches on some codes, instead of only showing them:
 | `file_not_found` | `path` | Nothing is at the path in that source: no file on disk (a link leading nowhere or round in a loop included), no entry in the index or the commit |
 | `permission_denied` | `path`, `detail` | The operating system refused to read the path or a directory on the way to it. `path` is absolute when the directory a request is scoped to cannot be read, and otherwise the request's own |
 | `outside_scope` | `path` | The path, with its symbolic links followed, leads outside the project's directory (or the worktree), and is not read |
-| `unsupported_file_type` | `path`, `file_type` | The path is not a regular file: `file_type` is `directory`, `file` (listing a file), `symlink` and `submodule` (in the index or a commit), `unmerged` (an index entry with conflicting stages), `fifo`, `socket`, `device` or `other`. A FIFO, socket or device is never opened |
-| `source_changed` | `path` | What was being read changed while it was read — the file, or the directory being listed — or a symbolic link appeared on its resolved path; nothing that was read is returned |
-| `limit_exceeded` | `limit`, `max`, `size?` | A browse budget was reached: `limit` is `file_bytes` (`size` the file's size, when known), `git_output`, `reply_bytes` or `pending_requests` — and, once the requests that use them are served, `patch_bytes` and `change_entries`; `max` is the budget. See "Browse budgets" |
+| `unsupported_file_type` | `path`, `file_type` | The path is not a regular file: `file_type` is `directory`, `file` (listing a file), `symlink` and `submodule` (in the index or a commit), `unmerged` (an index entry with conflicting stages, read from the index or as a change), `fifo`, `socket`, `device` or `other`. A FIFO, socket or device is never opened |
+| `source_changed` | `path` | What was being read changed while it was read — the file, the directory being listed, or a change's index entry or file on disk while its patch was made — or a symbolic link appeared on its resolved path; nothing that was read is returned |
+| `limit_exceeded` | `limit`, `max`, `size?` | A browse budget was reached: `limit` is `file_bytes` (`size` the file's size, when known), `git_output`, `reply_bytes`, `pending_requests` or `patch_bytes`; `max` is the budget. See "Browse budgets" |
 | `not_a_git_repository` | `project` | An index, branch or commit read, or a `worktree`, for a project that is in no Git repository |
 | `git_unavailable` | `detail` | The project's directory is inside a Git repository that `git` cannot read; `detail` is its message |
 | `worktree_unavailable` | `worktree` | The worktree id names no worktree of the project's repository any more: removed, or its path now holds something else |
@@ -189,6 +193,7 @@ A client also branches on some codes, instead of only showing them:
 | `unknown_branch` | `branch` | No local branch has that name |
 | `invalid_commit` | `commit` | Not a full, lower-case hexadecimal object id |
 | `unknown_commit` | `commit` | No commit has that id in the repository |
+| `invalid_change` | — | A `read_project_change` whose `change` names no side its group can read: both sides absent, an `out_of_scope` side outside the staged group, or an untracked change with an old side |
 | `git_failed` | `detail` | `git` failed on a browse read, or did not finish within its deadline; `detail` is its message |
 | `request_superseded` | — | A browse request was given up because a newer one took its slot |
 
@@ -394,10 +399,10 @@ of a console no client is showing stays in the daemon's status for it until that
 
 ### Browsing a project
 
-The browse requests — `get_project_source`, `list_project_dir` and `read_project_file` — read a project's files and
-their Git versions on demand, for a client showing them. Their replies go to the asking socket only: nothing about
-them is broadcast, nothing is kept for a later client, and none of it is part of `snapshot`, which carries no file
-content at all.
+The browse requests — `get_project_source`, `list_project_dir`, `read_project_file`, `list_project_changes` and
+`read_project_change` — read a project's files, their Git versions and a worktree's changes on demand, for a client
+showing them. Their replies go to the asking socket only: nothing about them is broadcast, nothing is kept for a later
+client, and none of it is part of `snapshot`, which carries no file content at all.
 
 Every browse request re-resolves its project from the store and its worktree from the repository as they stand at
 that moment. A client names a project by id and a worktree by the id `project_source` gave it, never by a directory:
@@ -413,6 +418,14 @@ ContentSource     = { kind: "live", root_id, version }
                   | { kind: "index", worktree, blob }
                   | { kind: "commit", commit, branch?, blob }
 FileContent       { size, kind: "text"|"binary", media_type?, text?, data? }
+ChangeEntry       = { group: "staged"|"unstaged"|"untracked", old: ChangeSide, new: ChangeSide }
+                  | { group: "conflicted", path, conflict }
+ChangeSide        = { state: "present", path, kind: "file"|"symlink"|"submodule", source: ContentSource }
+                  | { state: "absent" }
+                  | { state: "out_of_scope", repository_path }
+SideRead          = { state: "present", path, kind, source: ContentSource, file: FileContent? }
+                  | { state: "absent" }
+                  | { state: "out_of_scope" }
 ```
 
 #### Project sources
@@ -528,38 +541,77 @@ next reply, and nothing else.
 
 #### Changes and comparisons
 
-The requests that list a worktree's changes and compare two branches are not served yet. Their replies will identify
-content in the terms above, and this is the shape they take:
+`list_project_changes` lists a worktree's uncommitted changes and `read_project_change` reads one of them for its diff.
+The comparison of two branches is not served yet; its shape is recorded at the end of this section.
 
-```
-ChangeIdentity { group: "staged"|"unstaged"|"untracked"|"committed", old: ChangeSide, new: ChangeSide }
-ChangeSide     = { state: "present", path, kind: "file"|"symlink"|"submodule", source: ContentSource }
-               | { state: "absent" }
-               | { state: "out_of_scope", repository_path }
-```
+A change is identified by its group and both of its sides, not by a path alone:
 
-- A change is identified by its group and both of its sides, not by a path alone: a file both staged and changed
-  again since has two changes, one per group.
-- A present side's `path` is a wire path relative to the project's directory, as every browse `path` is.
-- An absent side — the old side of an added file, the new side of a deleted one — carries no path at all, so it can
-  never be resolved to a live file of the same name.
-- A side whose path lies outside the project's scope (a rename into the project from elsewhere in the repository) is
-  `out_of_scope`, distinct from absent, and carries its `repository_path` — relative to the repository's root, since
-  no path relative to the project can name it — for display only: no body is read for it and no patch content from it
-  is returned.
-- A present side's `kind` says what is there: a regular file, a symbolic link or a submodule. Only a file side's body
-  can be read; the patch shows a link's target as text and a submodule as its commit, the way `git` writes them. A
-  type change — a file that became a link, say — is one change whose two sides have different kinds.
-- A diff reply carries the `ContentSource` of both sides, and the patch and both bodies come from those same versions.
-  When a live side changes between reading the patch and reading its body, the reply is `source_changed` rather than a
-  patch from one version beside a body from another.
-- A patch over its budget is refused with `limit_exceeded` (`patch_bytes`), never cut: an incomplete patch is not
-  presented as a diff. A change list over its budget is cut and carries `complete: false`, as a listing does, its
-  limit being `change_entries`.
-- A branch comparison is the left branch's tip as the old side against the right branch's tip as the new side, each
-  resolved to its commit as above. Its reply echoes both and what they resolved to — `left: { branch, commit }`,
-  `right: { branch, commit }` — beside `project`, the `changes` and `complete`, so every change in it is identified
-  against exactly those two commits.
+- `staged` compares the commit at `HEAD` (the old side) with the worktree's index (the new side), and `unstaged` the
+  index with the files on disk. `untracked` is a file on disk that Git neither tracks nor ignores; its old side is
+  absent, so it is new content, never compared with an index entry it does not have. A file staged and changed again
+  since is two changes, one per group, each read against its own baseline.
+- A present side's `path` is a wire path relative to the project's directory, as every browse `path` is, and its
+  `source` is the version listed: a commit's blob, the index's blob, or the file on disk with its `version`.
+- An absent side — the old side of an added file, the new side of a deleted one, every old side before the first commit
+  — carries no path at all, so it can never be resolved to a live file of the same name.
+- A side whose path lies outside the project's scope (a rename into the project from elsewhere in the repository, or out
+  of it) is `out_of_scope`, distinct from absent, and carries its `repository_path` — relative to the repository's root,
+  since no path relative to the project can name it — for display only: no body is read for it, and no patch is made for
+  the change, since a patch would carry that side's content in its hunks. That is a staged rename. A rename on disk is
+  paired only for a path added with intent to add (`git add -N`); across the boundary, only its half inside the project
+  is listed, as the unstaged deletion or addition it is there, and it is read alone.
+- A present side's `kind` says what is there: a regular file, a symbolic link or a submodule. A directory is no side of
+  a change: a path that is a directory in a source is absent there, and a change never reads what lies below its paths.
+  Only a file side's body can be read; the patch shows a link's target as text and a submodule as its commit, the way
+  `git` writes them. A type change — a file that became a link, say — is one change whose two sides have different
+  kinds, and its patch holds two sections: the old side's removal and the new side's addition.
+- A path in conflict is not a two-sided change. It is listed as `conflicted`, with its `path` and its `conflict` —
+  `both_modified`, `both_added`, `both_deleted`, `added_by_us`, `added_by_them`, `deleted_by_us` or `deleted_by_them` —
+  and is read as a live file with `read_project_file`, which shows its conflict markers. Read as a change, it is refused
+  with `unsupported_file_type` (`unmerged`).
+
+The listing is one `git status` of the whole worktree, so its entries all come from one reading of the index and a
+rename is found against the rest of the repository. An entry is kept when either of its sides is inside the project's
+scope; the project's directory itself is not inside it. Files the repository ignores are not changes and are not listed,
+as `git status` does not list them; `list_project_dir` still shows them. A submodule's own uncommitted work belongs to
+that repository: only a submodule checked out at another commit than the index records is a change here. The changes of
+the project's scope are listed even when its directory is not on disk in that worktree, since a deletion is read from
+the index and `HEAD`, never from the disk. A disk side is what is on disk when the list is made, reached through no
+symbolic link — what lies beyond a link is, to Git, not there — and its `source` carries the `version` a live read of it
+would report while it stays as it is. A list over its budget is cut and carries `complete: false`, as a listing does: at
+most 10,000 entries or 2 MiB of paths as sent, the entries `git status` gave first.
+
+`read_project_change` reads the change at the paths it names as they are when it is read; a side named absent is looked
+up at the other side's path, so an addition that has since become a modification reads as one. A staged change is read
+against the commit at `HEAD`, resolved first and named in the reply's `head` (the empty tree before the first commit; a
+`HEAD` that names no commit otherwise is `git_failed`): its old side comes from that commit and its new side from the
+index. An unstaged change's old side comes from the index — a path added with intent to add holds nothing there yet, and
+its old side is `absent` — and its new side from the disk. A side no longer there is `absent`, and no side is ever read
+from the disk in place of the index or a commit. The patch is made by `git diff` over exactly those paths and nothing
+below them, with rename detection on and its presentation fixed whatever the user's configuration says, and the reply
+carries the `source` of both sides it was made from; with both sides absent there is nothing to compare, and the patch
+is empty. The index entries and the file on disk are looked at again once the patch is made, and a reply that may mix
+versions is refused with `source_changed`; reading it again gets a consistent copy. A reply whose sources differ from
+the listing's is the newer state, not an error: a change staged again, committed or overwritten since the listing reads
+as it is now, and the next listing agrees with it.
+
+A side's `file` is its body, carried only where no patch shows the content: the in-scope side of a change that crosses
+the project's boundary, an untracked file, and both file sides of a binary change, whose patch `git` writes as one line.
+A text change's content is in its patch alone. The patch is a `FileContent`, `text` or `binary` by the same rule as a
+body, so a patch that is not valid UTF-8 — of a file in another encoding, or with a header naming a path that is not
+UTF-8 — is `binary`. A patch over its budget is refused with `limit_exceeded` (`patch_bytes`), never cut: an incomplete
+patch is not presented as a diff. A change whose paths nest — a rename from `foo` to `foo/bar`, or back — cannot keep
+what lies below the outer path out of the `git` it runs: its index lookup is still matched exactly, and its patch keeps
+only the sections between its own two paths, made without rename detection so that neither is paired with a file below
+the other; it shows as its old path's removal and its new path's addition. What lies below the outer path still counts
+against the patch and metadata budgets, so a change with very much below it is refused with `limit_exceeded` rather than
+read. A `change` naming no side its group can read — both sides absent, an `out_of_scope` side outside the staged group,
+an untracked change with an old side — is `invalid_change`.
+
+A branch comparison, once served, is the left branch's tip as the old side against the right branch's tip as the new
+side, each resolved to its commit as above, its changes in a `committed` group. Its reply echoes both and what they
+resolved to — `left: { branch, commit }`, `right: { branch, commit }` — beside `project`, the `changes` and `complete`,
+so every change in it is identified against exactly those two commits.
 
 #### Git invocation
 
@@ -569,20 +621,27 @@ as every other `git` the daemon runs does:
 - Every `GIT_*` variable is removed except `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM` and `GIT_CONFIG_NOSYSTEM`, which
   only say where the user's own configuration is. That takes out everything that could point `git` at another
   repository, worktree, index or object store, and configuration passed through the environment.
-- `GIT_LITERAL_PATHSPECS=1`, so a file name is never a pattern; `GIT_NO_REPLACE_OBJECTS=1`, so an object id names the
-  object stored under it; `GIT_NO_LAZY_FETCH=1`, so a partial clone's missing object fails the read instead of going to
-  the network; `GIT_OPTIONAL_LOCKS=0`, so a read never takes the index lock from under an agent; the non-interactive
-  settings every daemon `git` has; and discovery capped at the home directory as above.
-- Every command runs with `--no-pager -c core.fsmonitor=false`, and every diff-family command with
-  `--no-ext-diff --no-textconv --no-color`: a configured external diff, textconv filter or file-system monitor is a
-  program that would run during the read and, for the first two, rewrite what is returned. Clean and smudge filters
-  stay in effect, since they define what a file's content in the repository is.
+- `GIT_LITERAL_PATHSPECS=1`, so a file name is never a pattern — except where a change is read: its index lookups and
+  its diff match each path exactly and nothing below it with `:(literal)<path>` and `:(exclude,glob)<path>/**` (the
+  path's glob characters escaped) (see "Changes and comparisons" for a change whose paths nest), and so run without it;
+  `GIT_NO_REPLACE_OBJECTS=1`, so an object id names the object stored under it; `GIT_NO_LAZY_FETCH=1`, so a partial
+  clone's missing object fails the read instead of going to the network; `GIT_OPTIONAL_LOCKS=0`, so `git status` never
+  takes the index lock to write back what it refreshed; the non-interactive settings every daemon `git` has; and
+  discovery capped at the home directory as above.
+- Every command runs with `--no-pager -c core.fsmonitor=false -c diff.autoRefreshIndex=false`, and every diff-family
+  command with `--no-ext-diff --no-textconv --no-color`: a configured external diff, textconv filter or file-system
+  monitor is a program that would run during the read and, for the first two, rewrite what is returned; and `git diff`,
+  comparing the index with the disk, would otherwise take the index lock and rewrite the index for a file whose
+  timestamps moved but whose content did not, which `GIT_OPTIONAL_LOCKS` does not prevent. No browse request writes to
+  the repository. Clean and smudge filters stay in effect, since they define what a file's content in the repository is.
 - Output is read as bytes, bounded while it is read, under a deadline, and the whole process group is killed on a
   deadline, an output budget or a cancel. A `git` whose output is still held open by something it started after it
   has exited fails rather than handing back output that may stop short.
 
 This needs Git 2.36 or later, for `git worktree list -z`. `GIT_NO_LAZY_FETCH` came with Git 2.45; an older Git ignores
-it, and can still fetch a partial clone's missing object during a read.
+it, and can still fetch a partial clone's missing object during a read. Telling a branch not born yet from a broken one,
+for a staged change's `HEAD`, takes `git show-ref --exists` (Git 2.43); before it, a broken branch is taken for one not
+born yet, and its staged changes are compared with the empty tree.
 
 #### Browse budgets
 
@@ -592,19 +651,22 @@ it, and can still fetch a partial clone's missing object during a read.
 | Patch, per change | 4 MiB | 99 % of the measured commits' whole patches were under about 1.2 MB, so one file's patch under this is the overwhelming case |
 | Directory entries | 10,000 | Counted on disk across the same projects' worktrees, ignored directories included: the largest held 6,418 entries (a Gradle cache) and 4,536 (an icon package in `node_modules`); 99.99 % held under 1,600 |
 | Listing names | 2 MiB, as sent | Bounds a listing whose names are few but long, counted as JSON writes them; 10,000 names of typical length are a small fraction of it |
-| Change entries | 10,000 | The largest measured commit changed 704 files and 99 % changed under 170; a worktree's pending changes are smaller still |
+| Change entries | 10,000 | The largest measured commit changed 704 files and 99 % changed under 170; a worktree's pending changes are smaller still. A change list past it is cut |
+| Change paths | 2 MiB, as sent | Bounds a change list whose entries are few but whose paths are long, counted as JSON writes them, the repository paths of sides outside the project included. A change list past it is cut |
+| `git status` output for a change list | 8 MiB | The status covers the whole worktree, since a rename into the project is only found against the rest of the repository; a record is about 120 bytes and its path, so this holds tens of thousands of changes. Past it the change list is refused (`git_output`) rather than built from part of the output |
 | `git` metadata output | 1 MiB | A `worktree list` entry is about 200 bytes; one path's index or tree entry is one line |
 | `git` stderr kept | 64 KiB | A `git` message is a few hundred bytes; the rest of a longer one is read and dropped |
 | `git` deadline | 30 s | Browse reads are local, so this only catches a wedged repository (a dead network volume, a held lock) |
 | Reads at once, daemon-wide | 4 | A viewer, its neighbour and a couple of directory expansions in parallel; more waits its turn. A read from disk has no deadline, so a volume that stops answering can hold these |
 | Outstanding requests, per connection | 16 | Waiting, being read, or queued until their reply is written. One more is refused with `limit_exceeded` at once, so a flooding client cannot grow the daemon's backlog |
-| Reserved per request | about 12 MiB for a file or a project source, about 7.8 MiB for a listing | Each request reserves its worst case before it starts. For a file that is three times the file body (a text body held as read and serialized, JSON escaping at most doubling it; a binary body held base64-encoded and serialized again) and room for the rest of the frame; for a listing, its names and the rest of its entries, each held as read and serialized. The reservation shrinks to the serialized reply and is given back once the reply is written to the socket. A reply that would be larger than its reservation is refused (`reply_bytes`) |
+| Reserved per request | about 12 MiB for a file or a project source, about 7.8 MiB for a listing, about 26.6 MiB for a change list, about 24.3 MiB for a change | Each request reserves its worst case before it starts. For a file that is three times the file body (a text body held as read and serialized, JSON escaping at most doubling it; a binary body held base64-encoded and serialized again) and room for the rest of the frame; for a listing, its names and the rest of its entries, each held as read and serialized; for a change list, the `git status` output while it is read and its entries, at 768 bytes each beside their paths, held as built and serialized; for a change, two bodies as a file reserves them beside a patch of at most 64 KiB, a body coming with a patch only when the patch carries no content (a text patch alone, at most 4 MiB, needs no more than one body). The reservation shrinks to the serialized reply and is given back once the reply is written to the socket. A reply that would be larger than its reservation is refused (`reply_bytes`) |
 | Bytes held for replies, per connection | about 48 MiB | Four file reads at their worst, so one window gets every read the daemon runs at a time |
 | Bytes held for replies, daemon-wide | about 96 MiB | Twice one connection's share, so a client that stops reading cannot hold every other connection's reads up |
 | Writing one frame | 30 s | Any frame on the control socket, not only a browse reply. On a loopback connection a client that takes no bytes for this long has stopped reading; its connection is closed, giving back what its queued replies held, and it reconnects to a fresh `snapshot` and asks again |
 
-The patch and change-entry budgets apply to the change and comparison requests once they are served. A diff reply
-holds a patch and two bodies, and reserves its own worst case on the same principle.
+A request takes its reservation in the order it came, out of the connection's share and then the daemon's: a large one
+waiting for room — a change list or a change at its worst, beside reads already holding theirs — holds back the smaller
+ones that came after it until it starts.
 
 #### Transport
 

@@ -1,8 +1,9 @@
 import { Spinner, ToggleButton, ToggleButtonGroup } from "@heroui/react";
-import React, { Suspense, lazy, useCallback, useEffect, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 
 import { useT } from "../i18n/react";
 import { diffPlan, textPlan } from "./budgets";
+import { withoutNoNewlineMarkers } from "./content";
 
 // The renderer module, with the library and its grammars, loads the first time code is shown.
 let rendererLoaded = false;
@@ -144,9 +145,43 @@ export function CodeSurface({
   );
 }
 
-/** A change as a diff, rendered from its patch within the budget, with the choice of layout; past
- * the budget, or when rendering fails, the patch as plain text, without the layout choice it no
- * longer has. */
+/** The choice between a unified and a split diff. */
+export function LayoutToggle({
+  layout,
+  onLayoutChange,
+}: {
+  layout: "unified" | "split";
+  onLayoutChange: (layout: "unified" | "split") => void;
+}): React.ReactElement {
+  const t = useT();
+  return (
+    <div className="flex shrink-0 justify-end">
+      <ToggleButtonGroup
+        aria-label={t("viewer.layout")}
+        size="sm"
+        selectionMode="single"
+        disallowEmptySelection
+        selectedKeys={[layout]}
+        onSelectionChange={(keys) => {
+          const [picked] = [...keys];
+          if (picked === "unified" || picked === "split") onLayoutChange(picked);
+        }}
+      >
+        <ToggleButton id="unified">{t("viewer.layout.unified")}</ToggleButton>
+        <ToggleButton id="split">{t("viewer.layout.split")}</ToggleButton>
+      </ToggleButtonGroup>
+    </div>
+  );
+}
+
+/**
+ * A change as a diff, rendered from its patch within the budget, with the choice of layout (left to
+ * the caller when `onLayoutChange` is absent, for several diffs sharing one); past the budget, or
+ * when rendering fails, the patch as plain text, without the layout choice it no longer has.
+ *
+ * Git's "\ No newline at end of file" marker lines are taken out before rendering and said in a
+ * notice of their own: the library draws the marker as a line of the change, in English.
+ */
 export function DiffSurface({
   resetKey,
   name,
@@ -159,11 +194,12 @@ export function DiffSurface({
   name: string;
   patch: string;
   layout: "unified" | "split";
-  onLayoutChange: (layout: "unified" | "split") => void;
+  onLayoutChange?: (layout: "unified" | "split") => void;
   theme: "light" | "dark";
 }): React.ReactElement {
   const t = useT();
   const label = t("viewer.contents", { name });
+  const marked = useMemo(() => withoutNoNewlineMarkers(patch), [patch]);
   const asText = (reason: string) => (
     <>
       <Notice>{reason}</Notice>
@@ -171,26 +207,13 @@ export function DiffSurface({
     </>
   );
   if (diffPlan(patch) === "patch") return asText(t("viewer.change.patchLarge"));
+  const ending = marked.old && marked.new ? "viewer.change.noNewlineBoth" : marked.old ? "viewer.change.noNewlineOld" : marked.new ? "viewer.change.noNewlineNew" : undefined;
   return (
     <RendererBoundary resetKey={resetKey} fallback={asText(t("viewer.change.patchFailed"))}>
-      <div className="flex shrink-0 justify-end">
-        <ToggleButtonGroup
-          aria-label={t("viewer.layout")}
-          size="sm"
-          selectionMode="single"
-          disallowEmptySelection
-          selectedKeys={[layout]}
-          onSelectionChange={(keys) => {
-            const [picked] = [...keys];
-            if (picked === "unified" || picked === "split") onLayoutChange(picked);
-          }}
-        >
-          <ToggleButton id="unified">{t("viewer.layout.unified")}</ToggleButton>
-          <ToggleButton id="split">{t("viewer.layout.split")}</ToggleButton>
-        </ToggleButtonGroup>
-      </div>
+      {onLayoutChange && <LayoutToggle layout={layout} onLayoutChange={onLayoutChange} />}
+      {ending && <Notice>{t(ending)}</Notice>}
       <CodeFrame label={label}>
-        <RenderedDiff name={name} patch={patch} layout={layout} theme={theme} />
+        <RenderedDiff name={name} patch={marked.patch} layout={layout} theme={theme} />
       </CodeFrame>
     </RendererBoundary>
   );

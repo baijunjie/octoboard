@@ -5,6 +5,9 @@ upstream** in the sidebar. Octoboard checks those projects against their remotes
 current console. What a check does beyond reporting depends on one setting, **Automatically sync
 repositories**, described last.
 
+A project's uncommitted changes are not part of this: they are in the project pane's Git mode (see
+`docs/product/project-pane-git-mode.md`), which only reads the repository and has no part in these checks.
+
 ## The branch badge
 
 At the end of a project's row — after the project's name, before the activity marker a collapsed project carries and

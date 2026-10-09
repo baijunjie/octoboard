@@ -9,7 +9,11 @@ import { displayWirePath } from "../wirePath";
 
 /** How a failed browse request is treated: given up for a newer one (nothing to show), worth asking
  * again at once, lost with the connection (asked again once it is back), or a failure to show. */
-export type BrowseFailure = { kind: "superseded" } | { kind: "changed" } | { kind: "disconnected" } | { kind: "failed"; message: string };
+export type BrowseFailure =
+  | { kind: "superseded" }
+  | { kind: "changed" }
+  | { kind: "disconnected" }
+  | { kind: "failed"; message: string; code: string };
 
 /** The browse budgets counted in bytes; the others (`pending_requests`, `change_entries`) are counts. */
 const BYTE_LIMITS = new Set(["file_bytes", "reply_bytes", "git_output", "patch_bytes"]);
@@ -54,11 +58,18 @@ export function browseFailure(
   if (err.code === "limit_exceeded" && err.params.limit === "file_bytes") {
     return {
       kind: "failed",
+      code: err.code,
       message:
         err.params.size !== undefined
           ? t("browser.error.fileTooLarge", { size: params.size!, max: params.max })
           : t("browser.error.fileTooLargeNoSize", { max: params.max }),
     };
   }
-  return { kind: "failed", message: daemonMessage(language, err.code, params, err.message, records) };
+  if (err.code === "limit_exceeded" && err.params.limit === "patch_bytes") {
+    return { kind: "failed", code: err.code, message: t("browser.error.patchTooLarge", { max: params.max }) };
+  }
+  if (err.code === "unsupported_file_type" && err.params.file_type === "unmerged") {
+    return { kind: "failed", code: err.code, message: t("browser.error.unmerged", { path: params.path ?? "" }) };
+  }
+  return { kind: "failed", code: err.code, message: daemonMessage(language, err.code, params, err.message, records) };
 }
