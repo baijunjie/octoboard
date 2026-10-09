@@ -3,8 +3,19 @@
 The official website presents Octoboard and its privacy policy. It is a static public site, separate from the
 application: visiting it does not connect to a local daemon, open a real agent session, or require an account.
 
-Status: not published. The website is prepared for GitHub Pages; publishing requires a manually triggered deployment.
-Repository pushes do not publish it automatically.
+## Publishing
+
+Every push to `main` publishes the static site to GitHub Pages. Pushes to other branches do not. The same
+publication can be started manually, and a manual run publishes the selected revision to that same site.
+
+Publication uses the origin and base path configured for the repository's GitHub Pages site, passed to generation
+as `NUXT_PUBLIC_SITE_ORIGIN` and `NUXT_APP_BASE_URL`. An origin reported as `http` is changed to `https` before
+generation, because Pages can report `http` until its certificate exists. An empty base path is `/`. Generation
+without these values uses the origin `https://octoboard.dev` and the base path `/`.
+
+The GitHub Pages custom domain is `octoboard.dev`. It is a repository setting, not a CNAME file, and a CNAME file
+is ignored when publishing this way. `www.octoboard.dev` is the www variant of that domain. When DNS records for
+both names exist, GitHub Pages redirects `www.octoboard.dev` to `octoboard.dev`.
 
 ## Pages and languages
 

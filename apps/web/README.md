@@ -68,9 +68,9 @@ Run these commands from the repository root:
 ## Configuration and publishing
 
 `NUXT_PUBLIC_SITE_ORIGIN` selects the public origin at build time, and `NUXT_APP_BASE_URL` selects its deployment
-path. Their defaults in `apps/web/site.config.ts` target the repository's GitHub Pages project site; a custom domain
-served at its root uses its own origin and a base path of `/`. The same configuration supplies page links, assets,
-canonical URLs and sitemap entries. When overriding these values, use the same values for generation and preview.
+path. Their defaults in `apps/web/site.config.ts` are the origin `https://octoboard.dev` and the base path `/`.
+The same configuration supplies page links, assets, canonical URLs and sitemap entries. When overriding these
+values, use the same values for generation and preview.
 
 The locale registration in `apps/web/nuxt.config.ts` maps the 17 catalog files to their route prefixes. English has
 no language prefix; Simplified Chinese uses `zh` in routes and `zh-Hans` for its catalog and language metadata.
@@ -81,6 +81,9 @@ Static generation includes every localized homepage and privacy page, their load
 application server. The Nuxt configuration produces the standalone error document from the rendered error route,
 removing scripts and preload links; the sitemap covers only the home and privacy pages.
 
-The manually dispatched [`.github/workflows/website.yml`](../../.github/workflows/website.yml) reads the configured
-GitHub Pages origin and base path, runs the locale and type checks, generates the website and deploys the static
-artifact. It does not run on pushes.
+[`.github/workflows/website.yml`](../../.github/workflows/website.yml) runs on pushes to `main` and on manual
+dispatch. It reads the GitHub Pages origin and base path with `actions/configure-pages`. An `http` origin is
+rewritten to `https` before generation, and an empty Pages base path becomes `/`. The workflow then runs the locale
+and type checks, generates the website, and deploys `apps/web/.output/public` to GitHub Pages. The custom domain
+`octoboard.dev` is the repository's GitHub Pages setting; publishing does not use a `CNAME` file, and Actions
+publishing ignores one.

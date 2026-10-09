@@ -1,6 +1,9 @@
 name: Deploy website
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -25,13 +28,24 @@ jobs:
           cache: pnpm
       - uses: actions/configure-pages@v5
         id: pages
+      # Pages reports an http origin until its certificate exists. The site is served over HTTPS.
+      - id: site
+        shell: bash
+        run: |
+          origin="${{ steps.pages.outputs.origin }}"
+          printf 'origin=%s\n' "${origin/#http:/https:}" >> "$GITHUB_OUTPUT"
+          base="${{ steps.pages.outputs.base_path }}"
+          if [ -z "$base" ]; then
+            base="/"
+          fi
+          printf 'base=%s\n' "$base" >> "$GITHUB_OUTPUT"
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @octoboard/web check:locales
       - run: pnpm --filter @octoboard/web typecheck
       - run: pnpm --filter @octoboard/web generate
         env:
-          NUXT_PUBLIC_SITE_ORIGIN: ${{ steps.pages.outputs.origin }}
-          NUXT_APP_BASE_URL: ${{ steps.pages.outputs.base_path || '/' }}
+          NUXT_PUBLIC_SITE_ORIGIN: ${{ steps.site.outputs.origin }}
+          NUXT_APP_BASE_URL: ${{ steps.site.outputs.base }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: apps/web/.output/public
