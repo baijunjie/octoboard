@@ -264,75 +264,22 @@ impl GitEnv {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+pub(super) mod tests {
     use super::*;
-    use crate::test_support::ScratchDir;
+    use crate::test_support::{git, isolated_git_env, repo_with, SYSTEM_GIT};
 
-    /// A `GitEnv` over this test process's own environment, plus `extra`, with `git` from
-    /// `/usr/bin` — the system one, already exec'd countless times, so no fresh-executable cost.
-    pub(crate) fn test_env(extra: &[(&str, &str)]) -> GitEnv {
-        let mut env: HashMap<String, String> = std::env::vars().collect();
-        env.retain(|key, _| !key.starts_with("GIT_"));
+    /// A `GitEnv` over [`isolated_git_env`] plus `extra`, running [`SYSTEM_GIT`].
+    ///
+    /// The two variables that keep the developer's own configuration out reach `git` only because
+    /// [`KEPT_GIT_VARIABLES`] holds them; every other `GIT_*` of theirs is dropped on the way, so
+    /// taking either off that list would quietly put their configuration back into every read a
+    /// test makes.
+    pub(in crate::browse) fn test_env(extra: &[(&str, &str)]) -> GitEnv {
+        let mut env = isolated_git_env();
         for (key, value) in extra {
             env.insert(key.to_string(), value.to_string());
         }
-        GitEnv::new("/usr/bin/git".to_string(), env)
-    }
-
-    /// Runs plain `git` in `dir` for fixture setup, failing the test on a non-zero exit. The user's
-    /// own configuration is left out, so a hook or a signing setting of theirs cannot get in the
-    /// way of a commit.
-    pub(crate) fn git(dir: &Path, args: &[&str]) -> Vec<u8> {
-        let args: Vec<&[u8]> = args.iter().map(|arg| arg.as_bytes()).collect();
-        git_bytes(dir, &args)
-    }
-
-    /// [`git`] with arguments that need not be UTF-8.
-    pub(crate) fn git_bytes(dir: &Path, args: &[&[u8]]) -> Vec<u8> {
-        use std::os::unix::ffi::OsStrExt;
-        let args: Vec<&std::ffi::OsStr> = args
-            .iter()
-            .map(|arg| std::ffi::OsStr::from_bytes(arg))
-            .collect();
-        let output = Command::new("/usr/bin/git")
-            .current_dir(dir)
-            .env_remove("GIT_DIR")
-            .env_remove("GIT_WORK_TREE")
-            .env_remove("GIT_INDEX_FILE")
-            .env("GIT_CONFIG_GLOBAL", "/dev/null")
-            .env("GIT_CONFIG_NOSYSTEM", "1")
-            .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
-            .args([
-                "-c",
-                "init.defaultBranch=main",
-                "-c",
-                "commit.gpgsign=false",
-            ])
-            .args(&args)
-            .output()
-            .expect("git runs");
-        assert!(
-            output.status.success(),
-            "git {args:?}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        output.stdout
-    }
-
-    /// A repository in a scratch directory with one commit holding `files`.
-    pub(crate) fn repo_with(label: &str, files: &[(&[u8], &[u8])]) -> ScratchDir {
-        use std::os::unix::ffi::OsStrExt;
-
-        let dir = ScratchDir::new(label);
-        git(&dir, &["init", "-q"]);
-        for (name, body) in files {
-            let path = dir.join(std::ffi::OsStr::from_bytes(name));
-            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(path, body).unwrap();
-        }
-        git(&dir, &["add", "-A"]);
-        git(&dir, &["commit", "-q", "-m", "fixture"]);
-        dir
+        GitEnv::new(SYSTEM_GIT.to_string(), env)
     }
 
     fn never() -> AtomicBool {
@@ -354,7 +301,7 @@ pub(crate) mod tests {
             ("GIT_CONFIG_PARAMETERS", "'core.worktree'='/'"),
         ];
         // The positive control: plain `git` with these variables reads the other repository.
-        let redirected = Command::new("/usr/bin/git")
+        let redirected = Command::new(SYSTEM_GIT)
             .current_dir(&*ours)
             .envs(overrides)
             .args(["cat-file", "blob", ":a.txt"])

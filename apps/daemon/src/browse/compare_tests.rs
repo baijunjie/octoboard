@@ -5,12 +5,12 @@
 use std::path::Path;
 
 use super::change_tests::{present, read_body, read_kind, read_source, summary, write};
-use super::git::tests::{git, repo_with};
 use super::tests::{code, Fixture};
 use super::*;
 use crate::protocol::{
     BranchInfo, ChangeEntry, ComparedChangeRef, ComparisonEndpoint, SideKind, SideRead, SideRef,
 };
+use crate::test_support::{git, git_stdin, repo_with};
 
 /// A comparison as `compare_project_branches` answered it.
 #[derive(Debug)]
@@ -223,7 +223,7 @@ fn local_branches_are_listed_with_their_tips_and_cut_at_their_budget() {
     let refs: String = (0..=budget::MAX_BRANCHES)
         .map(|n| format!("create refs/heads/b{n:05} {main}\n"))
         .collect();
-    super::change_tests::git_stdin(&repo, &["update-ref", "--stdin"], refs.as_bytes());
+    git_stdin(&repo, &["update-ref", "--stdin"], refs.as_bytes());
     let (branches, complete) = fixture.branches(&project).unwrap();
     assert_eq!((branches.len(), complete), (budget::MAX_BRANCHES, false));
 }

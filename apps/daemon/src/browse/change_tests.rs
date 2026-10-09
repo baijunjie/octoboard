@@ -5,14 +5,13 @@
 use std::path::Path;
 
 use super::changes::AFTER_PATCH;
-use super::git::tests::{git, repo_with};
 use super::tests::{bytes_of, code, Fixture};
 use super::*;
 use crate::protocol::{
     ChangeEntry, ChangeGroup, ChangeRef, ChangeSide, ConflictKind, ContentSource, SideKind,
     SideRead, SideRef,
 };
-use crate::test_support::ScratchDir;
+use crate::test_support::{fixture_git, git, git_stdin, repo_with, ScratchDir};
 
 /// A change as `read_project_change` answered it.
 #[derive(Debug)]
@@ -707,19 +706,8 @@ fn conflicts_are_listed_as_conflicts_and_never_read_as_two_sided_changes() {
     write(repo.join("f.txt"), b"ours\n");
     git(&repo, &["rm", "-q", "del.txt"]);
     git(&repo, &["commit", "-q", "-am", "ours"]);
-    let merge = std::process::Command::new("/usr/bin/git")
-        .current_dir(&*repo)
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .args([
-            "-c",
-            "user.name=t",
-            "-c",
-            "user.email=t@example.com",
-            "merge",
-            "-q",
-            "other",
-        ])
+    let merge = fixture_git(&repo)
+        .args(["merge", "-q", "other"])
         .output()
         .unwrap();
     assert!(!merge.status.success(), "the merge conflicts");
@@ -1331,21 +1319,6 @@ fn an_unstaged_type_change_and_a_submodule_replaced_by_a_directory_keep_their_si
         patch.contains("Subproject commit") && !patch.contains("INNER"),
         "{patch}"
     );
-}
-
-/// Runs plain `git` in `dir` with `input` on its stdin, for fixture setup.
-pub(super) fn git_stdin(dir: &Path, args: &[&str], input: &[u8]) {
-    use std::io::Write as _;
-    let mut child = std::process::Command::new("/usr/bin/git")
-        .current_dir(dir)
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .args(args)
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    child.stdin.take().unwrap().write_all(input).unwrap();
-    assert!(child.wait().unwrap().success(), "git {args:?}");
 }
 
 #[test]

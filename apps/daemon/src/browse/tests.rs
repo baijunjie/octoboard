@@ -9,14 +9,14 @@ use std::sync::Arc;
 
 use base64::Engine as _;
 
-use super::git::tests::{git, git_bytes, repo_with, test_env};
+use super::git::tests::test_env;
 use super::git::GitEnv;
 use super::*;
 use crate::protocol::{
     Agent, BrowseEntry, Console, ContentKind, EntryKind, LinkTarget, Project, ProjectSource,
 };
 use crate::state::AppState;
-use crate::test_support::{app_state, ScratchDir};
+use crate::test_support::{app_state, git, git_bytes, repo_with, ScratchDir};
 
 pub(super) struct Fixture {
     pub(super) state: Arc<AppState>,

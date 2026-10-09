@@ -1,13 +1,16 @@
 //! Fixtures the daemon's tests share: a scratch directory that removes itself, an `AppState` over
-//! a store in one, and a stand-in live session on a PTY that ends itself — each a guard, so a test
-//! that fails part-way cleans up as surely as one that passes — and the waits on a fixture
-//! process a test spawned: the pid it recorded, running a scenario again when it was killed
-//! before recording one, and its being gone. Compiled only for tests, and one module rather than
-//! a `tests/` directory because the fixtures reach private items (`LiveSession::new`,
+//! a store in one, and a stand-in live session on a PTY that ends itself — each a guard, so a
+//! test that fails part-way cleans up as surely as one that passes — the waits on a fixture
+//! process a test spawned (the pid it recorded, running a scenario again when it was killed
+//! before recording one, and its being gone), and the environment a test's `git` runs in together
+//! with the repositories it builds with it. Compiled only for tests, and one module rather than a
+//! `tests/` directory because some of the fixtures reach private items (`LiveSession::new`,
 //! `AppState::new`).
 
+use std::collections::HashMap;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -247,4 +250,93 @@ pub(crate) fn assert_gone_by(pid: i32, deadline: Instant) {
         }
         std::thread::sleep(Duration::from_millis(20));
     }
+}
+
+/// The environment a test's `git` runs in: this process's own, without any `GIT_*` variable, plus
+/// no global or system configuration. A variable of the developer's shell (`GIT_DIR`, say) cannot
+/// redirect a command, and their own configuration, hooks or signing settings cannot decide what a
+/// test observes.
+pub(crate) fn isolated_git_env() -> HashMap<String, String> {
+    let mut env: HashMap<String, String> = std::env::vars().collect();
+    env.retain(|key, _| !key.starts_with("GIT_"));
+    env.insert("GIT_CONFIG_GLOBAL".to_string(), "/dev/null".to_string());
+    env.insert("GIT_CONFIG_NOSYSTEM".to_string(), "1".to_string());
+    env
+}
+
+/// The `git` a test runs: the system one, already exec'd countless times, so no
+/// fresh-executable cost.
+pub(crate) const SYSTEM_GIT: &str = "/usr/bin/git";
+
+/// A `git` command in `dir` for fixture setup, over exactly [`isolated_git_env`] and nothing
+/// more. The caller adds the subcommand, and runs it where it needs its output, its exit status
+/// or a pipe on its stdin.
+///
+/// It arrives with `-c` options already queued, so a caller adding one of its own adds it before
+/// the subcommand: a `-c` after the subcommand is an argument to that subcommand instead.
+///
+/// The identity and the default branch name are passed per command because that environment
+/// leaves no configuration to take them from: without them a commit fails for want of an author
+/// and the first branch is whatever `git`'s own built-in default is.
+pub(crate) fn fixture_git(dir: &Path) -> Command {
+    let mut command = Command::new(SYSTEM_GIT);
+    command
+        .current_dir(dir)
+        .env_clear()
+        .envs(isolated_git_env())
+        .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+        .args(["-c", "init.defaultBranch=main"]);
+    command
+}
+
+/// Runs plain `git` in `dir` through [`fixture_git`], failing the test on a non-zero exit.
+/// Returns what it printed.
+pub(crate) fn git(dir: &Path, args: &[&str]) -> Vec<u8> {
+    let args: Vec<&[u8]> = args.iter().map(|arg| arg.as_bytes()).collect();
+    git_bytes(dir, &args)
+}
+
+/// [`git`] with arguments that need not be UTF-8.
+pub(crate) fn git_bytes(dir: &Path, args: &[&[u8]]) -> Vec<u8> {
+    use std::os::unix::ffi::OsStrExt;
+    let args: Vec<&std::ffi::OsStr> = args
+        .iter()
+        .map(|arg| std::ffi::OsStr::from_bytes(arg))
+        .collect();
+    let output = fixture_git(dir).args(&args).output().expect("git runs");
+    assert!(
+        output.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    output.stdout
+}
+
+/// [`git`] with `input` on its stdin, for a subcommand that reads one. Its own output is left to
+/// the test's, so a failure reports the arguments alone rather than `git`'s complaint.
+pub(crate) fn git_stdin(dir: &Path, args: &[&str], input: &[u8]) {
+    use std::io::Write as _;
+    let mut child = fixture_git(dir)
+        .args(args)
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(input).unwrap();
+    assert!(child.wait().unwrap().success(), "git {args:?}");
+}
+
+/// A repository in a scratch directory with one commit holding `files`.
+pub(crate) fn repo_with(label: &str, files: &[(&[u8], &[u8])]) -> ScratchDir {
+    use std::os::unix::ffi::OsStrExt;
+
+    let dir = ScratchDir::new(label);
+    git(&dir, &["init", "-q"]);
+    for (name, body) in files {
+        let path = dir.join(std::ffi::OsStr::from_bytes(name));
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, body).unwrap();
+    }
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-q", "-m", "fixture"]);
+    dir
 }

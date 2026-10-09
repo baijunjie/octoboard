@@ -536,8 +536,7 @@ fn parse_ab(text: &str) -> (u32, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::browse::git::tests::{git, repo_with};
-    use crate::test_support::ScratchDir;
+    use crate::test_support::{git, isolated_git_env, repo_with, ScratchDir, SYSTEM_GIT};
 
     #[test]
     fn a_normal_branch_with_an_upstream_and_no_movement() {
@@ -765,17 +764,11 @@ mod tests {
     }
 
     /// Runs the branch-header read in `repo` with the given access, as [`run_git_read`] would
-    /// but over the test process's own environment and the system `git`, and returns what it
-    /// reported.
+    /// but over [`isolated_git_env`] and the system `git`, and returns what it reported.
     fn read_header(repo: &Path, access: GitAccess) -> BranchHeader {
-        let mut env: HashMap<String, String> = std::env::vars().collect();
-        env.retain(|key, _| !key.starts_with("GIT_"));
-        // The user's own configuration is left out, as it is for every other `git` a test runs.
-        env.insert("GIT_CONFIG_GLOBAL".to_string(), "/dev/null".to_string());
-        env.insert("GIT_CONFIG_NOSYSTEM".to_string(), "1".to_string());
         let mut command = git_command(
-            Path::new("/usr/bin/git"),
-            &env,
+            Path::new(SYSTEM_GIT),
+            &isolated_git_env(),
             repo,
             BRANCH_HEADER_ARGS,
             access,

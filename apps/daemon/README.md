@@ -70,7 +70,7 @@ the repository root and cover both crates; `-p octoboardd` narrows either to thi
 | `src/instance_lock.rs` | Enforces one daemon per data directory |
 | `src/paths.rs` | Where Octoboard keeps its own files, under `~/.octoboard`, and the host's home directory when it is really known (`known_home_dir`), as reported to clients |
 | `src/adapter/` | One adapter per agent CLI — see below |
-| `src/test_support.rs` | Test-only (`#[cfg(test)]`, not part of the binary): the fixtures the modules' unit tests share — a self-removing scratch directory and file, an `AppState` over a fresh store in one, a stand-in live session on a PTY that ends itself, and the helpers for tests that run a fixture shell and check the processes it left (`env_shell` and `subprocess` tests) |
+| `src/test_support.rs` | Test-only (`#[cfg(test)]`, not part of the binary): the fixtures the modules' unit tests share — a self-removing scratch directory and file, an `AppState` over a fresh store in one, a stand-in live session on a PTY that ends itself, the helpers for tests that run a fixture shell and check the processes it left (`env_shell` and `subprocess` tests), and the git fixtures: `isolated_git_env` (the process environment without any `GIT_*` variable and with no global or system git configuration, which the `git_status.rs` and `browse/` tests share), `git_command` (the system git, `SYSTEM_GIT`, in a directory in that environment, which the other git fixtures are built on), `git` / `git_bytes` (plain `git` for fixture setup, failing the test on a non-zero exit), `git_stdin` (the same with input piped in) and `repo_with` (a repository in a scratch directory with one commit) |
 
 ### `src/mcp/`
 
