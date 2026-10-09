@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 
 import { arrowNavigation } from "./arrowKeys";
 
@@ -41,4 +41,16 @@ it("leaves the arrows to a control that uses them, and to a text selection", () 
   range.selectNodeContents(frame);
   document.getSelection()!.addRange(range);
   expect(arrowNavigation(press(frame, "ArrowRight"), dialog)).toBeUndefined();
+});
+
+it("leaves the arrows to a selection in the rendered code, which WebKit reports collapsed at its shadow host", () => {
+  const { dialog, frame } = viewer();
+  // jsdom does not re-scope a shadow-root selection; this is what WebKit's `getSelection()` reports.
+  const reported = { type: "Range", isCollapsed: true, anchorNode: frame } as unknown as Selection;
+  const spy = vi.spyOn(document, "getSelection").mockReturnValue(reported);
+  try {
+    expect(arrowNavigation(press(frame, "ArrowRight"), dialog)).toBeUndefined();
+  } finally {
+    spy.mockRestore();
+  }
 });

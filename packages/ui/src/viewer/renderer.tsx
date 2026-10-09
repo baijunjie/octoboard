@@ -1,6 +1,7 @@
 // The one module that touches the rendering library (`@pierre/diffs`, over Shiki). It is loaded
 // lazily by `CodeSurface.tsx`, so the library and its grammars stay out of the startup bundle, and
-// nothing outside it sees a library type: callers hand it plain text and patches.
+// nothing outside it sees a library type: callers hand it plain text and patches. The one thing
+// read from the library's rendered DOM elsewhere is `rendererDom.ts`, which cannot live here.
 import { getFiletypeFromFileName, preloadHighlighter, processFile, type FileContents, type FileDiffMetadata } from "@pierre/diffs";
 import { File, FileDiff, WorkerPoolContext } from "@pierre/diffs/react";
 import { getOrCreateWorkerPoolSingleton, terminateWorkerPoolSingleton } from "@pierre/diffs/worker";

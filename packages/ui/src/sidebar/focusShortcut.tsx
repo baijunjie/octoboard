@@ -1,14 +1,14 @@
 import { Kbd } from "@heroui/react";
 import React from "react";
 
-import { IS_MAC, useWindowShortcut } from "../useWindowShortcut";
+import { IS_MAC, isPrimaryModifier, useWindowShortcut } from "../useWindowShortcut";
 
 /** ⇧⌘F on macOS, Ctrl+Shift+F elsewhere: a combination the terminal's agents do not use, since
  * on macOS ⌘ never reaches a terminal application, and not one of the system's own. Matched on the
  * physical key so a keyboard layout or a held Shift does not change it. */
 function matchFocusShortcut(event: KeyboardEvent): true | undefined {
   if (event.code !== "KeyF" || !event.shiftKey || event.altKey) return undefined;
-  return (IS_MAC ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey) ? true : undefined;
+  return isPrimaryModifier(event) ? true : undefined;
 }
 
 /** Toggles focus mode from the keyboard: enters it for the project of the selected session, or

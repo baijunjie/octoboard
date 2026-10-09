@@ -303,7 +303,8 @@ commit and its new side from To's, and is shown as a staged change is below; it 
   conflict markers where both sides modified or added it. A path both sides deleted has no file to show and says it
   does not exist.
 
-How a diff is coloured in each appearance is in "What follows the choice" in `docs/product/appearance.md`.
+How a diff is coloured in each appearance is in "What follows the choice" in `docs/product/appearance.md`. A diff's
+code is focused, selected and copied as a file's is (see "Selecting and copying" in `docs/product/project-pane.md`).
 
 ### Moving between changes
 

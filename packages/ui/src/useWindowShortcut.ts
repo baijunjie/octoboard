@@ -5,6 +5,12 @@ import { MODAL_OPEN } from "./layout/useRegionCycle";
 /** Whether the keyboard is an Apple one, where ⌘ is the shortcut modifier. */
 export const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
+/** Whether the platform's shortcut modifier is held, and not the other one: ⌘ on an Apple keyboard,
+ * Ctrl elsewhere. */
+export function isPrimaryModifier(event: Pick<KeyboardEvent, "metaKey" | "ctrlKey">): boolean {
+  return IS_MAC ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+}
+
 /**
  * A window-wide keyboard shortcut. `match` says what, if anything, a key press means (it is told
  * nothing else, so it can be a plain function of the event); a match calls `run` with it.

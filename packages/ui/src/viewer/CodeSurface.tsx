@@ -1,9 +1,11 @@
 import { Spinner, ToggleButton, ToggleButtonGroup } from "@heroui/react";
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { useFocusRing } from "react-aria";
 
 import { useT } from "../i18n/react";
 import { diffPlan, textPlan } from "./budgets";
 import { withoutNoNewlineMarkers } from "./content";
+import { isSelectAll, selectCode } from "./selectAll";
 
 // The renderer module, with the library and its grammars, loads the first time code is shown.
 let rendererLoaded = false;
@@ -64,29 +66,53 @@ function Notice({ children }: { children: React.ReactNode }): React.ReactElement
 /** Text as it is, laid out by the browser as one preformatted node: what the viewer falls back to
  * past a budget or when the renderer fails, and cheap at any size the daemon sends. */
 export function PlainText({ text, label }: { text: string; label: string }): React.ReactElement {
+  const frame = useCodeFrame();
   return (
     <pre
       dir="ltr"
       tabIndex={0}
       role="region"
       aria-label={label}
-      className="min-h-0 flex-1 overflow-auto rounded-xl bg-surface-secondary p-3 font-mono text-xs leading-5 break-words whitespace-pre-wrap text-foreground outline-none focus-visible:ring-2 focus-visible:ring-focus"
+      {...frame}
+      className="min-h-0 flex-1 overflow-auto rounded-xl bg-surface-secondary p-3 font-mono text-xs leading-5 break-words whitespace-pre-wrap text-foreground outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
     >
       {text}
     </pre>
   );
 }
 
+/**
+ * What both code frames share as focusable regions: a focus ring, and Select All taking the code
+ * alone (`selectCode`), left to the browser's own where that cannot.
+ *
+ * The ring follows react-aria's focus-visible state rather than CSS `:focus-visible`: in the app's
+ * WKWebView a frame reached with Tab inside the viewer did not match `:focus-visible` and showed no
+ * ring, while the viewer's buttons beside it did.
+ */
+function useCodeFrame(): React.HTMLAttributes<HTMLElement> & { "data-focus-visible"?: true } {
+  const { focusProps, isFocusVisible } = useFocusRing();
+  return {
+    ...focusProps,
+    "data-focus-visible": isFocusVisible || undefined,
+    onKeyDown: (event) => {
+      if (!isSelectAll(event)) return;
+      if (selectCode(event.currentTarget)) event.preventDefault();
+    },
+  };
+}
+
 /** The scrolling frame around rendered code. It takes focus so the code can be scrolled from the
  * keyboard, and keeps the code in its own reading direction under a right-to-left language. */
 function CodeFrame({ label, children }: { label: string; children: React.ReactNode }): React.ReactElement {
+  const frame = useCodeFrame();
   return (
     <div
       dir="ltr"
       tabIndex={0}
       role="region"
       aria-label={label}
-      className="min-h-0 flex-1 overflow-auto rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-focus"
+      {...frame}
+      className="min-h-0 flex-1 overflow-auto rounded-xl outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
     >
       <Suspense fallback={<Loading />}>{children}</Suspense>
     </div>

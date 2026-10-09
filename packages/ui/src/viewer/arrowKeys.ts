@@ -24,8 +24,10 @@ export function arrowNavigation(event: KeyboardEvent, viewer: Element): "previou
   if (event.isComposing || event.keyCode === 229 || event.defaultPrevented) return undefined;
   const target = event.target instanceof Element ? event.target : undefined;
   if (target?.closest(OWNS_ARROWS)) return undefined;
+  // `type`, not `isCollapsed`: WebKit reports a selection lying inside a shadow root, as all the
+  // rendered code does, as collapsed at the shadow host, and only its `type` still says "Range".
   const selection = viewer.ownerDocument.getSelection();
-  if (selection && !selection.isCollapsed && selection.anchorNode && within(viewer, selection.anchorNode)) return undefined;
+  if (selection?.type === "Range" && selection.anchorNode && within(viewer, selection.anchorNode)) return undefined;
   const rtl = getComputedStyle(viewer).direction === "rtl";
   return (event.key === "ArrowLeft") !== rtl ? "previous" : "next";
 }

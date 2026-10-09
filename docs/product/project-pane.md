@@ -152,6 +152,19 @@ same viewer; what it shows of a change is in "Opening a change" in `docs/product
   name, not even for a moment while moving between files.
 - **A file that cannot be shown** says why (see "Errors" below).
 
+### Selecting and copying
+
+The **code region** — a file's code, highlighted or plain, or a change's diff or plain patch — takes keyboard focus,
+with Tab or a click, so it can be scrolled from the keyboard; reached with Tab it shows a focus ring.
+
+With keyboard focus on the code region, **⌘A** (Ctrl+A off macOS) selects that region's code and nothing else: not
+its line numbers, not a diff's markers, and not the viewer's title, path and size, so copying takes the code alone.
+While the code has not been drawn yet, the key selects nothing. A change shown as two diffs, Before and After, is two
+code regions, and the key selects the one with keyboard focus.
+
+While text inside the viewer is selected, the Left and Right arrow keys leave it selected rather than moving to
+another file (see "Moving between files" below).
+
 ### Moving between files
 
 **Previous file** and **Next file**, at the foot of the viewer, and the **Left** and **Right** arrow keys move to the
