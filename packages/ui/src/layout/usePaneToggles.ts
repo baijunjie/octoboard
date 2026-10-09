@@ -5,7 +5,7 @@ import { useDockedPanelVisible, type DockedPanel } from "./panelVisibility";
 import { type ConsolePeek, useConsolePeek } from "./useConsolePeek";
 import { MODAL_OPEN } from "./useRegionCycle";
 
-/** Whether the pane holds keyboard focus: a tree row reached by Tab, or the report's iframe. */
+/** Whether the pane holds keyboard focus: a tree row reached by Tab, or a control or frame in the aside. */
 function holdsFocus(panel: DockedPanel): boolean {
   const panes = document.querySelectorAll(`[data-pane=${panel}]`);
   return Array.from(panes).some((pane) => pane.contains(document.activeElement));
@@ -25,9 +25,10 @@ const PEEK_HIDE_DELAY_MS = 200;
 export interface PanePeek {
   /** Whether the pane is currently floating. Never true below the breakpoint or while it is docked. */
   active: boolean;
-  /** Floats the pane in, as the pointer rests on the report panel's edge or reaches its toggle; does
-   * nothing where the pane cannot float, and closes the other side's floating pane. It arms no
-   * slide-away timer: that starts when the pointer leaves the pane or the toggle (`leave`). */
+  /** Floats the pane in, as the pointer rests on whatever brings it up (the aside's edge strip or
+   * toggle; the sidebar's is the rail's avatars, through `useConsolePeek`); does nothing where the
+   * pane cannot float, and closes the other side's floating pane. It arms no slide-away timer: that
+   * starts when the pointer leaves the pane or whatever brought it up (`leave`). */
   reveal: () => void;
   /** The pointer is on the floating pane again: cancels a pending slide-away. */
   keep: () => void;
@@ -66,14 +67,14 @@ function usePanePeek(panel: DockedPanel, peekable: boolean, focusTerminal: () =>
   const leave = () => {
     clearTimeout(timer.current);
     if (!activeRef.current) return;
-    // A menu opened from the floating pane lives in a popover outside it, so the pointer
-    // moving onto the menu looks like leaving: while a popup trigger inside is expanded, keep
-    // waiting. So it does while focus is inside the pane: closing it would move focus to the
-    // terminal mid-typing, and the rest of the keystrokes would reach the agent. A dialog opened
-    // from the pane is outside it too, with no popup trigger to show for it, so one open keeps
-    // it as well. So does the pointer being on the pane, which a pane that slid in under a still
-    // pointer may never have reported (`:hover` is up to date once it is there). Escape and the
-    // toggle still close it.
+    // A menu opened from the floating pane lives in a popover outside it, so the pointer moving onto
+    // the menu looks like leaving: while a popup trigger inside is expanded, keep waiting. So it does
+    // while focus is inside the pane: closing it would move focus to the terminal mid-typing, and the
+    // rest of the keystrokes would reach the agent. A dialog opened from the pane is outside it too,
+    // with no popup trigger to show for it, so one open keeps it as well — such as the file viewer a
+    // project's browser opens, which gives focus back to a row of the pane when it closes. So does
+    // the pointer being on the pane, which a pane that slid in under a still pointer may never have
+    // reported (`:hover` is up to date once it is there). Escape and the toggle still close it.
     const tick = () => {
       const popupOpen = document.querySelector(`[data-pane=${panel}] [aria-haspopup][aria-expanded=true]`);
       const pointerOn = document.querySelector(`[data-pane=${panel}]:hover`);
@@ -102,61 +103,65 @@ function usePanePeek(panel: DockedPanel, peekable: boolean, focusTerminal: () =>
 
 export interface PaneToggles {
   sidebarOpen: boolean;
-  reportOpen: boolean;
+  asideOpen: boolean;
   sidebarDocked: boolean;
-  reportDocked: boolean;
+  asideDocked: boolean;
   /** The hidden docked sidebar floating over the terminal because the pointer is on a console's avatar. */
   sidebarPeek: SidebarPeek;
-  /** The report panel's floating, from the window's end edge or the report toggle. */
-  reportPeek: PanePeek;
+  /** The aside's floating, from the window's end edge or the aside's toggle. */
+  asidePeek: PanePeek;
   sidebarShown: boolean;
-  reportShown: boolean;
+  asideShown: boolean;
   toggleSidebar: () => void;
-  toggleReport: () => void;
+  toggleAside: () => void;
   closeSidebar: () => void;
-  closeReport: () => void;
+  closeAside: () => void;
+  /** Puts the aside on screen for good, for an explicit request to see what it holds: docks it
+   * at and above the breakpoint, opens its drawer (closing the sidebar's) below it. */
+  showAside: () => void;
   /** Closes every overlay that is open, a narrow-mode drawer or a floating pane, as Escape does;
    * does nothing while none is, so focus inside a docked pane stays put. */
   dismissOverlays: () => void;
 }
 
 /**
- * The state behind the two panel toggles (the sidebar's in the top bar, the report panel's on the
- * rail). Below the `docked` breakpoint the sidebar and the report panel are closed-by-default
- * overlays (their own components' doc comments have the layout); at and above it the same toggles
- * show or hide the docked panes instead (`panelVisibility.ts`). Both states live in one place since
- * the toggles sit in the window chrome, and widening the window past the breakpoint has to be able
- * to close either overlay.
+ * The state behind the two panel toggles (the sidebar's in the top bar, the aside's on the rail).
+ * The aside is the pane at the end side, which shows whatever owns it at the moment: a console
+ * session's report panel or a project's browser (`asideOwner.ts`). Below the `docked` breakpoint
+ * the sidebar and the aside are closed-by-default overlays (their own components' doc comments
+ * have the layout); at and above it the same toggles show or hide the docked panes instead
+ * (`panelVisibility.ts`). Both states live in one place since the toggles sit in the window chrome,
+ * and widening the window past the breakpoint has to be able to close either overlay.
  *
  * While a docked pane is hidden, the pointer can float it in over the terminal without resizing
- * it (`sidebarPeek`, `reportPeek`): the sidebar is brought up by a console's avatar on the rail,
- * the report panel by the window's end edge or its toggle; leaving it (or Escape) hides it again,
- * and pressing the toggle docks it for good. The two never float together: revealing one hides the
+ * it (`sidebarPeek`, `asidePeek`): the sidebar is brought up by a console's avatar on the rail,
+ * the aside by the window's end edge or its toggle; leaving it (or Escape) hides it again, and
+ * pressing the toggle docks it for good. The two never float together: revealing one hides the
  * other.
  *
- * `hasReportPanel` is whether the selected session has a report panel at all (only a console
- * session does); `focusTerminal` is where keyboard focus goes when the pane holding it is hidden.
+ * `hasAside` is whether anything owns the aside at the moment; `focusTerminal` is where keyboard
+ * focus goes when the pane holding it is hidden.
  */
 export function usePaneToggles({
-  hasReportPanel,
+  hasAside,
   focusTerminal,
 }: {
-  hasReportPanel: boolean;
+  hasAside: boolean;
   focusTerminal: () => void;
 }): PaneToggles {
   const isNarrow = useIsNarrow();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [reportOpen, setReportOpen] = useState(false);
+  const [asideOpen, setAsideOpen] = useState(false);
   const [sidebarDocked, setSidebarDocked] = useDockedPanelVisible("sidebar");
-  const [reportDocked, setReportDocked] = useDockedPanelVisible("report");
+  const [asideDocked, setAsideDocked] = useDockedPanelVisible("aside");
   const sidebarPeek = usePanePeek("sidebar", !isNarrow && !sidebarDocked, focusTerminal);
-  const reportPeek = usePanePeek("report", !isNarrow && !reportDocked && hasReportPanel, focusTerminal);
+  const asidePeek = usePanePeek("aside", !isNarrow && !asideDocked && hasAside, focusTerminal);
   const revealPeek = (mine: PeekControl, other: PeekControl) => () => {
     if (!mine.peekable) return;
     other.hide();
     mine.reveal();
   };
-  const consolePeek = useConsolePeek({ ...sidebarPeek, reveal: revealPeek(sidebarPeek, reportPeek) });
+  const consolePeek = useConsolePeek({ ...sidebarPeek, reveal: revealPeek(sidebarPeek, asidePeek) });
 
   // An overlay left open stops meaning anything once the window is wide enough to show its
   // content in the row instead — without this, widening past the breakpoint with a drawer open
@@ -169,35 +174,35 @@ export function usePaneToggles({
   useEffect(() => {
     if (isNarrow) return;
     if (!sidebarDocked) releaseFocus("sidebar", focusTerminal);
-    if (!reportDocked) releaseFocus("report", focusTerminal);
+    if (!asideDocked) releaseFocus("aside", focusTerminal);
     setSidebarOpen(false);
-    setReportOpen(false);
+    setAsideOpen(false);
   }, [isNarrow]);
 
-  // Selecting a session whose console has no report panel leaves `reportOpen` with nothing to
-  // mean: the panel stops rendering (it only exists for a console session), but a scrim rendered on
-  // `reportOpen` alone would still dim the whole viewport with no toggle left to close it.
+  // The aside losing its owner leaves `asideOpen` with nothing to mean: the pane stops rendering,
+  // but a scrim rendered on `asideOpen` alone would still dim the whole viewport with no toggle
+  // left to close it.
   useEffect(() => {
-    if (!hasReportPanel) setReportOpen(false);
-  }, [hasReportPanel]);
+    if (!hasAside) setAsideOpen(false);
+  }, [hasAside]);
 
   const closeSidebar = () => {
     releaseFocus("sidebar", focusTerminal);
     setSidebarOpen(false);
   };
-  const closeReport = () => {
-    releaseFocus("report", focusTerminal);
-    setReportOpen(false);
+  const closeAside = () => {
+    releaseFocus("aside", focusTerminal);
+    setAsideOpen(false);
   };
 
   const dismissOverlays = () => {
-    if (!sidebarOpen && !reportOpen && !sidebarPeek.active && !reportPeek.active) return;
+    if (!sidebarOpen && !asideOpen && !sidebarPeek.active && !asidePeek.active) return;
     // Only a drawer that is open: closing one runs `releaseFocus`, which would pull focus out of a
     // docked pane that is not being hidden.
     if (sidebarOpen) closeSidebar();
-    if (reportOpen) closeReport();
+    if (asideOpen) closeAside();
     sidebarPeek.hide();
-    reportPeek.hide();
+    asidePeek.hide();
   };
 
   // Opening either drawer closes the other — without this, both scrims can be on screen at once,
@@ -211,16 +216,25 @@ export function usePaneToggles({
     }
     if (sidebarOpen) return closeSidebar();
     setSidebarOpen(true);
-    closeReport();
+    closeAside();
   };
-  const toggleReport = () => {
+  const toggleAside = () => {
     if (!isNarrow) {
-      if (reportDocked) releaseFocus("report", focusTerminal);
-      else reportPeek.hide(false);
-      return setReportDocked(!reportDocked);
+      if (asideDocked) releaseFocus("aside", focusTerminal);
+      else asidePeek.hide(false);
+      return setAsideDocked(!asideDocked);
     }
-    if (reportOpen) return closeReport();
-    setReportOpen(true);
+    if (asideOpen) return closeAside();
+    setAsideOpen(true);
+    closeSidebar();
+  };
+  const showAside = () => {
+    if (!isNarrow) {
+      if (asideDocked) return;
+      asidePeek.hide(false);
+      return setAsideDocked(true);
+    }
+    setAsideOpen(true);
     closeSidebar();
   };
 
@@ -244,7 +258,7 @@ export function usePaneToggles({
   // what `useRefocusIfLost` in `dialogs/Dialog.tsx` exists to prevent, so it is not worth a second
   // guard here.
   useEffect(() => {
-    if (!sidebarOpen && !reportOpen && !sidebarPeek.active && !reportPeek.active) return;
+    if (!sidebarOpen && !asideOpen && !sidebarPeek.active && !asidePeek.active) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       const target = event.target as Element | null;
@@ -256,21 +270,22 @@ export function usePaneToggles({
     };
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [sidebarOpen, reportOpen, sidebarPeek.active, reportPeek.active]);
+  }, [sidebarOpen, asideOpen, sidebarPeek.active, asidePeek.active]);
 
   return {
     sidebarOpen,
-    reportOpen,
+    asideOpen,
     sidebarDocked,
-    reportDocked,
+    asideDocked,
     sidebarPeek: { active: sidebarPeek.active, keep: sidebarPeek.keep, leave: sidebarPeek.leave, ...consolePeek },
-    reportPeek: { ...reportPeek, reveal: revealPeek(reportPeek, sidebarPeek) },
+    asidePeek: { ...asidePeek, reveal: revealPeek(asidePeek, sidebarPeek) },
     sidebarShown: isNarrow ? sidebarOpen : sidebarDocked,
-    reportShown: isNarrow ? reportOpen : reportDocked,
+    asideShown: isNarrow ? asideOpen : asideDocked,
     toggleSidebar,
-    toggleReport,
+    toggleAside,
     closeSidebar,
-    closeReport,
+    closeAside,
+    showAside,
     dismissOverlays,
   };
 }

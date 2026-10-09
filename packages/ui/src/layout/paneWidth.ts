@@ -4,18 +4,18 @@ import { createPersistedPreference } from "../persistedPreference";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 
 /** The two panes whose docked width the user can change. */
-export type PaneSide = "sidebar" | "report";
+export type PaneSide = "sidebar" | "aside";
 
 /** Per pane, at and above the `docked` breakpoint: the width it has until the user resizes it (what
  * a double-click on its handle returns to) and the bounds of a chosen width. Below the breakpoint
  * each is a fixed-width drawer instead. */
 const PANES = {
   sidebar: { key: PREFERENCE_KEYS.sidebarWidth, min: 200, default: 280, max: 480 },
-  report: { key: PREFERENCE_KEYS.reportWidth, min: 300, default: 420, max: 720 },
+  aside: { key: PREFERENCE_KEYS.asideWidth, min: 300, default: 420, max: 720 },
 } satisfies Record<PaneSide, { key: string; min: number; default: number; max: number }>;
 
 /** The terminal pane's floor (the terminal's wrapper in `App.tsx`); the window's 1148px minimum is
- * this plus the rail, the sidebar's default and the report panel's minimum. */
+ * this plus the rail, the sidebar's default and the aside's minimum. */
 const TERMINAL_FLOOR = 520;
 
 /** Memoised once resolved: the rail's width cannot change at runtime. */
@@ -52,7 +52,7 @@ function createChosenWidth(side: PaneSide) {
   );
 }
 
-const chosenWidths = { sidebar: createChosenWidth("sidebar"), report: createChosenWidth("report") };
+const chosenWidths = { sidebar: createChosenWidth("sidebar"), aside: createChosenWidth("aside") };
 
 // The viewport width as of the last `resize`, so reading it never forces a layout.
 let viewportWidth = document.documentElement.clientWidth;
@@ -71,23 +71,23 @@ function subscribeToViewport(listener: () => void): () => void {
  * content instead, so it neither takes space nor leaves any. */
 export interface DockedPanes {
   sidebar: boolean;
-  report: boolean;
+  aside: boolean;
 }
 
 /**
  * The one rule for sharing the row between the panes, so both clamps agree at every viewport width:
- * the terminal always keeps `TERMINAL_FLOOR`, and when space is short the report panel gives up
- * width first, down to its minimum. The sidebar therefore only ever assumes the report panel's
- * minimum (not its chosen width), and the report panel gets what is left after the sidebar's
+ * the terminal always keeps `TERMINAL_FLOOR`, and when space is short the aside gives up
+ * width first, down to its minimum. The sidebar therefore only ever assumes the aside's
+ * minimum (not its chosen width), and the aside gets what is left after the sidebar's
  * rendered width. A pane that is not docked is not limited by the viewport (it overlays the
- * terminal). At 1148px with both docked: rail 48, sidebar 280, terminal 520, report 300.
+ * terminal). At 1148px with both docked: rail 48, sidebar 280, terminal 520, aside 300.
  */
 function maxWidthFor(side: PaneSide, docked: DockedPanes, chosenSidebar: number | undefined, railWidth: number): number {
   const { min, max } = PANES[side];
   if (!docked[side]) return max;
   if (side === "sidebar") {
-    const reportReserve = docked.report ? PANES.report.min : 0;
-    return clamp(viewportWidth - railWidth - TERMINAL_FLOOR - reportReserve, min, max);
+    const asideReserve = docked.aside ? PANES.aside.min : 0;
+    return clamp(viewportWidth - railWidth - TERMINAL_FLOOR - asideReserve, min, max);
   }
   const sidebar = PANES.sidebar;
   const sidebarWidth = docked.sidebar

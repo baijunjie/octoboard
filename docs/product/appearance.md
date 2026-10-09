@@ -32,6 +32,9 @@ Everything the window shows follows the chosen appearance, including:
   rail. In the macOS application it is the system's translucent sidebar material, drawn in the chosen appearance; in a
   browser it is an opaque colour of the appearance's own (see "The window chrome and the content panel" in
   `docs/product/window-layout.md`).
+- **Code in a project pane's file viewer**, highlighted in a high-contrast colour scheme of its own for each
+  appearance, every colour of which meets 4.5:1 against the code's background; an image there sits on a checkerboard
+  drawn in the appearance's colours (see "The file viewer" in `docs/product/project-pane.md`).
 - **A console's default avatar**, whose fills have their own light and dark values (see "Avatar" in
   `docs/product/consoles-and-projects.md`).
 - **The native window's own appearance** in the macOS application — the window's close, minimise and zoom buttons

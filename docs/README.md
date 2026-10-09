@@ -36,21 +36,31 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   its own project) starts and drives sessions: each one's tools and a bound session's `report`, the brief a task is
   handed over as, the reporting loop and what happens when a session stops without reporting, automatic archiving,
   which sessions an owner drives, and the information sessions of one project share with each other.
-- [Report panel](product/report-panel.md) — the console session's third pane: pushing a page with `show_page` and what
-  the page id is for, paging back through the kept history, why a history page is read-only and where that is
-  enforced, why a page is a static document whose scripts never run and what is stripped from it, why it has no route
-  to the network, submitting a native form and how its fields reach the console session, Escape and F6 inside a page,
-  the window shortcuts (⌘[ / ⌘], ⌃Tab) a page passes on to the window, the light surface a page renders on whatever
-  the window's appearance is, and right-clicking inside a page.
+- [Report panel](product/report-panel.md) — what a console session shows in the right pane: pushing a page with
+  `show_page` and what the page id is for, paging back through the kept history, why a history page is read-only and
+  where that is enforced, why a page is a static document whose scripts never run and what is stripped from it, why it
+  has no route to the network, submitting a native form and how its fields reach the console session, Escape and F6
+  inside a page, the window shortcuts (⌘[ / ⌘], ⌃Tab) a page passes on to the window, the light surface a page renders
+  on whatever the window's appearance is, and right-clicking inside a page.
 - [Window layout](product/window-layout.md) — the window chrome (the top bar and the left rail, over the translucent
   macOS material or an opaque colour in a browser) and the opaque content panel it frames, what the top bar holds and
   how it doubles as the macOS titlebar, what the rail holds (the console switcher, the waiting count, the connection
-  status it shows only on trouble, the notifications bell, the report panel toggle, Settings), the three panes and
-  what each is allowed to give up, resizing the sidebar and the report panel, hiding either and floating it back in on
-  hover, the macOS window's 1148×600 minimum and the arithmetic behind it, how the window's size and position are
-  remembered across launches, the narrow layout a plain browser gets below 1148 px, where the sidebar and the report
-  panel become drawers over the terminal, moving between regions with F6, which right-click menus the desktop app and
-  a browser show, and how all of it mirrors under a right-to-left language (and what never does).
+  status it shows only on trouble, the notifications bell, the right pane's toggle, Settings), the three panes and what
+  each is allowed to give up, what the right pane shows (a console session's report or a project's files) and how that
+  changes on selecting a session, Browse files, switching consoles, Back and Forward and deleting its owner, resizing
+  the sidebar and the right pane, hiding either and floating it back in on hover, the macOS window's 1148×600 minimum
+  and the arithmetic behind it, the narrow layout a plain browser gets below 1148 px, where the sidebar and the right
+  pane become drawers over the terminal, which right-click menus the desktop app and a browser show, and how all of it
+  mirrors under a right-to-left language (and what never does).
+- [Moving focus between regions](product/moving-focus-between-regions.md) — F6 and Shift+F6: the order of the window's
+  regions, which ones are skipped, and where focus lands in each, the right pane included.
+- [Window size and position](product/window-size-and-position.md) — how the macOS window's size, position and maximized
+  state are remembered and restored across launches.
+- [Project pane](product/project-pane.md) — a project's files in the right pane: opening it with Browse files or by
+  selecting a project session without starting or resuming anything, the file tree (what is listed, its order, rows and
+  the keyboard, the selected file and a removed one), when the tree is listed again, what is remembered per project,
+  the read-only file viewer (what it shows, Previous/Next and the arrow keys, closing it, a file that changes while
+  open), its errors, and a pane that fails to load.
 - [Toasts](product/toasts.md) — failures and notices that need no answer: where they appear, how one about a session
   is titled, when they dismiss themselves, how an identical one replaces rather than stacks, copying their text
   without taking focus off the terminal, and reaching them with F6.
@@ -130,30 +140,35 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   worktrees' dev apps (fixed port, stopping by PID only), and fully reloading a dev window before judging a defect in
   it.
 - [Verifying the desktop UI](memory/verifying-the-desktop-ui.md) — how to verify terminal and UI behaviour in the real
-  app: why a verification stays as narrow as the change, looking at a UI state in the gallery before staging it
-  through a daemon and what the gallery cannot settle, checking in WebKit with real pointer input and with long and
-  CJK text, ruling out a locked screen before trusting a capture, getting an error out of a blank window, bisecting a
-  symptom against the daemon, what a scripted GUI probe can and cannot prove and why its setup goes through the
-  daemon's protocol (raising a session's hand with a forged hook event, seeding trusted folders), confirming Octoboard
-  is frontmost before a scripted keystroke, freezing the app's WebContent process, where to watch for a report page's
-  blocked navigation, where a network probe's positive control comes from, and which checks need a person (input
-  methods, reduced motion).
+  app: why a verification stays as narrow as the change, looking at a UI state in the gallery before staging it through
+  a daemon and what the gallery cannot settle, checking in WebKit with real pointer input and with long and CJK text,
+  ruling out a locked screen before trusting a capture, getting an error out of a blank window, bisecting a symptom
+  against the daemon, what a scripted GUI probe can and cannot prove and why its setup goes through the daemon's
+  protocol (raising a session's hand with a forged hook event, seeding trusted folders), confirming Octoboard is
+  frontmost before a scripted keystroke, freezing the app's WebContent process, where to watch for a report page's
+  blocked navigation, where a network probe's positive control comes from, proving that no key reached the terminal with
+  a stand-in agent that echoes every byte, and which checks need a person (input methods, reduced motion).
 - [Writing UI components](memory/writing-ui-components.md) — conventions for `packages/ui` components: why a component
   HeroUI 3 already provides is used rather than hand-built, where to check what it provides, and what a justified
-  hand-built one is built on and where its reason is written, why a HeroUI control pressed with the mouse takes
-  keyboard focus off the terminal, when `preventFocusOnPress` is needed, and why "⋯" menus are built on `ActionMenu`,
-  why a dialog must not lose focus to `<body>` when a focused control unmounts or turns disabled, so its subject is
-  switched with a reset key rather than by re-keying it and an action that takes seconds marks its button pending
-  rather than disabled, why a Tailwind class name has to stand in the source as literal text, why every
-  icon-only control also gets a tooltip through `TitledControl`, how user-facing text goes through the message catalog
-  (`useT` over the module-level `t()`, a helper taking the translator, `PlainMessageKey` tables, placeholders and plural
-  messages instead of joined fragments), how layout follows the reading direction (logical utilities, mirrored
-  directional icons, two-glyph chevrons, `dir` on paths and typed names, `docked:rtl:` twins), why only icon-only
-  chrome sits on the translucent window material and text goes on the opaque panel, and the WCAG 2.2 AA bar the UI
-  is held to (keyboard, visible focus, names, roles and states (`aria-current` only on hand-built rows), contrast —
-  auditing every gallery scenario in both themes, fills against their surface and animations at their faintest frame,
-  overriding HeroUI's whole `--default` family on a region with its own surface, which token an outline meant to be
-  seen is built from, and why HeroUI's own text colours are measured rather than trusted — colour, motion).
+  hand-built one is built on and where its reason is written, why a HeroUI control pressed with the mouse takes keyboard
+  focus off the terminal, when `preventFocusOnPress` is needed, and why "⋯" menus are built on `ActionMenu`, why a
+  dialog must not lose focus to `<body>` when a focused control unmounts or turns disabled, so its subject is switched
+  with a reset key rather than by re-keying it and an action that takes seconds marks its button pending rather than
+  disabled, why a Tailwind class name has to stand in the source as literal text, why a state of your own on a
+  react-aria-components element needs a `data-*` name it does not write itself, why every icon-only control also gets a
+  tooltip through `TitledControl`, how user-facing text goes through the message catalog (`useT` over the module-level
+  `t()`, a helper taking the translator, `PlainMessageKey` tables, placeholders and plural messages instead of joined
+  fragments), how layout follows the reading direction (logical utilities, mirrored directional icons, two-glyph
+  chevrons, `dir` on paths and typed names, `docked:rtl:` twins), why only icon-only chrome sits on the translucent
+  window material and text goes on the opaque panel, and the WCAG 2.2 AA bar the UI is held to (keyboard, visible focus,
+  names, roles and states (`aria-current` only on hand-built rows), contrast — auditing every gallery scenario in both
+  themes, fills against their surface and animations at their faintest frame, overriding HeroUI's whole `--default`
+  family on a region with its own surface, which token an outline meant to be seen is built from, and why HeroUI's own
+  text colours are measured rather than trusted — colour, motion).
+- [Sending browse requests from the UI](memory/sending-browse-requests-from-the-ui.md) — why the window's browse
+  requests are bounded by one count shared across the window rather than one per component (the daemon's per-connection
+  bound, and a sent request that is never timed out or cancelled when its component unmounts), and sizing a new kind of
+  request together with the existing limits.
 - [Writing automated tests](memory/writing-automated-tests.md) — how lean unit tests are kept (one case per rule,
   table-driven), then the fixture conventions this project's tests need on macOS: why an executable written fresh per
   test flakes only under a parallel run, why every wait on a spawned process is bounded by the shared `PATIENCE`

@@ -404,6 +404,9 @@ pub struct BrowseEntry {
     pub kind: EntryKind,
     /// A regular file's size in bytes; `null` for anything else.
     pub size: Option<u64>,
+    /// A regular file's version, equal to the `version` a live read of it would report while it
+    /// stays unchanged; `null` for anything else.
+    pub version: Option<String>,
     /// What a symbolic link resolves to; `null` for anything else.
     pub target: Option<LinkTarget>,
 }

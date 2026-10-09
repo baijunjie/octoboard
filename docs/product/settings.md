@@ -9,7 +9,7 @@ folders** and **Notifications**; the dialog opens on General unless it was asked
 ## In a narrow window
 
 Below 1148 px — the width under which the window's panes become drawers (see "Below 1148 px: the sidebar and the
-report panel become drawers" in `docs/product/window-layout.md`), so only a client with no window minimum of its own,
+right pane become drawers" in `docs/product/window-layout.md`), so only a client with no window minimum of its own,
 such as a plain browser, gets here — the dialog fills the window inside a 16 px margin on every side, and the list of
 sections becomes a row of tabs along its top, above the selected section. When the tabs do not fit the row's width,
 the row scrolls sideways, and the selected section's tab is scrolled into view when the dialog opens.

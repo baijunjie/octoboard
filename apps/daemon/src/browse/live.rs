@@ -107,8 +107,7 @@ fn open_without_links(path: &Path, flags: libc::c_int) -> io::Result<File> {
 #[derive(Debug)]
 pub struct LiveFile {
     pub bytes: Vec<u8>,
-    /// The file's identity, size, modification and change times at the read, as one opaque
-    /// string: equal versions mean nothing about the file changed in between.
+    /// The file's [`version`] at the read.
     pub version: String,
 }
 
@@ -163,15 +162,36 @@ pub(super) fn read_resolved(
     })
 }
 
-fn version(metadata: &Metadata) -> String {
+/// A regular file's version: its device and inode, size, and modification and change times, as one
+/// opaque string. The change time moves with every write and every replacement of the inode, so two
+/// equal versions mean nothing about the file changed in between. It is built from fields a plain
+/// `stat` carries, so a listing's [`entry_version`] and a read's [`version`] of the same file agree.
+fn version_of(dev: u64, ino: u64, size: u64, mtime: (i64, i64), ctime: (i64, i64)) -> String {
     format!(
-        "{}:{}:{}.{}:{}.{}",
-        file_id(metadata),
+        "{dev}:{ino}:{size}:{}.{}:{}.{}",
+        mtime.0, mtime.1, ctime.0, ctime.1
+    )
+}
+
+fn version(metadata: &Metadata) -> String {
+    version_of(
+        metadata.dev(),
+        metadata.ino(),
         metadata.len(),
-        metadata.mtime(),
-        metadata.mtime_nsec(),
-        metadata.ctime(),
-        metadata.ctime_nsec()
+        (metadata.mtime(), metadata.mtime_nsec()),
+        (metadata.ctime(), metadata.ctime_nsec()),
+    )
+}
+
+/// The [`version`] a read of the regular file `stat` describes would report.
+#[allow(clippy::unnecessary_cast)] // The `stat` fields' types differ between platforms.
+fn entry_version(stat: &libc::stat) -> String {
+    version_of(
+        stat.st_dev as u64,
+        stat.st_ino as u64,
+        stat.st_size as u64,
+        (stat.st_mtime as i64, stat.st_mtime_nsec as i64),
+        (stat.st_ctime as i64, stat.st_ctime_nsec as i64),
     )
 }
 
@@ -299,19 +319,30 @@ pub(super) fn list_resolved(
             libc::DT_REG => libc::S_IFREG,
             _ => stat.st_mode as libc::mode_t & libc::S_IFMT,
         };
-        let (kind, size, target) = match kind {
+        let (kind, size, version, target) = match kind {
             libc::S_IFLNK => {
                 let link = canonical.join(std::ffi::OsStr::from_bytes(&raw));
-                (EntryKind::Symlink, None, Some(link_target(scope, &link)))
+                (
+                    EntryKind::Symlink,
+                    None,
+                    None,
+                    Some(link_target(scope, &link)),
+                )
             }
-            libc::S_IFDIR => (EntryKind::Directory, None, None),
-            libc::S_IFREG => (EntryKind::File, Some(stat.st_size as u64), None),
-            _ => (EntryKind::Other, None, None),
+            libc::S_IFDIR => (EntryKind::Directory, None, None, None),
+            libc::S_IFREG => (
+                EntryKind::File,
+                Some(stat.st_size as u64),
+                Some(entry_version(&stat)),
+                None,
+            ),
+            _ => (EntryKind::Other, None, None, None),
         };
         entries.push(BrowseEntry {
             name,
             kind,
             size,
+            version,
             target,
         });
     }

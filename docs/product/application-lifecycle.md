@@ -210,8 +210,8 @@ after the table:
 
 The macOS application keeps the window's size, position and maximized state in
 `~/Library/Application Support/dev.octoboard.app/window-state.json` (see "The window's size and position across
-launches" in `docs/product/window-layout.md`). It belongs to the application's window rather than to the daemon, so it
-is not under `~/.octoboard`. Deleting it makes the next launch open the window as a first launch does.
+launches" in `docs/product/window-size-and-position.md`). It belongs to the application's window rather than to the
+daemon, so it is not under `~/.octoboard`. Deleting it makes the next launch open the window as a first launch does.
 
 Nothing is written inside a project directory, and nothing is written into the user's own agent configuration — see
 "What Octoboard never modifies" in `docs/product/launching-agents.md`.

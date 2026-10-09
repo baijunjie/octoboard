@@ -7,13 +7,13 @@ import type { PaneSide, PaneWidth } from "../layout/paneWidth";
 const KEY_STEP = 16;
 const KEY_STEP_SHIFT = 64;
 
-/** What differs between the sides. The sidebar is on the start side and the report panel on the end
- * side, so `edge` is the logical side of the window the handle is anchored to, and `grow` is the
+/** What differs between the sides. The sidebar is on the start side and the aside on the end side,
+ * so `edge` is the logical side of the window the handle is anchored to, and `grow` is the
  * direction, along the reading direction, that the handle moves in when the pane gets wider: toward
- * the end for the sidebar, whose edge is its end one, toward the start for the report panel. The
+ * the end for the sidebar, whose edge is its end one, toward the start for the aside. The
  * pointer and the arrow keys work in physical directions, so `physicalGrow` turns it into
  * +1 (right) or -1 (left) for the direction in force. `offset` is how far the pane's own edge is
- * from the window's: the sidebar starts where the left rail ends, the report panel is flush with
+ * from the window's: the sidebar starts where the left rail ends, the aside is flush with
  * the window. */
 const SIDES = {
   sidebar: {
@@ -22,8 +22,9 @@ const SIDES = {
     offset: "var(--rail-width)",
     grow: 1,
   },
-  report: {
-    label: "pane.resizeReport",
+  aside: {
+    // Named by its caller, after what the aside shows.
+    label: undefined,
     edge: "insetInlineEnd",
     offset: "0px",
     grow: -1,
@@ -35,7 +36,7 @@ function physicalGrow(element: HTMLElement, grow: 1 | -1): 1 | -1 {
 }
 
 /**
- * The drag handle on a docked pane's inner edge (the sidebar's end, the report panel's start): a
+ * The drag handle on a docked pane's inner edge (the sidebar's end, the aside's start): a
  * thin hit area straddling the border, with a highlight line on hover, focus and while dragging.
  * Keyboard focus adds a ring around the handle and widens the line to fill it: the line alone is a
  * 2px stripe that, in the light theme, is under the 3:1 against the border pixel it replaces that
@@ -51,7 +52,7 @@ function physicalGrow(element: HTMLElement, grow: 1 | -1): 1 | -1 {
  *
  * A mouse press that focused the handle would take keystrokes away from the terminal, so mousedown
  * is cancelled; reaching the handle by Tab still focuses it. The drag itself uses pointer capture,
- * so the pointer keeps driving it over the report panel's iframe, and while it lasts the root
+ * so the pointer keeps driving it over a report page's iframe, and while it lasts the root
  * carries `pane-resizing` (`style.css`) so the cursor stays a resize cursor over whatever the
  * pointer crosses. The width is persisted once, when the drag ends.
  *
@@ -61,9 +62,12 @@ function physicalGrow(element: HTMLElement, grow: 1 | -1): 1 | -1 {
 export function PaneResizeHandle({
   side,
   paneWidth,
+  label: ownLabel,
 }: {
   side: PaneSide;
   paneWidth: PaneWidth;
+  /** The handle's accessible name, for the aside, whose name depends on what it shows. */
+  label?: string;
 }): React.ReactElement {
   const t = useT();
   const { width, min, max, setWidth, persist, reset } = paneWidth;
@@ -108,7 +112,7 @@ export function PaneResizeHandle({
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label={t(label)}
+      aria-label={ownLabel ?? (label && t(label))}
       aria-valuenow={width}
       aria-valuemin={min}
       aria-valuemax={max}

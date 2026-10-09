@@ -5,8 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
 import { useCurrentLanguage, useT } from "../i18n/react";
-import { drawerClass, PANE_ID, ReportPeekHotZone } from "../layout/paneOverlay";
-import type { PanePeek } from "../layout/usePaneToggles";
+import { AsidePane, type AsideLayout } from "../layout/AsidePane";
 import { usePlatform } from "../platform/react";
 import type { Page } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
@@ -21,38 +20,25 @@ import {
 } from "./pageDocument";
 
 /**
- * A console session's report panel: shown only while a console session is selected, which is what
- * makes its pages visible at all (there is nowhere else to show them). Lists pages on mount and on
+ * A console session's report panel: the aside's content while that console session owns it (see
+ * `asideOwner.ts`), which is what makes its pages visible at all. Lists pages on mount and on
  * every snapshot — the daemon never replays a missed `page_created` on its own (see the `page_list`
  * row under "Daemon to client" in `apps/daemon/PROTOCOL.md`), so re-listing is the only way to recover
  * from one. Switching to another console session mounting a fresh instance, so that its position is
  * not carried over from the previous one, is the call site's concern, not this component's.
- *
- * Below the `docked` breakpoint this renders as a closed-by-default overlay instead of a row
- * sibling (`open`, owned by `usePaneToggles` alongside the sidebar's own overlay state) — never
- * unmounted by closing it or by hiding the docked panel, since that would lose the `list_pages`
- * state above and re-request it on every reopen.
  */
 export function ReportPanel({
   consoleSessionId,
-  open,
-  reportWidth,
-  peek,
+  layout,
   onEscape,
   onCycleRegion,
   onMoveHistory,
   onMoveConsoleSession,
 }: {
   consoleSessionId: string;
-  open: boolean;
-  /** The user's chosen width (`usePaneWidth`) for the docked and the floating forms; the drawer
-   * below the breakpoint ignores it. */
-  reportWidth: number;
-  /** The hover reveal of the panel while the user has hidden the docked one from the rail (which
-   * has no effect below the breakpoint, where `open` decides): the same panel, kept as a fixed
-   * overlay that floats in over the terminal, with its shadow and rounded edge. `undefined` while
-   * the docked panel is shown. Hiding never unmounts the panel, for the same reason as `open`. */
-  peek?: PanePeek;
+  /** Where the aside is on screen; the panel never unmounts for being closed or hidden, since that
+   * would lose the `list_pages` state below and re-request it on every reopen. */
+  layout: AsideLayout;
   /** Escape was pressed inside the page's frame, where this document never sees the key. The
    * owner closes whichever overlay is open, as Escape does elsewhere. */
   onEscape: () => void;
@@ -115,65 +101,15 @@ export function ReportPanel({
 
   // The panel keeps its place in the row while the first `list_pages` is in flight: dropping out
   // and back would resize the terminal pane, a real SIGWINCH to the agent, on every console
-  // session switch.
-  // Below the `docked` breakpoint "its place" is a fixed overlay instead, so resizing the
-  // terminal never comes up there in the first place — `open` only ever slides it on and off
-  // screen, never changes whether it is mounted.
-  //
-  // `drawerClass` fits the drawer between `--top-chrome-height` and `--bottom-chrome-height`, leaving
-  // the window chrome (the top bar, and the rail with the report toggle) and the connection banner
-  // visible while it is open, and puts it back as a plain row sibling at or above the breakpoint —
-  // see that function's own comment for the geometry.
-  //
-  // The drawer below the breakpoint is a fixed 420px, capped at 92vw. The docked panel is
-  // `flex: 0 1` at `--report-width`, the chosen width already held back to what the row affords;
-  // the shrink and the 300px floor are only a safety net. With the docked panel hidden,
-  // `drawerClass` instead keeps it the overlay at every width, floating in while `peek` is
-  // active at `--report-width` (still capped at 92vw); `overflow-hidden` clips the iframe to the
-  // rounded edge. In every form the panel is painted `--panel`, the content panel's own colour, so a
-  // drawer or a floating panel keeps the empty states from showing the terminal through.
-  const overlay = peek
-    ? `docked:w-(--report-width) docked:rounded-s-xl docked:overflow-hidden ${drawerClass("end", "floating", open, peek.active)}`
-    : `docked:w-auto docked:max-w-none docked:min-w-[300px] docked:flex-[0_1_var(--report-width)] ${drawerClass("end", "drawer", open)}`;
-  const panelClass = `flex min-h-0 flex-col border-s border-separator bg-panel w-[420px] max-w-[92vw] ${overlay}`;
-
-  // `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener closes a
-  // drawer for, on every branch below since any of them can be what is on screen while open.
-  //
-  // The pointer handlers sit on the panel, not the iframe: a pointer inside the sandboxed frame
-  // sends nothing to this document. Entering the frame therefore must not count as leaving, and
-  // the frame's own enter and leave (reported by this document for the iframe element) stand in
-  // for the panel's across that boundary, `onPointerMove` for coming back out onto the panel's
-  // chrome, where the panel itself never saw the pointer leave.
-  const pane = {
-    id: PANE_ID.report,
-    "data-pane": "report",
-    "data-region": "report",
-    "data-escape-scope": true,
-    style: { "--report-width": `${reportWidth}px` } as React.CSSProperties,
-    onPointerEnter: peek?.keep,
-    onPointerMove: peek?.keep,
-    onPointerLeave: peek?.leave,
-  };
-  const hotZone = peek && <ReportPeekHotZone peek={peek} />;
-
-  if (sessionPages === undefined) {
-    return (
-      <>
-        <div {...pane} className={panelClass} />
-        {hotZone}
-      </>
-    );
-  }
+  // session switch. Below the `docked` breakpoint "its place" is a fixed overlay instead, so
+  // resizing the terminal never comes up there in the first place.
+  if (sessionPages === undefined) return <AsidePane layout={layout} />;
 
   if (sessionPages.length === 0) {
     return (
-      <>
-        <div {...pane} className={`${panelClass} items-center justify-center text-sm text-muted`}>
-          {t("report.empty")}
-        </div>
-        {hotZone}
-      </>
+      <AsidePane layout={layout} className="items-center justify-center text-sm text-muted">
+        {t("report.empty")}
+      </AsidePane>
     );
   }
 
@@ -191,66 +127,63 @@ export function ReportPanel({
   };
 
   return (
-    <>
-      <div {...pane} className={panelClass}>
-        {/* A previous / next pager with "n / m", hand-assembled from buttons: HeroUI's `Pagination`
-            is a list of numbered pages, which neither reads as nor behaves like this. */}
-        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-separator px-3 text-xs text-muted">
-          <TitledControl title={t("report.previous")}>
-            <Button
-              isIconOnly
-              size="sm"
-              variant="ghost"
-              aria-label={t("report.previous")}
-              preventFocusOnPress
-              isDisabled={displayIndex === 0}
-              onPress={() => goTo(displayIndex - 1)}
-            >
-              <ChevronLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
-            </Button>
-          </TitledControl>
-          <span className="whitespace-nowrap">
-            {t("report.position", { index: displayIndex + 1, total: sessionPages.length })}
-          </span>
-          <TitledControl title={t("report.next")}>
-            <Button
-              isIconOnly
-              size="sm"
-              variant="ghost"
-              aria-label={t("report.next")}
-              preventFocusOnPress
-              isDisabled={displayIndex === sessionPages.length - 1}
-              onPress={() => goTo(displayIndex + 1)}
-            >
-              <ChevronRight aria-hidden="true" className="size-4 rtl:-scale-x-100" />
-            </Button>
-          </TitledControl>
-          {/* The timestamp's width is whatever the user's locale makes of it, so it is the element
-              that gives way, rather than pushing the badge off the panel's edge when narrow. */}
-          <FadeOverflow as="span" className="ms-auto min-w-0">
-            {new Date(page.created_at).toLocaleString(language)}
-          </FadeOverflow>
-          {isHistory && (
-            <Chip size="sm" variant="soft" color="warning" className="shrink-0">
-              {t("report.readOnly")}
-            </Chip>
-          )}
-        </div>
-        <PageFrame
-          key={page.id}
-          page={page}
-          isHistory={isHistory}
-          onSubmit={handleSubmit}
-          onEscape={onEscape}
-          onCycleRegion={onCycleRegion}
-          onMoveHistory={onMoveHistory}
-          onMoveConsoleSession={onMoveConsoleSession}
-          onPointerEnter={peek?.keep}
-          onPointerLeave={peek?.leave}
-        />
+    <AsidePane layout={layout}>
+      {/* A previous / next pager with "n / m", hand-assembled from buttons: HeroUI's `Pagination`
+          is a list of numbered pages, which neither reads as nor behaves like this. */}
+      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-separator px-3 text-xs text-muted">
+        <TitledControl title={t("report.previous")}>
+          <Button
+            isIconOnly
+            size="sm"
+            variant="ghost"
+            aria-label={t("report.previous")}
+            preventFocusOnPress
+            isDisabled={displayIndex === 0}
+            onPress={() => goTo(displayIndex - 1)}
+          >
+            <ChevronLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+          </Button>
+        </TitledControl>
+        <span className="whitespace-nowrap">
+          {t("report.position", { index: displayIndex + 1, total: sessionPages.length })}
+        </span>
+        <TitledControl title={t("report.next")}>
+          <Button
+            isIconOnly
+            size="sm"
+            variant="ghost"
+            aria-label={t("report.next")}
+            preventFocusOnPress
+            isDisabled={displayIndex === sessionPages.length - 1}
+            onPress={() => goTo(displayIndex + 1)}
+          >
+            <ChevronRight aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+          </Button>
+        </TitledControl>
+        {/* The timestamp's width is whatever the user's locale makes of it, so it is the element
+            that gives way, rather than pushing the badge off the panel's edge when narrow. */}
+        <FadeOverflow as="span" className="ms-auto min-w-0">
+          {new Date(page.created_at).toLocaleString(language)}
+        </FadeOverflow>
+        {isHistory && (
+          <Chip size="sm" variant="soft" color="warning" className="shrink-0">
+            {t("report.readOnly")}
+          </Chip>
+        )}
       </div>
-      {hotZone}
-    </>
+      <PageFrame
+        key={page.id}
+        page={page}
+        isHistory={isHistory}
+        onSubmit={handleSubmit}
+        onEscape={onEscape}
+        onCycleRegion={onCycleRegion}
+        onMoveHistory={onMoveHistory}
+        onMoveConsoleSession={onMoveConsoleSession}
+        onPointerEnter={layout.peek?.keep}
+        onPointerLeave={layout.peek?.leave}
+      />
+    </AsidePane>
   );
 }
 

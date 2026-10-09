@@ -9,6 +9,7 @@ import { filterScenarios } from "./filter";
 import { focusScenarios } from "./focus";
 import { gitScenarios } from "./git";
 import { layoutScenarios } from "./layout";
+import { projectFilesScenarios } from "./projectFiles";
 import { noticeScenarios } from "./notices";
 import { reportScenarios } from "./report";
 import { settingsScenarios } from "./settings";
@@ -29,6 +30,7 @@ export const SCENARIOS: Scenario[] = [
   ...noticeScenarios,
   ...archiveScenarios,
   ...reportScenarios,
+  ...projectFilesScenarios,
   ...settingsScenarios,
   ...dialogScenarios,
   ...viewerScenarios,

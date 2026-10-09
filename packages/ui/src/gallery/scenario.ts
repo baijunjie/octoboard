@@ -1,4 +1,5 @@
 import type { DirEntry, MessageParams } from "../protocol";
+import type { FixtureFiles } from "./fixtures/projectFiles";
 import type { ViewerSubject } from "../viewer/content";
 import type { State, ToastRequest } from "../store";
 import type { TerminalBehaviour } from "./fakeTerminal";
@@ -9,10 +10,10 @@ import type { Ui } from "./interact";
 export interface Preferences {
   /** The docked sidebar is shown (default) or hidden by the user. */
   sidebarVisible?: boolean;
-  reportVisible?: boolean;
+  asideVisible?: boolean;
   /** Chosen docked widths in pixels. */
   sidebarWidth?: number;
-  reportWidth?: number;
+  asideWidth?: number;
   /** The console the sidebar shows, and what is in focus mode. */
   sidebarConsole?: string;
   sidebarFocus?: `project:${string}` | `consoleSession:${string}`;
@@ -55,6 +56,9 @@ export interface Scenario {
   terminal?: TerminalBehaviour;
   /** What `list_dir` answers per path; a path not listed gets a generic listing. */
   directories?: Record<string, DirEntry[]>;
+  /** The files every project's browser shows (`list_project_dir`, `read_project_file`); without it,
+   * `SAMPLE_FILES`. */
+  files?: FixtureFiles;
   steps?: Step[];
   /** Renders the file viewer over the subjects `subjects` builds, in place of the app; built only
    * when the scenario opens. `loadDelay` shows each one's loading state for that many milliseconds

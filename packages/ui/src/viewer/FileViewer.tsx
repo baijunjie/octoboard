@@ -1,6 +1,6 @@
 import { Alert, Button, Chip } from "@heroui/react";
 import { ChevronLeft, ChevronRight, FileQuestion } from "lucide-react";
-import React, { useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { PathText } from "../components/PathText";
 import { TitledControl } from "../components/TitledControl";
@@ -9,6 +9,7 @@ import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useOctoboardTheme } from "../theme";
 import { displayWirePath, wireBaseName } from "../wirePath";
+import { arrowNavigation } from "./arrowKeys";
 import { CodeSurface, DiffSurface, Loading, useRendererScope } from "./CodeSurface";
 import {
   changePresentation,
@@ -29,7 +30,8 @@ const STATUS_LABELS: Record<ChangeStatus, PlainMessageKey> = {
   modified: "viewer.change.modified",
 };
 
-/** Moving to the subject before or after this one; a missing callback disables its button. */
+/** Moving to the subject before or after this one, from the footer's buttons and from Left and Right;
+ * a missing callback disables its button and its key. */
 export interface ViewerNavigation {
   onPrevious?: () => void;
   onNext?: () => void;
@@ -40,6 +42,9 @@ export interface ViewerNavigation {
  * two versions, or the loading or failed state of either. It stays mounted while its subject
  * changes (`subject.key`), so moving between files keeps focus inside it; content and errors are
  * the subject's own and never outlive it. It offers no editing of any kind.
+ *
+ * Left and Right do what Previous and Next do (`arrowNavigation` has when they do not), handled on
+ * the dialog itself: a key pressed in it never reaches anything outside, the terminal included.
  */
 export function FileViewer({
   subject,
@@ -77,6 +82,23 @@ export function FileViewer({
     const other = which === "previous" ? (hasNext ? nextRef.current : null) : hasPrevious ? previousRef.current : null;
     (other ?? headerRef.current?.closest<HTMLElement>("[role=dialog]"))?.focus();
   }, [subject.key, hasPrevious, hasNext]);
+  // The latest callbacks, for a listener added once.
+  const latestNavigation = useRef(navigation);
+  latestNavigation.current = navigation;
+  useEffect(() => {
+    const dialog = headerRef.current?.closest<HTMLElement>("[role=dialog]");
+    if (!dialog) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const direction = arrowNavigation(event, dialog);
+      if (!direction) return;
+      event.preventDefault();
+      event.stopPropagation();
+      (direction === "previous" ? latestNavigation.current?.onPrevious : latestNavigation.current?.onNext)?.();
+    };
+    dialog.addEventListener("keydown", onKeyDown);
+    return () => dialog.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const track = (which: "previous" | "next") => ({
     onFocus: () => (focusedNavigation.current = which),
     onBlur: (event: React.FocusEvent) => {

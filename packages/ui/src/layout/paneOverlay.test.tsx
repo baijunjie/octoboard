@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { ReportPeekHotZone } from "./paneOverlay";
+import { AsidePeekHotZone } from "./paneOverlay";
 import type { PanePeek } from "./usePaneToggles";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -19,10 +19,10 @@ afterEach(() => {
   root = container = undefined;
 });
 
-/** A report panel that will end up spanning x 1160..1440 and y 40..800, wherever it is on its way. */
+/** An aside that will end up spanning x 1160..1440 and y 40..800, wherever it is on its way. */
 function addPane(): void {
   const pane = document.body.appendChild(document.createElement("aside"));
-  pane.dataset.pane = "report";
+  pane.dataset.pane = "aside";
   Object.defineProperties(pane, { offsetLeft: { value: 1160 }, offsetWidth: { value: 280 } });
   // Where it is on its way in: translated off to the right, so only its layout position tells where
   // it is going to be.
@@ -33,7 +33,7 @@ function mount(active = false) {
   const peek = { active, reveal: vi.fn(), keep: vi.fn(), leave: vi.fn() } satisfies PanePeek;
   container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
-  const render = (next: PanePeek) => act(() => root!.render(<ReportPeekHotZone peek={next} />));
+  const render = (next: PanePeek) => act(() => root!.render(<AsidePeekHotZone peek={next} />));
   render(peek);
   return { peek, render };
 }

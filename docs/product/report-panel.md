@@ -1,13 +1,13 @@
 # Report panel
 
-The **report panel** is the third pane of the window, to the right of the terminal (to its left under a right-to-left
-language, see "Right-to-left layout" in `docs/product/window-layout.md`). It belongs to a
-**console session** rather than to its console: each console session has its own pages, and
-the panel shows those of the selected console session, so two console sessions in one console do not share a history.
-It is on screen only while the selected session is a console session. Selecting a project
-session leaves the terminal to fill the pane on its own. How wide the panel is, how the user resizes and hides it, how a
-hidden one floats in, and what becomes of it in a window too narrow for three panes, is described in
-`docs/product/window-layout.md`.
+The **report panel** is what the window's right pane shows while a **console session** owns it, to the right of the
+terminal (to its left under a right-to-left language, see "Right-to-left layout" in `docs/product/window-layout.md`).
+It belongs to the console session rather than to its console: each console session has its own pages, and the panel
+shows those of the selected console session, so two console sessions in one console do not share a history. Selecting
+a console session puts its report panel in the right pane; when the right pane shows something else instead — a
+project pane, or nothing — is in "What the right pane shows" in `docs/product/window-layout.md`. How wide the pane is,
+how the user resizes and hides it, how a hidden one floats in, and what becomes of it in a window too narrow for three
+panes, is described in `docs/product/window-layout.md`.
 
 A page is a whole HTML document the console session wrote, for anything better shown than typed
 into the terminal — a table, a comparison, a set of choices. A page may carry a form, and what the
@@ -35,8 +35,9 @@ The panel's bar carries, left to right (mirrored under a right-to-left language)
 and one forward, the position as "current / total" counted from 1 with the oldest page first, the page's creation
 time formatted for the UI's current language (see "What follows the language" in `docs/product/language.md`), and — on
 any page but the newest — a "Read-only" badge. The position, the total and the badge all count the selected console
-session's pages only. The place the user has paged to is not kept: leaving a console session, for another console
-session or for a project session, and coming back shows its newest page again.
+session's pages only. The place the user has paged to is not kept: whenever the report panel gives way in the right
+pane — another session selected, or Browse files putting a project pane in its place — coming back to it shows its
+newest page again, started over from its markup, with anything typed into its form and not submitted gone.
 
 - The panel follows the newest page: a page pushed while the user is on the newest one moves the view
   to it.
@@ -138,15 +139,15 @@ read as being about whichever session the user happens to be looking at.
 
 Pressing Escape while focus is inside a page also tells the window so, on a history page too. The
 key never reaches the window from inside the frame, so without this it could not close the floating
-report panel or the narrow-window drawer. It closes whatever overlay is open, as Escape does
+right pane or the narrow-window drawer. It closes whatever overlay is open, as Escape does
 anywhere else, and with nothing open it does nothing. An Escape pressed during an input
 method's composition, where it cancels the composition, is not relayed. Inside the page the key keeps
 its usual effect either way, such as closing an open drop-down list.
 
 `F6` and `Shift+F6` pressed while focus is inside a page are likewise passed to the window, on a
 history page too, and move focus to the next or previous region of the window (see "Moving focus
-between regions with F6" in `docs/product/window-layout.md`); the browser's own handling of the key
-inside the frame is cancelled. The signal is acted on only while focus is inside the page's frame.
+between regions with F6" in `docs/product/moving-focus-between-regions.md`); the browser's own handling
+of the key inside the frame is cancelled. The signal is acted on only while focus is inside the page's frame.
 Neither this signal nor Escape's carries anything from the page.
 
 ## Window shortcuts inside a page

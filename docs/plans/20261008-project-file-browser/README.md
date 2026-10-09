@@ -57,8 +57,7 @@ right-pane space.
 
 1. 01 Source identities and bounded read contracts (closed)
 2. 02 Validate the read-only renderers (closed)
-3. [Project file browsing and navigation](03-project-file-browser.md) — ship a real project entry point, tree,
-   daemon reads, modal and previous/next navigation together.
+3. 03 Project file browsing and navigation (closed)
 4. [Uncommitted changes across worktrees](04-worktree-changes.md) — add scoped worktree selection and staged,
    unstaged and untracked inspection to the usable project pane.
 5. [Local branch comparison](05-branch-comparison.md) — compare selected branch tips through the same bounded,
@@ -66,16 +65,13 @@ right-pane space.
 6. [Final confirmation](06-final-confirmation.md) — checks that could not be run when their milestone closed and that
    nothing later depends on.
 
-Each milestone is independently verifiable and mergeable after its dependencies. Milestone 03 must work with real
-project files. Milestones 04 and 05 extend that working surface rather than deferring panel integration until after
-Git review is built.
+Each milestone is independently verifiable and mergeable after its dependencies. Milestones 04 and 05 extend the
+working project pane rather than deferring panel integration until after Git review is built.
 
 ## Open
 
 These choices do not block the milestone split, but must be resolved before the named milestone is complete:
 
-- **03:** exact tree sorting convention, ignored-file visibility, refresh cadence and which per-project preferences
-  persist across client restarts. Collapsed-directory exclusion and non-wrapping navigation are already fixed.
 - **04:** whether diff navigation crosses staged/unstaged groups. A path in both groups always has two distinct
   change identities, regardless of that interaction choice.
 

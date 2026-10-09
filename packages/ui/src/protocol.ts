@@ -249,6 +249,9 @@ export interface BrowseEntry {
   name: string;
   kind: "file" | "directory" | "symlink" | "other";
   size: number | null;
+  /** A regular file's version, equal to a live read's `version` while the file stays unchanged;
+   * null for anything else. */
+  version: string | null;
   target: "file" | "directory" | "other" | "missing" | "outside" | null;
 }
 

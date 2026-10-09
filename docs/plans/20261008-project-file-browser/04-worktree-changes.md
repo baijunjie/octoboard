@@ -6,8 +6,8 @@
 > open their correct sources. Concurrent staging/committing and unavailable worktrees produce coherent results or
 > explicit stale/unavailable states. The complete flow works through the real project pane.
 
-Depends on [project file browsing](03-project-file-browser.md); all reads follow the browse contract in
-`apps/daemon/PROTOCOL.md`'s "Browsing a project".
+It extends the shipped project pane (`docs/product/project-pane.md`; code in `packages/ui/src/browser/`, see
+`packages/ui/README.md`); all reads follow the browse contract in `apps/daemon/PROTOCOL.md`'s "Browsing a project".
 
 ## Technical design
 
@@ -60,6 +60,16 @@ Depends on [project file browsing](03-project-file-browser.md); all reads follow
 - `git diff` writes a file↔symlink type change as two file sections in one patch, which the viewer's diff library
   renders as one combined change. Check this against a real type change and present it as the contract's single
   change whose sides differ in `kind`.
+- The project pane's mode lives in `BrowserMode` (`packages/ui/src/browser/browserState.ts`, persisted per project);
+  only `files` exists. Add the Git mode there and its switch in the `ProjectBrowser` header; the aside's owner stays
+  the project, and its labels (`ASIDE_LABELS` in `layout/asideOwner.ts`, "project pane") already fit a Git view.
+- `get_project_source` is not called by the UI yet; Git availability and the worktree list come from it.
+- The viewer's content key names its source (`live`); index, commit and branch reads need keys of their own, with the
+  change group part of the identity.
+- `neighbours()` in `packages/ui/src/browser/tree.ts` is the ordering rule for viewer navigation; reuse its approach
+  for change lists rather than letting the viewer sort.
+- Listing requests are bounded per browser and per window (`useDirectoryListings.ts`); Git list and content requests
+  share the daemon's per-connection bound and need to be sized together with them.
 
 ## Notes for the developer
 

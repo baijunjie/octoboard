@@ -1,4 +1,4 @@
-import { Archive, ArrowLeftRight, Focus, FolderPlus, KeyRound, List, Pencil, Pin, PinOff, Settings2, Trash2 } from "lucide-react";
+import { Archive, ArrowLeftRight, Focus, FolderOpen, FolderPlus, KeyRound, List, Pencil, Pin, PinOff, Settings2, Trash2 } from "lucide-react";
 
 import { switchEntries } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuSubmenu } from "../components/ActionMenu";
@@ -53,9 +53,10 @@ export function consoleMenu(t: Translate, console: Console, onOpenDialog: (dialo
   ];
 }
 
-/** The project's actions, in the project row and in a focus mode (the project's own header, and a
- * console session's project headings), which leaves out "Focus mode": the project's own is in it
- * already, and a console session's has no project focus mode to enter from there. */
+/** The project's actions, opening its files first, in the project row and in a focus mode (the
+ * project's own header, and a console session's project headings), which leaves out "Focus mode":
+ * the project's own is in it already, and a console session's has no project focus mode to enter
+ * from there. */
 export function projectMenu(
   t: Translate,
   handlers: SidebarHandlers,
@@ -64,6 +65,8 @@ export function projectMenu(
   { inFocus = false }: { inFocus?: boolean } = {},
 ): ActionMenuEntry[] {
   return [
+    { label: t("sidebar.project.browse"), icon: FolderOpen, onClick: () => handlers.onBrowseProject(project) },
+    "separator",
     pinItem(t, project.pinned, () => handlers.onSetPinned({ project }, !project.pinned)),
     { label: t("sidebar.project.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-project", project }) },
     { label: t("sidebar.project.edit"), icon: Settings2, onClick: () => handlers.onOpenDialog({ kind: "edit-project", project }) },

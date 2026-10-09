@@ -31,6 +31,8 @@ export interface SidebarHandlers {
   /** Enters the focus mode of a project or a console session, or with `undefined` leaves it. */
   onFocus: (target: FocusTarget | undefined) => void;
   onOpenArchive: (scope: ArchiveScope) => void;
+  /** Opens the project's browser in the aside, starting nothing. */
+  onBrowseProject: (project: Project) => void;
   onSetPinned: (target: { project: Project } | { session: Session }, pinned: boolean) => void;
   /** Opens Settings at a section. */
   onOpenSettings: (section: SettingsSectionId) => void;

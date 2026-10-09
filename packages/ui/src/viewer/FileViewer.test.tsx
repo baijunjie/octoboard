@@ -139,3 +139,15 @@ it("announces a read failure once, with its title", () => {
   const title = [...(dialog()?.querySelectorAll("*") ?? [])].find((element) => element.textContent === "Could not open this file");
   expect(title?.getAttribute("aria-hidden")).toBe("true");
 });
+
+it("moves to the previous and next subject with Left and Right, as its buttons do", () => {
+  const onPrevious = vi.fn();
+  const onNext = vi.fn();
+  show(binary, { onPrevious, onNext });
+  for (const key of ["ArrowLeft", "ArrowRight"]) {
+    act(() => {
+      dialog()!.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    });
+  }
+  expect([onPrevious.mock.calls.length, onNext.mock.calls.length]).toEqual([1, 1]);
+});

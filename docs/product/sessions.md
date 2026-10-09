@@ -54,8 +54,10 @@ running sessions of its project and share information with them; it takes work o
 another session is information to weigh (see "Information between sessions of a project" in
 `docs/product/hub-orchestration.md`).
 
-Selecting a console session also shows its own **report panel** beside the terminal, described
-in `docs/product/report-panel.md`; a project session's terminal has the pane to itself.
+Selecting a session also fills the window's right pane, beside the terminal: with a console session's own **report
+panel** (see `docs/product/report-panel.md`), or with a project session's project's **project pane**, its files (see
+`docs/product/project-pane.md`). When the right pane shows something else is in "What the right pane shows" in
+`docs/product/window-layout.md`.
 
 ## Where sessions are listed
 
@@ -449,19 +451,19 @@ With no session selected, the terminal's area says so and asks for a session to 
 terminal is live: keystrokes go straight to the agent, exactly as in a system terminal. Mouse
 reporting works, so an agent's own mouse-driven TUI is usable. `Ctrl+C` reaches the agent, and so do `Tab` and
 `Shift+Tab`. `F6` and `Shift+F6` never do: they move keyboard focus to another region of the window (see "Moving
-focus between regions with F6" in `docs/product/window-layout.md`).
+focus between regions with F6" in `docs/product/moving-focus-between-regions.md`).
 
 - Attaching to a session replays the **most recent 2 MiB** of that session's output, then follows live output. The
   terminal itself keeps 10,000 lines of scrollback.
 - A reattach always redraws from the replay rather than appending to what is on screen, so scrollback older than the
   replay window is lost on every reconnect.
 - Whatever changes the terminal pane's size resizes the agent's terminal: resizing the window, resizing
-  the sidebar or the report panel, and hiding or showing either of them all do; a pane floating in or a drawer
+  the sidebar or the right pane, and hiding or showing either of them all do; a pane floating in or a drawer
   opening over the terminal does not (see `docs/product/window-layout.md`). The
   screen follows at once, but the agent is told the new size only once it has held still for about
   120 ms, and only when it differs from the size the agent already has, so a drag sends the agent one
   size change rather than one for every step of the drag. The window has a minimum size, sized so that
-  the sidebar, the terminal and the report panel all stay usable side by side — see "The window's
+  the sidebar, the terminal and the right pane all stay usable side by side — see "The window's
   minimum size" in `docs/product/window-layout.md`.
 - The terminal's colours follow the window's light or dark appearance, and its text is held to a minimum contrast
   against its cell's background whatever colours the agent prints — see "What follows the choice" in

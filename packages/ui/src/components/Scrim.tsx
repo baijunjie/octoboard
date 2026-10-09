@@ -1,7 +1,7 @@
 import React from "react";
 
 /**
- * The dimming layer behind a narrow-mode overlay (the sidebar drawer, the report panel drawer):
+ * The dimming layer behind a narrow-mode overlay (the sidebar drawer, the aside's drawer):
  * pressing it closes the overlay. Sits on an ordinary low `z-index`, well under the modal
  * overlay's and HeroUI's toast region's (`--z-index-overlay` and `--z-index-toast`, overlay + 1),
  * so a dialog opened from inside the drawer, or a toast, still renders above it. Hidden outright at

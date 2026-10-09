@@ -42,7 +42,7 @@ The name assistive technology announces for an avatar is the console's name toge
 **Edit console** and **Delete console**, as in the sidebar's header below. It does not switch to the console.
 
 **The current console is remembered per client**, in that client's own browser storage, as the panes' widths are
-(see "Resizing the sidebar and the report panel" in `docs/product/window-layout.md`). A remembered console that no
+(see "Resizing the sidebar and the right pane" in `docs/product/window-layout.md`). A remembered console that no
 longer exists falls back to the first console. Switching console leaves focus mode; the selected session stays
 selected. Selecting a session anywhere switches the sidebar to that session's console (see "Selecting a session"
 below).
@@ -64,7 +64,7 @@ hover" in `docs/product/window-layout.md`. For any console other than the curren
   then selects a session counts as one visit (see "What counts as a place" in
   `docs/product/navigation-history.md`).
 - Showing the sidebar for good with its toggle while it previews a console shows the current console, not the one the
-  card was previewing. The card goes away and the column eases open; see "Hiding the sidebar and the report panel"
+  card was previewing. The card goes away and the column eases open; see "Hiding the sidebar and the right pane"
   and "A hidden pane floats in on hover" in `docs/product/window-layout.md`.
 
 ## The console header
@@ -184,6 +184,8 @@ project collapsed.
 At the row's end are a **+** button, **New session**, which opens the new-session dialog for that project (see
 "Opening a session" in `docs/product/sessions.md`), and the project's action menu:
 
+- **Browse files** — shows the project's files in the right pane, selecting, starting and resuming no session (see
+  `docs/product/project-pane.md`). It comes first, set apart from the items below it.
 - **Pin** / **Unpin** — see "Order of projects and sessions" below.
 - **Rename** — a dialog with the name alone; an empty name is rejected.
 - **Project settings** — the project dialog, see "Editing a project" in `docs/product/consoles-and-projects.md`.
@@ -316,14 +318,16 @@ is archived and when it is resumed; an archived session's menu offers no Pin or 
 
 Selecting a session shows its terminal; selecting an interrupted one resumes it, except by `Ctrl+Tab` or
 `Ctrl+Shift+Tab` in a console session's focus mode, which only shows an interrupted console session (see "The switch
-strip" in `docs/product/focus-mode.md`). Selecting an archived one does not reopen it: it is shown still archived, with
-the output its last process left on screen read-only, and typing into its terminal or pressing Reopen reopens it (see "Archiving, interruption and resuming" and "The terminal" in
-`docs/product/sessions.md`). Whatever it is selected from — a sidebar row, a "View archive" or "Archived console
-sessions" submenu, focus mode and its switch strip, the archive view, the rail's waiting count, or the menu bar icon's
-menu (see "Choosing a session" in `docs/product/menu-bar-icon.md`) — **the sidebar follows it**: it switches to the
-session's console, and leaves focus mode when the session does not belong to what focus mode is on (see "Leaving focus
-mode, and what is remembered" in `docs/product/focus-mode.md`). Back and Forward return to earlier selections without
-resuming anything (see `docs/product/navigation-history.md`).
+strip" in `docs/product/focus-mode.md`). Selecting an archived one does not reopen it: it is shown still archived,
+with the output its last process left on screen read-only, and typing into its terminal or pressing Reopen reopens it
+(see "Archiving, interruption and resuming" and "The terminal" in `docs/product/sessions.md`). Selecting a session also
+puts its own pane in the window's right pane: a console session's report panel, a project session's project pane (see
+"What the right pane shows" in `docs/product/window-layout.md`). Whatever it is selected from — a sidebar row, a "View
+archive" or "Archived console sessions" submenu, focus mode and its switch strip, the archive view, the rail's waiting
+count, or the menu bar icon's menu (see "Choosing a session" in `docs/product/menu-bar-icon.md`) — **the sidebar
+follows it**: it switches to the session's console, and leaves focus mode when the session does not belong to what
+focus mode is on (see "Leaving focus mode, and what is remembered" in `docs/product/focus-mode.md`). Back and Forward
+return to earlier selections without resuming anything (see `docs/product/navigation-history.md`).
 
 A session is selected automatically only when this application is the one that opened it — through the console
 sessions section's New console session button or the new-session dialog — and that closes the archive view if it is
@@ -347,7 +351,7 @@ mirrored under a right-to-left language, and nothing moves where the system asks
 section's "Archived console sessions" submenu — opens the archive view: **every** archived session of that project,
 every archived session bound to that console session, or every archived console session of that console.
 
-- It **covers the terminal's area only**: the sidebar and, for a console session, the report panel stay as they are.
+- It **covers the terminal's area only**: the sidebar and the right pane stay as they are.
   The terminal goes on running beneath it and is not resized.
 - Its header says how many archived sessions there are, over the title "Archived sessions" (for console sessions,
   "Archived console sessions"; for a console session's bound sessions, "Archived bound sessions"), with **Delete all**
@@ -373,5 +377,5 @@ project, its console session or its console no longer exists. Closing it hands k
 
 It takes keyboard focus as it opens, so keystrokes stop reaching the terminal it covers, and it keeps focus after a
 deletion. It is a region of its own in the `F6` cycle (see "Moving focus between regions with F6" in
-`docs/product/window-layout.md`). Below 1148 px, where the sidebar is a drawer, opening the archive view closes the
-sidebar's drawer so that the view is not hidden behind it.
+`docs/product/moving-focus-between-regions.md`). Below 1148 px, where the sidebar is a drawer, opening the archive
+view closes the sidebar's drawer so that the view is not hidden behind it.

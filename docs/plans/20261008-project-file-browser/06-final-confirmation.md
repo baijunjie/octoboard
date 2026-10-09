@@ -14,3 +14,9 @@
 - In the packaged app, with the file viewer open, check by hand what was only checked in WebKit with scripted real
   input: selecting and copying code with the mouse and keyboard, Tab order through the viewer's controls, a narrow
   window, and the controls under a right-to-left language with code and paths still left-to-right.
+- With an input method (e.g. Chinese or Japanese), compose text while the file viewer is open: the arrow keys must
+  move within the composition, not to another file.
+- In the packaged app (these ran only in WebKit against a real daemon): navigate quickly through files of a project
+  on a slow disk or network share; delete and overwrite the open file while it is shown; quit and relaunch the daemon
+  connection (reconnect) with the project pane open; delete the project whose pane is shown. Each must show the right
+  file's content or an explicit state, never another file's body.

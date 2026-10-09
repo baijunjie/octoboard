@@ -649,6 +649,51 @@ fn links_are_followed_inside_the_scope_and_refused_outside_it() {
 }
 
 #[test]
+fn a_listed_file_carries_the_version_a_live_read_reports() {
+    let fixture = Fixture::new();
+    let project_dir = ScratchDir::new("browse-entry-version");
+    std::fs::write(project_dir.join("a.txt"), b"aaaa\n").unwrap();
+    std::fs::create_dir(project_dir.join("dir")).unwrap();
+    let project = fixture.project("p", &project_dir);
+    let listed = |name: &str| {
+        let (entries, _) = fixture.list(&project, None, "").unwrap();
+        entries
+            .into_iter()
+            .find(|e| e.name == name)
+            .unwrap()
+            .version
+    };
+    let read = || match fixture
+        .read(&project, None, "a.txt", ReadFrom::Live)
+        .unwrap()
+        .0
+    {
+        ContentSource::Live { version, .. } => version,
+        other => panic!("not a live source: {other:?}"),
+    };
+
+    let before = listed("a.txt");
+    assert_eq!(before, Some(read()));
+    assert_eq!(listed("dir"), None, "only a regular file has a version");
+    // Rewritten in place at the same size, with a modification time of its own so that the change
+    // shows even where the clock is coarser than two writes.
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .open(project_dir.join("a.txt"))
+        .unwrap();
+    std::io::Write::write_all(&mut &file, b"bbbb\n").unwrap();
+    file.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000))
+        .unwrap();
+    drop(file);
+    let after = listed("a.txt");
+    assert_ne!(
+        after, before,
+        "a same-size rewrite is told apart from the listing alone"
+    );
+    assert_eq!(after, Some(read()));
+}
+
+#[test]
 fn special_files_are_refused_without_being_opened() {
     let fixture = Fixture::new();
     let project_dir = ScratchDir::new("browse-special");

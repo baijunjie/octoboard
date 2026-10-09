@@ -3,11 +3,11 @@ import { PREFERENCE_KEYS } from "../preferenceKeys";
 
 /** The two panes the user can hide at and above the `docked` breakpoint. Below it they are
  * drawers, whose open state `usePaneToggles` holds instead. */
-export type DockedPanel = "sidebar" | "report";
+export type DockedPanel = "sidebar" | "aside";
 
 const visibility: Record<DockedPanel, PersistedPreference<boolean>> = {
   sidebar: createPersistedPreference(PREFERENCE_KEYS.sidebarVisible, (raw) => raw !== "false", String),
-  report: createPersistedPreference(PREFERENCE_KEYS.reportVisible, (raw) => raw !== "false", String),
+  aside: createPersistedPreference(PREFERENCE_KEYS.asideVisible, (raw) => raw !== "false", String),
 };
 
 /** Whether the docked `panel` is shown, and a setter that persists the choice. Visible unless the

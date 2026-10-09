@@ -8,8 +8,8 @@ import type { PanePeek } from "./usePaneToggles";
  *   request, so it stays a fixed overlay at every width. */
 export type PaneMode = "drawer" | "floating";
 
-/** The DOM ids of the two panes, which the sidebar and report toggles name in `aria-controls`. */
-export const PANE_ID = { sidebar: "sidebar-pane", report: "report-pane" } as const;
+/** The DOM ids of the two panes, which the sidebar and aside toggles name in `aria-controls`. */
+export const PANE_ID = { sidebar: "sidebar-pane", aside: "aside-pane" } as const;
 
 /** The edge a pane sits on: the reading direction's start or end. */
 export type PaneEdge = "start" | "end";
@@ -42,8 +42,8 @@ const SIDE_CLASSES = {
 };
 
 /**
- * The geometry shared by the sidebar's and the report panel's overlay forms (`Sidebar.tsx`,
- * `ReportPanel.tsx`): fixed between `style.css`'s `--top-chrome-height` and
+ * The geometry shared by the sidebar's and the aside's overlay forms (`Sidebar.tsx`,
+ * `AsidePane.tsx`): fixed between `style.css`'s `--top-chrome-height` and
  * `--bottom-chrome-height`, sliding in from `side`; the start side's edge is the rail's, and a start
  * pane that floats is inset from all of those instead (`floatingFrame`).
  * `open` is whether the drawer is open below the breakpoint. Callers add their own
@@ -69,7 +69,8 @@ const SIDE_CLASSES = {
  * HeroUI's `Drawer` is not used: it is modal (everything outside is inert, focus is trapped, its
  * content is portalled and unmounted while closed). The panes have to be non-modal row siblings
  * that are also drawers and hover-peek panes, with the window chrome (the top bar and the rail)
- * still operable, focus staying on the terminal, and the report page staying mounted.
+ * still operable, focus staying on the terminal, and what the aside shows (a report page, a file
+ * tree) staying mounted.
  */
 export function drawerClass(side: PaneEdge, mode: PaneMode, open: boolean, peeking = false): string {
   const { anchor, closed, floatingFrame, floatingAway } = SIDE_CLASSES[side];
@@ -107,7 +108,7 @@ export function RailClip({ floating, children }: { floating: boolean; children: 
   );
 }
 
-/** How long a mouse pointer has to stay on the report panel's hot zone before the panel floats in. */
+/** How long a mouse pointer has to stay on the aside's hot zone before the aside floats in. */
 const PEEK_DWELL_MS = 200;
 
 /** Whether the pointer is off a pane at the place the pane is sliding to. The element under the
@@ -127,10 +128,10 @@ function outsidePane(pane: Element | null, event: PointerEvent): boolean {
 }
 
 /**
- * The strip along the window's end edge that floats the hidden report panel in when a mouse pointer
- * stays on it; rendered by the panel itself, only while it is hidden and not already out. It starts
- * under the top bar and ends above the connection banner, so their controls stay clear. It reacts to
- * a mouse only, as the toggles do.
+ * The strip along the window's end edge that floats the hidden aside in when a mouse pointer stays
+ * on it; rendered by the pane itself (`AsidePane.tsx`), only while it is hidden and not already out.
+ * It starts under the top bar and ends above the connection banner, so their controls stay clear. It
+ * reacts to a mouse only, as the toggles do.
  *
  * The pane waits `PEEK_DWELL_MS` before floating in, so a pointer passing along the edge does not
  * make it flicker in, one resting on the edge does. The toggle that floats a pane in does so at
@@ -149,7 +150,7 @@ function outsidePane(pane: Element | null, event: PointerEvent): boolean {
  * the direction; under right-to-left it is on the left and 8px, easy to reach by pushing the
  * pointer to the edge. Hence the physical widths.
  */
-export function ReportPeekHotZone({ peek }: { peek: PanePeek }): React.ReactElement | null {
+export function AsidePeekHotZone({ peek }: { peek: PanePeek }): React.ReactElement | null {
   const dwell = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // The dwell's callback outlives the render that scheduled it, and `peek` is rebuilt every render.
   const latest = useRef(peek);
@@ -160,7 +161,7 @@ export function ReportPeekHotZone({ peek }: { peek: PanePeek }): React.ReactElem
     unwatch.current?.();
     const onMove = (event: PointerEvent) => {
       unwatch.current?.();
-      if (outsidePane(document.querySelector("[data-pane=report]"), event)) latest.current.leave();
+      if (outsidePane(document.querySelector("[data-pane=aside]"), event)) latest.current.leave();
     };
     window.addEventListener("pointermove", onMove, { capture: true });
     unwatch.current = () => {

@@ -13,6 +13,10 @@ A place is what the window shows, taken together:
 - the focus mode the sidebar is in, if any (see `docs/product/focus-mode.md`);
 - the archive view and what it is for, while it is open (see "The archive view" in `docs/product/sidebar.md`).
 
+What the right pane shows is not part of a place: Browse files records no visit, and a move gives the right pane what
+selecting the session moved to would, or leaves it as it is when the selected session stays (see "What the right pane
+shows" in `docs/product/window-layout.md`).
+
 **Every change of any of these is a visit**, whatever made it: a sidebar row, a console avatar on the rail, entering or
 leaving focus mode, a chip in a focus mode, the archive view opening or closing, the waiting count, the menu bar icon's
 menu, a session this window opened being selected, a keyboard shortcut. A change that leaves the window where it already

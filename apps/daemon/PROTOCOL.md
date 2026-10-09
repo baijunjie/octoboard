@@ -407,7 +407,7 @@ nothing a client sends is used as a path to read from, apart from the relative `
 ProjectSourceInfo { project, root, resolved_root, root_id, git: GitSourceInfo?, git_error? }
 GitSourceInfo     { repository, common_dir, worktree, scope, worktrees: WorktreeInfo[] }
 WorktreeInfo      { id, root, main, head?, branch?, scope_present }
-BrowseEntry       { name, kind: "file"|"directory"|"symlink"|"other", size?,
+BrowseEntry       { name, kind: "file"|"directory"|"symlink"|"other", size?, version?,
                     target?: "file"|"directory"|"other"|"missing"|"outside" }
 ContentSource     = { kind: "live", root_id, version }
                   | { kind: "index", worktree, blob }
@@ -484,9 +484,10 @@ its metadata and is never read; one swapped in after that check is opened withou
 is read from it. The file's identity, size, modification and change times are compared before and after the read, and
 a file that changed in between is `source_changed`, never a body stitched from bytes on either side of the change. A
 program writing the file in place can still leave it, for a moment, half written; a read in that moment returns the
-file as it then is, as any reader would. `version` is those values at the read, as one opaque string: two equal
-versions mean nothing about the file changed between the two reads. A read from disk has no deadline of its own: a
-volume that stops answering holds the read until it answers or fails.
+file as it then is, as any reader would. `version` is the file's device and inode numbers, size, and modification
+and change times at the read, as one opaque string, compared whole and never parsed: two equal versions mean nothing
+about the file changed between the two reads. A read from disk has no deadline of its own: a volume that stops
+answering holds the read until it answers or fails.
 
 An index read looks up the path's entry in the worktree's index, and a branch or commit read looks up the path in the
 commit's tree, both by listing exactly that path — never through a revision expression a file name could take part
@@ -507,8 +508,10 @@ for a binary body, as a hint from its first bytes, for the image formats the dae
 being text, arrives as text with no `media_type`. `size` is the body's length in bytes.
 
 A listing names each entry once, in byte order of the names' wire forms, with its `kind`. `size` is a regular file's
-size; `target` says what a symbolic link resolves to — a file, a directory, something else, nothing (`missing`) or
-something outside the scope (`outside`, not looked at further). `complete` is false when the listing stopped at a
+size and `version` the `version` a live read of it would report while it stays as it is, so a client holding a file's
+body can tell from a listing alone whether it has changed since, a rewrite of the same size included. `target` says
+what a symbolic link resolves to — a file, a directory, something else, nothing (`missing`) or something outside the
+scope (`outside`, not looked at further). `complete` is false when the listing stopped at a
 budget, and the entries then are those read before it stopped, not a chosen subset; it is false too when an entry
 could not be read, which is then left out.
 

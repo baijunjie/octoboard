@@ -117,6 +117,16 @@ both, a field assembled anywhere else has to:
   `hidden` / `inert` / `translate`, the global events and `data-*`; anything else — `role` among them — is dropped
   without a warning, and a message that appears only on submit is then never announced at all.
 
+## A react-aria-components element writes its own state `data-*` attributes over yours
+
+A react-aria-components element spreads the props it is given first and then sets the state attributes it owns —
+`data-selected`, `data-focused`, `data-hovered`, `data-pressed`, `data-expanded`, `data-disabled` and the like — so a
+value you pass under one of those names is replaced without a warning, and a style keyed on it follows react-aria's
+state rather than yours. HeroUI's components render react-aria-components elements and behave the same. To mark a
+state of your own on one (a tree row that is the current file while the tree has no react-aria selection, say), use a
+`data-*` name that the component's own file under `packages/ui/node_modules/react-aria-components/dist/private/` does
+not write, such as `data-current` on a `TreeItem`, or a class.
+
 ## A Tailwind class name has to stand in the source as literal text
 
 Tailwind 4 reads the source as plain text and emits a utility only for a class name it can find spelled out there, so

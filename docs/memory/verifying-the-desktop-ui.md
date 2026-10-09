@@ -117,6 +117,14 @@ sign-in screen, stray keystrokes completed a real Codex sign-in through the defa
 signed in to the account. So hand focus back after each GUI step, and never leave the window frontmost on a sign-in
 screen.
 
+## Prove that no key reached the terminal against an agent that echoes every byte
+
+When a verification has to show that keys the UI handles itself — in a pane, a viewer, a dialog over the terminal —
+never reach the selected session, run that session on a stand-in agent CLI that writes back everything it reads, not
+on a real agent. A real agent shows nothing for many keys (an arrow, Escape or Enter at an empty prompt), so a key
+that leaked looks the same as one that did not, and the check passes whatever the UI does; against the echo, any leak
+shows up in the terminal.
+
 ## Input-method and reduced-motion checks need the user's hands
 
 Injected keystrokes bypass macOS input methods entirely, so a scripted CJK composition test passes without ever

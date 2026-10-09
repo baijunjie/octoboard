@@ -4,9 +4,12 @@
 export const PREFERENCE_KEYS = {
   language: "octoboard.language",
   sidebarVisible: "octoboard.sidebarVisible",
-  reportVisible: "octoboard.reportVisible",
+  // The aside's two keys keep the names they had while the pane only ever held the report panel, so
+  // a choice made then still applies.
+  asideVisible: "octoboard.reportVisible",
   sidebarWidth: "octoboard.sidebarWidth",
-  reportWidth: "octoboard.reportWidth",
+  asideWidth: "octoboard.reportWidth",
   sidebarConsole: "octoboard.sidebarConsole",
   sidebarFocus: "octoboard.sidebarFocus",
+  projectBrowsers: "octoboard.projectBrowsers",
 } as const;

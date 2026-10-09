@@ -2,9 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
 import { ArchiveView } from "./archive/ArchiveView";
+import { forgetProjectsOtherThan } from "./browser/browserState";
+import { LazyProjectBrowser } from "./browser/LazyProjectBrowser";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { ContentPanel } from "./components/ContentPanel";
 import { PaneResizeHandle } from "./components/PaneResizeHandle";
+import { refocusIfLost } from "./components/refocusIfLost";
 import { Rail } from "./components/Rail";
 import { Scrim } from "./components/Scrim";
 import { BareTitleBar, TitleBar } from "./components/TitleBar";
@@ -15,8 +18,11 @@ import type { DialogRequest } from "./dialogs/dialogRequest";
 import { RequestedDialog } from "./dialogs/RequestedDialog";
 import { TrustPromptDialog } from "./dialogs/TrustPromptDialog";
 import { useT } from "./i18n/react";
+import type { AsideLayout } from "./layout/AsidePane";
+import { ASIDE_LABELS, liveOwner, ownerAfterMove, ownerForSession, ownerKey, sameOwner, type AsideOwner } from "./layout/asideOwner";
 import { usePaneWidth } from "./layout/paneWidth";
 import type { DockPhase } from "./layout/sidebarDockMotion";
+import { useConsoleOwnerRule } from "./layout/useConsoleOwnerRule";
 import { usePaneToggles } from "./layout/usePaneToggles";
 import { useRegionCycle } from "./layout/useRegionCycle";
 import { useAppExit } from "./lifecycle/useAppExit";
@@ -42,7 +48,7 @@ import { nextWaitingSession, waitingSessionsInTreeOrder } from "./waiting";
 
 export function App(): React.ReactElement {
   const t = useT();
-  const { request, toastError, reconnect } = useDaemon();
+  const { request, toastError, reconnect, store } = useDaemon();
   const connectionState = useDaemonStore((s) => s.connectionState);
   const hosts = useDaemonStore((s) => s.hosts);
   const consoles = useDaemonStore((s) => s.consoles);
@@ -67,9 +73,13 @@ export function App(): React.ReactElement {
   const projectList = useMemo(() => Array.from(projects.values()), [projects]);
   const sessionList = useMemo(() => Array.from(sessions.values()), [sessions]);
   const selectedSession = selectedSessionId ? sessions.get(selectedSessionId) : undefined;
-  // Only a console session has a report panel at all; computed here (rather than where it is
-  // consumed below) because the pane toggles and the panes' width clamps need it too.
-  const hasReportPanel = selectedSession?.role === "console";
+  // Who the aside belongs to (`asideOwner.ts`): set by what the user does, and gone with what it
+  // names. Computed here (rather than where it is consumed below) because the pane toggles, the
+  // region cycle and the panes' width clamps need it too.
+  const [asideOwnerState, setAsideOwner] = useState<AsideOwner>();
+  const asideOwner = liveOwner(asideOwnerState, projects, sessions);
+  const asideProject = asideOwner?.kind === "project" ? projects.get(asideOwner.project) : undefined;
+  const hasAside = asideOwner !== undefined;
   const sidebarView = useSidebarView(consoleList, projects, sessions);
   useGitStatusSchedule(sidebarView.currentConsole?.id);
   const archiveConsole = archiveScope ? consoles.get(archiveScope.console) : undefined;
@@ -83,7 +93,7 @@ export function App(): React.ReactElement {
     (archiveProjectId === undefined || archiveProject !== undefined) &&
     (archiveConsoleSessionId === undefined || archiveBoundTo !== undefined);
 
-  const panes = usePaneToggles({ hasReportPanel, focusTerminal });
+  const panes = usePaneToggles({ hasAside, focusTerminal });
   // The hidden sidebar floats in showing the console whose avatar the pointer is on, which is not
   // the current one until something is pressed in it. That is a plain console view: a focus mode
   // belongs to the current console.
@@ -107,7 +117,7 @@ export function App(): React.ReactElement {
       sidebar: panes.sidebarShown,
       archive: archiveOpen,
       terminal: selectedSession !== undefined && !archiveOpen,
-      report: hasReportPanel && panes.reportShown,
+      aside: hasAside && panes.asideShown,
       banner: connectionState === "reconnecting" || connectionState === "closed",
     },
     focusTerminal,
@@ -117,18 +127,46 @@ export function App(): React.ReactElement {
   // the handle's own position is the settled width, so it stays off until the ease has finished.
   const [sidebarColumnPhase, setSidebarColumnPhase] = useState<DockPhase>(panes.sidebarDocked ? "open" : "closed");
   // Hiding takes the sidebar out of the row at once, which is also when `usePaneWidth` stops
-  // clamping it. With the report panel docked, that clamp is what holds the sidebar under its
-  // chosen width, so the column would widen and reflow on the first frame of the close. It stays
-  // clamped until the column has left the row. The report panel's width uses the real docked
-  // flags: holding it back for the ease would snap it when the column finishes.
+  // clamping it. With the aside docked, that clamp is what holds the sidebar under its chosen
+  // width, so the column would widen and reflow on the first frame of the close. It stays clamped
+  // until the column has left the row. The aside's width uses the real docked flags: holding it
+  // back for the ease would snap it when the column finishes. A hidden aside gives its width back.
   const sidebarWidth = usePaneWidth("sidebar", {
     sidebar: panes.sidebarDocked || sidebarColumnPhase !== "closed",
-    report: hasReportPanel && panes.reportDocked,
+    aside: hasAside && panes.asideDocked,
   });
-  const reportWidth = usePaneWidth("report", {
+  const asideWidth = usePaneWidth("aside", {
     sidebar: panes.sidebarDocked,
-    report: hasReportPanel && panes.reportDocked,
+    aside: hasAside && panes.asideDocked,
   });
+  const asideLayout: AsideLayout = {
+    open: panes.asideOpen,
+    width: asideWidth.width,
+    peek: panes.asideDocked ? undefined : panes.asidePeek,
+  };
+
+  // An owner that is gone leaves no aside, and is not brought back by anything that appears later.
+  useEffect(() => {
+    if (asideOwnerState && !asideOwner && hosts) setAsideOwner(undefined);
+  }, [asideOwnerState, asideOwner, hosts]);
+  // Making another console current closes a browser of a project of the console left behind (a
+  // console the floating sidebar only previews is not current), and coming back to the selected
+  // session's console gives the aside back to the session's own owner.
+  const ownerRule = useConsoleOwnerRule(sidebarView.currentConsole?.id, () => {
+    const next = ownerAfterMove(asideOwnerState, selectedSession, sidebarView.currentConsole?.id, projects);
+    if (!sameOwner(next, asideOwnerState)) setAsideOwner(next);
+  });
+  /** The owner as the user just set it, which settles a console change held for the same press. */
+  const setOwnerByUser = (owner: AsideOwner | undefined) => {
+    ownerRule.ownerSet();
+    setAsideOwner(owner);
+  };
+  // A removed project's browser state has nothing left to apply to.
+  useEffect(() => {
+    if (hosts) forgetProjectsOtherThan(new Set(projects.keys()));
+  }, [projects, hosts]);
+  // What the aside showed goes with its owner; focus that was inside it goes to the terminal.
+  useEffect(() => refocusIfLost(focusTerminal), [ownerKey(asideOwner)]);
 
   useWaitingNotifications(sessionList, consoles, projects, hosts !== undefined);
   useStatusItemMenu({
@@ -238,6 +276,8 @@ export function App(): React.ReactElement {
    * sidebar already shows, so only the archive view, were it open, has to give way. */
   const showOpenedSession = (sessionId: string) => {
     setSelectedSessionId(sessionId);
+    // The reply that names the session has already been applied to the store by the time this runs.
+    setOwnerByUser(ownerForSession(store.getState().sessions.get(sessionId)));
     setArchiveScope(undefined);
   };
 
@@ -265,6 +305,8 @@ export function App(): React.ReactElement {
 
   const selectSession = (session: Session, { enterFocus = false, resume = true } = {}) => {
     setSelectedSessionId(session.id);
+    // A console session brings its report into the aside, a project session its project's browser.
+    setOwnerByUser(ownerForSession(session));
     // Whatever led here — the sidebar, the archive, the waiting-count button — the sidebar follows
     // the session: its console is the one shown, and focus mode on something the session does not
     // belong to is left, unless `enterFocus` asks for the focus mode of this console session itself.
@@ -283,6 +325,13 @@ export function App(): React.ReactElement {
   const reopenSession = (session: Session) => {
     selectSession(session);
     if (session.status === "archived") void resumeSession(session.id);
+  };
+
+  /** Opens a project's browser in the aside, putting the aside on screen, without selecting or
+   * starting any session: the terminal beside it stays as it is. */
+  const browseProject = (project: Project) => {
+    setOwnerByUser({ kind: "project", project: project.id });
+    panes.showAside();
   };
 
   const openArchive = (scope: ArchiveScope) => {
@@ -355,16 +404,23 @@ export function App(): React.ReactElement {
       const session = target.session ? sessions.get(target.session) : undefined;
       sidebarView.setFocus(focusFor(resolveFocus(target.focus, target.console, projects, sessions), session, sessions));
       setSelectedSessionId(target.session);
+      // The aside follows the session moved to, as selecting it does, and a move that keeps the
+      // session leaves it to whoever owns it; either way under the rule of making another console
+      // current, as the place moved to may have another current console than its session's.
+      const owner = target.session !== selectedSessionId ? ownerForSession(session) : asideOwner;
+      setAsideOwner(ownerAfterMove(owner, session, target.console, projects));
       setArchiveScope(target.archive);
     },
     focusTerminal,
   });
 
   // A press in the previewing sidebar makes its console current. If that press goes on to select a
-  // session there, the two changes are one visit in the history.
+  // session there, the two changes are one visit in the history, and the aside goes straight to
+  // that session's owner rather than first through the console change's.
   const commitPreview = () => {
     if (!previewing || !shownConsole) return;
     navigation.joinPressVisits();
+    ownerRule.holdForPress();
     sidebarView.selectConsole(shownConsole.id);
   };
 
@@ -442,11 +498,11 @@ export function App(): React.ReactElement {
           waitingCount={waitingSessions.length}
           onNextWaiting={selectNextWaiting}
           terminalProblem={terminalProblem}
-          hasReportPanel={hasReportPanel}
-          reportShown={panes.reportShown}
-          onToggleReport={panes.toggleReport}
-          onReportToggleEnter={() => panes.reportPeek.reveal()}
-          onReportToggleLeave={panes.reportPeek.leave}
+          aside={asideOwner?.kind}
+          asideShown={panes.asideShown}
+          onToggleAside={panes.toggleAside}
+          onAsideToggleEnter={() => panes.asidePeek.reveal()}
+          onAsideToggleLeave={panes.asidePeek.leave}
           onOpenSettings={openSettings}
           focusTerminal={focusTerminal}
         />
@@ -464,6 +520,7 @@ export function App(): React.ReactElement {
             onOpenDialog={openDialog}
             onFocus={sidebarView.setFocus}
             onOpenArchive={openArchive}
+            onBrowseProject={browseProject}
             onSetPinned={setPinned}
             onOpenSettings={openSettingsAt}
             open={panes.sidebarOpen}
@@ -480,16 +537,16 @@ export function App(): React.ReactElement {
               viewport narrower than that scroll instead of clipping. */}
           <main className="relative flex min-w-0 flex-1 overflow-x-auto docked:overflow-visible">
             {/* Takes the terminal's place in the row, so the archive covers the terminal alone, not the
-                report panel beside it; the terminal fills it. Above the `docked` breakpoint the 520px
-                basis and floor are the report panel's counterpart: with a 0 basis free space stays
-                positive at any window wider than the panel's own basis, flexbox never leaves the grow
-                phase, and the panel's shrink factor is never consulted. 520px is about 53 columns
-                at ~9.2px/column off a real agent CLI (the terminal's padding eats the rest). Below the
-                breakpoint the sidebar and the report panel are overlays rather than row siblings
-                (`usePaneToggles`), so this is the row's only content and takes a much smaller floor:
-                398px is 40 columns at the same ~9.2px/column plus the same padding allowance, under
-                which the terminal stops being usable at all, so `overflow-x-auto` on `main` scrolls
-                rather than squeezing it further. */}
+                aside beside it; the terminal fills it. Above the `docked` breakpoint the 520px basis
+                and floor are the aside's counterpart: with a 0 basis free space stays positive at any
+                window wider than the aside's own basis, flexbox never leaves the grow phase, and the
+                aside's shrink factor is never consulted. 520px is about 53 columns at ~9.2px/column
+                off a real agent CLI (the terminal's padding eats the rest). Below the breakpoint the
+                sidebar and the aside are overlays rather than row siblings (`usePaneToggles`), so
+                this is the row's only content and takes a much smaller floor: 398px is 40 columns at
+                the same ~9.2px/column plus the same padding allowance, under which the terminal stops
+                being usable at all, so `overflow-x-auto` on `main` scrolls rather than squeezing it
+                further. */}
             <div className="relative flex min-h-0 min-w-[398px] flex-[1_1_398px] docked:min-w-[520px] docked:flex-[1_1_520px]">
               {archiveOpen && archiveConsole && (
                 <ArchiveView
@@ -519,26 +576,34 @@ export function App(): React.ReactElement {
                 onProblemChange={setTerminalProblem}
               />
             </div>
-            {/* Only a console session has a report panel, and it is that console session's own.
-                Keyed on its id so switching console sessions mounts a fresh instance, which does
-                not carry one's position over to the other. */}
-            {/* The `selectedSession &&` is only for narrowing: `hasReportPanel` already implies it. */}
-            {hasReportPanel && selectedSession && (
+            {/* Keyed on what owns the aside, so a new owner mounts a fresh instance: a report does not
+                carry one console session's position over to another, and a browser drops whatever
+                it read for the project before. */}
+            {asideOwner?.kind === "report" && (
               <ReportPanel
-                key={selectedSession.id}
-                consoleSessionId={selectedSession.id}
-                open={panes.reportOpen}
-                reportWidth={reportWidth.width}
-                peek={panes.reportDocked ? undefined : panes.reportPeek}
+                key={asideOwner.consoleSession}
+                consoleSessionId={asideOwner.consoleSession}
+                layout={asideLayout}
                 onEscape={panes.dismissOverlays}
                 onCycleRegion={regionCycle.cycle}
                 onMoveHistory={navigation.moveByShortcut}
                 onMoveConsoleSession={moveConsoleSession}
               />
             )}
+            {asideProject && (
+              <LazyProjectBrowser
+                key={asideProject.id}
+                project={asideProject}
+                layout={asideLayout}
+                active={panes.asideShown || panes.asidePeek.active}
+                focusTerminal={focusTerminal}
+              />
+            )}
           </main>
-          {hasReportPanel && panes.reportDocked && <PaneResizeHandle side="report" paneWidth={reportWidth} />}
-          {panes.reportOpen && <Scrim label={t("app.closeReport")} onClose={panes.closeReport} />}
+          {asideOwner && panes.asideDocked && (
+            <PaneResizeHandle side="aside" paneWidth={asideWidth} label={t(ASIDE_LABELS[asideOwner.kind].resize)} />
+          )}
+          {asideOwner && panes.asideOpen && <Scrim label={t(ASIDE_LABELS[asideOwner.kind].close)} onClose={panes.closeAside} />}
         </ContentPanel>
       </div>
       <ConnectionBanner state={connectionState} onRetry={reconnect} focusTerminal={focusTerminal} />

@@ -3,7 +3,8 @@
 The Tauri 2 shell of the macOS desktop application: the native window and menu bar, the `octoboardd` sidecar, the
 exit flow, and keeping the application running in the background behind a menu bar icon once its window is closed. It contains no UI of its own: the window loads the UI in [`../../packages/ui/`](../../packages/ui/README.md),
 bundled into the application at build time (not served by the daemon), which provides the console/project/session
-menu, the `xterm.js` terminal, console and project management, the report panel and the exit-flow screens.
+menu, the `xterm.js` terminal, console and project management, the report panel, the project file browser and the
+exit-flow screens.
 
 The UI talks to `octoboardd` (see [`../daemon/`](../daemon/README.md)) only over the WebSocket/HTTP protocol in
 [`../daemon/PROTOCOL.md`](../daemon/PROTOCOL.md) — no Tauri IPC command carries daemon traffic, and the shell never asks

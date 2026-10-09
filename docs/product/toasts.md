@@ -21,4 +21,4 @@ are about, is in "Losing the daemon connection" in `docs/product/application-lif
   had it before, or to the terminal when that is gone.
 - The toasts are reached from the keyboard with `F6` and `Shift+F6`: while at least one is shown they are the last
   stop of the window's region cycle, landing on the newest toast (see "Moving focus between regions with F6" in
-  `docs/product/window-layout.md`).
+  `docs/product/moving-focus-between-regions.md`).
