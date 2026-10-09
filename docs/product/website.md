@@ -76,9 +76,10 @@ own, including one pointed at a model the user hosts.
 
 The primary action in the header, hero, menu, and closing section uses the same localized download label and opens
 the repository's GitHub Releases page. It does not link directly to an installer file. The hero identifies macOS
-Apple Silicon, and both the hero and closing section state that the installer is coming soon. The download action
-does not imply that a package has already been published. Other repository links open GitHub; the footer links to the
-localized privacy page, the MIT License as the license terms, and the operator's email address.
+Apple Silicon and describes the app as an early prototype still in development. The closing note repeats that
+status beside the MIT License. The download action does not imply that a package has already been published.
+Other repository links open GitHub; the footer links to the localized privacy page, the MIT License as the license
+terms, and the operator's email address.
 
 The footer forms a compact centered group: the wordmark and localized tagline, followed by navigation links and
 copyright. On small screens, the wordmark and tagline stack vertically.
@@ -107,9 +108,9 @@ autonomous development is already implemented.
 
 The platform section appears between the data-handling section and the questions. Its five entries have equal visual
 weight in a desktop row and become a compact list of icons and text on small screens. The macOS entry uses brighter
-text and identifies the version as developed, with an installer for Apple Silicon coming soon on GitHub Releases.
-Completed development and a publicly available installer are separate states; the website currently promises the
-latter only as forthcoming.
+text and identifies the version as an early prototype. The section introduction says the macOS app is still in
+development, that only the first prototype features are in place, and that the details are still being refined.
+The site does not describe the macOS app as finished and does not give an installer date.
 
 Status: not implemented — versions for Linux, Windows, iOS, and Android. Each appears with a platform icon and a
 planned status, without a download or an availability date. The platform answer repeats the same availability status.

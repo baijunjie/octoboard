@@ -16,12 +16,12 @@ reports back together. You can still open any project conversation and work with
 
 The full introduction is on [octoboard.dev](https://octoboard.dev).
 
-**Status: early development.** The macOS app for Apple Silicon is developed. An installer is coming soon on
-[GitHub Releases](https://github.com/baijunjie/octoboard/releases).
+**Status: early development.** The macOS app for Apple Silicon is still in development. Only the first
+prototype features are in place, and the details are still being refined.
 
 | Platform | Status |
 |---|---|
-| macOS (Apple Silicon) | Developed; installer coming soon |
+| macOS (Apple Silicon) | Early prototype, still in development |
 | Linux | Planned |
 | Windows | Planned |
 | iOS | Planned |
