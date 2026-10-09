@@ -88,7 +88,7 @@
   "privacySharingTitle": "Informationsaustausch bei der Zusammenarbeit",
   "privacySharingBody": "Zur Koordination der Arbeit werden Aufgabenbeschreibungen, Berichte und relevanter Kontext zwischen den beteiligten Sitzungen ausgetauscht. Gelangen diese Informationen in die Sitzung eines anderen Agenten, können sie von dessen konfiguriertem Anbieter verarbeitet werden. Bei der Zusammenarbeit von Agenten verschiedener Anbieter können Aufgabeninformationen daher an mehrere Anbieter weitergegeben werden.",
   "privacyWebsiteTitle": "Diese Website",
-  "privacyWebsiteBody": "Dies ist eine statische Website, die auf GitHub Pages gehostet wird. Wir setzen auf dieser Website keine Analysewerkzeuge, Werbetracker oder Cookies ein. GitHub erfasst die IP-Adressen von Besuchern zu Sicherheitszwecken. Wie GitHub mit diesen Informationen umgeht, erklärt die Datenschutzerklärung von GitHub.",
+  "privacyWebsiteBody": "Diese statische Website wird auf GitHub Pages gehostet. Wir verwenden ein Cookie, um die für diesen Browser ausgewählte oder erkannte Sprache ein Jahr lang zu speichern. Wir fügen keine Analysewerkzeuge oder Werbetracker hinzu. GitHub erfasst IP-Adressen von Besuchern zu Sicherheitszwecken; Einzelheiten finden Sie in der Datenschutzerklärung von GitHub.",
   "privacyGithubLink": "Datenschutzerklärung von GitHub",
   "privacyContactTitle": "Informationen, die du uns freiwillig sendest",
   "privacyContactBody": "Wenn du uns per E-Mail oder über GitHub Issues kontaktierst, erhalten wir die von dir bereitgestellten Informationen und verwenden sie, um deine Anfrage zu beantworten. Angaben in einem öffentlichen Issue sind für andere sichtbar. Bei Fragen zum Datenschutz erreichst du {operatorName} unter der unten angegebenen E-Mail-Adresse.",

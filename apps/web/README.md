@@ -107,6 +107,9 @@ The locale table in [`apps/web/seo/site-seo.ts`](seo/site-seo.ts) maps the 17 ca
 prefixes, and [`apps/web/nuxt.config.ts`](nuxt.config.ts) passes that table to `@nuxtjs/i18n`. English has
 no language prefix; Simplified Chinese uses `zh` in routes and `zh-Hans` for its catalog and language metadata.
 The English catalog is the message source, and the locale check validates every other catalog against it.
+[`apps/web/app/plugins/detect-language.client.ts`](app/plugins/detect-language.client.ts) handles the website's
+client-side locale choice and persistence, reusing the shared language matcher in
+[`packages/ui/src/i18n/matchLanguage.ts`](../../packages/ui/src/i18n/matchLanguage.ts).
 
 Static generation includes every localized homepage and privacy page, their loading assets, `sitemap.xml`,
 `robots.txt`, and `404.html`, plus one Markdown file for each of those pages, `llms.txt`, `llms-full.txt`, and

@@ -88,7 +88,7 @@
   "privacySharingTitle": "Information shared during collaboration",
   "privacySharingBody": "To coordinate work, task descriptions, reports, and relevant context pass between participating sessions. When this information enters another agent's session, it may be processed by that agent's configured provider. Working with agents from different providers may therefore involve sharing task information with multiple providers.",
   "privacyWebsiteTitle": "This website",
-  "privacyWebsiteBody": "This is a static website hosted on GitHub Pages. We do not add analytics, advertising trackers, or cookies to this website. GitHub records visitors' IP addresses for security purposes. GitHub's privacy statement explains how it handles this information.",
+  "privacyWebsiteBody": "This is a static website hosted on GitHub Pages. We use a cookie to remember the language selected or detected for this browser for one year. We do not add analytics or advertising trackers. GitHub records visitors' IP addresses for security purposes; see GitHub's privacy statement.",
   "privacyGithubLink": "GitHub privacy statement",
   "privacyContactTitle": "Information you choose to send us",
   "privacyContactBody": "If you contact us by email or through GitHub Issues, we receive the information you choose to provide and use it to respond to your request. Information posted in a public issue is visible to others. For privacy questions, contact {operatorName} at the email address below.",

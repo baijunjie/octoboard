@@ -88,7 +88,7 @@
   "privacySharingTitle": "협업 중 공유되는 정보",
   "privacySharingBody": "작업을 조율하기 위해 작업 설명, 보고서 및 관련 맥락이 참여 세션 간에 전달됩니다. 이 정보가 다른 에이전트의 세션에 들어가면 해당 에이전트에 설정된 제공업체가 처리할 수 있습니다. 따라서 서로 다른 제공업체의 에이전트가 협업할 때는 작업 정보가 여러 제공업체와 공유될 수 있습니다.",
   "privacyWebsiteTitle": "이 웹사이트",
-  "privacyWebsiteBody": "이 웹사이트는 GitHub Pages에서 호스팅하는 정적 웹사이트입니다. 웹사이트에 분석 도구, 광고 추적기 또는 쿠키를 추가하지 않습니다. GitHub는 보안 목적으로 방문자의 IP 주소를 기록합니다. GitHub의 개인정보 처리방침에서 이 정보의 처리 방식을 설명합니다.",
+  "privacyWebsiteBody": "이 웹사이트는 GitHub Pages에서 호스팅하는 정적 사이트입니다. 이 브라우저에서 선택되거나 감지된 언어를 1년 동안 기억하기 위해 쿠키를 사용합니다. 분석 도구나 광고 추적기는 추가하지 않습니다. GitHub는 보안을 위해 방문자의 IP 주소를 기록합니다. 자세한 내용은 GitHub 개인정보 처리방침을 확인하세요.",
   "privacyGithubLink": "GitHub 개인정보 처리방침",
   "privacyContactTitle": "직접 제공하는 정보",
   "privacyContactBody": "이메일이나 GitHub Issues로 문의하면 사용자가 직접 제공한 정보를 받아 요청에 응답하는 데 사용합니다. 공개 이슈에 게시한 정보는 다른 사람도 볼 수 있습니다. 개인정보 관련 문의는 아래 이메일 주소로 {operatorName}에게 보내 주세요.",

@@ -88,7 +88,7 @@
   "privacySharingTitle": "Informasi yang dibagikan selama kolaborasi",
   "privacySharingBody": "Untuk mengoordinasikan pekerjaan, deskripsi tugas, laporan, dan konteks yang relevan diteruskan di antara sesi yang terlibat. Saat informasi ini masuk ke sesi agen lain, informasi tersebut dapat diproses oleh penyedia yang dikonfigurasikan untuk agen itu. Karena itu, bekerja dengan agen dari penyedia berbeda dapat melibatkan pembagian informasi tugas kepada beberapa penyedia.",
   "privacyWebsiteTitle": "Situs ini",
-  "privacyWebsiteBody": "Ini adalah situs statis yang dihosting di GitHub Pages. Kami tidak menambahkan analitik, pelacak iklan, atau cookie ke situs ini. GitHub mencatat alamat IP pengunjung untuk keperluan keamanan. Pernyataan privasi GitHub menjelaskan cara informasi tersebut ditangani.",
+  "privacyWebsiteBody": "Ini adalah situs statis yang dihosting di GitHub Pages. Kami menggunakan cookie untuk mengingat bahasa yang dipilih atau terdeteksi untuk browser ini selama satu tahun. Kami tidak menambahkan analitik atau pelacak iklan. GitHub mencatat alamat IP pengunjung untuk keamanan; lihat pernyataan privasinya.",
   "privacyGithubLink": "Pernyataan privasi GitHub",
   "privacyContactTitle": "Informasi yang Anda pilih untuk dikirimkan",
   "privacyContactBody": "Jika Anda menghubungi kami melalui email atau GitHub Issues, kami menerima informasi yang Anda pilih untuk diberikan dan menggunakannya untuk menanggapi permintaan Anda. Informasi yang diposting dalam issue publik dapat dilihat orang lain. Untuk pertanyaan privasi, hubungi {operatorName} melalui alamat email di bawah ini.",

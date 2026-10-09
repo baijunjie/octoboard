@@ -88,7 +88,7 @@
   "privacySharingTitle": "協作時傳遞的資訊",
   "privacySharingBody": "為協調工作，任務說明、工作報告與相關脈絡會在參與協作的工作階段之間傳遞。當這些資訊進入另一個代理的工作階段後，可能由該代理設定的服務供應商處理。因此，不同廠商的代理協作時，任務資訊可能由多個服務供應商處理。",
   "privacyWebsiteTitle": "本網站",
-  "privacyWebsiteBody": "本網站是託管於 GitHub Pages 的靜態網站。我們未在網站中加入流量分析、廣告追蹤器或 Cookie。GitHub 會基於安全目的記錄訪客的 IP 位址。GitHub 隱私權聲明介紹其如何處理這些資訊。",
+  "privacyWebsiteBody": "本網站是託管於 GitHub Pages 的靜態網站。我們使用 Cookie 記住為此瀏覽器選擇或偵測到的語言，並保留一年。我們未加入流量分析工具或廣告追蹤器。GitHub 會基於安全目的記錄訪客的 IP 位址，詳情請參閱 GitHub 隱私權聲明。",
   "privacyGithubLink": "GitHub 隱私權聲明",
   "privacyContactTitle": "你主動提供的資訊",
   "privacyContactBody": "如果你透過電子郵件或 GitHub Issues 聯絡我們，我們會收到你主動提供的資訊，並用於回應你的請求。公開 Issue 中的資訊可被其他人查看。如有隱私權相關問題，請透過下方信箱聯絡 {operatorName}。",

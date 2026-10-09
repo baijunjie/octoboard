@@ -88,7 +88,7 @@
   "privacySharingTitle": "Informations partagées pendant la collaboration",
   "privacySharingBody": "Pour coordonner le travail, les descriptions de tâches, les rapports et le contexte pertinent circulent entre les sessions participantes. Lorsque ces informations entrent dans la session d’un autre agent, elles peuvent être traitées par le fournisseur configuré pour cet agent. Collaborer avec des agents de fournisseurs différents peut donc impliquer le partage d’informations sur les tâches avec plusieurs fournisseurs.",
   "privacyWebsiteTitle": "Ce site web",
-  "privacyWebsiteBody": "Ce site statique est hébergé sur GitHub Pages. Nous n’y ajoutons aucun outil d’analyse, traceur publicitaire ou cookie. GitHub enregistre les adresses IP des visiteurs à des fins de sécurité. La déclaration de confidentialité de GitHub explique le traitement de ces informations.",
+  "privacyWebsiteBody": "Ce site statique est hébergé sur GitHub Pages. Nous utilisons un cookie pour mémoriser pendant un an la langue choisie ou détectée pour ce navigateur. Nous n’ajoutons aucun outil d’analyse ni traceur publicitaire. GitHub enregistre les adresses IP des visiteurs à des fins de sécurité ; consultez sa déclaration de confidentialité.",
   "privacyGithubLink": "Déclaration de confidentialité de GitHub",
   "privacyContactTitle": "Les informations que vous choisissez de nous envoyer",
   "privacyContactBody": "Si vous nous contactez par e-mail ou via GitHub Issues, nous recevons les informations que vous choisissez de fournir et les utilisons pour répondre à votre demande. Les informations publiées dans une issue publique sont visibles par d’autres personnes. Pour toute question sur la confidentialité, contactez {operatorName} à l’adresse e-mail ci-dessous.",

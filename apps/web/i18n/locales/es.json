@@ -88,7 +88,7 @@
   "privacySharingTitle": "Información compartida durante la colaboración",
   "privacySharingBody": "Para coordinar el trabajo, las sesiones participantes intercambian descripciones de tareas, informes y contexto relevante. Cuando esta información llega a la sesión de otro agente, puede ser tratada por el proveedor configurado para ese agente. Por tanto, colaborar con agentes de distintos proveedores puede implicar compartir información sobre las tareas con varios proveedores.",
   "privacyWebsiteTitle": "Este sitio web",
-  "privacyWebsiteBody": "Este es un sitio web estático alojado en GitHub Pages. No incorporamos analítica, rastreadores publicitarios ni cookies a este sitio. GitHub registra las direcciones IP de los visitantes por motivos de seguridad. La declaración de privacidad de GitHub explica cómo trata esta información.",
+  "privacyWebsiteBody": "Este es un sitio web estático alojado en GitHub Pages. Usamos una cookie para recordar durante un año el idioma seleccionado o detectado para este navegador. No añadimos herramientas de análisis ni rastreadores publicitarios. GitHub registra las direcciones IP de los visitantes por motivos de seguridad; consulta su declaración de privacidad.",
   "privacyGithubLink": "Declaración de privacidad de GitHub",
   "privacyContactTitle": "Información que decides enviarnos",
   "privacyContactBody": "Si nos contactas por correo electrónico o mediante GitHub Issues, recibimos la información que decidas facilitar y la utilizamos para responder a tu solicitud. La información publicada en una incidencia pública es visible para otras personas. Para consultas sobre privacidad, contacta con {operatorName} en la dirección de correo indicada a continuación.",

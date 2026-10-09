@@ -32,10 +32,14 @@ Indonesian, Italian, Japanese, Korean, Brazilian Portuguese, Russian, Thai, Turk
 and Traditional Chinese. This coverage is specific to the website; the application's translation coverage is described
 in `docs/product/language.md`, "What is translated so far".
 
-English is the default. The site does not redirect visitors based on their browser language or store a language
-preference in a cookie. The language selector names each language in that language and opens the corresponding
-version of the current page: switching from a privacy page stays on a privacy page. Arabic uses a right-to-left
-layout. Page URLs remain usable directly, including after a reload.
+English is the default. On a normal site page that opens in English, the site checks the remembered language after
+the app mounts. If there is no remembered language, it matches the browser's preferred languages to the supported
+languages and opens the matching version of the same page. Unknown language tags and English leave the page on its
+default route. A page opened with a language prefix is not redirected. The language selector names each language in
+that language and opens the corresponding version of the current page: switching from a privacy page stays on a
+privacy page. Arabic uses a right-to-left layout. Page URLs remain usable directly, including after a reload. The
+site remembers language changes for one year in a same-site cookie.
+The unlocalized static 404 page does not perform language matching.
 
 ## Search indexing and agent-readable copies
 
@@ -275,8 +279,9 @@ Its disclosures distinguish:
 - third-party agents and tools, which can send data to their configured providers under those providers' policies;
 - repository operations, including remote status checks, which can contact configured Git remotes;
 - task information passed between agent sessions, which can consequently reach more than one provider;
-- the static website, with no added analytics, advertising trackers, or cookies, and GitHub Pages' security logging
-  of visitor IP addresses, with a link to GitHub's privacy statement;
+- the static website, which uses a same-site cookie to remember the selected or detected language for one year and
+  adds no analytics or advertising trackers; GitHub Pages also logs visitor IP addresses for security, with a link
+  to GitHub's privacy statement;
 - information voluntarily supplied through email or GitHub Issues, including the visibility of public issues.
 
 The local-data explanation is not a promise that all workflow data remains on one device. There is no separate

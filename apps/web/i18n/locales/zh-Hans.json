@@ -88,7 +88,7 @@
   "privacySharingTitle": "协作中的信息传递",
   "privacySharingBody": "为协调工作，任务说明、工作报告及相关上下文会在参与协作的会话之间传递。当这些信息进入另一个智能体的会话后，可能由该智能体配置的服务提供商处理。因此，不同厂商的智能体协作时，任务信息可能由多个服务提供商处理。",
   "privacyWebsiteTitle": "本网站",
-  "privacyWebsiteBody": "本网站是托管于 GitHub Pages 的静态网站。我们未在网站中添加访问分析、广告追踪器或 Cookie。GitHub 会出于安全目的记录访客的 IP 地址。GitHub 隐私声明介绍了其如何处理这些信息。",
+  "privacyWebsiteBody": "本网站是托管于 GitHub Pages 的静态网站。我们使用 Cookie 记住为此浏览器选择或检测到的语言，并保留一年。我们未添加访问分析工具或广告追踪器。GitHub 会出于安全目的记录访客的 IP 地址，详情请参阅 GitHub 隐私声明。",
   "privacyGithubLink": "GitHub 隐私声明",
   "privacyContactTitle": "你主动提供的信息",
   "privacyContactBody": "如果你通过电子邮件或 GitHub Issues 联系我们，我们会接收你主动提供的信息，并用于回应你的请求。公开 Issue 中的信息可被其他人查看。如有隐私相关问题，请通过下方邮箱联系 {operatorName}。",

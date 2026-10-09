@@ -85,6 +85,7 @@ export default defineNuxtConfig({
     })),
     baseUrl: site.origin,
     trailingSlash: true,
+    // The client plugin uses the shared language matcher and remembers manual choices.
     detectBrowserLanguage: false,
   },
   hooks: {

@@ -88,7 +88,7 @@
   "privacySharingTitle": "İş birliği sırasında paylaşılan bilgiler",
   "privacySharingBody": "Çalışmayı koordine etmek için görev açıklamaları, raporlar ve ilgili bağlam katılımcı oturumlar arasında aktarılır. Bu bilgiler başka bir ajanın oturumuna girdiğinde, o ajan için yapılandırılmış sağlayıcı tarafından işlenebilir. Bu nedenle farklı sağlayıcılardan ajanlarla çalışmak, görev bilgilerinin birden fazla sağlayıcıyla paylaşılmasını gerektirebilir.",
   "privacyWebsiteTitle": "Bu web sitesi",
-  "privacyWebsiteBody": "Bu, GitHub Pages üzerinde barındırılan statik bir web sitesidir. Siteye analiz araçları, reklam izleyicileri veya çerez eklemiyoruz. GitHub, güvenlik amacıyla ziyaretçilerin IP adreslerini kaydeder. Bu bilgilerin nasıl işlendiği GitHub’ın gizlilik bildiriminde açıklanır.",
+  "privacyWebsiteBody": "Bu, GitHub Pages üzerinde barındırılan statik bir web sitesidir. Bu tarayıcı için seçilen veya algılanan dili bir yıl boyunca hatırlamak üzere çerez kullanıyoruz. Analiz araçları veya reklam izleyicileri eklemiyoruz. GitHub güvenlik amacıyla ziyaretçilerin IP adreslerini kaydeder; ayrıntılar için gizlilik bildirimine bakın.",
   "privacyGithubLink": "GitHub gizlilik bildirimi",
   "privacyContactTitle": "Bize göndermeyi seçtiğiniz bilgiler",
   "privacyContactBody": "Bize e-posta veya GitHub Issues üzerinden ulaşırsanız, sağlamayı seçtiğiniz bilgileri alır ve talebinize yanıt vermek için kullanırız. Herkese açık bir issue’da paylaşılan bilgiler başkaları tarafından görülebilir. Gizlilik soruları için aşağıdaki e-posta adresinden {operatorName} ile iletişime geçebilirsiniz.",

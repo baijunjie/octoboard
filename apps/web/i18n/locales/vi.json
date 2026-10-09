@@ -88,7 +88,7 @@
   "privacySharingTitle": "Thông tin chia sẻ trong quá trình cộng tác",
   "privacySharingBody": "Để điều phối công việc, mô tả nhiệm vụ, báo cáo và ngữ cảnh liên quan được chuyển giữa các phiên tham gia. Khi thông tin đi vào phiên của một agent khác, nhà cung cấp được cấu hình cho agent đó có thể xử lý thông tin. Vì vậy, cộng tác với agent từ các nhà cung cấp khác nhau có thể dẫn đến việc chia sẻ thông tin nhiệm vụ với nhiều nhà cung cấp.",
   "privacyWebsiteTitle": "Trang web này",
-  "privacyWebsiteBody": "Đây là trang web tĩnh được lưu trữ trên GitHub Pages. Chúng tôi không thêm công cụ phân tích, trình theo dõi quảng cáo hay cookie vào trang web. GitHub ghi lại địa chỉ IP của khách truy cập vì mục đích bảo mật. Tuyên bố về quyền riêng tư của GitHub giải thích cách họ xử lý thông tin này.",
+  "privacyWebsiteBody": "Đây là trang web tĩnh được lưu trữ trên GitHub Pages. Chúng tôi dùng cookie để ghi nhớ trong một năm ngôn ngữ được chọn hoặc phát hiện cho trình duyệt này. Chúng tôi không thêm công cụ phân tích hay trình theo dõi quảng cáo. GitHub ghi lại địa chỉ IP của khách truy cập vì mục đích bảo mật; hãy xem tuyên bố quyền riêng tư của GitHub.",
   "privacyGithubLink": "Tuyên bố về quyền riêng tư của GitHub",
   "privacyContactTitle": "Thông tin chủ động gửi cho chúng tôi",
   "privacyContactBody": "Khi nhận liên hệ qua email hoặc GitHub Issues, chúng tôi nhận thông tin được chủ động cung cấp và sử dụng để phản hồi yêu cầu. Thông tin đăng trong issue công khai có thể được người khác xem. Với câu hỏi về quyền riêng tư, hãy liên hệ {operatorName} qua địa chỉ email bên dưới.",

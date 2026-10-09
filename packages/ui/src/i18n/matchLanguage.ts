@@ -23,7 +23,7 @@ function parseTag(tag: string): ParsedTag | undefined {
   let region: string | undefined;
   for (const part of parts.slice(1)) {
     if (!script && !region && /^[a-z]{4}$/i.test(part)) {
-      script = part[0].toUpperCase() + part.slice(1).toLowerCase();
+      script = part[0]!.toUpperCase() + part.slice(1).toLowerCase();
     } else if (!region && /^([a-z]{2}|\d{3})$/i.test(part)) {
       region = part.toUpperCase();
     } else {
