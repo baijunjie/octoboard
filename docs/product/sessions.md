@@ -470,9 +470,10 @@ focus between regions with F6" in `docs/product/moving-focus-between-regions.md`
   `docs/product/appearance.md`.
 - A client that stops draining output for more than a few seconds is dropped by the daemon rather than letting output
   buffer without bound. The application then reconnects by itself, with a backoff, up to five times. Meanwhile the
-  rail's connection status says the terminal is reconnecting; once the attempts are spent it reads "Terminal
-  disconnected" and offers a "Reconnect terminal" button, which starts them over (see "The connection status" in
-  `docs/product/window-layout.md`). A reconnect in the background never steals keyboard focus.
+  terminal connection indicator after the session's status icon in the top bar shows the terminal is reconnecting;
+  once the attempts are spent it shows the terminal is disconnected, and pressing it starts them over (see "The
+  terminal connection indicator" in `docs/product/window-layout.md`). A reconnect in the background never steals
+  keyboard focus.
 - **Until the session's first output is on screen, the terminal is covered by a loading state** — a spinner and a
   line saying the session is being resumed, while a resume of it is under way or it has no process yet, and that the
   terminal is loading otherwise. It covers whatever comes before that first output, every time the terminal attaches

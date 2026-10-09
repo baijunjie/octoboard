@@ -42,7 +42,7 @@ export interface TerminalPaneHandle {
 
 /** Reconnect backoff after a dropped-but-still-live session's socket closes: doubles each attempt,
  * capped, and stops after `MAX_AUTO_RECONNECT_ATTEMPTS` so a session that keeps failing to connect
- * does not retry forever — the rail's Reconnect covers that case instead. The attempt
+ * does not retry forever — the top bar's Reconnect covers that case instead. The attempt
  * counter only resets once a connection has *stayed* open for `STABLE_CONNECTION_MS` — resetting it
  * on every `open` would mean a connection that opens and drops again within a few seconds (a
  * backpressure drop recurs roughly that often under sustained output) always sees attempt 0, so the
@@ -236,7 +236,7 @@ export function TerminalPane({
     attachCurrent(true);
   }, [attachCurrent]);
 
-  // Reports the connection's trouble to the rail. The controller's own status is read rather
+  // Reports the connection's trouble to the top bar. The controller's own status is read rather
   // than `status`: a session switch attaches in an effect above, so the state still holds the
   // previous session's outcome for one render, while the controller already has the new one's.
   // A first connect that has not failed yet is not trouble (typing meanwhile is queued); once an

@@ -55,18 +55,20 @@ It runs, left to right:
   `docs/product/navigation-history.md`); each is disabled while there is nowhere to go in its direction.
 - The sidebar toggle ("Show sessions" / "Hide sessions").
 - The selected session's **breadcrumb** — *console › project › session title* for a project session, *console › session
-  title* for a console session, which belongs to no project — followed by the session's status icon. At 1148 px and
-  wider, while the sidebar is shown, the breadcrumb starts where the terminal's area does, over the sidebar's inner
-  edge, and follows that edge while the sidebar is resized and while the docked column eases open or closed (see
-  "Hiding the sidebar and the right pane" below). The start of the bar never becomes narrower than the buttons there
-  — in the macOS application, that includes the clear space kept for the window buttons. Once the column no longer
+  title* for a console session, which belongs to no project — followed by the session's status icon and, while its
+  terminal connection is in trouble, the terminal connection indicator (see "The terminal connection indicator"
+  below). At 1148 px and wider, while the sidebar is shown, the breadcrumb starts where the terminal's area does, over
+  the sidebar's inner edge, and follows that edge while the sidebar is resized and while the docked column eases open
+  or closed (see "Hiding the sidebar and the right pane" below). The start of the bar never becomes narrower than the
+  buttons there — in the macOS application, that includes the clear space kept for the window buttons. Once the column no longer
   reaches past that start, the breadcrumb stays beside the sidebar toggle, which is also where it sits while the
   sidebar is hidden. Below 1148 px it starts right after the sidebar toggle as well. A trail too long for the bar
   fades out at its right edge, as in "Names too long for their space" in
-  `docs/product/labels-and-tooltips.md`, and the status icon always stays visible. With no session selected there is no
-  breadcrumb. While the archive view is open (see "The archive view" in `docs/product/sidebar.md`) the breadcrumb shows
-  where that is instead, with no status icon: *console › project › Archived sessions*, *console › console session ›
-  Archived bound sessions*, or *console › Archived console sessions*.
+  `docs/product/labels-and-tooltips.md`, and the status icon and the terminal connection indicator always stay
+  visible. With no session selected there is no breadcrumb. While the archive view is open (see "The archive view" in
+  `docs/product/sidebar.md`) the breadcrumb shows where that is instead, with no status icon and no terminal connection
+  indicator: *console › project › Archived sessions*, *console › console session › Archived bound sessions*, or
+  *console › Archived console sessions*.
 
 Nothing else is in the bar: the window's other controls are on the rail (see "The rail" below).
 
@@ -78,6 +80,34 @@ language the buttons and their clear space stay at the left end, which then hold
 start. Dragging any part of the bar that is not a control moves the window, and double-clicking it zooms the window,
 as with a native titlebar. Opened in a plain browser, the bar has none of this: it starts at the left edge and does
 not move anything.
+
+### The terminal connection indicator
+
+The indicator follows the selected session's status icon at the end of the breadcrumb and reports that session's
+terminal connection. **While the terminal connection is healthy it shows nothing.** It also shows nothing while the
+connection to the daemon is not open, whatever the terminal's state: trouble with the daemon connection is shown only
+by the connection banner (see "Losing the daemon connection" in `docs/product/application-lifecycle.md`). A terminal is
+in trouble only while its session's process is running — a session that is not running has nothing to connect to —
+and a first connection still in progress is not trouble until an attempt has failed. How the terminal reconnects is in
+"The terminal" in `docs/product/sessions.md`.
+
+| Situation | What the indicator is | Its tooltip and accessible name |
+|---|---|---|
+| The terminal dropped and its automatic attempts are under way | an amber turning arrow, with nothing to press | says the terminal is reconnecting |
+| The terminal's automatic attempts are spent | a red unplugged cord, a button | says the terminal is disconnected and that pressing it reconnects it |
+
+- The two glyphs differ in shape as well as colour. The arrow turns, except where the system asks for reduced motion.
+- **Pressing the unplugged cord reconnects the terminal**: the automatic attempts start over and the indicator becomes
+  the turning arrow. While the mouse is on it, while it has keyboard focus and while it is pressed, the cord is drawn as
+  a plug.
+- The turning arrow is a Tab stop too, and in either state the indicator shows its tooltip on keyboard focus as well as
+  under the mouse.
+- Assistive technology is told each change of state as it happens: that the terminal is reconnecting, or that it is
+  disconnected.
+- A mouse press on the indicator leaves keyboard focus where it was, so the terminal keeps receiving keystrokes. When
+  the indicator goes away while it holds keyboard focus — the connection came back, the archive view's breadcrumb took
+  the session's place, or no session is selected any more — focus goes to the terminal, or to the top bar's first
+  enabled control when the terminal cannot take it.
 
 ## The rail
 
@@ -93,7 +123,6 @@ The rail runs from under the top bar to the window's bottom (or the connection b
   - the **waiting count**, a raised hand with the number of sessions waiting for the user in a badge at its top
     right, shown only while at least one is (99+ beyond 99); pressing it goes to the next waiting session (see "The
     raised hand" in `docs/product/sessions.md`);
-  - the **connection status**, described below;
   - **Turn on notifications**, a bell with a small dot on it, shown only in a browser whose answer to notifications is
     still undecided; pressing it asks the browser (see "Notifications" in `docs/product/settings.md`);
   - the right pane's toggle, shown only while the right pane has an owner (see "What the right pane shows" below);
@@ -125,29 +154,6 @@ focus where it was, so after a mouse press the terminal keeps receiving keystrok
 the keyboard keeps focus on itself while the browser's prompt is up, so no keystrokes reach the session meanwhile; once
 the browser answers and the bell goes away, focus moves to the terminal, or to the top bar's first enabled control when
 the terminal cannot take it.
-
-### The connection status
-
-One indicator on the rail covers both the connection to the daemon and the selected session's terminal connection.
-**While both are healthy it shows nothing.** On trouble it shows an icon, an amber turning arrow while things are still
-being retried and a red unplugged cord once they are not; the label below is its tooltip and accessible name:
-
-| Situation | Label |
-|---|---|
-| The daemon connection is being established | Connecting… |
-| The daemon connection dropped and is being retried | Reconnecting… |
-| The daemon connection's automatic attempts are spent | Disconnected |
-| The daemon is connected; the selected session's terminal dropped and is being retried | the terminal is reconnecting |
-| The daemon is connected; the terminal's automatic attempts are spent | Terminal disconnected, with a **Reconnect terminal** button under it, shown as a plug icon |
-
-The daemon's state comes first: while it is not connected, the terminal's state is not shown. A terminal is in trouble
-only while its session's process is running — a session that is not running has nothing to connect to — and a first
-connection still in progress is not trouble until an attempt has failed. How the terminal reconnects is in "The
-terminal" in `docs/product/sessions.md`; the daemon connection's own banner and its Retry are in "Losing the daemon
-connection" in `docs/product/application-lifecycle.md`.
-
-The indicator is a Tab stop that shows its label as a tooltip while it has focus. When it, or the Reconnect terminal
-button, disappears while it holds focus, because the connection came back, focus goes to the terminal.
 
 ## What the right pane shows
 

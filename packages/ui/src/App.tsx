@@ -475,6 +475,9 @@ export function App(): React.ReactElement {
         onBack={navigation.back}
         onForward={navigation.forward}
         selectedSession={selectedSession}
+        // The terminal's socket cannot be better than the daemon behind it, whose state `ConnectionBanner` shows.
+        terminalProblem={connectionState === "open" ? terminalProblem : undefined}
+        focusTerminal={focusTerminal}
         viewTrail={
           archiveOpen && archiveConsole
             ? archiveProject
@@ -497,7 +500,6 @@ export function App(): React.ReactElement {
           onOpenDialog={openDialog}
           waitingCount={waitingSessions.length}
           onNextWaiting={selectNextWaiting}
-          terminalProblem={terminalProblem}
           aside={asideOwner?.kind}
           asideShown={panes.asideShown}
           onToggleAside={panes.toggleAside}

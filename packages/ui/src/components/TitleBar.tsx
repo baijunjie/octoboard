@@ -6,9 +6,12 @@ import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
 import { useDaemonStore } from "../store";
+import type { TerminalProblem } from "../terminal/TerminalPane";
 import { ChromeButton } from "./ChromeButton";
 import { FadeOverflow } from "./FadeOverflow";
 import { StatusIcon } from "./StatusIcon";
+import { TerminalConnection } from "./TerminalConnection";
+import { useFocusHandoff } from "./useFocusHandoff";
 
 /** The bar's frame: full window width, above everything, painting nothing of its own (the window's
  * background shows, `--window-background` in `style.css`), and the window's drag handle where the
@@ -62,22 +65,23 @@ export function BareTitleBar(): React.ReactElement {
   );
 }
 
-/** Console › Project › session title, with the session's status icon beside it; a console session
- * has no project, so its trail is just the console and its own title. The trail fades at its end
- * edge when too long, the icon always stays. */
-function Breadcrumb({ session }: { session: Session }): React.ReactElement {
+/** Console › Project › session title, with the session's status icon and, while something is wrong,
+ * its terminal connection beside it; a console session has no project, so its trail is just the
+ * console and its own title. The trail fades at its end edge when too long, the icons always stay. */
+function Breadcrumb({ session, terminalProblem }: { session: Session; terminalProblem?: TerminalProblem }): React.ReactElement {
   const consoleName = useDaemonStore((s) => s.consoles.get(session.console_id)?.name);
   const projectName = useDaemonStore((s) => (session.project_id ? s.projects.get(session.project_id)?.name : undefined));
   const trail = session.role === "console" ? [consoleName, session.title] : [consoleName, projectName, session.title];
   return (
     <Trail names={trail.map((part) => part ?? "…")}>
       <StatusIcon status={session.status} />
+      <TerminalConnection problem={terminalProblem} />
     </Trail>
   );
 }
 
 /** A trail of names, the last one emphasised; it fades at its end edge when too long, and what
- * follows it (a status icon) always stays. It sits on the window chrome, so the names before the
+ * follows it (the status icons) always stays. It sits on the window chrome, so the names before the
  * last take `--chrome-muted`, not the panel's `--muted` (`style.css`). */
 function Trail({ names, children }: { names: string[]; children?: React.ReactNode }): React.ReactElement {
   return (
@@ -113,14 +117,20 @@ interface TitleBarProps {
   /** What the content area shows instead of the selected session's terminal (the archive view),
    * as the breadcrumb's names; it then takes the session's place in the bar. */
   viewTrail?: string[];
+  /** What is wrong with the selected session's terminal connection, if anything. */
+  terminalProblem?: TerminalProblem;
+  /** Where focus goes when the connection indicator that held it goes away, alone or with the
+   * breadcrumb. */
+  focusTerminal: () => void;
 }
 
 /**
  * The bar across the top of the window, on the window chrome like the rail below it: Back and
- * Forward, the sidebar toggle, and the selected session's breadcrumb. Nothing sits at its end but the
- * window's drag area: the other window controls are on the rail (`Rail.tsx`). Above the `docked`
- * breakpoint, the start segment tracks the docked sidebar's clip (`.title-bar-start`), so the
- * breadcrumb stays over the main area while that column eases open or closed.
+ * Forward, the sidebar toggle, and the selected session's breadcrumb with its status and terminal
+ * connection. Nothing sits at its end but the window's drag area: the other window controls are on
+ * the rail (`Rail.tsx`). Above the `docked` breakpoint, the start segment tracks the docked
+ * sidebar's clip (`.title-bar-start`), so the breadcrumb stays over the main area while that
+ * column eases open or closed.
  */
 export function TitleBar({
   sidebarShown,
@@ -131,8 +141,11 @@ export function TitleBar({
   onForward,
   selectedSession,
   viewTrail,
+  terminalProblem,
+  focusTerminal,
 }: TitleBarProps): React.ReactElement {
   const t = useT();
+  const held = useFocusHandoff(focusTerminal);
   return (
     <BarFrame>
       {/* Above the `docked` breakpoint, as wide as the rail plus the sidebar's clip, and never
@@ -161,8 +174,8 @@ export function TitleBar({
           </ChromeButton>
         </div>
       </div>
-      <div className="flex min-w-0 flex-1 items-center px-3">
-        {viewTrail ? <Trail names={viewTrail} /> : selectedSession && <Breadcrumb session={selectedSession} />}
+      <div className="flex min-w-0 flex-1 items-center px-3" {...held}>
+        {viewTrail ? <Trail names={viewTrail} /> : selectedSession && <Breadcrumb session={selectedSession} terminalProblem={terminalProblem} />}
       </div>
     </BarFrame>
   );

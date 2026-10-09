@@ -230,20 +230,21 @@
 }
 
 /* The colours of the status glyphs (`StatusIcon.tsx`: a waiting session's hand, a working one's
-   dot; and the rail's waiting count and connection trouble), which carry meaning and so need 3:1 on
-   every surface they sit on: the panel, the sidebar, a selected row, the chrome, and on the chrome's
-   real material with its hover and pressed tints (light #e2e4e5 and its darker variant #d0d2d3, dark
-   #484a4b). HeroUI's light `--warning` is a fill colour (1.65:1 on `--chrome`, 2.04:1 on white), so
-   light takes a deeper amber for the glyph: 4.87:1 on a selected sidebar row, its floor among the
-   content surfaces, 4.94:1 on the light material, 4.33:1 hovered and 3.78:1 pressed, and 4.15 /
-   3.65 / 3.19 on the darker variant; `--warning` itself stays the fill of the banner and the
-   badges, under its dark label. Dark keeps HeroUI's own (5.03:1 on the dark material, 4.00:1
-   hovered, 3.29:1 pressed). HeroUI's `--danger` is too dark as a glyph on the dark material, 2.83:1
-   (3.18:1 in light, which the glyph keeps), so dark takes a lighter red for it: 3.33:1 there; the
-   connection indicator it colours has no hover fill. The accent glyph is `--accent` in light (3.62
-   on a selected sidebar row) and a lighter blue in dark, where `--accent` is 2.56:1 on a selected
-   sidebar row (this one 4.48 there, its floor). Idle's speech bubble keeps HeroUI's `--success`,
-   below 3:1 (see `StatusIcon.tsx`). */
+   dot; the rail's waiting count; and the top bar's terminal connection), which carry meaning and so
+   need 3:1 on every surface they sit on: the panel, the sidebar, a selected row, the chrome, and on
+   the chrome's real material with its hover and pressed tints (light #e2e4e5 and its darker variant
+   #d0d2d3, dark #484a4b). HeroUI's light `--warning` is a fill colour (1.65:1 on `--chrome`, 2.04:1
+   on white), so light takes a deeper amber for the glyph: 4.87:1 on a selected sidebar row, its
+   floor among the content surfaces, 4.94:1 on the light material, 4.33:1 hovered and 3.78:1
+   pressed, and 4.15 / 3.65 / 3.19 on the darker variant; `--warning` itself stays the fill of the
+   banner and the badges, under its dark label. Dark keeps HeroUI's own (5.03:1 on the dark
+   material, 4.00:1 hovered, 3.29:1 pressed). HeroUI's `--danger` is too dark as a glyph on the dark
+   material, 2.83:1 (3.18:1 in light, which the glyph keeps), so dark takes a lighter red for it:
+   3.33:1 there; the connection indicator it colours is a chrome button whose hover and pressed
+   fills the red glyph never sits on: it gives way to a plug under the pointer, on keyboard focus
+   and while pressed. The accent glyph is `--accent` in light (3.62 on a selected sidebar row) and a
+   lighter blue in dark, where `--accent` is 2.56:1 on a selected sidebar row (this one 4.48 there,
+   its floor). Idle's speech bubble keeps HeroUI's `--success`, below 3:1 (see `StatusIcon.tsx`). */
 :root {
   --warning-glyph: oklch(0.5 0.15 55);
   --danger-glyph: var(--danger);

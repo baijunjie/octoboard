@@ -10,10 +10,8 @@ import type { Console, Session } from "../protocol";
 import { activityLabelKey } from "../sessionLabel";
 import { consoleMenu } from "../sidebar/menus";
 import { type Activity, consoleActivity } from "../sidebar/order";
-import type { TerminalProblem } from "../terminal/TerminalPane";
 import { ActionMenu } from "./ActionMenu";
 import { CHROME_BUTTON_FILLS, CHROME_CURRENT_FILLS, ChromeButton } from "./ChromeButton";
-import { ConnectionStatus } from "./ConnectionStatus";
 import { ConsoleAvatar } from "./ConsoleAvatar";
 import { NotificationsBell } from "./NotificationsBell";
 import { ActivityBadge } from "./StatusIcon";
@@ -120,8 +118,6 @@ interface RailProps {
   onOpenDialog: (dialog: DialogRequest) => void;
   waitingCount: number;
   onNextWaiting: () => void;
-  /** What is wrong with the selected session's terminal connection, if anything. */
-  terminalProblem?: TerminalProblem;
   /** What owns the aside, which the toggle names: a console session's report or a project's files.
    * With no owner there is no aside, and no toggle. */
   aside?: AsideOwner["kind"];
@@ -133,18 +129,16 @@ interface RailProps {
   onAsideToggleEnter: () => void;
   onAsideToggleLeave: () => void;
   onOpenSettings: () => void;
-  /** Where focus goes when a control that held it goes away (the notifications bell, a connection
-   * indicator). */
+  /** Where focus goes when a control that held it goes away (the notifications bell). */
   focusTerminal: () => void;
 }
 
 /**
  * The left rail, the window chrome's second half beside the top bar: at the top the console
  * switcher (one avatar per console, in their order, then New console), at the bottom, pushed down,
- * the waiting count, the connection trouble indicator (nothing while healthy), the notifications
- * bell (browser only, while the permission is undecided), the aside's toggle (while something owns
- * the aside) and Settings. It sits at the reading direction's start, like the sidebar, and holds only
- * glyphs and avatars.
+ * the waiting count, the notifications bell (browser only, while the permission is undecided), the
+ * aside's toggle (while something owns the aside) and Settings. It sits at the reading direction's
+ * start, like the sidebar, and holds only glyphs and avatars.
  */
 export function Rail({
   consoles,
@@ -157,7 +151,6 @@ export function Rail({
   onOpenDialog,
   waitingCount,
   onNextWaiting,
-  terminalProblem,
   aside,
   asideShown,
   onToggleAside,
@@ -223,7 +216,6 @@ export function Rail({
             </Badge.Anchor>
           </ChromeButton>
         )}
-        <ConnectionStatus terminalProblem={terminalProblem} focusTerminal={focusTerminal} />
         <NotificationsBell focusTerminal={focusTerminal} />
         {aside && (
           <ChromeButton

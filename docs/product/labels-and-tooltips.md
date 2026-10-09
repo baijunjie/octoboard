@@ -8,11 +8,13 @@ A control shown only as an icon has a tooltip naming it, shown both when the mou
 keyboard focus. The tooltip's text is the same name assistive technology announces for the control, except on the consoles'
 avatars and the ⋮ buttons below. These are:
 
-- the top bar's buttons — Back, Forward and the sidebar toggle, whose tooltip follows its "Show …" / "Hide …" label;
+- the top bar's controls — Back, Forward, the sidebar toggle, whose tooltip follows its "Show …" / "Hide …" label, and
+  the terminal connection indicator at the breadcrumb's end, in both its states (see "The terminal connection
+  indicator" in `docs/product/window-layout.md`);
 - the rail's buttons — each console's avatar, whose tooltip is the console's name while the name announced for it also
   says what is going on in it (see "The console switcher" in `docs/product/sidebar.md`), New console, the waiting
-  count, whose tooltip says how many sessions are waiting and that pressing it goes to the next one, Reconnect
-  terminal, Turn on notifications, the right pane's toggle, whose tooltip follows its "Show …" / "Hide …" label and
+  count, whose tooltip says how many sessions are waiting and that pressing it goes to the next one, Turn on
+  notifications, the right pane's toggle, whose tooltip follows its "Show …" / "Hide …" label and
   names what the pane shows (see "The two pane toggles" in `docs/product/window-layout.md`), and Settings;
 - the ⋮ button that opens an action menu — a row's, the console's in the sidebar's header, and the project's in
   focus mode. Its tooltip is a short "More actions", while the name announced for it also names what it belongs to
