@@ -1,9 +1,11 @@
 import { Button } from "@heroui/react";
-import type { LucideIcon } from "lucide-react";
-import React from "react";
+import { Pin, PinOff, type LucideIcon } from "lucide-react";
+import React, { type RefObject, useRef } from "react";
 
+import { handFocusOff } from "../components/handFocusOff";
 import { TitledControl } from "../components/TitledControl";
 import { FadeOverflow } from "../components/FadeOverflow";
+import { useT } from "../i18n/react";
 
 /** Stops a row's own mousedown from moving focus off whatever had it (typically the terminal) —
  * click still fires normally afterward. Shared by every row in the sidebar. */
@@ -120,6 +122,7 @@ export function RowIconButton({
   onPress,
   isDisabled,
   iconClassName,
+  ref,
 }: {
   icon: LucideIcon;
   label: string;
@@ -127,9 +130,11 @@ export function RowIconButton({
   isDisabled?: boolean;
   /** Extra classes on the glyph itself, such as a right-to-left mirror. */
   iconClassName?: string;
+  /** The element around the button, for focus to be handed to. */
+  ref?: React.Ref<HTMLDivElement>;
 }): React.ReactElement {
   return (
-    <div className="flex" onClick={(e) => e.stopPropagation()}>
+    <div ref={ref} className="flex" onClick={(e) => e.stopPropagation()}>
       <TitledControl title={label}>
         <Button
           isIconOnly
@@ -142,6 +147,50 @@ export function RowIconButton({
           className="size-6 min-w-0 rounded-md text-muted hover:text-foreground"
         >
           <Icon aria-hidden="true" className={iconClassName ? `size-4 ${iconClassName}` : "size-4"} />
+        </Button>
+      </TitledControl>
+    </div>
+  );
+}
+
+/** The pin mark of a pinned project or session, which is also the way to unpin it: a pin glyph that
+ * becomes the unpin one while the button is hovered or holds keyboard focus. Placed like
+ * `RowIconButton`, so pressing it neither selects the row behind it nor moves focus. `name` is
+ * what it unpins, for the accessible name, as the tooltip is the bare verb. Unpinning takes the
+ * button away, and keyboard focus with it, so `returnFocusTo` is the element that takes the focus
+ * over first when the button holds it: the enclosing row, or an element holding the first button
+ * that stays (a header, which is no tab stop itself). */
+export function PinButton({
+  name,
+  onUnpin,
+  returnFocusTo,
+  className = "",
+}: {
+  name: string;
+  onUnpin: () => void;
+  returnFocusTo: RefObject<HTMLElement | null>;
+  className?: string;
+}): React.ReactElement {
+  const t = useT();
+  const holder = useRef<HTMLDivElement>(null);
+  const unpin = () => {
+    handFocusOff(holder.current, returnFocusTo.current, true);
+    onUnpin();
+  };
+  return (
+    <div ref={holder} className={`flex shrink-0 ${className}`} onClick={(e) => e.stopPropagation()}>
+      <TitledControl title={t("sidebar.unpin")}>
+        <Button
+          isIconOnly
+          size="sm"
+          variant="ghost"
+          aria-label={t("sidebar.unpinItem", { name })}
+          preventFocusOnPress
+          onPress={unpin}
+          className="group/pin size-6 min-w-0 rounded-md text-muted hover:text-foreground"
+        >
+          <Pin aria-hidden="true" className="size-3 group-hover/pin:hidden group-data-[focus-visible=true]/pin:hidden" />
+          <PinOff aria-hidden="true" className="hidden size-3 group-hover/pin:block group-data-[focus-visible=true]/pin:block" />
         </Button>
       </TitledControl>
     </div>

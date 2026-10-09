@@ -10,9 +10,10 @@ This is the guarantee the whole design rests on:
 - **Octoboard installs nothing into a project.** It writes no instruction file, no settings file and no hook of its
   own, and changes none of the project's. What the session's agent itself writes while it works is the point of the
   whole thing and is not Octoboard's doing. Removing a project removes an association, never a directory. The one
-  thing Octoboard does to a project directory on its own account, the user has to turn on first: with
-  **Automatically sync repositories** on, a project's branch is fast-forwarded when it is behind its upstream, which
-  moves its working tree (see "Automatically syncing repositories" in `docs/product/project-git-status.md`).
+  thing Octoboard does to a project directory on its own account happens only at the user's word: a project's branch
+  is fast-forwarded when it is behind its upstream, which moves its working tree — on its own once **Automatically
+  sync repositories** has been turned on, or for one project when the user chooses its **Sync repository** (see
+  "Automatically syncing repositories" and "Syncing one project by hand" in `docs/product/project-git-status.md`).
 - **The user's own agent configuration is never written to, with two narrow exceptions.** Octoboard does not edit
   `~/.claude.json`, `~/.codex/`, `~/.grok/`, an account's config directory, or anything else the agent reads as the
   user's global setup, and it never makes a trust decision of its own in any of them. The first exception is switching
@@ -144,13 +145,13 @@ one login-shell snapshot of its own — the same kind described above — resolv
 snapshot's `PATH`, and reads what each agent's default account resolves to from it (see "Agent config directories" in
 `docs/product/consoles-and-projects.md`). A binary that resolves is all "available" means: whether an account's
 directory holds a login is never checked, since a user may sign in through an API key from their shell, a credential
-helper or an organization's gateway, none of which shows in the directory. This does not hold up the daemon's start: the application is served
-immediately, and the result follows once it lands, typically within a couple of seconds and budgeted the same ten
-seconds a launch's own snapshot is. Until it lands every agent reads as *not yet determined*, during which nothing is
-refused for being unavailable — a launch whose agent turns out to have no binary is refused by the ordinary path
-above, which already covers it. A snapshot that does not complete leaves availability not yet determined for the rest
-of that run rather than marking every agent unavailable. With every agent determined unavailable, no session can be
-opened at all; see "Opening a session" in `docs/product/sessions.md`.
+helper or an organization's gateway, none of which shows in the directory. This does not hold up the daemon's start:
+the application is served immediately, and the result follows once it lands, typically within a couple of seconds
+and budgeted the same ten seconds a launch's own snapshot is. Until it lands every agent reads as *not yet
+determined*, during which nothing is refused for being unavailable — a launch whose agent turns out to have no binary
+is refused by the ordinary path above, which already covers it. A snapshot that does not complete leaves availability
+not yet determined for the rest of that run rather than marking every agent unavailable. With every agent determined
+unavailable, no session can be opened at all; see "Opening a session" in `docs/product/sessions.md`.
 
 ## Per-agent specifics a user will notice
 

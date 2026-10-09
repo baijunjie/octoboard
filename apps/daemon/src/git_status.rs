@@ -4,7 +4,10 @@
 //! once at a time, concurrently with the others of its console, and at most once every
 //! `GIT_CHECK_MIN_INTERVAL`.
 //!
-//! `sync_behind_projects` is the module's second entry point, driven by `update_settings` the
+//! `sync_project_now` is the manual entry point, driven by `sync_project_git`: one project's
+//! ordinary check, but past the floor above and fast-forwarding whatever the setting says.
+//!
+//! `sync_behind_projects` is the module's third entry point, driven by `update_settings` the
 //! moment **Automatically sync repositories** is turned on: it only fast-forwards branches already
 //! behind their upstream, goes nowhere near the remote, and is therefore outside the floor above —
 //! sharing the in-flight claim with the checks, but not their minimum interval.
@@ -47,31 +50,66 @@ const GIT_CHECK_MIN_INTERVAL: Duration = Duration::from_secs(60);
 /// there is nothing here for a caller to wait on.
 pub fn refresh(state: &Arc<AppState>, projects: Vec<Project>) {
     for project in projects {
-        spawn_check(state, project);
+        spawn_check(state, project, false);
     }
 }
 
-/// Claims the project's check, or does nothing if one is already running or the minimum interval
-/// has not elapsed since the last one completed, then runs it on a blocking thread: every step
-/// below shells out to `git`, which blocks. The claim is held by the closure itself and released on
-/// drop, panic included, so a step that panics still frees the project for the next sweep instead of
-/// excluding it forever.
-fn spawn_check(state: &Arc<AppState>, project: Project) {
-    if !due_for_check(
-        state.git_check_completed_at(&project.id),
-        Instant::now(),
-        GIT_CHECK_MIN_INTERVAL,
-    ) {
+/// Claims the project's check, or does nothing if one is already running, then runs it on a
+/// blocking thread: every step below shells out to `git`, which blocks. The claim is held by the
+/// closure itself and released by `release_unless_rerun_owed` after each check, or on drop if a
+/// step panics, so a panic still frees the project for the next sweep instead of excluding it
+/// forever. Unless `force`, the project must also be due (`GIT_CHECK_MIN_INTERVAL`), and the
+/// fast-forward follows the setting; `force` is the manual sync, which ignores both. A forced
+/// request that finds a check running leaves it to that check, which runs once more, forced,
+/// before releasing the claim.
+fn spawn_check(state: &Arc<AppState>, project: Project, force: bool) {
+    if !force
+        && !due_for_check(
+            state.git_check_completed_at(&project.id),
+            Instant::now(),
+            GIT_CHECK_MIN_INTERVAL,
+        )
+    {
         return;
     }
-    let Some(claim) = state.claim_git_check(&project.id) else {
+    let claim = if force {
+        state.claim_git_check_forced(&project.id)
+    } else {
+        state.claim_git_check(&project.id)
+    };
+    let Some(mut claim) = claim else {
         return;
     };
     let state = state.clone();
     tokio::task::spawn_blocking(move || {
-        let _claim = claim;
-        check_project(&state, &project);
+        let mut project = project;
+        let mut force = force;
+        loop {
+            check_project(&state, &project, force);
+            if !claim.release_unless_rerun_owed() {
+                break;
+            }
+            // The rerun comes after an arbitrary wait: the project may have been removed meanwhile,
+            // and a removed project's directory must not be fetched or merged. Dropping the claim
+            // here releases it.
+            match state.store.get_project(&project.id) {
+                Ok(Some(fresh)) => project = fresh,
+                _ => break,
+            }
+            force = true;
+        }
     });
+}
+
+/// One project's check and fast-forward, started right now at the user's request: the same work
+/// `refresh` does, but it ignores `GIT_CHECK_MIN_INTERVAL` and the **Automatically sync
+/// repositories** setting — asking for it is the consent the setting would otherwise give. A
+/// project already being checked gets one more forced check once that one ends, so the request
+/// results in a fast-forward attempt, except while the settings-triggered `sync_behind_projects`
+/// pass holds the claim: the request is left to that pass, which makes no rerun.
+/// Fire-and-forget, like `refresh`.
+pub fn sync_project_now(state: &Arc<AppState>, project: Project) {
+    spawn_check(state, project, true);
 }
 
 /// Whether a project last completed at `last_completed` is due for another check at `now`, given
@@ -87,8 +125,8 @@ fn due_for_check(last_completed: Option<Instant>, now: Instant, floor: Duration)
 /// One project's check, steps 1-6 of the daemon behaviour described in `PROTOCOL.md`. Never fails
 /// outright: every step that can fail records its message on `GitStatus.error` and the check
 /// continues, so a transient fetch failure still leaves the branch name and last known numbers
-/// showing.
-fn check_project(state: &AppState, project: &Project) {
+/// showing. `force_sync` fast-forwards a syncable branch whether or not the setting is on.
+fn check_project(state: &AppState, project: &Project, force_sync: bool) {
     let path = PathBuf::from(&project.path);
 
     // Checked before the first publish, not after it: publishing `repository: true` and only then
@@ -155,7 +193,7 @@ fn check_project(state: &AppState, project: &Project) {
     }
     read_branch_header(&path, &mut status);
 
-    if auto_sync_enabled(state) && syncable(&status) {
+    if (force_sync || auto_sync_enabled(state)) && syncable(&status) {
         fast_forward(state, &path, &mut status);
     }
 

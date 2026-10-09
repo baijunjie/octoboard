@@ -5,8 +5,8 @@ How the window's controls and names are labelled where their text does not fit o
 ## Tooltips on icon-only controls
 
 A control shown only as an icon has a tooltip naming it, shown both when the mouse rests on it and when it receives
-keyboard focus. The tooltip's text is the same name assistive technology announces for the control, except on the consoles'
-avatars and the ⋮ buttons below. These are:
+keyboard focus. The tooltip's text is the same name assistive technology announces for the control, except on the
+consoles' avatars, the ⋮ buttons and the pin buttons below. These are:
 
 - the top bar's controls — Back, Forward, the sidebar toggle, whose tooltip follows its "Show …" / "Hide …" label, and
   the terminal connection indicator at the breadcrumb's end, in both its states (see "The terminal connection
@@ -22,6 +22,8 @@ avatars and the ⋮ buttons below. These are:
 - the sidebar's other icon buttons — a project's **+** (New session), wherever it appears, the Projects heading's
   Filter projects, the Clear filter beside it, and the Expand all projects or Collapse all projects button (see
   "Expanding and collapsing the listed projects" in `docs/product/sidebar.md`), and focus mode's Leave focus mode;
+- the pin button of a pinned project or session, whose tooltip is a short "Unpin", while the name announced for it
+  also names what it unpins (see "Pinning" in `docs/product/sidebar.md`);
 - the archive view's Close button and each of its rows' Delete button, whose tooltip names the session;
 - the three options of Settings' Appearance row — Light, Dark and System (see "Appearance" in
   `docs/product/settings.md`);
@@ -34,6 +36,19 @@ avatars and the ⋮ buttons below. These are:
 While the docked sidebar is hidden at 1148 px and wider, a console's avatar opens its tooltip on keyboard focus only:
 resting the mouse on it floats the sidebar in, which names the console at its top (see "Previewing a console from the
 rail" in `docs/product/sidebar.md`).
+
+## Tooltips on indicators
+
+A few marks that are not controls carry a tooltip too. They are not tab stops, so their tooltip shows only while the
+mouse rests on them, never on keyboard focus; what it says reaches assistive technology through the name of the row or
+badge they sit in, or the text beside them. These are:
+
+- the binding badge, the coloured dot on a project session's row bound to a console session, whose tooltip names that
+  console session (see "The binding badge" in `docs/product/sidebar.md`);
+- a session's agent icon on its row, on a focus mode's card or archived row and on the archive view's row, whose
+  tooltip names the account the session runs under (see "Session rows" in `docs/product/sidebar.md`);
+- the branch badge's warning triangle, whose tooltip carries the failed check's message (see "The branch badge" in
+  `docs/product/project-git-status.md`).
 
 ## Names too long for their space
 

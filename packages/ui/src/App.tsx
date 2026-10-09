@@ -334,6 +334,10 @@ export function App(): React.ReactElement {
     panes.showAside();
   };
 
+  const syncProjectGit = (project: Project) => {
+    request({ type: "sync_project_git", project: project.id }).catch((err: unknown) => toastError((err as Error).message));
+  };
+
   const openArchive = (scope: ArchiveScope) => {
     setArchiveScope(scope);
     // Below the `docked` breakpoint the sidebar is a drawer over the terminal, and would keep
@@ -523,6 +527,7 @@ export function App(): React.ReactElement {
             onFocus={sidebarView.setFocus}
             onOpenArchive={openArchive}
             onBrowseProject={browseProject}
+            onSyncProjectGit={syncProjectGit}
             onSetPinned={setPinned}
             onOpenSettings={openSettingsAt}
             open={panes.sidebarOpen}

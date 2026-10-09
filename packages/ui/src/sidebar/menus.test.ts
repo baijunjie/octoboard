@@ -4,7 +4,7 @@ import { sessionOf } from "../gallery/fixtures/builders";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
 import type { Account, Project, Session } from "../protocol";
-import { projectMenu, sessionMenu } from "./menus";
+import { type MenuPlacement, projectMenu, sessionMenu } from "./menus";
 import type { SidebarHandlers } from "./types";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
@@ -47,16 +47,16 @@ describe("the Switch account entry", () => {
 
 describe("the Focus mode entry", () => {
   const hub = sessionOf("h", "c", undefined, "Hub", "idle");
-  const labels = (session: Session, inFocus = false) =>
-    sessionMenu(t, {} as SidebarHandlers, session, [], { inFocus }).flatMap((entry) => (typeof entry === "object" ? [entry.label] : []));
+  const labels = (session: Session, placement: MenuPlacement = "list") =>
+    sessionMenu(t, {} as SidebarHandlers, session, [], { placement }).flatMap((entry) => (typeof entry === "object" ? [entry.label] : []));
 
   it.each([
-    ["a console session's row", hub, false, true],
-    ["a console session's own focus mode", hub, true, false],
-    ["an archived console session", { ...hub, status: "archived" as const }, false, false],
-    ["a project session", sessionOf("s", "c", "p", "Title", "idle"), false, false],
-  ])("is offered for %s: %#", (_, session, inFocus, offered) => {
-    expect(labels(session, inFocus).includes("Focus mode")).toBe(offered);
+    ["a console session's row", hub, "list", true],
+    ["a console session's own focus mode", hub, "focused", false],
+    ["an archived console session", { ...hub, status: "archived" as const }, "list", false],
+    ["a project session", sessionOf("s", "c", "p", "Title", "idle"), "list", false],
+  ] as const)("is offered for %s: %#", (_, session, placement, offered) => {
+    expect(labels(session, placement).includes("Focus mode")).toBe(offered);
   });
 
   it("enters the console session's focus mode", () => {
@@ -67,12 +67,34 @@ describe("the Focus mode entry", () => {
   });
 });
 
-describe("a project's Focus mode entry", () => {
-  const labels = (inFocus: boolean) =>
-    projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, [], { inFocus }).flatMap((entry) => (typeof entry === "object" ? [entry.label] : []));
+describe("a project's menu", () => {
+  const labels = (placement: MenuPlacement, gitRepository = false) =>
+    projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, [], { placement, gitRepository }).flatMap((entry) =>
+      typeof entry === "object" ? [entry.label] : [],
+    );
 
-  it("is left out of any focus mode's project menu, and offered in the project list's", () => {
-    expect(labels(false)).toContain("Focus mode");
-    expect(labels(true)).not.toContain("Focus mode");
+  it("leaves Focus mode out of any focus mode, and offers it in the project list", () => {
+    expect(labels("list")).toContain("Focus mode");
+    expect(labels("focused")).not.toContain("Focus mode");
+    expect(labels("nested")).not.toContain("Focus mode");
+  });
+
+  it("offers Sync repository only for a git repository", () => {
+    expect(labels("list", true)).toContain("Sync repository");
+    expect(labels("list")).not.toContain("Sync repository");
+  });
+
+  it("leaves Pin out of the focused project's own menu only", () => {
+    const pin = (placement: MenuPlacement) => labels(placement).some((label) => label === "Pin" || label === "Unpin");
+    expect([pin("list"), pin("nested"), pin("focused")]).toEqual([true, true, false]);
+  });
+});
+
+describe("a console session's Pin entry", () => {
+  const hub = sessionOf("h", "c", undefined, "Hub", "idle");
+  it("is left out of its own focus mode's menu only", () => {
+    const pin = (placement: MenuPlacement) =>
+      sessionMenu(t, {} as SidebarHandlers, hub, [], { placement }).some((entry) => typeof entry === "object" && (entry.label === "Pin" || entry.label === "Unpin"));
+    expect([pin("list"), pin("focused")]).toEqual([true, false]);
   });
 });

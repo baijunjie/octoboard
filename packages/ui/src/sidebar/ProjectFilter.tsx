@@ -15,6 +15,7 @@ import { handFocusOff } from "../components/handFocusOff";
 import { PICKED_TAG_CLASS, PICKED_TAG_REMOVE_CLASS } from "../components/tagStyle";
 import { TitledControl } from "../components/TitledControl";
 import { usePointerFocusReturn } from "../components/usePointerFocusReturn";
+import { useTrimmedField } from "../dialogs/useTrimmedField";
 import { useT } from "../i18n/react";
 import { withoutTags, withTag } from "../projectFiltering";
 import { keepFocus, RowIconButton } from "./rows";
@@ -33,7 +34,7 @@ export const NO_FILTER: ProjectFilter = { keyword: "", tags: [] };
 
 /** Whether `filter` is narrowing the list at all. */
 function isFiltering(filter: ProjectFilter): boolean {
-  return filter.keyword.trim() !== "" || filter.tags.length > 0;
+  return filter.keyword !== "" || filter.tags.length > 0;
 }
 
 /** The filter button by the Projects heading: it opens a popover with a field whose keyword
@@ -62,6 +63,7 @@ export function ProjectFilterButton({
   const pointerFocus = usePointerFocusReturn();
   const buttonHolder = holderRef;
   const clearHolder = useRef<HTMLSpanElement>(null);
+  const keywordField = useTrimmedField(filter.keyword, (keyword) => onChange((f) => ({ ...f, keyword })));
 
   const onOpenChange = (isOpen: boolean) => {
     setOpen(isOpen);
@@ -139,8 +141,7 @@ export function ProjectFilterButton({
               >
                 <SearchField
                   aria-label={t("sidebar.filter.field")}
-                  value={filter.keyword}
-                  onChange={(keyword) => onChange((f) => ({ ...f, keyword }))}
+                  {...keywordField}
                   onSubmit={() => onOpenChange(false)}
                   autoFocus
                   fullWidth

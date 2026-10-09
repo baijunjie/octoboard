@@ -48,7 +48,7 @@ function mount(render: (handlers: SidebarHandlers) => React.ReactElement): { tex
     reconnect: () => {},
     terminalUrl: () => "",
   };
-  const handlers = { onFocus: vi.fn(), onOpenDialog: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn(), onSwitchConsoleSession: vi.fn() } as unknown as SidebarHandlers;
+  const handlers = { onFocus: vi.fn(), onOpenDialog: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn(), onSetPinned: vi.fn(), onSwitchConsoleSession: vi.fn() } as unknown as SidebarHandlers;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() => root.render(<DaemonProvider value={daemon}>{render(handlers)}</DaemonProvider>));
@@ -132,5 +132,17 @@ it("a console session's focus mode has no strip when it is the console's only co
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={sessions.filter((s) => s.id !== hub2.id)} />
   ));
   expect(container.querySelector('[aria-label="Switch console session"]')).toBeNull();
+  unmount();
+});
+
+it("a pinned session's pin button unpins it without selecting its card", () => {
+  const pinned = sessionOf("web-pinned", main.id, web.id, "Pinned chore", "idle", { pinned: true });
+  const { container, handlers, unmount } = mount((h) => (
+    <ProjectFocusView handlers={h} console={main} project={web} sessions={[pinned]} owners={owners} />
+  ));
+  const unpin = container.querySelector<HTMLElement>('button[aria-label="Unpin Pinned chore"]');
+  act(() => unpin?.click());
+  expect(handlers.onSetPinned).toHaveBeenCalledWith({ session: pinned }, false);
+  expect(handlers.onSelectSession).not.toHaveBeenCalled();
   unmount();
 });

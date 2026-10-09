@@ -1,4 +1,4 @@
-import { Archive, ArrowLeftRight, Focus, FolderOpen, FolderPlus, KeyRound, List, Pencil, Pin, PinOff, Settings2, Trash2 } from "lucide-react";
+import { Archive, ArrowLeftRight, Focus, FolderOpen, FolderPlus, KeyRound, List, Pencil, Pin, PinOff, RefreshCw, Settings2, Trash2 } from "lucide-react";
 
 import { switchEntries } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuSubmenu } from "../components/ActionMenu";
@@ -53,24 +53,32 @@ export function consoleMenu(t: Translate, console: Console, onOpenDialog: (dialo
   ];
 }
 
+/** Where a menu is shown, which decides what it leaves out: `list` is the item's row in the
+ * sidebar's lists, with everything; `focused` is the header of the item's own focus mode, which
+ * has no "Focus mode" to enter and no Pin / Unpin (the item in focus is not pinned from there);
+ * `nested` is a project's heading inside a console session's focus mode, which has no project
+ * focus mode to enter from there. */
+export type MenuPlacement = "list" | "focused" | "nested";
+
 /** The project's actions, opening its files first, in the project row and in a focus mode (the
- * project's own header, and a console session's project headings), which leaves out "Focus mode":
- * the project's own is in it already, and a console session's has no project focus mode to enter
- * from there. */
+ * project's own header, and a console session's project headings); `placement` says which.
+ * "Sync repository" is offered only while the project is known to be a git repository
+ * (`gitRepository`, from its git status). */
 export function projectMenu(
   t: Translate,
   handlers: SidebarHandlers,
   project: Project,
   archived: Session[],
-  { inFocus = false }: { inFocus?: boolean } = {},
+  { placement = "list", gitRepository = false }: { placement?: MenuPlacement; gitRepository?: boolean } = {},
 ): ActionMenuEntry[] {
   return [
     { label: t("sidebar.project.browse"), icon: FolderOpen, onClick: () => handlers.onBrowseProject(project) },
+    ...(gitRepository ? [{ label: t("sidebar.project.syncGit"), icon: RefreshCw, onClick: () => handlers.onSyncProjectGit(project) }] : []),
     "separator",
-    pinItem(t, project.pinned, () => handlers.onSetPinned({ project }, !project.pinned)),
+    ...(placement === "focused" ? [] : [pinItem(t, project.pinned, () => handlers.onSetPinned({ project }, !project.pinned))]),
     { label: t("sidebar.project.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-project", project }) },
     { label: t("sidebar.project.edit"), icon: Settings2, onClick: () => handlers.onOpenDialog({ kind: "edit-project", project }) },
-    ...(inFocus ? [] : [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ project }) }]),
+    ...(placement === "list" ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ project }) }] : []),
     archiveSubmenu(t, t("sidebar.project.archive"), archived, handlers.onSelectSession, () =>
       handlers.onOpenArchive({ console: project.console_id, project: project.id }),
     ),
@@ -119,19 +127,21 @@ function switchAccountSubmenu(
  * (`ConsoleSessionsSection` in `Sidebar.tsx`) — a console session cannot archive itself (see "The
  * console session's tools" in `docs/product/hub-orchestration.md`), so this is the only way to
  * archive one, and the only place to switch its account. Focus mode is offered for a console
- * session alone, and not from its own focus mode's header (`inFocus`). */
+ * session alone; its own focus mode's header (`placement` `focused`) leaves out Focus mode and
+ * Pin / Unpin. */
 export function sessionMenu(
   t: Translate,
   handlers: SidebarHandlers,
   session: Session,
   accounts: Account[],
-  { inFocus = false }: { inFocus?: boolean } = {},
+  { placement = "list" }: { placement?: MenuPlacement } = {},
 ): ActionMenuEntry[] {
+  const focused = placement === "focused";
   const archived = session.status === "archived";
   const switchAccount = archived ? undefined : switchAccountSubmenu(t, handlers, session, accounts);
-  const focusable = session.role === "console" && !archived && !inFocus;
+  const focusable = session.role === "console" && !archived && !focused;
   return [
-    ...(archived ? [] : [pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned))]),
+    ...(archived || focused ? [] : [pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned))]),
     { label: t("sidebar.session.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) },
     ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ consoleSession: session }) }] : []),
     ...(switchAccount ? [switchAccount] : []),

@@ -2,8 +2,9 @@
 
 A project whose directory is a git repository carries its **current branch and how far that branch is from its
 upstream** in the sidebar. Octoboard checks those projects against their remotes by itself, on an interval, for the
-current console. What a check does beyond reporting depends on one setting, **Automatically sync
-repositories**, described last.
+current console, and checks one project at once when asked to with **Sync repository**. What a check does beyond
+reporting depends on one setting, **Automatically sync repositories**, described last, and on whether the check was
+asked for by hand.
 
 A project's uncommitted changes are not part of this: they are in the project pane's Git mode (see
 `docs/product/project-pane-git-mode.md`), which only reads the repository and has no part in these checks.
@@ -22,10 +23,12 @@ What it holds, in this order:
   refresh glyph while the remote is being checked; a download glyph bobbing up and down while the branch is being
   fast-forwarded.
   The four differ in shape, not in motion alone, and nothing animates where the system asks for reduced motion.
-- **A warning triangle**, only when the last check failed. Its tooltip carries the message `git` or the operating
-  system itself gave, shown as it came inside localized wording (see "What follows the language" in
-  `docs/product/language.md`). A failed check does not blank the rest of the badge: the branch and the counts are
-  still read from the repository and shown beside the warning.
+- **A warning triangle**, in red, when the last check failed, standing in for the branch or commit glyph; the
+  refresh and download glyphs still take its place while a check or a fast-forward runs. The glyph then carries a
+  tooltip with the message `git` or the operating system itself gave, shown as it came inside localized wording (see
+  "What follows the language" in `docs/product/language.md`); the tooltip shows on pointer hover only, since the
+  badge is no tab stop. A failed check does not blank the rest of the badge: the branch and the counts are still read
+  from the repository and shown beside the warning.
 - **The branch name** — or the short commit id, when `HEAD` is detached. A repository with no commit yet says so in its
   place, and nothing stands there when the branch could not be read at all, the warning carrying the reason instead.
 - **How far the branch is ahead of its upstream**, after an up arrow, and **how far behind**, after a down arrow, each
@@ -33,13 +36,13 @@ What it holds, in this order:
   neither.
 
 **While a check is in flight the badge keeps what the last check found** — the branch name (or short commit id), the
-counts and the warning triangle — and only its glyph turns into the spinning refresh glyph; the whole badge is replaced
-once the check finishes. A project's first check has nothing to keep, so until it finishes the badge shows the
-spinning glyph alone.
+counts and a failed check's message — and only its glyph turns into the spinning refresh glyph, the warning triangle
+included; the whole badge is replaced once the check finishes. A project's first check has nothing to keep, so until it
+finishes the badge shows the spinning glyph alone.
 
 **As the row gets tight the branch name is what gives way**: it fades out and can disappear entirely, leaving the
-glyph, the counts and the warning, which carry the same facts. The counts go next, and the warning triangle is the
-last thing to go. The project's name keeps a floor of its own and never vanishes.
+glyph (the warning triangle after a failed check) and the counts, which carry the same facts. The counts go next, and
+the glyph is the last thing to go. The project's name keeps a floor of its own and never vanishes.
 
 **What assistive technology hears.** A project row announces itself as one control, so the badge's facts are folded
 into the row's own name instead of being announced separately: the branch (or why there is none), the ahead and behind
@@ -55,8 +58,9 @@ carries its own name. The badge is deliberately not a live region, so a check st
 - every five minutes for as long as it stays current;
 - again once the connection to the daemon has been established, including after it was lost and came back (see
   "Losing the daemon connection" in `docs/product/application-lifecycle.md`);
-- and when a project appears in that console — added, or moved in from another one — which checks it without waiting
-  for the next round.
+- when a project appears in that console — added, or moved in from another one — which checks it without waiting
+  for the next round;
+- and when the user chooses **Sync repository** for it (see "Syncing one project by hand" below).
 
 A console that is not current has none of its projects checked, including one the floating sidebar is only
 previewing (see "Previewing a console from the rail" in `docs/product/sidebar.md`); switching to it checks them.
@@ -66,8 +70,8 @@ switch on" below.
 
 The daemon will not start a second check of a project while one is already running, and skips a project whose last
 check finished less than a minute ago — so several open windows, each on its own interval, cannot multiply the work. A
-project skipped that way simply keeps the status it already had. **The five-minute interval and the one-minute floor
-are fixed**, not settings.
+project skipped that way simply keeps the status it already had. Sync repository is the exception to both (see
+"Syncing one project by hand" below). **The five-minute interval and the one-minute floor are fixed**, not settings.
 
 A status is never stored: after a daemon restart there is none for any project, and a project's badge shows nothing
 again until its next check.
@@ -82,7 +86,8 @@ again until its next check.
 - Then the branch, its upstream and the ahead/behind counts are read from the repository. A fetch that failed —
   offline, authentication, a host key that has never been accepted — records its message for the warning triangle but
   does not stop this read, so the branch and the counts still show.
-- Finally the branch may be fast-forwarded; see "Automatically syncing repositories" below.
+- Finally the branch may be fast-forwarded; see "Automatically syncing repositories" and "Syncing one project by
+  hand" below.
 
 `git` runs with the user's own shell environment, so it is the `git` on the user's `PATH` and their git credentials
 that are used, as for a git association's clone (see "Associating a project" in
@@ -99,7 +104,8 @@ value and it survives a restart.
 Off and on alike, the check above runs and the branch and the counts stay accurate. The switch governs what happens
 beyond reporting: with it on, a branch that is **behind its upstream and has no commits of its own** is
 fast-forwarded — at the end of each check, and once immediately when the switch is turned on (see "Turning the switch
-on" below) — and the badge shows the fast-forward in flight.
+on" below) — and the badge shows the fast-forward in flight. With it off, only Sync repository fast-forwards (see
+"Syncing one project by hand" below), under the same rules:
 
 - It **never pushes**, and never merges anything that is not a fast-forward.
 - A branch that is ahead of its upstream, whether or not it is also behind, is left alone. So are a branch with no
@@ -108,8 +114,29 @@ on" below) — and the badge shows the fast-forward in flight.
   is working in that project.
 - A fast-forward `git` refuses records its message for the warning triangle, as a failed fetch does.
 
-This is the one case in which Octoboard changes anything inside a project's directory — the guarantee it qualifies is
-in "What Octoboard never modifies" in `docs/product/launching-agents.md`.
+Fast-forwarding a branch — with the switch on, or by Sync repository — is the one way Octoboard changes anything
+inside a project's directory; the guarantee it qualifies is in "What Octoboard never modifies" in
+`docs/product/launching-agents.md`.
+
+### Syncing one project by hand
+
+A project's action menu offers **Sync repository** while the project's status says its directory is a git repository
+— so not before its first status has arrived (see "Project rows" in `docs/product/sidebar.md` for where the menu
+is). It runs that project's check right away and then fast-forwards the branch under exactly the rules above, whether
+or not **Automatically sync repositories** is on; choosing it is the consent the switch would otherwise give. The
+one-minute floor does not apply.
+
+If a check of the project is already running, nothing starts alongside it: as soon as it ends, one more check runs,
+with the fast-forward, so the request ends in a fast-forward attempt. However many requests arrive meanwhile, they
+share that one extra check, and it does not run at all if the project has been removed in the meantime.
+
+The one exception is a request that arrives while the project is being visited by the pass that turning
+**Automatically sync repositories** on starts (see "Turning the switch on" below). The request is left to that pass:
+no check follows it and nothing is fetched, so the branch moves only if the pass's own local re-read finds it behind
+its upstream with no commits of its own.
+
+The badge shows the check and the fast-forward in flight as for any check, and a failed fetch or a fast-forward `git`
+refuses records its message for the warning triangle the same way.
 
 ### Turning the switch on
 

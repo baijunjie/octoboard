@@ -3,6 +3,7 @@ import React from "react";
 import { AGENT_OPTIONS, agentPickerOptions } from "../agents";
 import type { Translate } from "../i18n/catalog";
 import type { Agent, AgentAvailability } from "../protocol";
+import { IndicatorTooltip } from "./IndicatorTooltip";
 
 // The marks are taken from LobeHub's icon set (`@lobehub/icons-static-svg`, MIT): Claude's in its
 // brand colour, Codex's and Grok's monochrome in the current text colour, as their makers draw them.
@@ -22,13 +23,21 @@ const PATHS: Record<Agent, { d: string; fill: string }> = {
 };
 
 /** The mark of a session's agent. Always decorative: wherever it appears, the agent's name is in
- * the accessible name of the row or written out beside it (`sessionAriaLabel`). */
-export function AgentIcon({ agent, className = "size-4" }: { agent: Agent; className?: string }): React.ReactElement {
+ * the accessible name of the row or written out beside it (`sessionAriaLabel`). `tooltip`, where
+ * given, shows on pointer hover only, through `IndicatorTooltip`, without a name of its own, the
+ * mark being decorative. */
+export function AgentIcon({ agent, className = "size-4", tooltip }: { agent: Agent; className?: string; tooltip?: string }): React.ReactElement {
   const { d, fill } = PATHS[agent];
-  return (
+  const icon = (
     <svg viewBox="0 0 24 24" className={`shrink-0 ${className}`} fill={fill} fillRule="evenodd" aria-hidden="true">
       <path d={d} />
     </svg>
+  );
+  if (!tooltip) return icon;
+  return (
+    <IndicatorTooltip tooltip={tooltip} className="flex shrink-0">
+      {icon}
+    </IndicatorTooltip>
   );
 }
 

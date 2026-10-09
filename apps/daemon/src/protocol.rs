@@ -937,6 +937,14 @@ pub enum RequestBody {
     RefreshGitStatus {
         console: String,
     },
+    /// Checks one project against its remote and fast-forwards it right now, the same work
+    /// `refresh_git_status` does for a console, but ignoring the one-minute floor and whether
+    /// `auto_sync_repositories` is on. Answered with `ack` at once; the status follows as
+    /// `project_git_status` broadcasts. A project already being checked gets one more forced check
+    /// once that check ends.
+    SyncProjectGit {
+        project: String,
+    },
     Shutdown,
 }
 
@@ -1617,6 +1625,13 @@ mod tests {
                 r#"{"type":"refresh_git_status","id":"request-1","console":"console-7"}"#,
                 |body| match body {
                     RequestBody::RefreshGitStatus { console } => Some(console),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"sync_project_git","id":"request-1","project":"project-7"}"#,
+                |body| match body {
+                    RequestBody::SyncProjectGit { project } => Some(project),
                     _ => None,
                 },
             ),

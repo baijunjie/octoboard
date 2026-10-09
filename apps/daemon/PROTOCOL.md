@@ -75,6 +75,7 @@ the request id as if it were a record id.
 | `remove_trusted_directory` | `path` | Stops trusting a directory (compared after lexical normalisation, so a trailing slash does not matter) and broadcasts `trusted_directories_updated`. Projects' own permissions, sessions already running and the trust each agent has already recorded are untouched. Removing one that is not trusted does nothing. Directories are added only by `confirm_trust` |
 | `update_settings` | `auto_sync_repositories?`, `default_clone_dir?` | Each settable field absent means "leave it alone". `default_clone_dir` follows the path rules of `add_project`'s `path` (absolute or `~/`, stored lexically normalised, a relative one refused), and a blank value goes back to the built-in default; a refused value leaves the whole request unapplied. Broadcasts `settings_updated` only when something actually changed, as `remove_trusted_directory` does. A change that turns `auto_sync_repositories` on also starts the immediate fast-forward pass described in "Fast-forwarding when the setting is turned on" below, whose statuses follow as `project_git_status` broadcasts; an update that leaves the value as it was starts nothing. Turning it off starts nothing and undoes nothing |
 | `refresh_git_status` | `console` | Checks every project of `console` against its remote, concurrently; answered with `ack` at once, and the statuses follow as `project_git_status` broadcasts, one per project as its own check finishes. A project whose check is already running — this call raced ahead of an earlier one, or another client is watching the same console — is not started again, and nor is one whose last check completed less than a minute ago: several clients can each be polling this console on their own 5-minute interval and phase, and without this floor their sweeps would interleave into several checks per project every 5 minutes instead of one. Either way nothing is broadcast for the project that was skipped — it keeps whatever status it already had. An unknown console is `unknown_console`. See "Daemon behaviour, per project" below for what one project's check does |
+| `sync_project_git` | `project` | Checks one project against its remote and fast-forwards it right now, the same work `refresh_git_status` does per project (see "Daemon behaviour, per project" below), except that the one-minute floor does not apply and the fast-forward happens whether or not `auto_sync_repositories` is on, under the same rule (`upstream` set, `behind > 0`, `ahead == 0`). Answered with `ack` at once; the status follows as `project_git_status` broadcasts. A project whose check is already running gets one more check, with the fast-forward, as soon as that one ends, so the request ends in a fast-forward attempt; any number of requests meanwhile share that one rerun. The exception is a check that is the fast-forward pass started by turning `auto_sync_repositories` on: a request arriving during it is left to that pass, with no rerun. The rerun is skipped too if the project has been removed meanwhile. A project that is not a git repository is reported as such (`repository: false`). An unknown project is `unknown_project` |
 | `create_account` | `agent`, `name`, `config_dir` | Both fields are required: an account always has a name and a directory. `name` is trimmed and must be non-empty and unique within `agent` (compared trimmed, case-insensitively, including against the default account's own name); a collision is `account_name_taken`, naming the account it collides with. `config_dir` must be absolute or start with `~/`, and is stored lexically normalised; existence is not checked. Broadcasts `settings_updated` |
 | `update_account` | `account`, `name?`, `config_dir?` | Renames the account, repoints it, or both, independently; either field absent leaves it alone. Validated as in `create_account`. Broadcasts `settings_updated` when something actually changed |
 | `delete_account` | `account` | Clears the reference of every console that refers to this account — putting each one back on its agent's default account — then removes the account. A session holding it is left alone: it already carries its own copy of the directory it launches with. Broadcasts `settings_updated`, and a `console_upserted` for every console whose reference was cleared |
@@ -367,9 +368,10 @@ the same path, as a tool error carrying the same reason.
 
 ### Daemon behaviour, per project
 
-What `refresh_git_status` does for each of a console's projects, concurrently; the daemon has no timer of its own
-for this, so nothing runs until a client asks, and a project already checked within the last minute is skipped
-entirely (see `refresh_git_status` above):
+What `refresh_git_status` does for each of a console's projects, concurrently, and what `sync_project_git` does for
+the one project it names; the daemon has no timer of its own for this, so nothing runs until a client asks, and a
+project already checked within the last minute is skipped entirely, except for `sync_project_git`, to which that
+one-minute floor does not apply (see `refresh_git_status` above):
 
 1. If the directory is not a git repository, broadcast `repository: false`, `activity: idle`, and stop.
 2. Set `activity` to `checking` and broadcast `project_git_status`. That broadcast carries the branch, upstream,
@@ -382,10 +384,10 @@ entirely (see `refresh_git_status` above):
 4. Read the local state in one call, `git status --porcelain=v2 --branch --untracked-files=no`, taking `branch`,
    `detached`, `upstream`, `ahead` and `behind` from its `# branch.*` header lines; `--untracked-files=no` skips
    enumerating the worktree's files, which this step never reads anyway.
-5. If `auto_sync_repositories` is on, and `upstream` is set, and `behind > 0`, and `ahead == 0`: set `activity` to
-   `syncing` and broadcast, run `git merge --ff-only <upstream>`, then redo step 4 to pick up the new numbers. A
-   failed merge records `error`; `git` itself refuses rather than clobbering local changes, which is why nothing
-   here checks separately whether the worktree is clean.
+5. If `auto_sync_repositories` is on (or the check is a `sync_project_git`), and `upstream` is set, and
+   `behind > 0`, and `ahead == 0`: set `activity` to `syncing` and broadcast, run `git merge --ff-only <upstream>`,
+   then redo step 4 to pick up the new numbers. A failed merge records `error`; `git` itself refuses rather than
+   clobbering local changes, which is why nothing here checks separately whether the worktree is clean.
 6. Set `activity` to `idle` and broadcast.
 
 ### Fast-forwarding when the setting is turned on

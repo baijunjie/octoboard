@@ -49,3 +49,10 @@ it("leaves the interaction modality as the press set it without `showRing`", () 
   expect(document.activeElement).toBe(destination());
   expect(setInteractionModality).not.toHaveBeenCalled();
 });
+
+it("focuses the holder itself when it is a tab stop", () => {
+  holder.tabIndex = 0;
+  from.querySelector("button")?.focus();
+  handFocusOff(from, holder, true);
+  expect(document.activeElement).toBe(holder);
+});

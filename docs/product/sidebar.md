@@ -166,12 +166,12 @@ in force), Filter projects, then this button.
 
 ## Project rows
 
-A project row shows the project's name, a pin glyph when the project is pinned, and a chevron after the name. Clicking
-the row, or Enter or Space on it, collapses or expands it. Projects start expanded; whether one is collapsed is kept
-per window and is not stored. The chevron always shows while the project is collapsed, and only while the row is
-hovered or focused while it is expanded, and while hidden it takes no room, so a long name runs as far as it would in
-a session row and ends sooner when the chevron appears. The hover chevron fades and opens out as it appears, and back
-as it goes, briefly — at once where the system asks for reduced motion.
+A project row shows the project's name, its pin button when the project is pinned (see "Pinning" below), and a chevron
+after the name. Clicking the row, or Enter or Space on it, collapses or expands it. Projects start expanded; whether one
+is collapsed is kept per window and is not stored. The chevron always shows while the project is collapsed, and only
+while the row is hovered or focused while it is expanded, and while hidden it takes no room, so a long name runs as far
+as it would in a session row and ends sooner when the chevron appears. The hover chevron fades and opens out as it
+appears, and back as it goes, briefly — at once where the system asks for reduced motion.
 
 After the name, before the activity marker below and the row's controls, comes the project's **branch badge** — its
 current branch and how far it is from its upstream, when its directory is a git repository (see "The branch badge" in
@@ -185,8 +185,11 @@ At the row's end are a **+** button, **New session**, which opens the new-sessio
 "Opening a session" in `docs/product/sessions.md`), and the project's action menu:
 
 - **Browse files** — shows the project's files in the right pane, selecting, starting and resuming no session (see
-  `docs/product/project-pane.md`). It comes first, set apart from the items below it.
-- **Pin** / **Unpin** — see "Order of projects and sessions" below.
+  `docs/product/project-pane.md`).
+- **Sync repository** — only while the project's directory is known to be a git repository: checks the project
+  against its remote and fast-forwards it right now (see "Syncing one project by hand" in
+  `docs/product/project-git-status.md`). It and Browse files come first, set apart from the items below them.
+- **Pin** / **Unpin** — see "Pinning" below.
 - **Rename** — a dialog with the name alone; an empty name is rejected.
 - **Project settings** — the project dialog, see "Editing a project" in `docs/product/consoles-and-projects.md`.
 - **Focus mode** — see `docs/product/focus-mode.md`.
@@ -203,14 +206,17 @@ saying there are no sessions yet, with a **+** button that opens a new session.
 ## Session rows
 
 A session row shows the session's status glyph (see "Session statuses" in `docs/product/sessions.md`), its agent's icon,
-its title, and a pin glyph when it is pinned. A project session bound to a console session also carries that console
-session's **binding badge**: a small dot in the console session's colour, whose tooltip names it (see "The binding
-badge" below); one bound to a project session carries none. A console session's own row carries no *binding* badge —
-what it shows there instead is its own colour (see "The binding badge" below). Selecting a row resumes it when it is
-interrupted; no menu item does that. The row shows its agent as an icon alone; wherever the agent is named in words, the
-account the session runs under follows it in parentheses — "Claude Code (Work)" — as the account's name, "Default" for
-the agent's default account, or, for a session whose account has since been removed, the directory it recorded (or the
-agent's name alone when it recorded none). Its action menu offers:
+its title, and its pin button when it is pinned (see "Pinning" below). A project session bound to a console session also
+carries that console session's **binding badge**: a small dot in the console session's colour, whose tooltip names it
+(see "The binding badge" below); one bound to a project session carries none. A console session's own row carries no
+*binding* badge — what it shows there instead is its own colour (see "The binding badge" below). Selecting a row resumes
+it when it is interrupted; no menu item does that. The row shows its agent as an icon alone; wherever the agent is named
+in words, the account the session runs under follows it in parentheses — "Claude Code (Work)" — as the account's name,
+"Default" for the agent's default account, or, for a session whose account has since been removed, the directory it
+recorded (or the agent's name alone when it recorded none). The agent's icon has that account, named the same way, as
+its tooltip, or the agent's name when there is no account to name; the tooltip shows on pointer hover only, and the icon
+adds no tab stop. The agent's icon carries the same tooltip on a focus mode's session cards and archived rows (see
+`docs/product/focus-mode.md`) and on the archive view's rows (see "The archive view" below). Its action menu offers:
 
 - **Pin** / **Unpin**.
 - **Rename** — see "Renaming a session" in `docs/product/sessions.md`.
@@ -236,13 +242,14 @@ agent's name alone when it recorded none). Its action menu offers:
 A project session **bound to a console session** — one carrying the id of the console session it reports to (see
 "Console sessions and project sessions" in `docs/product/sessions.md`) — carries a small dot in that console session's
 colour wherever the project session is listed: its sidebar row. An unbound session carries no badge, and neither does a
-session bound to a project session. The badge's tooltip names the owning console session, and the row's own accessible
-name carries the same fact in words for assistive technology ("Bound to …"). The badge itself still carries no
-information its tooltip does not, so colour alone never distinguishes two owners for a user who cannot tell the colours
-apart. A console session's own row shows the same colour, decoratively, since the row's own label already names it, as
-do its focus mode's header, its chip in a project's focus mode and its chip in the switch strip (see
-`docs/product/focus-mode.md`). The cards in a focus mode carry no badge: a project's focus mode lists only sessions not
-bound to a console session, and a console session's lists only the ones bound to it.
+session bound to a project session. The badge's tooltip names the owning console session; the badge is no tab stop,
+so the tooltip shows on pointer hover only. The row's own accessible name carries the same fact in words for assistive
+technology ("Bound to …"). The badge itself still carries no information its tooltip does not, so colour alone never
+distinguishes two owners for a user who cannot tell the colours apart. A console session's own row shows the same
+colour, decoratively, since the row's own label already names it, as do its focus mode's header, its chip in a
+project's focus mode and its chip in the switch strip (see `docs/product/focus-mode.md`). The cards in a focus mode
+carry no badge: a project's focus mode lists only sessions not bound to a console session, and a console session's
+lists only the ones bound to it.
 
 **Where the colour comes from.** Octoboard gives each new console session a colour of its own from a fixed palette of
 six, taking the first the console's other console sessions that are not archived do not already have, and starting
@@ -309,10 +316,23 @@ The order follows status changes as they happen. A row that moves slides to its 
 second, and moves at once where the system asks for reduced motion. The rail's waiting count walks waiting sessions
 in this same order (see "The raised hand" in `docs/product/sessions.md`).
 
-**Pinning** is the user's own mark on a project or a session, set and cleared from its action menu; nothing is pinned
-to begin with. Its only effect is the order above. The pin is stored by the daemon with the project or the session,
-so every window and every client sees the same pins, and they survive a restart. A pinned session stays pinned when it
-is archived and when it is resumed; an archived session's menu offers no Pin or Unpin.
+### Pinning
+
+**Pinning** is the user's own mark on a project or a session, set and cleared from its action menu's **Pin** /
+**Unpin**, and cleared by its pin button too; nothing is pinned to begin with. Its only effect is the order above. The
+pin is stored by the daemon with the project or the session, so every window and every client sees the same pins, and
+they survive a restart. A pinned session stays pinned when it is archived and when it is resumed; an archived
+session's menu offers no Pin or Unpin. The header of a focus mode offers no Pin or Unpin for what is in focus (see
+"What both views show" in `docs/product/focus-mode.md`).
+
+**The pin button.** A pinned project or session shows a pin button: after its name on its row in the sidebar and on a
+project's heading in a console session's focus mode, and on the status line of its card in a focus mode. It is always
+shown while the item is pinned, and is reached with Tab like the row's other buttons. While the pointer is over it or it
+holds keyboard focus, its pin glyph turns into the unpin glyph. Its tooltip is "Unpin", while the name assistive
+technology announces for it also names the item ("Unpin …"). Pressing it unpins the item, as the menu's Unpin does; a
+mouse press neither selects the row nor moves keyboard focus. The button goes away with the pin, so when it held
+keyboard focus, focus is handed first, with its focus ring showing, to the row or card it was on — or, on a project's
+heading in a console session's focus mode, to that heading's **+** button.
 
 ## Selecting a session
 

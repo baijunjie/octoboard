@@ -12,7 +12,7 @@ import type { DialogRequest } from "../dialogs/dialogRequest";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Account, Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
-import { sessionAccountName } from "../sessionLabel";
+import { sessionAccountName, sessionAccountTooltip } from "../sessionLabel";
 import { archivedSessions, boundArchivedSessions } from "../sidebar/order";
 
 /** How many rows the list adds each time its end scrolls into view. */
@@ -143,7 +143,7 @@ export function ArchiveView({
                 data-marquee-scope
                 className="group flex min-h-12 items-center gap-3 rounded-lg px-2 transition-colors hover:bg-panel-hover"
               >
-                <AgentIcon agent={session.agent} />
+                <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
                 <div className="min-w-0 flex-1">
                   <FadeOverflow dir="auto" className="text-sm" titleWhenClipped={session.title}>
                     {session.title}

@@ -11,9 +11,9 @@ import React from "react";
  *
  * A tooltip is a label, not a surface to interact with: it closes the instant the pointer leaves
  * the trigger (`--tooltip-close-delay: 0s` in `style.css`, where HeroUI's default lingers), and it
- * is `pointer-events-none` (which has no token, so it is set here and on `ConnectionIcon`'s
- * tooltip), because react-aria's tooltip otherwise stays open while it is hovered and would
- * swallow clicks aimed at what lies beneath it. Nothing relies on a hoverable tooltip. */
+ * is `pointer-events-none` (which has no token, so every tooltip sets it itself), because
+ * react-aria's tooltip otherwise stays open while it is hovered and would swallow clicks aimed at
+ * what lies beneath it. Nothing relies on a hoverable tooltip. */
 export function TitledControl({
   title,
   children,

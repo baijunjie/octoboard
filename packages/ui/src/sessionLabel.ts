@@ -53,6 +53,12 @@ export function sessionAccountName(t: Translate, session: Session, accounts: Acc
   return accounts.find((account) => account.id === session.account_id)?.name ?? session.config_dir ?? undefined;
 }
 
+/** What the agent's mark on a session's row, card or archive list entry says in its tooltip: the
+ * account the session runs under, or the agent's own name where that cannot be resolved. */
+export function sessionAccountTooltip(t: Translate, session: Session, accounts: Account[]): string {
+  return sessionAccountName(t, session, accounts) ?? AGENT_LABEL[session.agent];
+}
+
 /** A session's agent followed by the account it runs under, as plain text: for an accessible name
  * or a tooltip, where `AgentAccountText` is not needed. */
 export function sessionAgentLabel(t: Translate, session: Session, accounts: Account[]): string {

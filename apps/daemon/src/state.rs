@@ -59,8 +59,9 @@ pub struct AppState {
     /// The ids of the projects whose git status is being checked right now, so
     /// `refresh_git_status` does not start a second check for one already in flight — a client
     /// polling faster than the checks finish, or several clients watching the same console, must
-    /// not pile up work. Claimed and released through [`AppState::claim_git_check`].
-    git_checks: Mutex<HashSet<String>>,
+    /// not pile up work. Claimed and released through [`AppState::claim_git_check`]. The value is
+    /// whether a manual sync (`sync_project_git`) arrived while the check ran and is owed a rerun.
+    git_checks: Mutex<HashMap<String, bool>>,
     /// When each project's last check completed, for the minimum-interval floor in
     /// `git_status::due_for_check` — a second guard next to `git_checks` above, needed because that
     /// one only stops two checks from overlapping and does nothing about several clients each
@@ -138,7 +139,7 @@ impl AppState {
             next_transcript_watch_generation: std::sync::atomic::AtomicU64::new(0),
             outbox: Outbox::default(),
             git_statuses: RwLock::new(HashMap::new()),
-            git_checks: Mutex::new(HashSet::new()),
+            git_checks: Mutex::new(HashMap::new()),
             git_check_completed: Mutex::new(HashMap::new()),
             agent_availability: RwLock::new(
                 [Agent::Claude, Agent::Codex, Agent::Grok]
@@ -816,22 +817,38 @@ impl AppState {
 
     // -- git status ------------------------------------------------------------
 
-    /// Claims the right to check this project's git status now, released when the returned guard
-    /// is dropped — including when the check panics, so a wedged step cannot leave its project
-    /// excluded from every later sweep for the rest of the daemon's life. `None` means a check for
-    /// it is already running and the caller must not start another.
+    /// Claims the right to check this project's git status now, released by
+    /// [`GitCheckClaim::release_unless_rerun_owed`] or, if the check panics, when the returned
+    /// guard is dropped, so a wedged step cannot leave its project excluded from every later
+    /// sweep for the rest of the daemon's life. `None` means a check for it is already running and
+    /// the caller must not start another.
     pub fn claim_git_check(self: &Arc<Self>, project_id: &str) -> Option<GitCheckClaim> {
-        if !self
-            .git_checks
-            .lock()
-            .expect("git check lock poisoned")
-            .insert(project_id.to_string())
-        {
+        self.claim_git_check_with(project_id, false)
+    }
+
+    /// As [`Self::claim_git_check`], for a manual sync: when a check is already running, nothing
+    /// is claimed, but the running check's claim is marked as owing a forced rerun, which
+    /// [`GitCheckClaim::release_unless_rerun_owed`] hands back to it. The marking and the claim
+    /// share one lock, so a request cannot slip in between the owner's last look and its release.
+    pub fn claim_git_check_forced(self: &Arc<Self>, project_id: &str) -> Option<GitCheckClaim> {
+        self.claim_git_check_with(project_id, true)
+    }
+
+    fn claim_git_check_with(
+        self: &Arc<Self>,
+        project_id: &str,
+        owe_rerun: bool,
+    ) -> Option<GitCheckClaim> {
+        let mut checks = self.git_checks.lock().expect("git check lock poisoned");
+        if let Some(rerun_owed) = checks.get_mut(project_id) {
+            *rerun_owed |= owe_rerun;
             return None;
         }
+        checks.insert(project_id.to_string(), false);
         Some(GitCheckClaim {
             state: self.clone(),
             project_id: project_id.to_string(),
+            released: false,
         })
     }
 
@@ -976,17 +993,43 @@ impl Drop for LaunchClaim {
     }
 }
 
-/// The right to check one project's git status right now, released on drop — including by a panic
-/// unwinding through it, which is what keeps a wedged step from excluding its project from every
-/// later sweep for the rest of the daemon's life. See `AppState::claim_git_check`.
+/// The right to check one project's git status right now, released by `release_unless_rerun_owed`
+/// or, when a panic unwinds through the holder, on drop, which is what keeps a wedged step from
+/// excluding its project from every later sweep for the rest of the daemon's life. See
+/// `AppState::claim_git_check`.
 pub struct GitCheckClaim {
     state: Arc<AppState>,
     project_id: String,
+    released: bool,
+}
+
+impl GitCheckClaim {
+    /// Releases the claim, unless a manual sync arrived while it was held: then the claim is kept,
+    /// the owed rerun is cleared and `true` is returned, for the holder to run one more check that
+    /// fast-forwards. Done under the lock `claim_git_check_forced` marks it under, so a request is
+    /// either seen here or finds the project unclaimed.
+    pub fn release_unless_rerun_owed(&mut self) -> bool {
+        let mut checks = self
+            .state
+            .git_checks
+            .lock()
+            .expect("git check lock poisoned");
+        if let Some(rerun_owed) = checks.get_mut(&self.project_id) {
+            if std::mem::take(rerun_owed) {
+                return true;
+            }
+        }
+        checks.remove(&self.project_id);
+        self.released = true;
+        false
+    }
 }
 
 impl Drop for GitCheckClaim {
     fn drop(&mut self) {
-        self.state.release_git_check(&self.project_id);
+        if !self.released {
+            self.state.release_git_check(&self.project_id);
+        }
     }
 }
 
@@ -1294,6 +1337,30 @@ mod tests {
 
         // The panic unwound through the claim's `Drop`, releasing it for the next sweep.
         assert!(state.claim_git_check("p1").is_some());
+    }
+
+    /// A manual sync that finds a check running must not be lost: it makes the holder run once
+    /// more, once, and only then release.
+    #[test]
+    fn a_manual_sync_during_a_check_is_owed_one_rerun() {
+        let (state, _dir) = app_state("state-git-claim-rerun");
+        let mut claim = state.claim_git_check("p1").expect("the first claim");
+        assert!(state.claim_git_check_forced("p1").is_none());
+        assert!(state.claim_git_check_forced("p1").is_none());
+
+        assert!(
+            claim.release_unless_rerun_owed(),
+            "the request is handed back"
+        );
+        assert!(
+            state.claim_git_check("p1").is_none(),
+            "the claim is still held for the rerun"
+        );
+        assert!(
+            !claim.release_unless_rerun_owed(),
+            "owed once, however many asked"
+        );
+        assert!(state.claim_git_check("p1").is_some(), "then it is released");
     }
 
     /// A status published for a project no longer in the store must be dropped rather than

@@ -18,7 +18,7 @@ not archived, each as its own row, in the console sessions section above the pro
 console sessions section and the project list" in `docs/product/sidebar.md`).
 
 A console session's row follows a session row exactly — the same status glyph, its agent's icon, its
-title, a pin glyph when pinned, and selecting it resumes it when it is interrupted, as selecting an
+title, a pin button when pinned, and selecting it resumes it when it is interrupted, as selecting an
 interrupted session's row does. Its action menu offers **Pin**/**Unpin**, **Rename**, **Focus mode** (see
 `docs/product/focus-mode.md`), **Switch account** and **Archive**; there is no Resume item, for the same reason. A
 console session's title is renameable, like a project session's; its default is under **Title** in "Opening a session"
@@ -392,10 +392,11 @@ way leaves the sessions bound to it as they are.
   switch, with nothing copied and nothing recorded, and that process may still be running. Once the process has been
   ended, a copy that does not complete, a relaunch the launch rules refuse and a relaunch whose process ends at once
   are each reported as a failed switch, not as a success: the session is left *interrupted* on its old account,
-  resumable as before, and already reads so everywhere by the time the failure is shown. Octoboard tells that last case from a success by the process ending within a few seconds of the
-  relaunch, never by reading what the agent printed. An account that is not signed in is therefore not a failed
-  switch: every agent, Grok Build included, comes up on its own sign-in rather than exiting, so the switch succeeds
-  and the session's terminal shows that agent's sign-in, which may start its sign-in flow.
+  resumable as before, and already reads so everywhere by the time the failure is shown. Octoboard tells that last
+  case from a success by the process ending within a few seconds of the relaunch, never by reading what the agent
+  printed. An account that is not signed in is therefore not a failed switch: every agent, Grok Build included, comes
+  up on its own sign-in rather than exiting, so the switch succeeds and the session's terminal shows that agent's
+  sign-in, which may start its sign-in flow.
 - **It can take a few seconds**, the time the agent is given to exit and the time the relaunched process is watched; the
   confirmation stays open, its button reading "Switching account…" and the session's terminal "Resuming session…",
   until the result is known, and shows a failure in place. The confirmation cannot be dismissed meanwhile, and the

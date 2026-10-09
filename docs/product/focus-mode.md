@@ -8,41 +8,45 @@ what they list.
 ## What both views show
 
 **The header**, in both: a back button, **Leave focus mode**, which returns to the full sidebar; the console's name
-above the name of what is in focus; a **+** button for a new session; and that thing's action menu, without its Focus
-mode item. A project's header also carries its branch badge (see "The branch badge" in
-`docs/product/project-git-status.md`). A console session's header shows its colour beside its name, and pressing the
-name selects the console session, whose terminal and report panel the view has no other row for; its action menu is the
-console session row's own (pin, rename, switch account, archive).
+above the name of what is in focus; a **+** button for a new session; and that thing's action menu, without its **Focus
+mode** and **Pin** / **Unpin** items. The header shows no pin button either. A project's header also carries its branch
+badge (see "The branch badge" in `docs/product/project-git-status.md`). A console session's header shows its colour
+beside its name, and pressing the name selects the console session, whose terminal and report panel the view has no
+other row for.
 
-**Session cards**, in both: the status glyph with the status in words, a pin glyph when pinned, the session's action
-menu (always shown), its title over up to two lines, its agent's icon and name with its account, and how long ago it
-was started. Clicking a card selects the session. They are in the order of "Order of projects and sessions" in
-`docs/product/sidebar.md`.
+**Session cards**, in both: the status glyph with the status in words, the pin button when pinned (see "Pinning" in
+`docs/product/sidebar.md`), the session's action menu (always shown), its title over up to two lines, its agent's icon
+and name with its account, and how long ago it was started. The agent's icon has a tooltip, as on a session row (see
+"Session rows" in `docs/product/sidebar.md`). Clicking a card selects the session. They are in the order of "Order of
+projects and sessions" in `docs/product/sidebar.md`.
 
-**Archived (n)**, in both: the ten most recently archived sessions of the view, each showing its agent's icon, its
-title and how long ago it was archived. Clicking one selects it. Its action menu offers **Rename** and **Delete**
-(which asks for confirmation; see "Deleting archived sessions" in `docs/product/sessions.md`). Below them **View all
-(n)** opens the archive view. With none archived, a line saying so.
+**Archived (n)**, in both, only while the view has archived sessions — with none, the section is not shown at all: the
+ten most recently archived sessions of the view, each showing its agent's icon, its title and how long ago it was
+archived. Clicking one selects it. Its action menu offers **Rename** and **Delete** (which asks for confirmation; see
+"Deleting archived sessions" in `docs/product/sessions.md`). Below them **View all (n)** opens the archive view.
 
 Relative times ("5 minutes ago") are worded in the current language, and anything under a minute reads as now.
 
 ## A project's focus mode
 
+From the top:
+
 - **Sessions (n)**: the project's sessions that are not archived and **not bound to a console session** — unbound
   ones, and ones bound to a project session, which are listed like any other. A session bound to a console session is
   not listed here, and so no card carries a binding badge. With none, a message and a **New session** button take
   their place.
-- **The sessions bound elsewhere**, under that heading, present only while the project has sessions that are not
+- **Archived (n)** is the project's archived sessions with the bound ones included. The archive is not filtered by
+  binding; only the list of live sessions is.
+- **The sessions bound elsewhere**, last, below the archive, present only while the project has sessions that are not
   archived bound to a console session that is not archived: one sentence for the whole project saying how many of its
   sessions are bound to console sessions, naming none of them, and below it a row of chips, wrapping onto as many
   lines as it needs — one chip per console session they are bound to, in the order the console sessions section lists
   them. A chip shows the console session's colour, its title (faded out when too long, the full title then its
   tooltip) and how many of this project's sessions that are not archived are bound to it. Pressing a chip enters that
   console session's focus mode; assistive technology hears it as entering that focus mode, with the count.
-- **New session** (the **+** and the empty message's button) opens the new-session dialog with no "Report to" choice:
-  the session is always unbound.
-- **Archived (n)** is the project's archived sessions with the bound ones included. The archive is not filtered by
-  binding; only the list of live sessions is.
+
+**New session** (the header's **+** and the empty message's button) opens the new-session dialog with no "Report to"
+choice: the session is always unbound.
 
 ## A console session's focus mode
 
@@ -51,10 +55,11 @@ Relative times ("5 minutes ago") are worded in the current language, and anythin
 - **Sessions (n)**: the projects of the console that have a session bound to this console session which is not
   archived, in the order of the project list, and under each project's name only the sessions bound to this console
   session, as cards. A session bound to another console session, to a project session or to none, is not shown, and
-  neither is a project with nothing bound to this one. With none, a message says so. Each project's name carries a pin
-  glyph while it is pinned, its own **+**, which opens a new session in that project, and its action menu, which is the
-  project list's without its Focus mode item: a project has no focus mode to be entered from here. The project list's
-  filter is not part of this view.
+  neither is a project with nothing bound to this one. With none, a message says so. Each project's name carries its
+  pin button while it is pinned (see "Pinning" in `docs/product/sidebar.md`), its own **+**, which opens a new session
+  in that project, and its action menu, which is the project row's without its Focus mode item — a project has no
+  focus mode to be entered from here — and keeps **Pin** / **Unpin**. The project list's filter is not part of this
+  view.
 - **New session**: the header's **+** opens a menu of the console's projects, so that a project with nothing bound yet
   can be reached; choosing one opens the new-session dialog for it. The dialog has no "Report to" field, and shows a
   line saying the session reports to this console session, which it will be bound to.

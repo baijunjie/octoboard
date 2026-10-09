@@ -459,6 +459,15 @@ pub async fn handle(
             Ok(None)
         }
 
+        RequestBody::SyncProjectGit { project } => {
+            let project = state
+                .store
+                .get_project(&project)?
+                .ok_or_else(|| CodedError::unknown_project(&project))?;
+            git_status::sync_project_now(state, project);
+            Ok(None)
+        }
+
         RequestBody::CreateAccount {
             agent,
             name,

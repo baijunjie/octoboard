@@ -1,5 +1,5 @@
 import { Button, ScrollShadow } from "@heroui/react";
-import { Archive, ArrowLeft, FolderOpen, FolderPlus, List, MessageSquarePlus, Pin, Plus } from "lucide-react";
+import { ArrowLeft, FolderOpen, FolderPlus, List, MessageSquarePlus, Plus } from "lucide-react";
 import React, { useLayoutEffect, useRef } from "react";
 
 import { AGENT_LABEL } from "../agents";
@@ -13,13 +13,13 @@ import { TitledControl } from "../components/TitledControl";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
-import { activityLabelKey, sessionAccountName, sessionAgentLabel, sessionAriaLabel, statusLabel } from "../sessionLabel";
+import { activityLabelKey, sessionAccountName, sessionAccountTooltip, sessionAgentLabel, sessionAriaLabel, statusLabel } from "../sessionLabel";
 import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
 import { GitBadge } from "./GitBadge";
 import { projectMenu, sessionMenu } from "./menus";
 import { archivedSessions, boundArchivedSessions, boundElsewhere, focusGroups, liveSessions, notBoundToConsoleSession, sortProjects, switchStrip, type SwitchStripEntry } from "./order";
-import { RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
+import { PinButton, RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
 import type { SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
 
@@ -78,10 +78,10 @@ function FocusTitle({ consoleName, title }: { consoleName: string; title: string
 }
 
 /** A project's focus mode: the sidebar given over to one project, its sessions not bound to a
- * console session as cards and its recent archive below them ("A project's focus mode" in
- * docs/product/focus-mode.md). The sessions bound to a console session are left out of the list
- * and summed up by a sentence with a chip for each console session, leading to its own focus mode;
- * the archive, bound sessions included, is not filtered. */
+ * console session as cards, its recent archive below them and, last, the console sessions that
+ * hold the rest ("A project's focus mode" in docs/product/focus-mode.md). The sessions bound to a
+ * console session are left out of the list and summed up by a sentence with a chip for each console
+ * session, leading to its own focus mode; the archive, bound sessions included, is not filtered. */
 export function ProjectFocusView({
   handlers,
   console: parentConsole,
@@ -125,13 +125,12 @@ export function ProjectFocusView({
         <RowIconButton icon={Plus} label={t("sidebar.project.openSession")} onPress={openSession} />
         <ActionMenu
           label={t("sidebar.project.actions", { name: project.name })}
-          items={projectMenu(t, handlers, project, archived, { inFocus: true })}
+          items={projectMenu(t, handlers, project, archived, { placement: "focused", gitRepository: gitStatus?.repository })}
           contextTargetRef={headerRef}
         />
       </FocusHeader>
       <ScrollShadow size={24} className="min-h-0 flex-1 px-2 pb-2">
         <SectionHeading>{t("sidebar.focus.sessions", { count: live.length })}</SectionHeading>
-        {elsewhere && <BoundElsewhere handlers={handlers} count={elsewhere.count} owners={elsewhere.owners} />}
         {live.length === 0 ? (
           <EmptyPanel
             icon={MessageSquarePlus}
@@ -142,6 +141,7 @@ export function ProjectFocusView({
           <SessionCards handlers={handlers} sessions={live} selectedSessionId={selectedSessionId} />
         )}
         <ArchivedList handlers={handlers} archived={archived} selectedSessionId={selectedSessionId} onViewAll={viewAll} />
+        {elsewhere && <BoundElsewhere handlers={handlers} count={elsewhere.count} owners={elsewhere.owners} />}
       </ScrollShadow>
     </>
   );
@@ -150,7 +150,8 @@ export function ProjectFocusView({
 /** A console session's focus mode: the sidebar given over to the projects that have a session bound
  * to it and, within each, only those sessions as cards, with its archived bound sessions below. A
  * session opened from here is bound to it, with no choice offered. What has no meaning here is
- * left out: a project's own focus mode (`projectMenu`'s `inFocus`) and the project list's filter. */
+ * left out: a project's own focus mode (`projectMenu`'s `nested` placement on the project headings
+ * here) and the project list's filter. */
 export function ConsoleSessionFocusView({
   handlers,
   console: parentConsole,
@@ -217,7 +218,7 @@ export function ConsoleSessionFocusView({
         )}
         <ActionMenu
           label={t("sidebar.session.actions", { title: consoleSession.title })}
-          items={sessionMenu(t, handlers, consoleSession, accounts, { inFocus: true })}
+          items={sessionMenu(t, handlers, consoleSession, accounts, { placement: "focused" })}
           contextTargetRef={headerRef}
         />
       </FocusHeader>
@@ -344,7 +345,11 @@ function FocusProjectGroup({
   selectedSessionId?: string;
 }): React.ReactElement {
   const t = useT();
+  // Read as `ProjectFocusView` does, for the "Sync repository" item.
+  const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
   const headerRef = useRef<HTMLDivElement>(null);
+  // Where focus goes when the pin button, ahead of it, is unpinned away.
+  const openSessionHolder = useRef<HTMLDivElement>(null);
   return (
     <>
       <div ref={headerRef} className="mb-1 flex min-h-7 items-center gap-1 ps-2 pe-2">
@@ -353,12 +358,12 @@ function FocusProjectGroup({
             <span className="text-sm font-medium">{project.name}</span>
           </RowLabel>
         </h4>
-        {project.pinned && <Pin aria-hidden="true" className="size-3 shrink-0 text-muted" />}
+        {project.pinned && <PinButton name={project.name} onUnpin={() => handlers.onSetPinned({ project }, false)} returnFocusTo={openSessionHolder} />}
         {/* Named for its project: the header's "+" is beside it in the same view. */}
-        <RowIconButton icon={Plus} label={t("sidebar.focus.newSessionIn", { name: project.name })} onPress={onOpenSession} />
+        <RowIconButton ref={openSessionHolder} icon={Plus} label={t("sidebar.focus.newSessionIn", { name: project.name })} onPress={onOpenSession} />
         <ActionMenu
           label={t("sidebar.project.actions", { name: project.name })}
-          items={projectMenu(t, handlers, project, archived, { inFocus: true })}
+          items={projectMenu(t, handlers, project, archived, { placement: "nested", gitRepository: gitStatus?.repository })}
           contextTargetRef={headerRef}
         />
       </div>
@@ -381,7 +386,7 @@ function BoundElsewhere({
 }): React.ReactElement {
   const t = useT();
   return (
-    <div className="px-2 pb-2">
+    <div className="px-2 pt-3 pb-2">
       <p className="text-xs text-muted">
         {t("sidebar.focus.boundElsewhere", { count })}
       </p>
@@ -435,7 +440,8 @@ function SessionCards({
   );
 }
 
-/** A focus mode's archive: its ten most recent rows, with "View all" to the archive view. */
+/** A focus mode's archive: its ten most recent rows, with "View all" to the archive view. Not drawn
+ * while there is none. */
 function ArchivedList({
   handlers,
   archived,
@@ -446,26 +452,21 @@ function ArchivedList({
   archived: Session[];
   selectedSessionId?: string;
   onViewAll: () => void;
-}): React.ReactElement {
+}): React.ReactElement | null {
   const t = useT();
+  if (archived.length === 0) return null;
   return (
     <>
       <SectionHeading>{t("sidebar.focus.archived", { count: archived.length })}</SectionHeading>
-      {archived.length === 0 ? (
-        <EmptyPanel compact icon={Archive} message={t("sidebar.archive.empty")} />
-      ) : (
-        <>
-          <div className="flex flex-col gap-0.5">
-            {archived.slice(0, ARCHIVE_PREVIEW).map((session) => (
-              <ArchivedRow key={session.id} handlers={handlers} session={session} selected={session.id === selectedSessionId} />
-            ))}
-          </div>
-          <Button size="sm" variant="ghost" fullWidth preventFocusOnPress onPress={onViewAll} className="mt-1 justify-start font-normal text-muted hover:text-foreground">
-            <List aria-hidden="true" className="size-4" />
-            {t("sidebar.archive.viewAll", { count: archived.length })}
-          </Button>
-        </>
-      )}
+      <div className="flex flex-col gap-0.5">
+        {archived.slice(0, ARCHIVE_PREVIEW).map((session) => (
+          <ArchivedRow key={session.id} handlers={handlers} session={session} selected={session.id === selectedSessionId} />
+        ))}
+      </div>
+      <Button size="sm" variant="ghost" fullWidth preventFocusOnPress onPress={onViewAll} className="mt-1 justify-start font-normal text-muted hover:text-foreground">
+        <List aria-hidden="true" className="size-4" />
+        {t("sidebar.archive.viewAll", { count: archived.length })}
+      </Button>
     </>
   );
 }
@@ -492,13 +493,13 @@ function SessionCard({
       ariaLabel={sessionAriaLabel(t, language, session, accounts)}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
-      className="min-h-8 flex-col gap-1 border border-separator px-[7px] py-2 data-selected:border-accent-glyph"
+      className="min-h-8 flex-col gap-1 border border-separator p-[7px] data-selected:border-accent-glyph"
     >
       <div className="flex items-center gap-2">
         <StatusIcon status={session.status} decorative />
         <span className="text-xs font-medium text-muted">{statusLabel(t, session.status)}</span>
         <span className="flex-1" />
-        {session.pinned && <Pin aria-hidden="true" className="size-3 shrink-0 text-muted" />}
+        {session.pinned && <PinButton name={session.title} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}
         <RowControls always>
           <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
         </RowControls>
@@ -507,7 +508,7 @@ function SessionCard({
         {session.title}
       </div>
       <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
-        <AgentIcon agent={session.agent} className="size-3.5" />
+        <AgentIcon agent={session.agent} className="size-3.5" tooltip={sessionAccountTooltip(t, session, accounts)} />
         <FadeOverflow
           as="span"
           className="min-w-0"
@@ -542,7 +543,7 @@ function ArchivedRow({
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
     >
-      <AgentIcon agent={session.agent} />
+      <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
       <RowLabel title={session.title}>
         <span className="text-muted">{session.title}</span>
       </RowLabel>

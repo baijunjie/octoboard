@@ -462,6 +462,10 @@ export type RequestBody =
    * is already in flight is not started again, so a client polling faster than the checks finish,
    * or several clients watching the same console, cannot pile work up. */
   | { type: "refresh_git_status"; console: string }
+  /** Checks one project against its remote and fast-forwards it right now, ignoring the
+   * one-minute floor and the `auto_sync_repositories` setting. Answered with `ack`; the status
+   * follows as `project_git_status` broadcasts. */
+  | { type: "sync_project_git"; project: string }
   /** Both fields are required: an account always has a name and a directory. Broadcasts
    * `settings_updated`. */
   | { type: "create_account"; agent: Agent; name: string; config_dir: string }

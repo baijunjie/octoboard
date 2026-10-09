@@ -8,7 +8,6 @@ import {
   ListChevronsDownUp,
   ListChevronsUpDown,
   MessageSquarePlus,
-  Pin,
   Plus,
   SearchX,
 } from "lucide-react";
@@ -29,7 +28,7 @@ import { columnClipClass, type DockPhase, useSidebarDockMotion } from "../layout
 import type { PanePeek } from "../layout/usePaneToggles";
 import { effectiveTags, matchesFilter, tagVocabulary, withoutTags } from "../projectFiltering";
 import type { Console, Project, Session } from "../protocol";
-import { activityLabelKey, sessionAriaLabel } from "../sessionLabel";
+import { activityLabelKey, sessionAccountTooltip, sessionAriaLabel } from "../sessionLabel";
 import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
@@ -38,7 +37,7 @@ import { type FilterUpdate, NO_FILTER, type ProjectFilter, ProjectFilterButton, 
 import { archiveSubmenu, consoleMenu, projectMenu, sessionMenu } from "./menus";
 import { archivedSessions, consoleActivity, isInactiveProject, liveSessions, sortProjects } from "./order";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
-import { RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
+import { PinButton, RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
 import { focusTargetId } from "./focus";
 import type { FocusTarget, SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
@@ -431,9 +430,9 @@ function ConsoleBody({
           // Only while the filter button is there (below): the chips hand focus to it when removed.
           projects.length > 0 && (
             <>
-              {filter.keyword.trim() !== "" && (
+              {filter.keyword !== "" && (
                 <ProjectFilterTag
-                  keyword={filter.keyword.trim()}
+                  keyword={filter.keyword}
                   returnFocusTo={filterButton}
                   onRemove={() => setFilter((f) => ({ ...f, keyword: "" }))}
                 />
@@ -647,7 +646,9 @@ function ProjectNode({
           <RowLabel title={project.name} className="min-w-0 shrink">
             <span className="font-medium">{project.name}</span>
           </RowLabel>
-          {project.pinned && <Pin aria-hidden="true" className="ms-2 size-3 shrink-0 text-muted" />}
+          {project.pinned && (
+            <PinButton name={project.name} onUnpin={() => handlers.onSetPinned({ project }, false)} returnFocusTo={rowRef} className="ms-1" />
+          )}
           {/* After the name rather than before it: while expanded it shows only on hover, which a
               leading chevron could not do without the names jumping sideways. Two glyphs rather than
               one rotated: a rotated chevron that is already mirrored would point the wrong way under
@@ -663,7 +664,7 @@ function ProjectNode({
         {isCollapsed && <ActivityMarker activity={activity} />}
         <RowControls>
           <RowIconButton icon={Plus} label={t("sidebar.project.openSession")} onPress={openSession} />
-          <ActionMenu label={t("sidebar.project.actions", { name: project.name })} items={projectMenu(t, handlers, project, archived)} contextTargetRef={rowRef} />
+          <ActionMenu label={t("sidebar.project.actions", { name: project.name })} items={projectMenu(t, handlers, project, archived, { gitRepository: gitStatus?.repository })} contextTargetRef={rowRef} />
         </RowControls>
       </TreeRow>
       {!isCollapsed && (
@@ -725,7 +726,7 @@ function SessionRow({
       onActivate={() => handlers.onSelectSession(session)}
     >
       <StatusIcon status={session.status} decorative />
-      <AgentIcon agent={session.agent} />
+      <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
       <RowLabel title={session.title}>{session.title}</RowLabel>
       {/* A console session shows its own colour, decorative here since the row's own label already
           names it; a bound project session's badge names its owner in its tooltip instead. */}
@@ -734,7 +735,7 @@ function SessionRow({
       ) : (
         owner && <BindingBadge owner={owner} />
       )}
-      {session.pinned && <Pin aria-hidden="true" className="size-3 shrink-0 text-muted" />}
+      {session.pinned && <PinButton name={session.title} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}
       <RowControls>
         <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
       </RowControls>

@@ -99,8 +99,8 @@ Leading and trailing whitespace is never meant, so a form never holds it: every 
 does. The form's state, its validation, its submit (Enter included) and any request fired from it see the trimmed value
 at once, while the field keeps what was typed until it loses focus, so a space between two words is not stripped on its
 way to the next one. A new field that is not a `TextInput` takes the hook's result as its `value`, `onChange` and
-`onBlur`, and its form does not call `.trim()` on the value. Left alone on purpose: a free-text area, the project
-filter's search field and the tags field's input, which trims what it adds as a tag itself.
+`onBlur`, and its form does not call `.trim()` on the value; the project filter's search field does the same. Left
+alone on purpose: a free-text area and the tags field's input, which trims what it adds as a tag itself.
 
 ## What is wrong with one field shows under that field, from the first submit on
 
@@ -175,6 +175,15 @@ never `Tooltip.Trigger`, which renders a focusable `role="button"` `div` around 
 also takes focus on a mouse press, undoing `preventFocusOnPress`. The shape works only when the child is itself a
 react-aria-components control (any HeroUI button or trigger), which picks the tooltip's hover and focus handling up
 from context; any other child — a plain element, a `span` around the control — gets no tooltip, with no warning.
+
+The one sanctioned exception is a tooltip on a non-control indicator (a badge, a status mark), which has no
+react-aria-components control to hang the shape on: `IndicatorTooltip` in
+`packages/ui/src/components/IndicatorTooltip.tsx`. It is hover-only by design and fixes what a bare `Tooltip.Trigger`
+gets wrong: the trigger hardcodes `role="button"` (so one left without a `role` exposes an unnamed button) and is
+focusable, so it always sets `tabIndex={-1}`, cancels `mousedown` so a press does not take focus off the terminal, and
+takes either a `label` (`role="img"` and `aria-label`) or `role="presentation"` (browsers ignore that role on a
+focusable element, so it only keeps the unnamed button role off). A deliberately focusable indicator, as
+`TerminalConnection`'s reconnecting arrow is, uses `Tooltip.Trigger` itself.
 
 ## Every string the user reads goes through the catalog, in a shape a translation can follow
 
