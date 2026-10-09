@@ -26,6 +26,10 @@ avatars and the ⋮ buttons below. These are:
 - the report panel's previous-page and next-page buttons;
 - the close button of every dialog, of Settings and of each toast ("Close").
 
+While the docked sidebar is hidden at 1148 px and wider, a console's avatar opens its tooltip on keyboard focus only:
+resting the mouse on it floats the sidebar in, which names the console at its top (see "Previewing a console from the
+rail" in `docs/product/sidebar.md`).
+
 ## Names too long for their space
 
 A single-line name or label too long for its space — a sidebar row's name, the top bar's breadcrumb, a session listed

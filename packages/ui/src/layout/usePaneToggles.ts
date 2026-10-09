@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { useIsNarrow } from "./breakpoint";
 import { useDockedPanelVisible, type DockedPanel } from "./panelVisibility";
+import { type ConsolePeek, useConsolePeek } from "./useConsolePeek";
+import { MODAL_OPEN } from "./useRegionCycle";
 
 /** Whether the pane holds keyboard focus: a tree row reached by Tab, or the report's iframe. */
 function holdsFocus(panel: DockedPanel): boolean {
@@ -23,7 +25,7 @@ const PEEK_HIDE_DELAY_MS = 200;
 export interface PanePeek {
   /** Whether the pane is currently floating. Never true below the breakpoint or while it is docked. */
   active: boolean;
-  /** Floats the pane in, as the pointer rests on the content panel's edge or reaches the toggle; does
+  /** Floats the pane in, as the pointer rests on the report panel's edge or reaches its toggle; does
    * nothing where the pane cannot float, and closes the other side's floating pane. It arms no
    * slide-away timer: that starts when the pointer leaves the pane or the toggle (`leave`). */
   reveal: () => void;
@@ -32,6 +34,10 @@ export interface PanePeek {
   /** The pointer left whatever kept the floating pane up: slides it away after a short delay. */
   leave: () => void;
 }
+
+/** The hidden docked sidebar's hover reveal: it floats in for the console whose avatar on the rail
+ * the pointer rests on (`useConsolePeek`), with no `reveal` of its own. */
+export type SidebarPeek = Omit<PanePeek, "reveal"> & ConsolePeek;
 
 interface PeekControl extends PanePeek {
   peekable: boolean;
@@ -63,11 +69,15 @@ function usePanePeek(panel: DockedPanel, peekable: boolean, focusTerminal: () =>
     // A menu opened from the floating pane lives in a popover outside it, so the pointer
     // moving onto the menu looks like leaving: while a popup trigger inside is expanded, keep
     // waiting. So it does while focus is inside the pane: closing it would move focus to the
-    // terminal mid-typing, and the rest of the keystrokes would reach the agent. Escape and the
+    // terminal mid-typing, and the rest of the keystrokes would reach the agent. A dialog opened
+    // from the pane is outside it too, with no popup trigger to show for it, so one open keeps
+    // it as well. So does the pointer being on the pane, which a pane that slid in under a still
+    // pointer may never have reported (`:hover` is up to date once it is there). Escape and the
     // toggle still close it.
     const tick = () => {
       const popupOpen = document.querySelector(`[data-pane=${panel}] [aria-haspopup][aria-expanded=true]`);
-      if (holdsFocus(panel) || popupOpen) {
+      const pointerOn = document.querySelector(`[data-pane=${panel}]:hover`);
+      if (holdsFocus(panel) || popupOpen || pointerOn || document.querySelector(MODAL_OPEN)) {
         timer.current = setTimeout(tick, PEEK_HIDE_DELAY_MS);
       } else {
         hide();
@@ -95,9 +105,9 @@ export interface PaneToggles {
   reportOpen: boolean;
   sidebarDocked: boolean;
   reportDocked: boolean;
-  /** The hidden docked sidebar floating over the terminal because the pointer asked for it. */
-  sidebarPeek: PanePeek;
-  /** The same for the report panel, from the end edge or the report toggle. */
+  /** The hidden docked sidebar floating over the terminal because the pointer is on a console's avatar. */
+  sidebarPeek: SidebarPeek;
+  /** The report panel's floating, from the window's end edge or the report toggle. */
   reportPeek: PanePeek;
   sidebarShown: boolean;
   reportShown: boolean;
@@ -119,9 +129,10 @@ export interface PaneToggles {
  * to close either overlay.
  *
  * While a docked pane is hidden, the pointer can float it in over the terminal without resizing
- * it (`sidebarPeek`, `reportPeek`): the content panel's edge on its side and its toggle reveal it,
- * leaving it (or Escape) hides it again, and pressing the toggle docks it for good. The two never
- * float together: revealing one hides the other.
+ * it (`sidebarPeek`, `reportPeek`): the sidebar is brought up by a console's avatar on the rail,
+ * the report panel by the window's end edge or its toggle; leaving it (or Escape) hides it again,
+ * and pressing the toggle docks it for good. The two never float together: revealing one hides the
+ * other.
  *
  * `hasReportPanel` is whether the selected session has a report panel at all (only a console
  * session does); `focusTerminal` is where keyboard focus goes when the pane holding it is hidden.
@@ -145,6 +156,7 @@ export function usePaneToggles({
     other.hide();
     mine.reveal();
   };
+  const consolePeek = useConsolePeek({ ...sidebarPeek, reveal: revealPeek(sidebarPeek, reportPeek) });
 
   // An overlay left open stops meaning anything once the window is wide enough to show its
   // content in the row instead — without this, widening past the breakpoint with a drawer open
@@ -251,7 +263,7 @@ export function usePaneToggles({
     reportOpen,
     sidebarDocked,
     reportDocked,
-    sidebarPeek: { ...sidebarPeek, reveal: revealPeek(sidebarPeek, reportPeek) },
+    sidebarPeek: { active: sidebarPeek.active, keep: sidebarPeek.keep, leave: sidebarPeek.leave, ...consolePeek },
     reportPeek: { ...reportPeek, reveal: revealPeek(reportPeek, sidebarPeek) },
     sidebarShown: isNarrow ? sidebarOpen : sidebarDocked,
     reportShown: isNarrow ? reportOpen : reportDocked,

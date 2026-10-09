@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
 import { useCurrentLanguage, useT } from "../i18n/react";
-import { drawerClass, PANE_ID, PeekHotZone } from "../layout/paneOverlay";
+import { drawerClass, PANE_ID, ReportPeekHotZone } from "../layout/paneOverlay";
 import type { PanePeek } from "../layout/usePaneToggles";
 import { usePlatform } from "../platform/react";
 import type { Page } from "../protocol";
@@ -155,7 +155,7 @@ export function ReportPanel({
     onPointerMove: peek?.keep,
     onPointerLeave: peek?.leave,
   };
-  const hotZone = peek && <PeekHotZone side="end" peek={peek} />;
+  const hotZone = peek && <ReportPeekHotZone peek={peek} />;
 
   if (sessionPages === undefined) {
     return (

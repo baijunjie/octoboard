@@ -2,7 +2,7 @@
 
 A project whose directory is a git repository carries its **current branch and how far that branch is from its
 upstream** in the sidebar. Octoboard checks those projects against their remotes by itself, on an interval, for the
-console the sidebar is showing. What a check does beyond reporting depends on one setting, **Automatically sync
+current console. What a check does beyond reporting depends on one setting, **Automatically sync
 repositories**, described last.
 
 ## The branch badge
@@ -45,19 +45,21 @@ carries its own name. The badge is deliberately not a live region, so a check st
 
 ## When a project is checked
 
-**Only the projects of the console the sidebar is showing** are checked (see "The console switcher" in
-`docs/product/sidebar.md`), and they are checked:
+**Only the projects of the current console** — the one the sidebar shows, see "The console switcher" in
+`docs/product/sidebar.md` — are checked, and they are checked:
 
-- as soon as that console becomes the one being shown;
-- every five minutes for as long as it stays shown;
+- as soon as that console becomes the current one;
+- every five minutes for as long as it stays current;
 - again once the connection to the daemon has been established, including after it was lost and came back (see
   "Losing the daemon connection" in `docs/product/application-lifecycle.md`);
 - and when a project appears in that console — added, or moved in from another one — which checks it without waiting
   for the next round.
 
-A console that is not being shown has none of its projects checked; switching to it checks them. Nothing is checked
-while no client is connected either: the schedule belongs to the application's window, not to the daemon. Turning
-**Automatically sync repositories** on is not a check and is not limited this way; see "Turning the switch on" below.
+A console that is not current has none of its projects checked, including one the floating sidebar is only
+previewing (see "Previewing a console from the rail" in `docs/product/sidebar.md`); switching to it checks them.
+Nothing is checked while no client is connected either: the schedule belongs to the application's window, not to the
+daemon. Turning **Automatically sync repositories** on is not a check and is not limited this way; see "Turning the
+switch on" below.
 
 The daemon will not start a second check of a project while one is already running, and skips a project whose last
 check finished less than a minute ago — so several open windows, each on its own interval, cannot multiply the work. A
@@ -112,8 +114,8 @@ Turning the switch on takes effect at once: the branches already known to be beh
 there and then, instead of waiting for the next check. Setting the switch to the value it already has does nothing.
 
 This pass **never goes to the remote** — nothing is fetched. The statuses Octoboard is already holding only pick which
-projects are worth visiting, so, unlike a check, it is **not limited to the console the sidebar is showing**: every
-project that has a status at all is visited, including projects of consoles that were shown earlier since Octoboard
+projects are worth visiting, so, unlike a check, it is **not limited to the current console**: every
+project that has a status at all is visited, including projects of consoles that were current earlier since Octoboard
 was started. A project that has never been checked is not visited — nothing is known to fast-forward it to.
 
 Before anything moves, each project's repository is read again — locally, still no network — and the same rule applied
@@ -129,7 +131,7 @@ itself.
 The badge shows the fast-forward in flight exactly as during a check, and a fast-forward `git` refuses records its
 message for the warning triangle the same way. A warning the last check left stays on the badge: it stands for that
 check against the remote, which a local fast-forward says nothing about. An error this pass records for a project of a
-console nobody is showing therefore stays on it until that console is shown again and its projects are checked, since
-a status is dropped only when the project or its console is deleted.
+console that is current in no window therefore stays on it until that console is current again and its projects are
+checked, since a status is dropped only when the project or its console is deleted.
 
 Turning the switch **off** undoes nothing and triggers nothing: branches already fast-forwarded stay where they are.

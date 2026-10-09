@@ -7,7 +7,8 @@ it, as in a web browser (see "The top bar" in `docs/product/window-layout.md`).
 
 A place is what the window shows, taken together:
 
-- the console the sidebar shows;
+- the current console (see "The console switcher" in `docs/product/sidebar.md`); a console the floating sidebar is
+  only previewing is not part of the place;
 - the selected session, or none;
 - the focus mode the sidebar is in, if any (see `docs/product/focus-mode.md`);
 - the archive view and what it is for, while it is open (see "The archive view" in `docs/product/sidebar.md`).
@@ -16,6 +17,11 @@ A place is what the window shows, taken together:
 leaving focus mode, a chip in a focus mode, the archive view opening or closing, the waiting count, the menu bar icon's
 menu, a session this window opened being selected, a keyboard shortcut. A change that leaves the window where it already
 was is not recorded again.
+
+One press can make two changes and still be one visit: a press inside the floating sidebar that makes the console it
+previews the current one and goes on to select a session there (see "Previewing a console from the rail" in
+`docs/product/sidebar.md`). Back from it returns to where the window was before the press. A selection made after that
+press has ended is a visit of its own.
 
 The history starts once the daemon's state has first arrived. It is kept in memory for the window alone: it is not
 stored, so reloading the window or restarting the application starts it empty, and every client has its own. It holds

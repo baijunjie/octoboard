@@ -83,6 +83,19 @@ export function App(): React.ReactElement {
     (archiveConsoleSessionId === undefined || archiveBoundTo !== undefined);
 
   const panes = usePaneToggles({ hasReportPanel, focusTerminal });
+  // The hidden sidebar floats in showing the console whose avatar the pointer is on, which is not
+  // the current one until something is pressed in it. That is a plain console view: a focus mode
+  // belongs to the current console.
+  const currentConsole = sidebarView.currentConsole;
+  const peekedId = panes.sidebarPeek.consoleId;
+  const peekedConsole = peekedId ? consoles.get(peekedId) : undefined;
+  const shownConsole = peekedConsole ?? currentConsole;
+  const previewing = shownConsole !== currentConsole;
+  // A previewed console that is deleted takes its avatar, and so the pointer's leaving it, with it.
+  const { active: peeking, leaveConsole } = panes.sidebarPeek;
+  useEffect(() => {
+    if (peekedId && peeking && !consoles.has(peekedId)) leaveConsole();
+  }, [peekedId, peeking, consoles]);
 
   // A region off screen is skipped by F6: a hidden docked pane, a closed drawer, and a floating pane
   // too, which is only a hover away rather than shown. The top bar and the rail are always there.
@@ -334,6 +347,14 @@ export function App(): React.ReactElement {
     focusTerminal,
   });
 
+  // A press in the previewing sidebar makes its console current. If that press goes on to select a
+  // session there, the two changes are one visit in the history.
+  const commitPreview = () => {
+    if (!previewing || !shownConsole) return;
+    navigation.joinPressVisits();
+    sidebarView.selectConsole(shownConsole.id);
+  };
+
   const setPinned = (target: { project: Project } | { session: Session }, pinned: boolean) => {
     const body =
       "project" in target
@@ -381,8 +402,6 @@ export function App(): React.ReactElement {
         sidebarWidth={panes.sidebarDocked ? sidebarWidth.width : undefined}
         sidebarShown={panes.sidebarShown}
         onToggleSidebar={panes.toggleSidebar}
-        onSidebarToggleEnter={() => panes.sidebarPeek.reveal()}
-        onSidebarToggleLeave={panes.sidebarPeek.leave}
         canGoBack={navigation.canGoBack}
         canGoForward={navigation.canGoForward}
         onBack={navigation.back}
@@ -404,6 +423,9 @@ export function App(): React.ReactElement {
           sessions={sessionList}
           currentConsoleId={sidebarView.currentConsole?.id}
           onSelectConsole={sidebarView.selectConsole}
+          onConsoleEnter={panes.sidebarPeek.hoverConsole}
+          onConsoleLeave={panes.sidebarPeek.leaveConsole}
+          hoverOpensSidebar={panes.sidebarPeek.peekable}
           onOpenDialog={openDialog}
           waitingCount={waitingSessions.length}
           onNextWaiting={selectNextWaiting}
@@ -422,8 +444,8 @@ export function App(): React.ReactElement {
             projects={projectList}
             sessions={sessionList}
             selectedSessionId={selectedSessionId}
-            currentConsole={sidebarView.currentConsole}
-            focus={sidebarView.focus}
+            shownConsole={shownConsole}
+            focus={previewing ? undefined : sidebarView.focus}
             onSelectSession={(session) => selectSession(session)}
             onSwitchConsoleSession={switchConsoleSession}
             onOpenConsoleSession={openConsoleSession}
@@ -434,6 +456,7 @@ export function App(): React.ReactElement {
             onOpenSettings={openSettingsAt}
             open={panes.sidebarOpen}
             peek={panes.sidebarDocked ? undefined : panes.sidebarPeek}
+            onPeekPress={commitPreview}
             sidebarWidth={sidebarWidth}
           />
           {panes.sidebarDocked && <PaneResizeHandle side="sidebar" paneWidth={sidebarWidth} />}

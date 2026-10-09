@@ -2,8 +2,8 @@ import type { Console, Project, Session } from "../protocol";
 import { belongsToFocus, resolveFocus } from "../sidebar/focus";
 import type { ArchiveScope } from "../sidebar/types";
 
-/** What the content area shows, in the terms the UI already keeps it in: the console the sidebar
- * shows, the selected session, the focus mode as `resolveFocus`'s key (`project:<id>` or
+/** What the content area shows, in the terms the UI already keeps it in: the current console, the
+ * selected session, the focus mode as `resolveFocus`'s key (`project:<id>` or
  * `consoleSession:<id>`), and the archive view's scope while it is open. */
 export interface Location {
   console?: string;

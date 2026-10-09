@@ -23,7 +23,7 @@ import { handFocusOff } from "../components/handFocusOff";
 import { ActivityMarker, StatusIcon } from "../components/StatusIcon";
 import { withGitBadge } from "../gitStatusLabel";
 import { useCurrentLanguage, useT } from "../i18n/react";
-import { drawerClass, PANE_ID, PeekHotZone } from "../layout/paneOverlay";
+import { drawerClass, PANE_ID, RailClip } from "../layout/paneOverlay";
 import type { PaneWidth } from "../layout/paneWidth";
 import type { PanePeek } from "../layout/usePaneToggles";
 import { effectiveTags, matchesFilter, tagVocabulary, withoutTags } from "../projectFiltering";
@@ -46,24 +46,30 @@ interface SidebarProps extends SidebarHandlers {
   projects: Project[];
   sessions: Session[];
   selectedSessionId?: string;
-  /** The console the sidebar shows; the caller resolves it to an existing one. */
-  currentConsole?: Console;
-  /** The project or console session in focus mode, if any; it belongs to `currentConsole`. */
+  /** The console the sidebar shows: the current one, or while the hidden sidebar floats in, the one
+   * whose avatar the pointer is on. The caller resolves it to an existing one. */
+  shownConsole?: Console;
+  /** The project or console session in focus mode, if any; it belongs to `shownConsole`. */
   focus?: FocusTarget;
   /** Whether the drawer is open below the `docked` breakpoint; above it the docked sidebar is
    * shown or, with `peek`, hidden (`usePaneToggles` owns the state, resetting it once the window no
    * longer needs it). */
   open: boolean;
   /** The hover reveal of the sidebar while the user has hidden it from the top bar: the same panel,
-   * kept as a fixed overlay at the docked width that floats in over the terminal, with its shadow
-   * and rounded edge. `undefined` while the docked sidebar is shown. */
-  peek?: PanePeek;
+   * kept as a fixed overlay at the docked width that floats in over the terminal, as a card inset
+   * from the rail and the window's other chrome, with its border, rounded corners and shadow.
+   * `undefined` while the docked sidebar is shown. */
+  peek?: Pick<PanePeek, "active" | "keep" | "leave">;
+  /** A press began inside the sidebar while it is hidden-docked (floating or sliding away), before
+   * whatever was pressed acts: where the console it is showing, if that is not the current one,
+   * becomes the current one. */
+  onPeekPress?: () => void;
   /** The docked-mode width and its setters; `App.tsx` owns it (`usePaneWidth`) so it can also
    * be read from outside the sidebar. */
   sidebarWidth: PaneWidth;
 }
 
-/** The sidebar: one console at a time, the one picked on the rail (see
+/** The sidebar: one console at a time, the current one picked on the rail, or the one a hover on the rail previews (see
  * docs/product/sidebar.md), with its console sessions and projects — or, in focus mode, one project
  * or one console session alone. Expand/collapse state is purely local UI state; the daemon has no notion of
  * it. */
@@ -71,10 +77,11 @@ export function Sidebar({
   projects,
   sessions,
   selectedSessionId,
-  currentConsole,
+  shownConsole,
   focus,
   open,
   peek,
+  onPeekPress,
   sidebarWidth,
   ...handlers
 }: SidebarProps): React.ReactElement {
@@ -153,10 +160,10 @@ export function Sidebar({
   }, [focusId]);
 
   const drawerClassName = peek
-    ? `docked:rounded-e-xl ${drawerClass("start", "floating", open, peek.active)}`
+    ? `docked:rounded-xl docked:border ${drawerClass("start", "floating", open, peek.active)}`
     : drawerClass("start", "drawer", open);
 
-  const consoleSessions = currentConsole ? sessions.filter((s) => s.console_id === currentConsole.id) : [];
+  const consoleSessions = shownConsole ? sessions.filter((s) => s.console_id === shownConsole.id) : [];
   // Every project session's binding badge names the console session it is bound to (`bound_to`) by
   // looking it up here, once, rather than each row searching the console's sessions itself.
   const owners = new Map(consoleSessions.filter((s) => s.role === "console").map((s) => [s.id, s]));
@@ -164,7 +171,7 @@ export function Sidebar({
   // What the sidebar is showing, and how it arrived there: going down into a focus mode slides the
   // new view in from the end, coming back up slides it in from the start, and switching to another
   // console fades it in.
-  const viewKey = !currentConsole ? "none" : focusId ? `focus:${focusId}` : `console:${currentConsole.id}`;
+  const viewKey = !shownConsole ? "none" : focusId ? `focus:${focusId}` : `console:${shownConsole.id}`;
   const viewRef = useRef<HTMLDivElement>(null);
   const previousViewRef = useRef(viewKey);
   // Played in place rather than by remounting the view, so a console switch leaves what is mounted
@@ -188,7 +195,7 @@ export function Sidebar({
   }, [viewKey]);
 
   let content: React.ReactNode;
-  if (!currentConsole) {
+  if (!shownConsole) {
     content = (
       <EmptyPanel
         icon={LayoutDashboard}
@@ -200,7 +207,7 @@ export function Sidebar({
     content = (
       <ProjectFocusView
         handlers={handlers}
-        console={currentConsole}
+        console={shownConsole}
         project={focus.project}
         sessions={consoleSessions.filter((s) => s.project_id === focus.project.id)}
         owners={owners}
@@ -211,29 +218,29 @@ export function Sidebar({
     content = (
       <ConsoleSessionFocusView
         handlers={handlers}
-        console={currentConsole}
+        console={shownConsole}
         consoleSession={focus.consoleSession}
-        projects={projects.filter((p) => p.console_id === currentConsole.id)}
+        projects={projects.filter((p) => p.console_id === shownConsole.id)}
         sessions={consoleSessions}
         selectedSessionId={selectedSessionId}
       />
     );
   } else {
-    const consoleProjects = projects.filter((p) => p.console_id === currentConsole.id);
+    const consoleProjects = projects.filter((p) => p.console_id === shownConsole.id);
     // Every project of the console, including any a filter is hiding: the button press changes
     // only the listed ones, but the action it offers follows the whole console.
     const foldControl = projectFoldControl(
-      expandPinned.get(currentConsole.id) ?? false,
+      expandPinned.get(shownConsole.id) ?? false,
       consoleProjects.map((project) => project.id),
       collapsed,
     );
     content = (
       <>
-        <ConsoleHeader handlers={handlers} current={currentConsole} />
+        <ConsoleHeader handlers={handlers} current={shownConsole} />
         <ScrollShadow size={24} className="min-h-0 flex-1 px-2 pb-2">
           <ConsoleBody
             handlers={handlers}
-            console={currentConsole}
+            console={shownConsole}
             projects={consoleProjects}
             sessions={consoleSessions}
             owners={owners}
@@ -243,7 +250,7 @@ export function Sidebar({
             setCollapsedFor={setCollapsedFor}
             foldControl={foldControl}
             onFold={() => {
-              const consoleId = currentConsole.id;
+              const consoleId = shownConsole.id;
               const pin = pinAfterFoldAction(foldControl);
               setExpandPinned((prev) => {
                 if ((prev.get(consoleId) ?? false) === pin) return prev;
@@ -252,9 +259,9 @@ export function Sidebar({
                 return next;
               });
             }}
-            filter={filters.get(currentConsole.id) ?? NO_FILTER}
+            filter={filters.get(shownConsole.id) ?? NO_FILTER}
             setFilter={(update) =>
-              setFilters((prev) => new Map(prev).set(currentConsole.id, update(prev.get(currentConsole.id) ?? NO_FILTER)))
+              setFilters((prev) => new Map(prev).set(shownConsole.id, update(prev.get(shownConsole.id) ?? NO_FILTER)))
             }
           />
         </ScrollShadow>
@@ -263,7 +270,7 @@ export function Sidebar({
   }
 
   return (
-    <>
+    <RailClip floating={peek !== undefined}>
       <nav
         // Below the `docked` breakpoint this is a fixed overlay, closed by default, slid on and off
         // with `open`; at or above it the `docked:` variants in `drawerClass` put it back exactly
@@ -299,6 +306,7 @@ export function Sidebar({
         className={`flex w-70 flex-col overflow-hidden sidebar-fills border-e border-separator bg-panel-sidebar shrink-0 docked:w-(--sidebar-width) ${drawerClassName}`}
         onPointerEnter={peek?.keep}
         onPointerLeave={peek?.leave}
+        onPointerDownCapture={peek ? onPeekPress : undefined}
         style={{ "--sidebar-width": `${sidebarWidth.width}px` } as React.CSSProperties}
         aria-label={t("sidebar.sessions")}
       >
@@ -306,8 +314,7 @@ export function Sidebar({
           {content}
         </div>
       </nav>
-      {peek && <PeekHotZone side="start" peek={peek} />}
-    </>
+    </RailClip>
   );
 }
 

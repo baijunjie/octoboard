@@ -54,12 +54,19 @@ function ConsoleTile({
   activity,
   current,
   onSelect,
+  onHoverChange,
+  hoverOpensSidebar,
   onOpenDialog,
 }: {
   console: Console;
   activity: Activity;
   current: boolean;
   onSelect: () => void;
+  /** A mouse pointer entered or left the avatar; touch and pen are ignored. */
+  onHoverChange: (hovered: boolean) => void;
+  /** Hovering the avatar floats the hidden sidebar in, whose header already names the console, so
+   * the tooltip then waits for keyboard focus. */
+  hoverOpensSidebar: boolean;
   onOpenDialog: (dialog: DialogRequest) => void;
 }): React.ReactElement {
   const t = useT();
@@ -67,7 +74,7 @@ function ConsoleTile({
   const activityKey = activityLabelKey(activity);
   return (
     <div ref={tileRef} className="flex">
-      <TitledControl title={thisConsole.name} placement="end">
+      <TitledControl title={thisConsole.name} placement="end" focusOnly={hoverOpensSidebar}>
         <Button
           isIconOnly
           size="sm"
@@ -76,6 +83,8 @@ function ConsoleTile({
           aria-current={current ? "true" : undefined}
           preventFocusOnPress
           onPress={onSelect}
+          onHoverStart={(event) => event.pointerType === "mouse" && onHoverChange(true)}
+          onHoverEnd={(event) => event.pointerType === "mouse" && onHoverChange(false)}
           className={`size-9 min-w-0 rounded-lg p-0 ${current ? CHROME_CURRENT_FILLS : CHROME_BUTTON_FILLS}`}
         >
           <span className="relative flex">
@@ -98,9 +107,15 @@ function ConsoleTile({
 interface RailProps {
   consoles: Console[];
   sessions: Session[];
-  /** The console the sidebar shows. */
+  /** The current console, which the sidebar shows unless it is previewing another. */
   currentConsoleId?: string;
   onSelectConsole: (consoleId: string) => void;
+  /** The pointer is on a console's avatar: with the docked sidebar hidden, that floats it in
+   * showing this console. */
+  onConsoleEnter: (consoleId: string) => void;
+  onConsoleLeave: () => void;
+  /** Whether the hidden sidebar can float in on hovering an avatar right now. */
+  hoverOpensSidebar: boolean;
   onOpenDialog: (dialog: DialogRequest) => void;
   waitingCount: number;
   onNextWaiting: () => void;
@@ -134,6 +149,9 @@ export function Rail({
   sessions,
   currentConsoleId,
   onSelectConsole,
+  onConsoleEnter,
+  onConsoleLeave,
+  hoverOpensSidebar,
   onOpenDialog,
   waitingCount,
   onNextWaiting,
@@ -176,6 +194,8 @@ export function Rail({
               activity={activities.get(c.id)}
               current={c.id === currentConsoleId}
               onSelect={() => onSelectConsole(c.id)}
+              hoverOpensSidebar={hoverOpensSidebar}
+              onHoverChange={(hovered) => (hovered ? onConsoleEnter(c.id) : onConsoleLeave())}
               onOpenDialog={onOpenDialog}
             />
           ))}

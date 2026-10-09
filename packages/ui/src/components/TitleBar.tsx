@@ -104,12 +104,10 @@ interface TitleBarProps {
    * the breadcrumb starts where the content panel's main area does; `undefined` while it is hidden. */
   sidebarWidth?: number;
   /** Whether the sidebar is currently shown, docked or as an open drawer; a hidden sidebar that is
-   * only floating in on hover does not count, since pressing the toggle docks it. */
+   * only floating in on hover (from a console's avatar on the rail) does not count, since pressing
+   * the toggle docks it. */
   sidebarShown: boolean;
   onToggleSidebar: () => void;
-  /** The pointer is on the sidebar toggle: with the docked sidebar hidden, that floats it in. */
-  onSidebarToggleEnter: () => void;
-  onSidebarToggleLeave: () => void;
   canGoBack: boolean;
   canGoForward: boolean;
   onBack: () => void;
@@ -131,8 +129,6 @@ export function TitleBar({
   sidebarWidth,
   sidebarShown,
   onToggleSidebar,
-  onSidebarToggleEnter,
-  onSidebarToggleLeave,
   canGoBack,
   canGoForward,
   onBack,
@@ -167,7 +163,6 @@ export function TitleBar({
             onPress={onToggleSidebar}
             expanded={sidebarShown}
             controls={PANE_ID.sidebar}
-            onMouseHoverChange={(hovered) => (hovered ? onSidebarToggleEnter() : onSidebarToggleLeave())}
           >
             {sidebarShown ? (
               <PanelLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />

@@ -25,6 +25,11 @@ export interface Navigation {
    * (the report page's relay): nothing where the shortcut does not exist, or while a dialog or
    * menu is open. */
   moveByShortcut: (backward: boolean) => void;
+  /** The console is about to change because a press inside the previewing sidebar committed it, and
+   * that press may go on to select something in it: the visit the console change makes and the one
+   * the selection makes are then recorded as one, so Back does not stop between them. Only a change
+   * before the pointer is released joins it. */
+  joinPressVisits: () => void;
 }
 
 /**
@@ -71,6 +76,10 @@ export function useNavigationHistory({
   // Set while a move is being applied, so that the location it arrives at is not a visit.
   const moving = useRef(false);
   const recorded = useRef<string>(undefined);
+  // `joinPressVisits` was called and the visit it announced has not been recorded yet / has been
+  // recorded, and the next one is to take its place.
+  const announced = useRef(false);
+  const joining = useRef(false);
 
   // After every render, so that the render a move causes is also the one that ends it, whether or
   // not the location changed.
@@ -80,10 +89,13 @@ export function useNavigationHistory({
     moving.current = false;
     if (!ready || (key === recorded.current && !moved)) return;
     recorded.current = key;
+    const replacesJoined = joining.current && !moved;
+    joining.current = announced.current && !moved && !replacesJoined;
+    if (joining.current) announced.current = false;
     setHistory((h) => {
       const current = h.entries[h.index];
       if (moved) return current && locationKey(current) === key ? h : replaceCurrent(h, location);
-      return current && !isLive(current) ? replaceCurrent(h, location) : push(h, location);
+      return replacesJoined || (current && !isLive(current)) ? replaceCurrent(h, location) : push(h, location);
     });
   });
 
@@ -98,6 +110,29 @@ export function useNavigationHistory({
     refocusIfLost(focusTerminal);
   };
 
+  const endJoin = useRef<(() => void) | undefined>(undefined);
+  const joinTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const joinPressVisits = () => {
+    endJoin.current?.();
+    clearTimeout(joinTimer.current);
+    announced.current = true;
+    // The press ends with its release, or is taken away from the page (a cancelled pointer, the
+    // window losing focus), which no release follows.
+    const stop = () => {
+      for (const type of ["pointerup", "pointercancel"]) window.removeEventListener(type, release, true);
+      window.removeEventListener("blur", release);
+      endJoin.current = undefined;
+    };
+    const release = () => {
+      stop();
+      // After the press's own handlers have run, which is where a selection is made.
+      joinTimer.current = setTimeout(() => (announced.current = joining.current = false), 50);
+    };
+    for (const type of ["pointerup", "pointercancel"]) window.addEventListener(type, release, true);
+    window.addEventListener("blur", release);
+    endJoin.current = stop;
+  };
+
   const moveByShortcut = (backward: boolean) => {
     if (!windowChrome || document.querySelector(MODAL_OPEN)) return;
     move(backward ? -1 : 1);
@@ -110,5 +145,6 @@ export function useNavigationHistory({
     back: () => move(-1),
     forward: () => move(1),
     moveByShortcut,
+    joinPressVisits,
   };
 }

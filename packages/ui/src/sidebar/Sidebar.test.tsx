@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, type ComponentProps } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
@@ -33,10 +33,8 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-/** Mounts the sidebar in `first`'s focus mode with focus on the control `pick` finds, then moves it
- * to `next`'s, as pressing that control does; returns what holds focus once the hand-off has run,
- * and whether the control that held it is still in the document. */
-function focusAfterMove(first: FocusTarget, pick: (nav: HTMLElement) => HTMLElement | null, next: FocusTarget): { active: Element | null; pickedConnected: boolean } {
+/** Mounts the sidebar over a stand-in daemon; `render` mounts it again with other props. */
+function mountSidebar(initial: Partial<ComponentProps<typeof Sidebar>>) {
   const daemon: Daemon = {
     store: createStateStore({}),
     request: vi.fn(),
@@ -49,18 +47,26 @@ function focusAfterMove(first: FocusTarget, pick: (nav: HTMLElement) => HTMLElem
   const handlers = { onFocus: vi.fn(), onOpenDialog: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn(), onSwitchConsoleSession: vi.fn() } as unknown as SidebarHandlers;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  const render = (focus: FocusTarget) =>
+  const render = (props: Partial<ComponentProps<typeof Sidebar>>) =>
     act(() =>
       root.render(
         <DaemonProvider value={daemon}>
-          <Sidebar {...handlers} projects={[web]} sessions={sessions} currentConsole={main} focus={focus} open sidebarWidth={sidebarWidth} />
+          <Sidebar {...handlers} projects={[web]} sessions={sessions} shownConsole={main} open sidebarWidth={sidebarWidth} {...props} />
         </DaemonProvider>,
       ),
     );
-  render(first);
+  render(initial);
+  return { container, root, render };
+}
+
+/** Mounts the sidebar in `first`'s focus mode with focus on the control `pick` finds, then moves it
+ * to `next`'s, as pressing that control does; returns what holds focus once the hand-off has run,
+ * and whether the control that held it is still in the document. */
+function focusAfterMove(first: FocusTarget, pick: (nav: HTMLElement) => HTMLElement | null, next: FocusTarget): { active: Element | null; pickedConnected: boolean } {
+  const { container, root, render } = mountSidebar({ focus: first });
   const picked = pick(container.querySelector("nav")!);
   act(() => picked?.focus());
-  render(next);
+  render({ focus: next });
   // Focus fell to the body with the control that held it, as in a browser.
   (document.activeElement as HTMLElement | null)?.blur();
   act(() => void vi.advanceTimersByTime(100));
@@ -89,4 +95,34 @@ it("goes to the way out of focus mode when a project's focus mode gives way to a
     { consoleSession: hub1 },
   );
   expect(active?.hasAttribute("data-focus-exit")).toBe(true);
+});
+
+it.each([
+  [true, 1],
+  [false, 0],
+])("reports a press inside the sidebar while it is hidden-docked, and only then (peeking: %s)", (peeking, calls) => {
+  const onPeekPress = vi.fn();
+  const { container, root } = mountSidebar({
+    open: false,
+    peek: peeking ? { active: false, keep: vi.fn(), leave: vi.fn() } : undefined,
+    onPeekPress,
+  });
+  act(() => void container.querySelector("nav button")!.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })));
+  expect(onPeekPress).toHaveBeenCalledTimes(calls);
+  act(() => root.unmount());
+});
+
+it("shows the console it is given, and a hover alone commits nothing", () => {
+  const other = consoleOf("c-2", "Other");
+  const onPeekPress = vi.fn();
+  const { container, root } = mountSidebar({
+    shownConsole: other,
+    open: false,
+    peek: { active: true, keep: vi.fn(), leave: vi.fn() },
+    onPeekPress,
+  });
+  expect(container.querySelector("nav")!.textContent).toContain("Other");
+  act(() => void container.querySelector("nav")!.dispatchEvent(new MouseEvent("pointerover", { bubbles: true })));
+  expect(onPeekPress).not.toHaveBeenCalled();
+  act(() => root.unmount());
 });

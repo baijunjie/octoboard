@@ -17,12 +17,14 @@ sessions section's own menu and the archive view.
 
 The consoles are switched from the top of the rail, at the window's left edge (see "The rail" in
 `docs/product/window-layout.md`): one avatar per console (see "Avatar" in `docs/product/consoles-and-projects.md`), in
-the order the consoles were created, followed by **New console**. The console the sidebar shows has a tile behind its
-avatar and is announced as the current one. Pressing another avatar shows that console instead, its view fading in
-(see "How the sidebar's view changes" below); pressing it with the mouse leaves keyboard focus where it was. Each
-avatar's tooltip is its console's name. A console created from this window — by the rail's New console or the
-sidebar's own button when there is no console — is shown as soon as it appears; one created from another client is
-only added to the rail.
+the order the consoles were created, followed by **New console**. The console the sidebar shows is the **current
+console**; its avatar has a tile behind it and is announced as the current one. (A sidebar floating in to preview
+another console is the one exception, see "Previewing a console from the rail" below.) Pressing another avatar makes
+that console the current one, its view fading in (see "How the sidebar's view changes" below); pressing it with the
+mouse leaves keyboard focus where it was. Each avatar's tooltip is its console's name (when it opens is in "Tooltips
+on icon-only controls" in `docs/product/labels-and-tooltips.md`). A console created from this window — by the rail's
+New console or the sidebar's own button when there is no console — becomes the current one as soon as it appears; one
+created from another client is only added to the rail.
 
 An avatar carries a badge at its bottom corner while something is going on in its console, taken from all its
 sessions, its console sessions included, so a raised hand in a console that is not shown is in sight too:
@@ -39,11 +41,29 @@ The name assistive technology announces for an avatar is the console's name toge
 **Right-clicking** (or Control-clicking) an avatar opens that console's action menu at the pointer: **Add project**,
 **Edit console** and **Delete console**, as in the sidebar's header below. It does not switch to the console.
 
-**Which console is shown is remembered per client**, in that client's own browser storage, as the panes' widths are
+**The current console is remembered per client**, in that client's own browser storage, as the panes' widths are
 (see "Resizing the sidebar and the report panel" in `docs/product/window-layout.md`). A remembered console that no
 longer exists falls back to the first console. Switching console leaves focus mode; the selected session stays
 selected. Selecting a session anywhere switches the sidebar to that session's console (see "Selecting a session"
 below).
+
+### Previewing a console from the rail
+
+While the docked sidebar is hidden, at 1148 px and wider, resting the mouse on a console's avatar floats the sidebar
+in showing **that** console — when it comes up, how it looks and when it goes away are in "A hidden pane floats in on
+hover" in `docs/product/window-layout.md`. For any console other than the current one this is a **preview**:
+
+- It shows the console's own view — the header, its console sessions and its projects — never a focus mode, which
+  belongs to the current console only. Resting on the current console's avatar shows the sidebar as it is, focus mode
+  included. Moving from one avatar to another fades the new console's view in, as switching console does.
+- **Hovering changes nothing**: the current console, its tile on the rail, the remembered console and the window's
+  history all stay as they were.
+- **A press anywhere inside the floating sidebar**, with any mouse button, makes the previewed console the current
+  one, and the press then goes on to do what it does there — select a row, open a menu, start a dialog. Pressing the
+  avatar itself makes it current too, as always. In the window's history a press that makes the console current and
+  then selects a session counts as one visit (see "What counts as a place" in
+  `docs/product/navigation-history.md`).
+- Showing the sidebar for good with its toggle while it previews a console shows the current console.
 
 ## The console header
 

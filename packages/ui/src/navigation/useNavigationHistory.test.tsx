@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it, type Mock, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
@@ -210,5 +210,83 @@ describe("useNavigationHistory", () => {
       act(() => h.navigation.moveByShortcut(true));
       expect(h.shown().session).toBe("a");
     });
+  });
+});
+
+describe("joinPressVisits", () => {
+  /** A console and a session as separate state, as a press in the previewing sidebar changes them: the
+   * console on the press, the session on its release. */
+  function mountConsoles() {
+    let navigation!: Navigation;
+    let setConsole!: (id: string) => void;
+    let setSession!: (id: string) => void;
+    function Host() {
+      const [console_, setC] = useState("c-1");
+      const [session, setS] = useState<string>("s-1");
+      setConsole = setC;
+      setSession = setS;
+      navigation = useNavigationHistory({
+        location: { console: console_, session },
+        ready: true,
+        isLive: () => true,
+        apply: (target) => {
+          setC(target.console!);
+          setS(target.session!);
+        },
+        focusTerminal: () => {},
+      });
+      return null;
+    }
+    container = document.body.appendChild(document.createElement("div"));
+    root = createRoot(container);
+    act(() => root!.render(<PlatformProvider value={{ kind: "browser" }}><Host /></PlatformProvider>));
+    return { navigation: () => navigation, setConsole: (id: string) => act(() => setConsole(id)), setSession: (id: string) => act(() => setSession(id)) };
+  }
+  const release = (type = "pointerup") => {
+    window.dispatchEvent(new MouseEvent(type));
+    act(() => void vi.advanceTimersByTime(100));
+  };
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("records the console change and the selection that follows it before the release as one visit", () => {
+    const ui = mountConsoles();
+    ui.navigation().joinPressVisits();
+    ui.setConsole("c-2");
+    ui.setSession("s-2");
+    release();
+    act(() => ui.navigation().back());
+    // Straight back to where the press began, not to the console changed with the old session.
+    expect(ui.navigation().canGoBack).toBe(false);
+    act(() => ui.navigation().forward());
+    expect(ui.navigation().canGoForward).toBe(false);
+  });
+
+  it("keeps joining when a second press is announced just after the first one's release, and drops the first one's listeners", () => {
+    const removed = vi.spyOn(window, "removeEventListener");
+    const ui = mountConsoles();
+    ui.navigation().joinPressVisits();
+    window.dispatchEvent(new MouseEvent("pointerup"));
+    expect(removed.mock.calls.filter(([type]) => ["pointerup", "pointercancel", "blur"].includes(type))).toHaveLength(3);
+    act(() => void vi.advanceTimersByTime(20));
+    ui.navigation().joinPressVisits();
+    // The first release's reset timer would have fired here, ending the second press's join.
+    act(() => void vi.advanceTimersByTime(40));
+    ui.setConsole("c-2");
+    ui.setSession("s-2");
+    release();
+    act(() => ui.navigation().back());
+    expect(ui.navigation().canGoBack).toBe(false);
+    removed.mockRestore();
+  });
+
+  it.each(["pointerup", "pointercancel", "blur"])("leaves a selection made after the press ended (%s) as a visit of its own", (type) => {
+    const ui = mountConsoles();
+    ui.navigation().joinPressVisits();
+    ui.setConsole("c-2");
+    release(type);
+    ui.setSession("s-2");
+    act(() => ui.navigation().back());
+    expect(ui.navigation().canGoBack).toBe(true);
   });
 });

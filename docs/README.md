@@ -13,11 +13,12 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   switching a session to another account of its agent, how a console session's archive, reopen and delete follow the
   sessions bound to it, where archived sessions are kept, and the terminal.
 - [Sidebar](product/sidebar.md) — one console at a time, picked on the rail's console switcher with each console's
-  activity badge, the console header, the console sessions section and the project list, project and session rows and
-  their menus, the binding badge a bound session carries, keyboard focus on rows, the order of projects and sessions
-  and pinning, filtering the project list and folding every project from its heading, how the sidebar follows the
-  selected session, how its view changes are animated, the archive view, and right-clicking a row, header or rail
-  avatar for its action menu (and where focus goes when the menu closes).
+  activity badge, previewing another console from the rail while the sidebar is hidden, the console header, the
+  console sessions section and the project list, project and session rows and their menus, the binding badge a bound
+  session carries, keyboard focus on rows, the order of projects and sessions and pinning, filtering the project list
+  and folding every project from its heading, how the sidebar follows the selected session, how its view changes are
+  animated, the archive view, and right-clicking a row, header or rail avatar for its action menu (and where focus
+  goes when the menu closes).
 - [Focus mode](product/focus-mode.md) — a project's and a console session's focus mode: what each view lists, the
   switch strip of a console session's focus mode (its fixed chip order, the activity each chip carries, a click versus
   ⌃Tab / ⌃⇧Tab and which of them resumes an interrupted console session), leaving focus mode and what is remembered,
@@ -27,7 +28,7 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   shortcuts in the macOS app.
 - [Project git status](product/project-git-status.md) — the branch badge on a project's row and in focus mode's header:
   its glyphs for a branch, a detached `HEAD`, a check in flight and a fast-forward in flight, the ahead and behind
-  counts, the marker a failed check leaves and what it tells assistive technology; when and how often the shown
+  counts, the marker a failed check leaves and what it tells assistive technology; when and how often the current
   console's projects are checked against their remotes and what one check runs; and the Automatically sync
   repositories switch — what it fast-forwards, what it never does, where it is kept, and the immediate
   fast-forward pass turning it on runs.

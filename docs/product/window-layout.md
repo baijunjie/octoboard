@@ -73,11 +73,12 @@ not move anything.
 
 The rail runs from under the top bar to the window's bottom (or the connection banner). Its two ends hold:
 
-- **At the top, the consoles**: one avatar per console, in the order the consoles were created, the console the
-  sidebar shows marked by a tile behind its avatar, then **New console**, which opens the new-console dialog (see
-  "Consoles" in `docs/product/consoles-and-projects.md`). Choosing a console, what each avatar's badge says
-  and what a right-click on one offers are in "The console switcher" in `docs/product/sidebar.md`. When there are more
-  consoles than fit, the avatars scroll, with no scrollbar drawn; New console stays below them.
+- **At the top, the consoles**: one avatar per console, in the order the consoles were created, the current console
+  marked by a tile behind its avatar, then **New console**, which opens the new-console dialog (see "Consoles" in
+  `docs/product/consoles-and-projects.md`). Choosing a console, what each avatar's badge says and what a right-click
+  on one offers are in "The console switcher" in `docs/product/sidebar.md`. While the docked sidebar is hidden, resting
+  the mouse on an avatar floats the sidebar in showing that console (see "A hidden pane floats in on hover" below).
+  When there are more consoles than fit, the avatars scroll, with no scrollbar drawn; New console stays below them.
 - **At the bottom**, top to bottom:
   - the **waiting count**, a raised hand with the number of sessions waiting for the user in a badge at its top
     right, shown only while at least one is (99+ beyond 99); pressing it goes to the next waiting session (see "The
@@ -231,21 +232,31 @@ terminal.
 At 1148 px and wider, a hidden pane can be brought up for a moment without showing it for good. This is a **floating
 pane**:
 
-- **What brings it up**: the mouse staying for **200 ms** on a strip along the pane's edge — 8 px along the content
-  panel's left edge, beside the rail, for the sidebar, 4 px along the window's right edge for the report panel, both
-  from below the top bar to above the connection banner — or, at once, the mouse reaching the pane's toggle. A pointer
-  that only crosses a strip, on its way between the rail and the terminal, brings nothing up. Touch and pen do
-  neither.
-- **How it shows**: it slides in over the terminal in 200 ms (at once where the system asks for reduced motion), the
-  sidebar from the rail's edge, at the pane's chosen width — the report panel at most 92% of the window's width — with a
-  shadow and no dimming behind it. It overlays the terminal, so **the terminal is not resized** and the agent is sent no
-  size change.
-- **How it goes away**: it slides away 200 ms after the pointer leaves it, or leaves the toggle without moving onto it.
-  Once a pane has come up from its edge strip, the pointer's first move counts as leaving it when it lands outside the
-  place the pane is sliding into. `Escape` sends it away at once and **does not reach the running agent**; so does
+- **What brings up the sidebar**: the mouse resting for **130 ms** on a console's avatar on the rail, the current
+  console's or another's. The sidebar then shows the console whose avatar the mouse is on, which need not be the
+  current one; what that preview is and how a press inside it makes the console current is in "Previewing a console
+  from the rail" in `docs/product/sidebar.md`. While the sidebar is out, moving onto another avatar shows that console
+  at once, with no wait. A pointer that only crosses the avatars brings nothing up. Neither the sidebar toggle nor the
+  content panel's edge brings the sidebar up.
+- **What brings up the report panel**: the mouse staying for **200 ms** on a 4 px strip along the window's right edge,
+  from below the top bar to above the connection banner, or, at once, the mouse reaching the report toggle.
+- Touch and pen bring up neither.
+- **How it shows**: it slides in over the terminal in 200 ms (at once where the system asks for reduced motion), at the
+  pane's chosen width — the report panel at most 92% of the window's width — with a shadow and no dimming behind it.
+  It overlays the terminal, so **the terminal is not resized** and the agent is sent no size change.
+  - The **sidebar** floats as a card: it keeps an 8 px gap from the rail, from the top bar and from the window's
+    bottom (or the connection banner), has rounded corners all round and a border. It slides in from under the rail
+    and out again behind it, never drawn over the rail.
+  - The **report panel** slides in from the window's right edge and runs from the top bar to the window's bottom (or
+    the connection banner).
+- **How it goes away**: it slides away 200 ms after the pointer has left it. For the sidebar that means the pointer is
+  on neither the pane nor a console's avatar; for the report panel, on neither the pane nor the report toggle. Once the
+  report panel has come up from its edge strip, the pointer's first move counts as leaving it when it lands outside the
+  place the panel is sliding into. `Escape` sends it away at once and **does not reach the running agent**; so does
   `Escape` pressed inside a report page (see "Escape and F6 inside a page" in `docs/product/report-panel.md`). It stays
-  up, whatever the pointer does, while it holds keyboard focus or one of its menus is open. A floating pane that holds
-  keyboard focus as it goes away hands focus to the terminal.
+  up, whatever the pointer does, while it holds keyboard focus or while a menu or a dialog is open, such as one opened
+  from it. A floating pane that holds keyboard focus as it goes away hands focus to the terminal. A floating sidebar
+  previewing a console that is deleted goes away as if the pointer had left that console's avatar.
 - **Only one at a time**: bringing one up sends the other away.
 - **Pressing the toggle** while the pane is floating shows it for good: it joins the row, and keyboard focus stays
   where it was. Until then the toggle still reads "Show …".
@@ -311,7 +322,7 @@ Where focus lands in each region:
 | Region | Lands on |
 |---|---|
 | Top bar | its first enabled control |
-| Rail | the shown console's avatar, or the rail's first control when there is no console |
+| Rail | the current console's avatar, or the rail's first control when there is no console |
 | Sidebar | the selected session's row, or the sidebar's first control when that row is not on screen |
 | Archive view | its first control |
 | Terminal | the terminal, so typing reaches the agent |
@@ -348,11 +359,9 @@ parts of the window:
   the report panel on the left; the content panel's rounded corner is its top right. The top bar's Back, Forward and
   sidebar toggle are at its right end, in mirrored order, and the breadcrumb runs leftward from them, starting over the
   terminal's area while the sidebar is shown.
-- Drawers and floating panes come in from their own pane's side: the sidebar's from the rail's edge, the report
-  panel's from the window's left edge. The edge strips that bring up a hidden pane are on those sides too, but they
-  keep their physical widths: 4 px along the content panel's right edge, beside the rail, for the sidebar, 8 px along
-  the window's left edge for the report panel, so the 4 px strip is always on the right, beside the terminal's
-  scrollbar.
+- Drawers and floating panes come in from their own pane's side: the sidebar's from the rail's edge (a floating
+  sidebar from under the rail), the report panel's from the window's left edge. The edge strip that brings up a hidden
+  report panel is along the window's left edge too, and 8 px wide there rather than 4 px.
 - Each resize handle stays on its pane's inner edge, the sidebar's left edge and the report panel's right one.
   Dragging toward the terminal still widens the pane, and so does the arrow key pointing away from the pane.
 - Settings and the other dialogs are mirrored the same way, and toasts sit at the bottom left.

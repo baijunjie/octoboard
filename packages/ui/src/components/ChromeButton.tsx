@@ -35,8 +35,7 @@ export function ChromeButton({
    * `controls` is the region's id. */
   expanded?: boolean;
   controls?: string;
-  /** Called as a mouse pointer enters or leaves the button; touch and pen are ignored, as the
-   * edge hot zones ignore them (`useHover` filters out touch only). */
+  /** Called as a mouse pointer enters or leaves the button; touch and pen are ignored. */
   onMouseHoverChange?: (hovered: boolean) => void;
   tooltipPlacement?: "end";
   /** Layout classes for the button, beside its fills. */

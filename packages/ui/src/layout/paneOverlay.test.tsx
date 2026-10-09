@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { PeekHotZone } from "./paneOverlay";
+import { ReportPeekHotZone } from "./paneOverlay";
 import type { PanePeek } from "./usePaneToggles";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -19,21 +19,21 @@ afterEach(() => {
   root = container = undefined;
 });
 
-/** A sidebar that will end up spanning x 72..352 and y 40..800, wherever it is on its way. */
+/** A report panel that will end up spanning x 1160..1440 and y 40..800, wherever it is on its way. */
 function addPane(): void {
   const pane = document.body.appendChild(document.createElement("aside"));
-  pane.dataset.pane = "sidebar";
-  Object.defineProperties(pane, { offsetLeft: { value: 72 }, offsetWidth: { value: 280 } });
-  // Where it is on its way in: translated off to the left, so only its layout position tells where
+  pane.dataset.pane = "report";
+  Object.defineProperties(pane, { offsetLeft: { value: 1160 }, offsetWidth: { value: 280 } });
+  // Where it is on its way in: translated off to the right, so only its layout position tells where
   // it is going to be.
-  pane.getBoundingClientRect = () => ({ top: 40, bottom: 800, left: -208, right: 72 }) as DOMRect;
+  pane.getBoundingClientRect = () => ({ top: 40, bottom: 800, left: 1440, right: 1720 }) as DOMRect;
 }
 
 function mount(active = false) {
   const peek = { active, reveal: vi.fn(), keep: vi.fn(), leave: vi.fn() } satisfies PanePeek;
   container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
-  const render = (next: PanePeek) => act(() => root!.render(<PeekHotZone side="start" peek={next} />));
+  const render = (next: PanePeek) => act(() => root!.render(<ReportPeekHotZone peek={next} />));
   render(peek);
   return { peek, render };
 }
@@ -82,7 +82,7 @@ it("leaves a first move within the pane's final extent to the pane, even while i
   addPane();
   enter();
   wait(200);
-  move(80);
+  move(1200);
   move(700);
   expect(peek.leave).not.toHaveBeenCalled();
 });
@@ -92,7 +92,7 @@ it("counts a first move above or below the pane as leaving it", () => {
   addPane();
   enter();
   wait(200);
-  move(100, 20);
+  move(1200, 20);
   expect(peek.leave).toHaveBeenCalledTimes(1);
 });
 

@@ -3,11 +3,11 @@ import { useShallow } from "zustand/react/shallow";
 
 import { useDaemon, useDaemonStore } from "../store";
 
-/** How often the shown console's projects are re-checked. A constant, not a setting. */
+/** How often the current console's projects are re-checked. A constant, not a setting. */
 const REFRESH_INTERVAL_MS = 5 * 60_000;
 
 /** Whether `current` holds an id `known` does not — the signal that a project newly appeared in
- * the shown console. Pure, so it is tested on its own rather than through the hook; a plain count
+ * the current console. Pure, so it is tested on its own rather than through the hook; a plain count
  * comparison would miss a project removed and another added in the same tick, since the count
  * does not change. */
 export function hasNewProjectId(known: ReadonlySet<string>, current: readonly string[]): boolean {
@@ -15,15 +15,15 @@ export function hasNewProjectId(known: ReadonlySet<string>, current: readonly st
 }
 
 /**
- * Keeps the shown console's git statuses current: sends `refresh_git_status` for `consoleId` as
- * soon as it is shown, again every `REFRESH_INTERVAL_MS` for as long as it stays shown, and once
+ * Keeps the current console's git statuses current: sends `refresh_git_status` for `consoleId` as
+ * soon as it is current, again every `REFRESH_INTERVAL_MS` for as long as it stays current, and once
  * more on a `snapshotEpoch` bump, since the daemon may have restarted and lost the statuses it
- * was holding in memory. Sends nothing while no console is shown (`consoleId` undefined) or the
+ * was holding in memory. Sends nothing while no console is current (`consoleId` undefined) or the
  * control connection is down; switching consoles drops the previous one's interval instead of
  * running several at once.
  *
  * The interval is driven only by `consoleId`, `connectionState` and `snapshotEpoch`: a project
- * being added to or removed from the shown console must not restart the 5-minute clock, so that
+ * being added to or removed from the current console must not restart the 5-minute clock, so that
  * roster change is handled by the second effect below instead, which refreshes without touching
  * the timer.
  */
@@ -54,7 +54,7 @@ export function useGitStatusSchedule(consoleId: string | undefined): void {
     return () => clearInterval(interval);
   }, [consoleId, connectionState, snapshotEpoch, request]);
 
-  // A project appearing in the shown console — added, or moved in from another console — gets
+  // A project appearing in the current console — added, or moved in from another console — gets
   // checked right away rather than waiting for the next sweep. `knownIds` tracks the roster this
   // hook has already seen for the *current* console; switching consoles resyncs it without
   // sending a refresh of its own, since the effect above already sends a full one for the switch.

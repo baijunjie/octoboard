@@ -28,8 +28,12 @@
   /* The left rail under the top bar (`Rail.tsx`): the window chrome's second half, at the reading
      direction's start. The content panel starts where it ends (the panel's own 1px start border
      overlaps the rail's last pixel, so that is also where the sidebar starts), which is what the
-     docked arithmetic above counts. Pane drawers and the pointer's hot zone start there too. */
+     docked arithmetic above counts. Pane drawers start there too. */
   --rail-width: 48px;
+
+  /* The gap a floating sidebar keeps from the rail, the top bar and the window's bottom
+     (`drawerClass` in `layout/paneOverlay.tsx`). */
+  --peek-gap: 8px;
 
   /* Where the content area starts: right below the top bar. Anything that overlays the content
      area, or runs along an edge that starts there, starts at this offset rather than at the window

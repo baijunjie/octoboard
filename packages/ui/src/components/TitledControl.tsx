@@ -18,6 +18,7 @@ export function TitledControl({
   title,
   children,
   placement,
+  focusOnly,
 }: {
   title: string | undefined;
   children: React.ReactElement;
@@ -25,10 +26,12 @@ export function TitledControl({
    * reading direction's, so a control on a vertical strip at the window's start edge opens it
    * toward the content under either direction. */
   placement?: "end";
+  /** The tooltip opens on keyboard focus only, not on hover. */
+  focusOnly?: boolean;
 }): React.ReactElement {
   if (!title) return children;
   return (
-    <Tooltip>
+    <Tooltip trigger={focusOnly ? "focus" : undefined}>
       {children}
       <Tooltip.Content placement={placement} className="pointer-events-none">{title}</Tooltip.Content>
     </Tooltip>

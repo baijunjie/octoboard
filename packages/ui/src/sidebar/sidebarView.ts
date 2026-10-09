@@ -6,7 +6,7 @@ import type { Console, Project, Session } from "../protocol";
 import { focusKey, resolveFocus } from "./focus";
 import type { FocusTarget } from "./types";
 
-/** The console the sidebar shows, and what is in focus mode, if anything. Kept per window profile in
+/** The current console, which the sidebar shows, and what is in focus mode, if anything. Kept per window profile in
  * `localStorage`, like the panes' visibility: a convenience, so a stored id that no longer names a
  * record is simply ignored. */
 const consolePreference = createPersistedPreference<string | undefined>(
