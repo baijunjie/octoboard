@@ -20,7 +20,7 @@ use std::sync::Arc;
 use anyhow::{bail, Result};
 
 use crate::outbox::Drain;
-use crate::protocol::{error_code, Agent, CodedError, Role, Session, SessionStatus};
+use crate::protocol::{error_code, CodedError, Role, Session, SessionStatus};
 use crate::state::AppState;
 use crate::{coordinator, hooks, term};
 
@@ -89,7 +89,10 @@ pub enum WhenBlocked {
 /// state through terminal modes, and a write while a modal dialog is up has its trailing Enter
 /// confirm whatever option is highlighted — at Claude Code's trust dialog that exits the session, at
 /// Grok's approval modal it selects always-approve. Working and idle are both safe: every agent
-/// queues a message written mid-turn and consumes it when the turn ends.
+/// queues a message written mid-turn and consumes it when the turn ends. The one thing that comes
+/// before any hook is each agent's own trust screen, which the trailing Enter would answer — Codex
+/// and Grok Build would take it as trusting the folder — so a session whose trust watch still holds
+/// writes (`TrustState::holds_writes`) is blocked as well.
 ///
 /// **Blocks** on the PTY write; callers on the runtime are responsible for keeping it off a worker.
 pub fn write_message(
@@ -116,6 +119,17 @@ pub fn write_message(
             &[("session", id)],
         ));
     }
+    let at_trust_screen = state
+        .live_session(id)
+        .is_some_and(|live| live.trust.holds_writes());
+    if at_trust_screen && when_blocked == WhenBlocked::Refuse {
+        return Err(CodedError::raised(
+            error_code::SESSION_TRUST_PENDING,
+            "this session's agent is showing, or may be about to show, its folder-trust \
+             confirmation; send the message once that has been answered",
+            &[("session", id)],
+        ));
+    }
 
     // Queued even when the session looks ready, so messages cannot overtake one another.
     state.queue_message(id, text);
@@ -127,25 +141,6 @@ pub fn write_message(
             lost_message(),
             &[],
         )),
-    }
-}
-
-/// Releases whatever is queued for a session that has just been relaunched, where the agent will not
-/// release it itself. Called on every relaunch, so most calls find an empty queue.
-///
-/// The instruction is queued rather than written because the session's status after a relaunch is
-/// Octoboard's own doing, not something a hook reported — and the agent may be sitting on its own
-/// trust or approval dialog, where the paste's trailing Enter confirms whatever option is
-/// highlighted: at Claude Code's trust dialog that exits the session, at Grok's approval modal it
-/// selects always-approve. Those two each report a status as they start, which releases it.
-///
-/// Codex does not: its `SessionStart` does not fire until the first prompt submission, because the
-/// thread is created lazily then, so nothing it reports would release the queue before the user
-/// typed. Writing to it unprompted is safe where it would not be for the other two — a paste at a
-/// Codex modal changes nothing.
-pub fn release_after_relaunch(state: &Arc<AppState>, session: &Session) {
-    if session.agent == Agent::Codex {
-        state.spawn_flush_outbox(&session.id, SessionStatus::Idle);
     }
 }
 
@@ -370,7 +365,7 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
-    use crate::protocol::{Origin, Role, SessionStatus};
+    use crate::protocol::{Agent, Origin, Role, SessionStatus};
 
     fn project_session(title: &str) -> Session {
         Session {

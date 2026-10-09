@@ -10,7 +10,7 @@ const project = (name: string, tags: string[]): Project => ({
   name,
   path: `/${name}`,
   source: "local",
-  claude_trust_consent: false,
+  trust_consent: false,
   pinned: false,
   tags,
 });

@@ -13,7 +13,7 @@ use tokio::sync::mpsc;
 use crate::protocol::Agent;
 use crate::ptyio;
 use crate::ringbuf::RingBuffer;
-use crate::trust::TrustState;
+use crate::trust::{CarriedTrust, TrustState};
 
 /// Terminal replay buffer per session.
 pub const RING_CAPACITY: usize = 2 * 1024 * 1024;
@@ -84,8 +84,7 @@ pub struct LiveSession {
     /// with no dialog ever shown. A raised hand here would ask the user to answer something they
     /// never see.
     pub resolves_approvals_itself: bool,
-    /// Watches a Claude Code session's output for its workspace-trust screen; inert for the other
-    /// agents.
+    /// Watches the session's output for its agent's folder-trust confirmation.
     pub trust: TrustState,
     /// How many times anything but the trust path has written into this session's input. An
     /// attached terminal's own protocol replies (focus reports, answers to the agent's terminal
@@ -107,6 +106,9 @@ pub struct NewSession {
     pub child: Box<dyn Child + Send + Sync>,
     pub scratch_dir: Option<std::path::PathBuf>,
     pub resolves_approvals_itself: bool,
+    /// Grok's: where the trust it records when its confirmation is pressed is carried from and to;
+    /// see `adapter::LaunchPlan::carried_trust`.
+    pub carried_trust: Option<CarriedTrust>,
 }
 
 impl LiveSession {
@@ -129,7 +131,7 @@ impl LiveSession {
             final_output_kept: Mutex::new(false),
             scratch_dir: Mutex::new(session.scratch_dir),
             resolves_approvals_itself: session.resolves_approvals_itself,
-            trust: TrustState::new(session.agent),
+            trust: TrustState::new(session.agent, session.carried_trust),
             input_writes: AtomicU64::new(0),
             input_lock: Mutex::new(()),
         }
@@ -205,17 +207,22 @@ impl LiveSession {
     /// frame size tested.
     pub fn on_output(&self, data: &[u8]) {
         let chunk = Bytes::copy_from_slice(data);
-        let targets: Vec<(u64, mpsc::Sender<Bytes>)> = {
+        let (targets, total): (Vec<(u64, mpsc::Sender<Bytes>)>, u64) = {
             let mut fan = self.fan.lock().expect("fan mutex poisoned");
             fan.ring.push(data);
             fan.total += data.len() as u64;
-            fan.subscribers
+            let targets = fan
+                .subscribers
                 .iter()
                 .map(|sub| (sub.id, sub.tx.clone()))
-                .collect()
+                .collect();
+            (targets, fan.total)
         };
 
-        self.trust.feed(data);
+        // The count without its lock: a writer holds that lock while the agent may be waiting for
+        // this very thread to drain its output.
+        self.trust
+            .feed(data, self.input_writes.load(Ordering::Acquire), total);
 
         let mut dropped = Vec::new();
         for (id, tx) in targets {
@@ -235,9 +242,11 @@ impl LiveSession {
     /// Counted: every writer but the trust path comes through here, which is how the trust path
     /// learns that someone else has typed into the session since it last looked. A write made up
     /// only of what an attached terminal sends by itself — focus reports, replies to the agent's
-    /// terminal queries — is not counted: Claude Code turns focus reporting on as it draws the trust
-    /// screen, so an attached terminal writes that traffic all the time and none of it can move
-    /// the cursor.
+    /// terminal queries, mouse movement, wheel turns and button releases — is not counted: Claude
+    /// Code turns focus reporting on as it draws its trust screen, and Grok Build turns on
+    /// reporting every mouse movement as it draws its own, so an attached terminal writes that
+    /// traffic all the time and none of it answers a screen. A mouse button press is counted: it
+    /// is the person acting.
     pub fn write_input(&self, data: &[u8]) -> Result<(), ptyio::PartialWrite> {
         let _input = self.input_lock.lock().expect("input mutex poisoned");
         if !is_terminal_protocol(data) {
@@ -408,9 +417,17 @@ impl LiveSession {
 
 /// Whether a chunk written to a session's input is nothing but a terminal's own protocol traffic:
 /// focus in/out (`CSI I`, `CSI O`), device attributes (`CSI … c`), cursor position (`CSI … R`),
-/// mode reports (`CSI … $ y`), window reports (`CSI … t`), status reports (`CSI … n`), and operating
-/// system or device control string replies. Conservative: an empty chunk, any other byte, any other
-/// final byte — the arrow keys included — and a sequence cut short all say no.
+/// mode reports (`CSI … $ y`), window reports (`CSI … t`), status reports (`CSI … n`), mouse
+/// movement, wheel and button-release reports (`CSI < b;x;y M` with the motion bit, 32, or the
+/// wheel bit, 64, set in `b`, and `CSI < … m`; the older `CSI M` with three bytes alike), and
+/// operating system or device control string replies. Conservative: an empty chunk, any other
+/// byte, any other final byte — the arrow keys included — a mouse button press, and a sequence cut
+/// short all say no.
+///
+/// Movement and the wheel are let through because Grok Build reports every mouse movement while
+/// its trust screen is up, and a pointer passing or scrolling over the terminal is not the person
+/// answering it. Where mouse reporting is off, as at Codex's screen, the terminal turns the wheel
+/// into arrow keys, which are counted.
 fn is_terminal_protocol(chunk: &[u8]) -> bool {
     if chunk.is_empty() {
         return false;
@@ -421,6 +438,18 @@ fn is_terminal_protocol(chunk: &[u8]) -> bool {
             return false;
         }
         match chunk.get(at + 1) {
+            // The older mouse report: `M` and three bytes of button and position.
+            Some(b'[') if chunk.get(at + 2) == Some(&b'M') => {
+                if chunk.len() < at + 6 || chunk[at + 3..at + 6].iter().any(|byte| *byte < 0x20) {
+                    return false;
+                }
+                // A release is button 3; movement has the motion bit, the wheel its own bit.
+                let button = chunk[at + 3] - 0x20;
+                if button & (32 | 64) == 0 && button & 3 != 3 {
+                    return false;
+                }
+                at += 6;
+            }
             Some(b'[') => {
                 at += 2;
                 let start = at;
@@ -433,6 +462,14 @@ fn is_terminal_protocol(chunk: &[u8]) -> bool {
                 let known = match final_byte {
                     b'I' | b'O' | b'c' | b'R' | b't' | b'n' => true,
                     b'y' => chunk[start..at].contains(&b'$'),
+                    b'm' => chunk.get(start) == Some(&b'<'),
+                    b'M' => {
+                        chunk.get(start) == Some(&b'<')
+                            && std::str::from_utf8(&chunk[start + 1..at])
+                                .ok()
+                                .and_then(|params| params.split(';').next()?.parse::<u32>().ok())
+                                .is_some_and(|button| button & (32 | 64) != 0)
+                    }
                     _ => false,
                 };
                 if !known {
@@ -533,6 +570,12 @@ mod tests {
             b"\x1b]11;rgb:0000/0000/0000\x1b\\",
             b"\x1bP>|xterm.js\x1b\\",
             b"\x1b[I\x1b[?1;2c\x1b]10;rgb:ffff/ffff/ffff\x07",
+            b"\x1b[<35;12;7M",
+            b"\x1b[<0;12;7m",
+            b"\x1b[M#,'",
+            b"\x1b[MC,'",
+            b"\x1b[<64;12;7M",
+            b"\x1b[Ma,'",
         ] {
             assert!(is_terminal_protocol(protocol), "{protocol:?}");
         }
@@ -557,6 +600,12 @@ mod tests {
             b"\x1bP>|xterm\x07.js\x1b\\",
             b"\x1bP>|xterm.js",
             b"\x1bOB",
+            b"\x1b[35;12;7M",
+            b"\x1b[M#",
+            b"\x1b[<35;12;7",
+            b"\x1b[<0;12;7M",
+            b"\x1b[<0;12;7M\x1b[<0;12;7m",
+            b"\x1b[M ,'",
         ] {
             assert!(!is_terminal_protocol(input), "{input:?}");
         }

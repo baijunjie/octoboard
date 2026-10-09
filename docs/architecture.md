@@ -126,8 +126,8 @@ IPC, no shared state.** Hooks and the MCP server of a session point at the daemo
 - **Detecting the raised hand is limited by what the hooks expose**, not by Octoboard: a question asked as plain prose
   is indistinguishable from a finished turn on all three agents, and that is a known gap rather than something to work
   around with terminal-text matching. State is read from hooks, never from rendered output, because that would need a
-  VT emulator in the daemon and differs between an agent's own renderers. The one exception is Claude Code's
-  workspace-trust screen, which no hook precedes and so can only be recognized in the output.
+  VT emulator in the daemon and differs between an agent's own renderers. The one exception is each agent's own
+  folder-trust confirmation, which no hook precedes and so can only be recognized in the output.
 
 ## Known pitfalls of the Tauri / Rust approach
 

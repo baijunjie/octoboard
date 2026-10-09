@@ -8,9 +8,10 @@ import { useDaemon, useDaemonStore } from "../store";
 import { SettingRow } from "./SettingRow";
 import { useSectionRefocus } from "./useSectionRefocus";
 
-/** The folders under which Octoboard answers Claude Code's trust prompt for every project, with a
- * way to stop each. Stopping leaves each project's own consent and every running session as it is
- * (see "Trusted folders" in `docs/product/launching-agents.md`). */
+/** The folders under which Octoboard presses every agent's trust confirmation for every project —
+ * the parent-directory form of the one permission all agents share — with a way to stop each.
+ * Stopping leaves each project's own permission, every running session and the trust each agent
+ * has already recorded as they are (see "Trusted folders" in `docs/product/folder-trust.md`). */
 export function TrustedFoldersSection(): React.ReactElement {
   const t = useT();
   const { request, toastError } = useDaemon();

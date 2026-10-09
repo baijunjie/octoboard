@@ -12,22 +12,28 @@
 //! leaves the rest of the prompt byte-identical. Not `instructions`, which *replaces* the system
 //! prompt.
 //!
-//! Two conditions are launch prerequisites rather than polish:
+//! Codex's update check is turned off for each launch (`check_for_update_on_startup=false`): its
+//! "Update now / Skip" prompt would otherwise sit in front of the trust screen Octoboard watches
+//! for. Only the launch is affected; the user's own setting is left as it is.
 //!
-//! - **Project trust.** Without it the folder-trust modal appears. The table must be passed whole
-//!   (`-c 'projects={"<path>"={trust_level="trusted"}}'`) because `-c` splits its key on `.` and
-//!   silently ignores a dotted path containing a quoted segment, and the path has to be the
-//!   canonical one — `/private/tmp/…`, not `/tmp/…`.
-//! - **Hook trust.** Codex gates any new or changed hook behind a persisted trust hash. Without it
-//!   an interactive session raises a blocking review modal and no hook runs, and a headless one
-//!   hangs indefinitely with no output at all. `--dangerously-bypass-hook-trust` is the verified
-//!   way through; despite the name it weakens neither the sandbox nor the approval policy, it only
-//!   skips the review of hooks Octoboard generated itself. The cost — two warning lines on every
-//!   launch — is permanent short of redesigning the injection so the hook command is
-//!   session-independent: the hash is taken over the handler definition, which includes the hook
-//!   command, and that command is the session's own hook script path, so seeding `hooks.state`
-//!   with hashes shipped with the adapter cannot work — no hash captured once could ever match a
-//!   different session's.
+//! Two kinds of trust are involved, and they are handled differently:
+//!
+//! - **Project trust** is not passed. In a git repository Codex has not been told to trust, it
+//!   shows its own "Trust this folder?" confirmation, which Octoboard presses under the user's
+//!   permission (`crate::trust`); Codex then records `trust_level = "trusted"` for the repository
+//!   root in its own `config.toml`, so a later launch is trusted from the start. A per-launch
+//!   `projects` override would be saved nowhere, and would mark the folder trusted on the user's
+//!   behalf.
+//! - **Hook trust** is a launch prerequisite. Codex gates any new or changed hook behind a
+//!   persisted trust hash. Without it an interactive session raises a blocking review modal and no
+//!   hook runs, and a headless one hangs indefinitely with no output at all.
+//!   `--dangerously-bypass-hook-trust` is the verified way through; despite the name it weakens
+//!   neither the sandbox nor the approval policy, it only skips the review of hooks Octoboard
+//!   generated itself. The cost — two warning lines on every launch — is permanent short of
+//!   redesigning the injection so the hook command is session-independent: the hash is taken over
+//!   the handler definition, which includes the hook command, and that command is the session's
+//!   own hook script path, so seeding `hooks.state` with hashes shipped with the adapter cannot
+//!   work — no hash captured once could ever match a different session's.
 //!
 //! One of the user's own settings changes what Octoboard may promise: with `approvals_reviewer`
 //! set to auto review, Codex resolves an approval request itself — the `PermissionRequest` hook
@@ -101,16 +107,6 @@ impl AgentAdapter for CodexAdapter {
             args.push(id.to_string());
         }
 
-        let canonical_cwd = std::fs::canonicalize(spec.cwd)
-            .unwrap_or_else(|_| spec.cwd.to_path_buf())
-            .to_string_lossy()
-            .into_owned();
-        args.push("-c".to_string());
-        args.push(format!(
-            "projects={{{}={{trust_level=\"trusted\"}}}}",
-            toml_string(&canonical_cwd)
-        ));
-
         let command = spec.hook_script.to_string_lossy().into_owned();
         for event in HOOK_EVENTS {
             args.push("-c".to_string());
@@ -145,6 +141,11 @@ impl AgentAdapter for CodexAdapter {
         args.push(format!(
             "mcp_servers.{key}.default_tools_approval_mode=\"auto\""
         ));
+
+        // Codex's own update prompt ("Update now / Skip") would otherwise come up before its trust
+        // screen, unrecognised and in the way of it. Off for this launch only.
+        args.push("-c".to_string());
+        args.push("check_for_update_on_startup=false".to_string());
 
         args.push("-c".to_string());
         args.push(format!(
@@ -237,22 +238,21 @@ mod tests {
             .collect()
     }
 
+    /// Project trust is Codex's own to record when its confirmation is pressed, so it is never
+    /// passed for one launch; the update prompt, which would come up before that confirmation, is
+    /// turned off for the launch.
     #[test]
-    fn passes_the_project_trust_table_whole_and_canonicalised() {
+    fn passes_no_project_trust_and_no_update_check() {
         let fixture = spec_fixture();
         let plan = CodexAdapter.plan(&fixture.spec()).expect("plan");
-        let canonical = std::fs::canonicalize(&fixture.cwd).expect("canonical path");
-        let expected = format!(
-            "projects={{{:?}={{trust_level=\"trusted\"}}}}",
-            canonical.to_string_lossy()
-        );
-        // The whole table in one override: `-c` splits its key on `.`, so a dotted path with a
-        // quoted segment is accepted and then silently ignored.
+        let overrides = overrides(&plan.args);
         assert!(
-            overrides(&plan.args).contains(&expected),
-            "expected {expected} among {:?}",
-            overrides(&plan.args)
+            !overrides
+                .iter()
+                .any(|override_| override_.starts_with("projects")),
+            "{overrides:?}"
         );
+        assert!(overrides.contains(&"check_for_update_on_startup=false".to_string()));
     }
 
     #[test]

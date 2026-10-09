@@ -192,6 +192,11 @@ pub struct LaunchPlan {
     /// Something about this launch the user has to be told, because the agent will not tell them
     /// in a way they can act on. Surfaced once, when the session starts.
     pub notice: Option<Notice>,
+    /// Where the agent records the trust its confirmation grants when that record cannot reach the
+    /// user's own configuration by itself, and so has to be carried there once the confirmation is
+    /// accepted, by Octoboard's press or in the terminal. Only Grok, whose trust store lives in the
+    /// per-session home.
+    pub carried_trust: Option<crate::trust::CarriedTrust>,
 }
 
 pub trait AgentAdapter {

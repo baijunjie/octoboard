@@ -106,7 +106,7 @@ impl Store {
                 default_agent TEXT,
                 source        TEXT NOT NULL,
                 remote_url    TEXT,
-                claude_trust_consent INTEGER NOT NULL DEFAULT 0,
+                trust_consent INTEGER NOT NULL DEFAULT 0,
                 pinned        INTEGER NOT NULL DEFAULT 0,
                 tags          TEXT NOT NULL DEFAULT '[]'
             );
@@ -167,11 +167,19 @@ impl Store {
         // No migration runs here: the application has not shipped, so a database whose schema is
         // not this one has already been moved aside by `supersede_if_outdated`, above, rather than
         // upgraded in place. `CREATE TABLE IF NOT EXISTS` therefore only ever meets either a brand
-        // new file or one already in this shape. The one exception: an optional setting gained
-        // after a database was created is added in place, since moving the file aside would cost
-        // the user every project over a setting that has a default.
+        // new file or one already in this shape. Two exceptions are changed in place, since moving
+        // the file aside would cost the user every console, project and account over a change
+        // that loses nothing: an optional setting gained after a database was created is added,
+        // and the project's trust permission, once Claude Code's alone and now shared by every
+        // agent, is renamed with its values kept.
         if !column_exists(&conn, "settings", "default_clone_dir")? {
             conn.execute("ALTER TABLE settings ADD COLUMN default_clone_dir TEXT", [])?;
+        }
+        if column_exists(&conn, "projects", "claude_trust_consent")? {
+            conn.execute(
+                "ALTER TABLE projects RENAME COLUMN claude_trust_consent TO trust_consent",
+                [],
+            )?;
         }
         let store = Self {
             conn: Mutex::new(conn),
@@ -371,7 +379,7 @@ impl Store {
     pub fn insert_project(&self, project: &Project) -> Result<()> {
         self.lock().execute(
             "INSERT INTO projects (id, console_id, host_id, name, path, default_agent, source,
-                                   remote_url, claude_trust_consent, pinned, tags)
+                                   remote_url, trust_consent, pinned, tags)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 project.id,
@@ -382,7 +390,7 @@ impl Store {
                 project.default_agent.as_ref().map(enum_to_text),
                 enum_to_text(&project.source),
                 project.remote_url,
-                project.claude_trust_consent,
+                project.trust_consent,
                 project.pinned,
                 tags_to_text(&project.tags),
             ],
@@ -390,12 +398,12 @@ impl Store {
         Ok(())
     }
 
-    /// Records the user's agreement (or its withdrawal) that Octoboard may answer Claude Code's
-    /// trust screen for this project. Its own statement rather than a field of `update_project`,
-    /// which is the user's edit of the project and never reaches this decision.
-    pub fn set_project_claude_trust_consent(&self, id: &str, consent: bool) -> Result<()> {
+    /// Records the user's permission (or its withdrawal) for Octoboard to press any agent's trust
+    /// confirmation for this project without asking. Its own statement rather than a field of
+    /// `update_project`, which is the user's edit of the project and never reaches this decision.
+    pub fn set_project_trust_consent(&self, id: &str, consent: bool) -> Result<()> {
         self.lock().execute(
-            "UPDATE projects SET claude_trust_consent = ?2 WHERE id = ?1",
+            "UPDATE projects SET trust_consent = ?2 WHERE id = ?1",
             params![id, consent],
         )?;
         Ok(())
@@ -464,8 +472,8 @@ impl Store {
 
     // -- trusted directories -------------------------------------------------
 
-    /// The directories the user has agreed Octoboard may answer Claude Code's trust screen under,
-    /// as stored: absolute and lexically normalised by whoever wrote them.
+    /// The directories under which the user has agreed Octoboard may press any agent's trust
+    /// confirmation, as stored: absolute and lexically normalised by whoever wrote them.
     pub fn trusted_directories(&self) -> Result<Vec<String>> {
         let conn = self.lock();
         let mut stmt = conn.prepare("SELECT path FROM trusted_directories ORDER BY path")?;
@@ -869,7 +877,8 @@ const CURRENT_SHAPE_COLUMNS: [(&str, &str); 3] = [
 /// has ever carried one of those also carries the rest of the shape as of its own milestone, so
 /// the two columns together tell an outdated table apart from a current one. A `pages` table that
 /// still names the console rather than the console session (milestone 9) is outdated the same way;
-/// see [`CURRENT_SHAPE_COLUMNS`].
+/// see [`CURRENT_SHAPE_COLUMNS`]. A `projects` table whose trust permission column still has its
+/// older name is not: `Store::open` renames that column in place.
 ///
 /// The old file is renamed rather than deleted, so a user who needs what was in it still has it on
 /// disk; see "the files Octoboard keeps under `~/.octoboard`" in
@@ -920,7 +929,7 @@ fn supersede_if_outdated(path: &Path) -> Result<()> {
 }
 
 const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agent, source,
-                               remote_url, claude_trust_consent, pinned, tags";
+                               remote_url, trust_consent, pinned, tags";
 
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
                                role, origin, title, status, has_conversation, bound_to, colour,
@@ -1025,7 +1034,7 @@ fn read_project(row: &Row<'_>) -> rusqlite::Result<Project> {
         default_agent: enum_from_row_opt::<Agent>(row, 5)?,
         source: enum_from_row::<ProjectSource>(row, 6)?,
         remote_url: row.get(7)?,
-        claude_trust_consent: row.get(8)?,
+        trust_consent: row.get(8)?,
         pinned: row.get(9)?,
         tags,
     })
@@ -1224,6 +1233,32 @@ mod tests {
         );
     }
 
+    /// A database from before the trust permission was shared keeps its projects, each with the
+    /// permission it had, under the column's new name.
+    #[test]
+    fn the_older_trust_permission_column_is_renamed_in_place() {
+        let path = temp_db("trust-consent-rename");
+        {
+            let store = Store::open(&path).expect("store");
+            store
+                .insert_console(&console(None, None, None))
+                .expect("console");
+            store.insert_project(&project(true)).expect("project");
+        }
+        {
+            let conn = Connection::open(&path).expect("database");
+            conn.execute(
+                "ALTER TABLE projects RENAME COLUMN trust_consent TO claude_trust_consent",
+                [],
+            )
+            .expect("the older name");
+        }
+
+        let store = Store::open(&path).expect("reopened in place");
+        let project = store.get_project("project-1").unwrap().expect("kept");
+        assert!(project.trust_consent);
+    }
+
     /// A reporter whose conclusion only holds while the session has not moved on writes through
     /// this, so the check and the write must be one step: it moves the session only from the status
     /// it expected, and says which happened.
@@ -1283,7 +1318,7 @@ mod tests {
             default_agent: None,
             source: ProjectSource::Local,
             remote_url: None,
-            claude_trust_consent: consent,
+            trust_consent: consent,
             pinned: false,
             tags: Vec::new(),
         }
@@ -1344,24 +1379,24 @@ mod tests {
                 .get_project("project-1")
                 .unwrap()
                 .unwrap()
-                .claude_trust_consent
+                .trust_consent
         };
         assert!(!consented(&store));
 
         store
-            .set_project_claude_trust_consent("project-1", true)
+            .set_project_trust_consent("project-1", true)
             .expect("recorded");
         assert!(consented(&store));
-        assert!(store.list_projects().unwrap()[0].claude_trust_consent);
+        assert!(store.list_projects().unwrap()[0].trust_consent);
 
         let mut edited = store.get_project("project-1").unwrap().unwrap();
         edited.name = "Renamed".to_string();
-        edited.claude_trust_consent = false;
+        edited.trust_consent = false;
         store.update_project(&edited).expect("edited");
         assert!(consented(&store), "an edit must not withdraw the consent");
 
         store
-            .set_project_claude_trust_consent("project-1", false)
+            .set_project_trust_consent("project-1", false)
             .expect("withdrawn");
         assert!(!consented(&store));
     }

@@ -13,28 +13,31 @@ This is the guarantee the whole design rests on:
   thing Octoboard does to a project directory on its own account, the user has to turn on first: with
   **Automatically sync repositories** on, a project's branch is fast-forwarded when it is behind its upstream, which
   moves its working tree (see "Automatically syncing repositories" in `docs/product/project-git-status.md`).
-- **The user's own agent configuration is never written to, with one narrow exception.** Octoboard does not edit
+- **The user's own agent configuration is never written to, with two narrow exceptions.** Octoboard does not edit
   `~/.claude.json`, `~/.codex/`, `~/.grok/`, an account's config directory, or anything else the agent reads as the
-  user's global setup, and it never writes a trust decision into any of them. The exception is switching a session to
-  another account (see "Switching a session's account" in `docs/product/sessions.md`): it copies the one conversation
-  record of that one session into the target account's directory, adding it there or replacing an earlier copy of the
-  same record. It builds the copy in a transient `.octoboard-switch` directory at the root of the target directory,
-  which it removes again, so a failure never leaves a half-written record among the agent's own. It touches no settings
-  file of the agent's, none of the other records in either directory, and it leaves the original where it was.
-  Creating a Codex account's directory that does not exist yet, empty, before its first launch is not an exception:
-  Codex refuses to start without it, and nothing of the user's is in it.
+  user's global setup, and it never makes a trust decision of its own in any of them. The first exception is switching
+  a session to another account (see "Switching a session's account" in `docs/product/sessions.md`): it copies the one
+  conversation record of that one session into the target account's directory, adding it there or replacing an
+  earlier copy of the same record. It builds the copy in a transient `.octoboard-switch` directory at the root of the
+  target directory, which it removes again, so a failure never leaves a half-written record among the agent's own. It
+  touches no settings file of the agent's, none of the other records in either directory, and it leaves the original
+  where it was. The second is Grok Build's trust store: once Grok's own trust confirmation has been accepted, the one
+  entry Grok wrote into its session's copy of the store is carried, unchanged, into the user's own (see "Carrying Grok
+  Build's trust record" in `docs/product/folder-trust.md`). Creating a Codex account's directory that does not exist
+  yet, empty, before its first launch is not an exception: Codex refuses to start without it, and nothing of the
+  user's is in it.
 
-Where Claude Code stops to ask whether to trust a folder, Octoboard does not touch a file either: it
-answers the prompt on Claude Code's own screen, with the keystrokes a person would type — for a project
-session only after the user has agreed to that in Octoboard, for a console session in the console's own
-working directory without asking. Claude Code then records the answer in its own configuration, as it
-does when a person answers. See "Claude Code's workspace-trust prompt" below.
+Where an agent stops to ask whether to trust a folder, Octoboard decides nothing on its behalf: it presses the
+agent's own confirmation, with the keystrokes a person would type — for a project session only after the user has
+given Octoboard permission, for a console session in the console's own working directory without asking — and the
+agent records the trust in its own configuration, as it does when a person answers. See
+`docs/product/folder-trust.md`.
 
 Two settings of theirs are *read* at launch and never written: whether Claude Code has been trusted
 with the project's directory, and whether Codex resolves approval requests by itself. Each one
 changes what Octoboard can promise for that session (see "Per-agent specifics a user will notice"
 below and "The raised hand" in `docs/product/sessions.md`). The Codex setting remains the user's to
-change in Codex itself; Claude Code's trust is given by answering its trust prompt.
+change in Codex itself; Claude Code's trust is given by answering its trust confirmation.
 
 Everything Octoboard adds is injected **per launch** and disappears with the process. In consequence, a project's own
 configuration keeps working exactly as it does outside Octoboard: its instruction file, its skills, its hooks and its
@@ -157,9 +160,9 @@ starts. The flags that would drop the project's own permission rules, hooks or M
 When Claude Code has **not been trusted with the project's directory**, it ignores that project's own
 `allow` permission rules for the session while still applying its `deny` rules — so the session is
 only ever more restrictive, never less. Octoboard tells the user so once, when the session starts,
-naming the project it is in: the `allow` rules stay ignored until Claude Code's trust prompt is
-answered, and Octoboard answers that prompt once the user has agreed to it (see "Claude Code's
-workspace-trust prompt" below). It stays silent unless the user's own configuration says
+naming the project it is in: the `allow` rules stay ignored until Claude Code's trust confirmation is
+answered, and Octoboard presses that confirmation once the user has agreed to it (see
+`docs/product/folder-trust.md`). It stays silent unless the user's own configuration says
 explicitly that the directory is untrusted, so a configuration it cannot read leaves them alone
 rather than warning on every launch; and it stays silent when a directory above the session's is
 recorded as trusted, which Claude Code honours without asking while leaving the directory's own
@@ -169,11 +172,13 @@ will itself read: `.claude.json` inside the Claude Code config directory in effe
 that file yet produces no warning; `~/.claude.json` is not consulted in its place.
 
 **Codex.** Codex cannot be given a session id in advance, and its conversation is created lazily on the first prompt
-submission — so a session opened without a task has no agent-side id until the user types something. Two launch
-conditions are visible:
+submission — so a session opened without a task has no agent-side id until the user types something. The launch
+conditions that are visible:
 
-- the project's directory is marked trusted for that one invocation, so no folder-trust dialog appears; nothing is
-  persisted to the user's configuration by it;
+- project trust is not passed: in a git repository Codex has not been told to trust, its own folder-trust
+  confirmation appears, and Octoboard presses it under the user's permission (see `docs/product/folder-trust.md`);
+- Codex's check for a newer version at startup is turned off for that launch (`check_for_update_on_startup=false`),
+  so that its update prompt does not come up ahead of the trust confirmation; the user's own setting is left as it is;
 - the review Codex would otherwise raise for Octoboard's own hooks is bypassed, which costs two warning lines in the
   session's own output on **every** launch, a resume included. The bypass covers hook review only; it does not weaken
   the sandbox or the approval policy. These two lines are a standing cost, not a defect waiting to be fixed: Codex
@@ -196,8 +201,10 @@ Two of its files are **copies** taken at launch rather than links, with conseque
 - the Grok configuration file: an edit the user makes to it while a session is running is not picked up by that
   session, and a setting the session persists (changing its reasoning effort, for instance) lands in Octoboard's copy
   and is lost when the session ends. Both are re-read from the source home on the next launch.
-- the trust store: the project's directory is marked trusted in the copy, so the project's own instructions, hooks and
-  MCP servers load — without writing a trust decision into the user's own store.
+- the trust store, `trusted_folders.toml`: copied as it is, with nothing added, so a folder the user has not trusted
+  Grok with shows Grok's own trust confirmation. The one entry Grok writes into the copy when that confirmation is
+  accepted is the exception to its being lost: it is carried into the source home's store (see "Carrying Grok
+  Build's trust record" in `docs/product/folder-trust.md`).
 
 A Grok Build config directory must **already be a Grok home, one Grok has been run against**. Only entries
 that already exist in the source home are linked; for an empty directory, Grok creates its login and session records
@@ -211,161 +218,6 @@ Grok Build additionally **requires the project to be a git repository**: it loca
 `.git` directory, and in a directory without one it loads neither the project's instructions nor the project's hooks.
 A console's working directory is not a repository, so a Grok console session reads no instruction file from it and
 takes its role through a launch flag instead (see "The console session's instruction file" above).
-
-## Claude Code's workspace-trust prompt
-
-The first time Claude Code runs in a directory it has not been trusted with, it stops on a screen of
-its own asking whether to trust the folder — a two-option list, "No, exit" and "Yes, I trust this
-folder", with the cursor starting on "No, exit" — and waits for a person. Until that screen is
-answered the session does nothing else and reports nothing (see "What the statuses are derived from"
-in `docs/product/sessions.md`). Octoboard recognises the screen and answers it for the user once they
-have agreed to that. Codex and Grok Build sessions are unaffected.
-
-What happens when the screen comes up depends on the session:
-
-| Session | What happens |
-|---|---|
-| Console session | Answered at once, without a dialog and without recording anything: its working directory is the console's own, which holds nothing but the instruction file Octoboard writes there. |
-| Project session whose project has the user's consent, or whose directory lies under a trusted folder | Answered at once, without a dialog. |
-| Any other project session | The user is asked in a dialog; nothing is sent until they agree. |
-
-**The dialog**, titled "Trust this folder?", opens by saying that Claude Code is asking whether to
-trust this folder — for the named session, when the session is known — with the project's full path
-set apart below in a monospace block. When "Trust parent folder" is offered, one sentence then says
-that it also trusts every project in the folder that holds this one, named by its last two path
-components, including projects added there later. A warning callout, tinted and set apart at the
-end, says that a trusted folder's `.claude/settings.json` may pre-approve tool permissions. Its
-buttons:
-
-- **Trust and continue** — Octoboard answers this session's screen. Only if that succeeded is the
-  project's consent recorded, so the project's later Claude Code sessions are answered without a
-  dialog; an answer that fails records nothing.
-- **Trust parent folder** — shown only when the daemon offers a folder for this project
-  (see "Trusted folders" below for which folder that is); a project with none to offer gets only the other
-  two buttons. The button's tooltip gives the full path of the folder offered. Octoboard answers this
-  session's screen, and only if that succeeded is that folder added to the trusted folders. The
-  project's own consent is not recorded; an answer that fails records nothing. If the folder can no
-  longer be offered by the time the button is chosen (see "Trusted folders" below), it is refused
-  before anything is answered: the dialog stays open and shows why, and the user can still choose
-  another button.
-- **Not now** — also what Escape, the dialog's close button and a click outside it do. Nothing is sent
-  and nothing is recorded; the screen stays for the user to answer in the session's terminal. The same
-  session is asked about again only if the application reloads its state (a reconnect, or catching up
-  after falling behind) while the screen is still up, and a
-  later session of the project is asked about again, since the project still has no consent.
-
-Once either trust button has been chosen the dialog closes, whether or not the screen could be
-answered — a screen is answered at most once, so trying again from the dialog could not succeed. A
-failure is then shown as a toast. Two outcomes differ: the refusal of a folder that can no longer be
-offered keeps the dialog open, and a go-ahead for a screen that is no longer waiting — already
-answered, whether from another client, in the terminal or by Octoboard itself — closes the dialog
-without any message when it was "Trust and continue", since nothing went wrong. For "Trust parent folder" it shows a
-message saying the folder was not trusted, because that choice was not carried out.
-
-Prompts are shown one at a time, oldest first; closing one brings up the next. A prompt still
-waiting is dropped, without being answered, when its session stops running. When a folder becomes
-trusted, the prompts waiting for projects under it are dropped as well, because Octoboard answers
-those screens itself; prompts for other projects stay queued. Whenever the application reloads its
-state (a connect, a reconnect, or catching up after falling behind), the daemon asks again about
-every screen still waiting, so a prompt the user never saw comes back; with no client connected the
-screen simply waits for the user to answer it in the terminal. Once one client has answered, a
-go-ahead from another changes nothing.
-
-**Consent** comes in two forms, and either one is enough for Octoboard to answer without asking:
-
-- **A project's consent** belongs to one project, is stored with it, and covers every later Claude
-  Code session in that project, a resume included. It is set only by "Trust and continue" and cannot
-  be withdrawn from the application; editing the project leaves it as it is, and removing the project
-  removes it with the association. A project starts without it.
-- **A trusted folder** covers every project whose directory is that folder or lies anywhere below it,
-  in any console, including projects associated after the folder was trusted — by the user or by a
-  console session. It is set only by "Trust parent folder", is stored on its own rather than with any
-  project, and can be removed in Settings. Its rules are in "Trusted folders" below.
-
-**How the screen is answered.** Octoboard types a Down and then an Enter into the session's terminal,
-checking before each key:
-
-- before the Down, that the screen as it was recognised is still showing and the cursor is on "No,
-  exit";
-- before the Enter, that the cursor has moved to "Yes, I trust this folder" and the terminal has gone
-  quiet;
-- before either, that nothing else has written into the session's input since the attempt began —
-  the user typing in the terminal, or a message Octoboard delivers to the session. An attached
-  terminal's own protocol replies, such as focus reports and answers to Claude Code's terminal
-  queries, are not counted.
-
-When any check fails the attempt stops without sending the next key and the screen is left for the
-user. A session's screen is answered at most once per run, so a failed attempt is not retried; the user
-is told in a notice on the session that Octoboard could not answer the screen and that they should
-answer it in the terminal.
-
-**Recognition is limited to the start of a session.** The screen is looked for only in a Claude Code
-session's own terminal output, and only until the session's first hook report or until it has printed
-64 KiB or run for 30 seconds, whichever comes first — the screen is the first thing Claude Code prints,
-so the same words appearing later in a session are never taken for it.
-
-### Trusted folders
-
-**What trusting a folder grants.** A trusted folder is not limited to the projects present when it
-was trusted. Every project associated under it later is covered as well, by whatever means it was
-associated — **including repositories a console session clones or adds into that folder on its own** —
-and Octoboard answers Claude Code's trust prompt for each of them without asking. Once that prompt is
-answered, Claude Code applies the permission rules and hooks in that project's own
-`.claude/settings.json` without asking either. Trusting a folder therefore means trusting whatever
-ends up inside it, for as long as the folder stays trusted.
-
-**Which folder.** The folder offered, and the only one that can be trusted from a session's dialog,
-is the parent directory of that session's project; the daemon derives it from the project's path, and
-no client can name a folder of its own. None is offered — and the "Trust parent folder"
-button is not shown — when:
-
-- the project's path is not absolute;
-- the parent is the filesystem root, which includes a project directly inside `/`;
-- the parent is the user's home directory or any directory that contains it, which includes a
-  project directly inside the home directory. This is checked on the paths as written and also on
-  the directories themselves, so a symbolic link to the home directory or to a directory above it, or
-  a spelling that differs only in letter case on a volume that does not tell case apart, is caught as
-  well;
-- the home directory cannot be determined.
-
-Such a project can still be trusted on its own with "Trust and continue". The same check is made
-again when the button is chosen, and a folder that fails it then is refused before anything is
-answered — with the error code `trust_directory_too_broad` when it is the root, the home directory or
-a directory containing it, `trust_path_not_absolute` when the project's path is not absolute, and
-`trust_home_unknown` when the home directory cannot be determined.
-
-**Which projects it covers.** A project is under a trusted folder when its directory is that folder
-or lies below it at any depth. Paths are compared component by component after a purely lexical
-clean-up (`.` dropped, `..` folded into the component before it, trailing slashes ignored):
-
-- `/work` covers `/work/app` and `/work/a/b/c`, but not `/work2` or `/workspace/app` — never a text
-  prefix;
-- symbolic links are not resolved: a project is covered when the path it was associated under lies
-  below the folder as written. A project associated through a symbolic link inside a trusted folder is
-  therefore covered wherever that link points, so a link inside a trusted folder extends the trust to
-  its target; a project associated under a path outside the folder is not covered, however it is
-  linked from inside;
-- names are compared exactly, so a spelling of the same folder that differs only in letter case is
-  not covered;
-- only absolute paths are ever covered: a project recorded with a relative path is never under a
-  trusted folder. Octoboard records every project it associates with an absolute path (see
-  "Associating a project" in `docs/product/consoles-and-projects.md`).
-
-**Trusting a folder answers what is already waiting.** At the moment a folder is added, every trust
-screen still waiting in a project under it is answered, including one the user put off with "Not
-now"; screens of projects outside it stay as they were and are still asked about. Each of these
-answers is sent under the same checks, and reported the same way when a check fails, as any other
-screen Octoboard answers.
-
-**The list in Settings.** The Trusted folders section of Settings (see `docs/product/settings.md`)
-explains what trusting a folder grants, as above, and lists every trusted folder, sorted by path,
-each path shown as in "How paths are shown" in `docs/product/settings.md`. Each folder has a Remove
-button, whose accessible name gives the folder's full path, that stops trusting it at once, without
-a confirmation. With no folder trusted, the section says so and that a
-folder is trusted from a session's trust prompt. Removing a folder leaves every project's own
-consent as it is and leaves running sessions alone, a screen already answered included; a trust
-screen that comes up afterwards in a project under it, without consent of its own and not under
-another trusted folder, is asked about again.
 
 ## Agent session data
 

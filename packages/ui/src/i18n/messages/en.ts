@@ -130,6 +130,8 @@ export const en = {
     other: "This session cannot be archived while {count} sessions bound to it are running: {sessions}. Archive those sessions or let them finish first.",
   },
   "daemon.session_waiting_for_user": "This session is waiting for you. Answer it in the terminal first.",
+  "daemon.session_trust_pending":
+    "This session's agent is showing, or may be about to show, its trust confirmation. Send the message once that is answered, or once the session has finished starting if none appears.",
   "daemon.queued_messages_lost":
     "A message queued for this session could not be written in full, so it and everything queued behind it were dropped. The session's input line may be holding part of a message {appName} could not finish writing. The next message written into the session will be run together with it, so check the session before sending anything else.",
   "daemon.page_not_current": "This page is no longer current, so its form can no longer be submitted.",
@@ -155,30 +157,36 @@ export const en = {
     "“{path}” is too broad to trust as a whole. It is the filesystem root or your home directory, or it contains one of them. Trust this project on its own, or move it under a narrower folder and trust that folder.",
   "daemon.trust_path_not_absolute": "“{path}” is not an absolute path, so there is no folder above it to trust.",
   "daemon.trust_home_unknown": "The home directory could not be determined, so no folder can be checked against it.",
-  "daemon.claude_trust_not_waiting": "This session is no longer waiting at Claude Code's trust screen.",
-  "daemon.not_a_claude_session": "Only a Claude Code session has a trust screen.",
-  "daemon.console_session_trust_not_asked": "{appName} answers a console session's trust screen without asking.",
+  "daemon.trust_not_waiting": "This session is no longer waiting at its agent's trust confirmation.",
+  "daemon.console_session_trust_not_asked": "{appName} presses a console session's trust confirmation without asking.",
   "daemon.binary_not_found": "“{binary}” was not found on PATH in the snapshotted shell environment.",
   "daemon.shell_environment_timeout":
     "“{shell} -l -i -c '{command}'” did not finish within {timeout}. A shell startup file is probably blocked on something other than stdin, or it left a background process holding the shell's output open. {appName} will not launch while the environment is unknown, because it will not guess at one. Fix or skip the slow step in the shell's rc files.",
   "daemon.agent_not_available":
     "{agent} is not available on this machine: its binary does not resolve on your login shell's PATH. {appName} supports Claude Code, Codex and Grok Build; make sure one of them is on your PATH to open a session.",
   "daemon.claude_workspace_untrusted":
-    "Claude Code has not been trusted with this directory, so this project's own “allow” permission rules are ignored until Claude Code's trust prompt is answered. Its “deny” rules still apply, so a session is only more restrictive, never less. {appName} answers that prompt for you once you have agreed to it.",
+    "Claude Code has not been trusted with this directory, so this project's own “allow” permission rules are ignored until Claude Code's trust confirmation is answered. Its “deny” rules still apply, so a session is only more restrictive, never less. {appName} presses that confirmation for you once you have agreed to it.",
   "daemon.queued_messages_dropped":
     "{appName} dropped what it had queued for this session. The session's input line may be holding part of a message {appName} could not finish writing. The next message written into the session will be run together with it, so check the session before sending anything else.",
-  "daemon.claude_trust_answer_failed": "{appName} could not answer Claude Code's trust screen ({reason}). Answer it in the terminal.",
+  "daemon.trust_answer_failed": "{appName} could not press {agent}'s trust confirmation ({reason}). Answer it in the terminal.",
+  "daemon.trust_not_carried_over":
+    "{appName} could not copy {agent}'s trust for this folder into “{path}” ({reason}), so {agent} will ask again the next time it opens this folder.",
   // What goes in place of `{reason}` above, keyed by the daemon's `reason_code`. Lowercase: it is
   // spliced into the middle of that sentence.
-  "daemon.trust_reason.screen_gone": "the trust screen is no longer on the terminal",
-  "daemon.trust_reason.cursor_not_on_decline": "the cursor is not on the screen's first option, or could not be found",
-  "daemon.trust_reason.cursor_did_not_move": "the cursor did not move to “Yes, I trust this folder”, so Enter was not sent",
-  "daemon.trust_reason.terminal_not_settled": "the terminal did not settle after the Down arrow, so Enter was not sent",
-  "daemon.trust_reason.cursor_moved_away": "the cursor is no longer on “Yes, I trust this folder”, so Enter was not sent",
-  "daemon.trust_reason.screen_not_dismissed": "the screen did not go away after Enter",
-  "daemon.trust_reason.screen_redrawn": "the screen was drawn again after Enter",
+  "daemon.trust_reason.screen_gone": "the trust confirmation is no longer on the terminal",
+  "daemon.trust_reason.cursor_not_at_start": "the cursor is not on the option it starts on, or could not be found",
+  "daemon.trust_reason.cursor_did_not_move": "the cursor did not move to the option that trusts the folder, so Enter was not sent",
+  "daemon.trust_reason.terminal_not_settled": "the terminal did not settle, so Enter was not sent",
+  "daemon.trust_reason.cursor_moved_away": "the cursor is no longer on the option that trusts the folder, so Enter was not sent",
+  "daemon.trust_reason.screen_not_dismissed": "the confirmation did not go away after the key was sent",
+  "daemon.trust_reason.screen_redrawn": "the confirmation was drawn again after the key was sent",
   "daemon.trust_reason.input_touched": "something else was written to the terminal in the meantime, so the keys were not sent",
   "daemon.trust_reason.terminal_write_failed": "writing to the terminal failed: {detail}",
+  "daemon.trust_reason.not_recorded": "no trust entry for this folder appeared in the session's copy of the file",
+  "daemon.trust_reason.store_locked": "the file stayed locked by another program",
+  "daemon.trust_reason.store_unreadable":
+    "the file could not be read as a trust list, or the entry could not be added without changing anything else, so it was left as it is",
+  "daemon.trust_reason.store_io_failed": "the file could not be read or written: {detail}",
 
   "connection.disconnected": "Disconnected from the daemon.",
   "connection.reconnecting": "Disconnected from the daemon. Reconnecting…",
@@ -585,16 +593,24 @@ export const en = {
     other: "Delete {count} archived sessions permanently?",
   },
   "dialog.trust.title": "Trust this folder?",
-  "dialog.trust.question": "Claude Code is asking whether to trust this folder:",
-  "dialog.trust.questionForSession": "Claude Code is asking whether to trust this folder for session “{session}”:",
-  "dialog.trust.parentNote": "“{label}” also trusts every project in {directory}, including ones added there later.",
+  "dialog.trust.question": "{agent} is asking whether to trust this folder:",
+  "dialog.trust.questionForSession": "{agent} is asking whether to trust this folder for session “{session}”:",
+  "dialog.trust.behavior":
+    "If you agree, {appName} presses {agent}'s own confirmation, and {agent} records the trust, so it does not ask again here. {appName} also records a permission every agent shares, so a later trust confirmation for this project is pressed without asking.",
+  "dialog.trust.codexRoot":
+    "{agent} records the trust for the root of the git repository this folder is in. If this project is a subfolder or a linked worktree, that covers more than this project.",
+  "dialog.trust.parentNote":
+    "“{label}” records {directory} instead, which covers every project in it, including ones added there later, for every agent.",
   "dialog.trust.cautionLabel": "Caution:",
-  "dialog.trust.caution": "A trusted folder's {file} may pre-approve tool permissions.",
+  "dialog.trust.caution.claude": "Trusting lets this project's own permission rules and hooks take effect: its {file} may pre-approve tool permissions.",
+  "dialog.trust.caution.codex":
+    "Trusting lets {agent} load this project's own configuration, hooks and command rules, which can run code even without a model request. This confirmation does not change {agent}'s sandbox or approval policy, though the project's own configuration can.",
+  "dialog.trust.caution.grok": "Trusting lets {agent} load this project's own instructions, hooks and MCP servers.",
   "dialog.trust.confirm": "Trust and continue",
   "dialog.trust.notNow": "Not now",
   "dialog.trust.parent": "Trust parent folder",
   "dialog.trust.alreadyAnswered":
-    "The trust screen was already answered, so this folder was not trusted. Use this dialog again for the next screen.",
+    "The trust confirmation was already answered, so this folder was not trusted. Use this dialog again for the next one.",
 
   "directoryPicker.path": "Directory path",
   "directoryPicker.go": "Go",
@@ -626,10 +642,12 @@ export const en = {
   "settings.git.autoSync.description":
     "Fast-forwards a project's branch when it is behind its upstream and can be. It never pushes, and it leaves a branch that has commits of its own alone. The remote is checked every few minutes whichever way this is set, so the branch always shows how far ahead or behind it is.",
   "settings.trusted.description":
-    "{appName} answers Claude Code's trust prompt without asking for every project under these folders, including projects added to them later. Claude Code then applies the permission rules and hooks in each project's own settings without asking either, so trust a folder only if you trust everything that ends up inside it.",
-  "settings.trusted.empty": "No folders are trusted. Trust a folder from a session's trust prompt.",
-  "settings.trusted.rowDescription": "Projects under this folder are trusted.",
-  "settings.trusted.removeTooltip": "Stop trusting this folder. Projects' own consents and running sessions are kept.",
+    "Under these folders, {appName} presses every agent's trust confirmation without asking, for every project, including projects added later. Each agent then records the trust in its own configuration and applies the project's own permission rules and hooks, so trust a folder only if you trust everything that ends up inside it.",
+  "settings.trusted.empty": "No folders are trusted. Trust a folder from a session's trust dialog.",
+  "settings.trusted.rowDescription":
+    "Every agent's trust confirmation is pressed without asking for projects under this folder.",
+  "settings.trusted.removeTooltip":
+    "Stop trusting this folder. Projects' own permissions, running sessions and the trust each agent has already recorded are kept.",
   "settings.trusted.removeLabel": "Stop trusting {path}",
   "settings.accounts.description":
     "An account is a named config directory of an agent: the directory it keeps its login and conversation history in. An agent has to be on your PATH for its accounts to be usable.",

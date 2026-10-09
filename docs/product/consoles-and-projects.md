@@ -152,16 +152,14 @@ A project carries a name, the directory it points at, an optional default agent,
 URL it was cloned from (for a git association), whether the user has pinned it (see "Order of projects and
 sessions" in `docs/product/sidebar.md`), and any number of tags. Every project is bound to a host (see "Hosts" below).
 
-A project also carries whether the user has agreed that Octoboard may answer Claude Code's workspace-trust prompt for
-its directory. A project starts without that consent, including one the console session associates; it is given only
-by "Trust and continue" in the dialog Octoboard shows when a Claude Code session of the project stops on that prompt,
-and it is not part of the project's editable fields. Separately from any project, the user can trust a whole folder,
-which covers every project under it — including any associated there later, by the user or by the console session —
-without giving any of them
-that consent; a trusted folder is not stored with a project, so editing or removing a project does not affect it (see
-"Trusted folders" in
-`docs/product/launching-agents.md`). The rules are in "Claude Code's workspace-trust prompt" in
-`docs/product/launching-agents.md`.
+A project also carries whether the user has given Octoboard permission to press any agent's trust confirmation for
+its directory without asking. A project starts without that permission, including one the console session associates;
+it is given only by "Trust and continue" in the dialog Octoboard shows when a session of the project stops on its
+agent's trust confirmation, and it is not part of the project's editable fields. Separately from any project, the user
+can trust a whole folder, which covers every project under it — including any associated there later, by the user or
+by the console session — without giving any of them that permission; a trusted folder is not stored with a project, so
+editing or removing a project does not affect it (see "Trusted folders" in `docs/product/folder-trust.md`). The rules
+are in "The trust permission" in `docs/product/folder-trust.md`.
 
 ### Tags
 
@@ -202,7 +200,7 @@ A path may be entered by hand or picked with the directory browser. A leading `~
 of the host the daemon runs on. The path must then be absolute: a relative path is refused, for every source. It is
 recorded lexically normalised — `.` components dropped, each `..` folded into the component before it, no trailing
 slash — without resolving symbolic links, so a path through a link is kept as written. A project's recorded path is
-what a trusted folder is compared against (see "Trusted folders" in `docs/product/launching-agents.md`).
+what a trusted folder is compared against (see "Trusted folders" in `docs/product/folder-trust.md`).
 
 The console session can associate a project itself, from the same three sources and under all the
 rules in this section (see "The console session's tools" in `docs/product/hub-orchestration.md`).

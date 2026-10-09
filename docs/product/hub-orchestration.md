@@ -139,7 +139,7 @@ receiver; the sender is told the owner was not copied. A copy for an owner that 
 queued.
 
 Delivery is the same as for any other message: sanitized as in "Messages held until a session can take them", held when
-the receiver is waiting for the user, and refused when it has no process running. The two tools are on by default and
+the receiver is waiting for the user or may be at its trust confirmation, and refused when it has no process running. The two tools are on by default and
 have no setting. A session launched before they existed keeps the role description it was first given, and on resume
 sees the tools without being told about them or about its owner.
 
@@ -163,16 +163,17 @@ A session started with `start_session` is **titled from its goal** rather than f
 goal's first non-blank line, shortened to roughly 48 characters on a word boundary with an ellipsis —
 so several sessions dispatched into one project can be told apart in the menu.
 
-A Claude Code session started with `start_session` in a directory Claude Code has not been trusted with
-first stops on Claude Code's workspace-trust prompt. When the user has given that project their
-consent, or has trusted a folder its directory lies under, Octoboard answers the prompt and the
-session carries on without them; otherwise the user is asked in a dialog — again after the application
-reconnects, if the prompt is still waiting — and the session waits on the prompt until it is answered,
+A session started with `start_session` in a folder its agent has not been told to trust can first stop
+on that agent's own trust confirmation. When the user has given that project the trust permission, or
+has trusted a folder its directory lies under, Octoboard presses the confirmation and the session
+carries on without them; otherwise the user is asked in a dialog — again after the application
+reconnects, if the confirmation is still waiting — and the session waits on it until it is answered,
 reading as *working* meanwhile. A trusted folder covers the projects the console session itself
-associates in it, a repository it clones there included: their sessions are answered without the user
-being asked, and the permission rules and hooks in those repositories' `.claude/settings.json` then
-apply without asking. See "Claude Code's workspace-trust prompt" and "Trusted folders" in
-`docs/product/launching-agents.md`.
+associates in it, a repository it clones there included: their sessions' confirmations are pressed
+without the user being asked, whichever agent shows them, and that agent then applies the
+repository's own configuration — for Claude Code, the permission rules and hooks in its
+`.claude/settings.json` — without asking. See "The trust permission" and "Trusted folders" in
+`docs/product/folder-trust.md`.
 
 ## Reporting
 
@@ -262,6 +263,25 @@ and that it must not send it again.
 A message for a session with no process running is refused outright: a resume starts the agent at
 its prompt and replays nothing. Anything still queued when a session's process ends goes with it.
 
+**Messages are also held while a session's trust confirmation may be up.** A message's trailing Enter would answer
+the agent's own folder-trust confirmation (see `docs/product/folder-trust.md`) — accepting it, and so trusting the
+folder, at Codex's and Grok Build's, and declining it, which exits the agent, at Claude Code's. So from every launch of
+a session, a resume included, everything Octoboard writes into it — an instruction, a report, information shared by
+another session, a report panel form submission, the instruction `reopen_session` hands over — is queued as above
+until the confirmation can no longer be on screen:
+
+- for Claude Code and Grok Build, until the session's first hook report, which each sends only once it is past the
+  confirmation (and, for Claude Code, past any other startup screen that follows it). A session whose hook reports
+  never arrive holds its messages for as long as it runs;
+- for Codex, which reports nothing until its first prompt, until about 30 seconds have passed since the launch (or
+  64 KiB of output has been printed) with no confirmation shown; once one is shown, until Octoboard's press of it
+  succeeds, a hook report arrives, or the person's own answer in the terminal is seen to replace it on screen.
+
+The user's own typing in the session's terminal is never held. A client's direct request to write into a session
+(`send_message` in the daemon's client protocol) is refused instead of queued, with the error code
+`session_trust_pending`, saying to send it once the confirmation has been answered, or once the session has finished
+starting if none appears.
+
 There is a second way a message Octoboard accepted does not arrive. If the agent stops taking input
 part way through a write, part of that message is left sitting in the session's input line. Whatever
 Octoboard writes next would be run together with it, so that message and everything queued behind it
@@ -274,8 +294,9 @@ something proved the line was clean would stall a console's whole orchestration 
 can give.
 
 A partial write has **not been observed** in any attempt, so none of this has been seen to happen. The one try, on
-Claude Code only, sent an 8,822-byte `send_message` into a session sitting at its folder-trust dialog: the call answered
-`delivered`, the dialog stayed untouched and no text appeared in the terminal. What became of the text was not
+Claude Code only, sent an 8,822-byte `send_message` into a session sitting at its folder-trust dialog — a write the
+hold described above now keeps back: the call answered `delivered`, the dialog stayed untouched and no text appeared
+in the terminal. What became of the text was not
 established, and it is unexplained: it does not match the documented effect of a write at Claude Code's trust dialog,
 where a trailing CR exits the session (see "Writing into a running session" in `docs/agent-cli-reference.md`). The
 assumption above that the next write closes the leftover fragment, bounding the damage to one spoiled message, has

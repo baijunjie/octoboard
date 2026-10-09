@@ -217,11 +217,14 @@ pub struct Project {
     pub default_agent: Option<Agent>,
     pub source: ProjectSource,
     pub remote_url: Option<String>,
-    /// The user has agreed that Octoboard may answer Claude Code's workspace-trust screen for this
-    /// project's directory, by sending the keystrokes that accept it (see `crate::trust`). Recorded
-    /// when they confirm the dialog the daemon asks them with; it covers every later Claude Code
-    /// session in the project.
-    pub claude_trust_consent: bool,
+    /// The user has agreed that Octoboard may press an agent's own trust confirmation for this
+    /// project's directory without asking, by sending the keystrokes that accept it (see
+    /// `crate::trust`). The project form of the one auto-trust permission every agent shares, a
+    /// trusted directory being the other: recorded once "Trust and continue" in the dialog the
+    /// daemon asks with has pressed a confirmation successfully, whichever agent showed it, and it
+    /// covers every later session of any agent in the project. It is not the agent's own trust
+    /// record, which each agent writes when its confirmation is pressed.
+    pub trust_consent: bool,
     /// The user pinned this project to the top of its console's project list. Only the user's
     /// `update_project` changes it.
     pub pinned: bool,
@@ -883,13 +886,13 @@ pub enum RequestBody {
         page: String,
         data: serde_json::Value,
     },
-    /// The user's answer to a `claude_trust_prompt`: Octoboard may answer that session's trust
-    /// screen. `remember` also records the project's consent, so its later sessions are answered
-    /// without asking; `trust_parent_dir` records the project's parent directory as trusted instead,
-    /// so every project under it is, and when set `remember` adds nothing. The directory is the
-    /// daemon's to derive from the session's project, never the client's to name. Either is
-    /// recorded only once the screen has been answered.
-    ConfirmClaudeTrust {
+    /// The user's answer to a `trust_prompt`: Octoboard may press that session's trust
+    /// confirmation. `remember` also records the project's consent, so a later confirmation of any
+    /// agent in the project is pressed without asking; `trust_parent_dir` records the project's
+    /// parent directory as trusted instead, so every project under it is, and when set `remember`
+    /// adds nothing. The directory is the daemon's to derive from the session's project, never the
+    /// client's to name. Either is recorded only once the confirmation has been pressed.
+    ConfirmTrust {
         session: String,
         remember: bool,
         #[serde(default)]
@@ -966,8 +969,8 @@ pub enum Event {
     AgentAvailabilityUpdated {
         agent_availability: Vec<AgentAvailability>,
     },
-    /// The directories whose projects Octoboard answers Claude Code's trust screen for changed: the
-    /// whole list, like every other upsert.
+    /// The directories whose projects Octoboard presses every agent's trust confirmation for
+    /// changed: the whole list, like every other upsert.
     TrustedDirectoriesUpdated {
         trusted_directories: Vec<String>,
     },
@@ -1011,15 +1014,16 @@ pub enum Event {
         params: Params,
         message: String,
     },
-    /// A Claude Code session of a project the user has not yet agreed Octoboard may answer for —
-    /// not by its own consent and not through a trusted directory — is sitting at its
-    /// workspace-trust screen. Broadcast once per screen, and sent again to a client after each
-    /// `snapshot` while the screen waits. `trust_dir` is the directory `confirm_claude_trust` with
-    /// `trust_parent_dir` would trust, and null when there is none to offer: it would be the
-    /// filesystem root, the home directory or one containing it, the home directory cannot be
-    /// determined, or the project's path is not absolute.
-    ClaudeTrustPrompt {
+    /// A session of a project the user has not yet agreed Octoboard may press trust confirmations
+    /// for — not by its own consent and not through a trusted directory — is sitting at its
+    /// agent's folder-trust confirmation; `agent` is the one asking. Broadcast once per
+    /// confirmation, and sent again to a client after each `snapshot` while it waits. `trust_dir`
+    /// is the directory `confirm_trust` with `trust_parent_dir` would trust, and null when there
+    /// is none to offer: it would be the filesystem root, the home directory or one containing it,
+    /// the home directory cannot be determined, or the project's path is not absolute.
+    TrustPrompt {
         session: String,
+        agent: Agent,
         project: String,
         path: String,
         trust_dir: Option<String>,
@@ -1325,19 +1329,26 @@ pub mod error_code {
     /// [`TRUST_DIRECTORY_TOO_BROAD`], where the home directory is unknown, so nothing can be
     /// checked against it.
     pub const TRUST_HOME_UNKNOWN: &str = "trust_home_unknown";
-    /// A go-ahead for a trust screen that is no longer waiting for one: answered already, by this
-    /// or another client or in the terminal, or gone with its session. Nothing is wrong, so a
-    /// client shows nothing.
-    pub const CLAUDE_TRUST_NOT_WAITING: &str = "claude_trust_not_waiting";
+    /// A go-ahead for a trust confirmation that is no longer waiting for one: pressed already, by
+    /// this or another client or in the terminal, gone with its session, or never shown. Nothing is
+    /// wrong, so a client shows nothing.
+    pub const TRUST_NOT_WAITING: &str = "trust_not_waiting";
 
     // -- for the user to read ----------------------------------------------------------------
 
-    /// Octoboard could not answer a trust screen it had accepted a go-ahead for. The `reason_code`
-    /// param says why, one of [`trust_reason`].
-    pub const CLAUDE_TRUST_ANSWER_FAILED: &str = "claude_trust_answer_failed";
-    /// A go-ahead for the trust screen of a session that is not Claude Code's.
-    pub const NOT_A_CLAUDE_SESSION: &str = "not_a_claude_session";
-    /// A go-ahead for a console session's trust screen, which Octoboard answers without asking.
+    /// Octoboard could not press a trust confirmation it had accepted a go-ahead for, or meant to
+    /// press without asking. `params` names the `agent`, and the `reason_code` param says why, one
+    /// of [`trust_reason`].
+    pub const TRUST_ANSWER_FAILED: &str = "trust_answer_failed";
+    /// Grok Build's confirmation was accepted — pressed by Octoboard, or answered by the person in
+    /// the terminal — but no trust entry for the folder reached the user's own store: Grok wrote
+    /// none into the session's copy in time, or the user's store could not be updated. Nothing was
+    /// written to the user's store and no permission was recorded. `params` names the `agent`, the
+    /// user's store as `path`, the English `reason`, its `reason_code` (one of [`trust_reason`]'s
+    /// carry codes) and, for some, a `detail`.
+    pub const TRUST_NOT_CARRIED_OVER: &str = "trust_not_carried_over";
+    /// A go-ahead for a console session's trust confirmation, which Octoboard presses without
+    /// asking.
     pub const CONSOLE_SESSION_TRUST_NOT_ASKED: &str = "console_session_trust_not_asked";
 
     /// A request that is not valid JSON of a known shape.
@@ -1388,6 +1399,10 @@ pub mod error_code {
     /// title, comma separated.
     pub const SESSION_HAS_RUNNING_SESSIONS: &str = "session_has_running_sessions";
     pub const SESSION_WAITING_FOR_USER: &str = "session_waiting_for_user";
+    /// A message the user sent is refused because the session's agent is showing, or may still be
+    /// about to show, its folder-trust confirmation, which the message's trailing Enter would
+    /// answer. `params` names the `session`.
+    pub const SESSION_TRUST_PENDING: &str = "session_trust_pending";
     pub const QUEUED_MESSAGES_LOST: &str = "queued_messages_lost";
     pub const PAGE_NOT_CURRENT: &str = "page_not_current";
     pub const BINARY_NOT_FOUND: &str = "binary_not_found";
@@ -1447,13 +1462,13 @@ pub mod error_code {
     pub const REQUEST_SUPERSEDED: &str = "request_superseded";
 }
 
-/// The `reason_code` param of a failed answer to a trust screen, in the `error` and in the
+/// The `reason_code` param of a failed press of a trust confirmation, in the `error` and in the
 /// `session_notice` alike; `PROTOCOL.md` lists each. A client that does not know one shows the
 /// English `reason` instead. A new reason also needs a `daemon.trust_reason.<code>` message in the
 /// UI's catalogs.
 pub mod trust_reason {
     pub const SCREEN_GONE: &str = "screen_gone";
-    pub const CURSOR_NOT_ON_DECLINE: &str = "cursor_not_on_decline";
+    pub const CURSOR_NOT_AT_START: &str = "cursor_not_at_start";
     pub const CURSOR_DID_NOT_MOVE: &str = "cursor_did_not_move";
     pub const TERMINAL_NOT_SETTLED: &str = "terminal_not_settled";
     pub const CURSOR_MOVED_AWAY: &str = "cursor_moved_away";
@@ -1461,6 +1476,11 @@ pub mod trust_reason {
     pub const SCREEN_REDRAWN: &str = "screen_redrawn";
     pub const INPUT_TOUCHED: &str = "input_touched";
     pub const TERMINAL_WRITE_FAILED: &str = "terminal_write_failed";
+    // Of `trust_not_carried_over`: why Grok Build's trust entry did not reach the user's store.
+    pub const NOT_RECORDED: &str = "not_recorded";
+    pub const STORE_LOCKED: &str = "store_locked";
+    pub const STORE_UNREADABLE: &str = "store_unreadable";
+    pub const STORE_IO_FAILED: &str = "store_io_failed";
 }
 
 /// Codes carried by `Event::SessionNotice`; `PROTOCOL.md` lists each with its params. Like an error
@@ -1468,7 +1488,8 @@ pub mod trust_reason {
 pub mod notice_code {
     pub const CLAUDE_WORKSPACE_UNTRUSTED: &str = "claude_workspace_untrusted";
     pub const QUEUED_MESSAGES_DROPPED: &str = "queued_messages_dropped";
-    pub const CLAUDE_TRUST_ANSWER_FAILED: &str = "claude_trust_answer_failed";
+    pub const TRUST_ANSWER_FAILED: &str = "trust_answer_failed";
+    pub const TRUST_NOT_CARRIED_OVER: &str = "trust_not_carried_over";
 }
 
 pub fn now_millis() -> i64 {
@@ -1579,9 +1600,9 @@ mod tests {
                 },
             ),
             (
-                r#"{"type":"confirm_claude_trust","id":"request-1","session":"session-7","remember":true}"#,
+                r#"{"type":"confirm_trust","id":"request-1","session":"session-7","remember":true}"#,
                 |body| match body {
-                    RequestBody::ConfirmClaudeTrust { session, .. } => Some(session),
+                    RequestBody::ConfirmTrust { session, .. } => Some(session),
                     _ => None,
                 },
             ),
@@ -1768,20 +1789,20 @@ mod tests {
     #[test]
     fn a_trust_confirmation_without_a_scope_means_this_project() {
         let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
-            RequestBody::ConfirmClaudeTrust {
+            RequestBody::ConfirmTrust {
                 remember,
                 trust_parent_dir,
                 ..
             } => (remember, trust_parent_dir),
-            _ => panic!("parses as confirm_claude_trust"),
+            _ => panic!("parses as confirm_trust"),
         };
         assert_eq!(
-            parse(r#"{"type":"confirm_claude_trust","session":"s","remember":true}"#),
+            parse(r#"{"type":"confirm_trust","session":"s","remember":true}"#),
             (true, false)
         );
         assert_eq!(
             parse(
-                r#"{"type":"confirm_claude_trust","session":"s","remember":false,"trust_parent_dir":true}"#
+                r#"{"type":"confirm_trust","session":"s","remember":false,"trust_parent_dir":true}"#
             ),
             (false, true)
         );

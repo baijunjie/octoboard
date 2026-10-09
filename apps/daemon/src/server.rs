@@ -415,10 +415,13 @@ async fn hook_callback(
     let payload: serde_json::Value =
         serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null);
 
-    // Claude Code runs no hook before its workspace-trust screen has been answered, so the first
-    // one means that screen is gone — and anything on the terminal that looks like it is not it.
+    // Claude Code and Grok run no hook before their trust confirmation has been answered, so the
+    // first one means that screen is gone — and anything on the terminal that looks like it is not
+    // it. Codex runs none around its own, but its first hook still comes only once the session is
+    // past it. A Grok screen the person answered in the terminal has its trust entry carried over
+    // from here (`trust::on_hook`).
     if let Some(live) = state.live_session(&session_id) {
-        live.trust.mark_hook_seen();
+        crate::trust::on_hook(&state, &live);
     }
 
     // A subagent's events are the agent's internal business and carry the subagent's own ids.

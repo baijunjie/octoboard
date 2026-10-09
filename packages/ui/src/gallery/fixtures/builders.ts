@@ -30,7 +30,7 @@ export function projectOf(id: string, consoleId: string, name: string, extra: Pa
     name,
     path: `/Users/dev/code/${name.toLowerCase().replaceAll(" ", "-")}`,
     source: "local",
-    claude_trust_consent: false,
+    trust_consent: false,
     pinned: false,
     tags: [],
     ...extra,

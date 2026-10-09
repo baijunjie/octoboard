@@ -16,8 +16,8 @@ of its own, that is every write path in the coordinator.
 Keeping it off the record costs two cleanups that both have to be written, because the derived state gets no deletion
 event of its own: the daemon drops its entry wherever the record itself is removed, and the client's reducer drops it
 on that record's `*_deleted` event, cascading from a console down to each of its projects. The git statuses are the
-worked example of the whole shape; the Claude trust prompts are the same idea with the repeat sent after each
-`snapshot` rather than inside it.
+worked example of the whole shape; the trust prompts are the same idea with the repeat sent after each `snapshot`
+rather than inside it.
 
 ## Time a repeating refresh from the client, and bound it in the daemon
 

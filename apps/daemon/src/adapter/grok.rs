@@ -17,10 +17,16 @@
 //! - `config.toml`, because Grok persists session settings back into it — `--reasoning-effort low`
 //!   was observed rewriting `default_reasoning_effort` in the file. Against a symlink that write
 //!   would either replace the link or be followed into the user's own configuration.
-//! - `trusted_folders.toml`, for the same reason and one more: the project folder must be trusted
-//!   or Grok silently loads none of the project's own `AGENTS.md`, hooks or MCP servers, and the
-//!   trust store it consults is the one inside `GROK_HOME`. Octoboard adds the entry to its copy
-//!   instead of making Grok write a trust decision into the user's store on their behalf.
+//! - `trusted_folders.toml`, for the same reason: Grok saves it by replacing the file, so against a
+//!   symlink its write would replace the link rather than reach the user's store, and no setting
+//!   moves the store out of `GROK_HOME`. The copy carries every folder the user already trusts,
+//!   and Octoboard adds nothing to it: a folder Grok has not been told to trust shows Grok's own
+//!   confirmation, which Octoboard presses under the user's permission (`crate::trust`), or the
+//!   person answers in the terminal. The entry Grok then writes lands only in this copy, so once
+//!   the confirmation is accepted, by Octoboard's press or in the terminal, it is carried over,
+//!   unchanged, to the user's own store (`LaunchPlan::carried_trust`), and a later launch is
+//!   trusted from the start. Until a folder is trusted Grok silently loads none of the project's
+//!   own `AGENTS.md`, hooks or MCP servers.
 //!
 //! A session pins its source home at creation, because the session records a resume looks for
 //! live in that home's `sessions/`; the farm is still what Grok runs against, so nothing changes
@@ -31,8 +37,8 @@
 //! and `auth.json` inside the throw-away farm and lose them.
 //!
 //! The copies are a snapshot: an edit the user makes while a session runs is not seen, and anything
-//! the session persists lands in Octoboard's copy and is lost to them. Both are mitigated by
-//! rebuilding the farm on every launch.
+//! the session persists lands in Octoboard's copy and is lost to them, the one exception being the
+//! trust entry above. Both are mitigated by rebuilding the farm on every launch.
 //!
 //! Two conditions come from Grok itself rather than from the mechanism: it locates a project by
 //! walking up for a `.git` directory and reads no project instructions *and* no project hooks
@@ -53,6 +59,7 @@ use serde_json::json;
 use super::{AgentAdapter, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS};
 use crate::mcp;
 use crate::protocol::{error_code, Agent, CodedError};
+use crate::trust::CarriedTrust;
 
 /// The events Octoboard's session states are derived from. All three stop events are registered
 /// because they are mutually exclusive, and `Notification` is the backstop: some turns (bash mode,
@@ -71,8 +78,11 @@ const HOOK_EVENTS: &[&str] = &[
     "Notification",
 ];
 
+/// Grok's trust store, inside `GROK_HOME`.
+const TRUST_STORE: &str = "trusted_folders.toml";
+
 /// Entries Octoboard owns in its `GROK_HOME` rather than linking to the user's.
-const COPIED_ENTRIES: &[&str] = &["config.toml", "trusted_folders.toml"];
+const COPIED_ENTRIES: &[&str] = &["config.toml", TRUST_STORE];
 
 /// Entries that must never exist in the farm: Grok's deployment sync deletes them at runtime, and
 /// an organisation-distributed config is not Octoboard's to reproduce.
@@ -101,7 +111,7 @@ impl AgentAdapter for GrokAdapter {
         if let Some(dir) = pinned {
             require_initialized_grok_home(dir)?;
         }
-        let grok_home = build_grok_home(spec, pinned)?;
+        let (grok_home, source_home) = build_grok_home(spec, pinned)?;
 
         let mut args = Vec::new();
         match spec.resume_agent_session_id {
@@ -133,12 +143,18 @@ impl AgentAdapter for GrokAdapter {
             }
         }
 
+        let carried_trust = CarriedTrust {
+            session_store: grok_home.join(TRUST_STORE),
+            user_store: source_home.join(TRUST_STORE),
+            folder: canonical_cwd(spec.cwd),
+        };
         Ok(LaunchPlan {
             args,
             env: vec![(
                 "GROK_HOME".to_string(),
                 grok_home.to_string_lossy().into_owned(),
             )],
+            carried_trust: Some(carried_trust),
             ..LaunchPlan::default()
         })
     }
@@ -165,8 +181,8 @@ pub(super) fn require_initialized_grok_home(dir: &Path) -> Result<()> {
     ))
 }
 
-/// Builds the session's `GROK_HOME` and returns its path.
-fn build_grok_home(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Result<PathBuf> {
+/// Builds the session's `GROK_HOME`, and returns its path and the source home it was built from.
+fn build_grok_home(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Result<(PathBuf, PathBuf)> {
     let source_home = pinned
         .map(Path::to_path_buf)
         .unwrap_or_else(|| default_grok_home(spec));
@@ -198,10 +214,10 @@ fn build_grok_home(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Result<PathB
     copy_if_present(&source_home.join("config.toml"), &config)?;
     append_mcp_server(&config, spec)?;
 
-    write_trusted_folders(&source_home, &farm, spec.cwd)?;
+    copy_if_present(&source_home.join(TRUST_STORE), &farm.join(TRUST_STORE))?;
     write_hooks(&farm, spec.hook_script)?;
 
-    Ok(farm)
+    Ok((farm, source_home))
 }
 
 /// The user's own Grok home when the session pins none, read from the launch environment rather
@@ -243,26 +259,13 @@ fn copy_if_present(from: &Path, to: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Copies the user's trust store and adds this project's directory to the copy, so the project's
-/// own configuration loads without Grok ever writing a trust decision into the user's own file.
-fn write_trusted_folders(source_home: &Path, farm: &Path, cwd: &Path) -> Result<()> {
-    let source = source_home.join("trusted_folders.toml");
-    let mut content = std::fs::read_to_string(&source).unwrap_or_default();
-    let canonical = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
-    let path_text = canonical.to_string_lossy();
-    let header = format!("[folders.{}]", json!(path_text.as_ref()));
-    if !content.contains(&header) {
-        if !content.is_empty() && !content.ends_with('\n') {
-            content.push('\n');
-        }
-        content.push_str(&format!(
-            "\n{header}\ntrusted = true\ndecided_at = {}\n",
-            crate::protocol::now_millis() / 1000
-        ));
-    }
-    std::fs::write(farm.join("trusted_folders.toml"), content)
-        .with_context(|| format!("writing the trust store in {}", farm.display()))?;
-    Ok(())
+/// The folder Grok records its trust for: the working directory as Grok resolves it, canonical
+/// (`/private/tmp/…`, not `/tmp/…`).
+fn canonical_cwd(cwd: &Path) -> String {
+    std::fs::canonicalize(cwd)
+        .unwrap_or_else(|_| cwd.to_path_buf())
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// Writes Octoboard's hooks into the farm. Hooks placed in `$GROK_HOME/hooks/*.json` load at
@@ -445,33 +448,28 @@ mod tests {
         assert!(!farm.join("requirements.toml").exists());
     }
 
+    /// The farm's trust store is the user's, copied as it is: the project is not written into it,
+    /// so Grok shows its own confirmation for a folder the user has not trusted, and the plan names
+    /// where the entry Grok writes on a press is carried from and to.
     #[test]
-    fn the_farms_trust_store_covers_the_project_without_touching_the_users() {
+    fn the_farms_trust_store_is_the_users_copied_without_the_project_added() {
         let mut fixture = spec_fixture();
         let home = with_default_home(&mut fixture);
-        std::fs::write(
-            home.join("trusted_folders.toml"),
-            "[folders.\"/somewhere/else\"]\ntrusted = true\n",
-        )
-        .expect("trust store");
+        let users = "[folders.\"/somewhere/else\"]\ntrusted = true\n";
+        std::fs::write(home.join(TRUST_STORE), users).expect("trust store");
 
         let plan = GrokAdapter.plan(&fixture.spec()).expect("plan");
         let farm = PathBuf::from(&plan.env[0].1);
-        let copy = std::fs::read_to_string(farm.join("trusted_folders.toml")).expect("the copy");
+        assert!(!farm.join(TRUST_STORE).is_symlink());
+        assert_eq!(
+            std::fs::read_to_string(farm.join(TRUST_STORE)).expect("the copy"),
+            users
+        );
+        let carried = plan.carried_trust.expect("Grok's trust is carried");
+        assert_eq!(carried.session_store, farm.join(TRUST_STORE));
+        assert_eq!(carried.user_store, home.join(TRUST_STORE));
         let canonical = std::fs::canonicalize(&fixture.cwd).expect("canonical path");
-        assert!(
-            copy.contains("/somewhere/else"),
-            "the user's entries survive"
-        );
-        assert!(
-            copy.contains(canonical.to_string_lossy().as_ref()),
-            "the project is trusted in the copy: without it Grok silently loads none of the \
-             project's own configuration"
-        );
-        // The user's own store is untouched.
-        let original =
-            std::fs::read_to_string(home.join("trusted_folders.toml")).expect("the original");
-        assert!(!original.contains(canonical.to_string_lossy().as_ref()));
+        assert_eq!(carried.folder, canonical.to_string_lossy());
     }
 
     #[test]

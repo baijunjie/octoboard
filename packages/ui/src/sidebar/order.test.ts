@@ -26,7 +26,7 @@ const project = (id: string, name: string, pinned = false): Project => ({
   name,
   path: `/${name}`,
   source: "local",
-  claude_trust_consent: false,
+  trust_consent: false,
   pinned,
   tags: [],
 });

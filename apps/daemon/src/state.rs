@@ -596,6 +596,12 @@ impl AppState {
         let Some(live) = self.live_session(id) else {
             return Drain::Pending;
         };
+        // Nor while the agent may be showing its trust screen, which the paste's trailing Enter
+        // would accept (Codex, Grok Build) or decline (Claude Code); see `crate::trust`. The press
+        // that answers it, its first hook or the end of the watch releases the queue.
+        if live.trust.holds_writes() {
+            return Drain::Pending;
+        }
         let outcome = self.outbox.drain(&live);
         if outcome == Drain::Lost {
             // Nobody is waiting on a return value for most of these drains, and a message Octoboard

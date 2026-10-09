@@ -37,12 +37,14 @@ export interface ToastRequest {
   session?: string;
 }
 
-/** A Claude Code session waiting at its workspace-trust screen for the user's say-so. */
+/** A session waiting at its agent's folder-trust confirmation for the user's say-so. */
 export interface TrustPrompt {
   session: string;
+  /** The agent that is asking. */
+  agent: Agent;
   project: string;
   path: string;
-  /** The directory "trust all projects" would trust, or null when none is offered. */
+  /** The directory the "Trust parent folder" choice would trust, or null when none is offered. */
   trustDir: string | null;
 }
 
@@ -90,10 +92,11 @@ export interface State {
   snapshotEpoch: number;
   /** Oldest first; the first is the one the dialog shows. A prompt is dropped when it is answered or
    * declined, when its session stops running, and on a `snapshot`, which cannot say whether the
-   * screen is still up — the daemon re-sends the prompts still waiting right after each snapshot. */
+   * confirmation is still up — the daemon re-sends the prompts still waiting right after each
+   * snapshot. */
   trustPrompts: TrustPrompt[];
-  /** The directories whose projects Octoboard answers the trust prompt for, as the last `snapshot`
-   * or `trusted_directories_updated` said. */
+  /** The directories whose projects Octoboard presses every agent's trust confirmation for, as the
+   * last `snapshot` or `trusted_directories_updated` said. */
   trustedDirectories: string[];
   /** Keyed by project id. Absent for a project the daemon has not reported on yet, or that is not
    * a git repository at all. Dropped when its project is deleted — the daemon sends no deletion
@@ -174,7 +177,7 @@ function reducer(state: State, action: Action): State {
           };
         case "trusted_directories_updated":
           // A prompt for a project under a directory that is now trusted has nothing left to ask:
-          // the daemon answers that screen itself. The others stay queued.
+          // the daemon presses that confirmation itself. The others stay queued.
           return {
             ...state,
             trustedDirectories: event.trusted_directories,
@@ -218,7 +221,12 @@ function reducer(state: State, action: Action): State {
         case "project_upserted": {
           const projects = new Map(state.projects);
           projects.set(event.project.id, event.project);
-          return { ...state, projects };
+          // A project that now has the permission has nothing left to ask: the daemon presses its
+          // waiting confirmations itself, whichever agent shows them.
+          const trustPrompts = event.project.trust_consent
+            ? state.trustPrompts.filter((p) => p.project !== event.project.id)
+            : state.trustPrompts;
+          return { ...state, projects, trustPrompts };
         }
         case "project_deleted": {
           const projects = new Map(state.projects);
@@ -235,7 +243,7 @@ function reducer(state: State, action: Action): State {
         case "session_upserted": {
           const sessions = new Map(state.sessions);
           sessions.set(event.session.id, event.session);
-          // A session that no longer runs is no longer at a screen anyone can answer.
+          // A session that no longer runs is no longer at a confirmation anyone can answer.
           const trustPrompts = isLive(event.session.status)
             ? state.trustPrompts
             : state.trustPrompts.filter((p) => p.session !== event.session.id);
@@ -249,12 +257,15 @@ function reducer(state: State, action: Action): State {
           pages.delete(event.session);
           return { ...state, sessions, pages };
         }
-        case "claude_trust_prompt": {
+        case "trust_prompt": {
           if (state.trustPrompts.some((p) => p.session === event.session)) return state;
-          // Nothing left to ask about a project that a trusted directory already covers.
+          // Nothing left to ask about a project that has the permission, of its own or through a
+          // trusted directory: the daemon presses its confirmations itself.
+          if (state.projects.get(event.project)?.trust_consent) return state;
           if (isUnderAny(event.path, state.trustedDirectories)) return state;
           const prompt: TrustPrompt = {
             session: event.session,
+            agent: event.agent,
             project: event.project,
             path: event.path,
             trustDir: event.trust_dir,
@@ -321,7 +332,8 @@ export interface Daemon {
    * belong to no request, and what `toastError` is given. Returns the unsubscribe. */
   onToast: (listener: (toast: ToastRequest) => void) => () => void;
   /** Drops a trust prompt from the queue, whether it was answered or declined — declining leaves the
-   * screen for the user in the terminal, and the daemon asks again for it only after a `snapshot`. */
+   * confirmation for the user in the terminal, and the daemon asks again for it only after a
+   * `snapshot`. */
   dismissTrustPrompt: (session: string) => void;
   /** Retries the control connection right away after the automatic reconnect budget was spent. */
   reconnect: () => void;

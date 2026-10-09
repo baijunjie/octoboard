@@ -432,7 +432,7 @@ pub async fn handle(
             Ok(None)
         }
 
-        RequestBody::ConfirmClaudeTrust {
+        RequestBody::ConfirmTrust {
             session,
             remember,
             trust_parent_dir,
@@ -625,7 +625,7 @@ pub async fn add_project(
             }),
             source,
             remote_url: remote_url.clone(),
-            claude_trust_consent: false,
+            trust_consent: false,
             pinned: false,
             tags: tags.clone(),
         };
@@ -967,8 +967,13 @@ async fn relaunch_session(
     .await
     {
         Ok(()) => {
+            // What was queued for the relaunched session — the instruction above, say — is
+            // released by its first hook; for Codex, which runs none until its first prompt, also
+            // by Octoboard's successful press of its trust screen, or once its trust watch has
+            // ended with none sighted (`trust::supervise`). Never before, since the agent may be
+            // sitting on its trust or approval screen, where the paste's trailing Enter would
+            // answer it.
             state.publish_session(&state.session_record(&session.id)?);
-            reporting::release_after_relaunch(state, &session);
             Ok(())
         }
         Err(err) => {
@@ -2019,7 +2024,7 @@ mod tests {
                 default_agent: None,
                 source: ProjectSource::Local,
                 remote_url: None,
-                claude_trust_consent: false,
+                trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),
             })
@@ -2131,7 +2136,7 @@ mod tests {
                 default_agent: None,
                 source: ProjectSource::Local,
                 remote_url: None,
-                claude_trust_consent: false,
+                trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),
             })
@@ -2210,7 +2215,7 @@ mod tests {
                     default_agent: None,
                     source: ProjectSource::Local,
                     remote_url: None,
-                    claude_trust_consent: false,
+                    trust_consent: false,
                     pinned: false,
                     tags: Vec::new(),
                 })
@@ -2619,7 +2624,7 @@ mod tests {
                     default_agent: None,
                     source: ProjectSource::Local,
                     remote_url: None,
-                    claude_trust_consent: false,
+                    trust_consent: false,
                     pinned: false,
                     tags: Vec::new(),
                 })
@@ -2921,7 +2926,7 @@ mod tests {
                 default_agent: None,
                 source: ProjectSource::Local,
                 remote_url: None,
-                claude_trust_consent: false,
+                trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),
             })

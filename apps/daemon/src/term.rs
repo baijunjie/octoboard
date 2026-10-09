@@ -192,6 +192,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         child,
         scratch_dir: Some(scratch),
         resolves_approvals_itself: plan.resolves_approvals_itself,
+        carried_trust: plan.carried_trust,
     }));
     session::spawn_reader_thread(live.clone(), PTY_READ_BUF);
 
@@ -239,7 +240,7 @@ pub fn send_message(session: &LiveSession, text: &str) -> Result<(), crate::ptyi
 /// steps — strip before guard, not after — is something a test can pin directly, rather than
 /// re-deriving it from a copy of this logic; `send_message` itself needs a `LiveSession` and a PTY,
 /// which is why it is not tested directly.
-fn frame_message(text: &str) -> Vec<u8> {
+pub(crate) fn frame_message(text: &str) -> Vec<u8> {
     // `text` can be model-authored (a report panel submission, a project session's report summary)
     // and is never reviewed before it is written here. Without this, a value containing the
     // paste-end marker (`ESC[201~`) would close the bracketed paste early, and everything the

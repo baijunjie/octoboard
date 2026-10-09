@@ -753,7 +753,7 @@ mod tests {
                 default_agent: None,
                 source: ProjectSource::Local,
                 remote_url: None,
-                claude_trust_consent: false,
+                trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),
             })
@@ -815,7 +815,7 @@ mod tests {
                     default_agent: None,
                     source: ProjectSource::Local,
                     remote_url: None,
-                    claude_trust_consent: false,
+                    trust_consent: false,
                     pinned: false,
                     tags: Vec::new(),
                 })
@@ -1000,7 +1000,7 @@ mod tests {
                 default_agent: None,
                 source: ProjectSource::Local,
                 remote_url: None,
-                claude_trust_consent: false,
+                trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),
             })

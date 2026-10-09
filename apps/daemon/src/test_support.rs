@@ -158,6 +158,23 @@ pub(crate) fn fake_live_session(
     rows: u16,
     script: &str,
 ) -> StandIn {
+    let live = watched_live_session(id, agent, cols, rows, script, None);
+    // Past its trust screen, as a session that has run a hook is, so that messages are written
+    // into it rather than held.
+    live.trust.end_watch();
+    live
+}
+
+/// [`fake_live_session`] with its trust watch still looking for the agent's screen, as a freshly
+/// launched session's is, and, for a Grok one, where its trust record is carried after a press.
+pub(crate) fn watched_live_session(
+    id: &str,
+    agent: Agent,
+    cols: u16,
+    rows: u16,
+    script: &str,
+    carried_trust: Option<crate::trust::CarriedTrust>,
+) -> StandIn {
     use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 
     let pty = native_pty_system()
@@ -183,6 +200,7 @@ pub(crate) fn fake_live_session(
         child,
         scratch_dir: None,
         resolves_approvals_itself: false,
+        carried_trust,
     })))
 }
 

@@ -1,24 +1,57 @@
 import type { Scenario } from "../scenario";
-import { SAMPLE, snapshotState } from "./builders";
+import { SAMPLE, sessionOf, snapshotState } from "./builders";
 
 const TRUST = "Trust and toasts";
 
-const { console: console_, web, api, sessions } = SAMPLE;
+const { console: console_, web, api } = SAMPLE;
+// A session of each of the other two agents, for the prompts and notices that name the agent.
+const codexSession = sessionOf("s-api-codex", console_.id, api.id, "Review the retry logic", "working", {
+  agent: "codex",
+});
+const grokSession = sessionOf("s-web-grok", console_.id, web.id, "Tidy the stylesheet", "working", { agent: "grok" });
+const sessions = [...SAMPLE.sessions, codexSession, grokSession];
 
 export const noticeScenarios: Scenario[] = [
   {
     id: "trust-prompt",
     group: TRUST,
     title: "Trust prompt, a second one queued",
-    description: "The dialog with the parent-folder option; the project's folder is shown, the second prompt waits behind it.",
+    description:
+      "Claude Code asking, with the parent-folder option; the project's folder is shown, the second prompt waits behind it.",
     state: snapshotState({
       consoles: [console_],
       projects: [web, api],
       sessions,
       trustPrompts: [
-        { session: "s-web-1", project: web.id, path: web.path, trustDir: "/Users/dev/code" },
-        { session: "s-api-1", project: api.id, path: api.path, trustDir: null },
+        { session: "s-web-1", agent: "claude", project: web.id, path: web.path, trustDir: "/Users/dev/code" },
+        { session: codexSession.id, agent: "codex", project: api.id, path: api.path, trustDir: null },
       ],
+    }),
+  },
+  {
+    id: "trust-prompt-codex",
+    group: TRUST,
+    title: "Trust prompt, Codex asking",
+    description: "Codex's caution and the note that it records the trust for the repository root.",
+    state: snapshotState({
+      consoles: [console_],
+      projects: [web, api],
+      sessions,
+      trustPrompts: [
+        { session: codexSession.id, agent: "codex", project: api.id, path: api.path, trustDir: "/Users/dev/code" },
+      ],
+    }),
+  },
+  {
+    id: "trust-prompt-grok",
+    group: TRUST,
+    title: "Trust prompt, Grok Build asking",
+    description: "Grok Build's caution, without the parent-folder option.",
+    state: snapshotState({
+      consoles: [console_],
+      projects: [web, api],
+      sessions,
+      trustPrompts: [{ session: grokSession.id, agent: "grok", project: web.id, path: web.path, trustDir: null }],
     }),
   },
   {
@@ -37,18 +70,31 @@ export const noticeScenarios: Scenario[] = [
     id: "toast-notice",
     group: TRUST,
     title: "Notice toasts",
-    description: "Session notices: a setting Octoboard had to work around, and a long text.",
+    description:
+      "Session notices: a setting Octoboard had to work around, a failed press of a trust confirmation, a trust entry that could not be carried over, and a long text.",
     state: snapshotState({ consoles: [console_], projects: [web, api], sessions }),
     toasts: [
       { kind: "notice", code: "claude_workspace_untrusted", params: {}, message: "", session: "s-web-1" },
       {
         kind: "notice",
-        code: "claude_trust_answer_failed",
-        params: { reason_code: "cursor_moved_away" },
+        code: "trust_answer_failed",
+        params: { agent: "Codex", reason_code: "cursor_moved_away" },
         message: "",
-        session: "s-api-1",
+        session: codexSession.id,
       },
       { kind: "notice", code: "queued_messages_dropped", params: {}, message: "", session: "s-web-2" },
+      {
+        kind: "notice",
+        code: "trust_not_carried_over",
+        params: {
+          agent: "Grok Build",
+          path: "/Users/dev/.grok/trusted_folders.toml",
+          reason: "the file stayed locked by another program",
+          reason_code: "store_locked",
+        },
+        message: "",
+        session: grokSession.id,
+      },
     ],
   },
 ];

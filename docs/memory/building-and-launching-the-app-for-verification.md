@@ -74,7 +74,7 @@ lock under `$HOME/.octoboard` and its port file under the temp directory (see th
 Octoboard is running, loses the lock and opens the window on the `?error=` startup screen instead of the app.
 The daemon then takes that directory as the user's home, and the app offers less around it: a project whose parent
 folder is or contains it gets no "Trust parent folder" (see the "Trusted folders" section of
-`docs/product/launching-agents.md`). So put project directories inside the throwaway `HOME` (`$HOME/code/<project>`),
+`docs/product/folder-trust.md`). So put project directories inside the throwaway `HOME` (`$HOME/code/<project>`),
 not beside it in one scratch directory.
 
 WKWebView ignores both variables, though: it keeps the page's `localStorage` under the *real* user's

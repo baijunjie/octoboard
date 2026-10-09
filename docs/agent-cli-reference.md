@@ -8,8 +8,9 @@ conversation into another config directory.
 Established against **Claude Code 2.1.274**, **Codex 0.160.0** and **Grok Build 1.0.46**; what the Claude Code section
 says about a declined prompt was measured on **2.1.286** as well, and held identically on both. What "Moving a
 conversation to another config directory" says was measured on **Claude Code 2.1.289**, **Codex 0.160.0** and **Grok
-Build 1.0.46**. All three rewrite their hook surface, their payload fields, their configuration layering and their
-on-disk layout on upgrade, so check a detail here against the installed version before relying on it.
+Build 1.0.46**. What "Folder-trust confirmations" says about Codex and Grok Build was measured on **Codex 0.161.0**
+and **Grok Build 1.0.50**. All three rewrite their hook surface, their payload fields, their configuration layering and
+their on-disk layout on upgrade, so check a detail here against the installed version before relying on it.
 
 How Octoboard's status mapping handles these traps is encoded in `apps/daemon/src/hooks.rs`; the product behavior
 built on them is in the product docs.
@@ -157,6 +158,12 @@ the hook's own stderr text is not shown — and a *synchronous* hook that hangs 
 `--- project-doc ---` line, so the user's global file survives; skills are discovered in both `<cwd>/.agents/skills/`
 and `<cwd>/.codex/skills/`. `<cwd>/.codex/config.toml` is **not read at all**, which is why Codex has no project-level
 permission or approval configuration for an injected one to collide with.
+
+**An update prompt can come first**: when a newer version is out, Codex can open with an "Update now / Skip / Skip
+until next version" prompt (seen as an "Update available!" banner in the probe on 0.161.0). Octoboard passes
+`-c check_for_update_on_startup=false` on every launch, the setting Codex's own config defines for whether it checks
+for updates at startup and shows that prompt, so nothing sits in front of the folder-trust confirmation; it applies to
+that launch only. That it suppresses the prompt entirely has not yet been verified against a live Codex.
 
 **Two visible side effects of passing any `-c` override**: it forces embedded mode, so the TUI carries a permanent
 `⚠ 1 warning` badge explaining that command-line overrides require it, and the session is invisible to `codex agents`.
@@ -323,19 +330,19 @@ edit of the project's or the user's files, and was exercised against the version
 - **Grok Build** has no flag for hooks or MCP, and its `GROK_CONFIG` / `GROK_CONFIG_PATH` overlay accepts only
   allowlisted keys, so both silently drop. The working mechanism is a per-session `GROK_HOME` where every entry links
   back to the source home, except a copied `config.toml` carrying the MCP block, a copied `trusted_folders.toml` with
-  the project added and an Octoboard `hooks/` directory. `auth.json` and `sessions/` stay links, so login is shared
-  and sessions stay resumable from the user's own
-  `grok`.
-- **Codex** needs the project marked trusted the same way (`-c 'projects={"<canonical cwd>"={trust_level="trusted"}}'`),
-  and gates hooks behind a persisted trust hash: without it an interactive session raises a blocking review modal and a
-  headless one **hangs indefinitely**. `--dangerously-bypass-hook-trust` clears that at the cost of two warning lines
-  per launch. The hash is taken over the handler definition, which includes the hook command, and that command is the
-  session's own script path, so hashes captured once could never match a later session. Removing the warning would mean
-  a session-independent hook command.
+  nothing added to it, and an Octoboard `hooks/` directory. `auth.json` and `sessions/` stay links, so login is shared
+  and sessions stay resumable from the user's own `grok`.
+- **Codex** gates hooks behind a persisted trust hash: without it an interactive session raises a blocking review modal
+  and a headless one **hangs indefinitely**. `--dangerously-bypass-hook-trust` clears that at the cost of two warning
+  lines per launch. The hash is taken over the handler definition, which includes the hook command, and that command is
+  the session's own script path, so hashes captured once could never match a later session. Removing the warning would
+  mean a session-independent hook command. Project trust is not passed: a per-launch `projects` override is saved
+  nowhere, so Codex's own confirmation is pressed instead (see "Folder-trust confirmations" below).
 - **Workspace trust gates the project's own configuration on Claude Code and Grok**, and fails silently. On Grok an
-  untrusted folder makes the project's `AGENTS.md`, hooks and MCP servers not load; trust lives inside `GROK_HOME`, so
-  that store must be present there with the project added (an undocumented `--trust` flag also exists), and Grok also
-  needs a recognized **git** root, since project hooks did not load in a trusted non-git directory. On Claude Code an
+  untrusted folder makes the project's `AGENTS.md`, hooks and MCP servers not load; trust lives inside `GROK_HOME` (an
+  undocumented `--trust` flag also exists), and Grok also needs a recognized **git** root, since project hooks did not
+  load in a trusted non-git directory. Octoboard makes no trust decision of its own in either agent's store and passes
+  none for a launch; it presses the agent's own confirmation (see "Folder-trust confirmations" below). On Claude Code an
   untrusted workspace makes the project's `allow` rules ignored (with a line on stderr) while `deny` still applies, so
   the session is only ever more restrictive. Its trust lives in the global config file (`~/.claude.json`, or
   `.claude.json` inside the config directory in effect), which Octoboard reads and never writes. It is read rather than
@@ -360,6 +367,41 @@ edit of the project's or the user's files, and was exercised against the version
 - Injection never modifies project files or the user's global configuration; where an agent can only be configured
   through a file, a "use this config directory" variable or flag is preferred.
 
+### Folder-trust confirmations
+
+Each agent asks once per folder it has not been told to trust, on a confirmation of its own, before any hook runs.
+Octoboard recognizes it in the terminal output and presses it; what pressing it records is the agent's own business.
+
+- **Claude Code** shows its workspace-trust screen the first time it runs in a directory, with the cursor on "No,
+  exit" and "Yes, I trust this folder" below it; a Down and then an Enter accept. It records the trust in its global
+  config file (above), and runs its first hook only after the screen is answered.
+- **Codex** shows its folder-trust confirmation only when the working directory is inside a git repository; outside
+  one it never asks. The screen reads "Trust this folder? Codex can read, edit, and run files here, …", then "› 1.
+  Trust and continue", "2. Quit" and "enter continue · esc quit". The cursor (`›`, U+203A) starts on option 1, and
+  Enter alone accepts; any carriage return reaching the screen accepts. Codex records `[projects."<repository root>"]
+  trust_level = "trusted"` in `$CODEX_HOME/config.toml`: from a subdirectory it records the repository root, and from
+  a linked worktree the main repository's root, so the record can cover more than the folder asked about. A trusted
+  parent directory in that file does not cover a repository below it. No hook fires before or right after the
+  confirmation, so only a bound on time and output can end a watch for it. Codex redraws only the cells that changed,
+  so text read off the screen can lose characters wherever the frame before held the same one; the confirmation's own
+  phrases came through intact in its first drawing, a path above it did not. The review Codex raises for new hooks
+  without `--dangerously-bypass-hook-trust` reads "Hooks need review … 2. Trust all and continue" and is a different
+  modal. On 0.161.0 a key the confirmation ignores (a letter, Right, Tab, `?`) draws nothing but a bare
+  synchronized-update frame (`ESC[?2026h ESC[39m ESC[49m ESC[0m ESC[?2026l`); accepting it clears the screen and
+  redraws it whole, starting with the ">_ OpenAI Codex (v…)" banner, which is how an answer given in the terminal is
+  told apart.
+- **Grok Build** shows its confirmation only when the folder holds content its trust gates, such as an `AGENTS.md`,
+  whether or not it is a git repository, so a console directory holding an instruction file is asked about too. The
+  screen reads "Do you trust the contents of this directory?", "Grok Build may run or modify contents in this
+  directory, posing security risks.", "Yes, proceed y" and "No, quit n", with no cursor; `y` or Enter accepts, and a
+  decline exits. Grok writes `[folders."<canonical cwd>"]` with `trusted = true` and `decided_at` into
+  `$GROK_HOME/trusted_folders.toml`, saving by replacing the file, so against Octoboard's per-session `GROK_HOME` the
+  entry lands only in the session's copy and a symlink there is replaced rather than followed; no setting moves the
+  store. Octoboard therefore carries that one entry, unchanged, into the user's own store, after its own press and after
+  the person answers in the terminal alike, holding the `trusted_folders.toml.lock` Grok keeps beside it. `SessionStart`
+  fires right after the press. While it waits, Grok animates its logo at about 2 KB/s, so the first drawing soon leaves
+  any window of recent output and the terminal is never quiet.
+
 ### Writing into a running session
 
 The sequence for all three agents is `ESC[200~`, the text with LF separators, `ESC[201~`, then `CR`; multi-line text
@@ -372,10 +414,14 @@ or destructively if ignored:
   non-blocking partial-write-and-retry loop in slices, never a blocking `write_all` on the daemon's event loop.
 - Nothing may be written while a modal dialog is up. The paste is discarded but the trailing `CR` confirms whatever is
   highlighted: at Claude Code's trust dialog that was seen to exit the session for a short message (an 8.8 KB paste
-  left it untouched, unexplained), and at Grok's approval modal it would select "always-approve". Codex is the
-  exception, where a paste at its modal changes nothing. Never send bare keys either, since Grok and Codex treat
-  digits as confirm hotkeys. The one deliberate exception is the daemon's answer to Claude Code's own trust screen,
-  which types Down and Enter and nothing else.
+  left it untouched, unexplained), at Grok's approval modal it would select "always-approve", and at Codex's or Grok's
+  folder-trust confirmation it accepts, trusting the folder. Only Codex's approval modal was seen to take a paste
+  without effect. Never send bare keys either, since Grok and Codex treat digits as confirm hotkeys. The one
+  deliberate exception is the daemon's press of an agent's own folder-trust confirmation: Down and Enter for Claude
+  Code, Enter for Codex, `y` for Grok, and nothing else.
 - The gate comes from hook-reported state, never from the terminal, because none of the agents signal modal state
-  through terminal modes. If the hook state is missing or stale, do not write. Recognizing Claude Code's trust screen is
-  the exception: no hook runs before it is answered, so it can only be read from the output.
+  through terminal modes. If the hook state is missing or stale, do not write. The folder-trust confirmations are the
+  exception: no hook runs before one is answered, so it can only be read from the output, and nothing is written into
+  a session from its launch until its first hook has arrived; for Codex, which runs none until its first prompt, also
+  until the confirmation has been pressed, the person's answer in the terminal is seen to replace it, or the watch for
+  it has ended with none sighted.

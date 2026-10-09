@@ -127,8 +127,11 @@ probe run with `/tmp` as its own cwd silently starts out trusted, quietly invali
 behaviour. Below a trusted directory it depends on git (read out of the Claude Code 2.1.294 executable): a directory
 that is not in a git repository is trusted through any trusted directory above it, without a trust screen and with its
 own entry left at `false`, while inside a repository only directories up to the repository root count. So a fresh
-scratch subdirectory of a trusted `/tmp` starts out trusted too unless it is a repository. Probes also leave session
-records behind in the user's agent directories.
+scratch subdirectory of a trusted `/tmp` starts out trusted too unless it is a repository. Codex asks only inside a git
+repository and records the trust for the repository's root — from a linked worktree, the main checkout's root (Codex
+0.161.0) — so a Codex probe run from this repository or any worktree of it marks the user's own clone trusted in their
+`config.toml`; give a Codex trust probe a fresh `git init` inside its scratch directory instead. Probes also leave
+session records behind in the user's agent directories.
 
 A fresh scratch directory is by definition untrusted, and Claude Code stops there on its folder-trust dialog and
 does nothing else — a probe that looks like it produced no output at all is usually sitting on that dialog. Grepping

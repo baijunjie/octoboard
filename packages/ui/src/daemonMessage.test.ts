@@ -17,12 +17,14 @@ it("words a known code from the catalog, showing a record by its name and an unk
 });
 
 it("words a trust answer's failure from its reason code, keeping the English reason for an unknown one", () => {
-  const reason = "the screen did not go away after Enter";
-  expect(daemonMessage("en", "claude_trust_answer_failed", { reason, reason_code: "screen_not_dismissed" }, "x", records)).toBe(
-    `${appConfig.name} could not answer Claude Code's trust screen (${reason}). Answer it in the terminal.`,
+  const reason = "the confirmation did not go away after the key was sent";
+  const agent = "Codex";
+  const params = { agent, reason, reason_code: "screen_not_dismissed" };
+  expect(daemonMessage("en", "trust_answer_failed", params, "x", records)).toBe(
+    `${appConfig.name} could not press Codex's trust confirmation (${reason}). Answer it in the terminal.`,
   );
-  expect(daemonMessage("en", "claude_trust_answer_failed", { reason: "why", reason_code: "newer" }, "x", records)).toBe(
-    `${appConfig.name} could not answer Claude Code's trust screen (why). Answer it in the terminal.`,
+  expect(daemonMessage("en", "trust_answer_failed", { agent, reason: "why", reason_code: "newer" }, "x", records)).toBe(
+    `${appConfig.name} could not press Codex's trust confirmation (why). Answer it in the terminal.`,
   );
 });
 

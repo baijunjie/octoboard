@@ -86,10 +86,14 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   Settings, how the system's languages map onto the list, what follows the current language and what does not (report
   pages, text aimed at agents), where the choice is kept, and what is translated so far.
 - [Launching agents](product/launching-agents.md) — the guarantee that Octoboard installs nothing into a project and
-  never writes the user's agent configuration (the one exception being the conversation record a switch of a session's
-  account copies), and the one thing it touches a project directory for, once the user turns it on; the three things
-  injected per launch and the console session's generated instruction file, the launch environment, Claude Code's
-  workspace-trust prompt, how Octoboard answers it and trusted folders, and the per-agent specifics.
+  never writes the user's agent configuration (the two narrow exceptions being the conversation record a switch of a
+  session's account copies and the Grok Build trust entry carried to the user's own store), and the one thing it
+  touches a project directory for, once the user turns it on; the three things injected per launch and the console
+  session's generated instruction file, the launch environment, and the per-agent specifics.
+- [Folder trust](product/folder-trust.md) — each agent's own folder-trust confirmation and where it records the trust,
+  the one auto-trust permission Claude Code, Codex and Grok Build share (a project or a trusted folder), the trust
+  dialog, how Octoboard presses each agent's confirmation, carrying Grok Build's trust entry into the user's store, and
+  the trusted-folders rules.
 - [Application lifecycle](product/application-lifecycle.md) — what Octoboard runs on and how it is distributed, startup
   and the single-instance rule, who can reach the daemon (any local program, but no web page in a browser), losing the
   daemon connection, closing the window into the background (out of the Dock, everything kept running) and every way
@@ -113,8 +117,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Agent CLI reference](agent-cli-reference.md) — what the three agent CLIs themselves do, against the versions the
   facts were established on: each one's hook events, the payload fields and the keys a turn can be correlated on, what
   a failing hook costs, how a project's own configuration layers around an injected one, how Octoboard is injected into
-  each agent and the conditions that come with it, the rules for writing into a running session, and where each keeps a
-  session's conversation record and what moving it to another config directory takes.
+  each agent and the conditions that come with it, each agent's own folder-trust confirmation (when it appears, how it
+  reads and is accepted, and where the agent records the trust), the rules for writing into a running session, and
+  where each keeps a session's conversation record and what moving it to another config directory takes.
 
 ## Code
 

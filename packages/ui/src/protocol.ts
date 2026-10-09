@@ -80,9 +80,10 @@ export interface Project {
   default_agent?: Agent | null;
   source: ProjectSource;
   remote_url?: string | null;
-  /** The user has agreed that Octoboard may answer Claude Code's workspace-trust screen for this
-   * project's directory. Only ever set by `confirm_claude_trust` with `remember`. */
-  claude_trust_consent: boolean;
+  /** The user has agreed that Octoboard may press any agent's own trust confirmation for this
+   * project's directory without asking: the project form of the one permission every agent shares.
+   * Only ever set by `confirm_trust` with `remember`, once a confirmation has been pressed. */
+  trust_consent: boolean;
   /** The user pinned this project to the top of its console's project list. */
   pinned: boolean;
   /** The user's free-form labels for this project, used to filter the project list. There is no tag
@@ -444,11 +445,12 @@ export type RequestBody =
    * session: it is what the panel knows, and it names the console session the submission goes to.
    * Only that console session's newest page may be submitted from. */
   | { type: "submit_page"; page: string; data: unknown }
-  /** The user's go-ahead to a `claude_trust_prompt`: Octoboard may answer that session's trust
-   * screen. `remember` also records the project's consent, so its later sessions are answered
-   * without a prompt; `trust_parent_dir` records the project's parent directory as trusted instead
-   * (the daemon derives it; it is the prompt's `trust_dir`), covering every project under it. */
-  | { type: "confirm_claude_trust"; session: string; remember: boolean; trust_parent_dir?: boolean }
+  /** The user's go-ahead to a `trust_prompt`: Octoboard may press that session's trust
+   * confirmation. `remember` also records the project's consent, so a later confirmation of any
+   * agent in the project is pressed without a prompt; `trust_parent_dir` records the project's
+   * parent directory as trusted instead (the daemon derives it; it is the prompt's `trust_dir`),
+   * covering every project under it. Either is recorded only once the confirmation was pressed. */
+  | { type: "confirm_trust"; session: string; remember: boolean; trust_parent_dir?: boolean }
   /** Stops trusting a directory; projects' own consents are untouched. */
   | { type: "remove_trusted_directory"; path: string }
   /** Each settable field is optional: absent means leave it as it is. Answered with `ack`;
@@ -518,7 +520,7 @@ export type Event =
       consoles: Console[];
       projects: Project[];
       sessions: Session[];
-      /** Directories whose projects Octoboard answers Claude Code's trust prompt for. */
+      /** Directories whose projects Octoboard presses every agent's trust confirmation for. */
       trusted_directories: string[];
       settings: Settings;
       /** Every status the daemon currently holds; empty on a fresh start. Keeps a reconnecting
@@ -558,13 +560,15 @@ export type Event =
    * broadcast as `session_upserted`, but that broadcast carries no request id, so this is the
    * only way the caller can tell which session in the tree is the one it just opened. */
   | { type: "session_opened"; id?: string; session: Session }
-  /** A Claude Code session of a project the user has not agreed Octoboard may answer for is at its
-   * workspace-trust screen, which asks whether `path` is trusted. Broadcast once per screen, and sent
-   * again to a client right after each `snapshot` (connect or lag recovery) for every screen still
-   * waiting, so a client that missed it is still asked; a repeat is ignored. */
+  /** A session of a project the user has not agreed Octoboard may press trust confirmations for is
+   * at its agent's folder-trust confirmation, which asks whether `path` is trusted; `agent` is the
+   * one asking. Broadcast once per confirmation, and sent again to a client right after each
+   * `snapshot` (connect or lag recovery) for every one still waiting, so a client that missed it is
+   * still asked; a repeat is ignored. */
   | {
-      type: "claude_trust_prompt";
+      type: "trust_prompt";
       session: string;
+      agent: Agent;
       project: string;
       path: string;
       /** The directory `trust_parent_dir` would trust, or null when there is none to offer (too broad
@@ -656,7 +660,7 @@ export type Event =
   | { type: "ack"; id?: string }
   /** A failure, worded from `code` and `params` (see `daemonMessage.ts`); `message` is the English
    * text, shown for a code the client does not know. A client also branches on some codes — see
-   * `ALREADY_RUNNING_CODES`, `TRUST_REFUSED_CODES`, `CLAUDE_TRUST_NOT_WAITING`, `REQUEST_SUPERSEDED`,
+   * `ALREADY_RUNNING_CODES`, `TRUST_REFUSED_CODES`, `TRUST_NOT_WAITING`, `REQUEST_SUPERSEDED`,
    * `SOURCE_CHANGED` and `WORKTREE_UNAVAILABLE`. */
   | { type: "error"; id?: string; code: string; params: MessageParams; message: string };
 
@@ -676,8 +680,9 @@ export const TRUST_REFUSED_CODES: readonly string[] = [
   "trust_home_unknown",
 ];
 
-/** The go-ahead was for a trust screen no longer waiting: nothing is wrong, so nothing is shown. */
-export const CLAUDE_TRUST_NOT_WAITING = "claude_trust_not_waiting";
+/** The go-ahead was for a trust confirmation no longer waiting: nothing is wrong, so nothing is
+ * shown. */
+export const TRUST_NOT_WAITING = "trust_not_waiting";
 
 /** A browse request given up for a newer one in its slot, as the client asked: nothing is shown. */
 export const REQUEST_SUPERSEDED = "request_superseded";

@@ -105,7 +105,7 @@ So where a check has to run in the real app, keep the GUI out of the setup: crea
 daemon's own protocol requests, and drive only the behaviour under test through the window. A session's status can be
 set up the same way, without an agent prompt or a model turn: POST `{"hook_event_name":"PermissionRequest"}` to the
 daemon's `/hook/<session>` to raise its hand, and a later `UserPromptSubmit` lowers it again. Trusted folders are the
-exception: the protocol adds one only as the answer to a live Claude Code trust screen, so seed them by inserting
+exception: the protocol adds one only as the answer to a live agent's trust confirmation, so seed them by inserting
 rows into the `trusted_directories` table of `$HOME/.octoboard/octoboard.db` while the app is stopped.
 
 Keystrokes go to whichever application is frontmost, and a click at screen coordinates to whichever window is on top

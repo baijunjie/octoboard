@@ -126,9 +126,9 @@ consoles and sessions use one are in "Agent config directories" in `docs/product
 
 ## Trusted folders
 
-The folders under which Octoboard answers Claude Code's workspace-trust prompt for every project, with a way to stop
-trusting each one. What the list shows and what removing a folder does are in "Trusted folders" in
-`docs/product/launching-agents.md`.
+The folders under which Octoboard presses every agent's trust confirmation without asking, for every project — the
+folder form of the trust permission all agents share — with a way to stop trusting each one. What the list shows and
+what removing a folder does are in "Trusted folders" in `docs/product/folder-trust.md`.
 
 ## Notifications
 

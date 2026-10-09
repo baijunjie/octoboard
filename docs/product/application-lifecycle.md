@@ -69,8 +69,8 @@ that are not failures. Every such notice names where its session is — the proj
 console session it is — and so does a failure that is about one particular session, since what the daemon reports refers
 to the session it is about only as "this session". A failed report-page submission is one such failure (see "Submitting
 a form back to the console session" in `docs/product/report-panel.md`). A failure raised by a dialog's own action is
-shown in that dialog instead — except in the dialog for Claude Code's workspace-trust prompt, which closes and reports
-most failures as a toast (see "Claude Code's workspace-trust prompt" in `docs/product/launching-agents.md`).
+shown in that dialog instead — except in the trust dialog, which closes and reports most failures as a toast (see
+"The trust dialog" in `docs/product/folder-trust.md`).
 
 A dialog has two places to say what went wrong. **The failure of the dialog's own action** — what the daemon
 rejected, or an image the window could not read as an avatar — is a line at the foot of the dialog. **What is wrong
@@ -202,7 +202,7 @@ after the table:
 
 | Path | Contents |
 |---|---|
-| `~/.octoboard/octoboard.db` | Consoles, projects, session records, the report panel pages of every console session, the folders trusted for Claude Code's workspace-trust prompt (see "Trusted folders" in `docs/product/launching-agents.md`), and the settings the daemon keeps for every client (see "Git" and "General" in `docs/product/settings.md`). Octoboard has not shipped, so its schema still changes in place: a database written by an older build is not upgraded. The daemon instead moves it aside, beside itself, with a `.superseded-<timestamp>` suffix, and starts a fresh one at the usual path — the data in the old file is not read back into the new one, and the user re-enters their consoles, projects and accounts by hand. The one exception is the default clone directory, an optional setting added later, which is added to an existing settings table in place. |
+| `~/.octoboard/octoboard.db` | Consoles, projects, session records, the report panel pages of every console session, each project's trust permission and the trusted folders (see "The trust permission" in `docs/product/folder-trust.md`), and the settings the daemon keeps for every client (see "Git" and "General" in `docs/product/settings.md`). Octoboard has not shipped, so its schema still changes in place: a database written by an older build is not upgraded. The daemon instead moves it aside, beside itself, with a `.superseded-<timestamp>` suffix, and starts a fresh one at the usual path — the data in the old file is not read back into the new one, and the user re-enters their consoles, projects and accounts by hand. Two exceptions are changed in place instead, so the database and everything in it are kept: the default clone directory, an optional setting added later, is added to an existing settings table; and a projects table that still keeps the trust permission under its older, Claude Code-only name has that column renamed, each project keeping the permission it had. |
 | `~/.octoboard/consoles/<console id>/` | A console's working directory, where its console sessions run, including the console session instruction file Octoboard generates there (see "The console session's instruction file" in `docs/product/launching-agents.md`). Removed when the console is deleted. |
 | `~/.octoboard/run/<session id>/` | Per-session scratch space for what a launch injects. Removed when the session's process is gone, and cleared wholesale on daemon start. |
 | `~/.octoboard/output/<session id>` | The raw terminal output a session's last process left, at most 2 MiB, shown when the session is selected with no process (see "The terminal" in `docs/product/sessions.md`). Written when the process ends, including when the daemon stops it on its way out, but not when the daemon itself goes down on an internal failure. Removed with the session's record; on daemon start, any left for a session that no longer exists is removed. |
@@ -213,5 +213,5 @@ The macOS application keeps the window's size, position and maximized state in
 launches" in `docs/product/window-size-and-position.md`). It belongs to the application's window rather than to the
 daemon, so it is not under `~/.octoboard`. Deleting it makes the next launch open the window as a first launch does.
 
-Nothing is written inside a project directory, and nothing is written into the user's own agent configuration — see
-"What Octoboard never modifies" in `docs/product/launching-agents.md`.
+Nothing is written inside a project directory, and nothing is written into the user's own agent configuration beyond
+two narrow exceptions — see "What Octoboard never modifies" in `docs/product/launching-agents.md`.

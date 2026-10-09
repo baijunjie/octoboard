@@ -101,12 +101,11 @@ prompt, and is given its work by typing into its terminal. Only a session starte
 session or an unbound project session — is handed an opening prompt, the brief it is started with (see "Handing out a
 task: the brief" in `docs/product/hub-orchestration.md`); it starts in *working*.
 
-A Claude Code session in a directory Claude Code has not been trusted with first stops on Claude
-Code's own workspace-trust prompt, before it takes up its task or reaches its prompt. A resumed
-session can stop on it as well; since a session left interrupted is relaunched only when it is
-selected or resumed, that is when its prompt appears. Octoboard answers that prompt for the user once
-they have agreed — for that project, or for a folder its directory lies under — or asks them first;
-see "Claude Code's workspace-trust prompt" in `docs/product/launching-agents.md`.
+A session in a folder its agent has not been told to trust can first stop on that agent's own trust confirmation,
+before it takes up its task or reaches its prompt. A resumed session can stop on it as well; since a session left
+interrupted is relaunched only when it is selected or resumed, that is when its confirmation appears. Octoboard presses
+that confirmation for the user once they have given permission — for that project, or for a folder its directory lies
+under, whichever agent asked — or asks them first; see `docs/product/folder-trust.md`.
 
 If the launch itself fails — the directory cannot be reached, the agent binary is not on the user's `PATH`, the user's
 shell environment could not be captured (see "The launch environment" in `docs/product/launching-agents.md`), or, for
@@ -202,8 +201,9 @@ limitations of what the agents expose rather than of this one:
   keeps reading as working until the next prompt is submitted. A session that was *waiting for the user* falls into
   the same silence, but there the hand would be left up with nothing to lower it, so that one case is recovered
   from the transcript instead — see "Declining a Claude Code prompt or question" below.
-- Claude Code reports nothing while it is on its workspace-trust prompt, so a session sitting there keeps the status its
-  launch gave it — *working* or *awaiting instructions* — and raises no hand, although it is waiting for a person.
+- No agent reports anything while it is on its own folder-trust confirmation, so a session sitting there keeps the
+  status its launch gave it — *working* or *awaiting instructions* — and raises no hand, although it is waiting for a
+  person.
 - Grok Build's bash mode (`!`) fires no tool or turn events, so work done through it never shows in the status; Grok's
   turn-end backstop was seen to follow about a minute later in one run (see "When a session does not report" in
   `docs/product/hub-orchestration.md`), but it finds the session already awaiting instructions.
