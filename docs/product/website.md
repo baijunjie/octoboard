@@ -34,6 +34,9 @@ keeping independent native project sessions with their own rules, retaining diff
 and letting the user work directly with the project agent handling a task. The explanation connects these benefits
 to transferring tasks and results between frontend, backend, and documentation projects, preserving local project
 configuration, and explaining specific requirements or code details directly to the agent doing the work.
+The different-brands benefit also includes assigning a step to another brand. A coordinator running Claude Code can give
+image generation to Codex, because Claude Code does not generate images, and can give Codex the steps that drive a local
+application or a browser, where Codex is stronger. The coordinator then continues from what Codex reports.
 
 A statement about collaboration across repositories appears beside a static illustration connecting the three agent
 brands to Octoboard's mascot. It leads into the three stages of coordination: give the goal to a coordinator, let
@@ -56,10 +59,9 @@ understanding, platform availability, preparation and costs, data handling, and 
 loading is described as dependent on the agent and its tools. Product understanding comes from ongoing conversations,
 project knowledge, and reports available to the session, not automatic training or permanent memory.
 
-Supported agents are Claude Code, Codex, and Grok Build. The preparation answer states that users install and sign in
-to their chosen agent command-line tools. Octoboard is free and open source under the MIT License; it does not supply
-provider accounts or model usage credits. Charges for agent or model services depend on the user's chosen account
-and plan and are billed directly by that provider. Octoboard does not add fees.
+Supported agents are Claude Code, Codex, and Grok Build. The preparation answer states that users install the agent
+CLIs they want to use. Octoboard is free and open source under the MIT License. The agents it runs are the user's
+own, including one pointed at a model the user hosts.
 
 The primary action in the header, hero, menu, and closing section uses the same localized download label and opens
 the repository's GitHub Releases page. It does not link directly to an installer file. The hero identifies macOS
@@ -160,9 +162,5 @@ website terms page; the software's license is linked separately from the privacy
 
 ## Remote host support
 
-Status: not implemented. The homepage marks remote host support as planned: projects and their agents would run on a
-user-selected host while the user coordinates from their computer. A decorative illustration pairs a local terminal
-with a remote device carrying Octoboard's mascot; the planned status remains explicit alongside it. Neither the
-homepage nor the privacy page claims that this is currently available, that connections are direct, or that no relay
-can be involved. The privacy page states that connection information, terminal traffic, task data, storage, and any
-relay involvement will be explained before the feature becomes available.
+Status: not implemented. The homepage and the privacy page say that remote host support is planned and do not describe
+a workflow. A decorative illustration sits beside that status.

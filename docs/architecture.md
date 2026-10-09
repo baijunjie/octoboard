@@ -67,20 +67,11 @@ design target — the native mobile apps have their own UI.
 ## Why the daemon is split out
 
 Session processes are owned by the daemon rather than by the window. That is what would let the daemon outlive the
-application (background operation; today it exits with the application) and lets a remote host run the host role of the
-very same daemon, with terminal streams, status events and orchestration commands all on one protocol so the UI need not
-tell local from remote. Doing the split up front avoids a later rewrite.
+application (background operation; today it exits with the application). Remote hosts are **not built yet**, and no
+workflow for them is settled.
 
 **Constraint: the UI and the daemon interact only over the network protocol (`apps/daemon/PROTOCOL.md`) — no Tauri
-IPC, no shared state.** Otherwise going remote or headless breaks. Hooks and the MCP server of a session point at the
-daemon on the host the session runs on, so a remote session never has to connect back to the user's machine.
-
-Remote hosts are **not built yet**; the design keeps them possible as follows: The application would install and
-start the daemon (host role only) on the remote machine over SSH and tunnel to it, and the coordinator would route
-`start_session` to the host role of the daemon on the right host. A remote console session would mean deploying the
-whole coordinator remotely and pointing the application at it, with no protocol change. After a disconnect the remote daemon
-keeps running on its own, and the coordinator would pull the status events and reports of the gap once the tunnel is
-back, which requires the daemon's events to be replayable by sequence number.
+IPC, no shared state.** Hooks and the MCP server of a session point at the daemon on the host the session runs on.
 
 ## Technology choices
 
