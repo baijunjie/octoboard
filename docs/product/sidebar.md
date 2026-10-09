@@ -63,7 +63,9 @@ hover" in `docs/product/window-layout.md`. For any console other than the curren
   avatar itself makes it current too, as always. In the window's history a press that makes the console current and
   then selects a session counts as one visit (see "What counts as a place" in
   `docs/product/navigation-history.md`).
-- Showing the sidebar for good with its toggle while it previews a console shows the current console.
+- Showing the sidebar for good with its toggle while it previews a console shows the current console, not the one the
+  card was previewing. The card goes away and the column eases open; see "Hiding the sidebar and the report panel"
+  and "A hidden pane floats in on hover" in `docs/product/window-layout.md`.
 
 ## The console header
 

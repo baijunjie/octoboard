@@ -12,6 +12,16 @@
   --breakpoint-docked: 1148px;
 }
 
+/* Registered so it interpolates. The docked sidebar's clip and the top bar's start segment both
+   read it (`sidebarDockMotion.ts`, `TitleBar.tsx`), which is what lets the column ease open and
+   closed while the breadcrumb stays over the terminal. 0 is the hidden column. Set on the document
+   element, so it inherits; a `display: contents` wrapper would not pass it on. */
+@property --sidebar-span {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
 :root {
   /* A tooltip is a label: it closes the instant the pointer leaves its trigger, where HeroUI's
      default (0.5s) lingers and keeps it hoverable. `Tooltip` reads this as its default close
@@ -67,6 +77,32 @@
   --console-session-azure: oklch(0.56 0.17 220);
   --console-session-violet: oklch(0.56 0.17 298);
   --console-session-rose: oklch(0.56 0.19 342);
+}
+
+/* Eases `--sidebar-span` over the same 200ms as the drawer's `duration-200` (`SIDEBAR_SPAN_MS`
+   in `sidebarDockMotion.ts`). Only while the docked column is opening or closing; a drag of the
+   pane's edge changes the length with no transition. Reduced motion never adds the class, and
+   drops the transition anyway. */
+@media (width >= theme(--breakpoint-docked)) {
+  .sidebar-span-animate {
+    transition: --sidebar-span 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* The top bar's start segment (`TitleBar.tsx`) tracks the same length the sidebar clip does, so
+     the breadcrumb stays over the terminal while the column eases. `min-width` is the buttons'
+     own width: once the clip is narrower than they are, the segment stops there instead of
+     snapping across when the column finishes closing. `min-content` is not put inside `max()`:
+     that declaration is dropped, and the segment then stays at the buttons' width. */
+  .title-bar-start {
+    width: calc(var(--rail-width) + var(--sidebar-span));
+    min-width: min-content;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-span-animate {
+    transition: none;
+  }
 }
 
 /* The window's surfaces, the one place their colours are set. Two kinds:

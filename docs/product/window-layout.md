@@ -50,9 +50,13 @@ It runs, left to right:
 - The sidebar toggle ("Show sessions" / "Hide sessions").
 - The selected session's **breadcrumb** — *console › project › session title* for a project session, *console › session
   title* for a console session, which belongs to no project — followed by the session's status icon. At 1148 px and
-  wider, while the sidebar is shown, the breadcrumb starts where the terminal's area does, over the sidebar's edge line,
-  and follows the sidebar's width while the sidebar is being resized; otherwise it starts right after the sidebar
-  toggle. A trail too long for the bar fades out at its right edge, as in "Names too long for their space" in
+  wider, while the sidebar is shown, the breadcrumb starts where the terminal's area does, over the sidebar's inner
+  edge, and follows that edge while the sidebar is resized and while the docked column eases open or closed (see
+  "Hiding the sidebar and the report panel" below). The start of the bar never becomes narrower than the buttons there
+  — in the macOS application, that includes the clear space kept for the window buttons. Once the column no longer
+  reaches past that start, the breadcrumb stays beside the sidebar toggle, which is also where it sits while the
+  sidebar is hidden. Below 1148 px it starts right after the sidebar toggle as well. A trail too long for
+  the bar fades out at its right edge, as in "Names too long for their space" in
   `docs/product/labels-and-tooltips.md`, and the status icon always stays visible. With no session selected there is no
   breadcrumb. While the archive view is open (see "The archive view" in `docs/product/sidebar.md`) the breadcrumb shows
   where that is instead, with no status icon: *console › project › Archived sessions*, *console › console session ›
@@ -100,7 +104,9 @@ Each toggle's label says what pressing it will do — "Show …" while its pane 
 and its icon shows the pane's current state: a window with that side's pane drawn solid while the pane is shown, and
 drawn dashed while it is hidden. Each toggle also tells assistive technology whether its pane is expanded: expanded
 while the pane is shown, which below 1148 px means its drawer is open. A hidden pane that is only floating in counts
-as hidden for both.
+as hidden for both. For the sidebar, shown and hidden follow the docked state at once, including while its column is
+still easing open or closed (see "Hiding the sidebar and the report panel" below): the toggle already reads "Hide …"
+as the column opens and "Show …" as it closes.
 
 ### Pressing the chrome's controls
 
@@ -185,9 +191,10 @@ gives up width first, down to 300 px, and only then the sidebar, down to 200 px.
 shown that makes, beside the 48 px rail, the sidebar 280 px, the terminal 520 px and the report panel 300 px. This never
 changes the remembered width: when the window widens again, each pane gets its chosen width back.
 
-A pane the user has hidden takes no width at all, and neither does one only floating in: its width goes to the
-terminal, and a hidden report panel stops holding back the sidebar's width (see "Hiding the sidebar and the report
-panel" below). With no console session selected there is no report panel in the row either.
+A pane the user has hidden takes no width at all once it is hidden, and neither does one only floating in: its width
+goes to the terminal, and a hidden report panel stops holding back the sidebar's width (see "Hiding the sidebar and
+the report panel" below). While the docked sidebar's column is easing closed, it still takes the width it has
+reached. With no console session selected there is no report panel in the row either.
 
 Anything that changes the terminal's size — resizing the window, resizing a pane, hiding or showing a pane —
 resizes the agent's terminal (see "The terminal" in `docs/product/sessions.md`).
@@ -207,7 +214,9 @@ run the pane's full height, from below the top bar to above the connection banne
   the terminal.
 
 A handle is there only while its pane is shown in the row: not while the pane is hidden or floating in, and not below
-1148 px, where the panes are fixed-width drawers.
+1148 px, where the panes are fixed-width drawers. The sidebar's handle is also absent while that column is easing
+open or closed; it is there only once the column is fully open. The report panel's handle is there whenever that
+panel is shown in the row.
 
 **Each pane's chosen width is remembered per client**, in that client's own browser storage, as the appearance choice
 is (see "Where the choice is stored" in `docs/product/appearance.md`); without that storage a choice lasts until the
@@ -227,10 +236,30 @@ widths. Hiding a pane hands its width to the terminal.
 Hiding a pane that holds keyboard focus — a sidebar row reached with Tab, say, or a report page — moves focus to the
 terminal.
 
+At 1148 px and wider, hiding or showing the docked sidebar eases that column over **200 ms**, the same length as the
+overlay drawer's slide. Where the system asks for reduced motion, the column opens or closes at once. Pressing the
+toggle again while the column is still moving reverses the ease. Below 1148 px this ease does not apply: the sidebar
+is the drawer, and that drawer slides (see "Below 1148 px: the sidebar and the report panel become drawers" below).
+Hiding and showing the report panel are immediate. Floating it still slides in and out over 200 ms (see "A hidden pane floats in on hover" below).
+
+During the ease the sidebar stays a full-height column, flush with the rail, from below the top bar to above the
+connection banner when that banner is shown, and it does not become the rounded card in "A hidden pane floats in on
+hover" below. Its contents stay at the width the open column is drawn at, including where the window is holding that
+width back (see "Pane widths at 1148 px and wider" above), and stay against the rail. The inner edge covers them as
+the column closes and uncovers them as it opens, so the text does not reflow. The hover card comes up only once the
+column has closed.
+
+As the column closes, the width it gives up goes to the terminal. When the report panel is docked and had been held
+below the width the user chose, it can grow into that room as the room appears. Showing the sidebar limits the report
+panel again as soon as the sidebar is shown, when the window cannot afford both panes their chosen widths, and the
+opening column takes its own width from the terminal as it eases open. The terminal is resized by either, as in
+"Pane widths at 1148 px and wider" above.
+
 ### A hidden pane floats in on hover
 
 At 1148 px and wider, a hidden pane can be brought up for a moment without showing it for good. This is a **floating
-pane**:
+pane**. On the sidebar, the rounded corners, the gaps, the shadow and the slide from behind the rail are this card.
+They are not how the docked column opens and closes (see "Hiding the sidebar and the report panel" above).
 
 - **What brings up the sidebar**: the mouse resting for **130 ms** on a console's avatar on the rail, the current
   console's or another's. The sidebar then shows the console whose avatar the mouse is on, which need not be the
@@ -258,8 +287,10 @@ pane**:
   from it. A floating pane that holds keyboard focus as it goes away hands focus to the terminal. A floating sidebar
   previewing a console that is deleted goes away as if the pointer had left that console's avatar.
 - **Only one at a time**: bringing one up sends the other away.
-- **Pressing the toggle** while the pane is floating shows it for good: it joins the row, and keyboard focus stays
-  where it was. Until then the toggle still reads "Show …".
+- **Pressing the toggle** while the pane is floating shows it for good, and keyboard focus stays where it was. Until
+  the pane is docked the toggle still reads "Show …". The report panel joins the row. The sidebar's card goes away
+  and the docked column eases open in the row; which console that column shows is in "Previewing a console from the
+  rail" in `docs/product/sidebar.md`.
 - The report panel floats in only while a console session is selected. There are no floating panes below 1148 px,
   and narrowing the window below it sends one away.
 
@@ -315,7 +346,9 @@ It works wherever focus is, the terminal included: there `Tab` and `Shift+Tab` s
 **A region not on screen is skipped**: a docked pane the user has hidden, a drawer that is closed, a hidden pane that
 is only floating in, the report panel when there is none or it has no controls (before its pages have arrived, or
 with no pages yet), and the terminal when no session is selected or while the archive view covers it. A pane counts as
-shown when it is docked in the row at 1148 px and wider, or its drawer is open below that.
+shown when it is docked in the row at 1148 px and wider, or its drawer is open below that. A docked sidebar column
+that is still easing closed already counts as hidden, and one that is still easing open already counts as shown (see
+"The two pane toggles" above).
 
 Where focus lands in each region:
 
@@ -358,7 +391,8 @@ parts of the window:
 - The rail is down the window's right edge, the sidebar on the right inside the content panel, beside the rail, and
   the report panel on the left; the content panel's rounded corner is its top right. The top bar's Back, Forward and
   sidebar toggle are at its right end, in mirrored order, and the breadcrumb runs leftward from them, starting over the
-  terminal's area while the sidebar is shown.
+  terminal's area while the sidebar is shown and following the column's inner edge while that column eases, as in
+  "The top bar" above.
 - Drawers and floating panes come in from their own pane's side: the sidebar's from the rail's edge (a floating
   sidebar from under the rail), the report panel's from the window's left edge. The edge strip that brings up a hidden
   report panel is along the window's left edge too, and 8 px wide there rather than 4 px.

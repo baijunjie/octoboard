@@ -73,9 +73,10 @@ const SIDE_CLASSES = {
  */
 export function drawerClass(side: PaneEdge, mode: PaneMode, open: boolean, peeking = false): string {
   const { anchor, closed, floatingFrame, floatingAway } = SIDE_CLASSES[side];
+  const dockedReset = "docked:static docked:z-auto docked:translate-none docked:rtl:translate-none docked:transition-none";
   const form =
     mode === "drawer"
-      ? "transition-transform docked:static docked:z-auto docked:translate-none docked:rtl:translate-none docked:transition-none"
+      ? `transition-transform ${dockedReset}`
       : `transition-[translate,visibility] ${floatingFrame} ${peeking ? "docked:translate-x-0 docked:rtl:translate-x-0 docked:shadow-xl" : floatingAway}`;
   const base = "fixed bottom-(--bottom-chrome-height) top-(--top-chrome-height) z-40 duration-200 motion-reduce:transition-none";
   return `${base} ${anchor} ${open ? "translate-x-0" : closed} ${form}`;

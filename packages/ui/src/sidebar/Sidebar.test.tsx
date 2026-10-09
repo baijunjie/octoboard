@@ -112,6 +112,20 @@ it.each([
   act(() => root.unmount());
 });
 
+it("keeps the docked column while hidden, and uses the inset card only while a peek is up", () => {
+  const hidden = mountSidebar({ open: false, peek: { active: false, keep: vi.fn(), leave: vi.fn() } });
+  const hiddenClass = hidden.container.querySelector("nav")!.className;
+  expect(hiddenClass).not.toContain("rounded-xl");
+  expect(hiddenClass).not.toContain("peek-gap");
+  act(() => hidden.root.unmount());
+
+  const peeking = mountSidebar({ open: false, peek: { active: true, keep: vi.fn(), leave: vi.fn() } });
+  const peekClass = peeking.container.querySelector("nav")!.className;
+  expect(peekClass).toContain("rounded-xl");
+  expect(peekClass).toContain("peek-gap");
+  act(() => peeking.root.unmount());
+});
+
 it("shows the console it is given, and a hover alone commits nothing", () => {
   const other = consoleOf("c-2", "Other");
   const onPeekPress = vi.fn();

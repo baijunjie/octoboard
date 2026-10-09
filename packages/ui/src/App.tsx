@@ -16,6 +16,7 @@ import { RequestedDialog } from "./dialogs/RequestedDialog";
 import { TrustPromptDialog } from "./dialogs/TrustPromptDialog";
 import { useT } from "./i18n/react";
 import { usePaneWidth } from "./layout/paneWidth";
+import type { DockPhase } from "./layout/sidebarDockMotion";
 import { usePaneToggles } from "./layout/usePaneToggles";
 import { useRegionCycle } from "./layout/useRegionCycle";
 import { useAppExit } from "./lifecycle/useAppExit";
@@ -112,10 +113,22 @@ export function App(): React.ReactElement {
     focusTerminal,
   });
 
-  // A hidden report panel gives its width back, and a hidden pane takes none of the row.
-  const dockedPanes = { sidebar: panes.sidebarDocked, report: hasReportPanel && panes.reportDocked };
-  const sidebarWidth = usePaneWidth("sidebar", dockedPanes);
-  const reportWidth = usePaneWidth("report", dockedPanes);
+  // The handle sits at the column's settled edge. During the ease that edge is still moving, and
+  // the handle's own position is the settled width, so it stays off until the ease has finished.
+  const [sidebarColumnPhase, setSidebarColumnPhase] = useState<DockPhase>(panes.sidebarDocked ? "open" : "closed");
+  // Hiding takes the sidebar out of the row at once, which is also when `usePaneWidth` stops
+  // clamping it. With the report panel docked, that clamp is what holds the sidebar under its
+  // chosen width, so the column would widen and reflow on the first frame of the close. It stays
+  // clamped until the column has left the row. The report panel's width uses the real docked
+  // flags: holding it back for the ease would snap it when the column finishes.
+  const sidebarWidth = usePaneWidth("sidebar", {
+    sidebar: panes.sidebarDocked || sidebarColumnPhase !== "closed",
+    report: hasReportPanel && panes.reportDocked,
+  });
+  const reportWidth = usePaneWidth("report", {
+    sidebar: panes.sidebarDocked,
+    report: hasReportPanel && panes.reportDocked,
+  });
 
   useWaitingNotifications(sessionList, consoles, projects, hosts !== undefined);
   useStatusItemMenu({
@@ -399,7 +412,6 @@ export function App(): React.ReactElement {
     <div className="relative flex h-full flex-col">
       <Toasts focusTerminal={focusTerminal} />
       <TitleBar
-        sidebarWidth={panes.sidebarDocked ? sidebarWidth.width : undefined}
         sidebarShown={panes.sidebarShown}
         onToggleSidebar={panes.toggleSidebar}
         canGoBack={navigation.canGoBack}
@@ -457,9 +469,12 @@ export function App(): React.ReactElement {
             open={panes.sidebarOpen}
             peek={panes.sidebarDocked ? undefined : panes.sidebarPeek}
             onPeekPress={commitPreview}
+            onColumnPhase={setSidebarColumnPhase}
             sidebarWidth={sidebarWidth}
           />
-          {panes.sidebarDocked && <PaneResizeHandle side="sidebar" paneWidth={sidebarWidth} />}
+          {panes.sidebarDocked && sidebarColumnPhase === "open" && (
+            <PaneResizeHandle side="sidebar" paneWidth={sidebarWidth} />
+          )}
           {/* Below the `docked` breakpoint the terminal is the row's only content and the floor
               drops to 398px (see the terminal's wrapper below); `overflow-x-auto` is what makes a
               viewport narrower than that scroll instead of clipping. */}

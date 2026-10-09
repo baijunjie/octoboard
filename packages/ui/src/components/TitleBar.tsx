@@ -100,9 +100,6 @@ function Trail({ names, children }: { names: string[]; children?: React.ReactNod
 }
 
 interface TitleBarProps {
-  /** The width of the docked sidebar when it is shown, which the start segment then runs past, so
-   * the breadcrumb starts where the content panel's main area does; `undefined` while it is hidden. */
-  sidebarWidth?: number;
   /** Whether the sidebar is currently shown, docked or as an open drawer; a hidden sidebar that is
    * only floating in on hover (from a console's avatar on the rail) does not count, since pressing
    * the toggle docks it. */
@@ -122,11 +119,10 @@ interface TitleBarProps {
  * The bar across the top of the window, on the window chrome like the rail below it: Back and
  * Forward, the sidebar toggle, and the selected session's breadcrumb. Nothing sits at its end but the
  * window's drag area: the other window controls are on the rail (`Rail.tsx`). Above the `docked`
- * breakpoint with the sidebar shown, the start segment holding the buttons ends where the content
- * panel's main area starts, so the breadcrumb lines up over it.
+ * breakpoint, the start segment tracks the docked sidebar's clip (`.title-bar-start`), so the
+ * breadcrumb stays over the main area while that column eases open or closed.
  */
 export function TitleBar({
-  sidebarWidth,
   sidebarShown,
   onToggleSidebar,
   canGoBack,
@@ -139,17 +135,10 @@ export function TitleBar({
   const t = useT();
   return (
     <BarFrame>
-      {/* Above the `docked` breakpoint with the sidebar shown, as wide as the rail and the sidebar
-          together, so the breadcrumb after it starts over the main area; otherwise just as wide as
-          its controls. */}
-      <div
-        className={`flex shrink-0 items-center ${sidebarWidth !== undefined ? "docked:w-(--bar-start-width)" : ""}`}
-        style={
-          sidebarWidth !== undefined
-            ? ({ "--bar-start-width": `calc(var(--rail-width) + ${sidebarWidth}px)` } as React.CSSProperties)
-            : undefined
-        }
-      >
+      {/* Above the `docked` breakpoint, as wide as the rail plus the sidebar's clip, and never
+          narrower than these buttons. The breadcrumb after it stays over the main area while the
+          column eases; below the breakpoint the class does not apply. */}
+      <div className="title-bar-start flex shrink-0 items-center">
         <LeftInset />
         <div className="flex items-center gap-1 px-2">
           <ChromeButton label={t("titleBar.back")} onPress={onBack} isDisabled={!canGoBack}>

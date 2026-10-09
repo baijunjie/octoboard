@@ -25,6 +25,7 @@ import { withGitBadge } from "../gitStatusLabel";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { drawerClass, PANE_ID, RailClip } from "../layout/paneOverlay";
 import type { PaneWidth } from "../layout/paneWidth";
+import { columnClipClass, type DockPhase, useSidebarDockMotion } from "../layout/sidebarDockMotion";
 import type { PanePeek } from "../layout/usePaneToggles";
 import { effectiveTags, matchesFilter, tagVocabulary, withoutTags } from "../projectFiltering";
 import type { Console, Project, Session } from "../protocol";
@@ -55,11 +56,15 @@ interface SidebarProps extends SidebarHandlers {
    * shown or, with `peek`, hidden (`usePaneToggles` owns the state, resetting it once the window no
    * longer needs it). */
   open: boolean;
-  /** The hover reveal of the sidebar while the user has hidden it from the top bar: the same panel,
-   * kept as a fixed overlay at the docked width that floats in over the terminal, as a card inset
-   * from the rail and the window's other chrome, with its border, rounded corners and shadow.
-   * `undefined` while the docked sidebar is shown. */
+  /** The hover reveal of the sidebar while the user has hidden it from the top bar. The card
+   * (fixed, inset from the rail and the other chrome, rounded, bordered, shadowed) is only up
+   * while this hover is, or while that card is sliding away. The rest of the time a hidden docked
+   * sidebar is the same column as the shown one, clipped to nothing. `undefined` while the docked
+   * sidebar is shown. */
   peek?: Pick<PanePeek, "active" | "keep" | "leave">;
+  /** Hears the docked column's show/hide phase, including one settled before paint, so a sibling
+   * such as the resize handle can follow it. */
+  onColumnPhase?: (phase: DockPhase) => void;
   /** A press began inside the sidebar while it is hidden-docked (floating or sliding away), before
    * whatever was pressed acts: where the console it is showing, if that is not the current one,
    * becomes the current one. */
@@ -82,6 +87,7 @@ export function Sidebar({
   open,
   peek,
   onPeekPress,
+  onColumnPhase,
   sidebarWidth,
   ...handlers
 }: SidebarProps): React.ReactElement {
@@ -159,9 +165,12 @@ export function Sidebar({
     return () => clearTimeout(timer);
   }, [focusId]);
 
-  const drawerClassName = peek
-    ? `docked:rounded-xl docked:border ${drawerClass("start", "floating", open, peek.active)}`
-    : drawerClass("start", "drawer", open);
+  // `peek` being passed means the docked sidebar is targeted hidden. The column eases to and from
+  // that; the inset card is a later state, only once the column is out of the row.
+  const dock = useSidebarDockMotion(peek === undefined, peek?.active ?? false, sidebarWidth.width, onColumnPhase);
+  const drawerClassName = dock.inset
+    ? `docked:rounded-xl docked:border ${drawerClass("start", "floating", open, dock.insetShown)}`
+    : `${drawerClass("start", "drawer", open)} docked:h-full docked:border-e-0`;
 
   const consoleSessions = shownConsole ? sessions.filter((s) => s.console_id === shownConsole.id) : [];
   // Every project session's binding badge names the console session it is bound to (`bound_to`) by
@@ -270,50 +279,61 @@ export function Sidebar({
   }
 
   return (
-    <RailClip floating={peek !== undefined}>
-      <nav
-        // Below the `docked` breakpoint this is a fixed overlay, closed by default, slid on and off
-        // with `open`; at or above it the `docked:` variants in `drawerClass` put it back exactly
-        // where it always was, a plain row sibling, regardless of `open`. With the sidebar hidden
-        // from the top bar's toggle, `drawerClass` instead keeps it a fixed overlay at the docked
-        // width that floats in while `peek` is active. Starting below `--top-chrome-height` leaves
-        // the top bar, and with it the sidebar toggle, visible while this is open; ending above
-        // `--bottom-chrome-height` does the same for the connection banner.
-        //
-        // `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener
-        // closes a drawer for. `data-pane` is how it finds this element to see whether it holds
-        // focus.
-        data-escape-scope
-        ref={navRef}
-        onFocus={(e) => {
-          // A portalled menu's focus bubbles here through React and may never blur, so it counts only
-          // when it came from inside the sidebar (a menu opened from the keyboard), not from the
-          // terminal (one opened with the mouse).
-          if (e.currentTarget.contains(e.target as Node) || e.currentTarget.contains(e.relatedTarget as Node | null)) {
-            holdsFocus.current = true;
-          }
-        }}
-        onBlur={(e) => {
-          // Focus moving around inside a portalled menu blurs here too; only leaving the sidebar's own
-          // DOM counts.
-          if (e.currentTarget.contains(e.target as Node) && !e.currentTarget.contains(e.relatedTarget)) {
-            holdsFocus.current = false;
-          }
-        }}
-        id={PANE_ID.sidebar}
-        data-pane="sidebar"
-        data-region="sidebar"
-        className={`flex w-70 flex-col overflow-hidden sidebar-fills border-e border-separator bg-panel-sidebar shrink-0 docked:w-(--sidebar-width) ${drawerClassName}`}
-        onPointerEnter={peek?.keep}
-        onPointerLeave={peek?.leave}
-        onPointerDownCapture={peek ? onPeekPress : undefined}
-        style={{ "--sidebar-width": `${sidebarWidth.width}px` } as React.CSSProperties}
-        aria-label={t("sidebar.sessions")}
+    <RailClip floating={dock.inset}>
+      {/* The clip is `display: contents` below the breakpoint and while the hover card is up, so
+          the fixed pane is laid out as if this wrapper were not there. At the docked breakpoint it
+          is the column's width. The sidebar inside stays at its full width, against the rail, and
+          the clip uncovers it: the list does not reflow and the column does not become the card.
+          `--sidebar-span` is set on the document element by `useSidebarDockMotion`. */}
+      <div
+        className={dock.inset ? "contents" : columnClipClass()}
+        style={dock.inset ? undefined : { width: "var(--sidebar-span)" }}
       >
-        <div key={focusId ?? "console"} ref={viewRef} className="flex min-h-0 flex-1 flex-col">
-          {content}
-        </div>
-      </nav>
+        <nav
+          // Below the `docked` breakpoint this is a fixed overlay, closed by default, slid on and off
+          // with `open`; at or above it the `docked:` variants in `drawerClass` put it back exactly
+          // where it always was, a plain row sibling, regardless of `open`. With the docked sidebar
+          // hidden, that column is clipped away; only a hover on a console's avatar (`dock.inset`)
+          // makes it the fixed card. Starting below `--top-chrome-height` leaves the top bar, and
+          // with it the sidebar toggle, visible while the drawer is open; ending above
+          // `--bottom-chrome-height` does the same for the connection banner.
+          //
+          // `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener
+          // closes a drawer for. `data-pane` is how it finds this element to see whether it holds
+          // focus.
+          data-escape-scope
+          ref={navRef}
+          onFocus={(e) => {
+            // A portalled menu's focus bubbles here through React and may never blur, so it counts only
+            // when it came from inside the sidebar (a menu opened from the keyboard), not from the
+            // terminal (one opened with the mouse).
+            if (e.currentTarget.contains(e.target as Node) || e.currentTarget.contains(e.relatedTarget as Node | null)) {
+              holdsFocus.current = true;
+            }
+          }}
+          onBlur={(e) => {
+            // Focus moving around inside a portalled menu blurs here too; only leaving the sidebar's own
+            // DOM counts.
+            if (e.currentTarget.contains(e.target as Node) && !e.currentTarget.contains(e.relatedTarget)) {
+              holdsFocus.current = false;
+            }
+          }}
+          id={PANE_ID.sidebar}
+          data-pane="sidebar"
+          data-region="sidebar"
+          className={`flex w-70 flex-col overflow-hidden sidebar-fills border-e border-separator bg-panel-sidebar shrink-0 docked:w-(--sidebar-width) ${drawerClassName}${dock.phase === "closed" && !dock.inset ? " docked:invisible" : ""}`}
+          onPointerEnter={peek?.keep}
+          onPointerLeave={peek?.leave}
+          onPointerDownCapture={peek ? onPeekPress : undefined}
+          onTransitionEnd={dock.inset ? dock.onInsetTransitionEnd : undefined}
+          style={{ "--sidebar-width": `${sidebarWidth.width}px` } as React.CSSProperties}
+          aria-label={t("sidebar.sessions")}
+        >
+          <div key={focusId ?? "console"} ref={viewRef} className="flex min-h-0 flex-1 flex-col">
+            {content}
+          </div>
+        </nav>
+      </div>
     </RailClip>
   );
 }
