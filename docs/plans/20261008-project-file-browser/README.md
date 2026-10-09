@@ -59,18 +59,11 @@ right-pane space.
 2. 02 Validate the read-only renderers (closed)
 3. 03 Project file browsing and navigation (closed)
 4. 04 Uncommitted changes across worktrees (closed)
-5. [Local branch comparison](05-branch-comparison.md) — compare selected branch tips through the same bounded,
-   source-aware review surface.
+5. 05 Local branch comparison (closed)
 6. [Final confirmation](06-final-confirmation.md) — checks that could not be run when their milestone closed and that
    nothing later depends on.
 
-Each milestone is independently verifiable and mergeable after its dependencies. Milestone 05 extends the working
-project pane's Git mode rather than building a review surface of its own.
-
-## Open
-
-These choices do not block the milestone split, but must be resolved before the named milestone is complete:
-
+Each milestone is independently verifiable and mergeable after its dependencies.
 
 ## Notes for the developer
 

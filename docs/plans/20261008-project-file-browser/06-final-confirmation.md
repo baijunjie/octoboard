@@ -25,3 +25,10 @@
 - [ ] F6 from the terminal lands on the project pane's selected mode tab (`docs/product/moving-focus-between-regions.md`
   says so from reading the code; not run).
 - [ ] With Reduce motion on, the Files/Git tabs' indicator does not slide.
+- [ ] The Compare view with VoiceOver: the Uncommitted/Compare tabs, the two branch selectors, Swap branches, the
+  commits line and the moved/deleted notice; also whether the Git mode's loading placeholders (a `role="status"`
+  inserted already holding its text, `gitStates.tsx` and `ProjectBrowser.tsx`) are announced.
+- [ ] Type a branch's first letters in a branch selector's popover with an input method composing (type-ahead), and
+  check the Uncommitted/Compare tabs' indicator under Reduce motion.
+- [ ] The Compare view in the packaged app under a right-to-left language, and its branch selectors in a narrow
+  window.

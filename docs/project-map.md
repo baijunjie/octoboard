@@ -62,5 +62,5 @@ Per-package commands are in that package's doc.
   the archive view, the xterm.js terminal pane, the pane-layout state, Back/Forward navigation history, the settings
   dialog, the other dialogs, the read-only file viewer (code, image and diff rendering behind an application-owned
   interface), the aside at the end side of the content panel (a console session's report panel or a project's
-  browser, its files and its worktrees' uncommitted changes) and the internationalization (language choice and message catalogs), and a dev-only gallery of UI states
+  browser, its files, its worktrees' uncommitted changes and a comparison of two local branches) and the internationalization (language choice and message catalogs), and a dev-only gallery of UI states
   over a fixture daemon (`src/gallery/`, served by the dev server, not part of the build). Loaded by the `apps/desktop/` shell and also runs in a plain browser.

@@ -1,0 +1,111 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, expect, it } from "vitest";
+
+import type { ChangeEntry, Event, RequestBody } from "../protocol";
+import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { useProjectBrowserState } from "./browserState";
+import { useGitReview } from "./useGitReview";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+type Pending = { body: RequestBody; resolve: (event: Event) => void; reject: (err: Error) => void };
+const pending: Pending[] = [];
+const roots: Root[] = [];
+
+afterEach(async () => {
+  for (const root of roots.splice(0)) act(() => root.unmount());
+  await act(async () => pending.splice(0).forEach((request) => request.reject(new Error("test over"))));
+});
+
+const daemon: Daemon = {
+  store: createStateStore({ connectionState: "open", snapshotEpoch: 1 }),
+  request: (body) => new Promise((resolve, reject) => pending.push({ body, resolve, reject })),
+  toastError: () => {},
+  onToast: () => () => {},
+  dismissTrustPrompt: () => {},
+  reconnect: () => {},
+  terminalUrl: () => "",
+};
+
+/** Answers the request of `type` still out with what `reply` makes of it. */
+async function answer(type: RequestBody["type"], reply: (body: RequestBody) => Event): Promise<RequestBody> {
+  const index = pending.findIndex((request) => request.body.type === type);
+  expect(index, `a ${type} request out among ${pending.map((p) => p.body.type).join(", ")}`).not.toBe(-1);
+  const [request] = pending.splice(index, 1);
+  await act(async () => request.resolve(reply(request.body)));
+  return request.body;
+}
+
+const committed = (path: string, commit: string): ChangeEntry => ({
+  group: "committed",
+  old: { state: "absent" },
+  new: { state: "present", path, kind: "file", source: { kind: "commit", commit, branch: null, blob: "b" } },
+});
+const comparison = (right: string, paths: string[]) => () =>
+  ({
+    type: "project_comparison",
+    project: "p",
+    left: { branch: "main", commit: "c1" },
+    right: { branch: "topic", commit: right },
+    changes: paths.map((path) => committed(path, right)),
+    complete: true,
+  }) satisfies Event;
+const read = (body: RequestBody): Event => {
+  if (body.type !== "read_project_comparison_change") throw new Error(body.type);
+  return { type: "project_comparison_change", project: "p", left: body.left, right: body.right, old: { state: "absent" }, new: { state: "absent" }, patch: null };
+};
+
+it("follows a comparison made again with the change still in it, and closes on one without it", async () => {
+  let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
+  const Probe = () => {
+    const browser = useProjectBrowserState("p");
+    latest = { browser, git: useGitReview("p", browser, true) };
+    return null;
+  };
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  act(() =>
+    root.render(
+      <DaemonProvider value={daemon}>
+        <Probe />
+      </DaemonProvider>,
+    ),
+  );
+  act(() => {
+    latest.browser.setGitView("compare");
+    latest.browser.setBranches("main", "topic");
+  });
+  const worktree = { id: "w", root: "/r", main: true, head: "c1", branch: "main", scope_present: true };
+  // The source and the branches, asked for first and again on every refresh; the comparison waits
+  // for them within the window's bound of two.
+  const sourceAndBranches = async () => {
+    await answer("get_project_source", () => ({
+      type: "project_source",
+      source: { project: "p", root: "/r", resolved_root: "/r", root_id: "r", git_error: null, git: { repository: "repo", common_dir: "/r/.git", worktree: "w", scope: "", worktrees: [worktree] } },
+    }));
+    await answer("list_project_branches", () => ({ type: "project_branches", project: "p", branches: [], complete: true }));
+  };
+  await sourceAndBranches();
+  await answer("compare_project_branches", comparison("c2", ["a.txt", "b.txt"]));
+  const loaded = latest.git.view.compare.comparison;
+  if (loaded.state !== "loaded") throw new Error(loaded.state);
+  act(() => latest.git.view.compare.onOpen(loaded.items[0]));
+  expect((await answer("read_project_comparison_change", read)) as object).toMatchObject({ right: { commit: "c2" } });
+
+  // Made again at another commit, with the change still in it: read again from the new pair.
+  act(() => latest.git.refresh());
+  await sourceAndBranches();
+  await answer("compare_project_branches", comparison("c3", ["a.txt"]));
+  expect((await answer("read_project_comparison_change", read)) as object).toMatchObject({ right: { commit: "c3" } });
+  expect(latest.git.viewer?.subject.key).toContain("c3");
+
+  // Made again without it: no such change between those commits, so the viewer closes.
+  act(() => latest.git.refresh());
+  await sourceAndBranches();
+  await answer("compare_project_branches", comparison("c4", ["b.txt"]));
+  expect(latest.git.viewer).toBeUndefined();
+  expect(latest.browser.selectedComparedChange).toBeUndefined();
+  expect(pending.some((request) => request.body.type === "read_project_comparison_change")).toBe(false);
+});

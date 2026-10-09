@@ -86,7 +86,7 @@ impl Fixture {
     }
 }
 
-fn present(path: &str) -> SideRef {
+pub(super) fn present(path: &str) -> SideRef {
     SideRef::Present {
         path: path.to_string(),
     }
@@ -114,7 +114,7 @@ fn entry<'a>(
                 ChangeEntry::Staged { old, new } => (ChangeGroup::Staged, old, new),
                 ChangeEntry::Unstaged { old, new } => (ChangeGroup::Unstaged, old, new),
                 ChangeEntry::Untracked { old, new } => (ChangeGroup::Untracked, old, new),
-                ChangeEntry::Conflicted { .. } => return None,
+                ChangeEntry::Conflicted { .. } | ChangeEntry::Committed { .. } => return None,
             };
             let names = side_path(old) == Some(path) || side_path(new) == Some(path);
             (g == group && names).then_some((old, new))
@@ -123,7 +123,7 @@ fn entry<'a>(
 }
 
 /// What every listed change names, as `(group, old, new)` with `-` for an absent side.
-fn summary(changes: &[ChangeEntry]) -> Vec<String> {
+pub(super) fn summary(changes: &[ChangeEntry]) -> Vec<String> {
     let name = |side: &ChangeSide| side_path(side).unwrap_or("-").to_string();
     let mut all: Vec<String> = changes
         .iter()
@@ -132,6 +132,7 @@ fn summary(changes: &[ChangeEntry]) -> Vec<String> {
             ChangeEntry::Unstaged { old, new } => format!("unstaged {} {}", name(old), name(new)),
             ChangeEntry::Untracked { old, new } => format!("untracked {} {}", name(old), name(new)),
             ChangeEntry::Conflicted { path, conflict } => format!("conflicted {path} {conflict:?}"),
+            ChangeEntry::Committed { old, new } => format!("committed {} {}", name(old), name(new)),
         })
         .collect();
     all.sort();
@@ -145,42 +146,47 @@ fn source_of(side: &ChangeSide) -> &ContentSource {
     }
 }
 
-fn read_source(side: &SideRead) -> &ContentSource {
+pub(super) fn read_source(side: &SideRead) -> &ContentSource {
     match side {
         SideRead::Present { source, .. } => source,
         other => panic!("not present: {other:?}"),
     }
 }
 
-fn read_body(side: &SideRead) -> Option<Vec<u8>> {
+pub(super) fn read_body(side: &SideRead) -> Option<Vec<u8>> {
     match side {
         SideRead::Present { file, .. } => file.as_ref().map(bytes_of),
         _ => None,
     }
 }
 
-fn read_kind(side: &SideRead) -> SideKind {
+pub(super) fn read_kind(side: &SideRead) -> SideKind {
     match side {
         SideRead::Present { kind, .. } => *kind,
         other => panic!("not present: {other:?}"),
     }
 }
 
-fn head_of(dir: &Path) -> String {
+pub(super) fn head_of(dir: &Path) -> String {
     String::from_utf8(git(dir, &["rev-parse", "HEAD"]))
         .unwrap()
         .trim()
         .to_string()
 }
 
-fn write(path: impl AsRef<Path>, body: &[u8]) {
+pub(super) fn write(path: impl AsRef<Path>, body: &[u8]) {
     let path = path.as_ref();
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, body).unwrap();
 }
 
 /// Adds a linked worktree of `repo` at `<parent>/<name>` with `args` (a new branch, `--detach`).
-fn add_worktree(repo: &Path, parent: &Path, name: &str, args: &[&str]) -> std::path::PathBuf {
+pub(super) fn add_worktree(
+    repo: &Path,
+    parent: &Path,
+    name: &str,
+    args: &[&str],
+) -> std::path::PathBuf {
     let path = parent.join(name);
     let mut all = vec!["worktree", "add", "-q"];
     all.extend_from_slice(args);
@@ -189,7 +195,7 @@ fn add_worktree(repo: &Path, parent: &Path, name: &str, args: &[&str]) -> std::p
     path
 }
 
-fn worktree_id(fixture: &Fixture, project: &str, root: &Path) -> String {
+pub(super) fn worktree_id(fixture: &Fixture, project: &str, root: &Path) -> String {
     let source = fixture.source(project).git.unwrap();
     let root = super::tests::canonical(root);
     source
@@ -1011,7 +1017,7 @@ fn a_submodule_change_and_a_nested_repository_stay_listed_with_their_kind() {
 }
 
 /// Every file under `dir`, with its length, modification time and bytes.
-fn snapshot(dir: &Path) -> Vec<(std::path::PathBuf, Vec<u8>, std::time::SystemTime)> {
+pub(super) fn snapshot(dir: &Path) -> Vec<(std::path::PathBuf, Vec<u8>, std::time::SystemTime)> {
     let mut all = Vec::new();
     let mut stack = vec![dir.to_path_buf()];
     while let Some(dir) = stack.pop() {
@@ -1043,6 +1049,9 @@ fn no_browse_request_writes_to_the_repository() {
     );
     let parent = ScratchDir::new("changes-read-only-linked");
     let linked = add_worktree(&repo, &parent, "wt", &["-b", "wt"]);
+    write(linked.join("d.txt"), b"committed on wt\n");
+    git(&linked, &["add", "d.txt"]);
+    git(&linked, &["commit", "-q", "-m", "wt"]);
     write(linked.join("b.txt"), b"linked\n");
     write(repo.join("c.txt"), b"staged\n");
     git(&repo, &["add", "c.txt"]);
@@ -1097,6 +1106,18 @@ fn no_browse_request_writes_to_the_repository() {
             present("new.txt"),
         )
         .unwrap();
+    fixture.branches(&project).unwrap();
+    for (left, right) in [("main", "wt"), ("wt", "main")] {
+        let compared = fixture.compare(&project, left, right).unwrap();
+        for (old, new) in [
+            (SideRef::Absent, present("d.txt")),
+            (present("d.txt"), SideRef::Absent),
+        ] {
+            fixture
+                .compared_change(&project, &compared, old, new)
+                .unwrap();
+        }
+    }
 
     let after = snapshot(&repo.join(".git"));
     let changed: Vec<_> = before
@@ -1313,7 +1334,7 @@ fn an_unstaged_type_change_and_a_submodule_replaced_by_a_directory_keep_their_si
 }
 
 /// Runs plain `git` in `dir` with `input` on its stdin, for fixture setup.
-fn git_stdin(dir: &Path, args: &[&str], input: &[u8]) {
+pub(super) fn git_stdin(dir: &Path, args: &[&str], input: &[u8]) {
     use std::io::Write as _;
     let mut child = std::process::Command::new("/usr/bin/git")
         .current_dir(dir)

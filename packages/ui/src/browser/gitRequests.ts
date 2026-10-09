@@ -1,12 +1,13 @@
 /**
- * How many of the Git mode's list requests — a project's source (`get_project_source`) and a
- * worktree's change list (`list_project_changes`) — are out at once in the window, every browser it
- * has mounted counted, those left out by a browser whose project's place was taken included (a
- * `git status` on a slow volume, say, held until its deadline). Sized with the listings' bound in
- * `useDirectoryListings.ts` (which also leaves room for a replacement in flight) and the viewer's
- * one slot, so that together they stay under the daemon's bound of 16 outstanding browse requests a
- * connection. Past it a request waits for one to finish; one whose browser is gone by then is not
- * sent at all.
+ * How many of the Git mode's list requests — a project's source (`get_project_source`), a
+ * worktree's change list (`list_project_changes`), a repository's branches
+ * (`list_project_branches`) and a branch comparison (`compare_project_branches`) — are out at once
+ * in the window, every browser it has mounted counted, those left out by a browser whose project's
+ * place was taken included (a `git status` on a slow volume, say, held until its deadline). Sized
+ * with the listings' bound in `useDirectoryListings.ts` (which also leaves room for a replacement
+ * in flight) and the viewer's one slot, so that together they stay under the daemon's bound of 16
+ * outstanding browse requests a connection. Past it a request waits for one to finish; one whose
+ * browser is gone by then is not sent at all.
  */
 const MAX_WINDOW_GIT_IN_FLIGHT = 2;
 

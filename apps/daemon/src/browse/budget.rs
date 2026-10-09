@@ -56,6 +56,32 @@ pub const CHANGE_ENTRY_BYTES: usize = 768;
 /// changes. Past it the listing is refused rather than built from part of the output.
 pub const CHANGE_STATUS_STDOUT: usize = 8 * 1024 * 1024;
 
+/// The most stdout the `git diff-tree` behind a branch comparison may print. Like a change
+/// listing's `git status`, it covers the whole tree, so that a rename into or out of the project's
+/// directory is found against the rest of the repository; a record is about 100 bytes plus its
+/// paths, so this holds tens of thousands of changed files. Past it a project below the
+/// repository's root is compared within its own directory instead, and a comparison still past it
+/// is refused rather than built from part of the output.
+pub const COMPARISON_STDOUT: usize = 8 * 1024 * 1024;
+
+/// The most local branches one branch listing carries before it is cut and marked incomplete. A
+/// repository usually has a handful to tens of local branches, and one kept for years with every
+/// branch left behind a few thousand; this matches the other listings' entry budgets.
+pub const MAX_BRANCHES: usize = 10_000;
+
+/// The most name bytes, as sent on the wire, one branch listing carries before it is cut and
+/// marked incomplete — the bound that holds when the branches are few but their names are long.
+pub const MAX_BRANCH_NAME_BYTES: usize = 2 * 1024 * 1024;
+
+/// The most stdout the `git for-each-ref` behind a branch listing may print. It is asked for one
+/// branch past [`MAX_BRANCHES`], each a line of about 90 bytes beside its name, so this is room for
+/// names averaging some 300 bytes; past it the listing is refused rather than read further.
+pub const BRANCH_LIST_STDOUT: usize = 4 * 1024 * 1024;
+
+/// What one branch listing entry takes beyond its name, counted generously as JSON writes it: a
+/// commit id (64 hex digits in a SHA-256 repository) and the JSON around the two.
+pub const BRANCH_ENTRY_BYTES: usize = 128;
+
 /// The largest patch one change's diff returns. 99 % of the measured commits' whole patches were
 /// under about 1.2 MB, so one file's patch under this is the overwhelming case; a larger one is
 /// refused, never cut, since part of a patch is not the change.
@@ -98,6 +124,18 @@ pub const LISTING_RESERVATION: usize = 2 * (MAX_LISTING_NAME_BYTES + MAX_DIR_ENT
 pub const CHANGE_LIST_RESERVATION: usize =
     CHANGE_STATUS_STDOUT + 2 * (MAX_CHANGE_PATH_BYTES + MAX_CHANGE_ENTRIES * CHANGE_ENTRY_BYTES);
 
+/// What a branch comparison reserves: the `git diff-tree` output while it is parsed, and its
+/// entries as a change listing's are held. Its two endpoints, each a branch name and a commit id,
+/// fit in the room each entry is given generously.
+pub const COMPARISON_RESERVATION: usize =
+    COMPARISON_STDOUT + 2 * (MAX_CHANGE_PATH_BYTES + MAX_CHANGE_ENTRIES * CHANGE_ENTRY_BYTES);
+
+/// What a branch listing reserves: the `git for-each-ref` output while it is parsed, and its
+/// entries, at [`MAX_BRANCHES`] with [`MAX_BRANCH_NAME_BYTES`] of names, held as built and as
+/// serialized.
+pub const BRANCH_LIST_RESERVATION: usize =
+    BRANCH_LIST_STDOUT + 2 * (MAX_BRANCH_NAME_BYTES + MAX_BRANCHES * BRANCH_ENTRY_BYTES);
+
 /// What one change's diff reserves: its worst case is two bodies at their worst, each as a file
 /// read reserves, beside a patch of at most [`BODIES_PATCH_BYTES`] held as read and serialized; a
 /// text patch alone, at most [`MAX_PATCH_BYTES`], is held no more than a file body is.
@@ -118,5 +156,7 @@ const _: () = assert!(LISTING_RESERVATION <= READ_RESERVATION);
 const _: () = assert!(READ_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
 const _: () = assert!(CHANGE_LIST_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
 const _: () = assert!(DIFF_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
+const _: () = assert!(COMPARISON_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
+const _: () = assert!(BRANCH_LIST_RESERVATION <= READ_RESERVATION);
 const _: () = assert!(MAX_PATCH_BYTES <= MAX_FILE_BYTES);
 const _: () = assert!(MAX_RETAINED_PER_CONNECTION <= MAX_RETAINED_BYTES);

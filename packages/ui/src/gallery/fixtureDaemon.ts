@@ -65,6 +65,8 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
 
   const files = scenario.files ?? SAMPLE_FILES;
   const git = scenario.git === undefined ? SAMPLE_GIT : scenario.git;
+  /** Whether a comparison has been made, after which the branch list tells of the branches moved. */
+  let compared = false;
   const fail = ({ code, params, message }: FixtureError): never => {
     throw new DaemonRequestError(daemonMessage(currentLanguage(), code, params, message, store.getState()), code, params);
   };
@@ -138,6 +140,38 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
             complete: true,
           };
         }
+        case "list_project_branches": {
+          const moved = compared ? (git?.moved ?? {}) : {};
+          const branches = (git?.branches ?? []).map((branch) => ({ ...branch, commit: moved[branch.name] ?? branch.commit }));
+          return { type: "project_branches", project: body.project, branches, complete: true };
+        }
+        case "compare_project_branches": {
+          const resolve = (name: string) => {
+            const branch = git?.branches?.find((b) => b.name === name);
+            if (!branch || git?.missing?.includes(name)) return fail({ code: "unknown_branch", params: { branch: name }, message: `there is no local branch ${name}` });
+            return { branch: name, commit: branch.commit };
+          };
+          const left = resolve(body.left);
+          const right = resolve(body.right);
+          compared = true;
+          const changes = left.commit === right.commit ? [] : (git?.comparisons?.[`${body.left}..${body.right}`] ?? []);
+          return { type: "project_comparison", project: body.project, left, right, changes: changes.map((change) => change.entry), complete: true };
+        }
+        case "read_project_comparison_change": {
+          const changes = git?.comparisons?.[`${body.left.branch}..${body.right.branch}`] ?? [];
+          const found = changes.find(({ entry }) => entry.group === "committed" && sameSide(entry.old, body.change.old) && sameSide(entry.new, body.change.new));
+          if (!found || found.entry.group === "conflicted") return fail({ code: "file_not_found", params: { path: "" }, message: "no such change" });
+          if (found.error) return fail(found.error);
+          return {
+            type: "project_comparison_change",
+            project: body.project,
+            left: body.left,
+            right: body.right,
+            old: readSide(found.entry.old, found.bodies?.old),
+            new: readSide(found.entry.new, found.bodies?.new),
+            patch: found.patch === undefined ? null : { size: found.patch.length, kind: "text", media_type: null, text: found.patch, data: null },
+          };
+        }
         case "read_project_change": {
           const worktree = body.worktree ?? git?.worktrees[0]?.id ?? "";
           const changes = git?.changes[worktree];
@@ -147,7 +181,9 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
                   entry.group === body.change.group && sameSide(entry.old, body.change.old) && sameSide(entry.new, body.change.new),
               )
             : undefined;
-          if (!found || found.entry.group === "conflicted") return fail({ code: "file_not_found", params: { path: "" }, message: "no such change" });
+          if (!found || found.entry.group === "conflicted" || found.entry.group === "committed") {
+            return fail({ code: "file_not_found", params: { path: "" }, message: "no such change" });
+          }
           if (found.error) return fail(found.error);
           return {
             type: "project_change",

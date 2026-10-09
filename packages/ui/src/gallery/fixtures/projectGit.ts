@@ -1,7 +1,7 @@
 // What the fixture daemon answers a project's Git mode with (`fixtureDaemon.ts`), and the gallery's
 // "Project Git" scenarios over it: the worktree selector, the change list in its sections, a diff of
 // each kind opened from it, and the states a source or a list can end in.
-import type { ChangeEntry, ChangeSide, ContentSource, FileContent, WorktreeInfo } from "../../protocol";
+import type { BranchInfo, ChangeEntry, ChangeSide, ContentSource, FileContent, WorktreeInfo } from "../../protocol";
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
 import type { FixtureError } from "./projectFiles";
@@ -21,11 +21,18 @@ export interface FixtureChange {
 
 /** A fixture project's repository: its worktrees, the first holding the project, and each one's
  * changes by its id; a worktree with an `error` in place of changes fails to list. With `gitError`,
- * the repository cannot be read at all. */
+ * the repository cannot be read at all. `branches` are its local branches; `comparisons` the
+ * changes between two of them, keyed `<left>..<right>` (none for a pair not given), and `missing`
+ * branches the list has that a comparison no longer finds. `moved` is what the branch list says of
+ * a branch once a comparison has been made: a branch moved to another commit since. */
 export interface FixtureGit {
   worktrees: WorktreeInfo[];
   changes: Record<string, FixtureChange[] | FixtureError>;
   gitError?: string;
+  branches?: BranchInfo[];
+  comparisons?: Record<string, FixtureChange[]>;
+  missing?: string[];
+  moved?: Record<string, string>;
 }
 
 const text = (body: string): FileContent => ({ size: new TextEncoder().encode(body).length, kind: "text", media_type: null, text: body, data: null });
@@ -143,6 +150,59 @@ const SIDE_CHANGES: FixtureChange[] = [
   { entry: { group: "unstaged", old: file("README.md", index("aa11bb2")), new: file("README.md", live("v6")) }, patch: "diff --git a/README.md b/README.md\nindex aa11bb2..cc33dd4 100644\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-# Search API\n+# Search API (experimental branch)\n" },
 ];
 
+const MAIN_TIP = "4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39";
+const FEATURE_TIP = "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807";
+const LONG_BRANCH = "feature/rework-the-ranking-pipeline-so-that-boosts-are-applied-after-deduplication";
+
+const BRANCHES: BranchInfo[] = [
+  { name: "feature/ranking-experiments", commit: FEATURE_TIP },
+  { name: LONG_BRANCH, commit: "5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a" },
+  { name: "main", commit: MAIN_TIP },
+  { name: "release/2.4", commit: MAIN_TIP },
+];
+
+const at = (commit: string) => (blob: string): ContentSource => ({ kind: "commit", commit, branch: null, blob });
+const onMain = at(MAIN_TIP);
+const onFeature = at(FEATURE_TIP);
+
+const RANKING_PATCH = [
+  "diff --git a/src/ranking.ts b/src/ranking.ts",
+  "index 3c4d5e6..7f8a9b0 100644",
+  "--- a/src/ranking.ts",
+  "+++ b/src/ranking.ts",
+  "@@ -1,3 +1,4 @@",
+  ' import type { Hit } from "./index";',
+  " ",
+  "-export const rank = (hits: Hit[]) => hits.sort((a, b) => b.score - a.score);",
+  "+export const rank = (hits: Hit[], boost = 1) =>",
+  "+  hits.map((hit) => ({ ...hit, score: hit.score * boost })).sort((a, b) => b.score - a.score);",
+  "",
+].join("\n");
+
+/** The changes from `main` to `feature/ranking-experiments`. */
+const FEATURE_COMPARISON: FixtureChange[] = [
+  { entry: { group: "committed", old: file("src/ranking.ts", onMain("3c4d5e6")), new: file("src/ranking.ts", onFeature("7f8a9b0")) }, patch: RANKING_PATCH },
+  { entry: { group: "committed", old: file("src/conf.ts", onMain("0f1e2d3")), new: file("src/config.ts", onFeature("4c5b6a7")) }, patch: RENAME_PATCH },
+  {
+    entry: { group: "committed", old: { state: "out_of_scope", repository_path: "shared/search-index.ts" }, new: file("src/index.ts", onFeature("2e3d4c5")) },
+    bodies: { new: text("export const buildIndex = (docs: string[]) => new Map(docs.map((d, i) => [i, d]));\n") },
+  },
+  { entry: { group: "committed", old: file("docs/old-notes.md", onMain("7c6b5a4")), new: { state: "absent" } }, patch: DELETED_PATCH },
+  {
+    entry: { group: "committed", old: file("docs/logo.png", onMain("6a5b4c3")), new: file("docs/logo.png", onFeature("8b7c6d5")) },
+    patch: "diff --git a/docs/logo.png b/docs/logo.png\nindex 6a5b4c3..8b7c6d5 100644\nBinary files a/docs/logo.png and b/docs/logo.png differ\n",
+    bodies: { old: image(IMAGES.before_png.data), new: image(IMAGES.after_png.data) },
+  },
+  {
+    entry: {
+      group: "committed",
+      old: file("current", onMain("3b18e51")),
+      new: { state: "present", path: "current", kind: "symlink", source: onFeature("8d2f1a0") },
+    },
+    patch: TYPE_CHANGE_PATCH,
+  },
+];
+
 const WORKTREES: WorktreeInfo[] = [
   { id: "wt-main", root: "/Users/dev/code/search-api", main: true, head: "4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39", branch: "main", scope_present: true },
   { id: "wt-side", root: "/Users/dev/code/search-api-experiments", main: false, head: "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807", branch: "feature/ranking-experiments", scope_present: true },
@@ -153,6 +213,8 @@ const WORKTREES: WorktreeInfo[] = [
 export const SAMPLE_GIT: FixtureGit = {
   worktrees: WORKTREES,
   changes: { "wt-main": MAIN_CHANGES, "wt-side": SIDE_CHANGES, "wt-detached": [] },
+  branches: BRANCHES,
+  comparisons: { "main..feature/ranking-experiments": FEATURE_COMPARISON },
 };
 
 const { console: console_, web, api, sessions } = SAMPLE;
@@ -164,6 +226,19 @@ const openGit = [
   (ui: Ui) => ui.wait(400),
 ];
 const openChange = (name: RegExp) => [...openGit, (ui: Ui) => ui.press(name), (ui: Ui) => ui.wait(800)];
+/** Shows the comparison of branch `left` with branch `right`, choosing each in its selector: From
+ * is the first one still to choose, then To. */
+const compare = (left: string, right: string) => [
+  ...openGit,
+  (ui: Ui) => ui.press(ui.t("git.view.compare")),
+  (ui: Ui) => ui.wait(300),
+  (ui: Ui) => ui.press(ui.t("git.compare.choose")),
+  (ui: Ui) => ui.press((name) => name.startsWith(left) && name.length === left.length + 7),
+  (ui: Ui) => ui.wait(300),
+  (ui: Ui) => ui.press(ui.t("git.compare.choose")),
+  (ui: Ui) => ui.press((name) => name.startsWith(right) && name.length === right.length + 7),
+  (ui: Ui) => ui.wait(600),
+];
 
 export const projectGitScenarios: Scenario[] = [
   {
@@ -215,6 +290,72 @@ export const projectGitScenarios: Scenario[] = [
     state,
     git: { worktrees: [], changes: {}, gitError: "fatal: detected dubious ownership in repository at '/Users/dev/code/search-api'" },
     steps: openGit,
+  },
+  {
+    id: "git-compare",
+    group: GROUP,
+    title: "Comparing two branches",
+    description:
+      "The Git mode's Compare view: From main To feature/ranking-experiments, the commits compared, and the changed files. Press one to open its diff, read from the two commits.",
+    width: 1440,
+    state,
+    steps: compare("main", "feature/ranking-experiments"),
+  },
+  {
+    id: "git-compare-diff",
+    group: GROUP,
+    title: "A change between two branches",
+    width: 1440,
+    state,
+    steps: [...compare("main", "feature/ranking-experiments"), (ui) => ui.press(/^ranking\.ts, modified/), (ui) => ui.wait(800)],
+  },
+  {
+    id: "git-compare-same",
+    group: GROUP,
+    title: "Two branches at the same commit",
+    width: 1440,
+    state,
+    steps: compare("main", "release/2.4"),
+  },
+  {
+    id: "git-compare-moved",
+    group: GROUP,
+    title: "A compared branch that has moved since",
+    description: "The branch list read after the comparison says feature/ranking-experiments is at another commit now; the comparison stays on the commits it was made at until Refresh.",
+    width: 1440,
+    state,
+    git: { ...SAMPLE_GIT, moved: { "feature/ranking-experiments": "1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e" } },
+    steps: [...compare("main", "feature/ranking-experiments"), (ui) => ui.wait(10_500)],
+  },
+  {
+    id: "git-compare-gone",
+    group: GROUP,
+    title: "A compared branch that no longer exists",
+    width: 1440,
+    state,
+    git: { ...SAMPLE_GIT, missing: ["release/2.4"] },
+    steps: compare("main", "release/2.4"),
+  },
+  {
+    id: "git-compare-narrow",
+    group: GROUP,
+    title: "Narrow window, comparing a long-named branch",
+    width: 800,
+    state,
+    steps: [
+      (ui) => ui.press(ui.t("titleBar.sidebar.show")),
+      (ui) => ui.press(ui.session("Fix the summary layout")),
+      (ui) => ui.press(ui.t("rail.projectPane.show")),
+      (ui) => ui.wait(500),
+      (ui) => ui.press(ui.t("browser.mode.git")),
+      (ui) => ui.wait(400),
+      (ui) => ui.press(ui.t("git.view.compare")),
+      (ui) => ui.press(ui.t("git.compare.choose")),
+      (ui) => ui.press((name) => name.startsWith("main") && name.length === 11),
+      (ui) => ui.press(ui.t("git.compare.choose")),
+      (ui) => ui.press((name) => name.startsWith(LONG_BRANCH)),
+      (ui) => ui.wait(600),
+    ],
   },
   {
     id: "git-narrow",

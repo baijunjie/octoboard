@@ -6,12 +6,13 @@ import type { ChangeEntry, ChangeGroup, ChangeSide, ConflictKind } from "../prot
 import { changeStatus, type ChangeStatus as SideStatus } from "../viewer/content";
 import { compareFilePaths } from "./tree";
 
-/** A part of the change list: one of the change groups, or the paths in conflict. */
-export type ChangeSection = ChangeGroup | "conflicted";
+/** A part of the change list: one of a worktree's change groups, the paths in conflict, or the one
+ * section of a branch comparison, which never shares a list with the others. */
+export type ChangeSection = ChangeGroup | "conflicted" | "committed";
 
 /** The sections top to bottom, in the order `git status` tells them: what a commit would take, what
  * stops one, then the rest. */
-export const SECTION_ORDER: readonly ChangeSection[] = ["staged", "conflicted", "unstaged", "untracked"];
+export const SECTION_ORDER: readonly ChangeSection[] = ["staged", "conflicted", "unstaged", "untracked", "committed"];
 
 /** How a change reads in the list: as the viewer words its two sides, or in conflict. */
 export type ChangeStatus = SideStatus | "conflicted";
@@ -22,6 +23,7 @@ export const SECTION_LABELS: Record<ChangeSection, PlainMessageKey> = {
   unstaged: "git.group.unstaged",
   untracked: "git.group.untracked",
   conflicted: "git.group.conflicted",
+  committed: "git.group.committed",
 };
 
 /** How each kind of conflict reads above the conflicted file. */

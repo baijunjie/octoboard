@@ -12,6 +12,10 @@
 //! never change meaning, so what can still move is the index entry and the file on disk: both are
 //! looked at before and after the patch is made, and a reply whose patch may have been made from
 //! another version than the sides it reports is refused as `source_changed` rather than returned.
+//!
+//! A change between two commits — one of a branch comparison's (`read_between`) — is read the way a
+//! staged one is, its two sides from the two commits; nothing it reads can move, so nothing is
+//! looked at again.
 
 use std::collections::HashMap;
 use std::fs;
@@ -131,7 +135,7 @@ fn ordinary(
     let mut entries = Vec::new();
     if xy[0] != b'.' {
         entries.push(ChangeEntry::Staged {
-            old: head_side(head, modes[0], oids[0], &rel),
+            old: head_side(head.as_deref(), modes[0], oids[0], &rel),
             new: index_side(&at.worktree, modes[1], oids[1], &rel),
         });
     }
@@ -165,7 +169,7 @@ fn renamed(
     match xy[0] {
         b'R' if rel.is_some() || from.is_some() => entries.push(ChangeEntry::Staged {
             old: match &from {
-                Some(from) => head_side(head, modes[0], oids[0], from),
+                Some(from) => head_side(head.as_deref(), modes[0], oids[0], from),
                 None => outside(original),
             },
             new: match &rel {
@@ -258,7 +262,7 @@ fn untracked(path: &[u8], scope: &RelPath, live: &mut LiveSides) -> Vec<ChangeEn
 
 /// `path`, relative to the repository's root, as a path relative to the project's directory —
 /// `None` when it is not inside it. The scope directory itself is not a path inside the project.
-fn in_scope(scope: &RelPath, path: &[u8]) -> Option<RelPath> {
+pub(super) fn in_scope(scope: &RelPath, path: &[u8]) -> Option<RelPath> {
     if scope.is_root() {
         return RelPath::from_bytes(path.to_vec()).filter(|rel| !rel.is_root());
     }
@@ -277,13 +281,13 @@ fn kind_of(mode: &[u8]) -> Option<SideKind> {
     }
 }
 
-fn head_side(head: &Option<String>, mode: &[u8], oid: &[u8], rel: &RelPath) -> ChangeSide {
+pub(super) fn head_side(head: Option<&str>, mode: &[u8], oid: &[u8], rel: &RelPath) -> ChangeSide {
     match (head, kind_of(mode)) {
         (Some(commit), Some(kind)) => ChangeSide::Present {
             path: rel.to_wire(),
             kind,
             source: ContentSource::Commit {
-                commit: commit.clone(),
+                commit: commit.to_string(),
                 branch: None,
                 blob: String::from_utf8_lossy(oid).into(),
             },
@@ -307,7 +311,7 @@ fn index_side(worktree: &str, mode: &[u8], oid: &[u8], rel: &RelPath) -> ChangeS
 }
 
 /// How many path bytes `entry` puts on the wire, counted as JSON writes them.
-fn entry_path_bytes(entry: &ChangeEntry) -> usize {
+pub(super) fn entry_path_bytes(entry: &ChangeEntry) -> usize {
     let len = |path: &String| json_escaped_len(path.as_bytes());
     let side = |side: &ChangeSide| match side {
         ChangeSide::Present { path, .. } => len(path),
@@ -317,7 +321,8 @@ fn entry_path_bytes(entry: &ChangeEntry) -> usize {
     match entry {
         ChangeEntry::Staged { old, new }
         | ChangeEntry::Unstaged { old, new }
-        | ChangeEntry::Untracked { old, new } => side(old) + side(new),
+        | ChangeEntry::Untracked { old, new }
+        | ChangeEntry::Committed { old, new } => side(old) + side(new),
         ChangeEntry::Conflicted { path, .. } => len(path),
     }
 }
@@ -463,6 +468,32 @@ pub fn read(
         ChangeGroup::Unstaged => reader.unstaged(old_path.unwrap(), new_path.unwrap()),
         ChangeGroup::Untracked => reader.untracked(new_path.unwrap()),
     }
+}
+
+/// Reads a change between two commits, `old_commit` holding its old side and `new_commit` its new
+/// one, as the sides `old` and `new` name it: both from those commits alone, and its patch made
+/// between exactly them. Both are immutable, so nothing is looked at again once the patch is made.
+pub(super) fn read_between(
+    env: &GitEnv,
+    at: &Located,
+    commits: (&str, &str),
+    (old, new): (&SideRef, &SideRef),
+    cancel: &AtomicBool,
+) -> Result<ChangeRead> {
+    let (old_named, new_named) = (side_path(old)?, side_path(new)?);
+    if old_named.is_none() && new_named.is_none() {
+        return Err(CodedError::raised(
+            error_code::INVALID_CHANGE,
+            "the change names no side to read",
+            &[],
+        ));
+    }
+    let out_of_scope = matches!(old, SideRef::OutOfScope) || matches!(new, SideRef::OutOfScope);
+    // As in `read`: a side named absent is looked up at the other side's path.
+    let old_path = old_named.clone().or_else(|| new_named.clone());
+    let new_path = new_named.or(old_named);
+    let reader = Reader { env, at, cancel };
+    reader.between(commits, (old, new), old_path, new_path, out_of_scope)
 }
 
 /// The project-relative path a side names, when it names one.
@@ -781,6 +812,59 @@ impl Reader<'_> {
                 bodies,
             )?,
             patch: Some(patch),
+        })
+    }
+
+    fn between(
+        &self,
+        (old_commit, new_commit): (&str, &str),
+        (old, new): (&SideRef, &SideRef),
+        old_path: Option<RelPath>,
+        new_path: Option<RelPath>,
+        out_of_scope: bool,
+    ) -> Result<ChangeRead> {
+        let found = |side: &SideRef, path: &Option<RelPath>, commit: &str| match (side, path) {
+            (SideRef::OutOfScope, _) | (_, None) => Ok(None),
+            (_, Some(rel)) => self.in_commit(Some(commit), rel).map(Some),
+        };
+        let old_found = found(old, &old_path, old_commit)?;
+        let new_found = found(new, &new_path, new_commit)?;
+        let source = |commit: &str, oid: &str| ContentSource::Commit {
+            commit: commit.to_string(),
+            branch: None,
+            blob: oid.to_string(),
+        };
+        let source_old = |oid: &str| source(old_commit, oid);
+        let source_new = |oid: &str| source(new_commit, oid);
+        // As for a staged change: across the project's boundary only the side inside is read, and
+        // no patch is made, since one would carry the other side's content in its hunks.
+        let patch = if out_of_scope {
+            None
+        } else if old_found == Some(Found::Absent) && new_found == Some(Found::Absent) {
+            Some(Vec::new())
+        } else {
+            let paths: Vec<&RelPath> = old_path.iter().chain(new_path.iter()).collect();
+            let commits: &[&[u8]] = &[old_commit.as_bytes(), new_commit.as_bytes()];
+            Some(self.patch(commits, &paths)?)
+        };
+        let bodies = patch.as_deref().is_none_or(carries_bodies);
+        Ok(ChangeRead {
+            head: None,
+            old: self.side(
+                None,
+                old_path.as_ref(),
+                old_found.as_ref(),
+                &source_old,
+                bodies,
+            )?,
+            new: self.side(
+                None,
+                new_path.as_ref(),
+                new_found.as_ref(),
+                &source_new,
+                bodies,
+            )?,
+            patch,
         })
     }
 

@@ -560,9 +560,16 @@ pub enum ChangeEntry {
         path: String,
         conflict: ConflictKind,
     },
+    /// A change between two branch tips: never part of a worktree's listing, only of a
+    /// comparison's, where the old side is the left tip's and the new side the right tip's.
+    Committed {
+        old: ChangeSide,
+        new: ChangeSide,
+    },
 }
 
-/// How a `read_project_change` names one side of the change to read.
+/// How a `read_project_change` or a `read_project_comparison_change` names one side of the
+/// change to read.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum SideRef {
@@ -582,7 +589,32 @@ pub struct ChangeRef {
     pub new: SideRef,
 }
 
-/// One side of a change as `read_project_change` read it.
+/// One local branch of a project's repository, as `list_project_branches` lists it: its name below
+/// `refs/heads/`, as a wire path, and the object id its reference named when it was listed — the
+/// commit at its tip, unless the branch is broken (a missing object, or not a commit).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BranchInfo {
+    pub name: String,
+    pub commit: String,
+}
+
+/// One end of a branch comparison: the branch, as a wire path, and the full id of the commit it was
+/// resolved to. A comparison reply reports both; a read of one of its changes names both back, and
+/// only `commit` decides what is read.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ComparisonEndpoint {
+    pub branch: String,
+    pub commit: String,
+}
+
+/// The change a `read_project_comparison_change` reads: its two sides, as the comparison gave them.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct ComparedChangeRef {
+    pub old: SideRef,
+    pub new: SideRef,
+}
+
+/// One side of a change as `read_project_change` or `read_project_comparison_change` read it.
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum SideRead {
@@ -619,6 +651,9 @@ pub const BROWSE_REQUEST_TYPES: &[&str] = &[
     "read_project_file",
     "list_project_changes",
     "read_project_change",
+    "list_project_branches",
+    "compare_project_branches",
+    "read_project_comparison_change",
 ];
 
 #[derive(Debug, Deserialize)]
@@ -651,6 +686,21 @@ pub enum BrowseBody {
         #[serde(default)]
         worktree: Option<String>,
         change: ChangeRef,
+    },
+    ListProjectBranches {
+        project: String,
+    },
+    /// `left` and `right` are branch names below `refs/heads/`, as wire paths.
+    CompareProjectBranches {
+        project: String,
+        left: String,
+        right: String,
+    },
+    ReadProjectComparisonChange {
+        project: String,
+        left: ComparisonEndpoint,
+        right: ComparisonEndpoint,
+        change: ComparedChangeRef,
     },
 }
 
@@ -1031,6 +1081,36 @@ pub enum Event {
         group: ChangeGroup,
         head: Option<String>,
         // Boxed: two sides with their bodies would make every `Event` this large.
+        old: Box<SideRead>,
+        new: Box<SideRead>,
+        patch: Option<FileContent>,
+    },
+    /// The reply to `list_project_branches`: the repository's local branches in byte order of
+    /// their names; `complete` is false when the list was cut at a budget.
+    ProjectBranches {
+        id: Option<String>,
+        project: String,
+        branches: Vec<BranchInfo>,
+        complete: bool,
+    },
+    /// The reply to `compare_project_branches`: the two branches with the commits they were
+    /// resolved to, and the changes between those commits that touch the project, each in the
+    /// `committed` group; `complete` is false when the list was cut at a budget.
+    ProjectComparison {
+        id: Option<String>,
+        project: String,
+        left: ComparisonEndpoint,
+        right: ComparisonEndpoint,
+        changes: Vec<ChangeEntry>,
+        complete: bool,
+    },
+    /// The reply to `read_project_comparison_change`: `left` and `right` echo the request, and
+    /// both sides and the patch were read from exactly those commits.
+    ProjectComparisonChange {
+        id: Option<String>,
+        project: String,
+        left: ComparisonEndpoint,
+        right: ComparisonEndpoint,
         old: Box<SideRead>,
         new: Box<SideRead>,
         patch: Option<FileContent>,

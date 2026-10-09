@@ -9,7 +9,9 @@ import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { changeItem, type ChangeItem } from "./changes";
 import type { DirListing } from "./tree";
 import { useChangeList, type ChangeList } from "./useChangeList";
-import { useChangeReader, type ChangeReader } from "./useChangeReader";
+import { useBranchComparison } from "./useBranchComparison";
+import { useBranchList } from "./useBranchList";
+import { useChangeReader, type ChangeOrigin, type ChangeReader } from "./useChangeReader";
 import { useDirectoryListings, type DirectoryListings } from "./useDirectoryListings";
 import { useFileReader, type FileReader } from "./useFileReader";
 
@@ -192,6 +194,7 @@ it("keeps at most two Git list requests out in the window, sending the next as o
   expect(pending.map((p) => "project" in p.body && p.body.project)).toEqual(["b", "c"]);
 });
 
+const OWN: ChangeOrigin = { kind: "worktree", worktree: undefined };
 const item = (path: string, group: ChangeGroup = "unstaged"): ChangeItem =>
   changeItem({ group, old: { state: "present", path, kind: "file", source: { kind: "index", worktree: "w", blob: "b" } }, new: { state: "absent" } });
 const change = (path: string, patch: string): Event => ({
@@ -208,8 +211,8 @@ const change = (path: string, patch: string): Event => ({
 it("shows the change moved to loading until its own reply, and never a change of another group under its key", async () => {
   const { daemon, pending } = controlledDaemon();
   const hook = mount<ChangeReader>(daemon, () => useChangeReader("p"));
-  act(() => hook.current().open(item("a.ts"), undefined));
-  act(() => hook.current().open(item("b.ts"), undefined));
+  act(() => hook.current().open(item("a.ts"), OWN));
+  act(() => hook.current().open(item("b.ts"), OWN));
   const [readA, readB] = pending.splice(0);
   expect(readB.body).toMatchObject({ type: "read_project_change", slot: "viewer", change: { group: "unstaged", old: { path: "b.ts" } } });
   await act(async () => readA.resolve(change("a.ts", "-a\n")));
@@ -217,7 +220,7 @@ it("shows the change moved to loading until its own reply, and never a change of
   await act(async () => readB.resolve(change("b.ts", "-b\n")));
   expect(hook.current().subject).toMatchObject({ path: "b.ts", content: { state: "change", change: { patch: "-b\n" } } });
   const unstagedKey = hook.current().subject?.key;
-  act(() => hook.current().open(item("b.ts", "staged"), undefined));
+  act(() => hook.current().open(item("b.ts", "staged"), OWN));
   expect(hook.current().subject?.key).not.toBe(unstagedKey);
   expect(hook.current().subject?.content).toEqual({ state: "loading" });
 });
@@ -244,4 +247,78 @@ it("sends a request replacing one in its own slot at once, past the window's bou
   expect(pending.map((p) => "project" in p.body && p.body.project)).toEqual(["a", "b"]);
   act(() => a.current().refresh());
   expect(pending.map((p) => "project" in p.body && p.body.project)).toEqual(["a", "b", "a"]);
+});
+
+const endpoint = (branch: string, commit: string) => ({ branch, commit });
+const comparison = (left: string, right: string, rightCommit: string, path: string): Event => ({
+  type: "project_comparison",
+  project: "p",
+  left: endpoint(left, "c-left"),
+  right: endpoint(right, rightCommit),
+  changes: [{ group: "committed", old: { state: "absent" }, new: { state: "present", path, kind: "file", source: { kind: "commit", commit: rightCommit, branch: null, blob: "b" } } }],
+  complete: true,
+});
+const compared = (state: ReturnType<typeof useBranchComparison>["comparison"]) =>
+  state.state === "loaded" ? [state.right.commit, ...state.items.map((i) => i.path)] : state.state;
+
+it("shows the comparison of the branches chosen last, whichever comparison answers last", async () => {
+  const { daemon, pending } = controlledDaemon();
+  const hook = mountWith(daemon, "a" as string, (right) => useBranchComparison("p", "main", right, true));
+  hook.set("b");
+  const [a, b] = pending.splice(0);
+  expect(b.body).toMatchObject({ type: "compare_project_branches", left: "main", right: "b", slot: "comparison:p" });
+  await act(async () => b.resolve(comparison("main", "b", "c-b", "b.txt")));
+  await act(async () => a.resolve(comparison("main", "a", "c-a", "a.txt")));
+  expect(compared(hook.current().comparison)).toEqual(["c-b", "b.txt"]);
+});
+
+it("keeps a comparison's commits through a reconnect, and asks again only for one lost with the connection", async () => {
+  const { daemon, pending } = controlledDaemon();
+  const hook = mountWith(daemon, "a" as string, (right) => useBranchComparison("p", "main", right, true));
+  await act(async () => pending.splice(0)[0].resolve(comparison("main", "a", "c-a", "a.txt")));
+  act(() => daemon.store.setState((state) => ({ snapshotEpoch: state.snapshotEpoch + 1 })));
+  expect(pending).toEqual([]);
+  expect(compared(hook.current().comparison)).toEqual(["c-a", "a.txt"]);
+
+  hook.set("b");
+  await act(async () => pending.splice(0)[0].reject(new Error("connection closed")));
+  expect(hook.current().comparison).toEqual({ state: "loading" });
+  act(() => daemon.store.setState((state) => ({ snapshotEpoch: state.snapshotEpoch + 1 })));
+  expect(pending.map((p) => p.body)).toMatchObject([{ type: "compare_project_branches", right: "b" }]);
+});
+
+it("reads a compared change from the comparison's two commits, and never takes another pair's reply", async () => {
+  const { daemon, pending } = controlledDaemon();
+  const hook = mount<ChangeReader>(daemon, () => useChangeReader("p"));
+  const entry = changeItem({ group: "committed", old: { state: "present", path: "a.ts", kind: "file", source: { kind: "commit", commit: "c1", branch: null, blob: "o" } }, new: { state: "absent" } });
+  const origin = (rightCommit: string): ChangeOrigin => ({ kind: "comparison", left: endpoint("main", "c1"), right: endpoint("topic", rightCommit) });
+  act(() => hook.current().open(entry, origin("c2")));
+  act(() => hook.current().open(entry, origin("c3")));
+  const [first, second] = pending.splice(0);
+  expect(second.body).toMatchObject({ type: "read_project_comparison_change", slot: "viewer", left: { commit: "c1" }, right: { commit: "c3" } });
+  const reply = (rightCommit: string, patch: string): Event => ({
+    type: "project_comparison_change",
+    project: "p",
+    left: endpoint("main", "c1"),
+    right: endpoint("topic", rightCommit),
+    old: { state: "present", path: "a.ts", kind: "file", source: { kind: "commit", commit: "c1", branch: null, blob: "o" }, file: null },
+    new: { state: "absent" },
+    patch: { size: patch.length, kind: "text", media_type: null, text: patch, data: null },
+  });
+  // The first read finished before the second superseded it: its reply is of the other pair.
+  await act(async () => first.resolve(reply("c2", "-from c2\n")));
+  expect(hook.current().subject?.content).toEqual({ state: "loading" });
+  await act(async () => second.resolve(reply("c3", "-from c3\n")));
+  expect(hook.current().subject).toMatchObject({ content: { state: "change", change: { patch: "-from c3\n" } } });
+  expect(hook.current().subject?.key).toContain("c3");
+});
+
+it("counts branch lists and comparisons in the window's bound of two Git list requests", async () => {
+  const { daemon, pending } = controlledDaemon();
+  mount(daemon, () => useBranchList("a", true));
+  mount(daemon, () => useBranchComparison("b", "main", "topic", true));
+  mount(daemon, () => useChangeList("c", undefined, true));
+  expect(pending.map((p) => p.body.type)).toEqual(["list_project_branches", "compare_project_branches"]);
+  await act(async () => pending.splice(0, 1)[0].resolve({ type: "project_branches", project: "a", branches: [], complete: true }));
+  expect(pending.map((p) => p.body.type)).toEqual(["compare_project_branches", "list_project_changes"]);
 });

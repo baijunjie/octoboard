@@ -3,8 +3,12 @@ import { useSyncExternalStore } from "react";
 import { createPersistedPreference } from "../persistedPreference";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 
-/** What a project's browser shows: its files on disk, or a worktree's uncommitted changes. */
+/** What a project's browser shows: its files on disk, or Git review. */
 export type BrowserMode = "files" | "git";
+
+/** What the Git mode shows: a worktree's uncommitted changes, or the changes between two
+ * branches. */
+export type GitView = "worktree" | "compare";
 
 /** The part of a project's browser state that outlives the window: its mode and the directories
  * expanded in its tree (wire paths). File bodies and listings are never stored. */
@@ -43,11 +47,14 @@ const stored = createPersistedPreference<Record<string, StoredBrowser>>(PREFEREN
 
 /** What each project's browser has selected, kept for the window's lifetime only: a selection is
  * about what the user is looking at now, and what an earlier run named may well be gone — a file,
- * a worktree, a change. `file` is the tree's selected file (the one last opened in the viewer),
- * `worktree` the worktree whose changes the Git mode shows (none for the one holding the project's
- * directory), `change` the key of the change last opened (`changeKey`). */
-type Selection = "file" | "worktree" | "change";
-const selections: Record<Selection, Map<string, string>> = { file: new Map(), worktree: new Map(), change: new Map() };
+ * a worktree, a branch, a change. `file` is the tree's selected file (the one last opened in the
+ * viewer), `worktree` the worktree whose changes the Git mode shows (none for the one holding the
+ * project's directory), `change` the key of the change last opened from them (`changeKey`);
+ * `gitView` which of its views the Git mode shows, `left` and `right` the branches compared (wire
+ * paths) and `comparedChange` the key of the change last opened from their comparison. */
+type Selection = "file" | "worktree" | "change" | "gitView" | "left" | "right" | "comparedChange";
+const SELECTIONS: readonly Selection[] = ["file", "worktree", "change", "gitView", "left", "right", "comparedChange"];
+const selections = Object.fromEntries(SELECTIONS.map((kind) => [kind, new Map<string, string>()])) as Record<Selection, Map<string, string>>;
 const selectionListeners = new Set<() => void>();
 let selectionVersion = 0;
 
@@ -87,13 +94,22 @@ export interface ProjectBrowserState {
   /** The worktree the Git mode shows the changes of, by its id; none for the one holding the
    * project's directory. */
   worktree?: string;
-  /** The key of the change the Git mode's viewer showed last. */
+  /** The key of the change the Git mode's viewer showed last from the worktree's changes. */
   selectedChange?: string;
+  gitView: GitView;
+  /** The branches compared, old side and new side, as wire paths; none until chosen. */
+  left?: string;
+  right?: string;
+  /** The key of the change the Git mode's viewer showed last from the comparison. */
+  selectedComparedChange?: string;
   setMode: (mode: BrowserMode) => void;
   setExpanded: (expanded: ReadonlySet<string>) => void;
   setSelected: (path: string | undefined) => void;
   setWorktree: (worktree: string | undefined) => void;
   setSelectedChange: (key: string | undefined) => void;
+  setGitView: (view: GitView) => void;
+  setBranches: (left: string | undefined, right: string | undefined) => void;
+  setSelectedComparedChange: (key: string | undefined) => void;
   /** Records the project's browser as just shown, which keeps it from being the first dropped. */
   touch: () => void;
 }
@@ -117,11 +133,21 @@ export function useProjectBrowserState(project: string): ProjectBrowserState {
     selected: selections.file.get(project),
     worktree: selections.worktree.get(project),
     selectedChange: selections.change.get(project),
+    gitView: selections.gitView.get(project) === "compare" ? "compare" : "worktree",
+    left: selections.left.get(project),
+    right: selections.right.get(project),
+    selectedComparedChange: selections.comparedChange.get(project),
     setMode: (mode) => update(project, (e) => ({ ...e, mode })),
     setExpanded: (next) => update(project, (e) => ({ ...e, expanded: [...next].slice(-MAX_EXPANDED) })),
     setSelected: (path) => setSelection("file", project, path),
     setWorktree: (worktree) => setSelection("worktree", project, worktree),
     setSelectedChange: (key) => setSelection("change", project, key),
+    setGitView: (view) => setSelection("gitView", project, view),
+    setBranches: (left, right) => {
+      setSelection("left", project, left);
+      setSelection("right", project, right);
+    },
+    setSelectedComparedChange: (key) => setSelection("comparedChange", project, key),
     touch: () => update(project, (e) => ({ ...e, used: Date.now() })),
   };
 }
@@ -136,7 +162,7 @@ export function forgetProjectsOtherThan(projects: ReadonlySet<string>): void {
     for (const project of gone) delete next[project];
     stored.set(next);
   }
-  for (const kind of ["file", "worktree", "change"] as const) {
+  for (const kind of SELECTIONS) {
     for (const project of [...selections[kind].keys()]) if (!projects.has(project)) setSelection(kind, project, undefined);
   }
 }

@@ -1,9 +1,10 @@
 //! Browsing a project's files and their Git versions, for the browse requests in
 //! `apps/daemon/PROTOCOL.md`'s "Browsing a project": where a project's files are (`source`), the
 //! files on disk (`live`), the files in Git (`blob`, through the isolated invocation in `git`), a
-//! worktree's uncommitted changes and one change's diff (`changes`),
-//! how a path travels on the wire (`wire_path`), the limits all of it is held to (`budget`), and
-//! the per-connection lane its replies take back to the client (`lane`).
+//! worktree's uncommitted changes and one change's diff (`changes`), the repository's local
+//! branches and the changes between two of their tips (`compare`), how a path travels on the wire
+//! (`wire_path`), the limits all of it is held to (`budget`), and the per-connection lane its
+//! replies take back to the client (`lane`).
 //!
 //! Every request re-resolves its project from the store and its worktree from the repository; a
 //! reply is never built from a directory a client named.
@@ -11,6 +12,7 @@
 pub mod blob;
 pub mod budget;
 pub mod changes;
+pub mod compare;
 pub mod git;
 pub mod lane;
 pub mod live;
@@ -19,6 +21,8 @@ pub mod wire_path;
 
 #[cfg(test)]
 mod change_tests;
+#[cfg(test)]
+mod compare_tests;
 #[cfg(test)]
 mod tests;
 
@@ -216,6 +220,56 @@ pub fn serve(
                 worktree,
                 group: change.group,
                 head: read.head,
+                old: Box::new(read.old),
+                new: Box::new(read.new),
+                patch: read.patch.map(file_content),
+            })
+        }
+        // A comparison concerns the repository's branches, not any one worktree's checkout or
+        // index: it is read in the worktree holding the project's directory, which has the same
+        // branches and objects as every other.
+        BrowseBody::ListProjectBranches { project } => {
+            let record = stored_project(state, &project)?;
+            let at = locate(&record, None, &git, cancel)?;
+            let list = compare::branches(git.env()?, &at, cancel)?;
+            Ok(Event::ProjectBranches {
+                id,
+                project,
+                branches: list.branches,
+                complete: list.complete,
+            })
+        }
+        BrowseBody::CompareProjectBranches {
+            project,
+            left,
+            right,
+        } => {
+            let record = stored_project(state, &project)?;
+            let at = locate(&record, None, &git, cancel)?;
+            let comparison = compare::list(git.env()?, &at, &left, &right, cancel)?;
+            Ok(Event::ProjectComparison {
+                id,
+                project,
+                left: comparison.left,
+                right: comparison.right,
+                changes: comparison.changes,
+                complete: comparison.complete,
+            })
+        }
+        BrowseBody::ReadProjectComparisonChange {
+            project,
+            left,
+            right,
+            change,
+        } => {
+            let record = stored_project(state, &project)?;
+            let at = locate(&record, None, &git, cancel)?;
+            let read = compare::read(git.env()?, &at, &left, &right, &change, cancel)?;
+            Ok(Event::ProjectComparisonChange {
+                id,
+                project,
+                left,
+                right,
                 old: Box::new(read.old),
                 new: Box::new(read.new),
                 patch: read.patch.map(file_content),

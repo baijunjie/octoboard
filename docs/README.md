@@ -56,18 +56,19 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   regions, which ones are skipped, and where focus lands in each, the right pane included.
 - [Window size and position](product/window-size-and-position.md) — how the macOS window's size, position and maximized
   state are remembered and restored across launches.
-- [Project pane](product/project-pane.md) — a project's files and Git review in the right pane: its Files and Git modes
-  and what is remembered of the mode, opening it with Browse files or by selecting a project session without starting or
-  resuming anything, the file tree (what is listed, its order, rows and the keyboard, the selected file and a removed
-  one), when the tree is listed again, what is remembered per project, the read-only file viewer (what it shows,
-  Previous/Next and the arrow keys, closing it, a file that changes while open), its errors, and a pane that fails to
-  load.
-- [Project pane: Git mode](product/project-pane-git-mode.md) — the project pane's read-only review of a worktree's
-  uncommitted changes: that it never writes to the repository and how it differs from the branch badge, how the
-  repository and its worktrees are found, the worktree selector and a worktree that goes away, the change list (Staged,
-  Conflicted, Unstaged and Untracked, what is and is not listed, a subdirectory project and renames across its boundary,
-  status letters, keyboard, states and errors, refreshes), opening a change in the file viewer (each kind of change,
-  Previous/Next across sections, following refreshes), and what is kept for the window's lifetime.
+- [Project pane](product/project-pane.md) — a project's files and Git review (uncommitted changes and branch comparison)
+  in the right pane: its Files and Git modes and what is remembered of the mode, opening it with Browse files or by
+  selecting a project session without starting or resuming anything, the file tree (what is listed, its order, rows and
+  the keyboard, the selected file and a removed one), when the tree is listed again, what is remembered per project, the
+  read-only file viewer (what it shows, Previous/Next and the arrow keys, closing it, a file that changes while open),
+  its errors, and a pane that fails to load.
+- [Project pane: Git mode](product/project-pane-git-mode.md) — the project pane's read-only review of a repository in
+  two views — Uncommitted (a worktree's uncommitted changes: the worktree selector and a worktree that goes away, the
+  Staged, Conflicted, Unstaged and Untracked list, a subdirectory project and renames across its boundary, states and
+  refreshes) and Compare (a tip-to-tip comparison of two local branches: the From and To selectors, Swap, fixed commits,
+  when a comparison is made, a branch that moves or goes away) — that it never writes to the repository and how it
+  differs from the branch badge, opening a change in the file viewer, errors, and what is kept for the window's
+  lifetime.
 - [Toasts](product/toasts.md) — failures and notices that need no answer: where they appear, how one about a session
   is titled, when they dismiss themselves, how an identical one replaces rather than stacks, copying their text
   without taking focus off the terminal, and reaching them with F6.
@@ -168,10 +169,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   fragments), how layout follows the reading direction (logical utilities, mirrored directional icons, two-glyph
   chevrons, `dir` on paths and typed names, `docked:rtl:` twins), why only icon-only chrome sits on the translucent
   window material and text goes on the opaque panel, and the WCAG 2.2 AA bar the UI is held to (keyboard, visible focus,
-  names, roles and states (`aria-current` only on hand-built rows), contrast — auditing every gallery scenario in both
-  themes, fills against their surface and animations at their faintest frame, overriding HeroUI's whole `--default`
-  family on a region with its own surface, which token an outline meant to be seen is built from, and why HeroUI's own
-  text colours are measured rather than trusted — colour, motion).
+  names, roles and states (`aria-current` only on hand-built rows, a status region kept mounted so what appears in it is
+  announced), contrast — auditing every gallery scenario in both themes, fills against their surface and animations at
+  their faintest frame, overriding HeroUI's whole `--default` family on a region with its own surface, which token an
+  outline meant to be seen is built from, and why HeroUI's own text colours are measured rather than trusted — colour,
+  motion).
 - [Sending browse requests from the UI](memory/sending-browse-requests-from-the-ui.md) — why the window's browse
   requests are bounded by one count shared across the window rather than one per component (the daemon's per-connection
   bound, and a sent request that is never timed out or cancelled when its component unmounts), and sizing a new kind of

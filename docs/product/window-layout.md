@@ -398,6 +398,6 @@ Not mirrored:
   language" in `docs/product/language.md`).
 - **A file's content in the file viewer**: code, a diff — whose split layout keeps the old side on the left — the
   file's name and path, and the paths a change names, read left to right, and a binary change's sizes run from before
-  to after left to right; only the viewer around them is mirrored. A file or folder name in the file tree, and a name
-  and what follows it in the Git mode's change list, are laid out in the direction of their own text, as a name the
-  user typed is.
+  to after left to right; only the viewer around them is mirrored. A file or folder name in the file tree, a name
+  and what follows it in the Git mode's change list, and a worktree's or a branch's name in the Git mode, are laid out
+  in the direction of their own text, as a name the user typed is; a commit's id reads left to right.

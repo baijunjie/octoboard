@@ -1,6 +1,8 @@
 // The file viewer's own model of what it shows. Callers build it from daemon replies; nothing in
 // it names a rendering library's types, so the renderer behind `CodeSurface` can be replaced
 // without touching the daemon contract or the callers.
+import type { ReactNode } from "react";
+
 import type { FileContent } from "../protocol";
 
 /**
@@ -53,12 +55,13 @@ export type ViewerContent =
  * What the viewer shows. `key` is the subject's identity — the caller composes it from the
  * project, the source and the path (a path alone is not an identity) — and a new key is a new
  * subject: what was shown for the previous one is dropped. `path` is the wire path the title
- * names; `source` is the caller's own wording of where the content came from.
+ * names; `source` is the caller's own wording of where the content came from, with any name in
+ * it isolated from the text around it.
  */
 export interface ViewerSubject {
   key: string;
   path: string;
-  source?: string;
+  source?: ReactNode;
   content: ViewerContent;
 }
 

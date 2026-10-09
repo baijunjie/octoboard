@@ -1,13 +1,13 @@
 # Project pane
 
-The **project pane** shows a project's files and its repository's uncommitted changes, in two **modes**: **Files**, a
-tree of the project's directory, read live from disk with whatever an agent has written and not committed, and **Git**,
-the uncommitted changes of a worktree of the project's repository (see `docs/product/project-pane-git-mode.md`). Either
-one opens what it lists in a read-only **file viewer**. It is shown in the window's right pane, in the place a console
-session's report panel takes (see "What the right pane shows" in `docs/product/window-layout.md`, which also says what
-puts it there and what takes it away), and it needs no session: the project is all it reads from. How wide the right
-pane is, how it is hidden, floats in and becomes a drawer is in `docs/product/window-layout.md`, and where `F6` lands
-in it in `docs/product/moving-focus-between-regions.md`.
+The **project pane** shows a project's files and its repository's changes, in two **modes**: **Files**, a tree of the
+project's directory, read live from disk with whatever an agent has written and not committed, and **Git**, the
+uncommitted changes of a worktree of the project's repository and the changes between two of its local branches (see
+`docs/product/project-pane-git-mode.md`). Either one opens what it lists in a read-only **file viewer**. It is shown in
+the window's right pane, in the place a console session's report panel takes (see "What the right pane shows" in
+`docs/product/window-layout.md`, which also says what puts it there and what takes it away), and it needs no session:
+the project is all it reads from. How wide the right pane is, how it is hidden, floats in and becomes a drawer is in
+`docs/product/window-layout.md`, and where `F6` lands in it in `docs/product/moving-focus-between-regions.md`.
 
 Nothing in the project pane changes anything: there is no editing, saving, creating, renaming or deleting of files,
 and nothing is staged, committed or checked out.
@@ -20,8 +20,8 @@ and nothing is staged, committed or checked out.
 - **Selecting a project session** shows its project's project pane.
 
 Moving between sessions of one project leaves its pane as it was: its mode, its expanded folders and selected file, and
-in Git its chosen worktree and selected change. Another project's session, or another project's Browse files, shows
-that project's own pane.
+in Git its view, its chosen worktree, its chosen branches and its selected changes. Another project's session, or
+another project's Browse files, shows that project's own pane.
 
 The pane's header names the project, with a folder icon, and carries the **Files** and **Git** tabs (see "Files and
 Git" below) and a **Refresh** button. Pressing Refresh with the mouse leaves keyboard focus where it was.
@@ -33,10 +33,11 @@ remembered per project (see "What is remembered" below), so Browse files or sele
 mode it was last left in.
 
 Only the mode on screen is kept up to date on its own: the Files mode as "Keeping the tree up to date" below says, the
-Git mode as "Keeping the list up to date" in `docs/product/project-pane-git-mode.md` says. Switching to a mode counts
-as showing it again, so it is refreshed when its last refresh is more than 5 seconds old. The header's **Refresh**
-refreshes the mode on screen: in Files every folder on screen is listed again, in Git the worktrees and the changes are
-read again.
+Git mode as "Uncommitted and Compare" in `docs/product/project-pane-git-mode.md` says. Switching to a mode counts as
+showing it again, so what it keeps up to date is refreshed when its last refresh is more than 5 seconds old. The
+header's **Refresh** refreshes the mode on screen: in Files every folder on screen is listed again, in Git the
+worktrees are read again, and so are the changes of the Uncommitted view, or the branches and their comparison in the
+Compare view, whichever is on screen.
 
 "The file tree", "The selected file" and "Keeping the tree up to date" below are about the Files mode.
 
@@ -125,8 +126,9 @@ project, the earliest expanded dropped first, and the state of at most 50 projec
 dropped first. A removed project's state is dropped.
 
 The selected file is kept only while the window is open: reloading it, or restarting the application, starts every
-project with no file selected. So are the Git mode's chosen worktree and selected change (see "What is remembered" in
-`docs/product/project-pane-git-mode.md`). Listings, change lists and file contents are never stored.
+project with no file selected. So are the Git mode's view, chosen worktree, chosen branches and selected changes (see
+"What is remembered" in `docs/product/project-pane-git-mode.md`). Listings, change lists and file contents are never
+stored.
 
 ## The file viewer
 

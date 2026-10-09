@@ -303,13 +303,32 @@ export type ConflictKind =
   | "deleted_by_us"
   | "deleted_by_them";
 
-/** One entry of `project_changes`: a change between two sides, or a path in conflict, which is no
- * two-sided change and is read as a live file. */
+/** One entry of `project_changes` or `project_comparison`: a change between two sides, or a path
+ * in conflict, which is no two-sided change and is read as a live file. A `committed` change is one
+ * of a branch comparison's, its old side from the left branch's commit and its new side from the
+ * right's. */
 export type ChangeEntry =
-  | { group: ChangeGroup; old: ChangeSide; new: ChangeSide }
+  | { group: ChangeGroup | "committed"; old: ChangeSide; new: ChangeSide }
   | { group: "conflicted"; path: string; conflict: ConflictKind };
 
-/** How `read_project_change` names one side, as the listing gave it. */
+/** One local branch, as `project_branches` lists it: its name below `refs/heads/` (a wire path) and
+ * the object id its reference named when it was listed — the commit at its tip, unless the branch
+ * is broken (a missing object, or not a commit), which a comparison then refuses. */
+export interface BranchInfo {
+  name: string;
+  commit: string;
+}
+
+/** One end of a branch comparison: the branch (a wire path) and the full id of the commit it was
+ * resolved to. A read of one of the comparison's changes names both back; only `commit` decides
+ * what is read. */
+export interface ComparisonEndpoint {
+  branch: string;
+  commit: string;
+}
+
+/** How `read_project_change` and `read_project_comparison_change` name one side, as the listing
+ * gave it. */
 export type SideRef = { state: "present"; path: string } | { state: "absent" } | { state: "out_of_scope" };
 
 /** One side of a change as `read_project_change` read it. `file` is its body, carried only where no
@@ -446,7 +465,8 @@ export type RequestBody =
    * `console_upserted` for every console whose reference was cleared. */
   | { type: "delete_account"; account: string }
   /** The browse requests (see "Browsing a project" in `apps/daemon/PROTOCOL.md`), answered with
-   * `project_source`, `project_dir`, `project_file`, `project_changes` and `project_change`. A
+   * `project_source`, `project_dir`, `project_file`, `project_changes`, `project_change`,
+   * `project_branches`, `project_comparison` and `project_comparison_change`. A
    * newer browse request on this connection with the same `slot` supersedes an older one still
    * outstanding, which is answered `request_superseded`; one that finished first still gets its
    * real reply, so a reply is also discarded by its `id`. */
@@ -466,6 +486,17 @@ export type RequestBody =
       project: string;
       worktree?: string;
       change: { group: ChangeGroup; old: SideRef; new: SideRef };
+      slot?: string;
+    }
+  | { type: "list_project_branches"; project: string; slot?: string }
+  /** `left` is the old side and `right` the new side, each a branch name as a wire path. */
+  | { type: "compare_project_branches"; project: string; left: string; right: string; slot?: string }
+  | {
+      type: "read_project_comparison_change";
+      project: string;
+      left: ComparisonEndpoint;
+      right: ComparisonEndpoint;
+      change: { old: SideRef; new: SideRef };
       slot?: string;
     }
   | { type: "shutdown" };
@@ -584,6 +615,30 @@ export type Event =
       worktree: string | null;
       group: ChangeGroup;
       head: string | null;
+      old: SideRead;
+      new: SideRead;
+      patch: FileContent | null;
+    }
+  /** In byte order of the names; `complete` is false when the list was cut at a budget. */
+  | { type: "project_branches"; id?: string; project: string; branches: BranchInfo[]; complete: boolean }
+  /** `left` and `right` are the branches as asked for and the commits they were resolved to; every
+   * change in `changes` (all `committed`) is between exactly those two commits. */
+  | {
+      type: "project_comparison";
+      id?: string;
+      project: string;
+      left: ComparisonEndpoint;
+      right: ComparisonEndpoint;
+      changes: ChangeEntry[];
+      complete: boolean;
+    }
+  /** `left` and `right` echo the request: both sides and the patch were read from those commits. */
+  | {
+      type: "project_comparison_change";
+      id?: string;
+      project: string;
+      left: ComparisonEndpoint;
+      right: ComparisonEndpoint;
       old: SideRead;
       new: SideRead;
       patch: FileContent | null;

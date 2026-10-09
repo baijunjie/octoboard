@@ -55,6 +55,9 @@ the request id as if it were a record id.
 | `read_project_file` | `project`, `path`, `worktree?`, `from?`, `slot?` | Reads one file of the project, `path` being a wire path relative to the project's directory. `from` picks the content: `{"kind":"live"}` (the default) the file on disk, `{"kind":"index"}` the blob staged for it, `{"kind":"branch","branch":…}` the blob at a local branch's tip, `{"kind":"commit","commit":…}` the blob in a commit given by its full id. With `worktree`, the disk and the index read are that worktree's. Answered with `project_file`. A browse request |
 | `list_project_changes` | `project`, `worktree?`, `slot?` | Lists the uncommitted changes of the worktree holding the project's directory — or, with `worktree`, of that worktree of its repository — that touch the project: staged, unstaged, untracked and in conflict. Answered with `project_changes`. A browse request |
 | `read_project_change` | `project`, `worktree?`, `change`, `slot?` | Reads one of those changes for its diff: `change` is `{group, old, new}`, `group` being `staged`, `unstaged` or `untracked` and each side `{"state":"present","path":…}`, `{"state":"absent"}` or `{"state":"out_of_scope"}` as the listing gave it. Answered with `project_change`. A browse request |
+| `list_project_branches` | `project`, `slot?` | Lists the local branches of the project's repository, each with the object id its reference names: the commit at its tip. Answered with `project_branches`. A browse request |
+| `compare_project_branches` | `project`, `left`, `right`, `slot?` | Resolves local branches `left` (the old side) and `right` (the new side), each a branch name as a wire path, to the commits at their tips, and lists the changes between those two commits that touch the project. Answered with `project_comparison`. A browse request |
+| `read_project_comparison_change` | `project`, `left`, `right`, `change`, `slot?` | Reads one change of a comparison for its diff: `left` and `right` are the comparison's `{branch, commit}` as its reply gave them, and `change` is `{old, new}`, each side as in `read_project_change`. Answered with `project_comparison_change`. A browse request |
 | `open_session` | `console_id`, `project_id?`, `agent?`, `account?`, `task?`, `title?`, `bound_to?` | Omit `project_id` for a console session; a console may hold any number of them at once. `agent` follows the priority in the "Which agent a session uses" section of `docs/product/sessions.md` when omitted. `account` is the account the session's agent reads, by id: absent leaves it to the console's reference for the session's agent, else the agent's default account; an explicit `null` chooses the default account outright, whatever the console refers to. An id that names no account of the session's agent is refused with `unknown_account`. `bound_to` names the session this (project) session should report to; absent means none. Ignored for a console session, which is never bound. A `bound_to` that names neither a console session of `console_id` nor an unbound project session of `project_id` is refused with `unknown_session` |
 | `resume_session` | `session` | Relaunches an `interrupted` or `archived` session through the agent's own resume mechanism, re-injecting everything. A session bound to an archived owner (a console session, or a project session that started it) relaunches that owner first, and the whole request fails with the owner's own refusal if it cannot, leaving both as they were; an owner that is only `interrupted` is left alone. Resuming an owner relaunches nothing bound to it |
 | `archive_session` | `session` | Ends the process and archives the session. Archiving a session that has sessions bound to it (a console session, or a project session that started some) goes by whether a process is running, not by status: refused with `session_has_running_sessions`, and nothing changed, while any session bound to it has a process (or is being launched, resumed or switched), and otherwise it archives every bound session that is not archived yet — the interrupted ones — along with the session itself, so nothing bound to it is left outside the archive. Archiving a session with nothing bound to it reaches no other session |
@@ -95,6 +98,9 @@ the request id as if it were a record id.
 | `project_file` | `id`, `project`, `worktree`, `path`, `source`, `file` — the reply to `read_project_file`. `project`, `worktree` and `path` echo the request; `source` is the `ContentSource` the body was read from and `file` the `FileContent` |
 | `project_changes` | `id`, `project`, `worktree`, `head`, `changes`, `complete` — the reply to `list_project_changes`. `project` and `worktree` echo the request; `head` is the commit the staged changes are against, null before the first commit; `changes` are `ChangeEntry` records in the order `git status` gives them; `complete` is false when the list was cut at a budget |
 | `project_change` | `id`, `project`, `worktree`, `group`, `head`, `old`, `new`, `patch` — the reply to `read_project_change`. `project`, `worktree` and `group` echo the request; `head` is the commit a staged change was read against (null before the first commit, and for the other groups); `old` and `new` are `SideRead` records; `patch` is a `FileContent` holding the change's unified patch as `git` writes it, null when none is made |
+| `project_branches` | `id`, `project`, `branches`, `complete` — the reply to `list_project_branches`. `branches` are `BranchInfo` records in byte order of their names; `complete` is false when the list was cut at a budget |
+| `project_comparison` | `id`, `project`, `left`, `right`, `changes`, `complete` — the reply to `compare_project_branches`. `left` and `right` are `ComparisonEndpoint` records: each branch as the request named it and the commit it was resolved to; `changes` are `ChangeEntry` records of the `committed` group, in the order `git` gives them; `complete` is false when the list was cut at a budget |
+| `project_comparison_change` | `id`, `project`, `left`, `right`, `old`, `new`, `patch` — the reply to `read_project_comparison_change`. `left` and `right` echo the request, and are the commits both sides and the patch were read from; `old`, `new` and `patch` are as in `project_change` |
 | `page_list` | `id`, `console_session_id`, `pages` — oldest first. Pages are not in `snapshot`: one carries a whole HTML document, and only the console session on screen needs its pages, so the panel asks. Asking again after every `snapshot` is what keeps it correct across a `page_created` a lagging client never received: such a client is sent a fresh snapshot in place of the events it missed, on the socket it already has |
 | `page_created` | `page` — the whole record. The console session pushed a page with `show_page` |
 | `ack` | `id` |
@@ -399,8 +405,9 @@ of a console no client is showing stays in the daemon's status for it until that
 
 ### Browsing a project
 
-The browse requests — `get_project_source`, `list_project_dir`, `read_project_file`, `list_project_changes` and
-`read_project_change` — read a project's files, their Git versions and a worktree's changes on demand, for a client
+The browse requests — `get_project_source`, `list_project_dir`, `read_project_file`, `list_project_changes`,
+`read_project_change`, `list_project_branches`, `compare_project_branches` and `read_project_comparison_change` — read a
+project's files, their Git versions, a worktree's changes and the changes between two branches on demand, for a client
 showing them. Their replies go to the asking socket only: nothing about them is broadcast, nothing is kept for a later
 client, and none of it is part of `snapshot`, which carries no file content at all.
 
@@ -418,7 +425,7 @@ ContentSource     = { kind: "live", root_id, version }
                   | { kind: "index", worktree, blob }
                   | { kind: "commit", commit, branch?, blob }
 FileContent       { size, kind: "text"|"binary", media_type?, text?, data? }
-ChangeEntry       = { group: "staged"|"unstaged"|"untracked", old: ChangeSide, new: ChangeSide }
+ChangeEntry       = { group: "staged"|"unstaged"|"untracked"|"committed", old: ChangeSide, new: ChangeSide }
                   | { group: "conflicted", path, conflict }
 ChangeSide        = { state: "present", path, kind: "file"|"symlink"|"submodule", source: ContentSource }
                   | { state: "absent" }
@@ -426,6 +433,8 @@ ChangeSide        = { state: "present", path, kind: "file"|"symlink"|"submodule"
 SideRead          = { state: "present", path, kind, source: ContentSource, file: FileContent? }
                   | { state: "absent" }
                   | { state: "out_of_scope" }
+BranchInfo        { name, commit }
+ComparisonEndpoint { branch, commit }
 ```
 
 #### Project sources
@@ -530,8 +539,9 @@ could not be read, which is then left out.
 
 #### Telling a stale reply from a current one
 
-A reply says exactly what it answers: `project`, `worktree` and `path` echo the request, and `source` (or `root_id`)
-identifies the directory, the index or the commit the content came from and the version or object read. A client that
+A reply says exactly what it answers: `project`, `worktree` and `path` echo the request — a comparison's `left` and
+`right` with the commits they were resolved to — and `source` (or `root_id`) identifies the directory, the index or the
+commit the content came from and the version or object read. A client that
 has since moved to another project, worktree, mode, file or comparison discards a reply that no longer matches what it
 shows, and discards by request `id` as well: a request that finished just before a newer one in its slot arrived is
 still answered with its real reply. Two kinds of change stay distinct: a reconnect, after which a client asks again
@@ -541,8 +551,9 @@ next reply, and nothing else.
 
 #### Changes and comparisons
 
-`list_project_changes` lists a worktree's uncommitted changes and `read_project_change` reads one of them for its diff.
-The comparison of two branches is not served yet; its shape is recorded at the end of this section.
+`list_project_changes` lists a worktree's uncommitted changes and `read_project_change` reads one of them for its diff;
+`compare_project_branches` lists the changes between two branches and `read_project_comparison_change` reads one of
+those (see "Comparing two branches" below).
 
 A change is identified by its group and both of its sides, not by a path alone:
 
@@ -608,10 +619,49 @@ against the patch and metadata budgets, so a change with very much below it is r
 read. A `change` naming no side its group can read — both sides absent, an `out_of_scope` side outside the staged group,
 an untracked change with an old side — is `invalid_change`.
 
-A branch comparison, once served, is the left branch's tip as the old side against the right branch's tip as the new
-side, each resolved to its commit as above, its changes in a `committed` group. Its reply echoes both and what they
-resolved to — `left: { branch, commit }`, `right: { branch, commit }` — beside `project`, the `changes` and `complete`,
-so every change in it is identified against exactly those two commits.
+#### Comparing two branches
+
+`list_project_branches` lists the repository's local branches — the references below `refs/heads/`, whichever
+worktree has one checked out, or none — each with the full object id its reference names, which is the commit at its
+tip. A broken branch, whose reference names an object the repository does not have or one that is not a commit, is
+listed as it is rather than looked into, since asking `git` what a missing object is would fail the whole list; a
+comparison of it is refused with `unknown_branch`, as a branch read is. At most 10,000 branches, or 2 MiB of names as
+sent, are listed, the first in byte order; a list cut there carries `complete: false`.
+
+`compare_project_branches` compares the left branch's tip, as the old side, with the right branch's tip, as the new
+side: the two commits themselves, never their merge base, so whatever the left branch has that the right one does not
+reads as undone, and swapping the two turns every change around. Each branch is checked and resolved to its commit as
+a branch read is (see "Reading": `invalid_branch_name`, `unknown_branch`), and the reply reports both —
+`left: { branch, commit }`, `right: { branch, commit }`. Every change in it is between exactly those two commits, in
+the `committed` group, its present sides' `source` naming the commit and the blob (with no `branch`, which the
+endpoints carry). Two branches at the same commit have no changes, and the reply says so by its two equal commits.
+
+The listing compares the two commits' whole trees, with rename detection on, so a rename into or out of the project's
+scope is found against the rest of the repository; an entry is kept when either side is inside the scope, and a side
+outside it is `out_of_scope` with its `repository_path`, as in a worktree's listing. When the whole trees' comparison is
+past its 8 MiB budget (far-apart branches of a large repository) and the project is below the repository's root, its
+own directory is compared instead: a rename across the scope's boundary then reads as the addition or the deletion it
+is inside, the way a rename on disk does in a worktree's listing, and nothing outside is named. A type change is one
+change whose sides have different kinds; a submodule is a change only when the commits record it at different commits.
+Nothing is read from any worktree's disk or index, so the project's folder does not have to hold a path for a
+comparison to list or read it, and a comparison means the same whichever worktree is chosen for the uncommitted
+changes. A list over its budget is cut and carries `complete: false`, as a change list is: at most 10,000 entries or
+2 MiB of paths as sent.
+
+`read_project_comparison_change` names the comparison it belongs to by both endpoints, as the comparison's reply gave
+them, and the daemon reads from those two commits only: each `commit` must be the full id of a commit in the repository
+(`invalid_commit`, `unknown_commit`) and each `branch` a branch name (`invalid_branch_name`), but the branches are not
+looked up again. A branch moved or deleted since its comparison was listed therefore never repoints the comparison; it
+reads as it was until the comparison is asked for again, which resolves the branches' new tips, or is refused with
+`unknown_branch` for a branch that is gone. A commit the repository no longer has — a deleted branch's, once pruned —
+is `unknown_commit`, and an object missing from the repository fails the read with `git_failed`; nothing is read in its
+place. Otherwise the change is read as a staged one is, its old side from the left commit and its new side from the
+right one: a side named absent is looked up at the other side's path, a side outside the scope gets no body and the
+change no patch, the patch is made between the two commits over exactly the change's paths (paths that nest
+included), a side's `file` is carried where no patch shows its content, and both sides absent is `invalid_change`.
+Since a commit's content never changes, nothing is looked at again once the patch is made, and the reply never mixes
+versions. The daemon does not check that the change a read names is one the comparison listed: like a
+`read_project_file` of a commit, a read is held only to the project's scope and the two commits it names.
 
 #### Git invocation
 
@@ -653,13 +703,17 @@ born yet, and its staged changes are compared with the empty tree.
 | Listing names | 2 MiB, as sent | Bounds a listing whose names are few but long, counted as JSON writes them; 10,000 names of typical length are a small fraction of it |
 | Change entries | 10,000 | The largest measured commit changed 704 files and 99 % changed under 170; a worktree's pending changes are smaller still. A change list past it is cut |
 | Change paths | 2 MiB, as sent | Bounds a change list whose entries are few but whose paths are long, counted as JSON writes them, the repository paths of sides outside the project included. A change list past it is cut |
+| Branches | 10,000 | A repository usually has a handful to tens of local branches, and one kept for years with every branch left behind a few thousand. A branch list past it is cut |
+| Branch names | 2 MiB, as sent | Bounds a branch list whose branches are few but whose names are long, counted as JSON writes them. A branch list past it is cut |
+| `git for-each-ref` output for a branch list | 4 MiB | One branch past the budget is asked for, each a line of about 90 bytes beside its name, so this is room for names averaging some 300 bytes. Past it the branch list is refused (`git_output`) |
+| `git diff-tree` output for a comparison | 8 MiB | As a change list's `git status`, it covers the whole tree, so a rename into the project is found against the rest of the repository; a record is about 100 bytes and its paths. Past it a project below the repository's root is compared within its own directory instead (see "Comparing two branches"), and a project at the root is refused (`git_output`), as is a directory's own comparison past it. That second run can double a comparison's worst-case time: two runs of up to the 30 s `git` deadline each |
 | `git status` output for a change list | 8 MiB | The status covers the whole worktree, since a rename into the project is only found against the rest of the repository; a record is about 120 bytes and its path, so this holds tens of thousands of changes. Past it the change list is refused (`git_output`) rather than built from part of the output |
 | `git` metadata output | 1 MiB | A `worktree list` entry is about 200 bytes; one path's index or tree entry is one line |
 | `git` stderr kept | 64 KiB | A `git` message is a few hundred bytes; the rest of a longer one is read and dropped |
 | `git` deadline | 30 s | Browse reads are local, so this only catches a wedged repository (a dead network volume, a held lock) |
 | Reads at once, daemon-wide | 4 | A viewer, its neighbour and a couple of directory expansions in parallel; more waits its turn. A read from disk has no deadline, so a volume that stops answering can hold these |
 | Outstanding requests, per connection | 16 | Waiting, being read, or queued until their reply is written. One more is refused with `limit_exceeded` at once, so a flooding client cannot grow the daemon's backlog |
-| Reserved per request | about 12 MiB for a file or a project source, about 7.8 MiB for a listing, about 26.6 MiB for a change list, about 24.3 MiB for a change | Each request reserves its worst case before it starts. For a file that is three times the file body (a text body held as read and serialized, JSON escaping at most doubling it; a binary body held base64-encoded and serialized again) and room for the rest of the frame; for a listing, its names and the rest of its entries, each held as read and serialized; for a change list, the `git status` output while it is read and its entries, at 768 bytes each beside their paths, held as built and serialized; for a change, two bodies as a file reserves them beside a patch of at most 64 KiB, a body coming with a patch only when the patch carries no content (a text patch alone, at most 4 MiB, needs no more than one body). The reservation shrinks to the serialized reply and is given back once the reply is written to the socket. A reply that would be larger than its reservation is refused (`reply_bytes`) |
+| Reserved per request | about 12 MiB for a file or a project source, about 7.8 MiB for a listing, about 10.4 MiB for a branch list, about 26.6 MiB for a change list or a comparison, about 24.3 MiB for a change of either | Each request reserves its worst case before it starts. For a file that is three times the file body (a text body held as read and serialized, JSON escaping at most doubling it; a binary body held base64-encoded and serialized again) and room for the rest of the frame; for a listing, its names and the rest of its entries, each held as read and serialized; for a branch list, the `git for-each-ref` output while it is read and its branches, at 128 bytes each beside their names, held as built and serialized; for a change list, the `git status` output while it is read and its entries, at 768 bytes each beside their paths, held as built and serialized, and for a comparison the same with its `git diff-tree` output; for a change of either kind, two bodies as a file reserves them beside a patch of at most 64 KiB, a body coming with a patch only when the patch carries no content (a text patch alone, at most 4 MiB, needs no more than one body). The reservation shrinks to the serialized reply and is given back once the reply is written to the socket. A reply that would be larger than its reservation is refused (`reply_bytes`) |
 | Bytes held for replies, per connection | about 48 MiB | Four file reads at their worst, so one window gets every read the daemon runs at a time |
 | Bytes held for replies, daemon-wide | about 96 MiB | Twice one connection's share, so a client that stops reading cannot hold every other connection's reads up |
 | Writing one frame | 30 s | Any frame on the control socket, not only a browse reply. On a loopback connection a client that takes no bytes for this long has stopped reading; its connection is closed, giving back what its queued replies held, and it reconnects to a fresh `snapshot` and asks again |

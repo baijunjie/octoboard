@@ -1,8 +1,9 @@
-import { Button, Label, ListBox, Select, Spinner } from "@heroui/react";
+import { Label, ListBox, Select, Tabs } from "@heroui/react";
 import { FileCheck, GitBranch, GitFork, TriangleAlert } from "lucide-react";
 import React, { useRef } from "react";
 
 import { EmptyPanel } from "../components/EmptyPanel";
+import { FadeOverflow } from "../components/FadeOverflow";
 import { PathText } from "../components/PathText";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import type { Translate } from "../i18n/catalog";
@@ -11,8 +12,11 @@ import { abbreviateHome } from "../pathDisplay";
 import type { WorktreeInfo } from "../protocol";
 import { useDaemonStore } from "../store";
 import { displayWirePath } from "../wirePath";
+import { BranchComparisonView } from "./BranchComparison";
+import type { GitView as GitViewKind } from "./browserState";
 import { ChangeList } from "./ChangeList";
 import type { ChangeItem } from "./changes";
+import { GitFailure, GitLoading } from "./gitStates";
 import type { ChangeList as ChangeListState } from "./useChangeList";
 import type { SourceState } from "./useProjectSource";
 
@@ -22,45 +26,48 @@ function worktreeName(t: Translate, worktree: WorktreeInfo): string {
   return worktree.head === null ? t("git.worktree.unborn") : t("git.worktree.detached", { commit: worktree.head.slice(0, 7) });
 }
 
-/**
- * The project pane's Git mode: which worktree's uncommitted changes are shown, and the changes. The
- * worktree only chooses where the changes are read from: it checks nothing out, moves no session
- * and leaves the Files mode on the project's own directory. A worktree that has gone is said to be
- * unavailable, never replaced by another one; the user chooses another.
- */
-export function GitView({
-  source,
-  list,
-  worktree,
-  onWorktreeChange,
-  selectedChange,
-  onOpen,
-  onRetry,
-  listRef,
-}: {
-  source: SourceState;
+/** What the worktree view shows and does: the chosen worktree's change list. */
+export interface WorktreeViewProps {
   list: ChangeListState;
-  /**
-   * The worktree whose changes are shown, by id; none for the one holding the project's directory.
-   */
+  /** The worktree whose changes are shown, by id; none for the one holding the project's
+   * directory. */
   worktree: string | undefined;
   onWorktreeChange: (worktree: string | undefined) => void;
   selectedChange: string | undefined;
   onOpen: (item: ChangeItem) => void;
+  listRef: React.Ref<HTMLDivElement>;
+}
+
+/**
+ * The project pane's Git mode, in two views: a worktree's uncommitted changes, from the worktree
+ * the selector chooses, and the changes between two local branches (`BranchComparisonView`). The
+ * worktree only chooses where the uncommitted changes are read from: it checks nothing out, moves
+ * no session, leaves the Files mode on the project's own directory and plays no part in a branch
+ * comparison. A worktree that has gone is said to be unavailable, never replaced by another one;
+ * the user chooses another.
+ */
+export function GitView({
+  source,
+  view,
+  onViewChange,
+  worktree,
+  compare,
+  onRetry,
+}: {
+  source: SourceState;
+  view: GitViewKind;
+  onViewChange: (view: GitViewKind) => void;
+  worktree: WorktreeViewProps;
+  compare: Omit<React.ComponentProps<typeof BranchComparisonView>, "onRetry">;
   /**
    * Asks again for whatever failed. `from` is the control pressed, which goes away with the
    * failure.
    */
   onRetry: (from: Element | null) => void;
-  listRef: React.Ref<HTMLDivElement>;
 }): React.ReactElement {
   const t = useT();
-  // When what holds focus below the selector goes — the list replaced by its empty state, a failure
-  // or the worktree found gone — focus goes to the selector rather than falling to `<body>`.
-  const selectRef = useRef<HTMLDivElement>(null);
-  const handoff = useFocusHandoff(() => selectRef.current?.querySelector<HTMLElement>("button")?.focus());
-  if (source.state === "loading") return <Loading label={t("git.loading")} />;
-  if (source.state === "error") return <Failure title={t("git.error.source")} message={source.message} onRetry={onRetry} />;
+  if (source.state === "loading") return <GitLoading label={t("git.loading")} />;
+  if (source.state === "error") return <GitFailure title={t("git.error.source")} message={source.message} onRetry={onRetry} />;
   const git = source.source.git;
   if (!git) {
     return source.source.git_error !== null ? (
@@ -69,15 +76,65 @@ export function GitView({
       <EmptyPanel icon={GitFork} message={t("git.notARepository")} />
     );
   }
-  const own = git.worktree;
+  return (
+    <Tabs
+      variant="secondary"
+      selectedKey={view}
+      onSelectionChange={(key) => onViewChange(key as GitViewKind)}
+      className="flex min-h-0 flex-1 flex-col gap-0"
+    >
+      <Tabs.ListContainer className="shrink-0 px-3">
+        <Tabs.List aria-label={t("git.views")} className="w-auto">
+          {/* HeroUI dims a hovered tab to 70%, which takes its muted label under WCAG AA's 4.5:1;
+              the hover darkens it instead. */}
+          <Tabs.Tab id="worktree" className="h-8 px-3 whitespace-nowrap hover:text-foreground hover:opacity-100">
+            {t("git.view.worktree")}
+            <Tabs.Indicator />
+          </Tabs.Tab>
+          <Tabs.Tab id="compare" className="h-8 px-3 whitespace-nowrap hover:text-foreground hover:opacity-100">
+            {t("git.view.compare")}
+            <Tabs.Indicator />
+          </Tabs.Tab>
+        </Tabs.List>
+      </Tabs.ListContainer>
+      <Tabs.Panel id="worktree" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
+        <WorktreeChanges worktrees={git.worktrees} own={git.worktree} {...worktree} onRetry={onRetry} />
+      </Tabs.Panel>
+      <Tabs.Panel id="compare" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
+        <BranchComparisonView {...compare} onRetry={onRetry} />
+      </Tabs.Panel>
+    </Tabs>
+  );
+}
+
+function WorktreeChanges({
+  worktrees,
+  own,
+  list,
+  worktree,
+  onWorktreeChange,
+  selectedChange,
+  onOpen,
+  onRetry,
+  listRef,
+}: WorktreeViewProps & {
+  worktrees: WorktreeInfo[];
+  own: string;
+  onRetry: (from: Element | null) => void;
+}): React.ReactElement {
+  const t = useT();
+  // When what holds focus below the selector goes — the list replaced by its empty state, a failure
+  // or the worktree found gone — focus goes to the selector rather than falling to `<body>`.
+  const selectRef = useRef<HTMLDivElement>(null);
+  const handoff = useFocusHandoff(() => selectRef.current?.querySelector<HTMLElement>("button")?.focus());
   const shownId = worktree ?? own;
-  const shown = git.worktrees.find((w) => w.id === shownId);
+  const shown = worktrees.find((w) => w.id === shownId);
   const gone = !shown || (list.state === "error" && list.unavailable);
   return (
     <>
       <WorktreeSelect
         ref={selectRef}
-        worktrees={git.worktrees}
+        worktrees={worktrees}
         own={own}
         value={shownId}
         missing={!shown}
@@ -88,9 +145,9 @@ export function GitView({
         {gone ? (
           <EmptyPanel icon={TriangleAlert} message={t("git.worktree.gone")} />
         ) : list.state === "loading" ? (
-          <Loading label={t("git.loading")} />
+          <GitLoading label={t("git.loading")} />
         ) : list.state === "error" ? (
-          <Failure title={t("git.error.list")} message={list.message} onRetry={onRetry} />
+          <GitFailure title={t("git.error.list")} message={list.message} onRetry={onRetry} />
         ) : list.items.length === 0 && list.complete ? (
           <EmptyPanel icon={FileCheck} message={t("git.empty")} />
         ) : (
@@ -124,6 +181,7 @@ function WorktreeSelect({
   const t = useT();
   const homeDir = useDaemonStore((s) => s.homeDir);
   const current = worktrees.find((w) => w.id === value);
+  const currentName = current ? worktreeName(t, current) : missing ? t("git.worktree.goneName") : "";
   return (
     <div ref={ref} className="shrink-0 border-b border-separator px-3 py-2">
       <Select fullWidth value={value} onChange={(key) => key !== null && onChange(String(key))}>
@@ -133,9 +191,9 @@ function WorktreeSelect({
             {() => (
               <>
                 <GitBranch aria-hidden="true" className="size-4 shrink-0 text-muted" />
-                <span dir="auto" className="min-w-0 truncate">
-                  {current ? worktreeName(t, current) : missing ? t("git.worktree.goneName") : ""}
-                </span>
+                <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={currentName}>
+                  {currentName}
+                </FadeOverflow>
               </>
             )}
           </Select.Value>
@@ -145,13 +203,14 @@ function WorktreeSelect({
           <ListBox>
             {worktrees.map((worktree) => {
               const name = worktreeName(t, worktree);
+              const shownName = worktree.id === own ? t("git.worktree.own", { name }) : name;
               const path = abbreviateHome(displayWirePath(worktree.root), homeDir);
               return (
                 <ListBox.Item key={worktree.id} id={worktree.id} textValue={name}>
-                  <span className="flex min-w-0 flex-col">
-                    <span dir="auto" className="truncate">
-                      {worktree.id === own ? t("git.worktree.own", { name }) : name}
-                    </span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <FadeOverflow as="span" dir="auto" titleWhenClipped={shownName}>
+                      {shownName}
+                    </FadeOverflow>
                     <PathText as="span" path={path} className="text-xs text-muted" />
                     {!worktree.scope_present && <span className="text-xs text-muted">{t("git.worktree.scopeMissing")}</span>}
                   </span>
@@ -162,41 +221,6 @@ function WorktreeSelect({
           </ListBox>
         </Select.Popover>
       </Select>
-    </div>
-  );
-}
-
-function Loading({ label }: { label: string }): React.ReactElement {
-  return (
-    <div role="status" className="flex flex-1 items-center justify-center gap-2 text-sm text-muted">
-      <Spinner size="sm" aria-hidden="true" />
-      {label}
-    </div>
-  );
-}
-
-/** A source or a list that could not be read: why, and a way to try again. */
-function Failure({
-  title,
-  message,
-  onRetry,
-}: {
-  title: string;
-  message: string;
-  onRetry: (from: Element | null) => void;
-}): React.ReactElement {
-  const t = useT();
-  const ref = useRef<HTMLDivElement>(null);
-  return (
-    <div ref={ref} className="flex flex-1 flex-col items-center justify-center gap-3 px-4 text-center text-sm">
-      <TriangleAlert aria-hidden="true" className="size-6 text-danger" />
-      <div role="alert" className="flex flex-col gap-1">
-        <p className="font-medium">{title}</p>
-        <p className="text-muted">{message}</p>
-      </div>
-      <Button size="sm" variant="secondary" preventFocusOnPress onPress={() => onRetry(ref.current)}>
-        {t("error.tryAgain")}
-      </Button>
     </div>
   );
 }

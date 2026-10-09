@@ -303,6 +303,35 @@ pub fn resolve_branch(
     branch: &str,
     cancel: &AtomicBool,
 ) -> Result<String> {
+    let refname = branch_refname(env, root, branch, cancel)?;
+    let limit = budget::GIT_METADATA_STDOUT;
+    let unknown = || {
+        CodedError::raised(
+            error_code::UNKNOWN_BRANCH,
+            format!("there is no local branch {branch} with a commit at its tip"),
+            &[("branch", branch)],
+        )
+    };
+    let args: &[&[u8]] = &[b"--verify", b"--hash", &refname];
+    let target = match env.run(root, "show-ref", args, limit, cancel) {
+        Ok(stdout) => String::from_utf8_lossy(&stdout).trim().to_string(),
+        Err(GitError::Failed(_)) => return Err(unknown()),
+        Err(err) => return Err(git_error(err)),
+    };
+    match peel_to_commit(env, root, &target, cancel)? {
+        Some(commit) if commit == target => Ok(commit),
+        _ => Err(unknown()),
+    }
+}
+
+/// `refs/heads/<branch>` for local branch `branch` (a wire path), once the name is checked to be
+/// one: `invalid_branch_name` otherwise. Nothing is looked up.
+pub fn branch_refname(
+    env: &GitEnv,
+    root: &Path,
+    branch: &str,
+    cancel: &AtomicBool,
+) -> Result<Vec<u8>> {
     let invalid = || {
         CodedError::raised(
             error_code::INVALID_BRANCH_NAME,
@@ -320,26 +349,9 @@ pub fn resolve_branch(
     refname.extend_from_slice(&name);
     let limit = budget::GIT_METADATA_STDOUT;
     match env.run(root, "check-ref-format", &[&refname], limit, cancel) {
-        Ok(_) => {}
-        Err(GitError::Failed(_)) => return Err(invalid()),
-        Err(err) => return Err(git_error(err)),
-    }
-    let unknown = || {
-        CodedError::raised(
-            error_code::UNKNOWN_BRANCH,
-            format!("there is no local branch {branch}"),
-            &[("branch", branch)],
-        )
-    };
-    let args: &[&[u8]] = &[b"--verify", b"--hash", &refname];
-    let target = match env.run(root, "show-ref", args, limit, cancel) {
-        Ok(stdout) => String::from_utf8_lossy(&stdout).trim().to_string(),
-        Err(GitError::Failed(_)) => return Err(unknown()),
-        Err(err) => return Err(git_error(err)),
-    };
-    match peel_to_commit(env, root, &target, cancel)? {
-        Some(commit) if commit == target => Ok(commit),
-        _ => Err(unknown()),
+        Ok(_) => Ok(refname),
+        Err(GitError::Failed(_)) => Err(invalid()),
+        Err(err) => Err(git_error(err)),
     }
 }
 

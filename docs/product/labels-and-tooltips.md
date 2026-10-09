@@ -24,8 +24,9 @@ avatars and the ⋮ buttons below. These are:
 - the three options of Settings' Appearance row — Light, Dark and System (see "Appearance" in
   `docs/product/settings.md`);
 - the report panel's previous-page and next-page buttons;
-- the project pane's Refresh button, a folder's chevron in its file tree ("Expand" / "Collapse"), and the file
-  viewer's Previous file and Next file buttons (see `docs/product/project-pane.md`);
+- the project pane's Refresh button, a folder's chevron in its file tree ("Expand" / "Collapse"), the file viewer's
+  Previous file and Next file buttons (see `docs/product/project-pane.md`), and the Git mode's Swap branches (see
+  "The branch selectors" in `docs/product/project-pane-git-mode.md`);
 - the close button of every dialog, of Settings and of each toast ("Close").
 
 While the docked sidebar is hidden at 1148 px and wider, a console's avatar opens its tooltip on keyboard focus only:
@@ -36,8 +37,9 @@ rail" in `docs/product/sidebar.md`).
 
 A single-line name or label too long for its space — a sidebar row's name, the top bar's breadcrumb, a session listed
 in a confirmation, the report panel's page timestamp, a name in a project pane's file tree or its header, a name or
-what follows it in the Git mode's change list, a worktree's path in its worktree selector — fades out where it is cut
-off rather than ending in an ellipsis. A name, unlike the timestamp, then has its full text as its tooltip.
+what follows it in the Git mode's change list, a worktree's name or path in its worktree selector, a branch's name in
+its branch selectors — fades out where it is cut off rather than ending in an ellipsis. A name, unlike the timestamp,
+then has its full text as its tooltip.
 
 **While the pointer is over it, such a label runs as a marquee**, so all of it can be read:
 

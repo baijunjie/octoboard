@@ -243,7 +243,11 @@ async fn submit_browse(state: &Arc<AppState>, lane: &Arc<Lane>, request: BrowseR
             budget::READ_RESERVATION
         }
         BrowseBody::ListProjectChanges { .. } => budget::CHANGE_LIST_RESERVATION,
-        BrowseBody::ReadProjectChange { .. } => budget::DIFF_RESERVATION,
+        BrowseBody::ReadProjectChange { .. } | BrowseBody::ReadProjectComparisonChange { .. } => {
+            budget::DIFF_RESERVATION
+        }
+        BrowseBody::ListProjectBranches { .. } => budget::BRANCH_LIST_RESERVATION,
+        BrowseBody::CompareProjectBranches { .. } => budget::COMPARISON_RESERVATION,
     };
     lane.submit(request.id, request.slot, reservation, move |cancel| {
         crate::browse::serve(&state, id, request.body, &GitEnv::from_shell, cancel)
