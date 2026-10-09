@@ -56,13 +56,18 @@ Porcelain `git status` and `git diff` are not read-only: when a tracked file's t
 not, both refresh the stat information and rewrite `.git/index`, holding `index.lock` while they do. Against a
 repository an agent is working in, that makes the agent's own `git add` or `git commit` fail with "index.lock
 exists". `GIT_OPTIONAL_LOCKS=0` stops `git status` from writing but not `git diff`; `git diff` also needs
-`-c diff.autoRefreshIndex=false`. Set both on any `git` the daemon runs only to read. Browse reads get them from
-`GitEnv::command` in `apps/daemon/src/browse/git.rs`; a `git` read built anywhere else has to set them itself.
+`-c diff.autoRefreshIndex=false`. Set both on any `git` the daemon runs only to read. No one place builds the
+daemon's `git` commands — several modules each assemble their own, and a builder that never reads a working
+repository carries neither — so grep `GIT_OPTIONAL_LOCKS` for the builder your read goes through instead of
+assuming either way; when it lacks the pair, add it there for every read that builder makes rather than at your
+one call site.
 
 A test claiming a read writes nothing to the repository proves it only if the fixture first leaves a tracked file
 with a new modification time and unchanged content; without that, nothing triggers the refresh and the test passes
-whatever the command does. Compare every file under `.git` (bytes and modification time) before and after, and when
-unsure what a `git` command writes, try it in a scratch repository outside the project first.
+whatever the command does. Compare every file under `.git` before and after on both its content and its modification
+time, holding the content as a digest rather than the bytes so that a failure names the file that changed instead of
+printing the whole directory. When unsure what a `git` command writes, try it in a scratch repository outside the
+project first.
 
 ## Type-check Linux-only code in a scratch crate, since no check on macOS compiles it
 

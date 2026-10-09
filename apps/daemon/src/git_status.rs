@@ -9,6 +9,7 @@
 //! behind their upstream, goes nowhere near the remote, and is therefore outside the floor above —
 //! sharing the in-flight claim with the checks, but not their minimum interval.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -21,7 +22,7 @@ use crate::protocol::{GitActivity, GitStatus, Project};
 use crate::state::AppState;
 
 /// Upper bound on one `git` subprocess (`fetch`, `status`, `merge`). `GIT_TERMINAL_PROMPT=0` and
-/// `ssh -oBatchMode=yes` (see `run_git_output`) turn a missing credential or an unknown host key
+/// `ssh -oBatchMode=yes` (see `git_command`) turn a missing credential or an unknown host key
 /// into an immediate failure rather than a prompt neither of them ever shows on a headless daemon,
 /// but a slow network can still legitimately take tens of seconds on a fetch; two minutes leaves a
 /// wide margin above that while still turning a wedged step into a reported error within one sweep
@@ -147,7 +148,7 @@ fn check_project(state: &AppState, project: &Project) {
         if let Some(remote) = &remote {
             args.push(remote);
         }
-        if let Err(err) = run_git(&path, &args) {
+        if let Err(err) = run_git_write(&path, &args) {
             tracing::debug!(%err, "fetching the remote failed");
             status.error = Some(err);
         }
@@ -265,7 +266,7 @@ fn fast_forward(state: &AppState, path: &Path, status: &mut GitStatus) {
     state.publish_git_status(status.clone());
     // `syncable` just checked `upstream` to be `Some`.
     let upstream = status.upstream.clone().expect("upstream is set");
-    if let Err(err) = run_git(path, &["merge", "--ff-only", &upstream]) {
+    if let Err(err) = run_git_write(path, &["merge", "--ff-only", &upstream]) {
         tracing::debug!(%err, "fast-forwarding the branch failed");
         status.error = Some(err);
     }
@@ -277,7 +278,7 @@ fn fast_forward(state: &AppState, path: &Path, status: &mut GitStatus) {
 /// with no remote is the ordinary case this exists to tell apart from one the fetch below should
 /// actually attempt, not a failure of its own.
 fn list_remotes(path: &Path) -> Vec<String> {
-    run_git_output(path, &["remote"])
+    run_git_read(path, &["remote"])
         .map(|output| {
             output
                 .lines()
@@ -293,7 +294,7 @@ fn list_remotes(path: &Path) -> Vec<String> {
 /// branch has no upstream, which is the ordinary case for a fresh branch and not reported as a
 /// failure.
 fn upstream_remote(path: &Path) -> Option<String> {
-    let output = run_git_output(
+    let output = run_git_read(
         path,
         &[
             "rev-parse",
@@ -329,6 +330,17 @@ fn fetch_remote(remotes: &[String], upstream_remote: Option<&str>) -> Option<Str
     None
 }
 
+/// The read of the local branch state: `git status`'s branch header, in the porcelain format whose
+/// `# branch.*` lines [`parse_branch_header`] takes. One constant rather than a literal at its one
+/// call site, so the test that proves this read leaves the repository's index alone runs the very
+/// command the check runs.
+const BRANCH_HEADER_ARGS: &[&str] = &[
+    "status",
+    "--porcelain=v2",
+    "--branch",
+    "--untracked-files=no",
+];
+
 /// Runs `git status --porcelain=v2 --branch --untracked-files=no` and applies what it says to
 /// `status`; a failure to run it records `status.error` and leaves every other field of `status`
 /// exactly as it was. A caller that reads a `GitStatus` it did not just build must therefore blank
@@ -343,15 +355,7 @@ fn fetch_remote(remotes: &[String], upstream_remote: Option<&str>) -> Option<Str
 /// separate invocation rather than reviving this one's enumeration for every sweep that does not
 /// need it.
 fn read_branch_header(path: &Path, status: &mut GitStatus) {
-    match run_git_output(
-        path,
-        &[
-            "status",
-            "--porcelain=v2",
-            "--branch",
-            "--untracked-files=no",
-        ],
-    ) {
+    match run_git_read(path, BRANCH_HEADER_ARGS) {
         Ok(output) => {
             let header = parse_branch_header(&output);
             status.branch = header.branch;
@@ -367,38 +371,91 @@ fn read_branch_header(path: &Path, status: &mut GitStatus) {
     }
 }
 
-/// Runs `git` with `args` in `path` and discards its stdout, for a step whose only interesting
-/// output is whether it succeeded.
-fn run_git(path: &Path, args: &[&str]) -> Result<(), String> {
-    run_git_output(path, args).map(|_| ())
+/// Whether a `git` this module runs only reads the project's repository, or is one of the two
+/// steps meant to write to it (the fetch and the fast-forward). A read is held back from writing
+/// the index, which it otherwise does behind the caller's back — see [`git_command`]; a write is
+/// not, since both of those steps legitimately take the locks they need. Which one a step is
+/// follows from the wrapper it is run through, each named for its access, rather than from an
+/// argument a call site passes and can get wrong. A read whose only interesting output is its exit
+/// status — a dirty-worktree `git diff --quiet`, say — therefore still goes through
+/// [`run_git_read`] and drops what it returns, never through [`run_git_write`]: it is exactly such
+/// a command that the index guard matters most for.
+#[derive(Clone, Copy)]
+enum GitAccess {
+    Read,
+    Write,
 }
 
-/// Runs `git` with `args` in `path`, using the cached shell environment and resolved binary, and
-/// returns its stdout as UTF-8. The error is the verbatim stderr of a failed `git`, the operating-
-/// system message of a failure to even start it, or a timeout past `GIT_COMMAND_TIMEOUT` —
-/// `GitStatus` carries it as is, untranslated.
-fn run_git_output(path: &Path, args: &[&str]) -> Result<String, String> {
+/// Runs `git` with `args` in `path` and returns its stdout as UTF-8, reading the repository and
+/// nothing more.
+fn run_git_read(path: &Path, args: &[&str]) -> Result<String, String> {
+    run_git_access(path, args, GitAccess::Read)
+}
+
+/// Runs `git` with `args` in `path` and discards its stdout, for one of the two steps that write
+/// to the repository.
+fn run_git_write(path: &Path, args: &[&str]) -> Result<(), String> {
+    run_git_access(path, args, GitAccess::Write).map(|_| ())
+}
+
+/// What both of the above run: the cached shell environment and resolved binary, and the command
+/// [`git_command`] builds over them. The error is the verbatim stderr of a failed `git`, the
+/// operating-system message of a failure to even start it, or a timeout past
+/// `GIT_COMMAND_TIMEOUT` — `GitStatus` carries it as is, untranslated, whichever of the two
+/// wrappers produced it.
+fn run_git_access(path: &Path, args: &[&str], access: GitAccess) -> Result<String, String> {
     let env = env_shell::cached_snapshot().map_err(|err| format!("{err:#}"))?;
     let git = env_shell::resolve_binary("git", &env).map_err(|err| format!("{err:#}"))?;
+    run_git_command(&mut git_command(Path::new(&git), &env, path, args, access))
+}
+
+/// The `git <args>` command to run in `path`, with the binary and the environment passed in rather
+/// than looked up, so a test can point both at something of its own instead of the user's login
+/// shell.
+fn git_command(
+    git: &Path,
+    env: &HashMap<String, String>,
+    path: &Path,
+    args: &[&str],
+    access: GitAccess,
+) -> std::process::Command {
     let mut command = std::process::Command::new(git);
     // `git` runs with the user's shell environment, the same one agents are launched with, rather
     // than the daemon's own minimal one.
     command.env_clear();
-    command.envs(&env);
-    // `git` and `ssh` read a missing credential, an unknown host key or a passphrase-protected key
-    // with no agent from the controlling terminal, not stdin — a null stdin (which `run_with_timeout`
-    // sets below) does nothing to stop that prompt. This is what turns all three into an immediate
-    // failure instead of a daemon launched from a terminal blocking forever on them.
+    command.envs(env);
+    // `git` and `ssh` read a missing credential, an unknown host key or a passphrase-protected
+    // key with no agent from the controlling terminal, not stdin — a null stdin (which
+    // `run_with_timeout` sets) does nothing to stop that prompt. This is what turns all three into
+    // an immediate failure instead of a daemon launched from a terminal blocking forever on them.
     command.env("GIT_TERMINAL_PROMPT", "0");
     command.env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes");
     command.env_remove("GIT_ASKPASS");
     command.env_remove("SSH_ASKPASS");
+    if matches!(access, GitAccess::Read) {
+        // A porcelain read is not read-only on its own: `git status` refreshes the stat
+        // information of a tracked file whose timestamps moved while its content did not, and
+        // rewrites `.git/index` to keep it — holding `index.lock` while it does, which is what
+        // fails the `git add` or `git commit` an agent is running in that same repository.
+        // `GIT_OPTIONAL_LOCKS=0` drops that write-back, and nothing of what the read reports.
+        // `-c diff.autoRefreshIndex=false` is the same guarantee for a diff-family read, which
+        // refreshes the index whatever `GIT_OPTIONAL_LOCKS` says; both go on every read, so one
+        // added later cannot take half of the guarantee.
+        command.env("GIT_OPTIONAL_LOCKS", "0");
+        command.args(["-c", "diff.autoRefreshIndex=false"]);
+    }
     command.current_dir(path);
     command.args(args);
+    command
+}
+
+/// Runs a command [`git_command`] built, to completion under `GIT_COMMAND_TIMEOUT`, and returns
+/// its stdout as UTF-8.
+fn run_git_command(command: &mut std::process::Command) -> Result<String, String> {
     // `run_with_timeout` is generic over whatever bounded subprocess it is given, so neither its
     // pipe-read errors nor its timeout message name `git` on their own — this is where that
     // subject is added.
-    let output = crate::subprocess::run_with_timeout(&mut command, GIT_COMMAND_TIMEOUT)
+    let output = crate::subprocess::run_with_timeout(command, GIT_COMMAND_TIMEOUT)
         .context("running git")
         .map_err(|err| format!("{err:#}"))?;
     if !output.status.success() {
@@ -498,6 +555,8 @@ fn parse_ab(text: &str) -> (u32, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::browse::git::tests::{git, repo_with};
+    use crate::test_support::ScratchDir;
 
     #[test]
     fn a_normal_branch_with_an_upstream_and_no_movement() {
@@ -653,5 +712,120 @@ mod tests {
             now,
             GIT_CHECK_MIN_INTERVAL
         ));
+    }
+
+    /// Every file under `.git`, by path, with its length, a digest of its bytes and its
+    /// modification time — what a read must leave untouched. The modification time is part of it
+    /// because an index rewritten with the same stat information it already held would compare
+    /// equal by content alone; the digest stands in for the bytes so that a failure prints an
+    /// entry per file rather than tens of kilobytes of byte literals.
+    fn git_dir_state(repo: &Path) -> Vec<(PathBuf, u64, u64, std::time::SystemTime)> {
+        use std::hash::{Hash, Hasher};
+
+        let mut state = Vec::new();
+        let mut stack = vec![repo.join(".git")];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).expect("the .git directory is readable") {
+                let path = entry.expect("its entries are readable").path();
+                let meta = std::fs::symlink_metadata(&path).expect("an entry has metadata");
+                if meta.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                let body = std::fs::read(&path).expect("an entry is readable");
+                let mut digest = std::hash::DefaultHasher::new();
+                body.hash(&mut digest);
+                let modified = meta.modified().expect("an entry has a modification time");
+                state.push((path, body.len() as u64, digest.finish(), modified));
+            }
+        }
+        state.sort_by(|a, b| a.0.cmp(&b.0));
+        state
+    }
+
+    /// What the branch header of [`repo_with_a_stale_stat`] reads as: a branch with an upstream it
+    /// is one commit ahead of, so that all four of the fields the check reports carry a value.
+    fn stale_stat_header() -> BranchHeader {
+        BranchHeader {
+            branch: Some("main".to_string()),
+            detached: false,
+            upstream: Some("origin/main".to_string()),
+            ahead: 1,
+            behind: 0,
+        }
+    }
+
+    /// A repository whose only tracked file has the content it was committed with but an older
+    /// modification time, which is what makes `git status` want to refresh the index: without it
+    /// the read writes nothing whatever its environment says, so the test below would pass even
+    /// with the guard removed.
+    fn repo_with_a_stale_stat(label: &str) -> ScratchDir {
+        let repo = repo_with(label, &[(b"f.txt", b"one\n")]);
+        // An upstream to report, with the branch one commit ahead of it. The remote is never
+        // contacted — these tests run the read and nothing else — but it has to be configured
+        // before `refs/remotes/origin/main` counts as the branch's tracking ref.
+        git(&repo, &["remote", "add", "origin", "."]);
+        git(&repo, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        git(&repo, &["branch", "--set-upstream-to=origin/main", "main"]);
+        std::fs::write(repo.join("f.txt"), b"two\n").expect("the tracked file is writable");
+        git(&repo, &["commit", "-q", "-am", "second"]);
+        move_modification_time_back(&repo.join("f.txt"));
+        repo
+    }
+
+    /// Moves `path`'s modification time a minute back, leaving its content alone.
+    fn move_modification_time_back(path: &Path) {
+        let file = std::fs::File::options()
+            .write(true)
+            .open(path)
+            .expect("the tracked file is writable");
+        file.set_modified(std::time::SystemTime::now() - Duration::from_secs(60))
+            .expect("its modification time is settable");
+    }
+
+    /// Runs the branch-header read in `repo` with the given access, as [`run_git_read`] would
+    /// but over the test process's own environment and the system `git`, and returns what it
+    /// reported.
+    fn read_header(repo: &Path, access: GitAccess) -> BranchHeader {
+        let mut env: HashMap<String, String> = std::env::vars().collect();
+        env.retain(|key, _| !key.starts_with("GIT_"));
+        // The user's own configuration is left out, as it is for every other `git` a test runs.
+        env.insert("GIT_CONFIG_GLOBAL".to_string(), "/dev/null".to_string());
+        env.insert("GIT_CONFIG_NOSYSTEM".to_string(), "1".to_string());
+        let mut command = git_command(
+            Path::new("/usr/bin/git"),
+            &env,
+            repo,
+            BRANCH_HEADER_ARGS,
+            access,
+        );
+        let output = run_git_command(&mut command).expect("the branch header is read");
+        parse_branch_header(&output)
+    }
+
+    #[test]
+    fn reading_the_branch_header_leaves_the_repository_untouched() {
+        let repo = repo_with_a_stale_stat("git-status-read");
+        let before = git_dir_state(&repo);
+        let header = read_header(&repo, GitAccess::Read);
+        assert_eq!(git_dir_state(&repo), before, "the read wrote under .git");
+        assert_eq!(header, stale_stat_header());
+    }
+
+    #[test]
+    fn the_same_read_without_the_guard_rewrites_the_index_and_still_reports_the_same_header() {
+        let repo = repo_with_a_stale_stat("git-status-read-unguarded");
+        let before = git_dir_state(&repo);
+        // The positive control for the test above: the fixture's stale stat information really
+        // does make this `git status` write, so the untouched `.git` up there is the guard doing
+        // its work and not the fixture failing to provoke any. The header settles the other half
+        // — the guard costs the check none of what it reports.
+        let header = read_header(&repo, GitAccess::Write);
+        assert_ne!(
+            git_dir_state(&repo),
+            before,
+            "an unguarded `git status` was expected to rewrite the index"
+        );
+        assert_eq!(header, stale_stat_header());
     }
 }
