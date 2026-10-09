@@ -7,8 +7,11 @@
 Octoboard is a local, open source command center for coding agents.
 
 Octoboard is for large projects inside a company. One product is split across repositories, each
-with its own rules and often its own agent. A change rarely stays in one of them. One agent session
-can miss another project's instructions and tools, so you end up copying context and relaying results.
+with its own rules and often its own agent. A change rarely stays in one of them. Agent workspace tools
+today usually load every project's Skills and tools into a single session and develop all of those projects
+there. Their contexts get mixed, and the quality of the work becomes unpredictable. Even then, that session can
+miss another project's instructions. Split the work into one session per project instead, and you end up
+copying context and relaying results yourself.
 
 Octoboard starts a native session in each project directory, so that project keeps its own agent,
 instructions, and tools. A coordinating agent splits the work, hands each project its part, and brings the

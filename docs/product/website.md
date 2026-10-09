@@ -165,11 +165,12 @@ Its replay control restarts the demonstration.
 
 The homepage then presents the source repository and MIT License, local data handling and planned remote support,
 platform availability, and nine questions. Each question can be expanded or collapsed independently, with the first
-expanded initially; several answers can remain open at once. The questions cover suitable tasks, configuration
-loading across directories or through subagents, different agent brands, reporting and direct participation, product
-understanding, platform availability, preparation and costs, data handling, and planned remote hosts. Configuration
-loading is described as dependent on the agent and its tools. Product understanding comes from ongoing conversations,
-project knowledge, and reports available to the session, not automatic training or permanent memory.
+expanded initially; several answers can remain open at once. The questions cover suitable tasks, loading several
+projects into one session, configuration loading across directories or through subagents, different agent brands,
+reporting and direct participation, product understanding, platform availability, preparation and costs, data handling,
+and planned remote hosts. Configuration loading is described as dependent on the agent and its tools. Product
+understanding comes from ongoing conversations, project knowledge, and reports available to the session, not automatic
+training or permanent memory.
 
 Supported agents are Claude Code, Codex, and Grok Build. The preparation answer states that users install the agent
 CLIs they want to use. Octoboard is free and open source under the MIT License. The agents it runs are the user's
