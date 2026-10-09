@@ -570,10 +570,43 @@ mod tests {
             .code
     }
 
+    /// Whether this Linux system refuses `openat2`, so that an open falls back to holding only the
+    /// last component (see the module doc).
+    #[cfg(target_os = "linux")]
+    fn openat2_is_refused() -> bool {
+        // SAFETY: `open_how` is plain integers, for which all zeroes is a valid value.
+        let how: libc::open_how = unsafe { std::mem::zeroed() };
+        // SAFETY: `openat2` reads `how` (of the size passed) and the NUL-terminated path, both
+        // alive for the call.
+        let fd = unsafe {
+            libc::syscall(
+                libc::SYS_openat2,
+                libc::AT_FDCWD,
+                c".".as_ptr(),
+                &how as *const libc::open_how,
+                std::mem::size_of::<libc::open_how>(),
+            )
+        };
+        if fd >= 0 {
+            // SAFETY: the descriptor was just opened here and is used nowhere else.
+            unsafe { libc::close(fd as libc::c_int) };
+            return false;
+        }
+        matches!(
+            io::Error::last_os_error().raw_os_error(),
+            Some(libc::ENOSYS | libc::EPERM)
+        )
+    }
+
     /// A directory on the resolved path replaced by a link to elsewhere between the resolution
     /// and the open: the read and the listing refuse, rather than follow it.
     #[test]
     fn a_link_swapped_in_after_resolution_is_never_followed() {
+        #[cfg(target_os = "linux")]
+        if openat2_is_refused() {
+            eprintln!("skipped: openat2 is refused, so only the last component is held");
+            return;
+        }
         let scope = ScratchDir::new("live-swap");
         let scope = fs::canonicalize(&*scope).unwrap();
         let outside = ScratchDir::new("live-swap-outside");

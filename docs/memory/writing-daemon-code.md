@@ -66,13 +66,21 @@ to produce the stale state, and the test needs a positive control beside it — 
 asserted to write. `apps/daemon/src/git_status.rs`'s
 `reading_the_branch_header_leaves_the_repository_untouched`, with the control that follows it, is the worked pair.
 
-## Type-check Linux-only code in a scratch crate, since no check on macOS compiles it
+## Run Linux-only code's tests in a Linux container, since no check on macOS compiles it
 
 Applies to daemon code under `#[cfg(target_os = "linux")]` (the daemon is meant to run on a Linux host too) when you
 are developing on macOS. `cargo check`, `cargo clippy` and the test suite on macOS skip that code entirely, so a clean
-run says nothing about it. Checking the daemon itself with `--target x86_64-unknown-linux-gnu` does not get there
-either: rusqlite's `bundled` feature compiles SQLite from C in a build script, which fails without a Linux C
-cross-compiler (`x86_64-linux-gnu-gcc`). So copy the Linux-only functions into a scratch crate outside the repository
-that depends only on what they use (typically `libc`), and run `cargo check --target x86_64-unknown-linux-gnu` there
-after `rustup target add x86_64-unknown-linux-gnu`. That proves it compiles, not how it behaves; say so when
-reporting the change.
+run says nothing about it, and `--target x86_64-unknown-linux-gnu` from macOS fails in rusqlite's `bundled` build
+script without a Linux C cross-compiler. So run `cargo test -p octoboardd` inside a Linux container (Docker).
+
+A stock Rust image on Debian bookworm fails about twenty tests for reasons unrelated to the code, which reads as a
+Linux bug in the daemon: its git (2.39) lacks `git worktree add --orphan`, which the browse tests use (needs 2.42 or
+later), and its `/bin/sh` is dash, while the stand-in scripts the trust tests run under `/bin/sh` use bash builtins
+(as macOS's `/bin/sh` is bash). Use an image whose git is new enough (Debian trixie's is) and point `/bin/sh` at bash
+before the run. To exercise a fallback for a refused system call (the browse reads' `openat2` refused as `ENOSYS` or
+`EPERM`), run the container with a seccomp profile that returns that errno for the call.
+
+Without a container runtime, the fallback is a compile check only: copy the Linux-only functions into a scratch crate
+outside the repository that depends only on what they use (typically `libc`), and run
+`cargo check --target x86_64-unknown-linux-gnu` there after `rustup target add x86_64-unknown-linux-gnu`; say when
+reporting that it proves it compiles, not how it behaves.
