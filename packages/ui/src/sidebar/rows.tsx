@@ -4,6 +4,7 @@ import React, { type RefObject, useRef } from "react";
 
 import { handFocusOff } from "../components/handFocusOff";
 import { TitledControl } from "../components/TitledControl";
+import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { useT } from "../i18n/react";
 
@@ -56,6 +57,7 @@ export function TreeRow({
   /** The row's element, so its action menu can open on a right-click anywhere on the row. */
   ref?: React.Ref<HTMLDivElement>;
 }): React.ReactElement {
+  const focusVisible = useFocusVisibleProps();
   return (
     <div
       ref={ref}
@@ -66,7 +68,8 @@ export function TreeRow({
       aria-expanded={expanded}
       data-selected={selected || undefined}
       data-marquee-scope
-      className={`group flex cursor-pointer rounded-lg text-sm outline-none select-none transition-colors hover:bg-panel-hover focus-visible:ring-2 focus-visible:ring-focus data-selected:bg-panel-selected ${className}`}
+      {...focusVisible}
+      className={`group flex cursor-pointer rounded-lg text-sm outline-none select-none transition-colors hover:bg-panel-hover data-focus-visible:ring-2 data-focus-visible:ring-focus data-selected:bg-panel-selected ${className}`}
       onMouseDown={keepFocus}
       onClick={onActivate}
       onKeyDown={rowKeyHandler(onActivate)}

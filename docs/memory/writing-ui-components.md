@@ -275,13 +275,14 @@ marked as it is, and do not add a new exception without the user's say. Concrete
   that holds controls — a pane, a panel, an overlay — is marked `data-region` and added to that hook's `REGIONS` and
   `shown`, or F6 skips it and a keyboard user in the terminal has no way to reach it.
 - **Visible focus**: HeroUI controls draw their own focus ring. A hand-built focusable element that removes the
-  outline puts a ring back, never `outline-none` alone, and takes it from react-aria's `useFocusRing` as HeroUI
-  does — spread its `focusProps`, set `data-focus-visible` from `isFocusVisible`, style with
-  `data-focus-visible:ring-2 data-focus-visible:ring-focus` (the code frames in
-  `packages/ui/src/viewer/CodeSurface.tsx`) — rather than from CSS `:focus-visible`. In the app's WKWebView an
-  element reached with Tab inside the file viewer (a react-aria focus-trapped dialog) did not match `:focus-visible`
-  and showed no ring, while Playwright's `webkit` matched it, so only the packaged app shows the miss; the cause was
-  not established. A keyboard handler that moves focus itself calls react-aria's
+  outline puts a ring back, never `outline-none` alone, and takes it from `useFocusVisibleProps`
+  (`packages/ui/src/components/useFocusVisibleProps.ts`): spread its props on the element and style with
+  `data-focus-visible:ring-2 data-focus-visible:ring-focus` (`group-data-focus-visible:` from a child). Never style
+  focus with CSS `:focus-visible` — no `focus-visible:` or `group-focus-visible:` variant, no
+  `:has(:focus-visible)` selector. Once the last focus came from a click, the app's WKWebView does not match it on an
+  element focused by script, even right after a key press, so every keyboard move made by script — F6 region
+  cycling, Tab inside a react-aria focus-trapped dialog — lands without a ring. Playwright's `webkit` matches it in
+  those cases, so only the packaged app shows the miss. A keyboard handler that moves focus itself calls react-aria's
   `setInteractionModality("keyboard")` first when the handler sits on the window's capture phase and stops
   propagation (react-aria tracks modality from a capture-phase listener on the document, which the key then never
   reaches), or what it focuses draws no ring when the previous input was a pointer.

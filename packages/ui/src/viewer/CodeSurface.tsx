@@ -1,7 +1,7 @@
 import { Spinner } from "@heroui/react";
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
-import { useFocusRing } from "react-aria";
 
+import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
 import { useT } from "../i18n/react";
 import { diffPlan, textPlan } from "./budgets";
 import { CODE_THEMES } from "./codeTheme";
@@ -85,20 +85,12 @@ export function PlainText({ text, label, theme }: { text: string; label: string;
   );
 }
 
-/**
- * What both code frames share as focusable regions: a focus ring, and Select All taking the code
- * alone (`selectCode`), left to the browser's own where that cannot.
- *
- * The ring follows react-aria's focus-visible state rather than CSS `:focus-visible`: in the app's
- * WKWebView a frame reached with Tab inside the viewer did not match `:focus-visible` and showed no
- * ring, while the viewer's buttons beside it did.
- */
-function useCodeFrame(): React.HTMLAttributes<HTMLElement> & { "data-focus-visible"?: true } {
-  const { focusProps, isFocusVisible } = useFocusRing();
+/** What both code frames share as focusable regions: a focus ring (`useFocusVisibleProps`), and
+ * Select All taking the code alone (`selectCode`), left to the browser's own where that cannot. */
+function useCodeFrame() {
   return {
-    ...focusProps,
-    "data-focus-visible": isFocusVisible || undefined,
-    onKeyDown: (event) => {
+    ...useFocusVisibleProps(),
+    onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
       if (!isSelectAll(event)) return;
       if (selectCode(event.currentTarget)) event.preventDefault();
     },

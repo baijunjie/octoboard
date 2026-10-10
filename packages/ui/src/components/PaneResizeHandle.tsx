@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { useT } from "../i18n/react";
 import type { PaneSide, PaneWidth } from "../layout/paneWidth";
+import { useFocusVisibleProps } from "./useFocusVisibleProps";
 
 /** Pixels an arrow key press moves the pane's edge; Shift multiplies it. */
 const KEY_STEP = 16;
@@ -73,6 +74,7 @@ export function PaneResizeHandle({
   const { width, min, max, setWidth, persist, reset } = paneWidth;
   const { label, edge, offset, grow } = SIDES[side];
   const [dragging, setDragging] = useState(false);
+  const focusVisible = useFocusVisibleProps();
   const dragRef = useRef<{ startX: number; startWidth: number; grow: 1 | -1 } | undefined>(undefined);
 
   useEffect(() => {
@@ -121,9 +123,10 @@ export function PaneResizeHandle({
       data-pane={side}
       // `data-region`: F6 from here moves on from the pane, as from any control inside it.
       data-region={side}
+      {...focusVisible}
       // Centred on the pane's inner edge, 3px each side, anchored to the logical side the pane is on.
       style={{ [edge]: `calc(${width - 3}px + ${offset})` }}
-      className="group absolute top-(--top-chrome-height) bottom-(--bottom-chrome-height) z-10 hidden w-1.5 cursor-col-resize touch-none outline-none focus-visible:ring-2 focus-visible:ring-focus docked:block"
+      className="group absolute top-(--top-chrome-height) bottom-(--bottom-chrome-height) z-10 hidden w-1.5 cursor-col-resize touch-none outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus docked:block"
       onMouseDown={(event) => event.preventDefault()}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
@@ -144,7 +147,7 @@ export function PaneResizeHandle({
       onKeyDown={onKeyDown}
     >
       <div
-        className={`mx-auto h-full w-0.5 transition-colors group-hover:bg-accent group-focus-visible:w-full group-focus-visible:bg-accent ${dragging ? "bg-accent" : ""}`}
+        className={`mx-auto h-full w-0.5 transition-colors group-hover:bg-accent group-data-focus-visible:w-full group-data-focus-visible:bg-accent ${dragging ? "bg-accent" : ""}`}
       />
     </div>
   );

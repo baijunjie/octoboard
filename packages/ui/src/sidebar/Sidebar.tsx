@@ -490,12 +490,13 @@ function ConsoleBody({
       ) : (
         // The inactive projects (no running session) sit at the end, dimmed as one group; pointing at
         // any of them, keyboard focus or an open menu inside one, brings the whole group back.
-        // Keyboard focus only (`:focus-visible`): focus a mouse-opened menu hands back to its
-        // trigger would otherwise keep the group lit after the pointer has gone. An open menu is
-        // matched on `aria-haspopup`, since a project row is itself `aria-expanded` while open.
+        // Keyboard focus only (`data-focus-visible`, set by the rows and HeroUI's controls alike):
+        // focus a mouse-opened menu hands back to its trigger would otherwise keep the group lit
+        // after the pointer has gone. An open menu is matched on `aria-haspopup`, since a project
+        // row is itself `aria-expanded` while open.
         <div
           ref={listRef}
-          className="relative flex flex-col gap-0.5 [&:has(>[data-inactive]:hover)>[data-inactive]]:after:bg-transparent [&:has(>[data-inactive]_:focus-visible)>[data-inactive]]:after:bg-transparent [&:has(>[data-inactive]_[aria-haspopup][aria-expanded=true])>[data-inactive]]:after:bg-transparent"
+          className="relative flex flex-col gap-0.5 [&:has(>[data-inactive]:hover)>[data-inactive]]:after:bg-transparent [&:has(>[data-inactive]_[data-focus-visible])>[data-inactive]]:after:bg-transparent [&:has(>[data-inactive]_[aria-haspopup][aria-expanded=true])>[data-inactive]]:after:bg-transparent"
         >
           {ordered.map((project) => (
             <div
@@ -667,7 +668,7 @@ function ProjectNode({
           {isCollapsed ? (
             <ChevronRight aria-hidden="true" className="ms-2 size-3.5 shrink-0 text-muted rtl:-scale-x-100" />
           ) : (
-            <ChevronDown aria-hidden="true" className="h-3.5 w-0 shrink-0 overflow-hidden text-muted opacity-0 transition-[opacity,width,margin] duration-150 motion-reduce:transition-none group-hover:ms-2 group-hover:w-3.5 group-hover:opacity-100 group-focus-visible:ms-2 group-focus-visible:w-3.5 group-focus-visible:opacity-100" />
+            <ChevronDown aria-hidden="true" className="h-3.5 w-0 shrink-0 overflow-hidden text-muted opacity-0 transition-[opacity,width,margin] duration-150 motion-reduce:transition-none group-hover:ms-2 group-hover:w-3.5 group-hover:opacity-100 group-data-focus-visible:ms-2 group-data-focus-visible:w-3.5 group-data-focus-visible:opacity-100" />
           )}
         </div>
         <GitBadge status={gitStatus} decorative />
