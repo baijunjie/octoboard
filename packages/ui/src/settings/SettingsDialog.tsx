@@ -74,7 +74,7 @@ export function SettingsDialog({
           className="flex h-[calc(100dvh-32px)] w-[calc(100vw-32px)] max-w-none flex-col overflow-hidden p-0 docked:h-[min(85vh,calc(100vh-96px))] docked:w-[min(1000px,calc(100vw-96px))] docked:flex-row"
         >
           <TitledControl title={t("common.close")}>
-            <Modal.CloseTrigger />
+            <Modal.CloseTrigger aria-label={t("common.close")} />
           </TitledControl>
           <Tabs
             orientation={isNarrow ? "horizontal" : "vertical"}

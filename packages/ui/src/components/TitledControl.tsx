@@ -13,7 +13,14 @@ import React from "react";
  * the trigger (`--tooltip-close-delay: 0s` in `style.css`, where HeroUI's default lingers), and it
  * is `pointer-events-none` (which has no token, so every tooltip sets it itself), because
  * react-aria's tooltip otherwise stays open while it is hovered and would swallow clicks aimed at
- * what lies beneath it. Nothing relies on a hoverable tooltip. */
+ * what lies beneath it. Nothing relies on a hoverable tooltip.
+ *
+ * While a tooltip is open react-aria links it to the control as its description
+ * (`aria-describedby`), and VoiceOver speaks a description after the name. A tooltip that only
+ * repeats the control's `aria-label` would thus be heard twice, so such a control is given an empty
+ * `aria-describedby`, which wins over the tooltip's and refers to nothing. A tooltip that says more
+ * than the name stays its description, and a control that sets its own `aria-describedby` keeps
+ * it. */
 export function TitledControl({
   title,
   children,
@@ -21,7 +28,7 @@ export function TitledControl({
   focusOnly,
 }: {
   title: string | undefined;
-  children: React.ReactElement;
+  children: React.ReactElement<{ "aria-label"?: string; "aria-describedby"?: string }>;
   /** Where the tooltip opens relative to the control; HeroUI's default is above it. `end` is the
    * reading direction's, so a control on a vertical strip at the window's start edge opens it
    * toward the content under either direction. */
@@ -30,9 +37,10 @@ export function TitledControl({
   focusOnly?: boolean;
 }): React.ReactElement {
   if (!title) return children;
+  const repeatsName = children.props["aria-label"] === title && children.props["aria-describedby"] === undefined;
   return (
     <Tooltip trigger={focusOnly ? "focus" : undefined}>
-      {children}
+      {repeatsName ? React.cloneElement(children, { "aria-describedby": "" }) : children}
       <Tooltip.Content placement={placement} className="pointer-events-none">{title}</Tooltip.Content>
     </Tooltip>
   );

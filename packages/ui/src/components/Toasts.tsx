@@ -221,7 +221,7 @@ function ToastClose(): React.ReactElement {
   const t = useT();
   return (
     <TitledControl title={t("common.close")}>
-      <Toast.CloseButton preventFocusOnPress />
+      <Toast.CloseButton aria-label={t("common.close")} preventFocusOnPress />
     </TitledControl>
   );
 }
