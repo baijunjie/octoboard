@@ -31,8 +31,13 @@
 
 - [ ] Archiving a console session follows its bound sessions down to the lead session's own sessions; the refusal
   when a bound session is still running is checked at both levels, naming the sessions in the way.
-- [ ] Reopening a session bound to an archived lead session reopens the lead session, and the lead session's archived
-  console session with it, following the existing rule that reopening a bound session brings its owner back.
+- [ ] Reopening an archived session reopens its archived owners level by level upward, the topmost first: a session
+  bound to an archived lead session brings back the lead session's archived console session, then the lead session,
+  then itself. The walk goes up through the owners that are archived and stops at the first that is not; an owner
+  that is only interrupted is not relaunched, as today. Its siblings — the other sessions bound to the same owners —
+  are not reopened. If an owner cannot be reopened, the whole reopen fails with its reason; owners already brought
+  back stay reopened and the rest stay archived. This extends the existing rules that reopening a bound session brings
+  its owner back and that reopening an owner reopens nothing bound to it.
 - [ ] Deleting an archived console session and deleting an archived lead session each take their archived bound
   sessions at both levels with them, and the counts a client is given before confirming include both levels. The bulk
   deletes (every archived console session of a console, every archived session bound to a console session) do the

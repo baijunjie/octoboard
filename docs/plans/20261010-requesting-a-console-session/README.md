@@ -51,6 +51,14 @@ the sessions bound to it) already refuses that. Hiding them would let the consol
 into the same project and working directory without knowing one is already working there, which is the reason reads
 are console-wide in the first place.
 
+### A team goes where its owner goes
+
+The sessions bound to a project session follow that session wherever the views place it. A project's focus mode lists
+the project's unbound sessions, each with the sessions bound to it under it. A lead session is bound to a console
+session, so it leaves its project's focus mode for its console session's, and its team goes with it, under it. The
+project's focus mode counts its sessions bound to each console session; that count and its chip include a lead
+session's team.
+
 ### A lead session follows its team's rules
 
 A lead session's sessions follow the same rules as a console session's: one archives itself when it reports `done`
@@ -83,11 +91,12 @@ reporting path.
 
 ### User confirmation is enforced by Octoboard, not by the prompt
 
-The daemon does not act on a `request_console_session` call by itself. It asks the user in a dialog showing the
-request, and **the call waits for the answer**. Only on approval does it start the console session and bind the
-caller; a refusal comes back to the session as a tool error carrying the reason in prose. A rule written into a prompt
-can be ignored by a model; the dialog cannot. This matters because the request hands a session the user opened by
-hand a route to the console's whole reach.
+The daemon does not act on a `request_console_session` call by itself. It asks the user in a dialog showing the request,
+and **the call waits for the answer**. Only on approval does it start the console session and bind the caller. The user
+dismissing the dialog without choosing counts as a refusal. A refusal comes back to the session as a tool error in fixed
+prose saying the user refused the request; the user is not asked for a reason. A rule written into a prompt can be
+ignored by a model; the dialog cannot. This matters because the request hands a session the user opened by hand a route
+to the console's whole reach.
 
 **The wait has a time limit, and it is Octoboard's own.** The user may be away. When the limit passes without an
 answer, Octoboard closes the dialog, starts nothing, and the call comes back as a tool error saying the user did not
@@ -99,6 +108,7 @@ limit on a tool call, so adding an agent never requires measuring or configuring
 
 - After the application reconnects, the pending request is sent again and its dialog shown again, as the trust
   confirmation's is. With several clients, the first answer wins and the other dialogs close.
+- Several pending requests are shown in order, oldest first.
 - It is withdrawn — its dialog closed, nothing started — on the signals Octoboard sees for every agent alike: the
   caller's process ends (interrupted, archived, exited), the call's connection to the daemon is dropped, or the agent
   cancels the call over MCP where it does so. The caller can ask again once resumed.
@@ -133,12 +143,3 @@ call is refused. Sessions an unbound project session starts and console sessions
 1. [01 Lead sessions in the binding model](01-lead-sessions-in-the-binding-model.md)
 2. [02 The request tool and its confirmation](02-request-tool-and-confirmation.md)
 3. [03 Lead sessions and their teams in the sidebar](03-lead-sessions-in-the-sidebar.md)
-
-## Open
-
-- What closing the confirmation dialog without an answer means: a refusal, or leaving the request pending until the
-  time limit.
-- Whether the reason a refusal carries is typed by the user or is fixed prose.
-- How several pending requests are shown at once.
-- How a project's focus mode lists a lead session. Today it lists only sessions not bound to a console session, so a
-  lead session would move out of its own project's list while its team stays in it.

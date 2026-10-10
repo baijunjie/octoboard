@@ -5,10 +5,11 @@
 > report.
 > Completion criteria: daemon tests cover announcing the tool to unbound project sessions and lead sessions only and
 > refusing a lead session's call, approval, refusal, the time limit, withdrawal on each signal, an approval after a
-> withdrawal, the fallback message after an unseen end of the call, and the first answer winning across clients; in
-> the app, the call from a running project session of each agent shows the dialog and waits, approval starts a console
-> session that receives the request as a report with the caller bound to it, refusal leaves everything unchanged, and
-> the dialog is shown again after a reconnect. Depends on 01.
+> withdrawal, the fallback message after an unseen end of the call, and the first answer winning across clients; in the
+> app, the call from a running project session of each agent shows the dialog and waits, approval starts a console
+> session that receives the request as a report with the caller bound to it, refusal — dismissing the dialog included —
+> leaves everything unchanged, several pending requests are shown oldest first, and the dialog is shown again after a
+> reconnect. Depends on 01.
 
 ## Technical design
 
@@ -25,7 +26,9 @@
   through the binding operation of 01, and deliver what the caller handed over to it as the lead session's first
   report. The tool's result names the new console session and tells the caller it is now bound to it and must report
   to it with `report`.
-- [ ] On refusal: a tool error carrying the reason in prose; nothing is started and the caller stays unbound.
+- [ ] On refusal, the user dismissing the dialog without choosing included: a tool error in fixed prose saying the user
+  refused the request; nothing is started and the caller stays unbound.
+- [ ] Several pending requests are shown in order, oldest first.
 - [ ] Withdrawal and the fallback, as in "User confirmation is enforced by Octoboard" in the overview: the pending
   request is sent again on reconnect; it is withdrawn, its dialog closed, when the caller's process ends, the call's
   connection is dropped or the agent cancels the call; an approval given after a withdrawal starts nothing and the user

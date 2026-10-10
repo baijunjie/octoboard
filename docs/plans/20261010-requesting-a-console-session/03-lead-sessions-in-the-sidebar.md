@@ -3,9 +3,9 @@
 > Goal: the sidebar shows which sessions belong to a project session, a lead session included, and the lead
 > session's binding to its console session, so the user can find a team and the sessions that hold up an archive.
 > Completion criteria: in the app, a project's sessions bound to a project session are listed under it as a third
-> level, the lead session carries the binding badge of a session bound to a console session, and a console session's
-> focus mode, keyboard focus on rows and the archive view handle the nesting; UI tests cover the ordering. A project's
-> focus mode is outside these criteria until its open point (see the overview) is settled.
+> level, the lead session carries the binding badge of a session bound to a console session, focus mode follows "A
+> team goes where its owner goes" in the overview, and keyboard focus on rows and the archive view handle the nesting;
+> UI tests cover the ordering.
 > Depends on 01 and 02.
 
 ## Technical design
@@ -18,9 +18,13 @@
 
 - [ ] Ordering, pinning and folding of the nested rows, consistent with the existing project and session order.
 - [ ] Keyboard focus and screen-reader structure of the third level.
-- [ ] Focus mode of a console session: the lead session appears among the console session's bound sessions; its own
-  sessions are not shown as the console session's.
-- [ ] Archive view: a lead session's archived sessions grouped under it.
+- [ ] Focus mode of a project: its unbound sessions, each with the sessions bound to it nested under it; a lead
+  session and its team are not listed there; the count and chip of sessions bound to its console session include the
+  team. Its list of archived sessions nests the sessions bound to a project session under that session.
+- [ ] Focus mode of a console session: the lead session appears among the console session's bound sessions, with its
+  own sessions nested under it rather than listed as the console session's.
+- [ ] Archive view, and a console session's focus mode's list of archived sessions: a lead session's archived
+  sessions grouped under it.
 - [ ] Update the product docs on the sidebar and focus mode.
 
 ## Notes for the developer
