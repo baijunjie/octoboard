@@ -73,8 +73,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   Staged, Conflicted, Unstaged and Untracked list, a subdirectory project and renames across its boundary, states and
   refreshes) and Compare (a tip-to-tip comparison of two local branches: the From and To selectors, Swap, fixed commits,
   when a comparison is made, a branch that moves or goes away) — that it never writes to the repository and how it
-  differs from the branch badge, opening a change in the file viewer, errors, and what is kept for the window's
-  lifetime.
+  differs from the branch badge, opening a change in the file viewer and expanding the lines its diff collapses,
+  errors, and what is kept for the window's lifetime.
 - [Toasts](product/toasts.md) — failures and notices that need no answer: where they appear, how one about a session
   is titled, when they dismiss themselves, how an identical one replaces rather than stacks, copying their text
   without taking focus off the terminal, and reaching them with F6.
@@ -191,8 +191,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   change depends on the resolved values it reads and never on the map, and the derivations that do take the map.
 - [Sending browse requests from the UI](memory/sending-browse-requests-from-the-ui.md) — why the window's browse
   requests are bounded by one count shared across the window rather than one per component (the daemon's per-connection
-  bound, and a sent request that is never timed out or cancelled when its component unmounts), and sizing a new kind of
-  request together with the existing limits.
+  bound, and a sent request that is never timed out or cancelled when its component unmounts), sizing a new kind of
+  request together with the existing limits, and the spare unit each replaceable slot reserves because the daemon
+  counts a replacing request before it gives the replaced one up.
 - [Writing automated tests](memory/writing-automated-tests.md) — how lean unit tests are kept (one case per rule,
   table-driven), then the fixture conventions this project's tests need on macOS: why an executable written fresh per
   test flakes only under a parallel run, why every wait on a spawned process is bounded by the shared `PATIENCE`

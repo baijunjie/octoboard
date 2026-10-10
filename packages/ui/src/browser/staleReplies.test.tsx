@@ -353,6 +353,67 @@ it("reads a compared change from the comparison's two commits, and never takes a
   expect(hook.current().subject?.key).toContain("c3");
 });
 
+const indexSide = (blob: string) => ({ state: "present", path: "a.ts", kind: "file", source: { kind: "index", worktree: "w", blob } }) as const;
+const bodiesOf = (text: (side: "old" | "new") => string): Event => ({
+  type: "project_change_bodies",
+  project: "p",
+  worktree: null,
+  group: "staged",
+  old: { ...indexSide("o"), file: { size: 1, kind: "text", media_type: null, text: text("old"), data: null } },
+  new: { ...indexSide("n"), file: { size: 1, kind: "text", media_type: null, text: text("new"), data: null } },
+});
+
+/** Opens a staged change of a file on both sides and answers its patch, returning what the viewer holds. */
+async function openedChange() {
+  const { daemon, pending } = controlledDaemon();
+  const hook = mount<ChangeReader>(daemon, () => useChangeReader("p"));
+  const item = changeItem({ group: "staged", old: indexSide("o"), new: indexSide("n") });
+  act(() => hook.current().open(item, { kind: "worktree", worktree: undefined }));
+  await act(async () =>
+    pending.splice(0)[0].resolve({
+      type: "project_change",
+      project: "p",
+      worktree: null,
+      group: "staged",
+      head: null,
+      old: { ...indexSide("o"), file: null },
+      new: { ...indexSide("n"), file: null },
+      patch: { size: 1, kind: "text", media_type: null, text: "@@ -1 +1 @@\n-a\n+b\n", data: null },
+    }),
+  );
+  const content = hook.current().subject?.content;
+  if (content?.state !== "change" || !content.change.loadBodies) throw new Error("the change offers no bodies");
+  return { pending, loadBodies: content.change.loadBodies };
+}
+
+it("reads a change's whole bodies only when asked, from the versions its patch reported", async () => {
+  const { pending, loadBodies } = await openedChange();
+  expect(pending).toEqual([]);
+  const loaded = loadBodies();
+  expect(pending[0].body).toMatchObject({
+    type: "read_project_change_bodies",
+    slot: "viewer-bodies",
+    change: { group: "staged" },
+    old: { state: "present", source: { blob: "o" } },
+    new: { state: "present", source: { blob: "n" } },
+  });
+  await act(async () => pending[0].resolve(bodiesOf((side) => `${side}\n`)));
+  expect(await loaded).toEqual({ old: "old\n", new: "new\n" });
+});
+
+it.each([
+  [{ code: "limit_exceeded", params: { limit: "file_bytes", size: "5242880", max: "4194304" } }, "unavailable"],
+  [{ code: "unsupported_file_type", params: { file_type: "symlink" } }, "unavailable"],
+  [{ code: "source_changed", params: {} }, "changed"],
+  [{ code: "request_superseded", params: {} }, "superseded"],
+  [{ code: "git_failed", params: { detail: "no object" } }, "failed"],
+])("tells why a change's bodies were not delivered: %j is %s", async ({ code, params }, reason) => {
+  const { pending, loadBodies } = await openedChange();
+  const outcome = expect(loadBodies()).rejects.toMatchObject({ reason });
+  await act(async () => pending[0].reject(new DaemonRequestError("daemon said so", code, params)));
+  await outcome;
+});
+
 it("counts branch lists and comparisons in the window's bound of two Git list requests", async () => {
   const { daemon, pending } = controlledDaemon();
   mount(daemon, () => useBranchList("a", true));

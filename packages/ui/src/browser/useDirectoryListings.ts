@@ -13,10 +13,13 @@ const MAX_IN_FLIGHT = 3;
  * left out by a browser whose project's place was taken included (on a volume slow to answer, say),
  * and above one browser's own share, so a browser stalled on one project never starves the next.
  * Sized under the daemon's bound of 16 outstanding requests a connection together with the
- * viewer's read and the Git mode's 2 list requests (`gitRequests.ts`), with room for one request
- * that replaces another in its slot: the daemon counts the newer one before it gives the older one
- * up, so for that moment both are outstanding. 11 + 1 + 2 + 1 = 15. */
-const MAX_WINDOW_IN_FLIGHT = 11;
+ * viewer's read, its read of a change's bodies (a slot of its own, `useChangeReader.ts`) and the
+ * Git mode's 2 list requests (`gitRequests.ts`), with room for requests that replace another in
+ * their slot: the daemon counts the newer one before it gives the older one up, so for that moment
+ * both are outstanding. A unit is reserved for each slot that can be replaced, as the viewer's two
+ * can at the same moment. 10 + 1 + 2 + 2 = 15: the listings, the viewer's read, the Git mode's
+ * list requests, and the last 2 the bodies slot's read and the allowance for a replacement. */
+const MAX_WINDOW_IN_FLIGHT = 10;
 const shared = { inFlight: 0, pumps: new Set<() => void>() };
 
 /** How often the directories on screen are listed again while the browser is on screen and the

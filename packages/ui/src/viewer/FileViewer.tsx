@@ -507,6 +507,7 @@ function ChangeView({
           layout={twoSides ? layout : "unified"}
           onLayoutChange={twoSides ? onLayoutChange : undefined}
           theme={theme}
+          loadBodies={change.loadBodies}
         />
       );
     }

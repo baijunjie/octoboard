@@ -41,6 +41,34 @@ export interface ViewerChange {
   new: ViewerChangeSide;
   patch?: string;
   unavailable?: string;
+  /** Reads both sides' whole text, for showing the lines the patch collapses. Present only where
+   * those lines can be offered at all: a change whose sides both exist as files. Called on the
+   * first expansion and not again for the same patch; it rejects with a `ChangeBodiesError`. */
+  loadBodies?: () => Promise<ChangeBodies>;
+}
+
+/** The whole text of both sides of a change, as the patch was made from them. */
+export interface ChangeBodies {
+  old: string;
+  new: string;
+}
+
+/**
+ * Why a change's bodies were not delivered:
+ *
+ * - `unavailable`: they cannot be shown, whatever is tried again — a body past the daemon's limit,
+ *   or a side that is no file. The viewer then keeps the collapsed lines as they are, without a word.
+ * - `changed`: the change moved on after its patch was read, so the bodies would not match it.
+ * - `failed`: the read failed; `message` says why, and asking again is fine.
+ * - `superseded`: the read was given up for a newer one, and nothing is said.
+ */
+export class ChangeBodiesError extends Error {
+  constructor(
+    readonly reason: "unavailable" | "changed" | "failed" | "superseded",
+    message?: string,
+  ) {
+    super(message ?? reason);
+  }
 }
 
 export type ViewerContent =

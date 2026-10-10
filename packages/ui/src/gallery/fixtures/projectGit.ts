@@ -5,7 +5,7 @@ import type { BranchInfo, ChangeEntry, ChangeSide, ContentSource, FileContent, W
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
 import type { FixtureError } from "./projectFiles";
-import { SAMPLE, snapshotState } from "./builders";
+import { SAMPLE, snapshotState, text } from "./builders";
 import { IMAGES } from "./viewerImages";
 
 const GROUP = "Project pane: Git";
@@ -17,6 +17,9 @@ export interface FixtureChange {
   patch?: string;
   bodies?: { old?: FileContent; new?: FileContent };
   error?: FixtureError;
+  /** What reading its whole bodies answers, for expanding its diff: both sides' text, or an error;
+   * with `delay` the answer comes that many milliseconds late. */
+  expand?: ({ old: string; new: string } | FixtureError) & { delay?: number };
 }
 
 /** A fixture project's repository: its worktrees, the first holding the project, and each one's
@@ -35,7 +38,6 @@ export interface FixtureGit {
   moved?: Record<string, string>;
 }
 
-const text = (body: string): FileContent => ({ size: new TextEncoder().encode(body).length, kind: "text", media_type: null, text: body, data: null });
 const image = (data: string): FileContent => ({ size: Math.floor((data.length * 3) / 4), kind: "binary", media_type: "image/png", text: null, data });
 const commit = (blob: string): ContentSource => ({ kind: "commit", commit: "4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39", branch: null, blob });
 const index = (blob: string): ContentSource => ({ kind: "index", worktree: "wt-main", blob });
@@ -112,6 +114,56 @@ index 7c6b5a4..0000000
 -Superseded by the architecture document.
 `;
 
+/** A source file of `count` numbered lines before and after the lines `edits` names (1-based) are
+ * rewritten, and the unified patch between them as `git diff` writes it with three lines of context:
+ * edits at most seven lines apart share a hunk, and the lines between hunks are what the viewer
+ * collapses. */
+function editedSource(path: string, count: number, edits: number[]): { old: string; new: string; patch: string } {
+  const before = Array.from({ length: count }, (_, i) => `  stages.push(stage${i + 1}(context)); // step ${i + 1}`);
+  const after = before.map((line, i) => (edits.includes(i + 1) ? `  stages.push(await stage${i + 1}(context)); // step ${i + 1}, awaited` : line));
+  const groups: number[][] = [];
+  for (const edit of edits) {
+    const last = groups[groups.length - 1];
+    if (last && edit - last[last.length - 1] <= 7) last.push(edit);
+    else groups.push([edit]);
+  }
+  const patch = [`diff --git a/${path} b/${path}`, "index 1a2b3c4..5d6e7f8 100644", `--- a/${path}`, `+++ b/${path}`];
+  for (const group of groups) {
+    const first = Math.max(group[0] - 3, 1);
+    const last = Math.min(group[group.length - 1] + 3, count);
+    patch.push(`@@ -${first},${last - first + 1} +${first},${last - first + 1} @@`);
+    for (let n = first; n <= last; n++) {
+      if (edits.includes(n)) patch.push(`-${before[n - 1]}`, `+${after[n - 1]}`);
+      else patch.push(` ${before[n - 1]}`);
+    }
+  }
+  return { old: `${before.join("\n")}\n`, new: `${after.join("\n")}\n`, patch: `${patch.join("\n")}\n` };
+}
+
+/** The lines of the long file the expansion scenarios change: a run of unmodified lines before the
+ * first hunk, a long one between the hunks, and a short one after the last. */
+const PIPELINE = editedSource("src/pipeline.ts", 120, [10, 70, 117]);
+
+/** How long reading the bodies of an expandable change takes, long enough to see it loading. */
+const EXPAND_DELAY_MS = 600;
+
+/** A change of a file whose diff can be expanded: `source` is what reading its bodies answers
+ * (its text, or the `error` given). */
+function expandable(
+  group: "staged" | "unstaged" | "committed",
+  path: string,
+  from: ContentSource,
+  to: ContentSource,
+  source: { old: string; new: string; patch: string },
+  error?: FixtureError,
+): FixtureChange {
+  return {
+    entry: { group, old: file(path, from), new: file(path, to) },
+    patch: source.patch.replaceAll("src/pipeline.ts", path),
+    expand: { ...(error ?? { old: source.old, new: source.new }), delay: EXPAND_DELAY_MS },
+  };
+}
+
 const MAIN_CHANGES: FixtureChange[] = [
   { entry: { group: "staged", old: file("src/server.ts", commit("1a2b3c4")), new: file("src/server.ts", index("5d6e7f8")) }, patch: SERVER_PATCH },
   { entry: { group: "staged", old: file("src/conf.ts", commit("0f1e2d3")), new: file("src/config.ts", index("4c5b6a7")) }, patch: RENAME_PATCH },
@@ -127,6 +179,22 @@ const MAIN_CHANGES: FixtureChange[] = [
     },
     patch: TYPE_CHANGE_PATCH,
   },
+  expandable("staged", "src/pipeline.ts", commit("a1b2c3d"), index("b2c3d4e"), PIPELINE),
+  expandable("staged", "src/limits.ts", commit("c3d4e5f"), index("d4e5f6a"), PIPELINE, {
+    code: "limit_exceeded",
+    params: { limit: "file_bytes", size: "5242880", max: "4194304" },
+    message: "the file is larger than the 4194304-byte limit",
+  }),
+  expandable("staged", "src/moved.ts", commit("e5f6a7b"), index("f6a7b8c"), PIPELINE, {
+    code: "source_changed",
+    params: {},
+    message: "the file changed while it was being read",
+  }),
+  expandable("staged", "src/flaky.ts", commit("a7b8c9d"), index("b8c9d0e"), PIPELINE, {
+    code: "git_failed",
+    params: { detail: "fatal: unable to read the object" },
+    message: "git failed: fatal: unable to read the object",
+  }),
   { entry: { group: "conflicted", path: "package.json", conflict: "both_modified" } },
   { entry: { group: "unstaged", old: file("src/server.ts", index("5d6e7f8")), new: file("src/server.ts", live("v2")) }, patch: SERVER_UNSTAGED_PATCH },
   { entry: { group: "unstaged", old: file("docs/old-notes.md", index("7c6b5a4")), new: { state: "absent" } }, patch: DELETED_PATCH },
@@ -187,6 +255,7 @@ const FEATURE_COMPARISON: FixtureChange[] = [
     entry: { group: "committed", old: { state: "out_of_scope", repository_path: "shared/search-index.ts" }, new: file("src/index.ts", onFeature("2e3d4c5")) },
     bodies: { new: text("export const buildIndex = (docs: string[]) => new Map(docs.map((d, i) => [i, d]));\n") },
   },
+  expandable("committed", "src/pipeline.ts", onMain("a1b2c3d"), onFeature("b2c3d4e"), PIPELINE),
   { entry: { group: "committed", old: file("docs/old-notes.md", onMain("7c6b5a4")), new: { state: "absent" } }, patch: DELETED_PATCH },
   {
     entry: { group: "committed", old: file("docs/logo.png", onMain("6a5b4c3")), new: file("docs/logo.png", onFeature("8b7c6d5")) },
@@ -254,6 +323,43 @@ export const projectGitScenarios: Scenario[] = [
   { id: "git-diff", group: GROUP, title: "A staged change's diff", width: 1440, state, steps: openChange(/^server\.ts, modified, src$/) },
   { id: "git-rename-outside", group: GROUP, title: "A rename from outside the project", width: 1440, state, steps: openChange(/^index\.ts, renamed/) },
   { id: "git-type-change", group: GROUP, title: "A file that became a symbolic link", width: 1440, state, steps: openChange(/^current, type changed/) },
+  {
+    id: "git-expand",
+    group: GROUP,
+    title: "A change with collapsed lines to expand",
+    description:
+      "src/pipeline.ts has three hunks with unmodified lines between them. Each expansion of a separator reveals 20 lines, the third reveals the rest of the gap, and Show whole file opens everything.",
+    width: 1440,
+    state,
+    steps: openChange(/^pipeline\.ts, modified/),
+  },
+  {
+    id: "git-expand-too-large",
+    group: GROUP,
+    title: "A change whose files are too large to expand",
+    description: "Expanding a separator finds the file past the limit: the separators keep their form and offer nothing more.",
+    width: 1440,
+    state,
+    steps: openChange(/^limits\.ts, modified/),
+  },
+  {
+    id: "git-expand-moved",
+    group: GROUP,
+    title: "A change that moved on before it was expanded",
+    description: "Expanding a separator finds the file changed since its patch was read: the patch stays as it is, with a note.",
+    width: 1440,
+    state,
+    steps: openChange(/^moved\.ts, modified/),
+  },
+  {
+    id: "git-expand-failed",
+    group: GROUP,
+    title: "A change whose lines could not be read",
+    description: "Expanding a separator fails to read the file; the separator says so and can be tried again.",
+    width: 1440,
+    state,
+    steps: openChange(/^flaky\.ts, modified/),
+  },
   { id: "git-image", group: GROUP, title: "An image change", width: 1440, state, steps: openChange(/^logo\.png, modified/) },
   { id: "git-too-large", group: GROUP, title: "A change whose patch is too large", width: 1440, state, steps: openChange(/^fixtures\.bin, modified/) },
   { id: "git-untracked", group: GROUP, title: "An untracked file", width: 1440, state, steps: openChange(/^log\.ts, untracked/) },
@@ -308,6 +414,15 @@ export const projectGitScenarios: Scenario[] = [
     width: 1440,
     state,
     steps: [...compare("main", "feature/ranking-experiments"), (ui) => ui.press(/^ranking\.ts, modified/), (ui) => ui.wait(800)],
+  },
+  {
+    id: "git-compare-expand",
+    group: GROUP,
+    title: "A change between two branches, expanded",
+    description: "src/pipeline.ts between the two commits: its collapsed lines are read from the same two commits.",
+    width: 1440,
+    state,
+    steps: [...compare("main", "feature/ranking-experiments"), (ui) => ui.press(/^pipeline\.ts, modified/), (ui) => ui.wait(800)],
   },
   {
     id: "git-compare-same",

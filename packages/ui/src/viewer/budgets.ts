@@ -39,3 +39,13 @@ export function textPlan(text: string): "highlight" | "plain" {
 export function diffPlan(patch: string): "render" | "patch" {
   return patch.length <= RENDER_BUDGETS.diffChars && countLines(patch) <= RENDER_BUDGETS.diffLines ? "render" : "patch";
 }
+
+/** Whether a change's lines can be expanded within the render budget: the whole of the longer
+ * side is drawn once every collapsed run is shown, and past the budget the collapsed lines stay as
+ * they are, as the patch alone is drawn. */
+export function bodiesPlan(bodies: { old: string; new: string }): "expand" | "none" {
+  const longest = bodies.old.length > bodies.new.length ? bodies.old : bodies.new;
+  return longest.length <= RENDER_BUDGETS.diffChars && Math.max(countLines(bodies.old), countLines(bodies.new)) <= RENDER_BUDGETS.diffLines
+    ? "expand"
+    : "none";
+}

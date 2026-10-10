@@ -5,6 +5,7 @@ import type { BrowseEntry, ChangeSide, DirEntry, Event, FileContent, SideRead, S
 import { createStateStore, type Daemon, type ToastRequest } from "../store";
 import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
+import { text } from "./fixtures/builders";
 import { SAMPLE_FILES, type FixtureError, type FixtureFile, type FixtureFiles } from "./fixtures/projectFiles";
 import { SAMPLE_GIT } from "./fixtures/projectGit";
 
@@ -195,6 +196,30 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
             new: readSide(found.entry.new, found.bodies?.new),
             patch: found.patch === undefined ? null : { size: found.patch.length, kind: "text", media_type: null, text: found.patch, data: null },
           };
+        }
+        case "read_project_change_bodies":
+        case "read_project_comparison_change_bodies": {
+          const asked = body.type === "read_project_change_bodies";
+          const changes = asked
+            ? git?.changes[body.worktree ?? git?.worktrees[0]?.id ?? ""]
+            : git?.comparisons?.[`${body.left.branch}..${body.right.branch}`];
+          const found = Array.isArray(changes)
+            ? changes.find(
+                ({ entry }) =>
+                  entry.group !== "conflicted" &&
+                  (!asked || entry.group === body.change.group) &&
+                  sameSide(entry.old, body.change.old) &&
+                  sameSide(entry.new, body.change.new),
+              )
+            : undefined;
+          if (!found?.expand || found.entry.group === "conflicted") return fail({ code: "invalid_change", params: {}, message: "no patch to expand" });
+          const { delay, ...expand } = found.expand;
+          if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+          if ("code" in expand) return fail(expand);
+          const sides = { old: readSide(found.entry.old, text(expand.old)), new: readSide(found.entry.new, text(expand.new)) };
+          return asked
+            ? { type: "project_change_bodies", project: body.project, worktree: body.worktree ?? null, group: body.change.group, ...sides }
+            : { type: "project_comparison_change_bodies", project: body.project, left: body.left, right: body.right, ...sides };
         }
         case "list_dir": {
           const listed = scenario.directories?.[body.path];

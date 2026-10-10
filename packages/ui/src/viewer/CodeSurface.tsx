@@ -1,12 +1,15 @@
 import { Spinner } from "@heroui/react";
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 
+import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
 import { useT } from "../i18n/react";
 import { diffPlan, textPlan } from "./budgets";
 import { CODE_THEMES } from "./codeTheme";
-import { hasHunks, withoutNoNewlineMarkers } from "./content";
+import { hasHunks, withoutNoNewlineMarkers, type ChangeBodies } from "./content";
 import { LayoutToggle, type DiffLayout } from "./diffLayout";
+import type { ExpansionStatus, SeparatorLabels } from "./expansion";
+import { focusFirstSeparatorControl } from "./rendererDom";
 import { isSelectAll, selectCode } from "./selectAll";
 
 // The renderer module, with the library and its grammars, loads the first time code is shown.
@@ -85,12 +88,20 @@ export function PlainText({ text, label, theme }: { text: string; label: string;
   );
 }
 
-/** What both code frames share as focusable regions: a focus ring (`useFocusVisibleProps`), and
- * Select All taking the code alone (`selectCode`), left to the browser's own where that cannot. */
+/** What both code frames share as focusable regions: a focus ring (`useFocusVisibleProps`), Select
+ * All taking the code alone (`selectCode`), left to the browser's own where that cannot, and Tab
+ * entering the controls among a diff's collapsed lines. */
 function useCodeFrame() {
   return {
     ...useFocusVisibleProps(),
     onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
+      // Tab from the frame itself goes to the first control among its collapsed lines, if it has one;
+      // the dialog's own Tab handling, which would go past it, does not see the frame's key.
+      if (event.key === "Tab" && !event.shiftKey && event.target === event.currentTarget && focusFirstSeparatorControl(event.currentTarget)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (!isSelectAll(event)) return;
       if (selectCode(event.currentTarget)) event.preventDefault();
     },
@@ -219,6 +230,7 @@ export function DiffSurface({
   layout,
   onLayoutChange,
   theme,
+  loadBodies,
 }: {
   resetKey: string;
   name: string;
@@ -226,10 +238,36 @@ export function DiffSurface({
   layout: DiffLayout;
   onLayoutChange?: (layout: DiffLayout) => void;
   theme: "light" | "dark";
+  /** Reads the whole text of both sides, which offers expanding the lines the patch collapses. */
+  loadBodies?: () => Promise<ChangeBodies>;
 }): React.ReactElement {
   const t = useT();
   const label = t("viewer.contents", { name });
   const marked = useMemo(() => withoutNoNewlineMarkers(patch), [patch]);
+  const labels = useMemo<SeparatorLabels>(
+    () => ({
+      unmodified: (count) => t("viewer.expand.unmodified", { count }),
+      unknown: t("viewer.expand.unknown"),
+      above: t("viewer.expand.above"),
+      below: t("viewer.expand.below"),
+      between: t("viewer.expand.between"),
+      all: t("viewer.expand.all"),
+      loading: t("viewer.expand.loading"),
+      failedHere: t("viewer.expand.failedHere"),
+    }),
+    [t],
+  );
+  // How the expansion of this patch's collapsed lines stands; a new subject, or the same one read
+  // again (which hands a new `loadBodies`, whether or not its patch differs), starts afresh.
+  const [reported, setReported] = useState<{ key: string; read?: () => Promise<ChangeBodies>; status: ExpansionStatus }>();
+  const status = reported?.key === resetKey && reported.read === loadBodies ? reported.status : undefined;
+  const onExpansion = useCallback((next: ExpansionStatus) => setReported({ key: resetKey, read: loadBodies, status: next }), [resetKey, loadBodies]);
+  const expansionNote =
+    status?.kind === "changed"
+      ? t("viewer.expand.changed")
+      : status?.kind === "failed"
+        ? t("viewer.expand.failed", { reason: status.message })
+        : undefined;
   const asText = (reason: string) => (
     <>
       <Notice>{reason}</Notice>
@@ -243,8 +281,21 @@ export function DiffSurface({
     <RendererBoundary resetKey={resetKey} fallback={asText(t("viewer.change.patchFailed"))}>
       {onLayoutChange && <LayoutToggle layout={layout} onLayoutChange={onLayoutChange} />}
       {ending && <Notice>{t(ending)}</Notice>}
+      {expansionNote !== undefined && <Notice>{expansionNote}</Notice>}
+      <StatusAnnouncer text={status?.kind === "loading" ? t("viewer.expand.loading") : expansionNote} />
       <CodeFrame label={label} resetKey={resetKey} theme={theme}>
-        {(onDrawn) => <RenderedDiff name={name} patch={marked.patch} layout={layout} theme={theme} onDrawn={onDrawn} />}
+        {(onDrawn) => (
+          <RenderedDiff
+            name={name}
+            patch={marked.patch}
+            layout={layout}
+            theme={theme}
+            onDrawn={onDrawn}
+            loadBodies={loadBodies}
+            labels={labels}
+            onExpansion={onExpansion}
+          />
+        )}
       </CodeFrame>
     </RendererBoundary>
   );

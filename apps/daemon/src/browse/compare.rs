@@ -225,9 +225,25 @@ fn record<'a>(
     Ok((inside(&old) || inside(&new)).then_some(ChangeEntry::Committed { old, new }))
 }
 
-/// Reads one change of a comparison of `left` and `right`, each checked first: a branch name that
-/// is one, and a commit that is a commit of this repository. The branches are not looked up again;
-/// the commits alone decide what is read.
+/// Checks each of `left` and `right`: a branch name that is one, and a commit that is a commit of
+/// this repository.
+fn verify_endpoints(
+    env: &GitEnv,
+    at: &Located,
+    left: &ComparisonEndpoint,
+    right: &ComparisonEndpoint,
+    cancel: &AtomicBool,
+) -> Result<()> {
+    for endpoint in [left, right] {
+        blob::branch_refname(env, &at.root, &endpoint.branch, cancel)?;
+        blob::verify_commit(env, &at.root, &endpoint.commit, cancel)?;
+    }
+    Ok(())
+}
+
+/// Reads one change of a comparison of `left` and `right`, each checked first
+/// ([`verify_endpoints`]). The branches are not looked up again; the commits alone decide what is
+/// read.
 pub fn read(
     env: &GitEnv,
     at: &Located,
@@ -236,10 +252,7 @@ pub fn read(
     change: &ComparedChangeRef,
     cancel: &AtomicBool,
 ) -> Result<ChangeRead> {
-    for endpoint in [left, right] {
-        blob::branch_refname(env, &at.root, &endpoint.branch, cancel)?;
-        blob::verify_commit(env, &at.root, &endpoint.commit, cancel)?;
-    }
+    verify_endpoints(env, at, left, right, cancel)?;
     changes::read_between(
         env,
         at,
@@ -260,10 +273,7 @@ pub fn read_bodies(
     expected: &changes::Expected,
     cancel: &AtomicBool,
 ) -> Result<changes::BodiesRead> {
-    for endpoint in [left, right] {
-        blob::branch_refname(env, &at.root, &endpoint.branch, cancel)?;
-        blob::verify_commit(env, &at.root, &endpoint.commit, cancel)?;
-    }
+    verify_endpoints(env, at, left, right, cancel)?;
     changes::read_bodies_between(
         env,
         at,

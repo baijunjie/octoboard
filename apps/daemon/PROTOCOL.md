@@ -444,7 +444,6 @@ versions, a worktree's changes and the changes between two branches on demand, f
 go to the asking socket only: nothing about them is broadcast, nothing is kept for a later client, and none of it is
 part of `snapshot`, which carries no file content at all.
 
-
 Every browse request re-resolves its project from the store and its worktree from the repository as they stand at
 that moment. A client names a project by id and a worktree by the id `project_source` gave it, never by a directory:
 nothing a client sends is used as a path to read from, apart from the relative `path` inside the project.
@@ -587,7 +586,8 @@ next reply, and nothing else.
 
 `list_project_changes` lists a worktree's uncommitted changes and `read_project_change` reads one of them for its diff;
 `compare_project_branches` lists the changes between two branches and `read_project_comparison_change` reads one of
-those (see "Comparing two branches" below).
+those (see "Comparing two branches" below). `read_project_change_bodies` and `read_project_comparison_change_bodies`
+read the whole bodies such a diff was made from (see "Reading a change's bodies" below).
 
 A change is identified by its group and both of its sides, not by a path alone:
 
@@ -671,11 +671,14 @@ or file version that matched, so the two bodies and the patch come from one stat
 
 The reply carries `old` and `new` as `SideRead` records with the body in `file`, a `FileContent` as in `project_file`,
 or `absent` for the side an added or deleted file does not have. A body is read with the file budget: one over 4 MiB is
-refused with `limit_exceeded` (`file_bytes`, carrying its `size`), never cut, and so is the whole request, since half
-the bodies cannot expand anything; the reply as a whole is held to the reservation of a change's diff (see "Browse
-budgets"). A side that is a link or a submodule has no body and is refused with `unsupported_file_type`. A change with
-no patch to expand — an untracked file, or one with a side outside the project — is `invalid_change`. Reading changes
-nothing in the repository, takes no lock and refreshes no index, as no browse request does.
+refused with `limit_exceeded` (`file_bytes`, carrying its `size` when known), never cut, and so is the whole request,
+since half the bodies cannot expand anything; the reply as a whole is held to the reservation of a change's diff (see
+"Browse budgets"). Because the change is resolved by making its patch first, a change whose patch is itself over the
+patch budget is refused with `limit_exceeded` (`patch_bytes`) before any body is read, exactly as its patch request is.
+A side that is a link or a submodule has no body and is refused with `unsupported_file_type`. A change with no patch to
+expand — an untracked file, or one with a side outside the project — is `invalid_change`, refused from the request alone
+before any side is read. Reading changes nothing in the repository, takes no lock and refreshes no index, as no browse
+request does.
 
 #### Comparing two branches
 
@@ -778,7 +781,9 @@ born yet, and its staged changes are compared with the empty tree.
 
 A request takes its reservation in the order it came, out of the connection's share and then the daemon's: a large one
 waiting for room — a change list or a change at its worst, beside reads already holding theirs — holds back the smaller
-ones that came after it until it starts.
+ones that came after it until it starts. A window reading a change holds two of these at once where it expands one: the
+patch and the bodies are separate requests, and two reservations of a change's class are more than a connection's share,
+so the later one waits for the earlier to give its reservation back, and whatever was queued behind it waits too.
 
 #### Transport
 

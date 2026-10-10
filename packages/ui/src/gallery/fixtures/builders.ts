@@ -1,4 +1,4 @@
-import type { Agent, Console, GitStatus, Host, Page, Project, Session, SessionStatus, Settings } from "../../protocol";
+import type { Agent, Console, FileContent, GitStatus, Host, Page, Project, Session, SessionStatus, Settings } from "../../protocol";
 import type { ConsoleRequest, State, TrustPrompt } from "../../store";
 
 const NOW = Date.now();
@@ -7,6 +7,9 @@ const NOW = Date.now();
 export function minutesAgo(minutes: number): number {
   return NOW - minutes * 60_000;
 }
+
+/** A text file's content as the daemon reads it. */
+export const text = (body: string): FileContent => ({ size: new TextEncoder().encode(body).length, kind: "text", media_type: null, text: body, data: null });
 
 const LOCAL_HOST: Host = { id: "local", name: "This Mac", kind: "local" };
 

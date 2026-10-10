@@ -332,6 +332,10 @@ export interface ComparisonEndpoint {
  * gave it. */
 export type SideRef = { state: "present"; path: string } | { state: "absent" } | { state: "out_of_scope" };
 
+/** The version of one side of a change as a diff reply reported it, which a bodies request names
+ * back so the bodies are read only from the sides the patch was made from. */
+export type SideVersion = { state: "present"; source: ContentSource } | { state: "absent" };
+
 /** One side of a change as `read_project_change` read it. `file` is its body, carried only where no
  * patch shows the content: a side alone, or both sides of a binary change. */
 export type SideRead =
@@ -487,7 +491,8 @@ export type RequestBody =
   | { type: "delete_account"; account: string }
   /** The browse requests (see "Browsing a project" in `apps/daemon/PROTOCOL.md`), answered with
    * `project_source`, `project_dir`, `project_file`, `project_changes`, `project_change`,
-   * `project_branches`, `project_comparison` and `project_comparison_change`. A
+   * `project_branches`, `project_comparison`, `project_comparison_change`, `project_change_bodies`
+   * and `project_comparison_change_bodies`. A
    * newer browse request on this connection with the same `slot` supersedes an older one still
    * outstanding, which is answered `request_superseded`; one that finished first still gets its
    * real reply, so a reply is also discarded by its `id`. */
@@ -518,6 +523,28 @@ export type RequestBody =
       left: ComparisonEndpoint;
       right: ComparisonEndpoint;
       change: { old: SideRef; new: SideRef };
+      slot?: string;
+    }
+  /** The whole bodies of a change `read_project_change` made a patch of, for expanding the lines
+   * the patch collapses; `old` and `new` are the versions that reply reported for its sides. */
+  | {
+      type: "read_project_change_bodies";
+      project: string;
+      worktree?: string;
+      change: { group: ChangeGroup; old: SideRef; new: SideRef };
+      old: SideVersion;
+      new: SideVersion;
+      slot?: string;
+    }
+  /** As `read_project_change_bodies`, for a change of a comparison. */
+  | {
+      type: "read_project_comparison_change_bodies";
+      project: string;
+      left: ComparisonEndpoint;
+      right: ComparisonEndpoint;
+      change: { old: SideRef; new: SideRef };
+      old: SideVersion;
+      new: SideVersion;
       slot?: string;
     }
   | { type: "shutdown" };
@@ -692,6 +719,26 @@ export type Event =
       old: SideRead;
       new: SideRead;
       patch: FileContent | null;
+    }
+  /** Both sides of the change with their whole bodies in `file`, each present or absent. */
+  | {
+      type: "project_change_bodies";
+      id?: string;
+      project: string;
+      worktree: string | null;
+      group: ChangeGroup;
+      old: SideRead;
+      new: SideRead;
+    }
+  /** `left` and `right` echo the request. */
+  | {
+      type: "project_comparison_change_bodies";
+      id?: string;
+      project: string;
+      left: ComparisonEndpoint;
+      right: ComparisonEndpoint;
+      old: SideRead;
+      new: SideRead;
     }
   | { type: "ack"; id?: string }
   /** A failure, worded from `code` and `params` (see `daemonMessage.ts`); `message` is the English

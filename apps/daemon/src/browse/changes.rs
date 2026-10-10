@@ -461,8 +461,7 @@ fn read_with(
     inline_bodies: bool,
 ) -> Result<ChangeRead> {
     let (old, new) = (side_path(&change.old)?, side_path(&change.new)?);
-    let out_of_scope =
-        matches!(change.old, SideRef::OutOfScope) || matches!(change.new, SideRef::OutOfScope);
+    let out_of_scope = has_out_of_scope_side(&change.old, &change.new);
     let valid = match change.group {
         ChangeGroup::Staged => old.is_some() || new.is_some(),
         ChangeGroup::Unstaged => !out_of_scope && (old.is_some() || new.is_some()),
@@ -493,6 +492,7 @@ fn read_with(
 }
 
 /// What a client names of the diff it expands: the versions its two sides were reported at.
+#[derive(Debug)]
 pub struct Expected<'a> {
     pub old: &'a SideVersion,
     pub new: &'a SideVersion,
@@ -515,11 +515,13 @@ pub fn read_bodies(
     expected: &Expected,
     cancel: &AtomicBool,
 ) -> Result<BodiesRead> {
-    if change.group == ChangeGroup::Untracked {
+    if change.group == ChangeGroup::Untracked || has_out_of_scope_side(&change.old, &change.new) {
         return Err(no_bodies());
     }
     let read = read_with(env, at, change, cancel, false)?;
-    bodies_of(env, at, read, expected, cancel)
+    // A change that was read names a side, and a side that is not out of scope names a path.
+    let path = (side_path(&change.new)?.or(side_path(&change.old)?)).unwrap();
+    bodies_of(env, at, read, &path, expected, cancel)
 }
 
 /// As [`read_bodies`], for a change between two commits, read as [`read_between`] reads it.
@@ -531,8 +533,19 @@ pub(super) fn read_bodies_between(
     expected: &Expected,
     cancel: &AtomicBool,
 ) -> Result<BodiesRead> {
+    if has_out_of_scope_side(sides.0, sides.1) {
+        return Err(no_bodies());
+    }
     let read = read_between_with(env, at, commits, sides, cancel, false)?;
-    bodies_of(env, at, read, expected, cancel)
+    // As in `read_bodies`.
+    let path = (side_path(sides.1)?.or(side_path(sides.0)?)).unwrap();
+    bodies_of(env, at, read, &path, expected, cancel)
+}
+
+/// Whether either side of a change lies outside the project: such a change has no patch, so its
+/// bodies are refused before any side is read.
+fn has_out_of_scope_side(old: &SideRef, new: &SideRef) -> bool {
+    matches!(old, SideRef::OutOfScope) || matches!(new, SideRef::OutOfScope)
 }
 
 fn no_bodies() -> anyhow::Error {
@@ -543,24 +556,19 @@ fn no_bodies() -> anyhow::Error {
     )
 }
 
-/// The bodies of the sides `read` found, once their versions are those `expected` names. The
-/// patch the read made is dropped first, so it is not held beside the bodies.
+/// The bodies of the sides `read` found, once their versions are those `expected` names; a side
+/// that is not has changed under the client, at `path`. The patch the read made is dropped first,
+/// so it is not held beside the bodies.
 fn bodies_of(
     env: &GitEnv,
     at: &Located,
     read: ChangeRead,
+    path: &RelPath,
     expected: &Expected,
     cancel: &AtomicBool,
 ) -> Result<BodiesRead> {
-    let ChangeRead {
-        old, new, patch, ..
-    } = read;
-    drop(patch);
+    let ChangeRead { old, new, .. } = read;
     let (old_expected, new_expected) = (expected.old, expected.new);
-    // A side outside the project means a change with no patch, which has nothing to expand.
-    if matches!(old, SideRead::OutOfScope) || matches!(new, SideRead::OutOfScope) {
-        return Err(no_bodies());
-    }
     for (side, expected) in [(&old, old_expected), (&new, new_expected)] {
         let same = match (side, expected) {
             (SideRead::Absent, SideVersion::Absent) => true,
@@ -570,14 +578,7 @@ fn bodies_of(
             _ => false,
         };
         if !same {
-            let path = [&new, &old].into_iter().find_map(|side| match side {
-                SideRead::Present { path, .. } => RelPath::parse(path),
-                _ => None,
-            });
-            return Err(path.map_or_else(
-                || git_failed("the change's sides are not the ones named"),
-                |path| live::changed(&path),
-            ));
+            return Err(live::changed(path));
         }
     }
     let reader = Reader {
@@ -623,7 +624,7 @@ fn read_between_with(
             &[],
         ));
     }
-    let out_of_scope = matches!(old, SideRef::OutOfScope) || matches!(new, SideRef::OutOfScope);
+    let out_of_scope = has_out_of_scope_side(old, new);
     // As in `read`: a side named absent is looked up at the other side's path.
     let old_path = old_named.clone().or_else(|| new_named.clone());
     let new_path = new_named.or(old_named);
@@ -911,7 +912,13 @@ impl Reader<'_> {
             let read = |path: &Option<RelPath>,
                         found: &Option<Found>,
                         source: &dyn Fn(&str) -> ContentSource| {
-                self.side(None, path.as_ref(), found.as_ref(), source, true)
+                self.side(
+                    None,
+                    path.as_ref(),
+                    found.as_ref(),
+                    source,
+                    self.inline_bodies,
+                )
             };
             return Ok(ChangeRead {
                 head: commit.clone(),
@@ -1088,7 +1095,13 @@ impl Reader<'_> {
         Ok(ChangeRead {
             head: None,
             old: SideRead::Absent,
-            new: self.side(scope.as_ref(), Some(&path), Some(&found), &source, true)?,
+            new: self.side(
+                scope.as_ref(),
+                Some(&path),
+                Some(&found),
+                &source,
+                self.inline_bodies,
+            )?,
             patch: None,
         })
     }
@@ -1150,8 +1163,7 @@ impl Reader<'_> {
             Found::Disk { kind, version } => (*kind, version.as_str()),
         };
         let file = if with_body {
-            self.body(scope, path, found)?
-                .map(crate::browse::file_content)
+            self.body(scope, path, found)?.map(file_content)
         } else {
             None
         };

@@ -74,7 +74,7 @@ area and the Git mode panel, and shows a type change as one diff.
 ## Milestones
 
 1. 01 diff-file-bodies (closed)
-2. [Expanding collapsed lines in the viewer](02-viewer-expansion.md)
+2. 02 viewer-expansion (closed)
 3. [Word wrap in the viewer](03-word-wrap.md)
 4. [The change list as a directory tree](04-change-tree.md)
 5. [Filtering the change list by file name](05-change-filter.md)
@@ -83,3 +83,4 @@ area and the Git mode panel, and shows a type change as one diff.
 8. [The viewer header's layout and tags](08-viewer-header-layout.md)
 9. [Surfaces and light-mode contrast in the viewer and Git mode](09-surfaces-and-contrast.md)
 10. [Showing a type change as one diff](10-type-change-diff.md)
+11. [Final confirmation](11-final-confirmation.md)

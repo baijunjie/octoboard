@@ -167,7 +167,9 @@ place, and the description gives way first. Moving from file to file therefore n
 ### Selecting and copying
 
 The **code region** — a file's code, highlighted or plain, or a change's diff or plain patch — takes keyboard focus,
-with Tab or a click, so it can be scrolled from the keyboard; reached with Tab it shows a focus ring.
+with Tab or a click, so it can be scrolled from the keyboard; reached with Tab it shows a focus ring. Tab again leaves
+the region, unless it holds a diff whose collapsed lines can be expanded, whose controls it enters first (see
+"Expanding the collapsed lines" in `docs/product/project-pane-git-mode.md`).
 
 With keyboard focus on the code region, **⌘A** (Ctrl+A off macOS) selects that region's code and nothing else: not
 its line numbers, not a diff's markers, and not the viewer's title, path and size, so copying takes the code alone.

@@ -5,7 +5,8 @@
  * in the window, every browser it has mounted counted, those left out by a browser whose project's
  * place was taken included (a `git status` on a slow volume, say, held until its deadline). Sized
  * with the listings' bound in `useDirectoryListings.ts` (which also leaves room for a replacement
- * in flight) and the viewer's one slot, so that together they stay under the daemon's bound of 16
+ * in flight) and the viewer's two slots (its read and its read of a change's bodies), so that
+ * together they stay under the daemon's bound of 16
  * outstanding browse requests a connection. Past it a request waits for one to finish; one whose
  * browser is gone by then is not sent at all.
  */

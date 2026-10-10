@@ -244,6 +244,35 @@ fn bodies_of_a_version_the_patch_was_not_made_from_are_rejected() {
 }
 
 #[test]
+fn an_added_path_that_is_gone_again_is_a_changed_source_not_a_failure() {
+    let fixture = Fixture::new();
+    let repo = repo_with("bodies-reset", &[(b"a.txt", b"one\n")]);
+    write(repo.join("new.txt"), b"fresh\n");
+    git(&repo, &["add", "new.txt"]);
+    let project = fixture.project("p", &repo);
+    let sides = || (SideRef::Absent, present("new.txt"));
+    let diff = fixture
+        .change(
+            &project,
+            None,
+            ChangeGroup::Staged,
+            SideRef::Absent,
+            present("new.txt"),
+        )
+        .unwrap();
+
+    // Both sides now resolve absent, yet the new one was named present.
+    git(&repo, &["reset", "-q", "new.txt"]);
+    let gone = fixture.bodies(
+        &project,
+        ChangeGroup::Staged,
+        sides(),
+        (version(&diff.old), version(&diff.new)),
+    );
+    assert_eq!(code(gone), error_code::SOURCE_CHANGED);
+}
+
+#[test]
 fn a_body_over_the_file_budget_is_refused_whole_and_other_sides_have_no_bodies() {
     let fixture = Fixture::new();
     let line = "x".repeat(99) + "\n";
@@ -306,6 +335,16 @@ fn a_body_over_the_file_budget_is_refused_whole_and_other_sides_have_no_bodies()
         limit(refused),
         (error_code::LIMIT_EXCEEDED, Some("file_bytes".to_string()))
     );
+
+    // A side outside the project means no patch to expand, refused before the in-scope side's
+    // body, which is over the budget here, is read.
+    let outside = fixture.bodies(
+        &project,
+        ChangeGroup::Staged,
+        (SideRef::OutOfScope, present("big.txt")),
+        (SideVersion::Absent, version(&diff.new)),
+    );
+    assert_eq!(code(outside), error_code::INVALID_CHANGE);
 
     // A link has no body to read, and an untracked file has no patch to expand.
     std::fs::remove_file(repo.join("t.txt")).unwrap();

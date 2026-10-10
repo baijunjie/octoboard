@@ -26,11 +26,27 @@ vi.mock("./renderer", async () => {
   return {
     HighlightedFile: ({ text, onDrawn }: { text: string; onDrawn?: () => void }) => <Stand text={text} onDrawn={onDrawn} />,
     // A patch marked "unrenderable" stands for one the library rejects.
-    RenderedDiff: ({ patch, layout, onDrawn }: { patch: string; layout: string; onDrawn?: () => void }) => {
+    // The stand-in tells whether it was handed a way to expand, and each button reports the state the
+    // real one would.
+    RenderedDiff: ({
+      patch,
+      layout,
+      onDrawn,
+      loadBodies,
+      onExpansion,
+    }: {
+      patch: string;
+      layout: string;
+      onDrawn?: () => void;
+      loadBodies?: () => void;
+      onExpansion?: (status: unknown) => void;
+    }) => {
       if (patch.includes("unrenderable")) throw new Error("The patch cannot be read");
       return (
-        <div data-layout={layout}>
+        <div data-layout={layout} data-expandable={String(loadBodies !== undefined)}>
           <Stand text={patch} onDrawn={onDrawn} />
+          <button type="button" data-report="changed" onClick={() => onExpansion?.({ kind: "changed" })} />
+          <button type="button" data-report="failed" onClick={() => onExpansion?.({ kind: "failed", message: "No luck." })} />
         </div>
       );
     },
@@ -230,6 +246,38 @@ it("draws a one-sided diff unified even when split was chosen for another", () =
   expect(layout()).toBe("split");
   show(change("@@ -0,0 +1 @@\n+a\n", { state: "absent" }));
   expect(layout()).toBe("unified");
+});
+
+// The diff is handed a way to expand its collapsed lines only when the change has one, and what
+// goes wrong with an expansion is said beside the code, without taking the patch away.
+it("offers expansion only to a change that can be expanded, and says why one did not happen", () => {
+  const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
+  const patch = "@@ -1 +1 @@\n-a\n+b\n";
+  const loadBodies = async () => ({ old: "a\n", new: "b\n" });
+  const change = (key: string, expandable: boolean, read = loadBodies): ViewerSubject => ({
+    key,
+    path: "src/c.ts",
+    content: { state: "change", change: { old: side, new: side, patch, ...(expandable ? { loadBodies: read } : {}) } },
+  });
+  const expandable = () => dialog()?.querySelector("[data-expandable]")?.getAttribute("data-expandable");
+  show(change("plain", false));
+  expect(expandable()).toBe("false");
+  show(change("expandable", true));
+  expect(expandable()).toBe("true");
+  const report = (which: string) => act(() => void dialog()!.querySelector<HTMLButtonElement>(`[data-report=${which}]`)!.click());
+  report("changed");
+  expect(dialog()?.textContent).toContain("This change has moved on since it was read, so its unmodified lines cannot be shown.");
+  report("failed");
+  expect(dialog()?.textContent).toContain("Could not read the unmodified lines. No luck.");
+  expect(dialog()?.querySelector("[data-renderer]")?.textContent).toBe(patch);
+  show(change("another", true));
+  expect(dialog()?.textContent).not.toContain("unmodified lines");
+  // The same change read again hands a new way to expand under the same key and patch, and the
+  // failure of the earlier read is not said of it.
+  report("failed");
+  expect(dialog()?.textContent).toContain("Could not read the unmodified lines.");
+  show(change("another", true, async () => ({ old: "a\n", new: "b\n" })));
+  expect(dialog()?.textContent).not.toContain("unmodified lines");
 });
 
 it("shows the raw patch when the diff cannot be rendered", () => {

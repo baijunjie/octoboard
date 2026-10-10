@@ -282,11 +282,13 @@ commit and its new side from To's, and is shown as a staged change is below; it 
 - **A text change** is a diff, drawn from the patch Git makes for it: unified at first, or split into its two sides
   side by side, chosen at the end of the row under the title. The choice is offered only for a diff with lines on both
   sides: an added or a deleted file reads the same either way, so it has none. The choice is remembered: later diffs
-  open in the layout last chosen, across changes and after the app restarts. A change whose patch has no lines — an
-  empty file added or removed, say — says it has no diff to show. Long lines wrap. A patch of more than 1,000,000
-  characters or 10,000 lines is shown as the plain patch, with a line saying it is shown that way because the change
-  is large; so is a patch the diff could not be drawn from. A patch that is not valid UTF-8 — of a file in another
-  encoding — is shown with replacement characters.
+  open in the layout last chosen, across changes and after the app restarts. Only the patch's hunks and the lines
+  around them are shown, each run of unchanged lines between them collapsed into a separator that can be expanded (see
+  "Expanding the collapsed lines" below). A change whose patch has no lines — an empty file added or removed, say —
+  says it has no diff to show. Long lines wrap. A patch of more than 1,000,000 characters or 10,000 lines is shown as
+  the plain patch, with a line saying it is shown that way because the change is large; so is a patch the diff could
+  not be drawn from. A patch that is not valid UTF-8 — of a file in another encoding — is shown with replacement
+  characters.
 - **A missing newline at the end** of either version is said in a line above the diff — the old version, the new one,
   or neither has one — rather than as a line of it. A symbolic link's change never says so, a link's target having
   no newline at its end anyway. A plain patch keeps Git's own marker lines.
@@ -316,6 +318,58 @@ commit and its new side from To's, and is shown as a staged change is below; it 
 
 How a diff is coloured in each appearance is in "What follows the choice" in `docs/product/appearance.md`. A diff's
 code is focused, selected and copied as a file's is (see "Selecting and copying" in `docs/product/project-pane.md`).
+
+### Expanding the collapsed lines
+
+Each run of unchanged lines a diff leaves out stands in it as a **separator** saying how many lines it holds — "6
+unmodified lines" — in the current language (see "What follows the language" in `docs/product/language.md`). Where the
+lines can be shown, the separator reveals them, in both the Uncommitted and the Compare view and in both diff layouts:
+
+- **One expansion reveals 20 lines.** A run between two hunks longer than that offers two controls: one reveals the 20
+  lines at the run's top, which appear above the separator, the other the 20 at its bottom, which appear below it. A
+  shorter run, and the run before the first hunk or after the last, offers one. The **third expansion of the same run**
+  reveals whatever is left of it, whichever of its controls is used.
+- **Show whole file**, at the end of a separator, reveals the file's every line at once, leaving no separator behind.
+  Each run offers it once — in the split layout on one side only.
+- **A separator's text is a control too**: clicking it does what the first of that separator's controls does.
+- An expandable diff also ends in a separator for the lines beyond its last hunk, whose number the patch does not say;
+  it says instead that more unmodified lines may follow.
+- **The lines are read only when the user expands.** Nothing of them comes with the patch, with a refresh, or when the
+  connection to the daemon comes back. The first expansion of a diff reads both of its sides whole, and every later
+  expansion of the same diff uses what that read returned. The read writes nothing to the repository and takes no
+  lock, as nothing in the Git mode does (see "Reading only" above).
+- **An expansion lasts as long as the diff is on screen.** A change opened again, or read again at other versions, is
+  drawn with its lines collapsed again.
+
+While the lines are being read the separator says so, and no other expansion starts until that read is answered: every
+control of the diff reads as unavailable meanwhile. That, and each note below, is announced to assistive technology.
+Then:
+
+- **A failed read** leaves the diff as it is: the separator says the lines could not be loaded and to try again, a note
+  above the diff gives the reason — that the connection to the daemon was lost, among them — and the next expansion
+  reads again. A read of the change itself that follows — on a listing with news of it, or once the connection to the
+  daemon is back — clears the failure without another expansion.
+- **A change that has moved on** since its patch was read, its file or its index having changed underneath, keeps every
+  line the patch shows, with a note above the diff saying its unmodified lines cannot be shown, and gives the expansion
+  up as below; it is offered again only once the change is read again (see "When the open change changes" below). A
+  change from the Compare view, read from two fixed commits, cannot move on this way.
+- **Moving on to another change** while the lines are being read gives that read up, saying nothing.
+
+**A diff that offers no expansion** keeps its separators with their counts and nothing else: no controls, and no
+trailing separator for the lines beyond the last hunk, which only an expandable diff has. That is so from the
+start for a diff whose two sides are not both files whose content can be read — an added or a deleted file, which has
+one side only, a symbolic link or a submodule, hence a type change, and a version outside the project. The rest is
+found only on the first expansion, and the diff is then drawn again in that form, so its trailing separator goes on
+that press: a side larger than the 4 MiB a read opens, a side past the viewer's own budget of 10,000 lines or
+1,000,000 characters, and the change having moved on. Of the three only the last says anything; the two limits pass
+without a word.
+
+From the keyboard, **Tab** from the code region moves into the separators' controls and then along them, run by run
+from the top of the diff, and after the last one leaves the diff; **Shift+Tab** from the first goes back to the code
+region. **Enter** or **Space** uses a control, and once the diff is drawn again keyboard focus is back on it, or on the
+nearest control left where that one is gone, or on the code region where none is left at all — after Show whole file,
+and after a diff turns out to offer no expansion. A control reached from the keyboard shows a focus ring, in either
+appearance; pressing one with the mouse leaves keyboard focus where it was.
 
 ### Moving between changes
 

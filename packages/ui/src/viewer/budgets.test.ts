@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { countLines, diffPlan, RENDER_BUDGETS, textPlan } from "./budgets";
+import { bodiesPlan, countLines, diffPlan, RENDER_BUDGETS, textPlan } from "./budgets";
 
 const lines = (count: number) => "x\n".repeat(count);
 
@@ -27,4 +27,12 @@ it.each([
   ["shows a wider patch as text", "x".repeat(RENDER_BUDGETS.diffChars + 1), "patch"],
 ])("%s", (_, patch, plan) => {
   expect(diffPlan(patch)).toBe(plan);
+});
+
+it.each([
+  ["expands bodies within the budget", lines(RENDER_BUDGETS.diffLines), lines(1), "expand"],
+  ["leaves the lines collapsed past it in lines, on either side", lines(1), lines(RENDER_BUDGETS.diffLines + 1), "none"],
+  ["leaves the lines collapsed past it in length", "x".repeat(RENDER_BUDGETS.diffChars + 1), "", "none"],
+])("%s", (_, old, next, plan) => {
+  expect(bodiesPlan({ old, new: next })).toBe(plan);
 });

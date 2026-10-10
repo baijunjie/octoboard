@@ -1,8 +1,16 @@
 // The one module that touches the rendering library (`@pierre/diffs`, over Shiki). It is loaded
 // lazily by `CodeSurface.tsx`, so the library and its grammars stay out of the startup bundle, and
-// nothing outside it sees a library type: callers hand it plain text and patches. The one thing
-// read from the library's rendered DOM elsewhere is `rendererDom.ts`, which cannot live here.
-import { getFiletypeFromFileName, preloadHighlighter, processFile, type FileContents, type FileDiffMetadata, type PostRenderPhase } from "@pierre/diffs";
+// nothing outside it sees a library type: callers hand it plain text and patches. The rendered DOM
+// is read elsewhere only by `rendererDom.ts`, which cannot live here, and `expansion.ts`, which
+// is the part of it that drives the separators of collapsed lines.
+import {
+  getFiletypeFromFileName,
+  preloadHighlighter,
+  processFile,
+  type FileContents,
+  type FileDiffMetadata,
+  type PostRenderPhase,
+} from "@pierre/diffs";
 import { File, FileDiff, WorkerPoolContext } from "@pierre/diffs/react";
 import { getOrCreateWorkerPoolSingleton, terminateWorkerPoolSingleton } from "@pierre/diffs/worker";
 import DiffsWorker from "@pierre/diffs/worker/worker.js?worker";
@@ -10,7 +18,9 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "
 
 import { RENDER_BUDGETS } from "./budgets";
 import { CODE_THEMES } from "./codeTheme";
+import type { ChangeBodies } from "./content";
 import type { DiffLayout } from "./diffLayout";
+import { EXPANSION_STEP, Expansion, type ExpansionStatus, type HunkExpander, type SeparatorLabels } from "./expansion";
 
 // GitHub's high-contrast palettes: of the bundled themes measured, the ones whose every token
 // reaches WCAG AA's 4.5:1 on the code background in both appearances.
@@ -22,7 +32,8 @@ const THEMES = { light: CODE_THEMES.light.name, dark: CODE_THEMES.dark.name } as
  * palette's grey comments fall short under either tint; so a changed word is underlined instead of
  * tinted in both appearances, and in the light one the line tints are the lightest that still read
  * as a tint. The dark palette meets the ratio on the library's own line tints. The `+` / `-`
- * indicators mark changed lines.
+ * indicators mark changed lines. The same sheet draws what the viewer adds to the separators of
+ * collapsed lines (`expansion.ts`): the whole-file control, and a focus ring.
  */
 function diffCss(theme: "light" | "dark"): string {
   const [added, removed] = theme === "light" ? ["#1a7f37", "#cf222e"] : ["#3fb950", "#f85149"];
@@ -32,6 +43,20 @@ function diffCss(theme: "light" | "dark"): string {
          [data-line][data-line-type="change-deletion"] { background-color: #fdf0f0 !important; }`
       : "";
   return `${lineTints}
+    [data-separator] [data-whole-file] {
+      position: absolute;
+      inset-block: 0;
+      inset-inline-end: 0;
+      display: flex;
+      align-items: center;
+      padding-inline: 1ch;
+      color: var(--diffs-fg-number);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    [data-separator] [data-whole-file]:hover { text-decoration: underline; }
+    [data-expand-button][data-focus-visible] { outline: 2px solid var(--focus); outline-offset: -2px; }
     [data-line-type="change-addition"] [data-diff-span],
     [data-line-type="change-deletion"] [data-diff-span] {
       background-color: transparent;
@@ -45,12 +70,12 @@ function diffCss(theme: "light" | "dark"): string {
 /**
  * Options shared by every rendering. The library's own header is off (the viewer's title names the
  * file), and so is everything interactive it can add inside the code — line selection, hover
- * utilities, hunk expansion — so the rendered code holds no control that keyboard access would
- * have to reach. Long lines wrap: the library would otherwise scroll them sideways inside its
- * shadow root, in an element that cannot take focus, so they could not be scrolled from the
- * keyboard; wrapped, the one scrolling element is the caller's focusable frame.
- * `disableErrorHandling` makes a failure throw to the caller's error boundary instead of printing
- * the library's English stack trace into the page.
+ * utilities — so the rendered code holds no control that keyboard access would have to reach, apart
+ * from the separators of collapsed lines (`expansion.ts`). Long lines wrap: the library would
+ * otherwise scroll them sideways inside its shadow root, in an element that cannot take focus, so
+ * they could not be scrolled from the keyboard; wrapped, the one scrolling element is the caller's
+ * focusable frame. `disableErrorHandling` makes a failure throw to the caller's error boundary
+ * instead of printing the library's English stack trace into the page.
  */
 const BASE_OPTIONS = {
   theme: THEMES,
@@ -105,11 +130,16 @@ function useLanguage(name: string): { lang: FileContents["lang"]; failed: boolea
 /** The library's post-render callback, telling `onDrawn` each time code is in its DOM: the library
  * also reports a render of an empty frame while its worker pool starts, which does not count. Stable
  * for the life of the component, so it never changes the options object the library compares. */
-function useDrawnCallback(onDrawn: (() => void) | undefined): (node: HTMLElement, instance: unknown, phase: PostRenderPhase) => void {
-  const latest = useRef(onDrawn);
-  latest.current = onDrawn;
-  return useCallback((node, _instance, phase) => {
-    if (phase !== "unmount" && (node.shadowRoot ?? node).querySelector("[data-code]")) latest.current?.();
+function useDrawnCallback<Instance = unknown>(
+  onDrawn: (() => void) | undefined,
+  /** Also told of every drawing, with the library's instance. */
+  onRender?: (node: HTMLElement, instance: Instance, phase: PostRenderPhase) => void,
+): (node: HTMLElement, instance: Instance, phase: PostRenderPhase) => void {
+  const latest = useRef({ onDrawn, onRender });
+  latest.current = { onDrawn, onRender };
+  return useCallback((node, instance, phase) => {
+    latest.current.onRender?.(node, instance, phase);
+    if (phase !== "unmount" && (node.shadowRoot ?? node).querySelector("[data-code]")) latest.current.onDrawn?.();
   }, []);
 }
 
@@ -165,6 +195,13 @@ export interface DiffRenderProps {
   theme: "light" | "dark";
   /** As `FileRenderProps.onDrawn`. */
   onDrawn?: () => void;
+  /** Reads both sides' whole text, for expanding the lines the patch collapses; without it the
+   * separators only say how many lines they hide. */
+  loadBodies?: () => Promise<ChangeBodies>;
+  /** What the separators say, in the app's language. */
+  labels: SeparatorLabels;
+  /** Told how the expansion stands: reading the text, failed, or the change having moved on. */
+  onExpansion?: (status: ExpansionStatus) => void;
 }
 
 /** A change rendered from its patch. Memoised for the same reason as `HighlightedFile`. */
@@ -174,6 +211,9 @@ export const RenderedDiff = memo(function RenderedDiff({
   layout,
   theme,
   onDrawn,
+  loadBodies,
+  labels,
+  onExpansion,
 }: DiffRenderProps): React.ReactElement | null {
   const language = useLanguage(name);
   const lang = language?.lang;
@@ -184,7 +224,36 @@ export const RenderedDiff = memo(function RenderedDiff({
     if (!metadata) throw new Error("The patch holds no file change");
     return { ...metadata, lang };
   }, [patch, lang]);
-  const onPostRender = useDrawnCallback(onDrawn);
+  // What the expansion has come to for this diff: the whole file shown, or no more offered.
+  const [ended, setEnded] = useState<{ diff: FileDiffMetadata; how: "all" | "stopped" }>();
+  const how = ended && ended.diff === fileDiff ? ended.how : undefined;
+  // Called back with the latest props, so a new callback each render does not reset the expansion.
+  const latest = useRef({ loadBodies, labels, onExpansion });
+  latest.current = { loadBodies, labels, onExpansion };
+  // Also for a diff that cannot be expanded: its separators are worded in the app's language all the same.
+  const expansion = useMemo(
+    () =>
+      fileDiff
+        ? new Expansion({
+            load: () => latest.current.loadBodies!(),
+            labels: () => latest.current.labels,
+            report: (status) => latest.current.onExpansion?.(status),
+            showAll: () => setEnded({ diff: fileDiff, how: "all" }),
+            stop: () => setEnded({ diff: fileDiff, how: "stopped" }),
+          })
+        : undefined,
+    [fileDiff],
+  );
+  const expandable = loadBodies !== undefined;
+  useEffect(() => () => expansion?.detach(), [expansion]);
+  useEffect(() => expansion?.decorate(), [expansion, labels]);
+  // A read of the change again that yields the same patch keeps this expansion, so a failure of the
+  // earlier read is dropped by hand.
+  useEffect(() => expansion?.forgetFailure(), [expansion, loadBodies]);
+  const onPostRender = useDrawnCallback<HunkExpander>(onDrawn, (node, instance, phase) => {
+    if (phase === "unmount") expansion?.detach();
+    else expansion?.attach(node, instance);
+  });
   const options = useMemo(
     () =>
       ({
@@ -195,9 +264,12 @@ export const RenderedDiff = memo(function RenderedDiff({
         hunkSeparators: "line-info-basic",
         lineDiffType: "word",
         unsafeCSS: diffCss(theme),
+        expansionLineCount: EXPANSION_STEP,
+        expandUnchanged: how === "all",
+        loadDiffFiles: expansion && expandable && how !== "stopped" ? expansion.files : undefined,
         onPostRender,
       }) as const,
-    [theme, layout, onPostRender],
+    [theme, layout, onPostRender, expansion, expandable, how],
   );
   return (
     <WorkerPoolContext.Provider value={rendererPool()}>

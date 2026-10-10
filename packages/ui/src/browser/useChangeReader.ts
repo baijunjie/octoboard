@@ -1,11 +1,28 @@
 import { createElement, useEffect, useRef, useState } from "react";
 
+import { DaemonRequestError } from "../daemon-client";
 import type { Translate } from "../i18n/catalog";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { abbreviateHome } from "../pathDisplay";
-import type { ChangeSide, ComparisonEndpoint, ConflictKind, Event, FileContent, SideRead, SideRef } from "../protocol";
+import type {
+  ChangeSide,
+  ComparisonEndpoint,
+  ConflictKind,
+  Event,
+  FileContent,
+  SideRead,
+  SideRef,
+  SideVersion,
+} from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
-import { bodyFromFileContent, type ViewerChangeSide, type ViewerContent, type ViewerSubject } from "../viewer/content";
+import {
+  bodyFromFileContent,
+  ChangeBodiesError,
+  type ChangeBodies,
+  type ViewerChangeSide,
+  type ViewerContent,
+  type ViewerSubject,
+} from "../viewer/content";
 import { displayWirePath } from "../wirePath";
 import { browseFailure } from "./browseError";
 import { CONFLICT_LABELS, SECTION_LABELS, type ChangeItem, type ShownChange } from "./changes";
@@ -16,6 +33,12 @@ const CHANGED_RETRIES = 2;
 /** The one slot every viewer read goes in, the file reader's included: a window shows one subject
  * at a time, whichever project and mode it is from. */
 const READ_SLOT = "viewer";
+
+/** The slot of the request for a change's whole bodies, apart from `READ_SLOT` so that a click on a
+ * separator never cancels the read of a patch still on its way (a background listing asks for one
+ * while the viewer is open). The daemon's bound of outstanding requests counts it among the
+ * viewer's two (see `useDirectoryListings.ts`). */
+const BODIES_SLOT = "viewer-bodies";
 
 /** Where a change is read from: a worktree's uncommitted changes (`worktree` none for the one
  * holding the project's directory), or a comparison of two branches at the commits it resolved. */
@@ -85,13 +108,23 @@ function readSide(side: SideRead, listed: ChangeSide): ViewerChangeSide {
   }
 }
 
-/** A patch as text. One that is not valid UTF-8 (a file in another encoding) is read with
- * replacement characters: it is shown, never applied. */
-function patchText(patch: FileContent): string {
-  if (patch.kind === "text") return patch.text ?? "";
-  const bytes = Uint8Array.from(atob(patch.data ?? ""), (c) => c.charCodeAt(0));
+/** A patch or a body as text. One that is not valid UTF-8 (a file in another encoding) is read with
+ * replacement characters, patch and bodies alike so their lines agree: it is shown, never applied. */
+function fileText(content: FileContent): string {
+  if (content.kind === "text") return content.text ?? "";
+  const bytes = Uint8Array.from(atob(content.data ?? ""), (c) => c.charCodeAt(0));
   return new TextDecoder("utf-8").decode(bytes);
 }
+
+/** The version a patch reply reported for a side that is a file, for the request that reads that
+ * side's whole body; nothing for a side that is not (one that does not exist, a link, a submodule,
+ * one outside the project). */
+function fileSideVersion(side: SideRead): SideVersion | undefined {
+  return side.state === "present" && side.kind === "file" ? { state: "present", source: side.source } : undefined;
+}
+
+/** The budgets whose overrun means the bodies can never be had, as opposed to a read that failed. */
+const BODY_LIMITS = new Set(["file_bytes", "patch_bytes", "reply_bytes"]);
 
 type Shown = { key: string; content: ViewerContent; failed?: { changing: boolean } };
 type Opened = { item: ChangeItem; origin: ChangeOrigin };
@@ -114,6 +147,10 @@ type Opened = { item: ChangeItem; origin: ChangeOrigin };
 export function useChangeReader(project: string): ChangeReader {
   const t = useT();
   const language = useCurrentLanguage();
+  // The wording a failure is given when it happens, not when the patch it belongs to arrived: a
+  // loader lives as long as its patch is shown, and the language can change in between.
+  const wording = useRef({ t, language });
+  wording.current = { t, language };
   const { request, store } = useDaemon();
   const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
   const [opened, setOpened] = useState<Opened>();
@@ -152,6 +189,73 @@ export function useChangeReader(project: string): ChangeReader {
     return reply.type === "project_change" && reply.project === project && reply.group === entry.group;
   };
 
+  /**
+   * How the change whose patch `reply` is gets its whole bodies, for expanding the lines the patch
+   * collapses: nothing where there is nothing to expand them from (a side that does not exist, or
+   * is not a file). The request names the versions `reply` reported, so a body of another revision
+   * is refused rather than shown beside this patch. It goes in a slot of its own, so a newer
+   * request for the bodies is the only one it cancels.
+   */
+  const bodiesLoader = (
+    item: ChangeItem,
+    origin: ChangeOrigin,
+    reply: Extract<Event, { type: "project_change" | "project_comparison_change" }>,
+  ): (() => Promise<ChangeBodies>) | undefined => {
+    const { entry } = item;
+    const old = fileSideVersion(reply.old);
+    const next = fileSideVersion(reply.new);
+    if (entry.group === "conflicted" || !old || !next) return undefined;
+    const sides = { old: sideRef(entry.old), new: sideRef(entry.new) };
+    const versions = { old, new: next };
+    const where = origin.kind === "worktree" && origin.worktree !== undefined ? { worktree: origin.worktree } : {};
+    const text = (side: SideRead) => (side.state === "present" && side.file ? fileText(side.file) : undefined);
+    return async () => {
+      try {
+        let bodies: Event;
+        if (entry.group !== "committed") {
+          bodies = await request({
+            type: "read_project_change_bodies",
+            project,
+            ...where,
+            change: { group: entry.group, ...sides },
+            ...versions,
+            slot: BODIES_SLOT,
+          });
+        } else if (origin.kind === "comparison") {
+          const { left, right } = origin;
+          bodies = await request({ type: "read_project_comparison_change_bodies", project, left, right, change: sides, ...versions, slot: BODIES_SLOT });
+        } else {
+          throw new ChangeBodiesError("unavailable");
+        }
+        if (bodies.type !== "project_change_bodies" && bodies.type !== "project_comparison_change_bodies") throw new ChangeBodiesError("unavailable");
+        const oldText = text(bodies.old);
+        const newText = text(bodies.new);
+        if (oldText === undefined || newText === undefined) throw new ChangeBodiesError("unavailable");
+        return { old: oldText, new: newText };
+      } catch (err) {
+        if (err instanceof ChangeBodiesError) throw err;
+        if (err instanceof DaemonRequestError && ["unsupported_file_type", "invalid_change"].includes(err.code)) throw new ChangeBodiesError("unavailable");
+        if (err instanceof DaemonRequestError && err.code === "limit_exceeded" && BODY_LIMITS.has(err.params.limit ?? "")) {
+          throw new ChangeBodiesError("unavailable");
+        }
+        const state = store.getState();
+        const root = state.projects.get(project)?.path;
+        const { t, language } = wording.current;
+        const failure = browseFailure(t, language, err, state, root && abbreviateHome(root, state.homeDir));
+        switch (failure.kind) {
+          case "superseded":
+            throw new ChangeBodiesError("superseded");
+          case "changed":
+            throw new ChangeBodiesError("changed");
+          case "disconnected":
+            throw new ChangeBodiesError("failed", t("viewer.expand.disconnected"));
+          case "failed":
+            throw new ChangeBodiesError("failed", failure.message);
+        }
+      }
+    };
+  };
+
   const read = (item: ChangeItem, origin: ChangeOrigin, attempt = 0) => {
     const s = live.current;
     const sequence = ++s.sequence;
@@ -168,7 +272,8 @@ export function useChangeReader(project: string): ChangeReader {
           const change = {
             old: readSide(reply.old, entry.old),
             new: readSide(reply.new, entry.new),
-            patch: reply.patch ? patchText(reply.patch) : undefined,
+            patch: reply.patch ? fileText(reply.patch) : undefined,
+            loadBodies: bodiesLoader(item, origin, reply),
           };
           setShown({ key, content: { state: "change", change } });
         }
