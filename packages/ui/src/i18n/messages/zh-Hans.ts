@@ -314,6 +314,7 @@ export const zhHans: Translation<"other"> = {
   "archive.loadingMore": "更多内容加载中…",
 
   "terminal.empty": "选择一个会话以查看其终端。",
+  "terminal.input": "终端输入",
   "terminal.loading": "终端加载中…",
   "terminal.resuming": "正在恢复会话…",
   "terminal.reconnecting": "终端正在重新连接…",

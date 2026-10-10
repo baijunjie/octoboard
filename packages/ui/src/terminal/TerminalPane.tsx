@@ -146,6 +146,13 @@ export function TerminalPane({
     // `handleStatusChange` is stable (its own deps are empty); this effect is mount/unmount-only.
   }, []);
 
+  // Names the terminal's input in the UI language; it follows a language change in place, as
+  // xterm only names the input once, when it opens.
+  const inputLabel = t("terminal.input");
+  useEffect(() => {
+    controllerRef.current?.setInputLabel(inputLabel);
+  }, [inputLabel]);
+
   // Recolours the running terminal in place rather than recreating it — the instance above is
   // mount-only, per its own comment, and `setColorTheme` is exactly the escape hatch for a change
   // that must still reach it. Skipped when `colorTheme` already matches what the controller has:

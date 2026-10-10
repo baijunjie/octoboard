@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { sessionOf } from "../gallery/fixtures/builders";
+import { currentLanguage, setLanguage } from "../i18n/language";
 import type { TermStatus } from "./TerminalController";
 import { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 
@@ -25,6 +26,10 @@ const { FakeController } = vi.hoisted(() => {
       FakeController.last = this;
     }
     mount(): void {}
+    inputLabel: string | undefined;
+    setInputLabel(label: string): void {
+      this.inputLabel = label;
+    }
     fit(): void {}
     syncSize(): void {}
     dispose(): void {}
@@ -177,4 +182,17 @@ it("recovers a terminal that gave up when a fresh snapshot arrives", () => {
   store.snapshotEpoch = 1;
   render(root);
   expect(FakeController.last.attaches).toBe(attaches + 1);
+});
+
+it("names the terminal's input in the UI language, and follows a language change", () => {
+  const language = currentLanguage();
+  try {
+    act(() => setLanguage("en"));
+    mount();
+    expect(FakeController.last.inputLabel).toBe("Terminal input");
+    act(() => setLanguage("zh-Hans"));
+    expect(FakeController.last.inputLabel).toBe("终端输入");
+  } finally {
+    act(() => setLanguage(language));
+  }
 });

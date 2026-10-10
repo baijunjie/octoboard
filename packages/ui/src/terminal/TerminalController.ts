@@ -251,6 +251,16 @@ export class TerminalController {
     this.term.dispose();
   }
 
+  /**
+   * Names xterm's input textarea for assistive technology. xterm reads its name from a
+   * process-wide English string once, in `open()`, so it can neither follow a language change nor
+   * be set per instance; this overwrites the attribute, so call it after `mount()` and whenever the
+   * label changes.
+   */
+  setInputLabel(label: string): void {
+    this.term.textarea?.setAttribute("aria-label", label);
+  }
+
   get currentStatus(): TermStatus {
     return this.status;
   }

@@ -40,7 +40,12 @@ const { FakeTerminal } = vi.hoisted(() => {
     attachCustomWheelEventHandler(handler: () => boolean): void {
       this.wheelHandler = handler;
     }
-    open(): void {}
+    textarea?: HTMLTextAreaElement;
+    /** xterm names its input textarea in English when it opens. */
+    open(): void {
+      this.textarea = document.createElement("textarea");
+      this.textarea.setAttribute("aria-label", "Terminal input");
+    }
     focus(): void {}
     dispose(): void {}
     modes = { mouseTrackingMode: "none" };
@@ -331,5 +336,14 @@ describe("a dormant session's saved output", () => {
     expect(term.screen).toContain("replay");
     expect(term.screen).not.toContain("old output");
     expect(term.screen).not.toContain("late");
+  });
+});
+
+describe("the input's accessible name", () => {
+  it("replaces xterm's English name once the terminal is open, and follows a later label", () => {
+    controller.setInputLabel("终端输入");
+    expect(term.textarea?.getAttribute("aria-label")).toBe("终端输入");
+    controller.setInputLabel("Terminal entrée");
+    expect(term.textarea?.getAttribute("aria-label")).toBe("Terminal entrée");
   });
 });

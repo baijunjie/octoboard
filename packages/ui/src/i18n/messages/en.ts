@@ -351,6 +351,7 @@ export const en = {
   "archive.loadingMore": "Loading more…",
 
   "terminal.empty": "Select a session to view its terminal.",
+  "terminal.input": "Terminal input",
   "terminal.loading": "Loading terminal…",
   "terminal.resuming": "Resuming session…",
   "terminal.reconnecting": "Reconnecting the terminal…",
