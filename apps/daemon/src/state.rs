@@ -304,7 +304,7 @@ impl AppState {
     }
 
     pub fn register_live(&self, session: Arc<LiveSession>) {
-        cleanup::register(session.clone());
+        session.enter_crash_cleanup();
         let mut live = self.live.write().expect("live sessions lock poisoned");
         live.sessions.insert(session.id.clone(), session);
     }
@@ -328,7 +328,6 @@ impl AppState {
         }
         drop(live);
         self.forget_session_bookkeeping(&session.id);
-        cleanup::unregister(session);
     }
 
     /// Reads a session record, failing with a message the UI can show when it is gone.
@@ -1031,53 +1030,6 @@ impl Drop for GitCheckClaim {
             self.state.release_git_check(&self.project_id);
         }
     }
-}
-
-/// The last-resort cleanup path: a registry of running sessions that can be killed without taking
-/// any lock that a panicking or signalled thread might already hold.
-pub mod cleanup {
-    use std::sync::{Arc, Mutex};
-
-    use crate::session::LiveSession;
-
-    static REGISTRY: Mutex<Vec<Arc<LiveSession>>> = Mutex::new(Vec::new());
-
-    pub fn register(session: Arc<LiveSession>) {
-        if let Ok(mut registry) = REGISTRY.lock() {
-            registry.push(session);
-        }
-    }
-
-    pub fn unregister(session: &Arc<LiveSession>) {
-        if let Ok(mut registry) = REGISTRY.lock() {
-            registry.retain(|registered| !Arc::ptr_eq(registered, session));
-        }
-    }
-
-    /// Kills every registered session outright. Safe from a panic hook: it only reads a pid and an
-    /// atomic flag, and the kill is gated on the child not having been reaped, so the pid cannot
-    /// have been recycled into something unrelated.
-    pub fn kill_all() {
-        let sessions = match REGISTRY.lock() {
-            Ok(registry) => registry.clone(),
-            Err(poisoned) => poisoned.into_inner().clone(),
-        };
-        for session in sessions {
-            session.kill_hard();
-        }
-    }
-}
-
-/// Installs a panic hook that kills every agent process before unwinding, so a daemon crash never
-/// leaves agents running unattended — `portable-pty` calls `setsid()`, so they are not in the
-/// daemon's process group and nothing else would reach them.
-pub fn install_panic_hook() {
-    let default_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        tracing::error!(%info, "panicking — killing every agent process first");
-        cleanup::kill_all();
-        default_hook(info);
-    }));
 }
 
 #[cfg(test)]

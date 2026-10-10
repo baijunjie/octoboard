@@ -10,6 +10,7 @@ use bytes::Bytes;
 use portable_pty::{Child, MasterPty};
 use tokio::sync::mpsc;
 
+use crate::crash_cleanup;
 use crate::protocol::Agent;
 use crate::ptyio;
 use crate::ringbuf::RingBuffer;
@@ -71,6 +72,9 @@ pub struct LiveSession {
     /// leaving that process unable to start any child at all until it was restarted.
     child: Mutex<Box<dyn Child + Send + Sync>>,
     reaped: AtomicBool,
+    /// The child's place in the cleanup that kills agents when the daemon goes down, held from
+    /// [`Self::enter_crash_cleanup`] until the child has exited, and given up before it is reaped.
+    crash_cleanup: Mutex<Option<crash_cleanup::Entry>>,
     fan: Mutex<Fan>,
     /// A reader thread is reading the PTY into `fan`; see [`spawn_reader_thread`].
     reader_running: AtomicBool,
@@ -121,6 +125,7 @@ impl LiveSession {
             master: Mutex::new(session.master),
             child: Mutex::new(session.child),
             reaped: AtomicBool::new(false),
+            crash_cleanup: Mutex::new(None),
             fan: Mutex::new(Fan {
                 ring: RingBuffer::new(RING_CAPACITY),
                 total: 0,
@@ -308,6 +313,14 @@ impl LiveSession {
         if self.reaped.load(Ordering::Acquire) {
             return true;
         }
+        // The crash cleanup signals by number, so the child leaves it while it is exited but not
+        // yet reaped, its pid still reserved. When `waitid` cannot tell, `try_wait` decides, and
+        // the child leaves only after it is reaped.
+        match self.exited_unreaped() {
+            Some(false) => return false,
+            Some(true) => self.leave_crash_cleanup(),
+            None => {}
+        }
         let exited = match child.try_wait() {
             Ok(Some(_)) => true,
             Ok(None) => false,
@@ -320,10 +333,27 @@ impl LiveSession {
         };
         if exited {
             self.reaped.store(true, Ordering::Release);
+            self.leave_crash_cleanup();
             drop(child);
             self.clean_scratch_dir();
         }
         exited
+    }
+
+    /// Whether the child has exited, found out without reaping it (`WNOWAIT`), or `None` when
+    /// `waitid` cannot say.
+    fn exited_unreaped(&self) -> Option<bool> {
+        // SAFETY: a zeroed `siginfo_t` is a valid buffer for `waitid` to fill in, and it is only
+        // read once `waitid` has succeeded.
+        unsafe {
+            let mut info: libc::siginfo_t = std::mem::zeroed();
+            let flags = libc::WEXITED | libc::WNOHANG | libc::WNOWAIT;
+            if libc::waitid(libc::P_PID, self.pid as libc::id_t, &mut info, flags) != 0 {
+                return None;
+            }
+            // With `WNOHANG`, a child that has not exited leaves `si_pid` as it was: 0.
+            Some(info.si_pid() != 0)
+        }
     }
 
     fn clean_scratch_dir(&self) {
@@ -373,12 +403,31 @@ impl LiveSession {
         tracing::warn!(session = %self.id, pid = self.pid, "session process is still alive after SIGKILL");
     }
 
-    /// Kills the session outright, with no graceful period and without taking a single lock — the
-    /// path a panic hook uses, where locking anything could deadlock against the thread that is
-    /// already going down. It reads only the pid and the reaped flag, so the worst a lost race
-    /// costs is a signal to a pid that has just been reaped.
-    pub fn kill_hard(&self) {
-        self.send_signal(libc::SIGKILL, true);
+    /// Enters the child in the cleanup that kills agents when the daemon goes down
+    /// (`crate::crash_cleanup`). Under the lock reaping takes, so a child reaped in the meantime
+    /// is never entered: the cleanup signals by number.
+    pub fn enter_crash_cleanup(&self) {
+        let child = self.child.lock().expect("child mutex poisoned");
+        if self.reaped.load(Ordering::Acquire) {
+            return;
+        }
+        let entry = crash_cleanup::register(self.pid);
+        if entry.is_none() {
+            tracing::warn!(session = %self.id, "the crash cleanup is full; this session's process would outlive a daemon crash");
+        }
+        *self
+            .crash_cleanup
+            .lock()
+            .expect("crash cleanup mutex poisoned") = entry;
+        drop(child);
+    }
+
+    /// Takes the child out of the crash cleanup; a no-op once it is out.
+    fn leave_crash_cleanup(&self) {
+        self.crash_cleanup
+            .lock()
+            .expect("crash cleanup mutex poisoned")
+            .take();
     }
 
     /// Signals the process while holding the lock that reaping happens under, so the child cannot
@@ -403,8 +452,7 @@ impl LiveSession {
             self.pid as i32
         };
         // SAFETY: the pid of a child this struct holds unreaped, so the number has not been
-        // recycled — `signal` guarantees that by holding the lock reaping takes; `kill_hard`
-        // accepts the narrow race deliberately.
+        // recycled — `signal` guarantees that by holding the lock reaping takes.
         if unsafe { libc::kill(target, signal) } != 0 {
             let err = io::Error::last_os_error();
             // ESRCH just means it exited in the meantime, which the caller finds out by polling.

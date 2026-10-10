@@ -8,6 +8,7 @@ mod adapter;
 mod availability;
 mod browse;
 mod coordinator;
+mod crash_cleanup;
 mod env_shell;
 mod git_env;
 mod git_status;
@@ -135,7 +136,7 @@ fn main() -> Result<()> {
                 .add_directive(tracing::Level::INFO.into()),
         )
         .init();
-    state::install_panic_hook();
+    crash_cleanup::install();
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
