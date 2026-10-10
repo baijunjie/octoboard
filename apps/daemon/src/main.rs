@@ -23,6 +23,7 @@ mod outbox;
 mod paths;
 mod protocol;
 mod ptyio;
+mod record_watch;
 mod relocate;
 mod reporting;
 mod ringbuf;

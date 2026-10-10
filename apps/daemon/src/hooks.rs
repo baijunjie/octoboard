@@ -100,9 +100,13 @@ fn claude_status(event: &str, payload: &Value) -> Option<SessionStatus> {
 
 fn codex_status(event: &str) -> Option<SessionStatus> {
     match event {
-        // No `SessionStart` arm: Codex defers it to the first prompt submission, so it arrives
-        // together with that prompt's `UserPromptSubmit` and, handled last, would put a working
-        // first turn back to idle. The launch and the resume already set `Idle` themselves.
+        // No `SessionStart` arm. Measured for its `startup` source only: Codex defers it to the
+        // first prompt submission, so it arrives together with that prompt's `UserPromptSubmit`
+        // and, handled last, would put a working first turn back to idle. The launch and the
+        // resume already set `Idle` themselves. The other sources (`resume`, `clear`, `compact`,
+        // `fork`) are unmeasured. This gives up what a `clear` or `fork` one mid-session may have
+        // done, correcting a session stuck at working; a `compact` one reporting `Idle` would have
+        // been wrong anyway.
         "UserPromptSubmit" | "PreToolUse" | "PostToolUse" => Some(SessionStatus::Working),
         "PermissionRequest" => Some(SessionStatus::WaitingUser),
         // Mutually exclusive with `Stop`, and the only cancellation signal any of the three agents

@@ -11,23 +11,20 @@
 //! `{"type":"task_complete","turn_id":…}` record when it ends, inside an `event_msg` entry's
 //! `payload`. The `turn_id` is the one the turn's `UserPromptSubmit` carries. A turn that ended in
 //! an error has an `error` object on that record (`message` is the user-facing text,
-//! `codex_error_info` the cause), written about a second after the prompt and readable as soon as it is; a turn that
-//! ended normally has `last_agent_message` and no `error` key at all. Codex flushes per record.
-//! The file does not exist yet when the first prompt of a session is submitted — it appears about
-//! a quarter of a second later — so a watch has to tolerate its absence.
+//! `codex_error_info` the cause), written about a second after the prompt and readable as soon as
+//! it is; a turn that ended normally has `last_agent_message` and no `error` key at all. Codex
+//! flushes per record. The file does not exist yet when the first prompt of a session is submitted
+//! — it appears about a quarter of a second later — so a watch has to tolerate its absence.
 //!
-//! [`scan_for_ending`] is the pure half: given a path, an offset and the open turn's id, whether
-//! that turn's `task_complete` was among the lines added. [`watch_for_failure`] is what calls it on
-//! a timer from the turn's `UserPromptSubmit`, and turns a failure into a failed turn ending, the
-//! same as Claude Code's `StopFailure`.
+//! [`ending_in_line`] is the pure half: whether one line is the open turn's `task_complete`, and
+//! how it says the turn ended. [`watch_for_failure`] arms `crate::record_watch` with it from the
+//! turn's `UserPromptSubmit`, and turns a failure into a failed turn ending, the same as Claude
+//! Code's `StopFailure`.
 //!
-//! The rollout is Codex's own and is rewritten on upgrades, so, as in `crate::transcript`, every
-//! line is parsed on its own and one that fails to parse, or has a shape this does not recognise,
-//! is skipped. Nothing here may abort the watch over a file it does not understand.
+//! The rollout is Codex's own and is rewritten on upgrades; see `crate::record_watch` for how a
+//! line this does not recognise is treated.
 
-use std::fs::File;
-use std::io::{self, Read, Seek, SeekFrom};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -35,6 +32,7 @@ use serde_json::Value;
 
 use crate::hooks::TurnEnd;
 use crate::protocol::SessionStatus;
+use crate::record_watch::{self, Owed, Start, Watch};
 use crate::state::{AppState, TurnClose};
 
 /// How often the watch checks the rollout for new lines. A failed turn is over within about a
@@ -51,52 +49,13 @@ enum Ending {
     Failed(Option<String>),
 }
 
-/// What one scan of a rollout found.
-struct Scan {
-    /// The watched turn's `task_complete`, if it was among the lines read.
-    ending: Option<Ending>,
-    /// Where the next scan should start: the offset just past the last complete line read. A line
-    /// still being written, with no trailing newline yet, is left for the next scan.
-    offset: u64,
-}
-
-/// Reads whatever full lines were appended to the rollout at `path` since `offset`, and reports how
-/// turn `turn_id` ended if one of them says so. An error is an I/O error opening or reading the
-/// file, `NotFound` included, not a line that fails to parse.
-fn scan_for_ending(path: &Path, offset: u64, turn_id: &str) -> io::Result<Scan> {
-    let mut file = File::open(path)?;
-    file.seek(SeekFrom::Start(offset))?;
-    let mut added = Vec::new();
-    file.read_to_end(&mut added)?;
-
-    let mut consumed = 0usize;
-    let mut ending = None;
-    while let Some(end) = added[consumed..].iter().position(|&byte| byte == b'\n') {
-        let line = &added[consumed..consumed + end];
-        consumed += end + 1;
-        if let Some(found) = ending_in_line(line, turn_id) {
-            ending = Some(found);
-        }
-    }
-    Ok(Scan {
-        ending,
-        offset: offset + consumed as u64,
-    })
-}
-
 /// How one rollout line says turn `turn_id` ended, if it is that turn's `task_complete`. A line
 /// that is not JSON, or is JSON of another shape, reads as `None`.
-///
-/// Most lines never reach the JSON parser: a rollout line can run to hundreds of KB (a tool's
-/// output), and a byte check for the record type rules nearly all of them out first.
-fn ending_in_line(line: &[u8], turn_id: &str) -> Option<Ending> {
-    if !std::str::from_utf8(line)
-        .ok()?
-        .contains("\"task_complete\"")
-    {
+fn ending_in_line(line: &str, turn_id: &str) -> Option<Ending> {
+    if !line.contains("\"task_complete\"") {
         return None;
     }
-    let value = serde_json::from_slice::<Value>(line).ok()?;
+    let value = serde_json::from_str::<Value>(line).ok()?;
     let payload = value.get("payload")?;
     if payload.get("type").and_then(Value::as_str) != Some("task_complete")
         || payload.get("turn_id").and_then(Value::as_str) != Some(turn_id)
@@ -123,15 +82,17 @@ fn ending_in_line(line: &[u8], turn_id: &str) -> Option<Ending> {
 /// Starts watching `session_id`'s rollout for the end of its open turn `turn_id`. Call it from a
 /// Codex `UserPromptSubmit`, where both are known.
 ///
-/// Spawned, never awaited: the hook response has to return inside the adapters' few-second timeout.
 /// The watch ends when it finds the turn's ending, when a newer watch for the session supersedes it
-/// (`AppState::begin_transcript_watch`), when the next prompt's submission retires it
-/// (`end_transcript_watch`), or when the process is gone.
+/// (`AppState::begin_record_watch`), when the next prompt's submission retires it
+/// (`end_record_watch`), or when the process is gone.
 ///
 /// It reads from where the session's previous watch of the same file got to, and from the start of
-/// the file for the first. Not from the file's end as it stands now: the record it is after can
-/// already be written by the time this is called. Which turn an ending belongs to is settled by the
-/// turn's id, not by where the scan started.
+/// the file for the first ([`Start::Carried`]). Not from the file's end as it stands now: the
+/// record it is after can already be written by the time this is called. The hook callback is a
+/// fresh exec plus a request, and a turn that fails at once can have its record written before the
+/// callback arrives, so starting at the end would miss the only notice the turn ever gives, which
+/// is the whole defect. Nothing is misattributed by reading earlier records, since an ending counts
+/// only for the exact open turn's id.
 pub fn watch_for_failure(
     state: &Arc<AppState>,
     session_id: &str,
@@ -146,78 +107,23 @@ pub fn watch_for_failure(
         );
         return;
     };
-    let path = PathBuf::from(transcript_path);
-    // The hook callback is a fresh exec plus a request, and a turn that fails at once can have its
-    // record written before the callback arrives — starting at the file's end would miss the only
-    // notice the turn ever gives, which is the whole defect. Nothing is misattributed by reading
-    // earlier records, since an ending counts only for the exact open turn's id.
-    let mut offset = state.rollout_offset(session_id, &path);
-
-    let generation = state.begin_transcript_watch(session_id);
-    let state = state.clone();
-    let session_id = session_id.to_string();
     let turn_id = turn_id.to_string();
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(POLL_INTERVAL).await;
-
-            if !state.transcript_watch_current(&session_id, generation) {
-                return; // A newer watch, or a hook ending the turn, has taken over.
-            }
-            if state.live_session(&session_id).is_none() {
-                return; // The process is gone.
-            }
-
-            let len = match tokio::fs::metadata(&path).await {
-                Ok(meta) => meta.len(),
-                Err(_) => continue, // Not created yet.
-            };
-            if len < offset {
-                // A shorter file than was read: rescan it from the start. That is safe because
-                // matching is keyed on the open turn's id, and skipping to the new end could skip
-                // the very record this watch is after. Not expected for a per-thread rollout.
-                tracing::debug!(
-                    session = %session_id, old_offset = offset, new_len = len,
-                    "the rollout shrank; rescanning it from the start"
-                );
-                offset = 0;
-            }
-            if len == offset {
-                continue;
-            }
-
-            // Blocking reads, and on a long session megabytes of them: off the runtime's threads.
-            let scan = {
-                let (path, turn_id) = (path.clone(), turn_id.clone());
-                tokio::task::spawn_blocking(move || scan_for_ending(&path, offset, &turn_id)).await
-            };
-            let scan = match scan {
-                Ok(Ok(scan)) => scan,
-                Ok(Err(err)) if err.kind() == io::ErrorKind::NotFound => continue,
-                Ok(Err(err)) => {
-                    tracing::warn!(
-                        session = %session_id, %err,
-                        "reading the rollout failed while watching it for an error"
-                    );
-                    return;
-                }
-                Err(_) => return, // The scan panicked.
-            };
-            offset = scan.offset;
-            state.note_rollout_offset(&session_id, &path, offset);
-            match scan.ending {
-                None => continue,
-                // `Stop` is on its way and ends the turn in the usual way.
-                Some(Ending::Completed) => return,
-                Some(Ending::Failed(message)) => {
-                    if state.transcript_watch_current(&session_id, generation) {
-                        end_failed_turn(&state, &session_id, message);
-                    }
-                    return;
-                }
-            }
-        }
-    });
+    record_watch::spawn(
+        state,
+        session_id,
+        PathBuf::from(transcript_path),
+        Watch {
+            interval: POLL_INTERVAL,
+            start: Start::Carried,
+        },
+        |_, _| Owed::Yes,
+        move |line| ending_in_line(line, &turn_id),
+        |state, session_id, ending| match ending {
+            // `Stop` is on its way and ends the turn in the usual way.
+            Ending::Completed => {}
+            Ending::Failed(message) => end_failed_turn(state, session_id, message),
+        },
+    );
 }
 
 /// Ends the open turn as a failed one, as if the agent had fired a failure event for it: the turn
@@ -257,15 +163,18 @@ fn end_failed_turn(state: &Arc<AppState>, session_id: &str, message: Option<Stri
 
 #[cfg(test)]
 mod tests {
+    use std::fs::File;
     use std::io::Write;
+    use std::path::Path;
 
     use super::*;
     use crate::protocol::{Agent, Console, Origin, Role, Session};
     use crate::test_support::{idle_stand_in, ScratchDir, ScratchFile, StandIn};
 
-    /// A failed turn's records, taken verbatim from a Codex 0.160.0 session whose account was at
-    /// its usage limit: `task_started`, `token_count`, then `task_complete` with an `error` object.
-    const FAILED: &str = include_str!("../testdata/rollout_failed_turn.jsonl");
+    /// Two failed turns of one Codex 0.160.0 session whose account was at its usage limit, taken
+    /// verbatim: each is `task_started`, `token_count`, then `task_complete` with an `error`
+    /// object.
+    const FAILED_TURNS: &str = include_str!("../testdata/rollout_failed_turns.jsonl");
     const FAILED_TURN: &str = "01a127d8-56fb-7442-b291-53bde00f15fe";
     const SECOND_FAILED_TURN: &str = "01a127d8-feef-7872-9890-c06ccd669d7d";
 
@@ -274,8 +183,25 @@ mod tests {
     const COMPLETED: &str = include_str!("../testdata/rollout_completed_turn.jsonl");
     const COMPLETED_TURN: &str = "01a1009e-6e43-73d3-a46f-5bc648f49a7a";
 
+    /// The interrupted turn, from a Codex 0.160.0 session: `task_complete` has a null
+    /// `last_agent_message` like a failed turn's, but no `error` key and no
+    /// `time_to_first_token_ms`.
+    const INTERRUPTED: &str = include_str!("../testdata/rollout_interrupted_turn.jsonl");
+    const INTERRUPTED_TURN: &str = "01a1009f-e588-7f21-b87f-47a002c43820";
+
     /// The other near-miss: the failed capture cut off after `token_count`, a turn still running.
     const RUNNING: &str = include_str!("../testdata/rollout_running_turn.jsonl");
+
+    /// The first `lines` lines of `text`.
+    fn first_lines(text: &str, lines: usize) -> &str {
+        let end = text.split_inclusive('\n').take(lines).map(str::len).sum();
+        &text[..end]
+    }
+
+    /// The first of those turns alone: its three lines.
+    fn failed_turn() -> &'static str {
+        first_lines(FAILED_TURNS, 3)
+    }
 
     fn rollout_file(name: &str) -> ScratchFile {
         ScratchFile::new(&format!("rollout-{name}"), "rollout.jsonl")
@@ -289,12 +215,14 @@ mod tests {
     fn ending_of(content: &str, turn_id: &str) -> Option<Ending> {
         let path = rollout_file("ending");
         write_rollout(&path, content);
-        scan_for_ending(&path, 0, turn_id).expect("scan").ending
+        record_watch::scan_lines(&path, 0, |line| ending_in_line(line, turn_id))
+            .expect("scan")
+            .found
     }
 
     #[test]
     fn a_failed_turn_is_found_with_codexs_own_message() {
-        let Some(Ending::Failed(Some(message))) = ending_of(FAILED, FAILED_TURN) else {
+        let Some(Ending::Failed(Some(message))) = ending_of(failed_turn(), FAILED_TURN) else {
             panic!("the failed turn was not recognised");
         };
         assert!(
@@ -311,6 +239,16 @@ mod tests {
         );
     }
 
+    /// Why the ending is keyed on the `error` key and not on a null message: an interrupted turn
+    /// has a null message too, and is `Interrupt`'s to end.
+    #[test]
+    fn an_interrupted_turn_is_not_a_failure() {
+        assert_eq!(
+            ending_of(INTERRUPTED, INTERRUPTED_TURN),
+            Some(Ending::Completed)
+        );
+    }
+
     #[test]
     fn a_turn_still_running_has_not_ended() {
         assert_eq!(ending_of(RUNNING, FAILED_TURN), None);
@@ -322,10 +260,10 @@ mod tests {
     /// turn's `task_started` it is that turn still running behind a failed one.
     #[test]
     fn an_earlier_turns_ending_is_not_the_watched_turns() {
-        let two = include_str!("../testdata/rollout_failed_turns.jsonl");
-        let second_started = two.lines().nth(3).expect("the second turn's start");
-        assert!(second_started.contains(SECOND_FAILED_TURN));
-        let cut = &two[..two.find(second_started).unwrap() + second_started.len() + 1];
+        let two = FAILED_TURNS;
+        let cut = first_lines(two, 4);
+        let last = cut.lines().last().expect("the second turn's start");
+        assert!(last.contains("task_started") && last.contains(SECOND_FAILED_TURN));
 
         assert!(matches!(
             ending_of(cut, FAILED_TURN),
@@ -338,7 +276,7 @@ mod tests {
         ));
 
         // A successful turn before a failed one: each id reads its own ending.
-        let mixed = format!("{COMPLETED}{FAILED}");
+        let mixed = format!("{COMPLETED}{}", failed_turn());
         assert_eq!(ending_of(&mixed, COMPLETED_TURN), Some(Ending::Completed));
         assert!(matches!(
             ending_of(&mixed, FAILED_TURN),
@@ -349,41 +287,14 @@ mod tests {
     /// Unrecognised and malformed lines are skipped, and the record after them is still read.
     #[test]
     fn unrecognised_lines_are_skipped_without_error() {
-        let content = format!("not json\n{{\"task_complete\":1}}\n\"task_complete\"\n{FAILED}");
+        let content = format!(
+            "not json\n{{\"task_complete\":1}}\n\"task_complete\"\n{}",
+            failed_turn()
+        );
         assert!(matches!(
             ending_of(&content, FAILED_TURN),
             Some(Ending::Failed(_))
         ));
-    }
-
-    /// The production entry condition: the watch starts before Codex has created the file.
-    #[test]
-    fn a_file_that_does_not_exist_yet_reads_as_not_found() {
-        let path = rollout_file("missing");
-        std::fs::remove_file(&path).ok();
-        let err = scan_for_ending(&path, 0, FAILED_TURN)
-            .err()
-            .expect("an error");
-        assert_eq!(err.kind(), io::ErrorKind::NotFound);
-    }
-
-    /// The other: a record caught mid-write has no newline yet and is left for the next scan, which
-    /// then reads it whole.
-    #[test]
-    fn a_line_truncated_mid_write_is_read_once_it_is_complete() {
-        let last = FAILED.trim_end().rsplit('\n').next().unwrap();
-        let before = &FAILED[..FAILED.len() - last.len() - 1];
-        let cut = &last[..last.len() / 2];
-
-        let path = rollout_file("truncated");
-        write_rollout(&path, &format!("{before}{cut}"));
-        let first = scan_for_ending(&path, 0, FAILED_TURN).expect("scan");
-        assert_eq!(first.ending, None);
-        assert_eq!(first.offset, before.len() as u64);
-
-        write_rollout(&path, FAILED);
-        let second = scan_for_ending(&path, first.offset, FAILED_TURN).expect("scan");
-        assert!(matches!(second.ending, Some(Ending::Failed(_))));
     }
 
     fn codex_session(id: &str, status: SessionStatus) -> Session {
@@ -486,7 +397,7 @@ mod tests {
     async fn a_failed_turn_returns_the_session_to_awaiting_instructions() {
         let fixture = Fixture::new("failed");
         fixture.watch();
-        write_rollout(&fixture.path, FAILED);
+        write_rollout(&fixture.path, failed_turn());
 
         assert!(fixture.went_idle(crate::test_support::PATIENCE).await);
         assert_eq!(fixture.state.close_turn("s", false), TurnClose::NoTurn);
@@ -494,17 +405,33 @@ mod tests {
 
     /// The race the watch's start offset exists for: Codex wrote the failed turn's `task_complete`
     /// before the hook callback armed the watch (0.25 s of margin on a session's first turn,
-    /// against a fresh hook exec and an HTTP round trip). A watch started at the file's length would begin
-    /// past the record and never see it. The case above only covers a file that does not exist yet,
-    /// where any start offset reads from zero, so it cannot catch this.
+    /// against a fresh hook exec and an HTTP round trip). A watch started at the file's length
+    /// would begin past the record and never see it. The case above only covers a file that does
+    /// not exist yet, where any start offset reads from zero, so it cannot catch this.
     #[tokio::test]
     async fn a_failure_written_before_the_watch_was_armed_is_still_found() {
         let fixture = Fixture::new("written-first");
-        write_rollout(&fixture.path, FAILED);
+        write_rollout(&fixture.path, failed_turn());
         fixture.watch();
 
         assert!(fixture.went_idle(crate::test_support::PATIENCE).await);
         assert_eq!(fixture.state.close_turn("s", false), TurnClose::NoTurn);
+    }
+
+    /// A watch resumes from where the previous one got to, and that offset can be past the end of
+    /// a file that has since shrunk. Skipping to the new end would skip the record the watch is
+    /// after, so it reads again from the start.
+    #[tokio::test]
+    async fn a_shrunk_rollout_is_read_again_from_the_start() {
+        let fixture = Fixture::new("shrunk");
+        let past_the_end = failed_turn().len() as u64 + 1000;
+        fixture
+            .state
+            .note_record_offset("s", &fixture.path, past_the_end);
+        write_rollout(&fixture.path, failed_turn());
+        fixture.watch();
+
+        assert!(fixture.went_idle(crate::test_support::PATIENCE).await);
     }
 
     /// A turn that completed normally is `Stop`'s to end, not the watch's; one still running is not
@@ -528,8 +455,8 @@ mod tests {
     async fn a_watch_retired_by_the_next_prompt_does_not_write() {
         let fixture = Fixture::new("retired");
         fixture.watch();
-        fixture.state.end_transcript_watch("s");
-        write_rollout(&fixture.path, FAILED);
+        fixture.state.end_record_watch("s");
+        write_rollout(&fixture.path, failed_turn());
         assert!(!fixture.went_idle(POLL_INTERVAL * 6).await);
     }
 }

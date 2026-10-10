@@ -274,8 +274,8 @@ pub fn deliver_report(
 }
 
 /// Closes the session's open turn on `turn` ending it, and has a report synthesised for the owner
-/// when the session reported nothing itself. What closing amounted to is returned, for the caller to
-/// decide what else the ending says about the session.
+/// when the session reported nothing itself. What closing amounted to is returned, for the caller
+/// to decide what else the ending says about the session.
 pub fn close_turn_and_report(
     state: &Arc<AppState>,
     session_id: &str,

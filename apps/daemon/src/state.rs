@@ -46,18 +46,19 @@ pub struct AppState {
     /// correlating turn ids. Entries are added on a turn start and removed when the session's
     /// process goes away.
     turns: Mutex<HashMap<String, TurnState>>,
-    /// The generation each session's transcript watch (`crate::transcript`, and for Codex
-    /// `crate::rollout`) is currently on.
+    /// The generation each session's record watch (`crate::record_watch`, run for Claude Code by
+    /// `crate::transcript` and for Codex by `crate::rollout`) is currently on.
     /// Starting a watch records a fresh value here; the watch keeps polling only while its own
     /// value is still the one recorded, which is what lets a newer watch for the same session
     /// retire an older one rather than race it. The counter it is drawn from is global, not
     /// per-session, because uniqueness is all that is asked of it.
-    transcript_watch_generations: Mutex<HashMap<String, u64>>,
-    next_transcript_watch_generation: std::sync::atomic::AtomicU64,
-    /// How far into its rollout file each Codex session's watches have read, with the file's path.
-    /// A new turn's watch resumes from there rather than rescanning the whole file, which on a long
-    /// session runs to megabytes; what an earlier watch read it has already judged.
-    rollout_offsets: Mutex<HashMap<String, (std::path::PathBuf, u64)>>,
+    record_watch_generations: Mutex<HashMap<String, u64>>,
+    next_record_watch_generation: std::sync::atomic::AtomicU64,
+    /// How far into its record file each session's carried-offset watches have read
+    /// (`crate::record_watch::Start::Carried`), with the file's path. A new turn's watch resumes
+    /// from there rather than rescanning the whole file, which on a long session runs to
+    /// megabytes; what an earlier watch read it has already judged.
+    record_offsets: Mutex<HashMap<String, (std::path::PathBuf, u64)>>,
     /// The per-session write queues. Every message Octoboard sends into a running agent goes
     /// through them; see `crate::outbox`.
     outbox: Outbox,
@@ -157,9 +158,9 @@ impl AppState {
             mcp_tokens: RwLock::new(HashMap::new()),
             turns: Mutex::new(HashMap::new()),
             request_hands: Mutex::new(HashMap::new()),
-            transcript_watch_generations: Mutex::new(HashMap::new()),
-            next_transcript_watch_generation: std::sync::atomic::AtomicU64::new(0),
-            rollout_offsets: Mutex::new(HashMap::new()),
+            record_watch_generations: Mutex::new(HashMap::new()),
+            next_record_watch_generation: std::sync::atomic::AtomicU64::new(0),
+            record_offsets: Mutex::new(HashMap::new()),
             outbox: Outbox::default(),
             git_statuses: RwLock::new(HashMap::new()),
             git_checks: Mutex::new(HashMap::new()),
@@ -827,67 +828,67 @@ impl AppState {
         self.revoke_mcp_tokens(id);
         self.turns.lock().expect("turn lock poisoned").remove(id);
         self.forget_request_hand(id);
-        self.transcript_watch_generations
+        self.record_watch_generations
             .lock()
-            .expect("transcript watch lock poisoned")
+            .expect("record watch lock poisoned")
             .remove(id);
-        self.rollout_offsets
+        self.record_offsets
             .lock()
-            .expect("rollout offset lock poisoned")
+            .expect("record offset lock poisoned")
             .remove(id);
     }
 
-    // -- transcript watch bookkeeping -----------------------------------------
+    // -- record watch bookkeeping ---------------------------------------------
 
-    /// Starts a new transcript watch for this session and returns the generation it owns.
+    /// Starts a new record watch for this session and returns the generation it owns.
     /// Recording it here retires whatever watch was running for the session before: its generation
     /// is no longer the one found under this id, so it stops at its next poll instead of racing the
-    /// new one. See `crate::transcript::watch_for_rejection`.
-    pub fn begin_transcript_watch(&self, id: &str) -> u64 {
+    /// new one. See `crate::record_watch::spawn`.
+    pub fn begin_record_watch(&self, id: &str) -> u64 {
         let generation = self
-            .next_transcript_watch_generation
+            .next_record_watch_generation
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        self.transcript_watch_generations
+        self.record_watch_generations
             .lock()
-            .expect("transcript watch lock poisoned")
+            .expect("record watch lock poisoned")
             .insert(id.to_string(), generation);
         generation
     }
 
-    /// Where a watch of the rollout at `path` may start reading: past what an earlier watch of the
-    /// same file already read, or zero for a file not seen before.
-    pub fn rollout_offset(&self, id: &str, path: &std::path::Path) -> u64 {
-        self.rollout_offsets
+    /// Where a carried-offset watch of the record at `path` may start reading: past what an earlier
+    /// watch of the same file already read, or zero for a file not seen before.
+    pub fn record_offset(&self, id: &str, path: &std::path::Path) -> u64 {
+        self.record_offsets
             .lock()
-            .expect("rollout offset lock poisoned")
+            .expect("record offset lock poisoned")
             .get(id)
             .filter(|(seen, _)| seen == path)
             .map_or(0, |(_, offset)| *offset)
     }
 
-    /// Records how far a watch has read into the rollout at `path`.
-    pub fn note_rollout_offset(&self, id: &str, path: &std::path::Path, offset: u64) {
-        self.rollout_offsets
+    /// Records how far a carried-offset watch has read into the record at `path`.
+    pub fn note_record_offset(&self, id: &str, path: &std::path::Path, offset: u64) {
+        self.record_offsets
             .lock()
-            .expect("rollout offset lock poisoned")
+            .expect("record offset lock poisoned")
             .insert(id.to_string(), (path.to_path_buf(), offset));
     }
 
-    /// Retires the session's transcript watch, if any, because the turn it was watching is over: a
+    /// Retires the session's record watch, if any, because the turn it was watching is over: a
     /// new turn is about to open, and a watch left current could close that one instead.
-    pub fn end_transcript_watch(&self, id: &str) {
-        self.transcript_watch_generations
+    pub fn end_record_watch(&self, id: &str) {
+        self.record_watch_generations
             .lock()
-            .expect("transcript watch lock poisoned")
+            .expect("record watch lock poisoned")
             .remove(id);
     }
 
-    /// Whether `generation` is still this session's current transcript watch — false once a newer
+    /// Whether `generation` is still this session's current record watch — false once a newer
     /// watch has taken over, or the session's bookkeeping has been dropped entirely.
-    pub fn transcript_watch_current(&self, id: &str, generation: u64) -> bool {
-        self.transcript_watch_generations
+    pub fn record_watch_current(&self, id: &str, generation: u64) -> bool {
+        self.record_watch_generations
             .lock()
-            .expect("transcript watch lock poisoned")
+            .expect("record watch lock poisoned")
             .get(id)
             == Some(&generation)
     }
@@ -1370,6 +1371,21 @@ mod tests {
     /// Only one report may come out of one turn, and only when the session did not report for
     /// itself. The repeat case is not hypothetical: Grok fires its `idle_prompt` backstop about a
     /// minute after every turn, whether or not a `Stop` already reported it.
+    /// A carried-offset watch resumes where the session's previous watch of the same file got to,
+    /// and a different file starts again from zero.
+    #[test]
+    fn a_record_offset_is_carried_for_the_same_file_and_not_for_another() {
+        let (state, _dir) = app_state("state-record-offset");
+        let path = std::path::Path::new("/rollout-a.jsonl");
+        assert_eq!(state.record_offset("s", path), 0);
+        state.note_record_offset("s", path, 120);
+        assert_eq!(state.record_offset("s", path), 120);
+        assert_eq!(
+            state.record_offset("s", std::path::Path::new("/rollout-b.jsonl")),
+            0
+        );
+    }
+
     #[test]
     fn a_turn_can_only_be_closed_once() {
         let (state, _dir) = app_state("state-turns");

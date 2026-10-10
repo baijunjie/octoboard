@@ -464,9 +464,10 @@ async fn hook_callback(
                 }
                 let prompt = agent.and_then(|agent| hooks::submitted_prompt(agent, &payload));
                 // The previous turn's watch goes before the new turn opens: a watch still current
-                // when it opens could find the previous turn's failure and close this one.
+                // when it opens could find the previous turn's failure and close this one. Codex
+                // only: Claude's watch retires itself once the session leaves `WaitingUser`.
                 if agent == Some(Agent::Codex) {
-                    state.end_transcript_watch(&session_id);
+                    state.end_record_watch(&session_id);
                 }
                 state.turn_started(&session_id, prompt);
             }

@@ -142,10 +142,11 @@ Turn-scoped events add `turn_id`, the per-turn key. The compaction events are th
 
 - `SessionStart` — `source` is one of `startup`, `resume`, `clear`, `compact`, `fork`. Its `session_id` is the only
   place Codex ever publishes its own id, and the thread id is the same value. `~/.codex/session_index.jsonl` is not an
-  alternative source: it records only *named* threads, and is written late. **It does not fire until the first prompt
-  is submitted**, and then arrives together with that prompt's `UserPromptSubmit`, in either order — measured 40 s
-  after the process started, both within the same second, and the order varied run to run. A mapping that gives it a
-  status therefore races the turn the prompt opens.
+  alternative source: it records only *named* threads, and is written late. **With `source: "startup"` it does not
+  fire until the first prompt is submitted**, and then arrives together with that prompt's `UserPromptSubmit`, in
+  either order — measured 40 s after the process started, both within the same second, and the order varied run to
+  run. A mapping that gives it a status therefore races the turn the prompt opens. When the other four sources arrive
+  is unmeasured.
 - `Stop` — `turn_id`, `last_assistant_message`, `stop_hook_active`.
 - `Interrupt` — fires on Esc or Ctrl+C during an in-flight turn (Ctrl+C confirmed by hand). It carries the base
   payload plus the cancelled turn's own `turn_id` and is mutually exclusive with `Stop`. Esc pressed while the session
