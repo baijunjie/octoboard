@@ -5,7 +5,7 @@
 //! credential helper, or an organization's gateway, and in none of those cases does the config
 //! directory show it either way. Both are derived from one login-shell snapshot, the same kind a
 //! launch takes, and carried as derived state of its own on `AppState` rather than a field of the
-//! stored `Settings` (`docs/memory/writing-daemon-code.md`).
+//! stored `Settings`, which is written only by the user's own updates.
 //!
 //! This creates no account: the default account exists for every agent by construction, and
 //! nothing here mints, stores or removes a row — only what each agent's own `AgentAvailability`

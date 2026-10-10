@@ -184,7 +184,7 @@ pub enum Availability {
 /// One agent's availability and what its default account currently resolves to, derived once per
 /// daemon start from one login-shell snapshot and held as its own derived state on `AppState`
 /// (`crate::availability`) — never as a field of the stored `Settings`, which is written only by
-/// the user's own updates (see `docs/memory/writing-daemon-code.md`). Travels to a client inside
+/// the user's own updates. Travels to a client inside
 /// `Event::Snapshot` and `Event::AgentAvailabilityUpdated`, one entry per agent, always three of
 /// them: the not-yet-determined state is carried by `availability` itself rather than by the
 /// entry's absence.
