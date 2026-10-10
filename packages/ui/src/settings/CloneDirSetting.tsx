@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
 import { useTrimmedField } from "../dialogs/useTrimmedField";
 import { useT } from "../i18n/react";
+import { isImeKey } from "../imeKey";
 import { abbreviateHome } from "../pathDisplay";
 import { useDaemon, useDaemonStore } from "../store";
 import { SettingRow } from "./SettingRow";
@@ -55,7 +56,7 @@ export function CloneDirSetting(): React.ReactElement {
               draftField.onBlur();
               save(draft);
             }}
-            onKeyDown={(event) => event.key === "Enter" && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229 && save(draft)}
+            onKeyDown={(event) => event.key === "Enter" && !isImeKey(event.nativeEvent) && save(draft)}
             className="min-w-0 flex-1"
           >
             <InputGroup title={stored === storedFull ? undefined : storedFull}>

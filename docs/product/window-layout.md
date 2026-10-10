@@ -280,10 +280,11 @@ They are not how the docked column opens and closes (see "Hiding the sidebar and
 - **How it goes away**: it slides away 200 ms after the pointer has left it. For the sidebar that means the pointer is
   on neither the pane nor a console's avatar; for the right pane, on neither the pane nor its toggle. Once the right
   pane has come up from its edge strip, the pointer's first move counts as leaving it when it lands outside the place
-  the pane is sliding into. `Escape` sends it away at once and **does not reach the running agent**; so does `Escape`
-  pressed inside a report page (see "Escape and F6 inside a page" in `docs/product/report-panel.md`). A floating pane
-  that holds keyboard focus as it goes away hands focus to the terminal. A floating sidebar previewing a console that
-  is deleted goes away as if the pointer had left that console's avatar.
+  the pane is sliding into. `Escape` sends it away at once and **does not reach the running agent**, except that in a
+  field holding text (the project pane's change filter) it only clears the field, and the next one sends the pane away;
+  so does `Escape` pressed inside a report page (see "Escape and F6 inside a page" in `docs/product/report-panel.md`). A
+  floating pane that holds keyboard focus as it goes away hands focus to the terminal. A floating sidebar previewing a
+  console that is deleted goes away as if the pointer had left that console's avatar.
 - **What keeps it up**, whatever the pointer does: keyboard focus inside it, one of its menus being open, or a dialog
   being open, for as long as it is — such as one opened from the pane, the file viewer a project pane opens among them
   (see "The file viewer" in `docs/product/project-pane.md`). So closing a viewer opened from a floating project pane,
@@ -310,7 +311,8 @@ default**:
   toggle in the top bar, the right pane's toggle on the rail, which is there only while the right pane has an owner.
   Browse files opens the right pane's drawer too (see "What the right pane shows" above).
 - A drawer closes on its toggle, on a press anywhere in the dimmed area beside it, or on `Escape`.
-  While a drawer is open `Escape` closes it and **does not reach the running agent**.
+  While a drawer is open `Escape` closes it and **does not reach the running agent**; in a field in the drawer that
+  holds text (the project pane's change filter) it only clears the field, and the next one closes the drawer.
 - Opening one drawer closes the other; at most one is ever open.
 - Widening the window to 1148 px or more closes both. The right pane's drawer stays open when its owner changes,
   showing the new owner's content, and closes when the right pane is left with no owner.

@@ -5,7 +5,7 @@ import type { PlainMessageKey } from "../i18n/catalog";
 import type { ChangeEntry, ChangeGroup, ChangeSide, ConflictKind } from "../protocol";
 import { changeStatus } from "../viewer/content";
 import type { StatusKey } from "../viewer/statusMarks";
-import { displayWirePath } from "../wirePath";
+import { displayWirePath, wireBaseName } from "../wirePath";
 import type { ChangeLayout } from "./changeLayout";
 import { compareFilePaths } from "./tree";
 
@@ -104,6 +104,15 @@ export function compareChanges(a: ChangeItem, b: ChangeItem): number {
 /** A listing's changes as the list shows them, top to bottom. */
 export function changeItems(entries: readonly ChangeEntry[]): ChangeItem[] {
   return entries.map(changeItem).sort(compareChanges);
+}
+
+/** The changes whose file name contains `text`, ignoring case and the whitespace around it; all of
+ * them for an empty `text`. Only the name is matched (`wireBaseName`, as the row shows it), not the
+ * directories before it, so a filter for "src" does not keep every file under `src/`. */
+export function filterChanges(items: ChangeItem[], text: string): ChangeItem[] {
+  const needle = text.trim().toLowerCase();
+  if (needle === "") return items;
+  return items.filter((item) => wireBaseName(item.path).toLowerCase().includes(needle));
 }
 
 /** The changes before and after `current` among `items` (the list in order). Navigation crosses

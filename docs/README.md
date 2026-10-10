@@ -167,25 +167,28 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   protocol (raising a session's hand with a forged hook event, seeding trusted folders), confirming Octoboard is
   frontmost before a scripted keystroke, freezing the app's WebContent process, where to watch for a report page's
   blocked navigation, where a network probe's positive control comes from, proving that no key reached the terminal with
-  a stand-in agent that echoes every byte, and which checks need a person (input methods, reduced motion).
+  a stand-in agent that echoes every byte, judging a packaged window's geometry from measured pixels and a real click
+  rather than from a capture alone, macOS's own autocorrect mangling scripted typing, and which checks need a person
+  (input methods, reduced motion).
 - [Writing UI components](memory/writing-ui-components.md) — conventions for `packages/ui` components: why a component
   HeroUI 3 already provides is used rather than hand-built, where to check what it provides, and what a justified
-  hand-built one is built on and where its reason is written, why a HeroUI control pressed with the mouse takes keyboard
-  focus off the terminal, when `preventFocusOnPress` is needed, and why "⋯" menus are built on `ActionMenu`, why a
-  dialog must not lose focus to `<body>` when a focused control unmounts or turns disabled, so its subject is switched
-  with a reset key rather than by re-keying it and an action that takes seconds marks its button pending rather than
-  disabled, that a single-line field hands its form the trimmed value, why a Tailwind class name has to stand in the
-  source as literal text, why a state of your own on a react-aria-components element needs a `data-*` name it does not
-  write itself, why every icon-only control also gets a tooltip through `TitledControl`, how user-facing text goes
-  through the message catalog (`useT` over the module-level `t()`, a helper taking the translator, `PlainMessageKey`
-  tables, placeholders and plural messages instead of joined fragments), how layout follows the reading direction
-  (logical utilities, mirrored directional icons, two-glyph chevrons, `dir` on paths and typed names, `docked:rtl:`
-  twins), why only icon-only chrome sits on the translucent window material and text goes on the opaque panel, and the
-  WCAG 2.2 AA bar the UI is held to (keyboard, visible focus, names, roles and states (`aria-current` only on hand-built
-  rows, a status region kept mounted so what appears in it is announced), contrast — auditing every gallery scenario in
-  both themes, fills against their surface and animations at their faintest frame, overriding HeroUI's whole `--default`
-  family on a region with its own surface, which token an outline meant to be seen is built from, and why HeroUI's own
-  text colours are measured rather than trusted — colour, motion).
+  hand-built one is built on and where its reason is written, why a HeroUI control pressed with the mouse takes
+  keyboard focus off the terminal, when `preventFocusOnPress` is needed, and why "⋯" menus are built on `ActionMenu`,
+  why a dialog must not lose focus to `<body>` when a focused control unmounts or turns disabled, so its subject is
+  switched with a reset key rather than by re-keying it and an action that takes seconds marks its button pending
+  rather than disabled, why a control inside a pane cannot keep Escape for itself from inside the React tree, that a
+  single-line field hands its form the trimmed value, why a Tailwind class name has to stand in the source as literal
+  text, why a state of your own on a react-aria-components element needs a `data-*` name it does not write itself, why
+  every icon-only control also gets a tooltip through `TitledControl`, how user-facing text goes through the message
+  catalog (`useT` over the module-level `t()`, a helper taking the translator, `PlainMessageKey` tables, placeholders
+  and plural messages instead of joined fragments), how layout follows the reading direction (logical utilities,
+  mirrored directional icons, two-glyph chevrons, `dir` on paths and typed names, `docked:rtl:` twins), why only
+  icon-only chrome sits on the translucent window material and text goes on the opaque panel, and the WCAG 2.2 AA bar
+  the UI is held to (keyboard, visible focus, names, roles and states (`aria-current` only on hand-built rows, a status
+  region kept mounted so what appears in it is announced), contrast — auditing every gallery scenario in both themes,
+  fills against their surface and animations at their faintest frame, overriding HeroUI's whole `--default` family on a
+  region with its own surface, which token an outline meant to be seen is built from, and why HeroUI's own text colours
+  are measured rather than trusted — colour, motion).
 - [Reading daemon state in the UI](memory/reading-daemon-state-in-the-ui.md) — why a map read through
   `useDaemonStore` has a new identity after every daemon event of its kind, so an effect or memo meant to fire on one
   change depends on the resolved values it reads and never on the map, and the derivations that do take the map.

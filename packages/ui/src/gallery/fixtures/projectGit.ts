@@ -118,9 +118,9 @@ index 7c6b5a4..0000000
  * rewritten, and the unified patch between them as `git diff` writes it with three lines of context:
  * edits at most seven lines apart share a hunk, and the lines between hunks are what the viewer
  * collapses. */
-function editedSource(path: string, count: number, edits: number[]): { old: string; new: string; patch: string } {
-  const before = Array.from({ length: count }, (_, i) => `  stages.push(stage${i + 1}(context)); // step ${i + 1}`);
-  const after = before.map((line, i) => (edits.includes(i + 1) ? `  stages.push(await stage${i + 1}(context)); // step ${i + 1}, awaited` : line));
+function editedSource(path: string, count: number, edits: number[], tail = ""): { old: string; new: string; patch: string } {
+  const before = Array.from({ length: count }, (_, i) => `  stages.push(stage${i + 1}(context)); // step ${i + 1}${tail}`);
+  const after = before.map((line, i) => (edits.includes(i + 1) ? `  stages.push(await stage${i + 1}(context)); // step ${i + 1}, awaited${tail}` : line));
   const groups: number[][] = [];
   for (const edit of edits) {
     const last = groups[groups.length - 1];
@@ -143,6 +143,9 @@ function editedSource(path: string, count: number, edits: number[]): { old: stri
 /** The lines of the long file the expansion scenarios change: a run of unmodified lines before the
  * first hunk, a long one between the hunks, and a short one after the last. */
 const PIPELINE = editedSource("src/pipeline.ts", 120, [10, 70, 117]);
+
+/** The same shape with every line far wider than a window, for the diff unwrapped. */
+const WIDE = editedSource("src/pipeline.ts", 120, [10, 70, 117], ` // ${"a note that runs on well past the edge of the window ".repeat(8)}`);
 
 /** How long reading the bodies of an expandable change takes, long enough to see it loading. */
 const EXPAND_DELAY_MS = 600;
@@ -180,6 +183,7 @@ const MAIN_CHANGES: FixtureChange[] = [
     patch: TYPE_CHANGE_PATCH,
   },
   expandable("staged", "src/pipeline.ts", commit("a1b2c3d"), index("b2c3d4e"), PIPELINE),
+  expandable("staged", "src/wide.ts", commit("9a8b7c6"), index("6c7d8e9"), WIDE),
   expandable("staged", "src/limits.ts", commit("c3d4e5f"), index("d4e5f6a"), PIPELINE, {
     code: "limit_exceeded",
     params: { limit: "file_bytes", size: "5242880", max: "4194304" },
@@ -306,6 +310,13 @@ const openGitInDrawer = [
   (ui: Ui) => ui.press(ui.t("browser.mode.git")),
   (ui: Ui) => ui.wait(400),
 ];
+/** Types `text` in the change list's filter field, leaving focus in it. */
+const filterBy = (text: string) => [
+  (ui: Ui) => ui.focus(ui.t("git.filter.label")),
+  (ui: Ui) => ui.type(text),
+  (ui: Ui) => ui.wait(300),
+];
+
 /** Shows the comparison of branch `left` with branch `right`, choosing each in its selector: From
  * is the first one still to choose, then To. */
 const compare = (left: string, right: string) => [
@@ -343,6 +354,26 @@ export const projectGitScenarios: Scenario[] = [
     width: 1440,
     state,
     steps: openChange(/^pipeline\.ts, modified/),
+  },
+  {
+    id: "git-expand-wide",
+    group: GROUP,
+    title: "A change with collapsed lines wider than the window",
+    description:
+      "src/wide.ts, unwrapped, has lines far wider than the dialog. Show whole file stays in view at the end of the bar while the diff is at its left edge, as the label and the chevrons do. A last step switches to the split layout, where each side scrolls on its own and the control sits at the inner edge of the left half.",
+    width: 760,
+    state,
+    steps: [...openGitInDrawer, (ui: Ui) => ui.press(/^wide\.ts, modified/), (ui: Ui) => ui.wait(800), (ui: Ui) => ui.press(/^Split$/), (ui: Ui) => ui.wait(400)],
+  },
+  {
+    id: "git-expand-narrow",
+    group: GROUP,
+    title: "A change with collapsed lines in a narrow window",
+    description:
+      "src/wide.ts, unwrapped and unified, in a window too narrow for the longest separator label beside Show whole file: the label ends in an ellipsis before the control, which stays clear of it and reachable.",
+    width: 460,
+    state,
+    steps: [...openGitInDrawer, (ui: Ui) => ui.press(/^wide\.ts, modified/), (ui: Ui) => ui.wait(800)],
   },
   {
     id: "git-expand-too-large",
@@ -418,6 +449,43 @@ export const projectGitScenarios: Scenario[] = [
     state,
     preferences: { changeLayout: "tree" },
     steps: openGit,
+  },
+  {
+    id: "git-changes-filter",
+    group: GROUP,
+    title: "A worktree's changes filtered by file name",
+    description:
+      "\"server\" typed in the field above the list: only the changes whose file name contains it remain, in their sections, and the sections' counts follow.",
+    width: 1440,
+    state,
+    steps: [...openGit, ...filterBy("server")],
+  },
+  {
+    id: "git-changes-filter-tree",
+    group: GROUP,
+    title: "A worktree's changes as a tree, filtered by file name",
+    description: "\"notes\" typed in the field: the tree keeps only the folders that lead to a match.",
+    width: 1440,
+    state,
+    preferences: { changeLayout: "tree" },
+    steps: [...openGit, ...filterBy("notes")],
+  },
+  {
+    id: "git-changes-filter-empty",
+    group: GROUP,
+    title: "A filter no file name matches",
+    description: "The list says no change matches; the field stays, so the text can be changed or cleared.",
+    width: 1440,
+    state,
+    steps: [...openGit, ...filterBy("no-such-file")],
+  },
+  {
+    id: "git-compare-filter",
+    group: GROUP,
+    title: "A comparison's changes filtered by file name",
+    width: 1440,
+    state,
+    steps: [...compare("main", "feature/ranking-experiments"), ...filterBy("rank")],
   },
   {
     id: "git-compare",
@@ -497,6 +565,24 @@ export const projectGitScenarios: Scenario[] = [
       (ui) => ui.press((name) => name.startsWith(LONG_BRANCH)),
       (ui) => ui.wait(600),
     ],
+  },
+  {
+    id: "git-narrow-filter-escape",
+    group: GROUP,
+    title: "Narrow window, Escape in the change filter",
+    description: "\"server\" typed in the filter field, then Escape: the field clears and the drawer stays open.",
+    width: 800,
+    state,
+    steps: [...openGitInDrawer, ...filterBy("server"), (ui) => ui.key("Escape")],
+  },
+  {
+    id: "git-narrow-filter-escape-twice",
+    group: GROUP,
+    title: "Narrow window, a second Escape in the emptied change filter",
+    description: "Escape clears the filter, and Escape again, the field being empty, closes the drawer.",
+    width: 800,
+    state,
+    steps: [...openGitInDrawer, ...filterBy("server"), (ui) => ui.key("Escape"), (ui) => ui.key("Escape")],
   },
   {
     id: "git-narrow",

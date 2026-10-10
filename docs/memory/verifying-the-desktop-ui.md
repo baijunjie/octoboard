@@ -31,7 +31,11 @@ in WebKit passed a scripted click in Chrome. Run a browser check of the page in 
 pointer through `page.mouse` rather than a click dispatched from script. Headless WebKit still is not the app for how
 things paint (it has no GPU compositing), so a rendering defect is judged in the real window. Where a change puts text
 in a constrained layout, include a long text and a CJK one: overflow defects there showed only with long text. Judge
-a colour or a dimming from computed styles or full-resolution pixels, not from a downscaled screenshot.
+a colour or a dimming from computed styles or full-resolution pixels, not from a downscaled screenshot. A packaged build
+offers no DOM to measure, so settle a geometry question there from ink extents read off a capture at the display's
+native resolution, allowing for its scale factor (a Retina display gives 2 image pixels per CSS pixel), and settle a
+question of overlap or reachability with a real click at the measured point, since a capture only ever shows what is
+on top.
 
 ## Rule out a locked screen before reading anything off a window capture
 
@@ -87,6 +91,12 @@ Events, `keystroke "<letter>" using control down` can be dropped silently where 
 `key code <n> using control down` arrives. `cliclick`'s key presses (`kp:`) do not reach this app's window at all,
 where the same key sent as `key code` moves it immediately; its clicks (`c:`) are fine. Prefer `osascript` with
 `key code`, and never conclude "the app swallows this key" from a scripted probe without confirming by hand.
+
+macOS mangles typed text of its own accord as well: with automatic correction and capitalization on (the default),
+text sent character by character into a packaged app's search field arrived as `Note` for `note` and `ran k` for
+`rank`, and the field's first Escape then reverted the correction instead of clearing the field. So type a probe's
+text as `key code` presses with a short delay between them, and read a garbled value, or an Escape that did not
+clear, as the correction rather than as a defect in the field.
 
 The page's HeroUI controls depend on input modality and timing in ways scripted input easily misses, in the app and
 in a plain browser alike. A tooltip opens on focus only after a real Tab key press (`element.focus()` or a click

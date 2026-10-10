@@ -1,3 +1,5 @@
+import { isImeKey } from "../imeKey";
+
 /** Elements whose own handling of Left and Right comes first: text the user edits, and composite
  * widgets that move among their items with the arrows (the diff layout's toggle group, a list). */
 const OWNS_ARROWS = [
@@ -21,7 +23,7 @@ const OWNS_ARROWS = [
 export function arrowNavigation(event: KeyboardEvent, viewer: Element): "previous" | "next" | undefined {
   if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return undefined;
   if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return undefined;
-  if (event.isComposing || event.keyCode === 229 || event.defaultPrevented) return undefined;
+  if (isImeKey(event) || event.defaultPrevented) return undefined;
   const target = event.target instanceof Element ? event.target : undefined;
   if (target?.closest(OWNS_ARROWS)) return undefined;
   // `type`, not `isCollapsed`: WebKit reports a selection lying inside a shadow root, as all the

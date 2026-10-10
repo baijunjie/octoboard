@@ -43,10 +43,42 @@ function diffCss(theme: "light" | "dark"): string {
          [data-line][data-line-type="change-deletion"] { background-color: #fdf0f0 !important; }`
       : "";
   return `${lineTints}
+    /* In the code column (\`[data-content]\`), whose parent \`[data-code]\` is the scroll container when
+       lines are not wrapped. Sticky, like the gutter the label and chevrons sit in, so it stays at the visible
+       end of the bar and not at the end of the longest line. Because it is in normal flow, not
+       absolute, it needs a max-content width, an auto start margin to reach the end and the bar's
+       full height; and it overlaps the separator's own wrapper only because the library hides that
+       wrapper inside \`[data-content]\`, so a library upgrade is checked against that rule.
+       The label sits in the gutter, which paints above the code column (\`z-index\`), and the library
+       (\`line-info-basic\`) gives the wrapper's first grid column all of the gutter's width and lets the
+       label run on in the next one, past the gutter: a label wider than what is left of the bar would
+       paint over the control. So the control is held to \`--whole-file-width\`, that next column ends
+       that far short of the end of the visible bar, and the label ends in an ellipsis.
+       \`[data-code]\` is made a size container so \`cqi\` is that visible width (it has a definite
+       width in both layouts), and the track is \`max(0px, calc(…))\` rather than the natural
+       \`minmax(0, calc(…))\`, which WebKit — the app's own engine — resolves to 0. The column is
+       measured from the gutter's physical left, as the library pins the gutter there; the code frame
+       is \`dir="ltr"\`, so the control is at the right.
+       The additions side of a split diff shows no label and is left alone. */
+    [data-separator] { --whole-file-width: 9em; }
+    [data-code] { container-type: inline-size; }
+    [data-code]:not([data-additions]) [data-gutter] [data-separator-wrapper] {
+      grid-template-columns: 100% max(0px, calc(100cqi - 100% - var(--whole-file-width)));
+    }
+    [data-gutter] [data-separator-content] { min-width: 0; }
+    [data-gutter] [data-unmodified-lines] {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     [data-separator] [data-whole-file] {
-      position: absolute;
-      inset-block: 0;
+      position: sticky;
       inset-inline-end: 0;
+      width: max-content;
+      max-width: var(--whole-file-width);
+      height: 100%;
+      margin-inline-start: auto;
       display: flex;
       align-items: center;
       padding-inline: 1ch;
@@ -54,6 +86,7 @@ function diffCss(theme: "light" | "dark"): string {
       cursor: pointer;
       user-select: none;
       white-space: nowrap;
+      overflow: hidden;
     }
     [data-separator] [data-whole-file]:hover { text-decoration: underline; }
     [data-expand-button][data-focus-visible] { outline: 2px solid var(--focus); outline-offset: -2px; }

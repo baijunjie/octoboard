@@ -9,6 +9,7 @@ import {
   changeNeighbours,
   changeTree,
   directoryKey,
+  filterChanges,
   rereadChange,
   visibleChanges,
   visibleNodes,
@@ -134,13 +135,49 @@ it("walks the changes on screen: all of them flat, and in the tree none under a 
   expect(visibleNodes(group.nodes, folded).map((node) => node.type)).toEqual(["directory", "directory", "change", "change", "directory", "change", "change"]);
 });
 
-it("moves between the changes on screen in the tree, past a collapsed directory, and from a change inside one", () => {
+it("moves between the changes on screen in the tree, past a collapsed directory", () => {
   const items = changeItems(treeEntries);
   const folded = new Set([directoryKey("unstaged", "src/utils/kickback")]);
   const shown = visibleChanges(items, "tree", folded);
   const byPath = (path: string) => items.find((item) => item.path === path)!;
   expect(changeNeighbours(shown, byPath("src/a.ts")).previous).toBeUndefined();
   expect(changeNeighbours(shown, byPath("src/b.ts")).next?.path).toBe("tools/release/notes.md");
-  // Opened before its directory was folded: it is placed where it was, so its neighbours are the rows around it.
+  // A change that is not among the rows is placed where it would be, so moving on from it reaches the rows around it.
   expect(changeNeighbours(shown, byPath("src/utils/kickback/y.ts"))).toMatchObject({ next: { path: "src/a.ts" } });
+});
+
+it("filters by file name alone, ignoring case and the whitespace around the text, and keeps the list for an empty one", () => {
+  const items = changeItems(treeEntries);
+  expect(filterChanges(items, "")).toBe(items);
+  expect(filterChanges(items, "  ")).toBe(items);
+  // The directories are not matched: `src` names a folder, not a file.
+  expect(filterChanges(items, "src")).toEqual([]);
+  expect(filterChanges(items, " .TS ").map((item) => item.path)).toEqual(["src/utils/kickback/x.ts", "src/utils/kickback/y.ts", "src/a.ts", "src/b.ts", "z.ts"]);
+  expect(filterChanges(items, "notes").map((item) => item.path)).toEqual(["tools/release/notes.md"]);
+});
+
+it("matches a renamed change by its new name and a deleted one by its old name", () => {
+  const items = changeItems([
+    { group: "unstaged", old: at("old/before.ts"), new: at("new/after.ts", "live") },
+    { group: "unstaged", old: at("gone.ts"), new: absent },
+  ]);
+  expect(filterChanges(items, "after").map((item) => item.path)).toEqual(["new/after.ts"]);
+  expect(filterChanges(items, "before")).toEqual([]);
+  expect(filterChanges(items, "gone").map((item) => item.path)).toEqual(["gone.ts"]);
+});
+
+it("lays a filtered list out as sections that count what is left, flat or as a tree, and moves through those rows", () => {
+  const items = changeItems([...treeEntries, { group: "staged", old: at("src/a.ts", "head"), new: at("src/a.ts") }]);
+  const shown = filterChanges(items, "a.ts");
+  const flat = changeGroups(shown, "flat");
+  expect(flat.map((group) => [group.section, group.items.length])).toEqual([["staged", 1], ["unstaged", 1]]);
+  const [staged, unstagedGroup] = changeGroups(shown, "tree");
+  // Only the directories that lead to a match remain, and the chain through them compacts again.
+  expect(outline(staged.nodes)).toEqual(["src/", "  src/a.ts"]);
+  expect(outline(unstagedGroup.nodes)).toEqual(["src/", "  src/a.ts"]);
+  expect(visibleChanges(shown, "tree", new Set()).map((item) => item.key)).toEqual(shown.map((item) => item.key));
+  // A change the filter hides is placed where it would be, so moving on from it reaches the rows
+  // around it.
+  const hidden = items.find((item) => item.path === "src/b.ts")!;
+  expect(changeNeighbours(shown, hidden)).toMatchObject({ previous: { path: "src/a.ts" } });
 });

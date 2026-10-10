@@ -77,7 +77,7 @@ area and the Git mode panel, and shows a type change as one diff.
 2. 02 viewer-expansion (closed)
 3. 03 word-wrap (closed)
 4. 04 change-tree (closed)
-5. [Filtering the change list by file name](05-change-filter.md)
+5. 05 change-filter (closed)
 6. [A row action button with Copy path](06-row-actions.md)
 7. [A document view for Markdown in the viewer](07-markdown-document-view.md)
 8. [The viewer header's layout and tags](08-viewer-header-layout.md)

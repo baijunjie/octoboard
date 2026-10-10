@@ -1,12 +1,16 @@
-import { Header, ListBox } from "@heroui/react";
+import { Header, ListBox, SearchField } from "@heroui/react";
+import { SearchX } from "lucide-react";
 import React, { useMemo } from "react";
 import { Collection, ListLayout, Virtualizer, type Key } from "react-aria-components";
 
+import { EmptyPanel } from "../components/EmptyPanel";
+import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useScrollFade } from "../components/useScrollFade";
 import { useCurrentLanguage, useT } from "../i18n/react";
+import { isImeKey } from "../imeKey";
 import type { ChangeLayout } from "./changeLayout";
 import { ChangeRowBody, changeRowText, HEADING_CLASS, HEADING_HEIGHT, SectionHeadingText } from "./changeRow";
-import { changeGroups, sections, visibleNodes, type ChangeItem, type ChangeSection } from "./changes";
+import { changeGroups, filterChanges, sections, visibleNodes, type ChangeItem, type ChangeSection } from "./changes";
 import { ChangeTree } from "./ChangeTree";
 import { ROW_HEIGHT } from "./treeRow";
 
@@ -26,12 +30,15 @@ export function changeRowOffset(items: readonly ChangeItem[], key: string, layou
   return undefined;
 }
 
-/** How the list shows its changes and what it remembers of that: the layout, and in the tree the
- * directories folded away (their row keys, `directoryKey`). */
+/** How the list shows its changes and what it remembers of that: the layout, in the tree the
+ * directories folded away (their row keys, `directoryKey`), and the file name text narrowing the
+ * rows (`filter`, empty for none). */
 export interface ChangeListView {
   layout: ChangeLayout;
   collapsed: ReadonlySet<string>;
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
+  filter: string;
+  onFilterChange: (filter: string) => void;
 }
 
 /**
@@ -40,7 +47,9 @@ export interface ChangeListView {
  * is the tree, the same sections with their changes grouped under directories (`ChangeTree`). A
  * row's action is to open its change in the viewer; nothing is selectable in the list's sense. The
  * change the viewer showed last is tinted and named as selected in its row's label instead, as the
- * file tree marks its file.
+ * file tree marks its file. A field above the list narrows its rows to the changes whose file name
+ * contains the text (`filterChanges`); the sections' counts follow the rows left, and the field
+ * stays when none are.
  */
 export function ChangeList({
   items,
@@ -58,20 +67,49 @@ export function ChangeList({
   listRef: React.Ref<HTMLDivElement>;
   changeView: ChangeListView;
 }): React.ReactElement {
-  if (changeView.layout === "tree") {
-    return (
-      <ChangeTree
-        items={items}
-        selected={selected}
-        label={label}
-        onOpen={onOpen}
-        listRef={listRef}
-        collapsed={changeView.collapsed}
-        onCollapsedChange={changeView.onCollapsedChange}
-      />
-    );
-  }
-  return <FlatChangeList items={items} selected={selected} label={label} onOpen={onOpen} listRef={listRef} />;
+  const t = useT();
+  const shown = useMemo(() => filterChanges(items, changeView.filter), [items, changeView.filter]);
+  const noMatch = shown.length === 0 && changeView.filter.trim() !== "" ? t("git.filter.noMatch") : undefined;
+  // The field is a sibling of the list, not inside it, so what is typed in it never reaches the
+  // list's type-ahead or arrow keys. An input method's keys are stopped here before the field's
+  // own handler and before whatever handles keys above it in the React tree: the composition owns
+  // them. react-aria's `useKeyboard` ignores only `isComposing`, so a key an engine reports with
+  // `keyCode` 229 alone is held back by this guard alone, or its Escape would clear the field. A
+  // listener on the window or the document, such as the pane's Escape (which leaves editable
+  // targets alone for this), runs before React's and is beyond this guard's reach.
+  const guardComposition = (event: React.KeyboardEvent) => {
+    if (isImeKey(event.nativeEvent)) event.stopPropagation();
+  };
+  return (
+    <>
+      <div className="shrink-0 border-b border-separator px-3 py-2" onKeyDownCapture={guardComposition}>
+        <SearchField aria-label={t("git.filter.label")} value={changeView.filter} onChange={changeView.onFilterChange} fullWidth variant="secondary">
+          <SearchField.Group>
+            <SearchField.SearchIcon />
+            <SearchField.Input placeholder={t("git.filter.placeholder")} />
+            <SearchField.ClearButton />
+          </SearchField.Group>
+        </SearchField>
+      </div>
+      {/* The visible line has no role of its own, so the announcer says it once. */}
+      <StatusAnnouncer text={noMatch} />
+      {noMatch ? (
+        <EmptyPanel icon={SearchX} message={noMatch} />
+      ) : changeView.layout === "tree" ? (
+        <ChangeTree
+          items={shown}
+          selected={selected}
+          label={label}
+          onOpen={onOpen}
+          listRef={listRef}
+          collapsed={changeView.collapsed}
+          onCollapsedChange={changeView.onCollapsedChange}
+        />
+      ) : (
+        <FlatChangeList items={shown} selected={selected} label={label} onOpen={onOpen} listRef={listRef} />
+      )}
+    </>
+  );
 }
 
 function FlatChangeList({

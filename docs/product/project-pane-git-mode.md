@@ -28,8 +28,8 @@ end of the tabs' row is the one control both views share, **Group by folder** (s
 Each view reads the repository only while it is on screen: the Uncommitted view as "Keeping the list up to date"
 below says, the Compare view as "The branch selectors" and "When a comparison is made" below say. Switching views
 leaves the other view as it was. "The worktree selector" and "The change list" below are about the Uncommitted view,
-"Comparing two branches" below about the Compare view; "Flat or grouped by folder" and "Opening a change" are about
-both.
+"Comparing two branches" below about the Compare view; "Flat or grouped by folder", "Filtering by file name" and
+"Opening a change" are about both.
 
 ## The repository and its worktrees
 
@@ -156,6 +156,37 @@ technology whether it is open, and its chevron is named Expand or Collapse (see 
 A change under a folded folder has no row, and it is the rows that the viewer moves through (see "Moving between
 changes" below).
 
+### Filtering by file name
+
+Above the change list, in both views and both forms of the list, flat or grouped by folder, is a **filter field**
+that narrows the rows to the changes whose file name contains its text. It is there whenever the list is: not in
+place of the lines that say there is nothing to list (see "What the list says instead" and "What the view says"
+below).
+
+- **Only the file's name is matched** — the last part of its path, as its row shows it — ignoring case and any
+  whitespace around the text; the folders it is in are not, so `src` does not keep every file under `src/`. A rename
+  is matched by its new name. An empty field, or one holding only whitespace, shows every change.
+- **It narrows what is shown, not what is listed.** The sections' counts are of the rows shown, a section with no
+  match is left out, and grouped by folder only the folders leading to a match remain. What the list holds, and when it
+  is listed again, is unchanged; a list listed again is narrowed by the same text.
+- **When nothing matches**, the list's place says there are no matching changes (announced to assistive technology
+  as it appears), and the field stays, so the text can be changed or cleared. Clearing it brings the whole list back.
+- The field has a **clear** button, and **Escape** in it clears it. In a drawer or a floating pane, Escape
+  in a field with text only clears it and leaves the pane; Escape in the then empty field closes the pane, as it does
+  from anywhere else in it.
+- The field is apart from the list: typing in it never moves through the list's rows, as typing a name's first
+  letters in the list does. While an input method is composing text in it, its keys, Escape included, belong to the
+  composition, and do not clear the field.
+
+The text is **one for both views** of a project, and is kept while the project's pane stays in the right pane —
+through switching views and modes, choosing worktrees or branches, and the pane being hidden. Once the right pane is
+given to something else (see "What the right pane shows" in `docs/product/window-layout.md`), or the window is
+reloaded or the application restarted, the project's pane starts with the field empty. It is not a choice kept like
+the grouping by folder.
+
+The viewer moves through the rows the filter leaves (see "Moving between changes" below). The Files mode's tree has no
+such field.
+
 ### What the list says instead
 
 - **Loading** while the worktrees or the changes are read, announced to assistive technology — once, when reading
@@ -269,7 +300,7 @@ until the new one is in.
   - the changed files, in one section, **Changed files**, headed with how many changes it holds. Its rows, their
     order, their status letters (A, M, D, R or T here), the keyboard and the selected change are as in the Uncommitted
     view (see "Rows and the keyboard" above), and it is grouped by folder with it (see "Flat or grouped by folder"
-    above);
+    above) and narrowed by the same filter (see "Filtering by file name" above);
   - **Not every change is shown**, under a list cut short: at most 10,000 changes, or 2 MiB of paths, are listed —
     those Git reported first;
   - **both branches are at the same commit**, so there are no differences;
@@ -364,7 +395,8 @@ lines can be shown, the separator reveals them, in both the Uncommitted and the 
   shorter run, and the run before the first hunk or after the last, offers one. The **third expansion of the same run**
   reveals whatever is left of it, whichever of its controls is used.
 - **Show whole file**, at the end of a separator, reveals the file's every line at once, leaving no separator behind.
-  Each run offers it once — in the split layout on one side only.
+  Each run offers it once — in the split layout on one side only. With wrapping off it stays at the visible end of the
+  bar as the diff is scrolled sideways, as the separator's text and controls do.
 - **A separator's text is a control too**: clicking it does what the first of that separator's controls does.
 - An expandable diff also ends in a separator for the lines beyond its last hunk, whose number the patch does not say;
   it says instead that more unmodified lines may follow.
@@ -409,11 +441,11 @@ appearance; pressing one with the mouse leaves keyboard focus where it was.
 
 **Previous file** and **Next file**, and the **Left** and **Right** arrow keys, move through the change list the change
 was opened from — the Uncommitted view's or the comparison's — as it is on screen, top to bottom, from one section
-into the next, and stop at either end rather than going round. Grouped by folder they follow the rows as shown, which
-leaves out the changes under a folded folder. A file in both Staged and Unstaged is two stops. A change with no row of
-its own — one the list no longer has, or one whose folder has been folded while it was open — keeps its place in the
-order, and the keys move on to the changes that surround it. When the keys do nothing, and how they mirror under a
-right-to-left language, is as in "Moving between files" in `docs/product/project-pane.md`.
+into the next, and stop at either end rather than going round. They follow the rows as shown: a change the filter
+hides is skipped (see "Filtering by file name" above), and so, grouped by folder, are the changes under a folded
+folder. A file in both Staged and Unstaged is two stops. A change with no row of its own — one the list no longer has —
+keeps its place in the order, and the keys move on to the changes that surround it. When the keys do nothing, and how they mirror under a right-to-left language, is as in "Moving between files" in
+`docs/product/project-pane.md`.
 
 ### Closing it
 
@@ -463,7 +495,8 @@ in place of the diff, in the current language. The cases beyond those of a file 
 the Uncommitted view's selected change; the branches chosen for From and To and the Compare view's selected change;
 and, grouped by folder, the folders folded away. Reloading the window, or restarting the application, starts every
 project on the Uncommitted view and the worktree holding its folder, with no branches chosen, no change selected and
-every folder open. Change lists, branch lists, comparisons and their contents are never stored.
+every folder open. Change lists, branch lists, comparisons and their contents are never stored. The filter's text is
+kept only while the project's pane stays in the right pane (see "Filtering by file name" above).
 
 **Across projects and restarts**: whether the change lists are grouped by folder (see "Flat or grouped by folder"
 above), kept as the file viewer's diff layout and wrap choices are. The mode itself is kept with the rest of the

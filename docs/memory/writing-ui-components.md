@@ -92,6 +92,21 @@ the duration of its own action — the obvious way to keep a slow request from b
 press and hover, keeps the control focusable, and announces the pending state. Keep `isDisabled` for a control
 that is unavailable for a reason outside the action itself (a field not filled in yet), where focus is not on it.
 
+## A control inside a pane never sees Escape first: the window's listener has it
+
+While a drawer or a floating pane is open, `packages/ui/src/layout/usePaneToggles.ts` holds a capture-phase `keydown`
+listener on `window` that dismisses the overlay. It runs before React's own dispatch from the root container, so
+nothing inside the React tree can keep Escape from it — not even `onKeyDownCapture` on a wrapper around the control.
+So a control inside a region marked `data-escape-scope` (the sidebar, the aside, the terminal pane, the top bar, the
+rail, the scrim) that needs Escape for itself is accounted for in that listener's own test instead (`holdsText`, which
+leaves the key to a text field that holds text), never guarded locally. A control in a popover or a dialog portalled
+to `<body>` sits outside every scope and is unaffected, which is the only reason the sidebar's project filter and the
+dialogs' fields never needed this.
+
+Check it where it shows: the listener is installed only while an overlay is up, so the symptom appears only below the
+layout breakpoint, with the pane as a drawer, or with a docked pane hidden and floated in on hover. A gallery scenario
+at a normal width, both panes docked, never reaches it.
+
 ## A single-line field hands its form the trimmed value
 
 Leading and trailing whitespace is never meant, so a form never holds it: every single-line text field in

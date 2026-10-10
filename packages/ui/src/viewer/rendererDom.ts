@@ -90,9 +90,11 @@ export function hiddenCount(label: HTMLElement): string {
 }
 
 /** Replaces a separator's text. Its direction is its own (in an Arabic app, the sentence is Arabic)
- * whatever the code frame's. */
+ * whatever the code frame's. A tooltip repeats it, for a label cut short by the room beside the
+ * whole-file control. */
 export function writeLabel(label: HTMLElement, text: string): void {
   label.dir = "auto";
+  label.title = text;
   label.textContent = text;
   label.dataset.written = text;
 }

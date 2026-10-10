@@ -235,3 +235,58 @@ it("moves the viewer through the change tree's rows on screen, skipping a collap
     });
   }
 });
+
+it("moves the viewer through the rows a file name filter leaves", async () => {
+  let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
+  const Probe = () => {
+    const browser = useProjectBrowserState("p");
+    latest = { browser, git: useGitReview("p", browser, true) };
+    return null;
+  };
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  act(() =>
+    root.render(
+      <DaemonProvider value={daemon}>
+        <Probe />
+      </DaemonProvider>,
+    ),
+  );
+  act(() => latest.browser.setGitView("worktree"));
+  const worktree = { id: "w", root: "/r", main: true, head: "c1", branch: "main", scope_present: true };
+  await answer("get_project_source", () => ({
+    type: "project_source",
+    source: { project: "p", root: "/r", resolved_root: "/r", root_id: "r", git_error: null, git: { repository: "repo", common_dir: "/r/.git", worktree: "w", scope: "", worktrees: [worktree] } },
+  }));
+  const source = { kind: "index", worktree: "w", blob: "b" } as const;
+  const unstaged = (path: string): ChangeEntry => ({
+    group: "unstaged",
+    old: { state: "present", path, kind: "file", source },
+    new: { state: "present", path, kind: "file", source: { kind: "live", root_id: "r", version: "1" } },
+  });
+  await answer("list_project_changes", () => ({ type: "project_changes", project: "p", worktree: null, head: "c1", changes: ["a/one.ts", "b/two.md", "c/three.ts"].map(unstaged), complete: true }));
+  const list = latest.git.view.worktree.list;
+  if (list.state !== "loaded") throw new Error(list.state);
+  const side = { state: "absent" } as const;
+  const readBack = (): Event => ({ type: "project_change", project: "p", worktree: null, group: "unstaged", head: null, old: side, new: side, patch: null });
+
+  act(() => latest.git.view.worktree.onOpen(list.items[0]));
+  await answer("read_project_change", readBack);
+  expect(latest.git.viewer?.navigation?.onNext).toBeDefined();
+
+  // `two.md` is filtered out, so Next from `one.ts` reaches `three.ts`; the directories are not
+  // matched.
+  act(() => latest.git.view.changeView.onFilterChange(".ts"));
+  act(() => latest.git.viewer?.navigation?.onNext?.());
+  await answer("read_project_change", readBack);
+  expect(latest.browser.selectedChange).toBe(list.items[2].key);
+
+  // Only the open change itself is left: nothing on either side.
+  act(() => latest.git.view.changeView.onFilterChange("three"));
+  expect(latest.git.viewer?.navigation?.onPrevious).toBeUndefined();
+  expect(latest.git.viewer?.navigation?.onNext).toBeUndefined();
+
+  // Cleared, the whole list is walked again.
+  act(() => latest.git.view.changeView.onFilterChange(""));
+  expect(latest.git.viewer?.navigation?.onPrevious).toBeDefined();
+});

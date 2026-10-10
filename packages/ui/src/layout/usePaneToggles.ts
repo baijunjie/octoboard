@@ -1,9 +1,35 @@
 import { useEffect, useRef, useState } from "react";
 
+import { isImeKey } from "../imeKey";
 import { useIsNarrow } from "./breakpoint";
 import { useDockedPanelVisible, type DockedPanel } from "./panelVisibility";
 import { type ConsolePeek, useConsolePeek } from "./useConsolePeek";
 import { MODAL_OPEN } from "./useRegionCycle";
+
+/** Elements that take typed text, as the Escape listener sees them: xterm.js's hidden `textarea`
+ * is not one, though it is one to the DOM, for the terminal reads its keys itself. */
+const EDITABLE = 'input, textarea:not(.xterm-helper-textarea), [contenteditable]:not([contenteditable="false"])';
+
+/** The input types that take typed text. Any other `input` (a checkbox, a radio, a range, a
+ * button) has a `value` that is no text the user typed, and no Escape of its own to keep. `number`
+ * is left out: its `value` is a number the field may have been given, so it would hold text
+ * whatever was typed, and nothing in it clears on Escape. */
+const TEXT_INPUT_TYPES = new Set(["text", "search", "email", "url", "tel", "password"]);
+
+/** Whether `target` is a field with text in it, whose Escape comes before the pane's: the field
+ * clears itself, and the pane is left for the next Escape, with the field empty. A field already
+ * empty has nothing to clear, so the key goes on to the pane; so does one that cannot be edited
+ * (read-only, disabled), which has no Escape of its own. */
+export function holdsText(target: Element | null): boolean {
+  const field = target?.closest(EDITABLE);
+  if (!field) return false;
+  if (field instanceof HTMLInputElement) {
+    return TEXT_INPUT_TYPES.has(field.type) && !field.readOnly && !field.disabled && field.value !== "";
+  }
+  if (field instanceof HTMLTextAreaElement) return !field.readOnly && !field.disabled && field.value !== "";
+  // Anything else matched is `contenteditable`.
+  return field.textContent !== "";
+}
 
 /** Whether the pane holds keyboard focus: a tree row reached by Tab, or a control or frame in the aside. */
 function holdsFocus(panel: DockedPanel): boolean {
@@ -249,6 +275,14 @@ export function usePaneToggles({
   // and closes itself from its own bubble-phase `onKeyDown` — stopping propagation unconditionally
   // here reached the key first and ate it before react-aria's own handler ever saw it.
   //
+  // A key aimed at an editable element with text in it is left to it: a field inside a scope (the
+  // change list's filter) has its own Escape (clearing it, cancelling an input method's
+  // composition), which a capture listener on the window would otherwise pre-empt, so the pane is
+  // dismissed by the next Escape, once the field is empty. Not xterm.js's hidden input, a
+  // `textarea` that holds the terminal's focus: Escape there is the terminal's to forward, and
+  // still closes the drawer. An input method's Escape in the terminal is its composition's, and
+  // closes nothing.
+  //
   // A target of `<body>` (or no target at all) is treated as in scope too: that is what a fresh
   // narrow-mode window has focused once a drawer is open but no session has ever been selected, so
   // `term.focus()` has never run. react-aria keeps focus inside an open dialog or menu, so an
@@ -263,6 +297,7 @@ export function usePaneToggles({
       if (event.key !== "Escape") return;
       const target = event.target as Element | null;
       if (target && target !== document.body && !target.closest("[data-escape-scope]")) return;
+      if (holdsText(target) || isImeKey(event)) return;
       // Consumed here rather than also reaching the terminal: with a drawer open, Escape closes
       // it, not whatever the running agent would have done with it.
       event.stopPropagation();

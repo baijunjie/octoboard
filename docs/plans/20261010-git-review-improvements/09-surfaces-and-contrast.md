@@ -6,6 +6,19 @@
 > the Git mode's controls, sections and rows are distinguishable from the panel; dark mode is unchanged or improved;
 > the chosen surfaces come from HeroUI's components rather than hand-set backgrounds.
 
+## Handoff
+
+From milestone 05 (filtering the change list by file name):
+
+- [ ] The change list's filter field barely separates from the Git panel: its fill measured about 1.2:1 against the
+  panel in both themes (light `#E7E7EA` on `#FAFAFA`, dark `#1E1F22` on `#0F0F12`) in the packaged app, so the field
+  reads by its icon and placeholder rather than by its own shape. That is HeroUI's own `secondary` `SearchField`
+  styling, and the sidebar's project filter has it too, so decide it here along with the panel's other surfaces
+  rather than per field. Everything else about the field passes AA: entered text 14.87:1 light / 14.52:1 dark, its
+  icons 5.07:1 / 5.68:1, the no-match line 5.78:1 / 6.28:1. The placeholder's own light-mode contrast is a separate,
+  app-wide defect with its own ticket, `docs/bugs/20261011-search-field-placeholder-contrast.md`, and is not this
+  milestone's to fix.
+
 ## Technical design
 
 - [ ] The viewer's code, diff and document areas sit on a HeroUI Surface whose variant gives a visible boundary in
