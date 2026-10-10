@@ -149,6 +149,8 @@ export function FileTree({
     }
   };
 
+  const chevronTitle = (isExpanded: boolean): string => (isExpanded ? t("browser.tree.collapse") : t("browser.tree.expand"));
+
   const renderNode = (node: TreeNode): React.ReactElement => {
     if (node.type === "status") return <StatusItem node={node} />;
     const name = wireBaseName(node.path);
@@ -161,10 +163,17 @@ export function FileTree({
               const Icon = link ? FolderSymlink : isExpanded ? FolderOpen : Folder;
               return (
                 <RowContent>
-                  {/* react-aria names the chevron itself and keeps it out of the tab order; the row
-                      does the same on a press, so the chevron is for the pointer alone. */}
-                  <TitledControl title={isExpanded ? t("browser.tree.collapse") : t("browser.tree.expand")}>
-                    <Button slot="chevron" className="flex size-4 shrink-0 items-center justify-center text-muted outline-none">
+                  {/* React Aria keeps the chevron out of the tab order; the row does the same on a press,
+                      so the chevron is for the pointer alone. React Aria's own label is a translation of
+                      "Expand" that disagrees with the tooltip's wording (zh-CN "扩展"), so the label is the
+                      tooltip's word from the catalog; React Aria appends the row's name through
+                      aria-labelledby, which gives "Expand src". */}
+                  <TitledControl title={chevronTitle(isExpanded)}>
+                    <Button
+                      slot="chevron"
+                      aria-label={chevronTitle(isExpanded)}
+                      className="flex size-4 shrink-0 items-center justify-center text-muted outline-none"
+                    >
                       {isExpanded ? (
                         <ChevronDown aria-hidden="true" className="size-3.5" />
                       ) : (

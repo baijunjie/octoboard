@@ -46,3 +46,39 @@ it("tints the selected file's row and names it as selected", () => {
   expect(row("b.ts").getAttribute("aria-label")).toBe("b.ts, selected");
   expect(row("a.ts").hasAttribute("data-current")).toBe(false);
 });
+
+// react-aria's own label for the chevron is its translation of "Expand" ("扩展" in zh-CN), which is
+// not the word the tooltip uses; the label comes from the app's catalog, and react-aria's
+// aria-labelledby (the chevron, then the row) appends the folder's name.
+it("labels a directory's chevron from the catalog, by whether the directory is open", () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const directory: TreeNode = {
+    type: "directory",
+    key: rowKey("src"),
+    path: "src",
+    entry: { name: "src", kind: "directory", size: 0, version: "v1", target: null },
+    children: [],
+  };
+  const render = (expanded: Set<string>) =>
+    act(() =>
+      root.render(
+        <FileTree
+          nodes={[directory]}
+          expanded={expanded}
+          label="Files"
+          onExpandedChange={() => {}}
+          onOpenFile={() => {}}
+          onRetry={() => {}}
+          treeRef={() => {}}
+        />,
+      ),
+    );
+  const root = createRoot(container);
+  render(new Set());
+  const chevron = () => container.querySelector("[slot=chevron]")!;
+  expect(chevron().getAttribute("aria-label")).toBe("Expand");
+  expect(chevron().getAttribute("aria-labelledby")).toBe(`${chevron().id} ${container.querySelector("[role=row]")!.id}`);
+  render(new Set([rowKey("src")]));
+  expect(chevron().getAttribute("aria-label")).toBe("Collapse");
+  expect(chevron().getAttribute("aria-labelledby")).toBe(`${chevron().id} ${container.querySelector("[role=row]")!.id}`);
+});

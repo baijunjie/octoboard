@@ -156,31 +156,33 @@ export function FileViewer({
       renamedFrom === undefined ? undefined : t("viewer.change.renamedFrom", { path: `\u2066${displayWirePath(renamedFrom)}\u2069` }),
     ].filter((part): part is string => typeof part === "string"),
   );
+  const statusLabel = status ? t(STATUS_LABELS[status]) : undefined;
+  const tags = [statusLabel, subject.stage].filter((tag): tag is string => tag !== undefined);
+  const titleName = tags.length > 0 ? `${tags.join(t("viewer.tagSeparator"))}${t("viewer.titleSeparator")}${name}` : name;
   return (
     <Dialog
       size="viewer"
       title={
-        <span className="flex min-w-0 items-center gap-2">
-          {/* What the change is, coloured, then where it is from, neutral: both tags come before the name,
-              whichever the subject has, and never shrink, so the name is what the fade cuts. */}
-          {status && (
-            <StatusChip status={status}>
-              {t(STATUS_LABELS[status])}
-            </StatusChip>
-          )}
-          {/* The tags and the name are boxes with only a gap between them, which reads as one run
-              ("Modified" "Unstaged" "c.ts" as "ModifiedUnstagedc.ts") in the dialog's accessible name. */}
-          {status && subject.stage && <span className="sr-only">{t("viewer.tagSeparator")}</span>}
-          {subject.stage && (
-            <Chip size="sm" variant="soft">
-              {subject.stage}
-            </Chip>
-          )}
-          {(status || subject.stage) && <span className="sr-only">{t("viewer.titleSeparator")}</span>}
-          <FadeOverflow as="span" dir="ltr" className="min-w-0" titleWhenClipped={name}>
-            {name}
-          </FadeOverflow>
-        </span>
+        <>
+          {/* WebKit puts a space around every flex item when it computes an accessible name
+              ("Modified , Staged : a.ts"), so the name is one string built here from the catalog and
+              the drawn boxes are hidden from it. select-none keeps a copied heading from holding the
+              text twice. */}
+          <span className="sr-only select-none">{titleName}</span>
+          <span aria-hidden="true" className="flex min-w-0 items-center gap-2">
+            {/* What the change is, coloured, then where it is from, neutral: both tags come before the name,
+                whichever the subject has, and never shrink, so the name is what the fade cuts. */}
+            {status && <StatusChip status={status}>{statusLabel}</StatusChip>}
+            {subject.stage !== undefined && (
+              <Chip size="sm" variant="soft">
+                {subject.stage}
+              </Chip>
+            )}
+            <FadeOverflow as="span" dir="ltr" className="min-w-0" titleWhenClipped={name}>
+              {name}
+            </FadeOverflow>
+          </span>
+        </>
       }
       onClose={onClose}
       footer={footer}
