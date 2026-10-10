@@ -70,7 +70,7 @@ function isChoice(entry: ActionMenuEntry): entry is ActionMenuItem {
   return entry !== "separator" && !("items" in entry) && entry.selected !== undefined;
 }
 
-function MenuItems({ entries, label }: { entries: ActionMenuEntry[]; label: string }): React.ReactElement {
+function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElement {
   // Items are keyed by position: two entries may share a label (two sessions of one title).
   const run = (key: React.Key) => {
     const entry = entries[Number(key)];
@@ -105,9 +105,9 @@ function MenuItems({ entries, label }: { entries: ActionMenuEntry[]; label: stri
       while (index < entries.length && isChoice(entries[index])) group.push(index++);
       index--;
       nodes.push(
+        // Left unnamed: a name here could only repeat the menu's.
         <Dropdown.Section
           key={group[0]}
-          aria-label={label}
           selectionMode="single"
           selectedKeys={group.filter((i) => (entries[i] as ActionMenuItem).selected).map(String)}
         >
@@ -124,8 +124,9 @@ function MenuItems({ entries, label }: { entries: ActionMenuEntry[]; label: stri
             <Label>{entry.label}</Label>
             <Dropdown.SubmenuIndicator />
           </Dropdown.Item>
-          <Dropdown.Popover className="max-w-72">
-            <MenuItems entries={entry.items} label={entry.label} />
+          {/* The submenu's menu is named after its trigger item, so its dialog goes without. */}
+          <Dropdown.Popover aria-labelledby="" className="max-w-72">
+            <MenuItems entries={entry.items} />
           </Dropdown.Popover>
         </Dropdown.SubmenuTrigger>,
       );
@@ -279,8 +280,12 @@ export function ActionMenu({
             {trigger ?? <EllipsisVertical aria-hidden="true" className="size-4" />}
           </Dropdown.Trigger>
         </TitledControl>
-        <Dropdown.Popover className="min-w-48 max-w-72" getTargetRect={pointerAt ? () => new DOMRect(pointerAt.x, pointerAt.y, 0, 0) : undefined}>
-          <MenuItems entries={items} label={label} />
+        {/* react-aria names the popover's dialog role after the trigger, as it does the menu inside it,
+            so a screen reader would speak the name twice. The dialog goes without one, a deliberate
+            departure from the ARIA rule that a dialog has a name: it only wraps the named menu, so a
+            name would just repeat it. The empty value wins over react-aria's and refers to nothing. */}
+        <Dropdown.Popover aria-labelledby="" className="min-w-48 max-w-72" getTargetRect={pointerAt ? () => new DOMRect(pointerAt.x, pointerAt.y, 0, 0) : undefined}>
+          <MenuItems entries={items} />
         </Dropdown.Popover>
       </Dropdown>
     </div>
