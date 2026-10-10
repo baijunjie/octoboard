@@ -20,10 +20,19 @@ and name with its account, and how long ago it was started. The agent's icon has
 "Session rows" in `docs/product/sidebar.md`). Clicking a card selects the session. They are in the order of "Order of
 projects and sessions" in `docs/product/sidebar.md`.
 
+A card for a session **bound to a project session the same view lists** is **inset under that session's card** and
+follows it, as a session row is under its owner's row (see "Project rows" in `docs/product/sidebar.md`); the cards sit
+apart from one another, so the nesting is the inset alone, with no line down it. No card carries a binding badge, so
+the owner's name in the card's accessible name is what carries the nesting to assistive technology (see "The binding
+badge" in `docs/product/sidebar.md`).
+
 **Archived (n)**, in both, only while the view has archived sessions — with none, the section is not shown at all: the
-ten most recently archived sessions of the view, each showing its agent's icon, its title and how long ago it was
+ten most recent rows of the view's archive, each showing its agent's icon, its title and how long ago it was
 archived. Clicking one selects it. Its action menu offers **Rename** and **Delete** (which asks for confirmation; see
-"Deleting archived sessions" in `docs/product/sessions.md`). Below them **View all (n)** opens the archive view.
+"Deleting archived sessions" in `docs/product/sessions.md`). Below them **View all (n)** opens the archive view. An
+archived session whose owner is a project session the list holds too is inset under it, with a line down the inset, as
+in the archive view (see "The archive view" in `docs/product/sidebar.md`); the ten are counted as rows, so the preview
+can end between an owner and the sessions under it but never shows an inset row without the row it is inset under.
 
 Relative times ("5 minutes ago") are worded in the current language, and anything under a minute reads as now.
 
@@ -31,19 +40,22 @@ Relative times ("5 minutes ago") are worded in the current language, and anythin
 
 From the top:
 
-- **Sessions (n)**: the project's sessions that are not archived and **not bound to a console session** — unbound
-  ones, and ones bound to a project session, which are listed like any other. A session bound to a console session is
-  not listed here, and so no card carries a binding badge. With none, a message and a **New session** button take
-  their place.
-- **Archived (n)** is the project's archived sessions with the bound ones included. The archive is not filtered by
-  binding; only the list of live sessions is.
-- **The sessions bound elsewhere**, last, below the archive, present only while the project has sessions that are not
-  archived bound to a console session that is not archived: one sentence for the whole project saying how many of its
-  sessions are bound to console sessions, naming none of them, and below it a row of chips, wrapping onto as many
-  lines as it needs — one chip per console session they are bound to, in the order the console sessions section lists
+- **Sessions (n)**: the project's sessions that are not archived and have **no console session above them** (see "Lead
+  sessions" in `docs/product/hub-orchestration.md`) — the unbound ones, each with the sessions bound to it inset under
+  it. A **lead session and the sessions under it** are left out of the list together, as is any session bound to a
+  console session: they belong to that console session's focus mode, and are summed up below instead. The count is
+  every card listed, the inset ones included. With none, a message and a **New session** button take their place.
+- **Archived (n)** is the project's archived sessions with the bound ones included — those of a lead session that is
+  still live among them. The archive is not filtered by binding; only the list of live sessions is.
+- **The sessions elsewhere**, last, below the archive, present only while the project has sessions that are not
+  archived under a console session that is not archived: one sentence for the whole project saying how many of its
+  sessions are under console sessions, naming none of them, and below it a row of chips, wrapping onto as many
+  lines as it needs — one chip per console session they are under, in the order the console sessions section lists
   them. A chip shows the console session's colour, its title (faded out when too long, the full title then its
-  tooltip) and how many of this project's sessions that are not archived are bound to it. Pressing a chip enters that
-  console session's focus mode; assistive technology hears it as entering that focus mode, with the count.
+  tooltip) and how many of this project's sessions that are not archived are under it. Both counts count a lead
+  session **and** the sessions under it, since the lead session's team is listed with it in that console session's
+  focus mode. Pressing a chip enters that console session's focus mode; assistive technology hears it as entering that
+  focus mode, with the count.
 
 **New session** (the header's **+** and the empty message's button) opens the new-session dialog with no "Report to"
 choice: the session is always unbound.
@@ -53,21 +65,26 @@ choice: the session is always unbound.
 - **The switch strip**, right under the header, while the console has more than one console session that is not
   archived: see "The switch strip" below.
 - **Sessions (n)**: the projects of the console that have a session bound to this console session which is not
-  archived, in the order of the project list, and under each project's name only the sessions bound to this console
-  session, as cards. A session bound to another console session, to a project session or to none, is not shown, and
-  neither is a project with nothing bound to this one. With none, a message says so. Each project's name carries its
-  pin button while it is pinned (see "Pinning" in `docs/product/sidebar.md`), its own **+**, which opens a new session
-  in that project, and its action menu, which is the project row's without its Focus mode item — a project has no
-  focus mode to be entered from here — and keeps **Pin** / **Unpin**. The project list's filter is not part of this
-  view.
+  archived, in the order of the project list, and under each project's name the sessions bound to this console session
+  as cards, each **lead session** among them carrying the sessions bound to it inset under it — they run in the lead
+  session's own project, so they fall under the same project's name. The count includes them, so it covers sessions
+  this console session sees but cannot drive (see "Lead sessions" in `docs/product/hub-orchestration.md`). A session
+  bound to another console session, to a project session that is not under this one, or to none, is not shown, and
+  neither is a project with nothing under this console session. With none, a message says so. Each project's name
+  carries its pin button while it is pinned (see "Pinning" in `docs/product/sidebar.md`), its own **+**, which opens a
+  new session in that project, and its action menu, which is the project row's without its Focus mode item — a project
+  has no focus mode to be entered from here — and keeps **Pin** / **Unpin**. The project list's filter is not part of
+  this view.
 - **New session**: the header's **+** opens a menu of the console's projects, so that a project with nothing bound yet
   can be reached; choosing one opens the new-session dialog for it. The dialog has no "Report to" field, and shows a
   line saying the session reports to this console session, which it will be bound to.
 - **With no project in the console at all** there is nothing to open a session in: the header's **+** is disabled, and
   in place of the sessions a message says the console has no projects yet, with an **Add project** button.
-- **Archived (n)** is the archived sessions under this console session — bound to it, or to an archived lead session
-  bound to it (see "Lead sessions" in `docs/product/hub-orchestration.md`), listed together in one list — and
-  **View all** opens the archive view scoped to them (see "The archive view" in `docs/product/sidebar.md`).
+- **Archived (n)** is the archived sessions under this console session — bound to it, or bound to an archived lead
+  session that is bound to it (see "Lead sessions" in `docs/product/hub-orchestration.md`), each of those inset under
+  that lead session — and **View all** opens the archive view scoped to them (see "The archive view" in
+  `docs/product/sidebar.md`). An archived session of a lead session that is still live is not here: it is in the lead
+  session's project's archive alone.
 
 ## The switch strip
 
@@ -115,12 +132,23 @@ tabs.
 
 **Focus mode is remembered per client** together with the console shown. It is left by the back button, by switching
 console, by selecting a session that does not belong to what is in focus, when the selected session stops belonging to
-it (reopening an archived session of a project bound to a console session makes it live and bound, so the project no
-longer lists it), and when what is in focus no longer exists — a project removed, a console session deleted or, as it
-has no row any more, archived. An archived console session is forgotten rather than remembered: reopening it does not
-put the sidebar back into its focus mode. A session belongs to a project's focus mode when it is one of the project's
-sessions not bound to a console session, or is archived; to a console session's when it is that console session or is
-bound to it. A remembered focus mode on something that is not in the console shown is ignored.
+it without being selected again, and when what is in focus no longer exists — a project removed, a console session
+deleted or, as it has no row any more, archived. An archived console session is forgotten rather than remembered:
+reopening it does not put the sidebar back into its focus mode. A remembered focus mode on something that is not in the
+console shown is ignored.
+
+**What belongs to what.** A session belongs to **a project's focus mode** when it is one of that project's sessions
+with no console session above it, or is one of that project's archived sessions. It belongs to **a console session's**
+when it is that console session itself, when it is live and under it — bound to it, or bound to a lead session bound to
+it (see "Lead sessions" in `docs/product/hub-orchestration.md`) — or when it is archived and that console session's
+archive reaches it: bound to it, or bound to a lead session that is archived too. For archived sessions the rule is the
+narrower one, so an archived session of a lead session that is **still live** belongs to its project's focus mode only,
+and selecting it from the console session's focus mode leaves that focus mode.
+
+The selected session can also stop belonging to what is in focus without being selected again, which leaves focus mode:
+reopening an archived session of a project that is bound to a console session makes it live and bound, so the project
+no longer lists it, and the session that owns the selected one becoming a lead session puts a console session above the
+selection, so its project no longer lists it either.
 
 ## The focus mode shortcut
 

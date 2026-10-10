@@ -14,15 +14,16 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   sessions bound to it, where archived sessions are kept, and the terminal.
 - [Sidebar](product/sidebar.md) — one console at a time, picked on the rail's console switcher with each console's
   activity badge, previewing another console from the rail while the sidebar is hidden, the console header, the
-  console sessions section and the project list, project and session rows and their menus, the binding badge a bound
-  session carries, keyboard focus on rows, the order of projects and sessions and pinning, filtering the project list
-  and folding every project from its heading, how the sidebar follows the selected session, how its view changes are
-  animated, the archive view, and right-clicking a row, header or rail avatar for its action menu (and where focus
-  goes when the menu closes).
-- [Focus mode](product/focus-mode.md) — a project's and a console session's focus mode: what each view lists, the
-  switch strip of a console session's focus mode (its fixed chip order, the activity each chip carries, a click versus
-  ⌃Tab / ⌃⇧Tab and which of them resumes an interrupted console session), leaving focus mode and what is remembered,
-  the focus mode shortcut, and where keyboard focus lands on entering and leaving.
+  console sessions section and the project list, project and session rows and their menus, the sessions bound to a
+  project session listed under it, the binding badge a bound session carries, keyboard focus on rows, the order of
+  projects and sessions and pinning, filtering the project list and folding every project from its heading, how the
+  sidebar follows the selected session, how its view changes are animated, the archive view, and right-clicking a
+  row, header or rail avatar for its action menu (and where focus goes when the menu closes).
+- [Focus mode](product/focus-mode.md) — a project's and a console session's focus mode: what each view lists, where a
+  lead session and the sessions under it are listed and where they are only counted, the switch strip of a console
+  session's focus mode (its fixed chip order, the activity each chip carries, a click versus ⌃Tab / ⌃⇧Tab and which
+  of them resumes an interrupted console session), leaving focus mode and what is remembered, the focus mode
+  shortcut, and where keyboard focus lands on entering and leaving.
 - [Navigation history](product/navigation-history.md) — Back and Forward in the top bar: what counts as a place, how a
   move skips places that no longer exist and never resumes a session, what the history keeps, and the ⌘[ / ⌘]
   shortcuts in the macOS app.
@@ -185,6 +186,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   both themes, fills against their surface and animations at their faintest frame, overriding HeroUI's whole `--default`
   family on a region with its own surface, which token an outline meant to be seen is built from, and why HeroUI's own
   text colours are measured rather than trusted — colour, motion).
+- [Reading daemon state in the UI](memory/reading-daemon-state-in-the-ui.md) — why a map read through
+  `useDaemonStore` has a new identity after every daemon event of its kind, so an effect or memo meant to fire on one
+  change depends on the resolved values it reads and never on the map, and the derivations that do take the map.
 - [Sending browse requests from the UI](memory/sending-browse-requests-from-the-ui.md) — why the window's browse
   requests are bounded by one count shared across the window rather than one per component (the daemon's per-connection
   bound, and a sent request that is never timed out or cancelled when its component unmounts), and sizing a new kind of

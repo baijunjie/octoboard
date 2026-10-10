@@ -1,4 +1,5 @@
 import type { Project, Session } from "../protocol";
+import { consoleSessionAbove } from "./order";
 import type { FocusTarget } from "./types";
 
 /** The id of the project or console session in focus. */
@@ -38,16 +39,27 @@ export function resolveFocus(
   }
 }
 
-/** Whether `session` is something the focused thing shows: a project's sessions not bound to a
- * console session (`sessions` is every session, to tell which owner is one) and, archived, all of
- * its sessions; a console session itself and the sessions bound to it. Selecting a session that is
- * not leaves focus mode, so what is selected is always on screen in the sidebar. */
+/** Whether `session` is something the focused thing shows: a project's sessions with no console
+ * session above them (`sessions` is every session, so the owner chain can be walked) and, archived,
+ * all of its sessions; a console session itself, the sessions under it, and the archived ones its
+ * archive reaches. Selecting a session that is not leaves focus mode, so what is selected is always
+ * on screen in the sidebar. */
 export function belongsToFocus(target: FocusTarget, session: Session, sessions: Map<string, Session>): boolean {
   if ("project" in target) {
-    const consoleOwned = !!session.bound_to && sessions.get(session.bound_to)?.role === "console";
-    return session.project_id === target.project.id && (session.status === "archived" || !consoleOwned);
+    const above = consoleSessionAbove(session, (id) => sessions.get(id));
+    return session.project_id === target.project.id && (session.status === "archived" || above === undefined);
   }
-  return session.id === target.consoleSession.id || session.bound_to === target.consoleSession.id;
+  if (session.id === target.consoleSession.id) return true;
+  // A live session under it is a card of the view, a lead session's own sessions among them. Its
+  // archive reaches less far than that chain does (`boundArchivedSessions`): an archived session of
+  // a lead session that is still live is listed in its project's archive, not here, so selecting it
+  // leaves this focus mode rather than leaving nothing on screen for the selection.
+  if (session.status !== "archived") {
+    return consoleSessionAbove(session, (id) => sessions.get(id))?.id === target.consoleSession.id;
+  }
+  if (session.bound_to === target.consoleSession.id) return true;
+  const owner = session.bound_to ? sessions.get(session.bound_to) : undefined;
+  return owner?.status === "archived" && owner.bound_to === target.consoleSession.id;
 }
 
 /** The focus mode to be in while `session` is selected: `focus`, unless it does not show `session`

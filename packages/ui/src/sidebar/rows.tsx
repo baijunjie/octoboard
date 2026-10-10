@@ -28,6 +28,22 @@ function rowKeyHandler(activate: () => void) {
   };
 }
 
+/** What a row listed under the project session that owns it carries: the inset of one level, and
+ * the line running down it. Shared by every list that nests them — the sidebar's project list, a
+ * focus mode's archived rows, the archive view — so the one visual rule for the one concept is
+ * written once, and a row is inset the same wherever it is listed.
+ *
+ * The inset is 16px because that is where the line wants to be: every one of those lists leads its
+ * rows with 8px of padding and a 16px glyph, so a line at the nested row's own start runs down the
+ * middle of the owner's glyph above it. It is a margin rather than a padding, since a padding here
+ * would replace the horizontal padding of a row that carries its own and inset it by less than a
+ * row wrapped in a bare element.
+ *
+ * The line is a pseudo-element overflowing the row by a list's gap at either end, so it runs on
+ * between two sessions of one team rather than breaking at every gap; a list that spaces its rows
+ * further apart than that (a focus mode's cards) leaves the line off and insets alone. */
+export const NESTED_ROW_CLASS = "relative ms-4 before:absolute before:-inset-y-px before:start-0 before:w-px before:bg-separator";
+
 /** One row of the sidebar: a `div` announcing itself as a button, since it carries an action menu
  * and a button cannot hold another. That is also why the tree is hand-built: HeroUI 3 has no Tree
  * or GridList, and its `Disclosure` trigger is itself a button, so it cannot contain the row's menu.

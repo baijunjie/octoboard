@@ -13,7 +13,8 @@ import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Account, Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
 import { sessionAccountName, sessionAccountTooltip } from "../sessionLabel";
-import { archivedSessions, boundArchivedSessions } from "../sidebar/order";
+import { archivedSessionRows, boundArchivedSessions } from "../sidebar/order";
+import { NESTED_ROW_CLASS } from "../sidebar/rows";
 
 /** How many rows the list adds each time its end scrolls into view. */
 const PAGE = 30;
@@ -21,13 +22,13 @@ const PAGE = 30;
 /**
  * Every archived session of a project, every archived console session of a console, or the
  * archived sessions under a console session (bound to it, or to an archived lead session bound to
- * it, listed flat), newest first: the full archive the sidebar's menus and focus mode lead to
- * ("The archive view" in docs/product/sidebar.md). It covers the terminal while open, which stays
- * mounted beneath it. The list is rendered a page at a time, adding the next page as its end
- * scrolls into view; the records themselves are all in the daemon's snapshot already.
+ * it, each of those inset under that lead session), newest first: the full archive the sidebar's
+ * menus and focus mode lead to ("The archive view" in docs/product/sidebar.md). It covers the
+ * terminal while open, which stays mounted beneath it. The list is rendered a page at a time,
+ * adding the next page as its end scrolls into view; a page is counted in rows, so a session inset
+ * under a lead session is never shown before the lead session it is inset under. The records
+ * themselves are all in the daemon's snapshot already.
  */
-// TODO: a lead session's archived sessions are listed flat among the console session's until
-// they are grouped under it (plan 20261010-requesting-a-console-session, milestone 03).
 export function ArchiveView({
   console: owner,
   project,
@@ -42,8 +43,8 @@ export function ArchiveView({
   console: Console;
   project?: Project;
   /** The console session whose archived sessions this lists (bound to it, or to an archived lead
-   * session bound to it), instead of a project's or the console's. Never set together with
-   * `project`. */
+   * session bound to it, inset under it), instead of a project's or the console's. Never set
+   * together with `project`. */
   boundTo?: Session;
   /** The scope's sessions; only the archived ones are listed, or, with `boundTo`, only the ones
    * archived and under it. */
@@ -58,7 +59,7 @@ export function ArchiveView({
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
-  const archived = boundTo ? boundArchivedSessions(sessions, boundTo.id) : archivedSessions(sessions);
+  const archived = archivedSessionRows(boundTo ? boundArchivedSessions(sessions, boundTo.id) : sessions);
   const [shown, setShown] = useState(PAGE);
   const sentinelRef = useRef<HTMLLIElement>(null);
   const rootRef = useRef<HTMLElement>(null);
@@ -141,11 +142,13 @@ export function ArchiveView({
           <EmptyPanel icon={Archive} message={t("sidebar.archive.empty")} />
         ) : (
           <ul className="flex flex-col gap-0.5 p-2">
-            {archived.slice(0, shown).map((session) => (
+            {archived.slice(0, shown).map(({ session, under }) => (
               <li
                 key={session.id}
                 data-marquee-scope
-                className="group flex min-h-12 items-center gap-3 rounded-lg px-2 transition-colors hover:bg-panel-hover"
+                className={`group flex min-h-12 items-center gap-3 rounded-lg px-2 transition-colors hover:bg-panel-hover${
+                  under ? ` ${NESTED_ROW_CLASS}` : ""
+                }`}
               >
                 <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
                 <div className="min-w-0 flex-1">
@@ -161,6 +164,10 @@ export function ArchiveView({
                       }}
                     />
                   </div>
+                  {/* The inset alone says which lead session a row was archived under, and a row
+                      here is plain text rather than a button with a name of its own, so the fact is
+                      put into words for assistive technology where the rest of the row is read. */}
+                  {under && <span className="sr-only">{t("sidebar.session.boundTo", { name: under.title })}</span>}
                 </div>
                 {/* Shown while the row is hovered or holds focus, like the sidebar rows' controls;
                     hidden by opacity, so they stay reachable with Tab. */}

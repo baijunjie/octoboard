@@ -38,6 +38,13 @@ const sessions = [
 ];
 const owners = new Map([hub1, hub2].map((s) => [s.id, s]));
 
+// A team in `web`: an unbound session with one of its own, and a lead session (bound to Hub) with
+// one of its own, which the project's focus mode leaves to Hub's and Hub's nests under it.
+const lead = sessionOf("web-lead", main.id, web.id, "Rework the gallery", "idle", { bound_to: hub1.id });
+const underLead = sessionOf("web-under-lead", main.id, web.id, "Chase the flaky test", "working", { bound_to: lead.id });
+const underFree = sessionOf("web-under-free", main.id, web.id, "Measure the first paint", "idle", { bound_to: "web-free" });
+const withTeams = [...sessions, lead, underLead, underFree];
+
 function mount(render: (handlers: SidebarHandlers) => React.ReactElement): { text: () => string; container: HTMLElement; handlers: SidebarHandlers; unmount: () => void } {
   const daemon: Daemon = {
     store: createStateStore({ settings: { auto_sync_repositories: false, default_clone_dir: "/p", accounts: [{ id: "work", agent: "claude", name: "Work", config_dir: "/w" }] } }),
@@ -67,9 +74,9 @@ it("a project's focus mode lists only its unbound sessions, its archive in full,
   expect(labels.some((l) => l.includes("Tidy the changelog"))).toBe(true);
   expect(labels.some((l) => l.includes("Fix the layout") || l.includes("Update the dependencies"))).toBe(false);
   expect(labels.some((l) => l.includes("An old bound spike"))).toBe(true);
-  expect(text()).toContain("2 sessions in this project are bound to console sessions");
+  expect(text()).toContain("2 sessions in this project are under console sessions");
 
-  const hub2Link = container.querySelector<HTMLElement>('button[aria-label="Enter focus mode for Hub 2, 1 bound session"]');
+  const hub2Link = container.querySelector<HTMLElement>('button[aria-label="Enter focus mode for Hub 2, 1 session under it"]');
   act(() => hub2Link?.click());
   expect(handlers.onFocus).toHaveBeenCalledWith({ consoleSession: hub2 });
   unmount();
@@ -144,5 +151,40 @@ it("a pinned session's pin button unpins it without selecting its card", () => {
   act(() => unpin?.click());
   expect(handlers.onSetPinned).toHaveBeenCalledWith({ session: pinned }, false);
   expect(handlers.onSelectSession).not.toHaveBeenCalled();
+  unmount();
+});
+
+it("a project's focus mode nests an unbound session's own sessions under it and leaves a lead session's team to its console session", () => {
+  const { container, text, unmount } = mount((h) => (
+    <ProjectFocusView handlers={h} console={main} project={web} sessions={withTeams.filter((s) => s.project_id === web.id)} owners={owners} />
+  ));
+  const cards = Array.from(container.querySelectorAll<HTMLElement>("[role=button][data-marquee-scope]")).filter((card) =>
+    card.className.includes("flex-col"),
+  );
+  expect(cards.map((card) => [card.getAttribute("aria-label")?.split(" session,")[0], card.parentElement!.className.includes("ms-4")])).toEqual([
+    ["Tidy the changelog", false],
+    ["Measure the first paint", true],
+  ]);
+  expect(text()).toContain("Sessions (2)");
+  // The line and the chip count the lead session and the session under it.
+  expect(text()).toContain("4 sessions in this project are under console sessions");
+  expect(container.querySelector('button[aria-label="Enter focus mode for Hub, 3 sessions under it"]')).not.toBeNull();
+  unmount();
+});
+
+it("a console session's focus mode nests a lead session's own sessions under it", () => {
+  const { container, text, unmount } = mount((h) => (
+    <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={withTeams} />
+  ));
+  const cards = Array.from(container.querySelectorAll<HTMLElement>("[role=button][data-marquee-scope]")).filter((card) =>
+    card.className.includes("flex-col"),
+  );
+  expect(cards.map((card) => [card.getAttribute("aria-label")?.split(" session,")[0], card.parentElement!.className.includes("ms-4")])).toEqual([
+    ["Fix the layout", false],
+    ["Rework the gallery", false],
+    ["Chase the flaky test", true],
+    ["Add idempotency keys", false],
+  ]);
+  expect(text()).toContain("Sessions (4)");
   unmount();
 });

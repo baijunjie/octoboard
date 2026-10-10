@@ -25,6 +25,14 @@ const web = projectOf("p-web", main.id, "Website");
 const hub1 = sessionOf("s-hub-1", main.id, undefined, "Hub", "idle", { colour: "teal" });
 const hub2 = sessionOf("s-hub-2", main.id, undefined, "Hub 2", "idle", { colour: "rose" });
 const sessions = [hub1, hub2, sessionOf("web-bound", main.id, web.id, "Fix the layout", "idle", { bound_to: hub1.id })];
+// A lead session (bound to a console session, with sessions of its own), its two sessions and an
+// unbound session beside it, to read the project list's three levels off.
+const lead = sessionOf("web-lead", main.id, web.id, "Rework the gallery", "idle", { bound_to: hub1.id });
+const team = [
+  sessionOf("web-team-1", main.id, web.id, "Chase the flaky test", "idle", { bound_to: lead.id }),
+  sessionOf("web-team-2", main.id, web.id, "Measure the first paint", "working", { bound_to: lead.id }),
+];
+const unbound = sessionOf("web-unbound", main.id, web.id, "Tidy the changelog", "interrupted");
 const sidebarWidth = { width: 280, min: 200, max: 480, setWidth: () => {}, persist: () => {}, reset: () => {} };
 
 beforeEach(() => vi.useFakeTimers());
@@ -138,5 +146,23 @@ it("shows the console it is given, and a hover alone commits nothing", () => {
   expect(container.querySelector("nav")!.textContent).toContain("Other");
   act(() => void container.querySelector("nav")!.dispatchEvent(new MouseEvent("pointerover", { bubbles: true })));
   expect(onPeekPress).not.toHaveBeenCalled();
+  act(() => root.unmount());
+});
+
+it("lists a project session's own sessions under it, and the binding badge only for a console session's owner", () => {
+  const { container, root } = mountSidebar({ sessions: [hub1, hub2, lead, ...team, unbound] });
+  const rows = Array.from(container.querySelectorAll<HTMLElement>("[data-sessions] [role=button][data-marquee-scope]"));
+  // The lead session is ranked against the unbound session as ever (idle before interrupted) and
+  // its own sessions follow it, ranked among themselves (working before idle).
+  expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual([
+    "Rework the gallery session, Claude Code (Default), Awaiting instructions, Bound to Hub",
+    "Measure the first paint session, Claude Code (Default), Working, Bound to Rework the gallery",
+    "Chase the flaky test session, Claude Code (Default), Awaiting instructions, Bound to Rework the gallery",
+    "Tidy the changelog session, Claude Code (Default), Interrupted",
+  ]);
+  const badges = rows.map((row) => row.querySelector('[style*="--console-session"]') !== null);
+  expect(badges).toEqual([true, false, false, false]);
+  // The two sessions of the team are inset under their owner, the other rows are not.
+  expect(rows.map((row) => row.parentElement!.className.includes("ms-4"))).toEqual([false, true, true, false]);
   act(() => root.unmount());
 });

@@ -35,9 +35,9 @@ import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
 import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterClear, ProjectFilterTag, ProjectFilterTags } from "./ProjectFilter";
 import { archiveSubmenu, consoleMenu, projectMenu, sessionMenu } from "./menus";
-import { archivedSessions, consoleActivity, isInactiveProject, liveSessions, sortProjects } from "./order";
+import { archivedSessions, consoleActivity, isInactiveProject, liveSessionRows, liveSessions, sortProjects } from "./order";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
-import { PinButton, RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
+import { NESTED_ROW_CLASS, PinButton, RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
 import { focusTargetId } from "./focus";
 import type { FocusTarget, SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
@@ -627,9 +627,9 @@ function ProjectNode({
   // the same `GitStatus` reference until this project's own entry changes, so no `useShallow` is
   // needed).
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
-  const live = liveSessions(sessions);
+  const rows = liveSessionRows(sessions);
   const archived = archivedSessions(sessions);
-  const activity = consoleActivity(live);
+  const activity = consoleActivity(sessions);
   const listRef = useFlip<HTMLDivElement>();
   const rowRef = useRef<HTMLDivElement>(null);
   const openSession = () =>
@@ -682,7 +682,7 @@ function ProjectNode({
         // Marked so collapsing every project at once can tell whether keyboard focus is standing in
         // a part about to go away (see `foldAll`).
         <div data-sessions className="ms-3 mt-0.5 border-s border-separator ps-1">
-          {live.length === 0 ? (
+          {rows.length === 0 ? (
             <EmptyPanel
               compact
               icon={MessageSquarePlus}
@@ -691,12 +691,16 @@ function ProjectNode({
             />
           ) : (
             <div ref={listRef} className="relative flex flex-col gap-0.5">
-              {live.map((session) => (
-                <div key={session.id} data-flip={session.id}>
+              {rows.map(({ session, under }) => (
+                // One flat list, a session bound to a project session only inset
+                // (`NESTED_ROW_CLASS`), rather than a list nested inside the owner's row: the
+                // reorder animation reads the list's direct children (`useFlip`), so a third level
+                // of its own would leave a team unanimated while its statuses change.
+                <div key={session.id} data-flip={session.id} className={under ? NESTED_ROW_CLASS : undefined}>
                   <SessionRow
                     handlers={handlers}
                     session={session}
-                    owner={session.bound_to ? owners.get(session.bound_to) : undefined}
+                    owner={under ?? (session.bound_to ? owners.get(session.bound_to) : undefined)}
                     selectedSessionId={selectedSessionId}
                   />
                 </div>
@@ -712,8 +716,11 @@ function ProjectNode({
 /** A session row: a project session's own, or one of the console's console sessions
  * (`ConsoleSessionsSection`), which share the row and its menu — pin, rename, archive, no resume —
  * since both are ordinary sessions once the row stops being a console session's sole, special one.
- * `owner`, given only for a bound project session, is the console session it reports to, drawn as
- * the binding badge in its colour. */
+ * `owner`, given only for a bound project session, is the session it reports to: a console session
+ * is drawn as the binding badge in its colour, while a project session — a lead session, or any
+ * project session that started this one — is not, since the row is already listed under it; either
+ * way the row's own accessible name names it, which is what carries the nesting to assistive
+ * technology. */
 function SessionRow({
   handlers,
   session,
@@ -740,11 +747,12 @@ function SessionRow({
       <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
       <RowLabel title={session.title}>{session.title}</RowLabel>
       {/* A console session shows its own colour, decorative here since the row's own label already
-          names it; a bound project session's badge names its owner in its tooltip instead. */}
+          names it; a session bound to one shows that console session's, naming its owner in the
+          tooltip. A session bound to a project session shows none: it is listed under its owner. */}
       {session.role === "console" && session.colour ? (
         <BindingBadge owner={session} decorative />
       ) : (
-        owner && <BindingBadge owner={owner} />
+        owner?.role === "console" && <BindingBadge owner={owner} />
       )}
       {session.pinned && <PinButton name={session.title} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}
       <RowControls>

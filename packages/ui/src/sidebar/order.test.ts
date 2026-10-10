@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Project, Session, SessionStatus } from "../protocol";
-import { boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessions, notBoundToConsoleSession, sortProjects, switchStrip } from "./order";
+import { archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, sortProjects, switchStrip } from "./order";
 
 const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to?: string): Session => ({
   id,
@@ -89,16 +89,66 @@ describe("sortProjects", () => {
   });
 });
 
-describe("notBoundToConsoleSession", () => {
-  it("keeps the sessions no console session owns, whatever their status", () => {
+describe("notUnderConsoleSession", () => {
+  it("keeps the sessions no console session is above, whatever their status, and drops a lead session with its team", () => {
     const owners = new Map([["s-console", { ...session("s-console", "idle", 0), role: "console" as const }]]);
     const sessions = [
       session("unbound", "idle", 1),
       session("archived", "archived", 2),
-      session("bound", "idle", 3, false, "s-console"),
-      session("bound-to-project", "idle", 4, false, "unbound"),
+      session("lead", "idle", 3, false, "s-console"),
+      session("under-lead", "idle", 4, false, "lead"),
+      session("bound-to-project", "idle", 5, false, "unbound"),
     ];
-    expect(notBoundToConsoleSession(sessions, owners).map((s) => s.id)).toEqual(["unbound", "archived", "bound-to-project"]);
+    expect(notUnderConsoleSession(sessions, owners).map((s) => s.id)).toEqual(["unbound", "archived", "bound-to-project"]);
+  });
+});
+
+describe("liveSessionRows", () => {
+  it("puts the sessions bound to a project session under it, each level in the sidebar's order", () => {
+    const rows = liveSessionRows([
+      session("unbound", "idle", 1),
+      session("newer-unbound", "idle", 9),
+      session("under-unbound", "idle", 2, false, "unbound"),
+      session("pinned-under-unbound", "idle", 3, true, "unbound"),
+      session("archived-under-unbound", "archived", 4, false, "unbound"),
+      session("under-an-owner-elsewhere", "idle", 5, false, "s-console"),
+    ]);
+    expect(rows.map((row) => [row.session.id, row.under?.id])).toEqual([
+      ["newer-unbound", undefined],
+      ["under-an-owner-elsewhere", undefined],
+      ["unbound", undefined],
+      ["pinned-under-unbound", "unbound"],
+      ["under-unbound", "unbound"],
+    ]);
+  });
+
+  it("still lists a session it cannot place under its owner, rather than dropping it", () => {
+    const rows = liveSessionRows([
+      session("unbound", "idle", 1),
+      session("under-unbound", "idle", 2, false, "unbound"),
+      session("a-third-level", "idle", 3, false, "under-unbound"),
+    ]);
+    expect(rows.map((row) => [row.session.id, row.under?.id])).toEqual([
+      ["unbound", undefined],
+      ["under-unbound", "unbound"],
+      ["a-third-level", undefined],
+    ]);
+  });
+});
+
+describe("archivedSessionRows", () => {
+  it("puts an archived session under its archived owner, and lists one whose owner is not archived on its own", () => {
+    const rows = archivedSessionRows([
+      { ...session("owner", "archived", 1, false), ended_at: 10 },
+      { ...session("under-owner", "archived", 2, false, "owner"), ended_at: 20 },
+      session("live-owner", "idle", 3),
+      { ...session("under-live-owner", "archived", 4, false, "live-owner"), ended_at: 30 },
+    ]);
+    expect(rows.map((row) => [row.session.id, row.under?.id])).toEqual([
+      ["under-live-owner", undefined],
+      ["owner", undefined],
+      ["under-owner", "owner"],
+    ]);
   });
 });
 
@@ -109,6 +159,7 @@ describe("boundElsewhere", () => {
   it.each([
     { name: "counts the live bound sessions, in total and per owner, naming each owner once in the sidebar's order", sessions: [session("a", "idle", 1, false, "hub-1"), session("b", "working", 2, false, "hub-2"), session("c", "idle", 3, false, "hub-1")], expected: { count: 3, owners: [["hub-2", 1], ["hub-1", 2]] } },
     { name: "leaves out unbound, archived, unknown-owner and archived-owner sessions", sessions: [session("a", "idle", 1), session("b", "archived", 2, false, "hub-1"), session("c", "idle", 3, false, "gone"), session("d", "idle", 4, false, "hub-old")], expected: undefined },
+    { name: "counts a lead session's own sessions with the console session above them", sessions: [session("lead", "idle", 1, false, "hub-1"), session("under-lead", "idle", 2, false, "lead"), session("under-unbound", "idle", 3, false, "unbound"), session("unbound", "idle", 4)], expected: { count: 2, owners: [["hub-1", 2]] } },
   ])("$name", ({ sessions, expected }) => {
     const summary = boundElsewhere(sessions, owners);
     expect(summary && { count: summary.count, owners: summary.owners.map((o) => [o.owner.id, o.count]) }).toEqual(expected);
@@ -116,7 +167,7 @@ describe("boundElsewhere", () => {
 });
 
 describe("focusGroups", () => {
-  it("lists the projects with a live session bound to the console session, each with only those, in project order", () => {
+  it("lists the projects with a live session bound to the console session, each with only those and a lead session's own sessions under it, in project order", () => {
     const in_ = (id: string, project: string, status: SessionStatus, bound_to?: string): Session => ({ ...session(id, status, 1, false, bound_to), project_id: project });
     const groups = focusGroups(
       [project("a", "alpha"), project("b", "beta"), project("c", "charlie"), project("d", "delta")],
@@ -126,12 +177,14 @@ describe("focusGroups", () => {
         in_("b-mine", "b", "working", "hub"),
         in_("b-unbound", "b", "working"),
         in_("c-archived", "c", "archived", "hub"),
+        in_("a-under-mine", "a", "idle", "a-mine"),
+        in_("a-archived-under-mine", "a", "archived", "a-mine"),
       ],
       "hub",
     );
-    expect(groups.map((g) => [g.project.id, g.sessions.map((s) => s.id)])).toEqual([
-      ["b", ["b-mine"]],
-      ["a", ["a-mine"]],
+    expect(groups.map((g) => [g.project.id, g.sessions.map((row) => [row.session.id, row.under?.id])])).toEqual([
+      ["b", [["b-mine", undefined]]],
+      ["a", [["a-mine", undefined], ["a-under-mine", "a-mine"]]],
     ]);
   });
 });

@@ -37,7 +37,7 @@ import { SettingsDialog } from "./settings/SettingsDialog";
 import { useSettingsDialog } from "./settings/useSettingsDialog";
 import { belongsToFocus, focusAfterSelect, focusFor, focusKey, followsStartedConsoleSession, KEY_SWITCH_SELECTION, resolveFocus, shortcutOutcome } from "./sidebar/focus";
 import { useFocusShortcut } from "./sidebar/focusShortcut";
-import { switchStrip } from "./sidebar/order";
+import { consoleSessionAbove, switchStrip } from "./sidebar/order";
 import { Sidebar } from "./sidebar/Sidebar";
 import { useSidebarView } from "./sidebar/sidebarView";
 import { useSwitchShortcut } from "./sidebar/switchShortcut";
@@ -354,12 +354,19 @@ export function App(): React.ReactElement {
 
   // The selected session can stop belonging to the focus mode without being selected again: an
   // archived session of a project, reopened from the archive view, becomes live and bound to a
-  // console session, and is then not listed there.
+  // console session, and is then not listed there. What it belongs to also follows the owner chain
+  // above it (`belongsToFocus`), which its own record does not show: the session that owns it
+  // becoming a lead session takes it out of its project's focus mode too. So the console session
+  // above it is a dependency of its own — and the whole session map is not, since this must fire
+  // on the selection changing and not on every session event: a chip in a project's focus mode
+  // enters a console session's with the selection left where it was, and a re-check on the next
+  // unrelated status change would drop straight back out of it.
+  const consoleSessionAboveSelection = selectedSession && consoleSessionAbove(selectedSession, (id) => sessions.get(id))?.id;
   useEffect(() => {
     if (sidebarView.focus && selectedSession && !belongsToFocus(sidebarView.focus, selectedSession, sessions)) {
       sidebarView.setFocus(undefined);
     }
-  }, [selectedSession?.id, selectedSession?.status, selectedSession?.bound_to]);
+  }, [selectedSession?.id, selectedSession?.status, selectedSession?.bound_to, consoleSessionAboveSelection]);
 
   // ⇧⌘F: into the focus mode of the selected session's context, or back out of focus mode.
   useFocusShortcut(() => {

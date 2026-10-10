@@ -18,8 +18,8 @@ import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
 import { GitBadge } from "./GitBadge";
 import { projectMenu, sessionMenu } from "./menus";
-import { archivedSessions, boundArchivedSessions, boundElsewhere, focusGroups, liveSessions, notBoundToConsoleSession, sortProjects, switchStrip, type SwitchStripEntry } from "./order";
-import { PinButton, RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
+import { archivedSessionRows, archivedSessions, boundArchivedSessions, boundElsewhere, focusGroups, liveSessionRows, type NestedSession, notUnderConsoleSession, sortProjects, switchStrip, type SwitchStripEntry } from "./order";
+import { NESTED_ROW_CLASS, PinButton, RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
 import type { SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
 
@@ -78,9 +78,10 @@ function FocusTitle({ consoleName, title }: { consoleName: string; title: string
 }
 
 /** A project's focus mode: the sidebar given over to one project, its sessions not bound to a
- * console session as cards, its recent archive below them and, last, the console sessions that
- * hold the rest ("A project's focus mode" in docs/product/focus-mode.md). The sessions bound to a
- * console session are left out of the list and summed up by a sentence with a chip for each console
+ * console session as cards, each with the sessions bound to it under it, its recent archive below
+ * them and, last, the console sessions that hold the rest ("A project's focus mode" in
+ * docs/product/focus-mode.md). A lead session and its team are left out of the list, with the
+ * sessions bound to a console session, and summed up by a sentence with a chip for each console
  * session, leading to its own focus mode; the archive, bound sessions included, is not filtered. */
 export function ProjectFocusView({
   handlers,
@@ -104,8 +105,11 @@ export function ProjectFocusView({
   // own entry, which keeps the same `GitStatus` reference until that entry itself changes, so no
   // `useShallow` is needed.
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
-  const live = liveSessions(notBoundToConsoleSession(sessions, owners));
+  const live = liveSessionRows(notUnderConsoleSession(sessions, owners));
+  // The rows nest an archived session under its archived owner; the project menu's "View archive"
+  // submenu lists the newest few flat, so it is given the plain list.
   const archived = archivedSessions(sessions);
+  const archivedRows = archivedSessionRows(sessions);
   const elsewhere = boundElsewhere(sessions, owners);
   const openSession = () =>
     handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project, binding: { kind: "unbound" } });
@@ -140,18 +144,19 @@ export function ProjectFocusView({
         ) : (
           <SessionCards handlers={handlers} sessions={live} selectedSessionId={selectedSessionId} />
         )}
-        <ArchivedList handlers={handlers} archived={archived} selectedSessionId={selectedSessionId} onViewAll={viewAll} />
+        <ArchivedList handlers={handlers} archived={archivedRows} selectedSessionId={selectedSessionId} onViewAll={viewAll} />
         {elsewhere && <BoundElsewhere handlers={handlers} count={elsewhere.count} owners={elsewhere.owners} />}
       </ScrollShadow>
     </>
   );
 }
 
-/** A console session's focus mode: the sidebar given over to the projects that have a session bound
- * to it and, within each, only those sessions as cards, with its archived bound sessions below. A
- * session opened from here is bound to it, with no choice offered. What has no meaning here is
- * left out: a project's own focus mode (`projectMenu`'s `nested` placement on the project headings
- * here) and the project list's filter. */
+/** A console session's focus mode: the sidebar given over to the projects that have a session
+ * bound to it and, within each, only those sessions as cards — a lead session among them carrying
+ * its own sessions under it — with its archived bound sessions below. A session opened from here
+ * is bound to it, with no choice offered. What has no meaning here is left out: a project's own
+ * focus mode (`projectMenu`'s `nested` placement on the project headings here) and the project
+ * list's filter. */
 export function ConsoleSessionFocusView({
   handlers,
   console: parentConsole,
@@ -174,7 +179,7 @@ export function ConsoleSessionFocusView({
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const groups = focusGroups(projects, sessions, consoleSession.id);
   const liveCount = groups.reduce((sum, group) => sum + group.sessions.length, 0);
-  const archived = boundArchivedSessions(sessions, consoleSession.id);
+  const archived = archivedSessionRows(boundArchivedSessions(sessions, consoleSession.id));
   const openSession = (project: Project) =>
     handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project, binding: { kind: "bound", to: consoleSession } });
   const viewAll = () => handlers.onOpenArchive({ console: parentConsole.id, consoleSession: consoleSession.id });
@@ -327,8 +332,9 @@ function SwitchStrip({
 }
 
 /** One project of a console session's focus mode: its name with its own new-session button and
- * actions, over the cards of the sessions bound to the console session. `archived` is all the
- * project's archived sessions, for its "View archive" submenu. */
+ * actions, over the cards of the sessions bound to the console session, each lead session among
+ * them carrying its own sessions under it. `archived` is all the project's archived sessions, for
+ * its "View archive" submenu. */
 function FocusProjectGroup({
   handlers,
   project,
@@ -339,7 +345,7 @@ function FocusProjectGroup({
 }: {
   handlers: SidebarHandlers;
   project: Project;
-  boundHere: Session[];
+  boundHere: NestedSession[];
   archived: Session[];
   onOpenSession: () => void;
   selectedSessionId?: string;
@@ -373,8 +379,9 @@ function FocusProjectGroup({
 }
 
 /** What a project's focus mode carries for the sessions it leaves out: a line saying how many are
- * bound to console sessions, over a chip for each console session, with how many of them are
- * bound to it, leading to its own focus mode. */
+ * under console sessions, over a chip for each console session, with how many of the project's
+ * sessions are under it, leading to its own focus mode. A lead session's own sessions are counted
+ * with it, as they are listed with it there. */
 function BoundElsewhere({
   handlers,
   count,
@@ -418,30 +425,38 @@ function BoundElsewhere({
   );
 }
 
-/** A focus mode's sessions as cards, in the order given. */
+/** A focus mode's sessions as cards, in the order given, a session bound to a project session inset
+ * under its owner. One flat list rather than a list nested inside the owner's card: the reorder
+ * animation reads the list's direct children (`useFlip`), so a level of its own would leave a team
+ * unanimated while its statuses change. Cards sit apart from one another, so the nesting is the
+ * inset alone — the same one as `NESTED_ROW_CLASS`, without the line that would break at every
+ * gap between them. */
 function SessionCards({
   handlers,
   sessions,
   selectedSessionId,
 }: {
   handlers: SidebarHandlers;
-  sessions: Session[];
+  sessions: NestedSession[];
   selectedSessionId?: string;
 }): React.ReactElement {
   const listRef = useFlip<HTMLDivElement>();
   return (
     <div ref={listRef} className="relative flex flex-col gap-2">
-      {sessions.map((session) => (
-        <div key={session.id} data-flip={session.id}>
-          <SessionCard handlers={handlers} session={session} selected={session.id === selectedSessionId} />
+      {sessions.map(({ session, under }) => (
+        <div key={session.id} data-flip={session.id} className={under ? "ms-4" : undefined}>
+          <SessionCard handlers={handlers} session={session} under={under} selected={session.id === selectedSessionId} />
         </div>
       ))}
     </div>
   );
 }
 
-/** A focus mode's archive: its ten most recent rows, with "View all" to the archive view. Not drawn
- * while there is none. */
+/** A focus mode's archive: its ten most recent rows, with "View all" to the archive view, an
+ * archived session bound to an archived project session inset under it. The rows are already flat
+ * and in display order, so the ten are counted as rows: the preview can end between an owner and
+ * its team, but never shows an inset row without the row it is inset under. Not drawn while there
+ * is none. */
 function ArchivedList({
   handlers,
   archived,
@@ -449,7 +464,7 @@ function ArchivedList({
   onViewAll,
 }: {
   handlers: SidebarHandlers;
-  archived: Session[];
+  archived: NestedSession[];
   selectedSessionId?: string;
   onViewAll: () => void;
 }): React.ReactElement | null {
@@ -459,8 +474,10 @@ function ArchivedList({
     <>
       <SectionHeading>{t("sidebar.focus.archived", { count: archived.length })}</SectionHeading>
       <div className="flex flex-col gap-0.5">
-        {archived.slice(0, ARCHIVE_PREVIEW).map((session) => (
-          <ArchivedRow key={session.id} handlers={handlers} session={session} selected={session.id === selectedSessionId} />
+        {archived.slice(0, ARCHIVE_PREVIEW).map(({ session, under }) => (
+          <div key={session.id} className={under ? NESTED_ROW_CLASS : undefined}>
+            <ArchivedRow handlers={handlers} session={session} under={under} selected={session.id === selectedSessionId} />
+          </div>
         ))}
       </div>
       <Button size="sm" variant="ghost" fullWidth preventFocusOnPress onPress={onViewAll} className="mt-1 justify-start font-normal text-muted hover:text-foreground">
@@ -472,15 +489,19 @@ function ArchivedList({
 }
 
 /** A session in focus mode: its status put into words, its agent and account, its title over two
- * lines, and when it started. No binding badge: a focus mode lists either only sessions not bound
- * to a console session or only those bound to the one console session it is for. */
+ * lines, and when it started. No binding badge: a focus mode lists either only the sessions no
+ * console session is above or only those under the one console session it is for. `under`, the
+ * project session this one is bound to and is inset below, goes into the card's accessible name,
+ * which is what carries that nesting to assistive technology. */
 function SessionCard({
   handlers,
   session,
+  under,
   selected,
 }: {
   handlers: SidebarHandlers;
   session: Session;
+  under?: Session;
   selected: boolean;
 }): React.ReactElement {
   const t = useT();
@@ -490,7 +511,7 @@ function SessionCard({
   return (
     <TreeRow
       ref={rowRef}
-      ariaLabel={sessionAriaLabel(t, language, session, accounts)}
+      ariaLabel={sessionAriaLabel(t, language, session, accounts, under)}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
       className="min-h-8 flex-col gap-1 border border-separator p-[7px] data-selected:border-accent-glyph"
@@ -523,13 +544,17 @@ function SessionCard({
   );
 }
 
+/** One row of a focus mode's archive. `under`, the archived project session this one is bound to
+ * and is inset below, goes into the row's accessible name, as on a session card. */
 function ArchivedRow({
   handlers,
   session,
+  under,
   selected,
 }: {
   handlers: SidebarHandlers;
   session: Session;
+  under?: Session;
   selected: boolean;
 }): React.ReactElement {
   const t = useT();
@@ -539,7 +564,7 @@ function ArchivedRow({
   return (
     <TreeRow
       ref={rowRef}
-      ariaLabel={sessionAriaLabel(t, language, session, accounts)}
+      ariaLabel={sessionAriaLabel(t, language, session, accounts, under)}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
     >

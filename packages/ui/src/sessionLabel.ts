@@ -67,11 +67,13 @@ export function sessionAgentLabel(t: Translate, session: Session, accounts: Acco
   return account === undefined ? agent : t("session.agentAccount", { agent, account });
 }
 
-/** A session row's accessible name: the row is one button, so its icons are not announced, and
- * the title, agent and its account, status and pin all have to be in this. `owner`, the console session this
- * (project) session is bound to, folds in the fact the binding badge shows visually — the badge
+/** A session row's accessible name: the row is one button, so its icons are not announced, and the
+ * title, agent and its account, status and pin all have to be in this. `owner` is the session this
+ * (project) session is bound to, and naming it here is what tells assistive technology who it
+ * reports to. For a console session that is the fact the binding badge shows visually — the badge
  * carries no information its tooltip does not, so it carries none the row's own label does not
- * either. */
+ * either. For a project session there is no badge at all: the row is listed under its owner, and
+ * this name is the only place that nesting is put into words. */
 export function sessionAriaLabel(
   t: Translate,
   language: Language,

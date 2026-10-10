@@ -277,10 +277,10 @@ export const zhHans: Translation<"other"> = {
   "sidebar.focus.newSessionIn": "在 {name} 中新建会话",
   "sidebar.focus.noBoundSessions": "没有会话绑定到此控制台会话",
   "sidebar.focus.enterConsoleSession": {
-    other: "进入 {name} 的专注模式，绑定会话 {count} 个",
+    other: "进入 {name} 的专注模式，归属会话 {count} 个",
   },
   "sidebar.focus.boundElsewhere": {
-    other: "此项目中有 {count} 个会话绑定到控制台会话",
+    other: "此项目中有 {count} 个会话归属于控制台会话",
   },
   "sidebar.focus.switchStrip": "切换控制台会话",
   "sidebar.focus.sessions": "会话（{count}）",

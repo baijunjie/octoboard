@@ -47,6 +47,20 @@ export const unboundArchived = sessionOf("s-unbound-archived", console_.id, proj
   ended_at: minutesAgo(5),
 });
 
+// An archived lead session bound to `boundConsoleSession` with two archived sessions of its own:
+// a console session's archive reaches them, and lists them under their lead session. Exported for
+// `ArchiveView.test.tsx`, as the sessions above are.
+export const archivedLead = sessionOf("s-lead-archived", console_.id, project.id, "Archived lead session", "archived", {
+  bound_to: boundConsoleSession.id,
+  ended_at: minutesAgo(8),
+});
+export const underArchivedLead = Array.from({ length: 2 }, (_, i) =>
+  sessionOf(`s-under-lead${i}`, console_.id, project.id, `Session ${i} of the archived lead session`, "archived", {
+    bound_to: archivedLead.id,
+    ended_at: minutesAgo(2 + i * 3),
+  }),
+);
+
 export const archiveScenarios: Scenario[] = [
   {
     id: "archive-many",
@@ -83,5 +97,18 @@ export const archiveScenarios: Scenario[] = [
       sessions: [boundConsoleSession, otherConsoleSession, otherOwnerArchived, unboundArchived, ...boundArchived],
     }),
     steps: [(ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: boundArchived.length }))],
+  },
+  {
+    id: "archive-bound-sessions-with-a-lead-session",
+    group: GROUP,
+    title: "A console session's archive with an archived lead session",
+    description: "The sessions archived under the lead session are inset below it, in the one list.",
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
+    state: snapshotState({
+      consoles: [console_],
+      projects: [project],
+      sessions: [boundConsoleSession, ...boundArchived, archivedLead, ...underArchivedLead],
+    }),
+    steps: [(ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: boundArchived.length + 1 + underArchivedLead.length }))],
   },
 ];

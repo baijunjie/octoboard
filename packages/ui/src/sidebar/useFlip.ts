@@ -4,10 +4,12 @@ const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 
 /**
  * Animates the reordering of a list: each direct child marked `data-flip` that moved since the last
- * render slides from where it was to where it is now (the FLIP technique). Positions are read as
- * `offsetTop` within the list, which `ref` must make the offset parent (`relative`), so scrolling
- * the sidebar does not read as movement. A child that just appeared is left alone. Nothing moves
- * where the system asks for reduced motion.
+ * render slides from where it was to where it is now (the FLIP technique). Direct children only, so
+ * a list that shows one row under another keeps every row a direct child and insets the nested ones
+ * rather than nesting a list inside a row, which would leave those rows out of the animation.
+ * Positions are read as `offsetTop` within the list, which `ref` must make the offset parent
+ * (`relative`), so scrolling the sidebar does not read as movement. A child that just appeared is
+ * left alone. Nothing moves where the system asks for reduced motion.
  *
  * React reorders keyed children by moving their DOM nodes, which blurs a focused control inside one
  * and drops focus to `<body>`; the list's focused element is remembered and given focus back.

@@ -208,20 +208,28 @@ An expanded project lists its sessions that are not archived as session rows. Wi
 saying there are no sessions yet; the whole line is a button, named **New session**, that opens the new-session dialog
 for that project, as the row's **+** button does.
 
+A session **bound to another of the project's sessions** — one that session started, a lead session's own sessions
+included (see "Lead sessions" in `docs/product/hub-orchestration.md`) — is listed **under that session**, one level
+deeper, inset with a line running down the inset. Unbound sessions and sessions bound to a console session stay at the
+project's own level, so a project's sessions go at most two levels deep. The nesting has no fold control of its own:
+the sessions under an owner fold away with their project, like every other session row.
+
 ## Session rows
 
 A session row shows the session's status glyph (see "Session statuses" in `docs/product/sessions.md`), its agent's icon,
 its title, and its pin button when it is pinned (see "Pinning" below). A project session bound to a console session also
 carries that console session's **binding badge**: a small dot in the console session's colour, whose tooltip names it
-(see "The binding badge" below); one bound to a project session carries none. A console session's own row carries no
-*binding* badge — what it shows there instead is its own colour (see "The binding badge" below). Selecting a row resumes
-it when it is interrupted; no menu item does that. The row shows its agent as an icon alone; wherever the agent is named
-in words, the account the session runs under follows it in parentheses — "Claude Code (Work)" — as the account's name,
-"Default" for the agent's default account, or, for a session whose account has since been removed, the directory it
-recorded (or the agent's name alone when it recorded none). The agent's icon has that account, named the same way, as
-its tooltip, or the agent's name when there is no account to name; the tooltip shows on pointer hover only, and the icon
-adds no tab stop. The agent's icon carries the same tooltip on a focus mode's session cards and archived rows (see
-`docs/product/focus-mode.md`) and on the archive view's rows (see "The archive view" below). Its action menu offers:
+(see "The binding badge" below); one bound to a project session carries none, since its row is listed under that
+session instead (see "Project rows" above), with the owner named in the row's own accessible name. A console session's
+own row carries no *binding* badge — what it shows there instead is its own colour (see "The binding badge" below).
+Selecting a row resumes it when it is interrupted; no menu item does that. The row shows its agent as an icon alone;
+wherever the agent is named in words, the account the session runs under follows it in parentheses — "Claude Code
+(Work)" — as the account's name, "Default" for the agent's default account, or, for a session whose account has since
+been removed, the directory it recorded (or the agent's name alone when it recorded none). The agent's icon has that
+account, named the same way, as its tooltip, or the agent's name when there is no account to name; the tooltip shows on
+pointer hover only, and the icon adds no tab stop. The agent's icon carries the same tooltip on a focus mode's session
+cards and archived rows (see `docs/product/focus-mode.md`) and on the archive view's rows (see "The archive view"
+below). Its action menu offers:
 
 - **Pin** / **Unpin**.
 - **Rename** — see "Renaming a session" in `docs/product/sessions.md`.
@@ -247,15 +255,19 @@ adds no tab stop. The agent's icon carries the same tooltip on a focus mode's se
 
 A project session **bound to a console session** — one carrying the id of the console session it reports to (see
 "Console sessions and project sessions" in `docs/product/sessions.md`) — carries a small dot in that console session's
-colour wherever the project session is listed: its sidebar row. An unbound session carries no badge, and neither does a
-session bound to a project session. The badge's tooltip names the owning console session; the badge is no tab stop,
-so the tooltip shows on pointer hover only. The row's own accessible name carries the same fact in words for assistive
-technology ("Bound to …"). The badge itself still carries no information its tooltip does not, so colour alone never
+colour wherever the project session is listed: its sidebar row. A **lead session** carries it like any other session
+bound to a console session (see "Lead sessions" in `docs/product/hub-orchestration.md`). An unbound session carries no
+badge, and neither does a session bound to a project session, which is listed under its owner instead (see "Project
+rows" above). The badge's tooltip names the owning console session; the badge is no tab stop, so the tooltip shows on
+pointer hover only. The row's own accessible name carries the same fact in words for assistive technology ("Bound
+to …"), in the same wording for a project session's owner as for a console session's, which is the only place the
+nesting is put into words. The badge itself still carries no information its tooltip does not, so colour alone never
 distinguishes two owners for a user who cannot tell the colours apart. A console session's own row shows the same
 colour, decoratively, since the row's own label already names it, as do its focus mode's header, its chip in a
 project's focus mode and its chip in the switch strip (see `docs/product/focus-mode.md`). The cards in a focus mode
-carry no badge: a project's focus mode lists only sessions not bound to a console session, and a console session's
-lists only the ones bound to it.
+carry no badge: a project's focus mode lists only sessions with no console session above them, and a console session's
+only the sessions under it, so there is never a second console session to name; a card inset under another session
+names that owner in its accessible name, as a row does.
 
 **Where the colour comes from.** Octoboard gives each new console session a colour of its own from a fixed palette of
 six, taking the first the console's other console sessions that are not archived do not already have, and starting
@@ -288,10 +300,11 @@ has its own light and dark value (see "What follows the choice" in `docs/product
 - Clicking a row deliberately does not move keyboard focus away from the terminal; a row reached with Tab can be
   activated with Enter or Space.
 - Each row tells assistive technology what its icons show: a session row its title, agent (Claude Code, Codex or Grok
-  Build) and the account it runs under, status, whether it is pinned, and, for a project session bound to a console
-  session, the console session it reports to (the binding badge's own fact); a project row whether it is pinned and,
-  while it carries an activity marker, what that marker means, plus its branch badge's facts (see "The branch badge"
-  in `docs/product/project-git-status.md`). A project row also tells it whether it is expanded or collapsed.
+  Build) and the account it runs under, status, whether it is pinned, and, for a bound project session, the session it
+  reports to — the console session the binding badge shows, or the project session its row is listed under, both in the
+  same wording (see "The binding badge" above); a project row whether it is pinned and, while it carries an activity
+  marker, what that marker means, plus its branch badge's facts (see "The branch badge" in
+  `docs/product/project-git-status.md`). A project row also tells it whether it is expanded or collapsed.
 
 ## Order of projects and sessions
 
@@ -317,6 +330,12 @@ one, or an open menu in one brings the whole group back to full strength while i
 3. then the most recently started first.
 
 The console sessions section lists its console sessions by that same session scheme.
+
+These three rules apply **within one level** of the project's list: the sessions the project lists at its own level are
+ranked against each other, and the sessions under one owner against each other, each group following its owner wherever
+the rules put it (see "Project rows" above). So a pinned session comes first among the sessions beside it, not first in
+the whole project, and a session under an owner is never ranked against that owner. Everything walked in this order
+follows the nesting the same way, so a session bound to a project session comes after its owner wherever both appear.
 
 The order follows status changes as they happen. A row that moves slides to its new place over about a quarter of a
 second, and moves at once where the system asks for reduced motion. The rail's waiting count walks waiting sessions
@@ -375,8 +394,10 @@ mirrored under a right-to-left language, and nothing moves where the system asks
 
 **View all (n)** — in a project's "View archive" submenu, in a focus mode's archived list, or in the console sessions
 section's "Archived console sessions" submenu — opens the archive view: **every** archived session of that project,
-every archived session under that console session (bound to it, or to an archived lead session bound to it, listed
-together in one list), or every archived console session of that console.
+every archived session under that console session (bound to it, or bound to an archived lead session that is bound to
+it), or every archived console session of that console. A lead session's own archived sessions are in that console
+session's archive only while the lead session is archived too; while the lead session is still live they are in its
+project's archive alone.
 
 - It **covers the terminal's area only**: the sidebar and the right pane stay as they are.
   The terminal goes on running beneath it and is not resized.
@@ -388,6 +409,12 @@ together in one list), or every archived console session of that console.
   its end is scrolled into view. Each row shows the session's agent's icon, its title, and its agent's name with its
   account and how long ago it was archived. Its **Reopen** and **Delete** buttons show while the row is hovered or holds
   keyboard focus, and are still reached with Tab.
+- A session whose owner is **a project session listed here too** — an archived session of an archived lead session, or
+  of any archived project session that had started sessions — is **inset under that owner**, with a line running down
+  the inset, and follows it instead of being ranked against the rows beside it; one whose owner is not in the list is
+  listed on its own. The row's text names the owner for assistive technology, in the wording a session row uses (see
+  "The binding badge" above). The 30 rows are counted as rows, so an inset row is never shown before the row it is
+  inset under.
 - **Reopen** resumes the session and selects it, which closes the view (see "Selecting a session" above).
 - **Delete** asks for confirmation, then deletes that session — for an archived owner, listing the archived sessions
   under it that are deleted with it; **Delete all** asks for confirmation, naming how many, then deletes every archived

@@ -87,6 +87,28 @@ const crowd = [
   sessionOf("o-7", console_.id, undefined, "Search tuning", "working", { colour: "teal" }),
 ].map((s, i) => ({ ...s, started_at: minutesAgo(700 - i * 10) }));
 
+// A lead session of `project` with two sessions of its own, which the project's focus mode leaves
+// to `hub1`'s and `hub1`'s nests under it, beside an unbound session with one of its own, which the
+// project's focus mode does list.
+const lead = sessionOf("s-lead", console_.id, project.id, "Rework the result ranking", "idle", { bound_to: hub1.id, account_id: "a-work" });
+const teamState = snapshotState({
+  consoles: [console_],
+  projects: [project, other],
+  sessions: [
+    hub1,
+    hub2,
+    lead,
+    sessionOf("s-lead-1", console_.id, project.id, "Chase the flaky test", "working", { bound_to: lead.id }),
+    sessionOf("s-lead-2", console_.id, project.id, "Measure the first paint", "waiting_user", { bound_to: lead.id }),
+    sessionOf("s-free", console_.id, project.id, "Write the migration", "idle"),
+    sessionOf("s-free-1", console_.id, project.id, "Check the index sizes", "interrupted", { bound_to: "s-free" }),
+    sessionOf("s-lead-archived", console_.id, project.id, "An archived lead session", "archived", { bound_to: hub1.id, ended_at: minutesAgo(90) }),
+    sessionOf("s-lead-archived-1", console_.id, project.id, "A session of the archived lead session", "archived", { bound_to: "s-lead-archived", ended_at: minutesAgo(80) }),
+    sessionOf("s-other-bound", console_.id, other.id, "Refresh the landing page", "idle", { bound_to: hub2.id }),
+  ],
+  settings,
+});
+
 export const focusScenarios: Scenario[] = [
   {
     id: "focus-project",
@@ -167,6 +189,27 @@ export const focusScenarios: Scenario[] = [
     description: "The header's new-session button is disabled, and the view says why and offers to add a project.",
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub2.id}` },
     state: snapshotState({ consoles: [console_], sessions: [hub2], settings }),
+  },
+  {
+    id: "focus-project-teams",
+    group: GROUP,
+    title: "A project's focus mode with teams",
+    description:
+      "An unbound session's own sessions are inset under its card. The lead session and the sessions under it are " +
+      "not listed: they are counted in the line and the chip of the console session they report to. The archive " +
+      "insets an archived session under its archived owner.",
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
+    state: teamState,
+  },
+  {
+    id: "focus-console-session-teams",
+    group: GROUP,
+    title: "A console session's focus mode with a lead session",
+    description:
+      "The lead session is one of the console session's cards, with the sessions bound to it inset under it: the " +
+      "console session sees the team and deals with the lead session alone. Its archive groups them the same way.",
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
+    state: teamState,
   },
   {
     id: "focus-project-long-names",

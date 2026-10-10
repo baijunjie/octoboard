@@ -4,12 +4,14 @@ import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 
 import {
+  archivedLead,
   boundArchived,
   boundConsoleSession,
   console_,
   otherConsoleSession,
   otherOwnerArchived,
   unboundArchived,
+  underArchivedLead,
 } from "../gallery/fixtures/archive";
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import { ArchiveView } from "./ArchiveView";
@@ -83,4 +85,37 @@ it("deletes all of a console session's archive by naming that console session", 
     expect.objectContaining({ kind: "delete-archived", consoleSession: boundConsoleSession, project: undefined, count: boundArchived.length }),
   );
   unmount();
+});
+
+it("lists the sessions archived under a lead session after it, inset, and names it for assistive technology", () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  act(() =>
+    root.render(
+      <ArchiveView
+        console={console_}
+        boundTo={boundConsoleSession}
+        sessions={[boundConsoleSession, archivedLead, ...underArchivedLead, ...boundArchived]}
+        accounts={[]}
+        onReopen={() => {}}
+        onOpenDialog={() => {}}
+        dialogOpen={false}
+        onClose={() => {}}
+      />,
+    ),
+  );
+  const rows = Array.from(container.querySelectorAll<HTMLElement>("li[data-marquee-scope]"));
+  // Newest first, except that the lead session's own sessions follow it rather than being ranked
+  // against the console session's.
+  expect(rows.map((row) => [row.querySelector(".text-sm")?.textContent, row.className.includes("ms-4")])).toEqual([
+    [boundArchived[0].title, false],
+    [archivedLead.title, false],
+    [underArchivedLead[0].title, true],
+    [underArchivedLead[1].title, true],
+    [boundArchived[1].title, false],
+    [boundArchived[2].title, false],
+  ]);
+  expect(rows[2].querySelector(".sr-only")?.textContent).toBe(`Bound to ${archivedLead.title}`);
+  act(() => root.unmount());
+  container.remove();
 });
