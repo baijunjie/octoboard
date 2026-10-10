@@ -9,6 +9,14 @@ separator such as "6 unmodified lines", and the separator cannot be expanded: th
 the hunks and their context, so the client has no text for the collapsed lines.
 - **Long lines cannot be wrapped.** Code is always shown unwrapped.
 - **The change list is always flat**, cannot be filtered by name, and a row offers no action of its own.
+- **Markdown shows only as source.** The viewer has no rendered document view.
+- **The viewer header is crowded.** The path, size, comparison and rename origin share one row; the path has no icon
+  unlike paths elsewhere in the app; the neutral Staged tag does not read as a tag in dark mode, and the spacing
+  between tags and the name is uneven.
+- **Light mode loses boundaries.** The viewer's code area is not distinguishable from the dialog, and the Git mode
+  panel as a whole has too little contrast; both are hand-set containers rather than HeroUI surfaces.
+- **A type change looks unlike every other change.** It shows as two separate Before and After diffs without the
+  unified/split choice, while a modified file shows as one diff with it.
 
 ## Plan outline
 
@@ -16,7 +24,8 @@ The renderer already supports expanding collapsed lines once it is given both si
 gains a bounded read of the two full file bodies a diff was made from; the viewer requests them when the user expands
 a separator and hands them to the renderer. The viewer gains a word-wrap choice beside the diff layout choice; the
 change list gains a flat/tree choice, a file-name filter and a per-row action button whose first action copies the
-path.
+path. The viewer also gains a source/document toggle for Markdown, a reworked header, HeroUI surfaces for its code
+area and the Git mode panel, and shows a type change as one diff.
 
 ## Key design decisions
 
@@ -37,6 +46,16 @@ path.
 - **Filtering is by file name**, narrowing the rows shown without changing what the list holds.
 - **A row's actions sit behind one icon button** at the row's end, so more actions can be added later; the first is
   Copy path.
+- **The header uses its width, and a long detail gets its own row.** The details sit beside the view controls so the
+  width next to them is not wasted; that, not keeping one row, is why they share a row. The path, size, comparison and
+  rename origin are kept apart as distinct items, a detail too long for the space left moves to a row of its own, and
+  the path shows with an icon prefix like the app's other paths.
+- **Standard components over hand-set styles.** Tags stay HeroUI Chips; the neutral tag's fill is measured against the
+  dialog, whose `--overlay` is lighter than the page background HeroUI's defaults are tuned for. The
+  viewer's code area and the Git mode panel move onto HeroUI surfaces, so both themes are covered by the
+  component rather than by hand.
+- **Every diff looks the same.** A type change is one diff with the layout choice, like any other change; the
+  Before/After split was a presentation choice, not a renderer limit.
 
 ## Milestones
 
@@ -46,6 +65,10 @@ path.
 4. [The change list as a directory tree](04-change-tree.md)
 5. [Filtering the change list by file name](05-change-filter.md)
 6. [A row action button with Copy path](06-row-actions.md)
+7. [A document view for Markdown in the viewer](07-markdown-document-view.md)
+8. [The viewer header's layout and tags](08-viewer-header-layout.md)
+9. [Surfaces and light-mode contrast in the viewer and Git mode](09-surfaces-and-contrast.md)
+10. [Showing a type change as one diff](10-type-change-diff.md)
 
 ## Open
 
@@ -59,3 +82,7 @@ path.
   choice.
 - What the separator says for a file over the limit, and for a side that does not exist (an added or deleted file
   has only one side).
+- Whether the Markdown document view is the default for Markdown, whether the choice is remembered, whether a
+  Markdown diff also gets a document view, and which Markdown library to use.
+- Which fill the neutral tag takes: another Chip colour or variant, or the `--default` family overridden for the
+  dialog.

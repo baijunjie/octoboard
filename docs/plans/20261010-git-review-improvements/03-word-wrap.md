@@ -2,7 +2,7 @@
 
 > Goal: the user can choose whether the file viewer wraps long lines, and the choice is remembered.
 > Completion criteria: a wrap toggle sits with the viewer's other view controls; code opens unwrapped by default; the
-> last choice applies to the next file and after a restart; the header keeps its fixed height; keyboard, screen reader
+> last choice applies to the next file and after a restart; the header's layout is unchanged; keyboard, screen reader
 > and RTL behaviour match the diff layout toggle; product docs describe it.
 
 ## Technical design
