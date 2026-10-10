@@ -31,6 +31,10 @@ its own would only know the first preference, which would put a user whose first
 even when a later preference is offered; the application therefore hands the web view the system's full list at
 launch.
 
+In the macOS application, the words a screen reader speaks for a control's role ("button", "tab") follow the system's
+language, not the choice made in Settings: they are in the first of the system's preferred languages that is one of the
+17 offered, and in English when none is. Only the UI's own text follows the choice.
+
 ## How the system's languages map onto the list
 
 The system's preferred languages are taken most preferred first, and **the first one that maps onto the list decides**.

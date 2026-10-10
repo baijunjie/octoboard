@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Merged by Tauri into the generated Info.plist. macOS picks the language of the roles VoiceOver
+       speaks ("button", "tab") from the languages the bundle declares, so every language the UI offers
+       is listed; an app declaring only English is spoken in English whatever the system language is. -->
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>ar</string>
+    <string>de</string>
+    <string>en</string>
+    <string>es</string>
+    <string>fr</string>
+    <string>hi</string>
+    <string>id</string>
+    <string>it</string>
+    <string>ja</string>
+    <string>ko</string>
+    <string>pt-BR</string>
+    <string>ru</string>
+    <string>th</string>
+    <string>tr</string>
+    <string>vi</string>
+    <string>zh-Hans</string>
+    <string>zh-Hant</string>
+  </array>
+</dict>
+</plist>
