@@ -14,11 +14,13 @@ import { useOctoboardTheme } from "../theme";
 import { displayWirePath, wireBaseName } from "../wirePath";
 import { arrowNavigation } from "./arrowKeys";
 import { diffPlan } from "./budgets";
-import { CodeSurface, DiffSurface, Loading, Unreadable, useRendererScope } from "./CodeSurface";
+import { useRendererScope } from "./codeRenderer";
+import { CodeSurface, DiffSurface } from "./CodeSurface";
 import {
   changePresentation,
   changeStatus,
   hasTwoSides,
+  isMarkdownName,
   type ViewerBody,
   type ViewerChange,
   type ViewerChangeSide,
@@ -28,8 +30,10 @@ import {
 import { ControlsSlot } from "./controlsSlot";
 import { diffLayout, LayoutToggle, type DiffLayout } from "./diffLayout";
 import { formatFileSize, formatSideSize } from "./format";
+import { MarkdownSurface } from "./MarkdownSurface";
 import { StatusChip } from "./StatusChip";
 import type { StatusKey } from "./statusMarks";
+import { Loading, Unreadable } from "./viewerStates";
 import { useWrapClaims, WrapToggleHost } from "./wordWrap";
 
 const STATUS_LABELS: Record<StatusKey, PlainMessageKey> = {
@@ -71,9 +75,13 @@ export function FileViewer({
   const language = useCurrentLanguage();
   // The user's last choice, kept across files and restarts (`diffLayout`).
   const layout = diffLayout.useValue();
+  const [markdownViewSlot, setMarkdownViewSlot] = useState<HTMLElement | null>(null);
   const [layoutSlot, setLayoutSlot] = useState<HTMLElement | null>(null);
   const { claimWrap, claimed: wrapClaimed } = useWrapClaims();
-  const controls = useMemo(() => ({ layout: layoutSlot, claimWrap }), [layoutSlot, claimWrap]);
+  const controls = useMemo(
+    () => ({ markdownView: markdownViewSlot, layout: layoutSlot, claimWrap }),
+    [markdownViewSlot, layoutSlot, claimWrap],
+  );
   const name = wireBaseName(subject.path);
   const { content } = subject;
   useRendererScope();
@@ -144,9 +152,10 @@ export function FileViewer({
 
   // The header is two rows of fixed height, whatever the subject is: the title, with the tags of what
   // the change is before the name, and under it one row of path and description with the view
-  // controls (the diff layout and word wrap choices) at its end. Every part that only some subjects
-  // have (the tags, the controls, the size) sits in a row that is as tall without it, and each row
-  // is one line cut by a fade, never wrapped, so moving between files cannot move the code below.
+  // controls (the Markdown view, diff layout and word wrap choices) at its end. Every part that only
+  // some subjects have (the tags, the controls, the size) sits in a row that is as tall without it,
+  // and each row is one line cut by a fade, never wrapped, so moving between files cannot move the
+  // code below.
   // An untracked file is a change with an absent old side, which `changeStatus` calls added; the
   // list marks it untracked and says so in `subject.status`, which also holds while the content is
   // not read (yet). Without one, a change's sides give it, and a path in conflict has none to compare.
@@ -204,10 +213,11 @@ export function FileViewer({
             {renamedFrom !== undefined && <RenamedFrom path={renamedFrom} />}
           </FadeOverflow>
         </div>
-        {/* Two fixed places, the layout choice before the wrap choice, so the Tab order is the
-            order on screen whichever of them mounts first. The layout slot has no box of its own
-            while empty, so it takes none of the gap. */}
+        {/* Fixed places, the Markdown view choice, then the layout choice, then the wrap choice, so
+            the Tab order is the order on screen whichever of them mounts first. The slots have no
+            box of their own while empty, so they take none of the gap. */}
         <div className="flex shrink-0 items-center gap-2">
+          <div ref={setMarkdownViewSlot} className="contents" />
           <div ref={setLayoutSlot} className="contents" />
           {wrapClaimed && <WrapToggleHost />}
         </div>
@@ -314,7 +324,7 @@ function ViewerContentBody({
     case "disconnected":
       return <Disconnected message={disconnectedMessage(t, content.what)} />;
     case "file":
-      return <BodyView resetKey={key} name={name} body={content.body} theme={theme} />;
+      return <BodyView resetKey={key} name={name} body={content.body} theme={theme} asDocument />;
     case "conflict":
       return (
         <>
@@ -386,21 +396,26 @@ function Failure({ message }: { message: string }): React.ReactElement {
   );
 }
 
-/** One file body, whichever kind it is. */
+/** One file body, whichever kind it is. A Markdown file's text is offered as a document when
+ * `asDocument` says so: a whole file shown alone, not a side of a comparison or a conflict body, whose
+ * markers are what it is looked at for. */
 function BodyView({
   resetKey,
   name,
   body,
   theme,
+  asDocument = false,
 }: {
   resetKey: string;
   name: string;
   body: ViewerBody;
   theme: "light" | "dark";
+  asDocument?: boolean;
 }): React.ReactElement {
   const t = useT();
   switch (body.kind) {
     case "text":
+      if (asDocument && isMarkdownName(name)) return <MarkdownSurface resetKey={resetKey} name={name} text={body.text} theme={theme} />;
       return <CodeSurface resetKey={resetKey} name={name} text={body.text} theme={theme} />;
     case "image":
       return <ImageView key={resetKey} name={name} body={body} theme={theme} />;
@@ -507,7 +522,8 @@ function ChangeView({
     case "single":
       // No note that there is nothing to compare it with: this relies on the caller marking an untracked
       // file's change `untracked` (`subject.status`), whose chip then says so.
-      return <BodyView resetKey={resetKey} name={name} body={presentation.body} theme={theme} />;
+      // A whole file body, so a Markdown one is offered as a document like a file read for itself.
+      return <BodyView resetKey={resetKey} name={name} body={presentation.body} theme={theme} asDocument />;
     case "text": {
       const twoSides = hasTwoSides(presentation.patch);
       return (

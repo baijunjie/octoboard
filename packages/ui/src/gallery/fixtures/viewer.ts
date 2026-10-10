@@ -204,6 +204,88 @@ pnpm build:app --bundles app
 \`\`\`
 `;
 
+// A fenced block far taller than the viewer, to be scrolled within the document's own frame.
+const LONG_FENCE = Array.from({ length: 200 }, (_, i) => `export const entry${i} = { id: ${i}, label: "Entry ${i}" };`).join("\n");
+
+// A document exercising every element the document view draws, plus what it must keep inert: raw
+// HTML, a remote image and a script link; and a passage in Arabic and one in Japanese.
+const GUIDE = `# Viewer guide
+
+A paragraph with **bold**, _italic_, \`inline code\`, a [web link](https://example.com/guide), a bare https://example.com/bare address,
+a [relative link](./README.md) and a [script link](javascript:alert(1)).
+
+## Lists and tasks
+
+1. First step
+2. Second step
+   - a nested bullet
+   - another one
+
+- [x] A finished task
+- [ ] An open task
+
+> A quoted remark that goes on for a while, so that the bar beside it spans more than one line of the document.
+
+### A table
+
+| Name | Kind | Notes |
+| :--- | :-: | ---: |
+| alpha | text | the first |
+| beta | image | a much longer cell that has to wrap inside its column instead of widening the table |
+
+## Code
+
+\`\`\`ts
+export function greet(name: string): string {
+  return \`Hello, \${name}\`; // a comment long enough to need wrapping inside the block, because blocks never scroll sideways
+}
+\`\`\`
+
+\`\`\`
+a fence with no language
+\`\`\`
+
+\`\`\`nosuchgrammar
+a fence whose language does not exist
+\`\`\`
+
+\`\`\`ts
+${LONG_FENCE}
+\`\`\`
+
+An empty fence follows.
+
+\`\`\`ts
+\`\`\`
+
+## Right to left and CJK
+
+مرحبا بالعالم، هذه فقرة بالعربية داخل مستند إنجليزي.
+
+- عنصر أول
+- عنصر ثان
+
+こんにちは、世界。これは日本語の段落です。
+
+## Footnotes
+
+A claim that needs a source[^1], and another[^2].
+
+[^1]: The first source, with a [link](https://example.com/source).
+[^2]: The second source.
+
+A claim in Chinese[^注1].
+
+[^注1]: 中文脚注的来源。
+
+## Inert
+
+![A remote picture that must not load](https://example.com/tracker.png)
+
+<script>window.__viewerPwned = "markdown-script";</script>
+<img src="https://example.com/raw.png" onerror="window.__viewerPwned = 'markdown-onerror'">
+`;
+
 const JSON_TEXT = `{
   "name": "octoboard-fixture",
   "version": "1.2.3",
@@ -313,6 +395,7 @@ async function files(): Promise<ViewerSubject[]> {
     file("crates/words/src/lib.rs", text("crates/words/src/lib.rs", RUST)),
     file("src/describe.ts", text("src/describe.ts", longLines())),
     file("README.md", text("README.md", MARKDOWN)),
+    file("docs/guide.md", text("docs/guide.md", GUIDE)),
     file("package.json", text("package.json", JSON_TEXT)),
     file("notes/plan.zzplan", text("notes/plan.zzplan", UNKNOWN)),
     file("web/index.html", text("web/index.html", HOSTILE_HTML)),
@@ -383,6 +466,16 @@ async function changes(): Promise<ViewerSubject[]> {
     change("assets/logo.png", present("assets/logo.png", before), present("assets/logo.png", after)),
     untracked("assets/new.png", after),
     untracked("src/scratch.ts", text("src/scratch.ts", NEW_SESSION)),
+    untracked("docs/draft.md", text("docs/draft.md", MARKDOWN)),
+    {
+      key: "Conflicted:docs/merge.md",
+      path: "docs/merge.md",
+      content: {
+        state: "conflict",
+        conflict: "Both sides modified this file. The file on disk is shown below with its conflict markers.",
+        body: text("docs/merge.md", "<<<<<<< ours\n# Release notes\n=======\n# Changes\n>>>>>>> theirs\n"),
+      },
+    },
     {
       key: "Conflicted:src/merge.ts",
       path: "src/merge.ts",
@@ -429,7 +522,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     title: "Files",
     description:
-      "Code in several languages (one file with lines wider than the viewer), every image format, an SVG and HTML whose scripts must not run, unsupported binary, a grammar that fails, files past the budgets, loading and failed reads. Previous / Next walks them in the same mounted viewer.",
+      "Code in several languages (one file with lines wider than the viewer), Markdown that opens as a document (headings, lists, tables, fenced code, right-to-left text, and markup that must stay inert), every image format, an SVG and HTML whose scripts must not run, unsupported binary, a grammar that fails, files past the budgets, loading and failed reads. Previous / Next walks them in the same mounted viewer.",
     viewer: { subjects: files },
   },
   {

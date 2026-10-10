@@ -139,7 +139,10 @@ translucent through the platform adapter's `translucentWindow`).
 
 `src-tauri/capabilities/default.json` also allowlists the `notification` plugin's commands (used by
 `packages/ui/src/lifecycle/useWaitingNotifications.ts` for the raised-hand system notification), the
-`clipboard-manager` plugin's write-text command (the platform adapter's `clipboard` capability),
+`clipboard-manager` plugin's write-text command (the platform adapter's `clipboard` capability), the `shell` plugin's
+open command (`shell:allow-open`, the platform adapter's `links` capability: a link in a rendered Markdown file opens in
+the system's browser; the plugin also spawns the daemon sidecar, but disables `open` unless `plugins.shell.open` is set
+in `tauri.conf.json`, which it is),
 `core:window|set_badge_count` (the Dock badge), `core:window|set_theme` (the window's native appearance following the
 in-app theme choice, used by `packages/ui/src/lifecycle/useNativeWindowTheme.ts`; the permission identifier in
 `capabilities/default.json` is `core:window:allow-set-theme`) and `core:window|show` (reveals the window the shell
@@ -199,10 +202,10 @@ any IPC call for it. The system's preferred languages travel the same way (`&lan
 | `src-tauri/src/tray.rs` | The menu bar icon: its menu (rebuilt from the UI's `set_tray_menu`; Open, Quit and the session lines), a left click that shows the window, and the `tray-session-chosen` event |
 | `src-tauri/src/menu.rs` | Builds the native macOS menu bar from the labels the UI sends (`set_menu_labels`), including the Settings… item that `lib.rs` turns into the `settings-requested` event |
 | `src-tauri/src/window_state.rs` | Remembers the window's frame and maximized state: decides the initial frame from the saved one and the connected displays, follows it from window events, saves it on exit |
-| `src-tauri/capabilities/default.json` | Allowlists the IPC commands above (through `permissions/*.toml`) plus the notification, clipboard write-text, Dock-badge, window-theme, window-reveal and window-drag/zoom commands |
+| `src-tauri/capabilities/default.json` | Allowlists the IPC commands above (through `permissions/*.toml`) plus the notification, clipboard write-text, shell open, Dock-badge, window-theme, window-reveal and window-drag/zoom commands |
 | `src-tauri/permissions/` | The app-defined permissions the capability names: `exit-lifecycle.toml`, `menu-labels.toml`, and `tray.toml` (`set_tray_menu` and `bring_to_front`) |
 | `src-tauri/icons/tray-template.png` | The menu bar icon's monochrome template image, derived by hand from the app icon's silhouette with the eyes cut out; no script regenerates it |
-| `src-tauri/tauri.conf.json` | Where the window's UI comes from (`frontendDist` is `packages/ui/dist`; `devUrl` and `beforeDevCommand` are that package's dev server), the `octoboardd` `externalBin`, and the bundle targets; its `productName` mirrors `config/app.json`'s `name`, which `build.rs` checks |
+| `src-tauri/tauri.conf.json` | Where the window's UI comes from (`frontendDist` is `packages/ui/dist`; `devUrl` and `beforeDevCommand` are that package's dev server), the `octoboardd` `externalBin`, the shell plugin's `open` flag, and the bundle targets; its `productName` mirrors `config/app.json`'s `name`, which `build.rs` checks |
 | `src-tauri/Info.plist` | Merged by Tauri into the bundle's generated `Info.plist`; declares the 17 UI languages as `CFBundleLocalizations`, which is what makes VoiceOver speak the controls' roles in the system's language instead of English |
 | `scripts/build-daemon.mjs` | Builds `octoboardd` in release mode and copies it into `src-tauri/binaries/` under the target-triple name Tauri's `externalBin` requires |
 | `scripts/build-app.mjs` | Builds the app for local verification with every `APPLE_*` variable stripped, and fails if the result carries a Developer ID authority; see "Release builds" above |

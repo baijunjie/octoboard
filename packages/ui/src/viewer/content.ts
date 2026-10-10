@@ -6,6 +6,11 @@ import type { ReactNode } from "react";
 import type { FileContent } from "../protocol";
 import type { StatusKey } from "./statusMarks";
 
+/** Whether a file of this name is Markdown, by its extension. */
+export function isMarkdownName(name: string): boolean {
+  return /\.(md|markdown)$/i.test(name);
+}
+
 /**
  * A file body classified for display. `text` is shown as code; `image` through an image element,
  * from a `data:` URL (the window's Content Security Policy admits images from `data:` only);

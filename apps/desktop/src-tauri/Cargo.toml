@@ -25,7 +25,10 @@ serde_json = "=1.0.151"
 # `tauri.conf.json` has to say the same, or `tauri-build` refuses the pair. The private API rules out
 # Mac App Store distribution; the app ships as a notarized DMG.
 tauri = { version = "=2.11.6", features = ["tray-icon", "macos-private-api"] }
-tauri-plugin-shell = "=2.0.2"
+# Same release as the `@tauri-apps/plugin-shell` the UI pins (`~2.3.3`): the UI opens a Markdown link
+# through its `open` command (`links` in `packages/ui/src/platform/tauri.ts`), and a platform whose
+# command does not resolve silently shows links as plain text. Newer releases (2.4 on) need rustc 1.90.
+tauri-plugin-shell = "=2.3.3"
 tauri-plugin-notification = "=2.4.0"
 tauri-plugin-clipboard-manager = "=2.3.3"
 anyhow = "1"

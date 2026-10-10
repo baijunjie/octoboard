@@ -16,6 +16,13 @@ export const RENDER_BUDGETS = {
    * main thread for about 0.8 s. */
   diffChars: 1_000_000,
   diffLines: 10_000,
+  /** The fenced blocks of a rendered document that are highlighted: their count and their total
+   * length in UTF-16 code units. Each block is a renderer instance of its own (a shadow root, a
+   * grammar load and a draw, queued on a pool of two workers), unlike a file, which is one, so a
+   * document of many fences stays within the file budget and would still make thousands. Blocks
+   * past either are shown as plain text. */
+  documentFences: 40,
+  documentFenceChars: 200_000,
 } as const;
 
 /** Counts the lines of `text`, a final line without a newline included. */

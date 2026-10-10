@@ -34,19 +34,34 @@ Implemented and verified in the component gallery under WebKit with real keyboar
 themes and under `ar`: the button's reveal and its zero width while hidden, its accessible name, the arrow key
 reaching it along the row, and Copy path raising its toast. These are what that could not settle:
 
-- [ ] Copy path in the packaged app: that the clipboard reaches it at all through `tauri-plugin-clipboard-manager`
-  and the `clipboard-manager:allow-write-text` capability entry, and that what lands on the clipboard is the path.
-  Nothing has exercised the plugin, its permission entry or a WKWebView clipboard write; a headless WebKit would not
-  read the clipboard back, so the written text rests on a unit test and on the toast appearing. A platform the
-  capability does not reach shows no action button at all, so the symptom of a wrong permission entry is a missing
-  button rather than an error.
-- [ ] A pointer press on the action button does not also open the file viewer behind the menu. The unit test fires a
-  bare `click`, which never produces the pointerdown/pointerup sequence react-aria's row press is built on, and the
-  gallery pass was keyboard-only. The flat list's row press comes from `useGridListItem`, a different mechanism from
-  the hand-built sidebar row that has lived on this pattern.
+- [x] Copy path in the packaged app: pressing the button with a real mouse and choosing Copy path left the change's
+  path on the system clipboard, read back after the toast, so the plugin and the `clipboard-manager:allow-write-text`
+  capability entry both reach it.
+- [x] A pointer press on the action button opens the menu and does not open the file viewer behind it.
 - [ ] A screen reader (VoiceOver) on the button: its name, and that the row's own name is not spoken twice.
 - [ ] The button's contrast against the row in light mode, hidden and revealed, measured rather than read off a
   screenshot.
+
+## Carried from milestone 07 (a document view for Markdown in the viewer)
+
+Verified in the packaged app: the document renderer's own chunk loads from `tauri://localhost`, a link opens the
+system browser with the viewer staying put, Select All then copy yields the file's Markdown source including the code
+inside fenced blocks, and an untracked Markdown file opened from the Git mode renders as a document. The rest was
+verified in the component gallery under WebKit with real input, in both themes and under `ar`. These are what neither
+could settle:
+
+- [ ] The document's loading state is centred in its frame. The change was made but never seen: the renderer's chunk
+  loads too fast to catch the Suspense fallback, in the gallery and in the packaged app alike. Throttling, or a file
+  large enough to slow the first draw, may make it visible.
+- [ ] A screen reader (VoiceOver) on the rendered document: the region's name, the heading and list structure, the
+  links, and the footnote heading that is marked for assistive technology only.
+- [ ] A Tab walk in the real WKWebView rather than Playwright's WebKit build: the document region, then each link in
+  it, then on out of the document.
+- [ ] One measurement of a Markdown file near the viewer's text budget. The document is gated on the same budget as
+  highlighting, on the stated grounds that a document that size would hold the window as long as highlighting it
+  would — but highlighting tokenizes in workers and only pays an insert cost on the main thread, while
+  `react-markdown` parses and builds the whole element tree on the main thread. The claim is plausible and unmeasured;
+  if it does not hold, the document needs a smaller budget of its own.
 
 ## Notes for the developer
 

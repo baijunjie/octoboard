@@ -3,6 +3,7 @@ import type {
   BadgeCapability,
   ClipboardCapability,
   ExitCapability,
+  LinkCapability,
   NativeWindowCapability,
   NotificationCapability,
   PlatformAdapter,
@@ -25,6 +26,7 @@ export function tauriPlatform(): PlatformAdapter {
     appMenu: tauriAppMenu(),
     statusItem: tauriStatusItem(),
     clipboard: tauriClipboard(),
+    links: tauriLinks(),
   };
 }
 
@@ -190,6 +192,18 @@ function tauriClipboard(): ClipboardCapability {
     async writeText(text) {
       const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
       await writeText(text);
+    },
+  };
+}
+
+/** Through the shell plugin's `open`, which hands the address to the system's default handler and
+ * only accepts `http:`, `https:`, `mailto:` and `tel:` ones (`plugins.shell.open` in
+ * `tauri.conf.json`). */
+function tauriLinks(): LinkCapability {
+  return {
+    async open(url) {
+      const { open } = await import("@tauri-apps/plugin-shell");
+      await open(url);
     },
   };
 }

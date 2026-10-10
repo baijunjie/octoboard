@@ -2,7 +2,7 @@
 import { beforeEach, expect, it } from "vitest";
 
 import { IS_MAC } from "../useWindowShortcut";
-import { isSelectAll, selectCode } from "./selectAll";
+import { copyDocument, isSelectAll, selectCode, selectDocument } from "./selectAll";
 
 const command = IS_MAC ? { metaKey: true, ctrlKey: false } : { metaKey: false, ctrlKey: true };
 const other = IS_MAC ? { metaKey: false, ctrlKey: true } : { metaKey: true, ctrlKey: false };
@@ -43,4 +43,34 @@ it("takes the key and selects nothing while the renderer has drawn no code yet",
   frame().appendChild(document.createElement("div")).attachShadow({ mode: "open" }).innerHTML = "Loading";
   expect(selectCode(frame())).toBe(true);
   expect(document.getSelection()!.toString()).toBe("");
+});
+
+const clipboardEvent = () => {
+  const data = new Map<string, string>();
+  let prevented = false;
+  return {
+    data,
+    event: {
+      clipboardData: { setData: (type: string, value: string) => void data.set(type, value) } as unknown as DataTransfer,
+      preventDefault: () => (prevented = true),
+    },
+    prevented: () => prevented,
+  };
+};
+
+// Fenced blocks lie in shadow roots a document selection does not hold, so the copy of a whole
+// document carries its source; how a real browser behaves is checked in a page.
+it("copies the Markdown source when the whole document is selected, and leaves a partial selection alone", () => {
+  frame().innerHTML = "<h1>Title</h1><p>text</p>";
+  const whole = clipboardEvent();
+  expect(selectDocument(frame())).toBe(true);
+  expect(copyDocument(whole.event, frame(), "# Title\n\ntext\n")).toBe(true);
+  expect(whole.data.get("text/plain")).toBe("# Title\n\ntext\n");
+  expect(whole.prevented()).toBe(true);
+
+  const part = clipboardEvent();
+  document.getSelection()!.selectAllChildren(frame().querySelector("p")!);
+  expect(copyDocument(part.event, frame(), "# Title\n\ntext\n")).toBe(false);
+  expect(part.data.size).toBe(0);
+  expect(part.prevented()).toBe(false);
 });

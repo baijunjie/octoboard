@@ -58,7 +58,9 @@ area and the Git mode panel, and shows a type change as one diff.
   Before/After split was a presentation choice, not a renderer limit.
 - **One expansion reveals 20 lines, and the third opens the rest.** The separator also offers expanding the whole
   file at once.
-- **One wrap choice covers files and diffs**, and nothing is wrapped by default — Markdown and plain text included.
+- **One wrap choice covers the source view of files and diffs**, and nothing is wrapped by default there — Markdown
+  source and plain text included. A rendered Markdown document always wraps, because an unwrapped sideways scroller
+  cannot be reached from the keyboard.
 - **Flat is the default list form**, and a chain of single-child directories is compacted into one row in the tree
   form.
 - **The filter matches the file name only**, and both the filter and the row action button stay in the change list;
@@ -79,7 +81,7 @@ area and the Git mode panel, and shows a type change as one diff.
 4. 04 change-tree (closed)
 5. 05 change-filter (closed)
 6. 06 row-actions (closed)
-7. [A document view for Markdown in the viewer](07-markdown-document-view.md)
+7. 07 markdown-document-view (closed)
 8. [The viewer header's layout and tags](08-viewer-header-layout.md)
 9. [Surfaces and light-mode contrast in the viewer and Git mode](09-surfaces-and-contrast.md)
 10. [Showing a type change as one diff](10-type-change-diff.md)

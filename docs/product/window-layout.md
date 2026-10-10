@@ -417,3 +417,8 @@ Not mirrored:
   the separator a diff shows where it collapsed unchanged lines (see "Expanding the collapsed lines" in
   `docs/product/project-pane-git-mode.md`), are laid out in the direction of their own text, as a name the user typed
   is; a commit's id reads left to right.
+- **A rendered Markdown document in the file viewer** (see "A Markdown file as a document" in
+  `docs/product/project-pane.md`), which is laid out in the direction of its own text, block by block: each paragraph,
+  heading, list, quote and table takes the direction of its own first strong letter, so a right-to-left passage in a
+  left-to-right document reads from its own side, with its quote bar on that side; inline code and a fenced block
+  always read left to right, and the frame around the document follows the window.

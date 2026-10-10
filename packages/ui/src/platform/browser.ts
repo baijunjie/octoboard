@@ -5,13 +5,26 @@ import type { PlatformAdapter } from "./index";
  * daemon outlives it), no application icon to badge, no native window to theme or reveal, no
  * window controls of its own to keep clear and no menu bar to answer. Desktop notifications map
  * onto the Web Notifications API, absent where the browser does not have it; the clipboard is the
- * async Clipboard API, absent where the page is not a secure context.
+ * async Clipboard API, absent where the page is not a secure context; a link opens in a new tab.
  */
 export function browserPlatform(): PlatformAdapter {
   return {
     kind: "browser",
     notifications: typeof Notification === "undefined" ? undefined : webNotifications(),
     clipboard: webClipboard(),
+    links: webLinks(),
+  };
+}
+
+/** A new tab with no access back to this page (`noopener`) and no referrer: the address comes from
+ * a file's own text, so it is not trusted with either. `noopener` makes `window.open` return `null`
+ * whether or not a tab opened, so a blocked popup cannot be told from an opened one and this never
+ * rejects. */
+function webLinks(): NonNullable<PlatformAdapter["links"]> {
+  return {
+    async open(url) {
+      window.open(url, "_blank", "noopener,noreferrer");
+    },
   };
 }
 

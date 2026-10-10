@@ -33,3 +33,39 @@ export function selectCode(frame: HTMLElement): boolean {
   const root = anchor.getRootNode();
   return frame.contains(anchor) || (root instanceof ShadowRoot && frame.contains(root.host));
 }
+
+/**
+ * Select All in a rendered document: everything the document holds. The browser's own would take the
+ * viewer's title, path and size with it. The selection is marked in the DOM only, and cannot hold the
+ * code of fenced blocks, which lie in the renderer's shadow roots, out of reach of a document
+ * selection — `copyDocument` is what makes a copy of it whole.
+ */
+export function selectDocument(region: HTMLElement): boolean {
+  const selection = region.ownerDocument.getSelection();
+  if (!selection) return false;
+  selection.selectAllChildren(region);
+  return true;
+}
+
+/**
+ * Makes a copy of a selection that is the whole of a rendered document put the document's Markdown
+ * source on the clipboard: a document selection holds no text for its fenced blocks (see
+ * `selectDocument`), so the browser's own copy would leave a gap where each one was. A selection of
+ * part of the document is left to the browser, which copies what it can reach. Returns whether it
+ * handled the copy.
+ */
+export function copyDocument(
+  event: { clipboardData: DataTransfer | null; preventDefault: () => void },
+  region: HTMLElement,
+  source: string,
+): boolean {
+  const selection = region.ownerDocument.getSelection();
+  if (!event.clipboardData || !selection || selection.rangeCount !== 1) return false;
+  const range = selection.getRangeAt(0);
+  const whole =
+    range.startContainer === region && range.endContainer === region && range.startOffset === 0 && range.endOffset === region.childNodes.length;
+  if (!whole) return false;
+  event.clipboardData.setData("text/plain", source);
+  event.preventDefault();
+  return true;
+}

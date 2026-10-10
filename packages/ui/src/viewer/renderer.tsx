@@ -1,5 +1,5 @@
 // The one module that touches the rendering library (`@pierre/diffs`, over Shiki). It is loaded
-// lazily by `CodeSurface.tsx`, so the library and its grammars stay out of the startup bundle, and
+// lazily by `codeRenderer.tsx`, so the library and its grammars stay out of the startup bundle, and
 // nothing outside it sees a library type: callers hand it plain text and patches. The rendered DOM
 // is read elsewhere only by `rendererDom.ts`, which cannot live here, and `expansion.ts`, which
 // is the part of it that drives the separators of collapsed lines.
@@ -139,12 +139,22 @@ export function endRendererPool(): void {
   terminateWorkerPoolSingleton();
 }
 
+/** The grammar a Markdown fence's info word names, which is a file extension (`ts`, `sh`) as often
+ * as a grammar's own name (`typescript`); without one, or one the library does not know, plain
+ * text (a name it knows nothing of is told apart only by the grammar failing to load). */
+function languageOfHint(hint: string): string {
+  const word = hint.trim().toLowerCase();
+  if (word === "") return "text";
+  const byExtension = getFiletypeFromFileName(`code.${word}`);
+  return byExtension === "text" ? word : byExtension;
+}
+
 /** Resolves the grammar for `name`, and the themes, before anything is rendered with them. One
  * that fails to load (a chunk that cannot be fetched, a grammar that does not compile under the
  * JavaScript regex engine) would otherwise leave the library waiting on a rejected promise with
  * nothing on screen; here it turns into plain text. */
-function useLanguage(name: string): { lang: FileContents["lang"]; failed: boolean } | undefined {
-  const detected = getFiletypeFromFileName(name);
+function useLanguage(name: string, hint?: string): { lang: FileContents["lang"]; failed: boolean } | undefined {
+  const detected = hint === undefined ? getFiletypeFromFileName(name) : languageOfHint(hint);
   const [result, setResult] = useState<{ for: string; lang: FileContents["lang"]; failed: boolean }>();
   useEffect(() => {
     let current = true;
@@ -185,6 +195,10 @@ export interface FileRenderProps {
   theme: "light" | "dark";
   /** Whether long lines wrap. */
   wrap: boolean;
+  /** The grammar by the info word of a Markdown fence, in place of the one `name` picks. */
+  language?: string;
+  /** Whether lines are numbered; they are unless this is false. */
+  lineNumbers?: boolean;
   /** Told whether the file is shown without highlighting because its grammar or a theme failed to
    * load; the caller passes a new callback for each file, so a second file in the same failing
    * language is reported too. */
@@ -202,10 +216,12 @@ export const HighlightedFile = memo(function HighlightedFile({
   text,
   theme,
   wrap,
+  language: hint,
+  lineNumbers = true,
   onPlainChange,
   onDrawn,
 }: FileRenderProps): React.ReactElement | null {
-  const language = useLanguage(name);
+  const language = useLanguage(name, hint);
   const failed = language?.failed;
   useEffect(() => {
     if (failed !== undefined) onPlainChange?.(failed);
@@ -217,8 +233,8 @@ export const HighlightedFile = memo(function HighlightedFile({
   );
   const onPostRender = useDrawnCallback(onDrawn);
   const options = useMemo(
-    () => ({ ...BASE_OPTIONS, themeType: theme, overflow: overflowOption(wrap), onPostRender }) as const,
-    [theme, wrap, onPostRender],
+    () => ({ ...BASE_OPTIONS, themeType: theme, overflow: overflowOption(wrap), disableLineNumbers: !lineNumbers, onPostRender }) as const,
+    [theme, wrap, lineNumbers, onPostRender],
   );
   return (
     <WorkerPoolContext.Provider value={rendererPool()}>

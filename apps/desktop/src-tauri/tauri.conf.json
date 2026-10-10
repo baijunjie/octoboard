@@ -16,6 +16,11 @@
       "csp": null
     }
   },
+  "plugins": {
+    "shell": {
+      "open": true
+    }
+  },
   "bundle": {
     "active": true,
     "targets": ["app", "dmg"],

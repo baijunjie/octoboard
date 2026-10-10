@@ -446,6 +446,12 @@ export const zhHans: Translation<"other"> = {
   "viewer.layout.unified": "统一",
   "viewer.layout.split": "并排",
   "viewer.wrap": "自动换行",
+  "viewer.markdown": "Markdown 视图",
+  "viewer.markdown.document": "文档",
+  "viewer.markdown.source": "源码",
+  "viewer.markdown.footnotes": "脚注",
+  "viewer.markdown.footnoteBack": "返回引用 {reference}",
+  "viewer.markdown.failed": "此文件不支持文档视图，以源码显示。",
   "viewer.expand.unmodified": {
     other: "{count} 行未修改内容",
   },

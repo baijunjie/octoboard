@@ -413,6 +413,11 @@ commit and its new side from To's, and is shown as a staged change is below; it 
   conflict markers where both sides modified or added it. A path both sides deleted has no file to show and says it
   does not exist.
 
+A whole file body shown here instead of a diff — an untracked file, or one added with no patch — is a Markdown
+document when the file is Markdown, as it is for a file read for itself (see "A Markdown file as a document" in
+`docs/product/project-pane.md`). A diff, the file behind a path in conflict and the version inside the project of a
+rename across the boundary are shown as source whatever the file is.
+
 How a diff is coloured in each appearance is in "What follows the choice" in `docs/product/appearance.md`. A diff's
 code is focused, selected and copied as a file's is (see "Selecting and copying" in `docs/product/project-pane.md`).
 
@@ -531,5 +536,5 @@ every folder open. Change lists, branch lists, comparisons and their contents ar
 kept only while the project's pane stays in the right pane (see "Filtering by file name" above).
 
 **Across projects and restarts**: whether the change lists are grouped by folder (see "Flat or grouped by folder"
-above), kept as the file viewer's diff layout and wrap choices are. The mode itself is kept with the rest of the
-pane's state (see "What is remembered" in `docs/product/project-pane.md`).
+above), kept as the file viewer's Markdown view, diff layout and wrap choices are. The mode itself is kept with the
+rest of the pane's state (see "What is remembered" in `docs/product/project-pane.md`).

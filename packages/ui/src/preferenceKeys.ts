@@ -15,4 +15,5 @@ export const PREFERENCE_KEYS = {
   diffLayout: "octoboard.diffLayout",
   wordWrap: "octoboard.wordWrap",
   changeLayout: "octoboard.changeLayout",
+  markdownView: "octoboard.markdownView",
 } as const;

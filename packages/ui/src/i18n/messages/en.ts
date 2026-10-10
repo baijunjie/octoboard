@@ -486,6 +486,12 @@ export const en = {
   "viewer.layout.unified": "Unified",
   "viewer.layout.split": "Split",
   "viewer.wrap": "Wrap lines",
+  "viewer.markdown": "Markdown view",
+  "viewer.markdown.document": "Document",
+  "viewer.markdown.source": "Source",
+  "viewer.markdown.footnotes": "Footnotes",
+  "viewer.markdown.footnoteBack": "Back to reference {reference}",
+  "viewer.markdown.failed": "Shown as source because the document view is not available for this file.",
   "viewer.expand.unmodified": {
     one: "{count} unmodified line",
     other: "{count} unmodified lines",

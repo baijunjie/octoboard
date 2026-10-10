@@ -1,11 +1,9 @@
-import { ToggleButton, ToggleButtonGroup } from "@heroui/react";
-import React, { useContext } from "react";
-import { createPortal } from "react-dom";
+import React from "react";
 
 import { useT } from "../i18n/react";
 import { createPersistedPreference } from "../persistedPreference";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
-import { ControlsSlot } from "./controlsSlot";
+import { SlotToggle } from "./slotToggle";
 
 export type DiffLayout = "unified" | "split";
 
@@ -28,25 +26,18 @@ export function LayoutToggle({
 }: {
   layout: DiffLayout;
   onLayoutChange: (layout: DiffLayout) => void;
-}): React.ReactElement | null {
+}): React.ReactElement {
   const t = useT();
-  const slot = useContext(ControlsSlot)?.layout;
-  if (!slot) return null;
-  return createPortal(
-    <ToggleButtonGroup
-      aria-label={t("viewer.layout")}
-      size="sm"
-      selectionMode="single"
-      disallowEmptySelection
-      selectedKeys={[layout]}
-      onSelectionChange={(keys) => {
-        const [picked] = [...keys];
-        if (picked === "unified" || picked === "split") onLayoutChange(picked);
-      }}
-    >
-      <ToggleButton id="unified">{t("viewer.layout.unified")}</ToggleButton>
-      <ToggleButton id="split">{t("viewer.layout.split")}</ToggleButton>
-    </ToggleButtonGroup>,
-    slot,
+  return (
+    <SlotToggle
+      slot="layout"
+      label={t("viewer.layout")}
+      value={layout}
+      options={[
+        { id: "unified", label: t("viewer.layout.unified") },
+        { id: "split", label: t("viewer.layout.split") },
+      ]}
+      onChange={onLayoutChange}
+    />
   );
 }

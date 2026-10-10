@@ -37,6 +37,9 @@ export interface PlatformAdapter {
   readonly statusItem?: StatusItemCapability;
   /** The system clipboard, for text the UI puts there on the user's say-so. */
   readonly clipboard?: ClipboardCapability;
+  /** Opening an address in the user's own browser (or mail client), for a link the UI shows but
+   * must not navigate its own window to. */
+  readonly links?: LinkCapability;
 }
 
 export interface ExitHandlers {
@@ -148,6 +151,13 @@ export interface ClipboardCapability {
   /** Puts `text` on the clipboard; rejects when the environment refuses (no permission, no
    * focused document). */
   writeText(text: string): Promise<void>;
+}
+
+export interface LinkCapability {
+  /** Opens `url`, an `http:`, `https:` or `mailto:` address, outside the app. Only the desktop
+   * platform reports a refusal, by rejecting: a browser cannot tell a blocked popup from an opened
+   * one, and resolves either way. */
+  open(url: string): Promise<void>;
 }
 
 /** Picks the implementation once, at startup, from the environment the page is running in. */

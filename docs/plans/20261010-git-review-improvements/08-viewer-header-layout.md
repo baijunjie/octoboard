@@ -7,6 +7,15 @@
 > branches, a rename's origin) moves to a row of its own instead of crowding the others; every tag, including the neutral stage tag, is visibly a tag against the dialog; the spacing between tags and
 > between the tags and the name is consistent; product docs describe the new layout.
 
+## Handoff
+
+From milestone 07 (a document view for Markdown in the viewer):
+
+- [ ] The header's view-control group grew a third choice: a Markdown file now carries a source/document toggle
+  before the layout and wrap controls, so the group is wider than the layout and wrap controls alone. Lay the details
+  out against that width, and check the worst case — a Markdown file opened from the Compare view, which shows the
+  comparison's branches beside all three controls.
+
 ## Technical design
 
 - [ ] The header's details (path, size, comparison, rename origin) are distinct items laid out beside the view

@@ -142,10 +142,11 @@ same viewer; what it shows of a change is in "Opening a change" in `docs/product
 
 The header is two rows, and the same height for every file, a change, or one still loading or failed: the title row, and
 under it a single row for the path, the size or the branches of a comparison and, at its end, the view controls the
-subject has — the diff layout choice, and after it the wrap choice (see "Wrapping long lines" below). A title or a row
-that is too long for the window fades out at its end rather than wrapping (the path from its start, so the name of its
-folder stays visible, and the full text is the tooltip); the view controls keep their place, and the description gives
-way first. Moving from file to file therefore never moves the code below it.
+subject has — the Markdown view choice (see "A Markdown file as a document" below), then the diff layout choice, then
+the wrap choice (see "Wrapping long lines" below). A title or a row that is too long for the window fades out at its
+end rather than wrapping (the path from its start, so the name of its folder stays visible, and the full text is the
+tooltip); the view controls keep their place, and the description gives way first. Moving from file to file therefore
+never moves the code below it.
 
 ### What it shows
 
@@ -153,7 +154,8 @@ way first. Moving from file to file therefore never moves the code below it.
   window's appearance (see "What follows the choice" in `docs/product/appearance.md`). A file of more than 10,000 lines
   or 1,000,000 characters is shown as plain text, with a line saying it is shown without highlighting because it is
   large; within highlighted code, a line longer than 1,000 characters is left unhighlighted. Where highlighting is not
-  available for a file, or fails to load, the file is shown as plain text.
+  available for a file, or fails to load, the file is shown as plain text. A **Markdown** file opens as a rendered
+  document instead, with its source a choice away (see "A Markdown file as a document" below).
 - **Images** — PNG, JPEG, GIF, WebP, BMP, ICO and SVG; AVIF on macOS 13 and later — are shown scaled down to fit and
   never scaled up, on a checkerboard that shows their transparent areas. An image is only displayed: an SVG's scripts
   never run and nothing it refers to is fetched. An image that cannot be decoded says so; an SVG that cannot be
@@ -165,18 +167,54 @@ way first. Moving from file to file therefore never moves the code below it.
   but not while its code is drawn.
 - **A file that cannot be shown** says why (see "Errors" below).
 
+### A Markdown file as a document
+
+A Markdown file — one whose name ends in `.md` or `.markdown`, in any case — opens as a **rendered document**, and
+**Markdown view**, the first of the header's view controls, switches between Document and Source. The source is the
+code view every other text file gets. The choice is remembered, like the diff layout and wrap choices: it holds for
+the next Markdown file, and after the application restarts.
+
+**What the document shows.** Headings, paragraphs, lists — GFM task lists among them, whose boxes show the state the
+text records and cannot be ticked — quotes, horizontal rules, tables, inline code, links and fenced code. A fenced
+block is highlighted the way the source view highlights code, by the grammar its info word names (a file extension
+such as `ts` as readily as a grammar's own name), and it wraps rather than scrolling sideways; a block whose grammar
+is not one the viewer knows is shown as plain text, and so are the blocks past the document's budget for highlighting
+them, in a document that holds a great many of them or very long ones. A table's columns keep the alignment the
+author wrote — GFM's left, centre and right, which stay physical as GFM defines them whichever direction the text
+reads in — and only an unaligned column follows the direction of its table. GFM footnotes are set off at the end,
+under a heading only assistive technology is given; a reference moves to its definition and the definition's back link
+moves to the reference, both scrolling within the document rather than taking the viewer anywhere.
+
+**The document is inert.** Raw HTML in the file is shown as text and never run. An image becomes its alt text and is
+never fetched. Only an absolute `http:`, `https:` or `mailto:` address is a link; a relative path, an anchor of the
+author's own and a `javascript:` address are drawn as their text alone. A link carries the address it leads to as its
+tooltip, and a link with no text of its own reads as that address. **Following a link never moves the viewer**: the
+address is handed to the user's own browser or mail client — to a new tab, in the UI opened in a browser — and the
+viewer stays on the file it was showing.
+
+**The document always wraps** and offers no Wrap lines control (see "Wrapping long lines" below).
+
+**Where the document is offered.** A Markdown file opened for itself, and a whole Markdown file body the Git mode
+shows — an untracked file, or one added with no patch (see "What it shows" in
+`docs/product/project-pane-git-mode.md`). A diff, the file behind a path in conflict and the version inside the
+project of a rename across the project's boundary keep the source view alone and show no Markdown view control. So
+does a Markdown file past the budget for highlighting (see "What it shows" above): it is shown as plain source, with
+no control either. Where the document cannot be drawn at all, the source is shown under a line saying the document
+view is not available for this file.
+
 ### Wrapping long lines
 
 **Wrap lines**, the last of the header's view controls, chooses whether lines too long for the viewer's width are
-broken onto the next line. **Nothing wraps until it is turned on**, whatever is shown — prose as much as code. It is
-one choice for everything the viewer shows as text, files and changes alike: code, a file shown as plain text, a diff,
-a plain patch, and the file behind a path in conflict. The choice is remembered, like the diff layout choice: it holds
-for the next file and the next change, and after the application restarts.
+broken onto the next line. **Nothing wraps until it is turned on** in what the viewer shows as source text — prose as
+much as code. It is one choice for all of it, files and changes alike: code, a file shown as plain text, a Markdown
+file's source, a diff, a plain patch, and the file behind a path in conflict. The choice is remembered, like the diff
+layout choice: it holds for the next file and the next change, and after the application restarts.
 
-- The control is there only while the viewer shows text whose lines could wrap. A change shown in sections, and an
-  image change whose sides fell back to their text, have the one choice between them rather than one for each part. An
-  image shown as an image, a binary file, a change with no differences, one with nothing to show and an error offer
-  none.
+- The control is there only while the viewer shows source text whose lines could wrap. A change shown in sections, and
+  an image change whose sides fell back to their text, have the one choice between them rather than one for each part.
+  An image shown as an image, a binary file, a change with no differences, one with nothing to show, an error and a
+  rendered Markdown document — which wraps whatever the choice says (see "A Markdown file as a document" above) —
+  offer none.
 - **While lines do not wrap, a long one is read by scrolling sideways with the pointer.** Those scrollers take no
   keyboard focus, and Left and Right in the viewer move between subjects (see "Moving between files" below), so from
   the keyboard the way to the end of a long line is to turn wrapping on.
@@ -193,6 +231,13 @@ With keyboard focus on the code region, **⌘A** (Ctrl+A off macOS) selects that
 its line numbers, not a diff's markers, and not the viewer's title, path and size, so copying takes the code alone.
 While the code has not been drawn yet, the key selects nothing. A change shown as two diffs, Before and After, is two
 code regions, and the key selects the one with keyboard focus.
+
+A **rendered Markdown document** (see "A Markdown file as a document" above) is a region of the same kind, named for
+the file as the code region is: Tab or a click puts keyboard focus on it so it can be scrolled from the keyboard, and
+Tab from there goes on through the links the document holds, each its own stop, before leaving it. ⌘A with keyboard
+focus on the document selects the document and not the viewer's title, path and size. Copying a selection that is the
+whole document puts the file's **Markdown source** on the clipboard, the source inside its fenced blocks included,
+which a selection of the drawn document cannot reach; a selection of part of the document copies as what is selected.
 
 While text inside the viewer is selected, the Left and Right arrow keys leave it selected rather than moving to
 another file (see "Moving between files" below).

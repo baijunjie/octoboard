@@ -19,6 +19,12 @@ From milestone 05 (filtering the change list by file name):
   app-wide defect with its own ticket, `docs/bugs/20261011-search-field-placeholder-contrast.md`, and is not this
   milestone's to fix.
 
+From milestone 07 (a document view for Markdown in the viewer):
+
+- [ ] The rendered document's frame sits on the code frame's background, so it has the same missing boundary against
+  the dialog in light mode. Move it onto whichever HeroUI surface the code area moves to, rather than leaving the two
+  frames on different footings.
+
 ## Technical design
 
 - [ ] The viewer's code, diff and document areas sit on a HeroUI Surface whose variant gives a visible boundary in

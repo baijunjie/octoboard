@@ -38,7 +38,9 @@ Everything the window shows follows the chosen appearance, including:
   an image there sits on a checkerboard drawn in the appearance's colours (see "The file viewer" in
   `docs/product/project-pane.md`). A diff there (see "Opening a change" in `docs/product/project-pane-git-mode.md`) is
   highlighted in the same scheme, with added and removed lines tinted and marked `+` and `-`, and a changed word within
-  a line underlined rather than tinted, so that every colour still meets 4.5:1 on the tinted lines.
+  a line underlined rather than tinted, so that every colour still meets 4.5:1 on the tinted lines. A rendered
+  Markdown document (see "A Markdown file as a document" in `docs/product/project-pane.md`) sits on that background
+  too, its links underlined as well as coloured, in a colour that meets 4.5:1 on it in either appearance.
 - **A console's default avatar**, whose fills have their own light and dark values (see "Avatar" in
   `docs/product/consoles-and-projects.md`).
 - **The native window's own appearance** in the macOS application — the window's close, minimise and zoom buttons

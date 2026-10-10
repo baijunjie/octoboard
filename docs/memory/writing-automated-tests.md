@@ -102,3 +102,15 @@ session attaches the terminal to it, and that attach (`attach` in `packages/ui/s
 focuses the terminal after whatever the sidebar or a hook did with focus. So a jsdom test asserting that focus stays
 on a sidebar control after a selection passes while the app does the opposite. Assert focus in jsdom only for moves
 that select no session; judge where focus lands after a selection in the real app.
+
+## A jsdom test cannot tell what a selection over the viewer's code copies
+
+Applies to the `packages/ui` viewer tests (`vitest` under jsdom), which mock the rendering library
+(`vi.mock("./renderer")`) with a plain `<pre>` in the light DOM. The library itself draws a file's code inside a
+shadow root of its own, which a document selection does not enter, so the mock takes away the one condition that
+decides what a Select All or a copy over a code frame — or over a rendered document that holds fenced blocks — puts
+on the clipboard: a handler that copies the prose and a gap where every block of code was passes its jsdom test, and
+a browser check that only shows the selection scoped to the right region passes as well.
+
+So assert in jsdom only what such a handler does to the DOM, and settle what a copy carries by copying for real in a
+browser over the page and reading the clipboard back.

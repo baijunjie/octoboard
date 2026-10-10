@@ -1,73 +1,18 @@
-import { Spinner } from "@heroui/react";
-import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import React, { Suspense, useCallback, useMemo, useState } from "react";
 
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
 import { useT } from "../i18n/react";
 import { diffPlan, textPlan } from "./budgets";
 import { CODE_THEMES } from "./codeTheme";
+import { HighlightedFile, RenderedDiff, RendererBoundary } from "./codeRenderer";
 import { hasHunks, withoutNoNewlineMarkers, type ChangeBodies } from "./content";
 import { LayoutToggle, type DiffLayout } from "./diffLayout";
 import type { ExpansionStatus, SeparatorLabels } from "./expansion";
 import { focusFirstSeparatorControl } from "./rendererDom";
 import { isSelectAll, selectCode } from "./selectAll";
+import { LoadingOverlay, Notice, Unreadable } from "./viewerStates";
 import { WrapToggle, wordWrap } from "./wordWrap";
-
-// The renderer module, with the library and its grammars, loads the first time code is shown.
-let rendererLoaded = false;
-const renderer = () => {
-  rendererLoaded = true;
-  return import("./renderer");
-};
-const HighlightedFile = lazy(() => renderer().then((module) => ({ default: module.HighlightedFile })));
-const RenderedDiff = lazy(() => renderer().then((module) => ({ default: module.RenderedDiff })));
-
-/** Shows its fallback in place of a renderer that threw — while rendering, in an effect, or by
- * failing to load its module — instead of letting the failure take the viewer down. A new `resetKey`
- * gives the renderer another try. */
-class RendererBoundary extends React.Component<
-  { resetKey: string; fallback: React.ReactNode; children: React.ReactNode },
-  { failed: boolean; key: string }
-> {
-  state = { failed: false, key: this.props.resetKey };
-
-  static getDerivedStateFromProps(props: { resetKey: string }, state: { key: string }): { failed: boolean; key: string } | null {
-    return props.resetKey === state.key ? null : { failed: false, key: props.resetKey };
-  }
-
-  static getDerivedStateFromError(): { failed: boolean } {
-    return { failed: true };
-  }
-
-  componentDidCatch(error: unknown): void {
-    console.warn("Viewer: the renderer failed", error);
-  }
-
-  render(): React.ReactNode {
-    return this.state.failed ? this.props.fallback : this.props.children;
-  }
-}
-
-/** Keeps the renderer's worker pool for as long as a viewer that calls this is mounted, and ends
- * it, if code was shown at all, once the last one unmounts. The count is checked again once the
- * renderer module is at hand, so a viewer opened in the meantime keeps the pool. */
-let mountedViewers = 0;
-export function useRendererScope(): void {
-  useEffect(() => {
-    mountedViewers += 1;
-    return () => {
-      mountedViewers -= 1;
-      if (mountedViewers === 0 && rendererLoaded) {
-        void renderer().then((module) => mountedViewers === 0 && module.endRendererPool());
-      }
-    };
-  }, []);
-}
-
-/** A line saying why the content below is shown the way it is. */
-function Notice({ children }: { children: React.ReactNode }): React.ReactElement {
-  return <p className="shrink-0 text-xs text-muted">{children}</p>;
-}
 
 /** Text as it is, laid out by the browser as one preformatted node: what the viewer falls back to
  * past a budget or when the renderer fails, and cheap at any size the daemon sends. It wraps long
@@ -145,33 +90,8 @@ function CodeFrame({
       style={{ backgroundColor: CODE_THEMES[theme].background }}
       className="relative min-h-0 flex-1 overflow-auto rounded-xl outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
     >
-      {/* Laid over the code rather than beside it, so taking it away does not lay out a large file
-          once more. */}
-      {!drawn && (
-        <div className="absolute inset-0 flex">
-          <Loading />
-        </div>
-      )}
+      {!drawn && <LoadingOverlay />}
       <Suspense fallback={null}>{children(onDrawn)}</Suspense>
-    </div>
-  );
-}
-
-/** The line standing in for a change with nothing to draw: no patch, or a patch with no lines. */
-export function Unreadable(): React.ReactElement {
-  const t = useT();
-  return <p className="text-sm text-muted">{t("viewer.change.unreadable")}</p>;
-}
-
-/** Visual only. The viewer's loading is spoken from its own status region, so this overlay, inserted
- * already holding its text, stays silent; only the renderer's pause while it draws a large file's
- * code goes unspoken. */
-export function Loading(): React.ReactElement {
-  const t = useT();
-  return (
-    <div aria-hidden="true" className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted">
-      <Spinner size="sm" aria-hidden="true" />
-      {t("viewer.loading")}
     </div>
   );
 }
