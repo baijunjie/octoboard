@@ -130,9 +130,9 @@ project, the earliest expanded dropped first, and the state of at most 50 projec
 dropped first. A removed project's state is dropped.
 
 The selected file is kept only while the window is open: reloading it, or restarting the application, starts every
-project with no file selected. So are the Git mode's view, chosen worktree, chosen branches and selected changes (see
-"What is remembered" in `docs/product/project-pane-git-mode.md`). Listings, change lists and file contents are never
-stored.
+project with no file selected. So are the Git mode's view, chosen worktree, chosen branches, selected changes and
+folded folders (see "What is remembered" in `docs/product/project-pane-git-mode.md`). Listings, change lists and file
+contents are never stored.
 
 ## The file viewer
 

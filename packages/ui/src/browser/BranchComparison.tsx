@@ -10,7 +10,7 @@ import { useFocusHandoff } from "../components/useFocusHandoff";
 import { Message, useT } from "../i18n/react";
 import type { BranchInfo } from "../protocol";
 import { displayWirePath } from "../wirePath";
-import { ChangeList } from "./ChangeList";
+import { ChangeList, type ChangeListView } from "./ChangeList";
 import type { ChangeItem } from "./changes";
 import { comparisonNotices } from "./comparisonNotices";
 import { GitFailure, GitLoading } from "./gitStates";
@@ -41,6 +41,7 @@ export function BranchComparisonView({
   onRetry,
   listRef,
   selectorsRef,
+  changeView,
 }: {
   branches: BranchList;
   comparison: Comparison;
@@ -53,6 +54,7 @@ export function BranchComparisonView({
   listRef: React.Ref<HTMLDivElement>;
   /** The selectors' strip, which takes keyboard focus when what held it below goes. */
   selectorsRef: React.RefObject<HTMLDivElement | null>;
+  changeView: ChangeListView;
 }): React.ReactElement {
   const t = useT();
   // When what holds focus below the selectors goes — the list replaced by a failure or an empty
@@ -98,6 +100,7 @@ export function BranchComparisonView({
           onOpen={onOpen}
           onRetry={onRetry}
           listRef={listRef}
+          changeView={changeView}
         />
       </div>
     </>
@@ -111,6 +114,7 @@ function ComparisonContent({
   onOpen,
   onRetry,
   listRef,
+  changeView,
 }: {
   branches: BranchList;
   comparison: Comparison;
@@ -118,6 +122,7 @@ function ComparisonContent({
   onOpen: (item: ChangeItem) => void;
   onRetry: (from: Element | null) => void;
   listRef: React.Ref<HTMLDivElement>;
+  changeView: ChangeListView;
 }): React.ReactElement {
   const t = useT();
   if (comparison.state === "idle") {
@@ -158,7 +163,7 @@ function ComparisonContent({
         <EmptyPanel icon={GitCompareArrows} message={t("git.compare.empty")} />
       ) : (
         <>
-          <ChangeList items={items} selected={selectedChange} label={t("git.compare.list.label")} onOpen={onOpen} listRef={listRef} />
+          <ChangeList items={items} selected={selectedChange} label={t("git.compare.list.label")} onOpen={onOpen} listRef={listRef} changeView={changeView} />
           {!complete && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-muted">{t("git.partial")}</p>}
         </>
       )}

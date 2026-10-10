@@ -27,9 +27,10 @@ consoles' avatars, the ⋮ buttons and the pin buttons below. These are:
 - the three options of Settings' Appearance row — Light, Dark and System (see "Appearance" in
   `docs/product/settings.md`);
 - the report panel's previous-page and next-page buttons;
-- the project pane's Refresh button, a folder's chevron in its file tree ("Expand" / "Collapse"), the file viewer's
-  Previous file and Next file buttons (see `docs/product/project-pane.md`), and the Git mode's Swap branches (see
-  "The branch selectors" in `docs/product/project-pane-git-mode.md`);
+- the project pane's Refresh button, a folder's chevron in its file tree and in the Git mode's change tree ("Expand" /
+  "Collapse"), the file viewer's Previous file and Next file buttons (see `docs/product/project-pane.md`), and the Git
+  mode's Swap branches and Group by folder (see "The branch selectors" and "Flat or grouped by folder" in
+  `docs/product/project-pane-git-mode.md`);
 - the close button of every dialog, of Settings and of each toast ("Close").
 
 While the docked sidebar is hidden at 1148 px and wider, a console's avatar opens its tooltip on keyboard focus only:

@@ -5,6 +5,8 @@ import type { PlainMessageKey } from "../i18n/catalog";
 import type { ChangeEntry, ChangeGroup, ChangeSide, ConflictKind } from "../protocol";
 import { changeStatus } from "../viewer/content";
 import type { StatusKey } from "../viewer/statusMarks";
+import { displayWirePath } from "../wirePath";
+import type { ChangeLayout } from "./changeLayout";
 import { compareFilePaths } from "./tree";
 
 /** A part of the change list: one of a worktree's change groups, the paths in conflict, or the one
@@ -120,6 +122,82 @@ export function changeNeighbours(items: readonly ChangeItem[], current: ChangeIt
 export function sections(items: readonly ChangeItem[]): { section: ChangeSection; items: ChangeItem[] }[] {
   return SECTION_ORDER.map((section) => ({ section, items: items.filter((item) => item.section === section) })).filter(
     (group) => group.items.length > 0,
+  );
+}
+
+/** One row of a section in its tree form: a directory, with what is under it, or a change. A chain
+ * of directories that each hold nothing but the next is one row, named by the whole chain. */
+export type ChangeNode =
+  | { type: "directory"; key: string; path: string; name: string; children: ChangeNode[] }
+  | { type: "change"; key: string; item: ChangeItem };
+
+/** The row key of the directory at `path` in `section`. A change's key (`changeKey`) is JSON, so
+ * the two never collide. */
+export const directoryKey = (section: ChangeSection, path: string): string => `dir:${section}:${path}`;
+
+/** The changes of one section (already in list order) grouped under their directories, directories
+ * before changes at every level as the file tree orders paths, and single-child directory chains
+ * compacted into one row. */
+export function changeTree(section: ChangeSection, items: readonly ChangeItem[]): ChangeNode[] {
+  interface Draft {
+    path: string;
+    name: string;
+    children: (Draft | ChangeItem)[];
+  }
+  const root: Draft = { path: "", name: "", children: [] };
+  const directories = new Map<string, Draft>();
+  for (const item of items) {
+    const parts = item.path.split("/");
+    let parent = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const path = parts.slice(0, i + 1).join("/");
+      let directory = directories.get(path);
+      if (!directory) {
+        directory = { path, name: parts[i], children: [] };
+        directories.set(path, directory);
+        parent.children.push(directory);
+      }
+      parent = directory;
+    }
+    parent.children.push(item);
+  }
+  const toNode = (child: Draft | ChangeItem): ChangeNode => {
+    if (!("children" in child)) return { type: "change", key: child.key, item: child };
+    let directory = child;
+    let name = child.name;
+    while (directory.children.length === 1 && "children" in directory.children[0]) {
+      directory = directory.children[0];
+      name += `/${directory.name}`;
+    }
+    return { type: "directory", key: directoryKey(section, directory.path), path: directory.path, name: displayWirePath(name), children: directory.children.map(toNode) };
+  };
+  return root.children.map(toNode);
+}
+
+/** The rows of `nodes` on screen, top to bottom: a collapsed directory keeps its own row and loses
+ * everything under it. */
+export function visibleNodes(nodes: readonly ChangeNode[], collapsed: ReadonlySet<string>): ChangeNode[] {
+  return nodes.flatMap((node) => (node.type === "directory" && !collapsed.has(node.key) ? [node, ...visibleNodes(node.children, collapsed)] : [node]));
+}
+
+/** The sections of the list, each with its changes and, in the layout's form, its rows: one per
+ * change when flat, the directory tree when `tree`. */
+export function changeGroups(
+  items: readonly ChangeItem[],
+  layout: ChangeLayout,
+): { section: ChangeSection; items: ChangeItem[]; nodes: ChangeNode[] }[] {
+  return sections(items).map((group) => ({
+    ...group,
+    nodes: layout === "tree" ? changeTree(group.section, group.items) : group.items.map((item) => ({ type: "change", key: item.key, item })),
+  }));
+}
+
+/** The changes with a row on screen, in the order the rows are: what the viewer moves through. All
+ * of them when flat; in the tree, those not under a collapsed directory. */
+export function visibleChanges(items: readonly ChangeItem[], layout: ChangeLayout, collapsed: ReadonlySet<string>): ChangeItem[] {
+  if (layout === "flat") return [...items];
+  return changeGroups(items, layout).flatMap((group) =>
+    visibleNodes(group.nodes, collapsed).flatMap((node) => (node.type === "change" ? [node.item] : [])),
   );
 }
 

@@ -1,32 +1,23 @@
 import { Spinner } from "@heroui/react";
 import {
-  ChevronDown,
-  ChevronRight,
   File,
   FileImage,
   FileQuestion,
   FileSymlink,
-  Folder,
-  FolderOpen,
-  FolderSymlink,
   RotateCw,
   TriangleAlert,
   type LucideIcon,
 } from "lucide-react";
 import React, { useMemo } from "react";
-import { Button, Collection, ListLayout, Tree, TreeItem, TreeItemContent, Virtualizer, type Key } from "react-aria-components";
+import { Collection, ListLayout, Tree, TreeItem, TreeItemContent, Virtualizer, type Key } from "react-aria-components";
 
 import { FadeOverflow } from "../components/FadeOverflow";
-import { TitledControl } from "../components/TitledControl";
 import { useScrollFade } from "../components/useScrollFade";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { BrowseEntry } from "../protocol";
 import { wireBaseName } from "../wirePath";
 import type { TreeNode } from "./tree";
-
-/** Every row is one line of this height, which is what lets the tree be virtualized and a row be
- * scrolled into view from its position alone. */
-export const ROW_HEIGHT = 28;
+import { DirectoryRow, ROW_CLASS, ROW_HEIGHT, RowContent, RowName } from "./treeRow";
 
 const IMAGE_NAME = /\.(png|jpe?g|gif|webp|bmp|ico|avif|svg)$/i;
 
@@ -149,8 +140,6 @@ export function FileTree({
     }
   };
 
-  const chevronTitle = (isExpanded: boolean): string => (isExpanded ? t("browser.tree.collapse") : t("browser.tree.expand"));
-
   const renderNode = (node: TreeNode): React.ReactElement => {
     if (node.type === "status") return <StatusItem node={node} />;
     const name = wireBaseName(node.path);
@@ -158,35 +147,7 @@ export function FileTree({
       const link = node.entry.kind === "symlink";
       return (
         <TreeItem id={node.key} textValue={name} hasChildItems className={ROW_CLASS}>
-          <TreeItemContent>
-            {({ isExpanded }) => {
-              const Icon = link ? FolderSymlink : isExpanded ? FolderOpen : Folder;
-              return (
-                <RowContent>
-                  {/* React Aria keeps the chevron out of the tab order; the row does the same on a press,
-                      so the chevron is for the pointer alone. React Aria's own label is a translation of
-                      "Expand" that disagrees with the tooltip's wording (zh-CN "扩展"), so the label is the
-                      tooltip's word from the catalog; React Aria appends the row's name through
-                      aria-labelledby, which gives "Expand src". */}
-                  <TitledControl title={chevronTitle(isExpanded)}>
-                    <Button
-                      slot="chevron"
-                      aria-label={chevronTitle(isExpanded)}
-                      className="flex size-4 shrink-0 items-center justify-center text-muted outline-none"
-                    >
-                      {isExpanded ? (
-                        <ChevronDown aria-hidden="true" className="size-3.5" />
-                      ) : (
-                        <ChevronRight aria-hidden="true" className="size-3.5 rtl:-scale-x-100" />
-                      )}
-                    </Button>
-                  </TitledControl>
-                  <Icon aria-hidden="true" className="size-4 shrink-0 text-muted" />
-                  <RowName name={name} />
-                </RowContent>
-              );
-            }}
-          </TreeItemContent>
+          <TreeItemContent>{({ isExpanded }) => <DirectoryRow name={name} isExpanded={isExpanded} link={link} />}</TreeItemContent>
           <Collection items={childrenOf(node)} dependencies={[language]}>
             {renderNode}
           </Collection>
@@ -236,26 +197,6 @@ export function FileTree({
         {renderNode}
       </Tree>
     </Virtualizer>
-  );
-}
-
-/** A row: indented by its level, with a visible ring under keyboard focus. */
-const ROW_CLASS = [
-  "group cursor-default rounded-md text-sm outline-none select-none hover:bg-panel-hover data-[current]:bg-panel-selected",
-  "data-[focus-visible]:ring-2 data-[focus-visible]:ring-focus data-[focus-visible]:ring-inset",
-].join(" ");
-
-function RowContent({ children }: { children: React.ReactNode }): React.ReactElement {
-  return (
-    <div className="flex h-7 min-w-0 items-center gap-1.5 pe-2 ps-[calc((var(--tree-item-level)-1)*0.875rem+0.5rem)]">{children}</div>
-  );
-}
-
-function RowName({ name, className = "" }: { name: string; className?: string }): React.ReactElement {
-  return (
-    <FadeOverflow as="span" dir="auto" className={`min-w-0 flex-1 ${className}`} titleWhenClipped={name}>
-      {name}
-    </FadeOverflow>
   );
 }
 

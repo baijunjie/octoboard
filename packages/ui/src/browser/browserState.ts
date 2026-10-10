@@ -58,6 +58,12 @@ const selections = Object.fromEntries(SELECTIONS.map((kind) => [kind, new Map<st
 const selectionListeners = new Set<() => void>();
 let selectionVersion = 0;
 
+/** The directories of the Git mode's change tree that the user folded away (`directoryKey`), per
+ * project and for the window's lifetime, like the selections: the sections of the two views never
+ * share a key, so one set serves both. Everything starts open. */
+const NONE_COLLAPSED: ReadonlySet<string> = new Set();
+const collapsedDirs = new Map<string, ReadonlySet<string>>();
+
 function subscribeSelections(listener: () => void): () => void {
   selectionListeners.add(listener);
   return () => selectionListeners.delete(listener);
@@ -68,6 +74,13 @@ function setSelection(kind: Selection, project: string, value: string | undefine
   if (map.get(project) === value) return;
   if (value === undefined) map.delete(project);
   else map.set(project, value);
+  selectionVersion += 1;
+  for (const listener of selectionListeners) listener();
+}
+
+function setCollapsed(project: string, collapsed: ReadonlySet<string>): void {
+  if (collapsed.size === 0) collapsedDirs.delete(project);
+  else collapsedDirs.set(project, collapsed);
   selectionVersion += 1;
   for (const listener of selectionListeners) listener();
 }
@@ -102,6 +115,8 @@ export interface ProjectBrowserState {
   right?: string;
   /** The key of the change the Git mode's viewer showed last from the comparison. */
   selectedComparedChange?: string;
+  /** The directories of the Git mode's change tree that are folded away, as row keys. */
+  collapsedChangeDirs: ReadonlySet<string>;
   setMode: (mode: BrowserMode) => void;
   setExpanded: (expanded: ReadonlySet<string>) => void;
   setSelected: (path: string | undefined) => void;
@@ -110,6 +125,7 @@ export interface ProjectBrowserState {
   setGitView: (view: GitView) => void;
   setBranches: (left: string | undefined, right: string | undefined) => void;
   setSelectedComparedChange: (key: string | undefined) => void;
+  setCollapsedChangeDirs: (collapsed: ReadonlySet<string>) => void;
   /** Records the project's browser as just shown, which keeps it from being the first dropped. */
   touch: () => void;
 }
@@ -137,6 +153,7 @@ export function useProjectBrowserState(project: string): ProjectBrowserState {
     left: selections.left.get(project),
     right: selections.right.get(project),
     selectedComparedChange: selections.comparedChange.get(project),
+    collapsedChangeDirs: collapsedDirs.get(project) ?? NONE_COLLAPSED,
     setMode: (mode) => update(project, (e) => ({ ...e, mode })),
     setExpanded: (next) => update(project, (e) => ({ ...e, expanded: [...next].slice(-MAX_EXPANDED) })),
     setSelected: (path) => setSelection("file", project, path),
@@ -148,6 +165,7 @@ export function useProjectBrowserState(project: string): ProjectBrowserState {
       setSelection("right", project, right);
     },
     setSelectedComparedChange: (key) => setSelection("comparedChange", project, key),
+    setCollapsedChangeDirs: (collapsed) => setCollapsed(project, collapsed),
     touch: () => update(project, (e) => ({ ...e, used: Date.now() })),
   };
 }
@@ -165,4 +183,5 @@ export function forgetProjectsOtherThan(projects: ReadonlySet<string>): void {
   for (const kind of SELECTIONS) {
     for (const project of [...selections[kind].keys()]) if (!projects.has(project)) setSelection(kind, project, undefined);
   }
+  for (const project of [...collapsedDirs.keys()]) if (!projects.has(project)) setCollapsed(project, NONE_COLLAPSED);
 }

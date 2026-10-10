@@ -6,6 +6,8 @@ import { afterEach, expect, it } from "vitest";
 import type { ChangeEntry, Event, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { useProjectBrowserState } from "./browserState";
+import { changeLayout } from "./changeLayout";
+import { directoryKey } from "./changes";
 import { useGitReview } from "./useGitReview";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -166,4 +168,70 @@ it("follows the list's status for an open worktree change whose key did not chan
   await answer("list_project_changes", listed("symlink", "2"));
   await answer("read_project_change", readBack);
   expect(latest.git.viewer?.subject.status).toBe("typeChanged");
+});
+
+it("moves the viewer through the change tree's rows on screen, skipping a collapsed directory", async () => {
+  let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
+  const Probe = () => {
+    const browser = useProjectBrowserState("p");
+    latest = { browser, git: useGitReview("p", browser, true) };
+    return null;
+  };
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  act(() =>
+    root.render(
+      <DaemonProvider value={daemon}>
+        <Probe />
+      </DaemonProvider>,
+    ),
+  );
+  act(() => {
+    latest.browser.setGitView("worktree");
+    changeLayout.set("tree");
+  });
+  try {
+    const worktree = { id: "w", root: "/r", main: true, head: "c1", branch: "main", scope_present: true };
+    await answer("get_project_source", () => ({
+      type: "project_source",
+      source: { project: "p", root: "/r", resolved_root: "/r", root_id: "r", git_error: null, git: { repository: "repo", common_dir: "/r/.git", worktree: "w", scope: "", worktrees: [worktree] } },
+    }));
+    const source = { kind: "index", worktree: "w", blob: "b" } as const;
+    const unstaged = (path: string): ChangeEntry => ({
+      group: "unstaged",
+      old: { state: "present", path, kind: "file", source },
+      new: { state: "present", path, kind: "file", source: { kind: "live", root_id: "r", version: "1" } },
+    });
+    await answer("list_project_changes", () => ({
+      type: "project_changes",
+      project: "p",
+      worktree: null,
+      head: "c1",
+      changes: ["a/x.ts", "a/y.ts", "z.ts"].map(unstaged),
+      complete: true,
+    }));
+    const list = latest.git.view.worktree.list;
+    if (list.state !== "loaded") throw new Error(list.state);
+    const side = { state: "absent" } as const;
+    const readBack = (): Event => ({ type: "project_change", project: "p", worktree: null, group: "unstaged", head: null, old: side, new: side, patch: null });
+    const z = list.items[2];
+
+    act(() => latest.git.view.worktree.onOpen(z));
+    await answer("read_project_change", readBack);
+    expect(latest.git.viewer?.navigation?.onPrevious).toBeDefined();
+
+    // Folding `a` takes its changes off the screen, so there is nothing before `z.ts` to move to.
+    act(() => latest.browser.setCollapsedChangeDirs(new Set([directoryKey("unstaged", "a")])));
+    expect(latest.git.viewer?.navigation?.onPrevious).toBeUndefined();
+    expect(latest.git.viewer?.navigation?.onNext).toBeUndefined();
+
+    // The flat list has every change on screen whatever was folded in the tree.
+    act(() => changeLayout.set("flat"));
+    expect(latest.git.viewer?.navigation?.onPrevious).toBeDefined();
+  } finally {
+    act(() => {
+      changeLayout.set("flat");
+      latest.browser.setCollapsedChangeDirs(new Set());
+    });
+  }
 });

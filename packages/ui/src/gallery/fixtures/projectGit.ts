@@ -212,6 +212,8 @@ const MAIN_CHANGES: FixtureChange[] = [
     },
   },
   { entry: { group: "untracked", old: { state: "absent" }, new: file("src/log.ts", live("v5")) }, bodies: { new: text("export const logRequests = () => {};\n") } },
+  // Two directories that each hold only the next: the tree shows them as one row, `tools/release`.
+  { entry: { group: "untracked", old: { state: "absent" }, new: file("tools/release/notes.md", live("v7")) }, bodies: { new: text("# Release notes\n") } },
 ];
 
 const SIDE_CHANGES: FixtureChange[] = [
@@ -295,6 +297,15 @@ const openGit = [
   (ui: Ui) => ui.wait(400),
 ];
 const openChange = (name: RegExp) => [...openGit, (ui: Ui) => ui.press(name), (ui: Ui) => ui.wait(800)];
+/** Opens Git mode in a narrow window, where the project pane is a drawer. */
+const openGitInDrawer = [
+  (ui: Ui) => ui.press(ui.t("titleBar.sidebar.show")),
+  (ui: Ui) => ui.press(ui.session("Fix the summary layout")),
+  (ui: Ui) => ui.press(ui.t("rail.projectPane.show")),
+  (ui: Ui) => ui.wait(500),
+  (ui: Ui) => ui.press(ui.t("browser.mode.git")),
+  (ui: Ui) => ui.wait(400),
+];
 /** Shows the comparison of branch `left` with branch `right`, choosing each in its selector: From
  * is the first one still to choose, then To. */
 const compare = (left: string, right: string) => [
@@ -398,6 +409,17 @@ export const projectGitScenarios: Scenario[] = [
     steps: openGit,
   },
   {
+    id: "git-changes-tree",
+    group: GROUP,
+    title: "A worktree's changes as a tree",
+    description:
+      "The same sections with their changes grouped by folder; tools/release is a chain of single-child folders shown as one row. Arrow keys move, Left and Right fold and unfold a folder, and the viewer's Left and Right skip the changes of a folded one.",
+    width: 1440,
+    state,
+    preferences: { changeLayout: "tree" },
+    steps: openGit,
+  },
+  {
     id: "git-compare",
     group: GROUP,
     title: "Comparing two branches",
@@ -405,6 +427,15 @@ export const projectGitScenarios: Scenario[] = [
       "The Git mode's Compare view: From main To feature/ranking-experiments, the commits compared, and the changed files. Press one to open its diff, read from the two commits.",
     width: 1440,
     state,
+    steps: compare("main", "feature/ranking-experiments"),
+  },
+  {
+    id: "git-compare-tree",
+    group: GROUP,
+    title: "Comparing two branches, as a tree",
+    width: 1440,
+    state,
+    preferences: { changeLayout: "tree" },
     steps: compare("main", "feature/ranking-experiments"),
   },
   {
@@ -458,12 +489,7 @@ export const projectGitScenarios: Scenario[] = [
     width: 800,
     state,
     steps: [
-      (ui) => ui.press(ui.t("titleBar.sidebar.show")),
-      (ui) => ui.press(ui.session("Fix the summary layout")),
-      (ui) => ui.press(ui.t("rail.projectPane.show")),
-      (ui) => ui.wait(500),
-      (ui) => ui.press(ui.t("browser.mode.git")),
-      (ui) => ui.wait(400),
+      ...openGitInDrawer,
       (ui) => ui.press(ui.t("git.view.compare")),
       (ui) => ui.press(ui.t("git.compare.choose")),
       (ui) => ui.press((name) => name.startsWith("main") && name.length === 11),
@@ -478,13 +504,15 @@ export const projectGitScenarios: Scenario[] = [
     title: "Narrow window, Git mode in the drawer",
     width: 800,
     state,
-    steps: [
-      (ui) => ui.press(ui.t("titleBar.sidebar.show")),
-      (ui) => ui.press(ui.session("Fix the summary layout")),
-      (ui) => ui.press(ui.t("rail.projectPane.show")),
-      (ui) => ui.wait(500),
-      (ui) => ui.press(ui.t("browser.mode.git")),
-      (ui) => ui.wait(400),
-    ],
+    steps: openGitInDrawer,
+  },
+  {
+    id: "git-narrow-tree",
+    group: GROUP,
+    title: "Narrow window, changes as a tree in the drawer",
+    width: 800,
+    state,
+    preferences: { changeLayout: "tree" },
+    steps: openGitInDrawer,
   },
 ];

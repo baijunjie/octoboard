@@ -391,6 +391,7 @@ export const zhHans: Translation<"other"> = {
   "git.conflict.deletedByUs": "存在冲突：由我方删除。下方按原样显示磁盘上的文件。",
   "git.conflict.deletedByThem": "存在冲突：由对方删除。下方按原样显示磁盘上的文件。",
   "git.views": "Git 视图",
+  "git.layout.tree": "按文件夹分组",
   "git.view.worktree": "未提交",
   "git.view.compare": "比较",
   "git.group.committed": "已更改的文件",

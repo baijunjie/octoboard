@@ -18,7 +18,7 @@ keyboard walk and the reconnect. These four could not be settled then:
   catalog exists; confirm against a language the app has, or against the mirrored layout with right-to-left content
   in the file itself.
 - [ ] A window below 800 px. "Show whole file" is positioned absolutely and may cover the end of a long separator
-  label.
+  label. The macOS window's minimum is 1148 px, so this one is reached in the gallery rather than the packaged app.
 
 ## Carried from milestone 03 (word wrap in the viewer)
 
@@ -29,6 +29,22 @@ throughout, so the packaged app never showed it:
 - [ ] Wrapping on for a file and for a diff in both layouts, the split layout's two sides staying level.
 - [ ] The choice surviving a real restart of the app, not only a written preference.
 - [ ] A diff with wrapping off, scrolled sideways: its separator controls still usable and not clipped.
+
+## Carried from milestone 04 (the change list as a directory tree)
+
+Verified in headless WebKit over the gallery and in unit tests; the machine's screen locked before every attempt at
+the packaged app, so none of this was seen in the real window:
+
+- [ ] The Group by folder toggle switching flat to tree and back, with the tab row's layout intact at the pane's
+  normal width, at the aside's 300 px minimum and under a right-to-left language. The toggle is laid over the tab
+  row absolutely, and at 300 px the tab list has about 244 px, where `Tabs.ListContainer`'s own scroll chevrons
+  would sit under it.
+- [ ] The tree under the existing sections: counts unchanged, directories before changes, a single-child chain as
+  one row.
+- [ ] Folding and unfolding by pointer and by Left/Right, and a fold surviving a switch between the two views.
+- [ ] Previous/Next following the rows as shown, skipping changes under a folded directory, and a change open when
+  its directory is folded keeping its place.
+- [ ] The grouping choice surviving a real restart, and the folded directories not surviving it.
 
 ## Notes for the developer
 

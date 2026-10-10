@@ -1,11 +1,12 @@
-import { Label, ListBox, Select, Tabs } from "@heroui/react";
-import { FileCheck, GitBranch, GitFork, TriangleAlert } from "lucide-react";
+import { Label, ListBox, Select, Tabs, ToggleButton } from "@heroui/react";
+import { FileCheck, FolderTree, GitBranch, GitFork, TriangleAlert } from "lucide-react";
 import React, { useRef } from "react";
 
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { PathText } from "../components/PathText";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
+import { TitledControl } from "../components/TitledControl";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import type { Translate } from "../i18n/catalog";
 import { useT } from "../i18n/react";
@@ -15,7 +16,8 @@ import { useDaemonStore } from "../store";
 import { displayWirePath } from "../wirePath";
 import { BranchComparisonView } from "./BranchComparison";
 import type { GitView as GitViewKind } from "./browserState";
-import { ChangeList } from "./ChangeList";
+import { changeLayout } from "./changeLayout";
+import { ChangeList, type ChangeListView } from "./ChangeList";
 import type { ChangeItem } from "./changes";
 import { GitFailure, GitLoading } from "./gitStates";
 import type { ChangeList as ChangeListState } from "./useChangeList";
@@ -82,13 +84,16 @@ function GitContent({
   onViewChange,
   worktree,
   compare,
+  changeView,
   onRetry,
 }: {
   source: SourceState;
   view: GitViewKind;
   onViewChange: (view: GitViewKind) => void;
   worktree: WorktreeViewProps;
-  compare: Omit<React.ComponentProps<typeof BranchComparisonView>, "onRetry">;
+  compare: Omit<React.ComponentProps<typeof BranchComparisonView>, "onRetry" | "changeView">;
+  /** How both views' change lists show their changes. */
+  changeView: ChangeListView;
   /**
    * Asks again for whatever failed. `from` is the control pressed, which goes away with the
    * failure.
@@ -111,9 +116,9 @@ function GitContent({
       variant="secondary"
       selectedKey={view}
       onSelectionChange={(key) => onViewChange(key as GitViewKind)}
-      className="flex min-h-0 flex-1 flex-col gap-0"
+      className="relative flex min-h-0 flex-1 flex-col gap-0"
     >
-      <Tabs.ListContainer className="shrink-0 px-3">
+      <Tabs.ListContainer className="shrink-0 ps-3 pe-11">
         <Tabs.List aria-label={t("git.views")} className="w-auto">
           {/* HeroUI dims a hovered tab to 70%, which takes its muted label under WCAG AA's 4.5:1;
               the hover darkens it instead. */}
@@ -127,11 +132,26 @@ function GitContent({
           </Tabs.Tab>
         </Tabs.List>
       </Tabs.ListContainer>
+      {/* Laid over the tab row's end: the tabs' container draws only its list, and wrapping it would switch
+          its variant's styles off. */}
+      <TitledControl title={t("git.layout.tree")}>
+        <ToggleButton
+          isIconOnly
+          size="sm"
+          className="absolute end-2 top-0"
+          aria-label={t("git.layout.tree")}
+          isSelected={changeView.layout === "tree"}
+          onChange={(selected) => changeLayout.set(selected ? "tree" : "flat")}
+          preventFocusOnPress
+        >
+          <FolderTree aria-hidden="true" className="size-4" />
+        </ToggleButton>
+      </TitledControl>
       <Tabs.Panel id="worktree" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
-        <WorktreeChanges worktrees={git.worktrees} own={git.worktree} {...worktree} onRetry={onRetry} />
+        <WorktreeChanges worktrees={git.worktrees} own={git.worktree} {...worktree} changeView={changeView} onRetry={onRetry} />
       </Tabs.Panel>
       <Tabs.Panel id="compare" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
-        <BranchComparisonView {...compare} onRetry={onRetry} />
+        <BranchComparisonView {...compare} changeView={changeView} onRetry={onRetry} />
       </Tabs.Panel>
     </Tabs>
   );
@@ -147,9 +167,11 @@ function WorktreeChanges({
   onOpen,
   onRetry,
   listRef,
+  changeView,
 }: WorktreeViewProps & {
   worktrees: WorktreeInfo[];
   own: string;
+  changeView: ChangeListView;
   onRetry: (from: Element | null) => void;
 }): React.ReactElement {
   const t = useT();
@@ -182,7 +204,7 @@ function WorktreeChanges({
           <EmptyPanel icon={FileCheck} message={t("git.empty")} />
         ) : (
           <>
-            <ChangeList items={list.items} selected={selectedChange} label={t("git.list.label")} onOpen={onOpen} listRef={listRef} />
+            <ChangeList items={list.items} selected={selectedChange} label={t("git.list.label")} onOpen={onOpen} listRef={listRef} changeView={changeView} />
             {!list.complete && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-muted">{t("git.partial")}</p>}
           </>
         )}

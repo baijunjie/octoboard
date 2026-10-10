@@ -430,6 +430,7 @@ export const en = {
   "git.conflict.deletedByUs": "In conflict: deleted by us. The file on disk is shown as it is.",
   "git.conflict.deletedByThem": "In conflict: deleted by them. The file on disk is shown as it is.",
   "git.views": "Git view",
+  "git.layout.tree": "Group by folder",
   "git.view.worktree": "Uncommitted",
   "git.view.compare": "Compare",
   "git.group.committed": "Changed files",

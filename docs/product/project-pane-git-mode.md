@@ -22,12 +22,14 @@ Git mode does neither, and neither one refreshes the other.
 
 Two tabs at the top of the Git mode switch between its views, **Uncommitted** and **Compare**; a project starts on
 Uncommitted. The tabs are there once the project's repository is found (see "The repository and its worktrees" below);
-while it is being read, when it cannot be read, or when there is none, what the Git mode says takes their place.
+while it is being read, when it cannot be read, or when there is none, what the Git mode says takes their place. At the
+end of the tabs' row is the one control both views share, **Group by folder** (see "Flat or grouped by folder" below).
 
 Each view reads the repository only while it is on screen: the Uncommitted view as "Keeping the list up to date"
 below says, the Compare view as "The branch selectors" and "When a comparison is made" below say. Switching views
 leaves the other view as it was. "The worktree selector" and "The change list" below are about the Uncommitted view,
-"Comparing two branches" below about the Compare view; "Opening a change" is about both.
+"Comparing two branches" below about the Compare view; "Flat or grouped by folder" and "Opening a change" are about
+both.
 
 ## The repository and its worktrees
 
@@ -102,7 +104,9 @@ Within a section, changes are in the order the file tree would show their paths 
 ### Rows and the keyboard
 
 Each row shows a status letter, the file's name, and then the folder it is in — or, for a rename, where it came from,
-and for a rename across the project's boundary, where it came from or went, outside the project. The letters:
+and for a rename across the project's boundary, where it came from or went, outside the project. Grouped by folder a
+row drops the folder, which its parent row carries instead, and keeps the rest (see "Flat or grouped by folder"
+below). The letters:
 
 | Letter | Status |
 |---|---|
@@ -123,6 +127,34 @@ long for their space" in `docs/product/labels-and-tooltips.md`).
   selectable otherwise.
 - The change the viewer showed last is the list's **selected change**: its row is tinted, assistive technology hears
   it named as selected, and the list keeps it in view behind the viewer while the viewer moves from change to change.
+
+### Flat or grouped by folder
+
+**Group by folder**, the toggle at the end of the row of view tabs, switches the change list between one row per
+change and the changes grouped under the folders they are in. It is the one choice for both views, kept across
+projects and after the application restarts; until it is turned on, both lists are flat.
+
+Grouped by folder, a list keeps its sections and their counts — the Uncommitted view's Staged, Conflicted, Unstaged
+and Untracked, the comparison's one section — and within each section the changes sit under their folders:
+
+- Within a folder, folders come first and then changes, each in the order the flat list has them (see "What is
+  listed" above).
+- A chain of folders that each hold nothing but the next is one row, named by the whole chain — `tools/release`.
+- A folder's row is a chevron, a folder icon and its name. A change's row is as it is in the flat list, less the
+  folder its parent row now carries.
+- Folders start open, and which ones the user folded away is kept per project for as long as the window is open: a
+  reload or a restart opens them all again. A fold survives switching to the other view and back, and belongs to the
+  section it was made in, so the same folder under another section stays open.
+
+The rows take the keyboard as the Files mode's tree does (see "Rows and the keyboard" in
+`docs/product/project-pane.md`): the arrow keys, Home and End move through them with the section headings skipped,
+typing a name's first letters moves to one, Right and Left open and close a folder (the other way round under a
+right-to-left language), and Enter opens a change or opens and closes a folder. A folder's row tells assistive
+technology whether it is open, and its chevron is named Expand or Collapse (see "Tooltips on icon-only controls" in
+`docs/product/labels-and-tooltips.md`).
+
+A change under a folded folder has no row, and it is the rows that the viewer moves through (see "Moving between
+changes" below).
 
 ### What the list says instead
 
@@ -236,7 +268,8 @@ until the new one is in.
   comparison found:
   - the changed files, in one section, **Changed files**, headed with how many changes it holds. Its rows, their
     order, their status letters (A, M, D, R or T here), the keyboard and the selected change are as in the Uncommitted
-    view (see "Rows and the keyboard" above);
+    view (see "Rows and the keyboard" above), and it is grouped by folder with it (see "Flat or grouped by folder"
+    above);
   - **Not every change is shown**, under a list cut short: at most 10,000 changes, or 2 MiB of paths, are listed —
     those Git reported first;
   - **both branches are at the same commit**, so there are no differences;
@@ -376,9 +409,11 @@ appearance; pressing one with the mouse leaves keyboard focus where it was.
 
 **Previous file** and **Next file**, and the **Left** and **Right** arrow keys, move through the change list the change
 was opened from — the Uncommitted view's or the comparison's — as it is on screen, top to bottom, from one section
-into the next, and stop at either end rather than going round. A file in both Staged and Unstaged is two stops. A
-change the list no longer has moves on to the changes that were beside it. When the keys do nothing, and how they
-mirror under a right-to-left language, is as in "Moving between files" in `docs/product/project-pane.md`.
+into the next, and stop at either end rather than going round. Grouped by folder they follow the rows as shown, which
+leaves out the changes under a folded folder. A file in both Staged and Unstaged is two stops. A change with no row of
+its own — one the list no longer has, or one whose folder has been folded while it was open — keeps its place in the
+order, and the keys move on to the changes that surround it. When the keys do nothing, and how they mirror under a
+right-to-left language, is as in "Moving between files" in `docs/product/project-pane.md`.
 
 ### Closing it
 
@@ -425,8 +460,11 @@ in place of the diff, in the current language. The cases beyond those of a file 
 ## What is remembered
 
 **Per project, for as long as the window is open**: the view shown, Uncommitted or Compare; the chosen worktree and
-the Uncommitted view's selected change; the branches chosen for From and To and the Compare view's selected change.
-Reloading the window, or restarting the application, starts every project on the Uncommitted view and the worktree
-holding its folder, with no branches chosen and no change selected. Change lists, branch lists, comparisons and their
-contents are never stored. The mode itself is kept with the rest of the pane's state (see "What
-is remembered" in `docs/product/project-pane.md`).
+the Uncommitted view's selected change; the branches chosen for From and To and the Compare view's selected change;
+and, grouped by folder, the folders folded away. Reloading the window, or restarting the application, starts every
+project on the Uncommitted view and the worktree holding its folder, with no branches chosen, no change selected and
+every folder open. Change lists, branch lists, comparisons and their contents are never stored.
+
+**Across projects and restarts**: whether the change lists are grouped by folder (see "Flat or grouped by folder"
+above), kept as the file viewer's diff layout and wrap choices are. The mode itself is kept with the rest of the
+pane's state (see "What is remembered" in `docs/product/project-pane.md`).

@@ -1,7 +1,21 @@
 import { expect, it } from "vitest";
 
 import type { ChangeEntry, ChangeSide, ContentSource } from "../protocol";
-import { changeEvidence, changeItem, changeItems, changeNeighbours, rereadChange, type ChangeEvidence, type ShownChange } from "./changes";
+import {
+  changeEvidence,
+  changeGroups,
+  changeItem,
+  changeItems,
+  changeNeighbours,
+  changeTree,
+  directoryKey,
+  rereadChange,
+  visibleChanges,
+  visibleNodes,
+  type ChangeEvidence,
+  type ChangeNode,
+  type ShownChange,
+} from "./changes";
 
 const index = (blob: string): ContentSource => ({ kind: "index", worktree: "w", blob });
 const at = (path: string, blob = "b1"): ChangeSide => ({ state: "present", path, kind: "file", source: index(blob) });
@@ -66,4 +80,67 @@ it("finds a change in a list, gone from a complete one, unknown in a cut or refr
   expect(changeEvidence({ items: [], complete: true, refreshing: false }, key)).toEqual({ state: "gone" });
   expect(changeEvidence({ items: [], complete: false, refreshing: false }, key)).toEqual({ state: "unknown" });
   expect(changeEvidence({ items, complete: true, refreshing: true }, key)).toEqual({ state: "unknown" });
+});
+
+const unstaged = (path: string): ChangeEntry => ({ group: "unstaged", old: at(path), new: at(path, "live") });
+const treeEntries = ["README.md", "src/a.ts", "src/b.ts", "src/utils/kickback/x.ts", "src/utils/kickback/y.ts", "tools/release/notes.md", "z.ts"].map(unstaged);
+
+/** A tree's rows as indented text: directories by their name, changes by their path. */
+const outline = (nodes: readonly ChangeNode[], depth = 0): string[] =>
+  nodes.flatMap((node) =>
+    node.type === "directory" ? [`${"  ".repeat(depth)}${node.name}/`, ...outline(node.children, depth + 1)] : [`${"  ".repeat(depth)}${node.item.path}`],
+  );
+
+it("groups a section's changes under directories, directories first, and compacts a chain of single-child directories", () => {
+  const items = changeItems(treeEntries);
+  expect(outline(changeTree("unstaged", items))).toEqual([
+    "src/",
+    "  utils/kickback/",
+    "    src/utils/kickback/x.ts",
+    "    src/utils/kickback/y.ts",
+    "  src/a.ts",
+    "  src/b.ts",
+    "tools/release/",
+    "  tools/release/notes.md",
+    "README.md",
+    "z.ts",
+  ]);
+});
+
+it("keeps a directory of one directory and a file as two rows, and keys a compacted row by its last directory", () => {
+  const items = changeItems(["a/b/c.ts", "a/d.ts"].map(unstaged));
+  const [top] = changeTree("unstaged", items);
+  expect(top).toMatchObject({ type: "directory", name: "a", key: directoryKey("unstaged", "a") });
+  const [inner] = (top as Extract<ChangeNode, { type: "directory" }>).children;
+  expect(inner).toMatchObject({ type: "directory", name: "b", key: directoryKey("unstaged", "a/b") });
+  expect(outline(changeTree("unstaged", changeItems(["x/y/z/f.ts"].map(unstaged))))).toEqual(["x/y/z/", "  x/y/z/f.ts"]);
+});
+
+it("walks the changes on screen: all of them flat, and in the tree none under a collapsed directory", () => {
+  const items = changeItems(treeEntries);
+  expect(visibleChanges(items, "flat", new Set(["dir:unstaged:src"])).map((item) => item.path)).toEqual(items.map((item) => item.path));
+  expect(visibleChanges(items, "tree", new Set()).map((item) => item.path)).toEqual([
+    "src/utils/kickback/x.ts",
+    "src/utils/kickback/y.ts",
+    "src/a.ts",
+    "src/b.ts",
+    "tools/release/notes.md",
+    "README.md",
+    "z.ts",
+  ]);
+  const folded = new Set([directoryKey("unstaged", "src/utils/kickback"), directoryKey("unstaged", "tools/release")]);
+  expect(visibleChanges(items, "tree", folded).map((item) => item.path)).toEqual(["src/a.ts", "src/b.ts", "README.md", "z.ts"]);
+  const [group] = changeGroups(items, "tree");
+  expect(visibleNodes(group.nodes, folded).map((node) => node.type)).toEqual(["directory", "directory", "change", "change", "directory", "change", "change"]);
+});
+
+it("moves between the changes on screen in the tree, past a collapsed directory, and from a change inside one", () => {
+  const items = changeItems(treeEntries);
+  const folded = new Set([directoryKey("unstaged", "src/utils/kickback")]);
+  const shown = visibleChanges(items, "tree", folded);
+  const byPath = (path: string) => items.find((item) => item.path === path)!;
+  expect(changeNeighbours(shown, byPath("src/a.ts")).previous).toBeUndefined();
+  expect(changeNeighbours(shown, byPath("src/b.ts")).next?.path).toBe("tools/release/notes.md");
+  // Opened before its directory was folded: it is placed where it was, so its neighbours are the rows around it.
+  expect(changeNeighbours(shown, byPath("src/utils/kickback/y.ts"))).toMatchObject({ next: { path: "src/a.ts" } });
 });

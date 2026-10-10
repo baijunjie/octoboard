@@ -19,6 +19,8 @@ export interface Preferences {
   /** The console the sidebar shows, and what is in focus mode. */
   sidebarConsole?: string;
   sidebarFocus?: `project:${string}` | `consoleSession:${string}`;
+  /** How the Git mode's change lists show their changes. */
+  changeLayout?: "flat" | "tree";
 }
 
 /** What the window shows in place of the app, for the screens that have no daemon behind them. */

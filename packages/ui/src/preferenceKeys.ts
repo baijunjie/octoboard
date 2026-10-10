@@ -14,4 +14,5 @@ export const PREFERENCE_KEYS = {
   projectBrowsers: "octoboard.projectBrowsers",
   diffLayout: "octoboard.diffLayout",
   wordWrap: "octoboard.wordWrap",
+  changeLayout: "octoboard.changeLayout",
 } as const;

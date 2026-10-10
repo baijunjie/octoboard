@@ -6,10 +6,12 @@ import type { ComparisonEndpoint } from "../protocol";
 import type { ViewerSubject } from "../viewer/content";
 import type { ViewerNavigation } from "../viewer/FileViewer";
 import type { ProjectBrowserState } from "./browserState";
-import { CHANGE_ROW_HEIGHT, changeRowOffset } from "./ChangeList";
-import { changeEvidence, changeNeighbours, rereadChange, type ChangeEvidence, type ChangeItem } from "./changes";
+import { changeLayout, type ChangeLayout } from "./changeLayout";
+import { changeRowOffset } from "./ChangeList";
+import { changeEvidence, changeNeighbours, rereadChange, visibleChanges, type ChangeEvidence, type ChangeItem } from "./changes";
 import { focusFirst, focusRow } from "./focusRow";
 import type { GitView } from "./GitView";
+import { ROW_HEIGHT } from "./treeRow";
 import { useBranchComparison } from "./useBranchComparison";
 import { useBranchList } from "./useBranchList";
 import { useChangeList } from "./useChangeList";
@@ -33,7 +35,8 @@ export interface GitReview {
  * is asked for.
  *
  * The viewer moves through the change list's rows on screen, from one section into the next, and
- * stops at either end. What it shows is the list's selection, kept in view behind it, and closing
+ * stops at either end; in the tree layout the changes under a folded directory have no row, so it
+ * skips them. What it shows is the list's selection, kept in view behind it, and closing
  * it puts keyboard focus on that row. While it is open, a worktree's listings decide when it reads
  * its change again (`rereadChange`); a comparison's change is read from the commits the comparison
  * on screen was made at, and follows that comparison when it is made again.
@@ -53,6 +56,8 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
   const changeListRef = useRef<HTMLDivElement>(null);
   const comparedListRef = useRef<HTMLDivElement>(null);
   const selectorsRef = useRef<HTMLDivElement>(null);
+  const layout = changeLayout.useValue();
+  const collapsed = browser.collapsedChangeDirs;
 
   // A worktree found gone may have been replaced by another at its place, or others added: what
   // the selector offers is asked for again.
@@ -110,19 +115,22 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
 
   // The change lists' selections are kept in view, while the viewer moves through the changes.
   const scrolledToChange = useRef<string | undefined>(undefined);
+  // The layout is part of what was scrolled to: the other layout is another list, with its own scroll.
   useLayoutEffect(() => {
     const selected = browser.selectedChange;
-    if (selected !== scrolledToChange.current && changes.list.state === "loaded" && scrollToChange(changeListRef.current, changes.list.items, selected)) {
-      scrolledToChange.current = selected;
+    const scrolled = selected && `${layout}:${selected}`;
+    if (scrolled !== scrolledToChange.current && changes.list.state === "loaded" && scrollToChange(changeListRef.current, changes.list.items, selected, layout, collapsed)) {
+      scrolledToChange.current = scrolled;
     }
-  }, [browser.selectedChange, changes.list]);
+  }, [browser.selectedChange, changes.list, layout, collapsed]);
   const scrolledToCompared = useRef<string | undefined>(undefined);
   useLayoutEffect(() => {
     const selected = browser.selectedComparedChange;
-    if (selected !== scrolledToCompared.current && shownComparison && scrollToChange(comparedListRef.current, shownComparison.items, selected)) {
-      scrolledToCompared.current = selected;
+    const scrolled = selected && `${layout}:${selected}`;
+    if (scrolled !== scrolledToCompared.current && shownComparison && scrollToChange(comparedListRef.current, shownComparison.items, selected, layout, collapsed)) {
+      scrolledToCompared.current = scrolled;
     }
-  }, [browser.selectedComparedChange, shownComparison]);
+  }, [browser.selectedComparedChange, shownComparison, layout, collapsed]);
 
   // The change list's say about the change in the viewer, as `rereadFor` weighs the listings' say
   // about a file; a fresh list counts as news only for a change whose sources kept moving.
@@ -170,19 +178,22 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
     if (viewedChange === undefined) return undefined;
     const compared = viewedOrigin?.kind === "comparison";
     const items = compared ? (shownComparison?.items ?? []) : changes.list.state === "loaded" ? changes.list.items : [];
-    const { previous, next } = changeNeighbours(items, viewedChange);
+    const { previous, next } = changeNeighbours(visibleChanges(items, layout, collapsed), viewedChange);
     const open = compared ? openComparedChange : openChange;
     return {
       onPrevious: previous === undefined ? undefined : () => open(previous),
       onNext: next === undefined ? undefined : () => open(next),
     };
-  }, [changes.list, shownComparison, viewedChange, viewedOrigin]);
+  }, [changes.list, shownComparison, viewedChange, viewedOrigin, layout, collapsed]);
+
+  const changeView = { layout, collapsed, onCollapsedChange: browser.setCollapsedChangeDirs };
 
   return {
     view: {
       source: source.source,
       view: gitView,
       onViewChange: browser.setGitView,
+      changeView,
       worktree: {
         list: changes.list,
         worktree: browser.worktree,
@@ -211,12 +222,18 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
 /** Scrolls `list` so the row of change `key` among `items` is in view; false when there is no
  * such row on screen yet. Rows and headings are each one height, so where a row is follows from
  * its place (`changeRowOffset`). */
-function scrollToChange(list: HTMLElement | null, items: readonly ChangeItem[], key: string | undefined): boolean {
+function scrollToChange(
+  list: HTMLElement | null,
+  items: readonly ChangeItem[],
+  key: string | undefined,
+  layout: ChangeLayout,
+  collapsed: ReadonlySet<string>,
+): boolean {
   if (key === undefined || !list) return false;
-  const top = changeRowOffset(items, key);
+  const top = changeRowOffset(items, key, layout, collapsed);
   if (top === undefined) return false;
   // Clear of the list's fade at its edges, as `scroll-padding` keeps the rows react-aria scrolls.
   if (top - FADE_SIZE < list.scrollTop) list.scrollTop = top - FADE_SIZE;
-  else if (top + CHANGE_ROW_HEIGHT + FADE_SIZE > list.scrollTop + list.clientHeight) list.scrollTop = top + CHANGE_ROW_HEIGHT + FADE_SIZE - list.clientHeight;
+  else if (top + ROW_HEIGHT + FADE_SIZE > list.scrollTop + list.clientHeight) list.scrollTop = top + ROW_HEIGHT + FADE_SIZE - list.clientHeight;
   return true;
 }
