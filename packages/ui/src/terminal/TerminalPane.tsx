@@ -1,9 +1,10 @@
 import { Button, Spinner, Surface } from "@heroui/react";
 import { SquareTerminal, Unplug } from "lucide-react";
-import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 
 import "@xterm/xterm/css/xterm.css";
 import { EmptyPanel } from "../components/EmptyPanel";
+import { focusTopBar } from "../components/focusTopBar";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useT } from "../i18n/react";
 import { isDormant as isDormantStatus, isLive, type Session } from "../protocol";
@@ -81,7 +82,21 @@ export function TerminalPane({
   // While the daemon connection is down the connection banner owns recovery and its Retry; the
   // terminal's own Reconnect is not offered then.
   const canReconnect = trouble === "disconnected" && connectionState === "open";
-  const focusTerminal = useCallback(() => controllerRef.current?.focus(), []);
+  // With no session the terminal is covered and inert and cannot take focus, so focus asked for it
+  // goes to the top bar wherever it is now, except on `<body>`: `refocusIfLost` asks at mount, and
+  // launching the app must not pull focus onto a control.
+  const hasSessionRef = useRef(false);
+  hasSessionRef.current = session !== undefined;
+  const focusTerminal = useCallback(() => {
+    if (hasSessionRef.current) controllerRef.current?.focus();
+    else if (document.activeElement !== document.body) focusTopBar();
+  }, []);
+  // The session going away turns the terminal inert, and focus inside it would then fall to
+  // `<body>` with no event; hand it to the top bar first.
+  const noSession = session === undefined;
+  useLayoutEffect(() => {
+    if (noSession && rootRef.current?.contains(document.activeElement)) focusTopBar();
+  }, [noSession]);
   const held = useFocusHandoff(focusTerminal);
 
   useImperativeHandle(
@@ -339,7 +354,7 @@ export function TerminalPane({
       {/* The padding sits on a wrapper, not on the element xterm is mounted in: the fit addon sizes
           the terminal from that element's computed height and width, padding included, so padding
           there gives it rows and columns that the overflow then clips. */}
-      <div className="min-h-0 flex-1 px-3 py-2">
+      <div inert={!session} className="min-h-0 flex-1 px-3 py-2">
         {/* xterm lays its cells out left to right whatever the page's direction. */}
         <div dir="ltr" className="h-full overflow-hidden" ref={containerRef} />
       </div>

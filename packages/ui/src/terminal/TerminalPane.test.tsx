@@ -196,3 +196,44 @@ it("names the terminal's input in the UI language, and follows a language change
     act(() => setLanguage(language));
   }
 });
+
+it("keeps focus off the covered terminal while no session is selected", () => {
+  const topBar = document.body.appendChild(document.createElement("div"));
+  topBar.dataset.region = "topbar";
+  const topBarButton = topBar.appendChild(document.createElement("button"));
+  const elsewhere = document.body.appendChild(document.createElement("button"));
+  const handle = createRef<TerminalPaneHandle>();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  act(() => root.render(<TerminalPane ref={handle} onResume={async () => true} />));
+  expect(container.querySelector("[inert]")?.contains(container.querySelector("[dir=ltr]"))).toBe(true);
+
+  // Focus asked for goes to the top bar from anywhere but `<body>`, which is left alone so that the
+  // refocus at mount does not pull focus at launch.
+  act(() => handle.current?.focus());
+  expect(document.activeElement).toBe(document.body);
+  elsewhere.focus();
+  act(() => handle.current?.focus());
+  expect(document.activeElement).toBe(topBarButton);
+  expect(FakeController.last.focuses).toBe(0);
+
+  act(() => root.render(<TerminalPane ref={handle} session={session} onResume={async () => true} />));
+  expect(container.querySelector("[inert]")).toBeNull();
+  act(() => handle.current?.focus());
+  expect(FakeController.last.focuses).toBe(1);
+});
+
+it("hands focus to the top bar when the session goes away while the terminal holds it", () => {
+  const topBar = document.body.appendChild(document.createElement("div"));
+  topBar.dataset.region = "topbar";
+  const topBarButton = topBar.appendChild(document.createElement("button"));
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  act(() => root.render(<TerminalPane session={session} onResume={async () => true} />));
+  const input = container.querySelector("[dir=ltr]")!.appendChild(document.createElement("textarea"));
+  input.focus();
+  act(() => root.render(<TerminalPane onResume={async () => true} />));
+  expect(document.activeElement).toBe(topBarButton);
+});

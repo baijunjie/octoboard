@@ -448,11 +448,13 @@ A session's title can be changed at any time, archived sessions included. An emp
 
 ## The terminal
 
-With no session selected, the terminal's area says so and asks for a session to be selected. The selected session's
-terminal is live: keystrokes go straight to the agent, exactly as in a system terminal. Mouse
-reporting works, so an agent's own mouse-driven TUI is usable. `Ctrl+C` reaches the agent, and so do `Tab` and
-`Shift+Tab`. `F6` and `Shift+F6` never do: they move keyboard focus to another region of the window (see "Moving
-focus between regions with F6" in `docs/product/moving-focus-between-regions.md`).
+With no session selected, the terminal's area says so and asks for a session to be selected, and the terminal cannot
+take keyboard focus: whatever would hand focus to it (hiding a pane that holds focus, or the session going away while
+the terminal holds it) puts focus on the top bar's first enabled control instead, and leaves it on nothing when it is
+already on nothing. The selected session's terminal is live: keystrokes go straight to the agent, exactly as in a
+system terminal. Mouse reporting works, so an agent's own mouse-driven TUI is usable. `Ctrl+C` reaches the agent, and
+so do `Tab` and `Shift+Tab`. `F6` and `Shift+F6` never do: they move keyboard focus to another region of the window
+(see "Moving focus between regions with F6" in `docs/product/moving-focus-between-regions.md`).
 
 - Attaching to a session replays the **most recent 2 MiB** of that session's output, then follows live output. The
   terminal itself keeps 10,000 lines of scrollback.

@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 
+import { focusTopBar } from "./focusTopBar";
+
 /** Hands keyboard focus on when the control that held it goes away. A focused element that is
  * removed fires no blur and focus falls to `<body>`, so the caller spreads the returned
  * `onFocus`/`onBlur` on a wrapper of the control, which remembers the element focus is on, and
@@ -8,8 +10,7 @@ import { useEffect, useRef } from "react";
  * remembered. Focus moved by script while the window is unfocused fires nothing either, so the
  * hand-off also needs focus to have actually fallen to `<body>`. It then goes where `restore` puts
  * it — the terminal, say, or a control beside the one that went — or to the top bar's first
- * enabled button when that leaves it on `<body>` (not a disabled one, as Back often is, which
- * cannot hold focus).
+ * enabled button when that leaves it on `<body>` (`focusTopBar`).
  *
  * The caller must stay mounted while the control goes away (render `null`, not unmount): the check
  * runs in the caller's own effect.
@@ -27,9 +28,7 @@ export function useFocusHandoff(restore: () => void): {
     held.current = null;
     if (document.activeElement !== document.body) return;
     restore();
-    if (document.activeElement === document.body) {
-      document.querySelector<HTMLElement>("[data-region=topbar] button:not([disabled])")?.focus();
-    }
+    if (document.activeElement === document.body) focusTopBar();
   });
   return {
     onFocus: (event) => {

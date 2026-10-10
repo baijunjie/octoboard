@@ -232,7 +232,7 @@ Both panes are shown by default. **Whether each one is hidden is remembered per 
 widths. Hiding a pane hands its width to the terminal.
 
 Hiding a pane that holds keyboard focus — a sidebar row reached with Tab, say, or a report page or a file tree row —
-moves focus to the terminal.
+moves focus to the terminal, or to the top bar when no session is selected.
 
 At 1148 px and wider, hiding or showing the docked sidebar eases that column over **200 ms**, the same length as the
 overlay drawer's slide. Where the system asks for reduced motion, the column opens or closes at once. Pressing the
