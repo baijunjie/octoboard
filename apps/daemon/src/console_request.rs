@@ -177,6 +177,14 @@ impl ConsoleRequests {
         self.lock().take(matches, how)
     }
 
+    /// Whether the session has a request waiting.
+    pub fn is_waiting_for(&self, session_id: &str) -> bool {
+        self.lock()
+            .waiting
+            .iter()
+            .any(|waiting| waiting.request.session == session_id)
+    }
+
     /// Takes one request for the user's answer; an approval also marks its session as being
     /// approved, in the same step, until the returned guard is dropped.
     fn take_answered(
@@ -236,7 +244,7 @@ pub fn pending_events(state: &AppState) -> Vec<Event> {
 /// Stops the requests `matches` picks out from waiting and tells every client to close their
 /// dialogs. Returns them, so an answer can carry its outcome to the waiting call.
 fn close(
-    state: &AppState,
+    state: &Arc<AppState>,
     matches: impl Fn(&Request) -> bool,
     how: ConsoleRequestEnding,
 ) -> Vec<Waiting> {
@@ -245,18 +253,23 @@ fn close(
     taken
 }
 
-fn announce_closed(state: &AppState, closed: &[Waiting], how: ConsoleRequestEnding) {
+/// The one place every ending of a request passes through. Besides telling the clients, it lowers
+/// the hand the request raised: the session goes back to what its agent's own events say, which
+/// matters most when the agent gave up on the call without any signal reaching Octoboard, as no
+/// event follows then to correct it.
+fn announce_closed(state: &Arc<AppState>, closed: &[Waiting], how: ConsoleRequestEnding) {
     for waiting in closed {
         state.broadcast(Event::ConsoleSessionRequestClosed {
             request_id: waiting.request.id.clone(),
             reason: how,
         });
+        state.lower_request_hand(&waiting.request.session);
     }
 }
 
 /// Withdraws whatever the session has waiting, because its process has ended: its call has nobody
 /// left to return to. Called wherever a live session is dropped.
-pub fn withdraw_for_session(state: &AppState, session_id: &str) {
+pub fn withdraw_for_session(state: &Arc<AppState>, session_id: &str) {
     close(
         state,
         |request| request.session == session_id,
@@ -269,7 +282,7 @@ pub fn withdraw_for_session(state: &AppState, session_id: &str) {
 /// timed out, already withdrawn — is left alone, so dropping this after the call has its outcome
 /// changes nothing.
 struct WithdrawOnDrop<'a> {
-    state: &'a AppState,
+    state: &'a Arc<AppState>,
     request_id: String,
 }
 
@@ -342,9 +355,17 @@ pub async fn ask(
     drop(replaced);
     state.broadcast(event);
     let _withdraw = WithdrawOnDrop {
-        state: state.as_ref(),
+        state,
         request_id: request_id.clone(),
     };
+    // A session waiting on a dialog is waiting for the user, whatever its agent's events say
+    // meanwhile.
+    if let Err(err) = state.raise_request_hand(&caller.id) {
+        tracing::debug!(session = %caller.id, %err, "raising the console session request's hand failed");
+    }
+    // The request was answerable from `hold` on, so it may have ended before the hand went up, and
+    // then nothing else would lower it. Costs nothing while the request still waits.
+    state.lower_request_hand(&caller.id);
 
     let outcome = tokio::select! {
         outcome = &mut answered => outcome,
@@ -1049,6 +1070,117 @@ mod tests {
         assert_eq!(launcher.launched.load(Ordering::SeqCst), 0);
     }
 
+    /// Posts one hook payload of Claude Code's to `/hook/:session`, and returns once the daemon has
+    /// applied what it says.
+    async fn post_hook(port: u16, session: &str, name: &str, mut payload: Value) {
+        payload["hook_event_name"] = json!(name);
+        payload["session_id"] = json!("claude-session");
+        let body = serde_json::to_vec(&payload).unwrap();
+        let path = format!("/hook/{session}");
+        tokio::task::spawn_blocking(move || crate::loopback::post(port, &path, &body, PATIENCE))
+            .await
+            .unwrap()
+            .unwrap();
+    }
+
+    async fn serve_hooks(state: &Arc<AppState>) -> u16 {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let router = crate::server::router(state.clone());
+        tokio::spawn(async move { axum::serve(listener, router).await });
+        port
+    }
+
+    fn status_of(state: &AppState, id: &str) -> SessionStatus {
+        state.session_record(id).unwrap().status
+    }
+
+    /// The hook events Claude Code 2.1.295 sent while a call waited for the user (the order and
+    /// payloads of the hook log that showed the bug): it moves the call to the background, ends
+    /// its turn with the call still running, and reports itself idle. None of them lowers the
+    /// hand, the agent's own status stays what a message may be written on, and once the request
+    /// is answered the session reads what its agent's events left it at.
+    #[tokio::test]
+    async fn a_waiting_request_holds_the_hand_up_whatever_the_agent_reports() {
+        let (state, _dir) = fixture("hand-held");
+        let _asker = running(&state, "asker");
+        let port = serve_hooks(&state).await;
+        let launcher = Launcher::new(&state);
+        let (call, request_id) = ask_in_background(&state, "asker", ANSWER_TIME_LIMIT).await;
+        assert_eq!(status_of(&state, "asker"), SessionStatus::WaitingUser);
+
+        post_hook(port, "asker", "PostToolUse", json!({})).await;
+        post_hook(port, "asker", "PostToolBatch", json!({})).await;
+        let task = json!({
+            "id": "kdn46xv43",
+            "type": "MCP task",
+            "status": "running",
+            "description": "octoboard/request_console_session",
+            "server": "octoboard",
+            "tool": "request_console_session",
+        });
+        post_hook(port, "asker", "Stop", json!({ "background_tasks": [task] })).await;
+        assert_eq!(status_of(&state, "asker"), SessionStatus::WaitingUser);
+        post_hook(
+            port,
+            "asker",
+            "Notification",
+            json!({"notification_type": "idle_prompt"}),
+        )
+        .await;
+        assert_eq!(status_of(&state, "asker"), SessionStatus::WaitingUser);
+        assert_eq!(pending_events(&state).len(), 1);
+
+        // Answering the dialog is not the terminal's business: a write is not refused for it.
+        let written = {
+            let state = state.clone();
+            tokio::task::spawn_blocking(move || {
+                reporting::write_message(&state, "asker", "hello", WhenBlocked::Refuse)
+            })
+            .await
+            .unwrap()
+        };
+        assert!(written.is_ok(), "{:?}", written.err());
+
+        answer_by(&launcher, &request_id, false).await.unwrap();
+        assert_eq!(status_of(&state, "asker"), SessionStatus::Idle);
+        post_hook(port, "asker", "PreToolUse", json!({})).await;
+        assert_eq!(status_of(&state, "asker"), SessionStatus::Working);
+        let _ = outcome_of(call).await;
+    }
+
+    /// An agent can give up on the call without any signal reaching Octoboard, so when the request
+    /// times out no event follows to correct the session: it goes back to what the agent's last
+    /// event said, not to idle and not left waiting.
+    #[tokio::test]
+    async fn a_request_that_times_out_returns_the_session_to_its_agents_status() {
+        // The timeout stays short, so a stalled machine can let it fire before the hook lands: then
+        // nothing was tested, and the whole scenario runs again.
+        let deadline = std::time::Instant::now() + PATIENCE;
+        for attempt in 0.. {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the hook never landed inside the request's time limit"
+            );
+            let (state, _dir) = fixture(&format!("hand-timeout-{attempt}"));
+            let _asker = running(&state, "asker");
+            let port = serve_hooks(&state).await;
+            let (call, _request_id) =
+                ask_in_background(&state, "asker", Duration::from_millis(300)).await;
+            post_hook(port, "asker", "PostToolUse", json!({})).await;
+            if !state.console_requests.is_waiting_for("asker")
+                || status_of(&state, "asker") != SessionStatus::WaitingUser
+            {
+                let _ = outcome_of(call).await;
+                continue;
+            }
+
+            outcome_of(call).await.expect_err("timed out");
+            assert_eq!(status_of(&state, "asker"), SessionStatus::Working);
+            return;
+        }
+    }
+
     /// The caller's process ending withdraws its request; an approval after that starts nothing
     /// and is refused with the code the dialog's toast is shown for.
     #[tokio::test]
@@ -1118,11 +1250,18 @@ mod tests {
         assert_ne!(waiting[0], first_id);
     }
 
+    /// The next event about the requests themselves; the caller's own status changes with them
+    /// are not what these tests look at.
     async fn next_event(events: &mut tokio::sync::broadcast::Receiver<Event>) -> Event {
-        tokio::time::timeout(PATIENCE, events.recv())
-            .await
-            .expect("an event in time")
-            .unwrap()
+        loop {
+            let event = tokio::time::timeout(PATIENCE, events.recv())
+                .await
+                .expect("an event in time")
+                .unwrap();
+            if !matches!(event, Event::SessionUpserted { .. }) {
+                return event;
+            }
+        }
     }
 
     /// Over the real router: a call whose connection is dropped withdraws its request, and the

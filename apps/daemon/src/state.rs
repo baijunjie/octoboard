@@ -4,7 +4,9 @@
 //! `crate::outbox`, and each project's live git status together with the claim that keeps two
 //! checks of one project from racing and the timestamp that keeps them from piling up across
 //! several clients, each ended session's saved terminal output, and the requests for a console
-//! session waiting for the user's answer (`crate::console_request`).
+//! session waiting for the user's answer (`crate::console_request`) together with the status
+//! each of those sessions' agents is at while the request holds the record at waiting for the
+//! user.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
@@ -83,6 +85,12 @@ pub struct AppState {
     /// The `request_console_session` calls waiting for the user's answer; see
     /// `crate::console_request`. Held in memory only: no caller outlives the daemon.
     pub console_requests: crate::console_request::ConsoleRequests,
+    /// For each session with a console-session request waiting, the status its agent's own events
+    /// say it has, while the record shows `WaitingUser` for the request. Kept so that the daemon's
+    /// decisions about the agent (can a message be written, did a turn end) keep reading the agent
+    /// rather than the hand, and so the status can be restored when the request ends. Always taken
+    /// before `console_requests`, never after. Dropped with the session's other bookkeeping.
+    request_hands: Mutex<HashMap<String, SessionStatus>>,
     events: broadcast::Sender<Event>,
     shutdown: tokio::sync::Notify,
 }
@@ -143,6 +151,7 @@ impl AppState {
             live: RwLock::new(LiveSessions::default()),
             mcp_tokens: RwLock::new(HashMap::new()),
             turns: Mutex::new(HashMap::new()),
+            request_hands: Mutex::new(HashMap::new()),
             transcript_watch_generations: Mutex::new(HashMap::new()),
             next_transcript_watch_generation: std::sync::atomic::AtomicU64::new(0),
             outbox: Outbox::default(),
@@ -328,7 +337,7 @@ impl AppState {
 
     /// Drops a session from the live map — but only if it is still *this* session. Comparing by id
     /// would let a finished session's exit watcher evict the live successor that reused its id.
-    fn unregister_live(&self, session: &Arc<LiveSession>) {
+    fn unregister_live(self: &Arc<Self>, session: &Arc<LiveSession>) {
         let mut live = self.live.write().expect("live sessions lock poisoned");
         let is_current = live
             .sessions
@@ -399,22 +408,133 @@ impl AppState {
         }
         drop(live);
         self.forget_saved_output(id);
+        self.forget_request_hand(id);
         self.broadcast(Event::SessionDeleted {
             session: id.to_string(),
         });
         Ok(true)
     }
 
-    /// Applies a status reported by a hook. Dormant statuses are never reached this way — a session
-    /// becomes archived by the user's request and interrupted by its process going away, both of
-    /// which are decided here rather than by the agent.
+    /// Applies a status reported by a hook, unless a waiting console-session request is holding the
+    /// hand up: then the status is only remembered, as what the agent's events say, and the record
+    /// keeps `WaitingUser`. Dormant statuses are never reached this way — a session becomes
+    /// archived by the user's request and interrupted by its process going away, both of which are
+    /// decided here rather than by the agent.
     pub fn apply_hook_status(&self, id: &str, status: SessionStatus) -> Result<()> {
+        // Held across the write, so a request opening at the same moment cannot have its hand
+        // lowered by a status read before it.
+        let mut hands = self
+            .request_hands
+            .lock()
+            .expect("request hands lock poisoned");
+        let status = if let Some(remembered) = hands.get_mut(id) {
+            *remembered = status;
+            SessionStatus::WaitingUser
+        } else {
+            status
+        };
         let mut session = self.session_record(id)?;
         if session.status.is_dormant() || session.status == status {
             return Ok(());
         }
         session.status = status;
         self.save_session(&session)
+    }
+
+    /// Raises the hand of a session whose console-session request has started waiting, remembering
+    /// the status its agent is at. A session with a request already held keeps what it remembered:
+    /// the request replacing another one is the same wait. A dormant record is left alone, as in
+    /// [`Self::apply_hook_status`].
+    pub fn raise_request_hand(&self, id: &str) -> Result<()> {
+        let mut hands = self
+            .request_hands
+            .lock()
+            .expect("request hands lock poisoned");
+        let mut session = self.session_record(id)?;
+        if session.status.is_dormant() {
+            return Ok(());
+        }
+        hands.entry(id.to_string()).or_insert(session.status);
+        if session.status != SessionStatus::WaitingUser {
+            session.status = SessionStatus::WaitingUser;
+            self.save_session(&session)?;
+        }
+        Ok(())
+    }
+
+    /// Lowers the hand [`Self::raise_request_hand`] raised, to the status the agent's events have
+    /// left it at since, unless another request of the session is still waiting. Conditional on
+    /// the hand still being up, so a session that has since been interrupted stays so.
+    pub fn lower_request_hand(self: &Arc<Self>, id: &str) {
+        let mut hands = self
+            .request_hands
+            .lock()
+            .expect("request hands lock poisoned");
+        if self.console_requests.is_waiting_for(id) {
+            return;
+        }
+        let Some(remembered) = hands.remove(id) else {
+            return;
+        };
+        if remembered != SessionStatus::WaitingUser {
+            if let Err(err) =
+                self.apply_reported_status_if(id, SessionStatus::WaitingUser, remembered)
+            {
+                tracing::debug!(session = %id, %err, "lowering the console session request's hand failed");
+                return;
+            }
+        }
+        // Released only now: while it is held, an `agent_status` reader cannot see "no hand" while
+        // the record still says `WaitingUser`.
+        drop(hands);
+        // A message queued while the hand was up is still queued, and no hook event is coming to
+        // release it.
+        self.spawn_flush_outbox(id, remembered);
+    }
+
+    /// Drops what [`Self::raise_request_hand`] remembered for a session that is going away.
+    pub fn forget_request_hand(&self, id: &str) {
+        self.request_hands
+            .lock()
+            .expect("request hands lock poisoned")
+            .remove(id);
+    }
+
+    /// The status the session's agent is at, which is the record's except while a console-session
+    /// request holds the hand up. Whatever the daemon decides about the agent itself reads this;
+    /// the record is what the window shows.
+    pub fn agent_status(&self, session: &Session) -> SessionStatus {
+        self.request_hands
+            .lock()
+            .expect("request hands lock poisoned")
+            .get(&session.id)
+            .copied()
+            .unwrap_or(session.status)
+    }
+
+    /// [`Self::apply_reported_status_if`] for a reporter that watches the agent's own status: with
+    /// a hand held and the agent remembered at `expected`, the new status replaces what is
+    /// remembered and the record keeps the request's `WaitingUser`. Otherwise it is the record that
+    /// is `expected` to be moved. Says whether anything moved.
+    pub fn report_agent_status_if(
+        &self,
+        id: &str,
+        expected: SessionStatus,
+        status: SessionStatus,
+    ) -> Result<bool> {
+        // Held across the fall-through, for the reason [`Self::apply_hook_status`] holds it.
+        let mut hands = self
+            .request_hands
+            .lock()
+            .expect("request hands lock poisoned");
+        match hands.get_mut(id) {
+            Some(remembered) if *remembered == expected => {
+                *remembered = status;
+                Ok(true)
+            }
+            Some(_) => Ok(false),
+            None => self.apply_reported_status_if(id, expected, status),
+        }
     }
 
     /// Applies a status on behalf of a reporter whose conclusion only holds while the session is
@@ -700,6 +820,7 @@ impl AppState {
     fn forget_session_bookkeeping(&self, id: &str) {
         self.revoke_mcp_tokens(id);
         self.turns.lock().expect("turn lock poisoned").remove(id);
+        self.forget_request_hand(id);
         self.transcript_watch_generations
             .lock()
             .expect("transcript watch lock poisoned")

@@ -201,7 +201,8 @@ pub fn watch_for_rejection(state: &Arc<AppState>, session_id: &str, transcript_p
                 return; // The process is gone.
             }
             match state.store.get_session(&session_id) {
-                Ok(Some(session)) if session.status == SessionStatus::WaitingUser => {}
+                Ok(Some(session)) if state.agent_status(&session) == SessionStatus::WaitingUser => {
+                }
                 // A real hook event already moved the session on, or it is gone from the store
                 // outright — either way, nothing here is still owed.
                 Ok(_) => return,
@@ -260,7 +261,7 @@ pub fn watch_for_rejection(state: &Arc<AppState>, session_id: &str, transcript_p
                 // Conditional on the session still waiting, in one step: the scan above read the
                 // status, and between that read and this write a real hook can have moved the
                 // session on, which an unconditional write would then lose.
-                match state.apply_reported_status_if(
+                match state.report_agent_status_if(
                     &session_id,
                     SessionStatus::WaitingUser,
                     SessionStatus::Idle,
@@ -268,7 +269,7 @@ pub fn watch_for_rejection(state: &Arc<AppState>, session_id: &str, transcript_p
                     Ok(true) => {
                         tracing::debug!(
                             session = %session_id,
-                            "a transcript rejection was found; the hand is lowered"
+                            "a transcript rejection was found; the agent is no longer waiting"
                         );
                         // Mirrors the release the hook path pairs with every status change: a
                         // message queued while the session was `WaitingUser` is still queued, and
@@ -558,9 +559,9 @@ mod tests {
     /// once a real hook event has moved the session on (here, straight to `Working`, standing in
     /// for a later prompt), a rejection record arriving afterwards must not overwrite it.
     ///
-    /// This only exercises the pre-check at the top of each poll (`session.status ==
-    /// WaitingUser`), which returns before the scan ever runs — the session is moved on before the
-    /// rejection is even written, so the watcher never reaches the scan or the write to find out
+    /// This only exercises the pre-check at the top of each poll (the agent's status being
+    /// `WaitingUser`), which returns before the scan ever runs — the session is moved on before
+    /// the rejection is even written, so the watcher never reaches the scan or the write to find out
     /// about it. Two further guards sit right before the write, for a session that moved on after a
     /// scan did find a rejection: the repeated generation check, and the conditional write that
     /// moves the session only while it is still waiting. Neither is reachable deterministically from
@@ -614,6 +615,59 @@ mod tests {
         .await
         .unwrap();
         assert!(applied, "the rejection must be applied");
+    }
+
+    /// A watch follows the agent's own status, not the record's: with a console-session request
+    /// holding the hand up, a decline found in the transcript moves what the agent is remembered
+    /// at, and the record keeps showing the request's `WaitingUser`.
+    #[tokio::test]
+    async fn a_rejection_during_a_held_hand_moves_the_agent_and_not_the_record() {
+        let fixture = Fixture::new("held-hand", waiting_session("s"));
+        fixture.state.raise_request_hand("s").expect("raise");
+        watch_for_rejection(&fixture.state, "s", Some(&fixture.path.to_string_lossy()));
+
+        std::fs::write(&fixture.path, REJECTION).expect("write rejection");
+
+        let state = fixture.state.clone();
+        let applied = tokio::task::spawn_blocking(move || {
+            crate::trust::wait_for(TEST_TIMEOUT, || {
+                let record = state.session_record("s").expect("record");
+                state.agent_status(&record) == SessionStatus::Idle
+            })
+        })
+        .await
+        .unwrap();
+        assert!(applied, "the rejection must move the agent's own status");
+        assert_eq!(
+            status_of(&fixture.state, "s"),
+            Some(SessionStatus::WaitingUser)
+        );
+    }
+
+    /// A conclusion about an agent that has since moved on is dropped, rather than falling through
+    /// to the record: the record is held at `WaitingUser` by the request, so a write conditional on
+    /// that would succeed and take the request's own hand down.
+    #[test]
+    fn a_rejection_is_dropped_once_the_agent_has_moved_on() {
+        let fixture = Fixture::new("moved-on", waiting_session("s"));
+        fixture.state.raise_request_hand("s").expect("raise");
+        fixture
+            .state
+            .apply_hook_status("s", SessionStatus::Working)
+            .expect("the agent reports a turn");
+
+        let reported = fixture
+            .state
+            .report_agent_status_if("s", SessionStatus::WaitingUser, SessionStatus::Idle)
+            .expect("report");
+
+        assert!(!reported, "the agent is no longer where the scan read it");
+        let record = fixture.state.session_record("s").expect("record");
+        assert_eq!(fixture.state.agent_status(&record), SessionStatus::Working);
+        assert_eq!(
+            status_of(&fixture.state, "s"),
+            Some(SessionStatus::WaitingUser)
+        );
     }
 
     /// A watch superseded by a newer one for the same session must not write either — the second

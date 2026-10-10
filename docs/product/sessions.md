@@ -156,7 +156,7 @@ Where a session's agent is named in the sidebar, its account is named with it (s
 | Status | Wire value | Glyph | Meaning |
 |---|---|---|---|
 | Working | `working` | an accent-coloured dot pulsing a fading copy of itself outward | The agent is executing a turn. |
-| Waiting for the user | `waiting_user` | a raised hand that waves now and then | The agent is waiting on a permission decision or has asked the user a question through its own ask-the-user tool. |
+| Waiting for the user | `waiting_user` | a raised hand that waves now and then | The agent is waiting on a permission decision or has asked the user a question through its own ask-the-user tool; or Octoboard is asking the user on the agent's behalf while the agent's call waits, which is a request for a console session (see "The call" in `docs/product/requesting-a-console-session.md`). |
 | Awaiting instructions | `idle` | a green speech bubble | The process is running and sitting at its prompt. |
 | Interrupted | `interrupted` | a pause sign | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
 | Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming"). No longer listed among its project's sessions (a console session, no longer in the console sessions section); reached through the archive (see "Archived sessions" below) and can be reopened. |
@@ -173,7 +173,8 @@ Transitions:
 - Opening a session puts it in *working* when it is handed an opening prompt (a session started with `start_session`),
   and in *awaiting instructions* otherwise (see "Opening a session").
 - While the process runs, reports from the agent move the session between *working*, *waiting for the user* and
-  *awaiting instructions*.
+  *awaiting instructions* — except while a request for a console session holds it at *waiting for the user* (see
+  "What the statuses are derived from" below).
 - The process ending for any reason other than archiving — the agent exiting on its own, a crash, the application
   quitting — leaves the session *interrupted*.
 - Archiving leaves the session *archived*. Archiving an owner also archives the *interrupted* sessions under it, and
@@ -190,10 +191,16 @@ Transitions:
 ### What the statuses are derived from
 
 Status comes from hook events Octoboard injects into each agent per launch, never from reading the terminal's rendered
-output. There is one exception, and only one: while a **Claude Code** session is *waiting for the user*, Octoboard also
-reads that session's own transcript file — the machine-readable record the agent keeps of the conversation, still not
-its rendered output — because a declined prompt is reported by no hook event at all; see "Declining a Claude Code
-prompt or question" below. A session's end is not taken from a hook either: the process is observed directly.
+output. Two things besides those events bear on a running session's status, and only these two.
+
+- While a **Claude Code** session is *waiting for the user*, Octoboard also reads that session's own transcript file —
+  the machine-readable record the agent keeps of the conversation, still not its rendered output — because a declined
+  prompt is reported by no hook event at all; see "Declining a Claude Code prompt or question" below.
+- A `request_console_session` call waiting for the user's answer holds its session at *waiting for the user* for the
+  whole wait, whatever the agent's own events say meanwhile; when the request ends the session goes back to where its
+  agent was last seen to be (see "The call" in `docs/product/requesting-a-console-session.md`).
+
+A session's end is not taken from a hook either: the process is observed directly.
 
 Where an agent reports nothing, the status simply stays at its last reported value. The known cases, which are
 limitations of what the agents expose rather than of this one:
@@ -251,13 +258,15 @@ own row:
   first. The sidebar follows the session it selects (see "Selecting a session" in
   `docs/product/sidebar.md`).
 
-**The user answers in the session's terminal**, and the status leaves *waiting for the user* on the
-agent's next event — or, where the answer was a decline and no event follows, on the decline showing
-up in the agent's own record of the conversation, which only Claude Code sessions are read for (see
-"Declining a Claude Code prompt or question" below). Nobody can answer for them: a session driving others — a console
-session, or a project session that started sessions — is told to leave such a session alone, and a message addressed to
-it is held until the user is done — see "Messages held until a session can take them" in
-`docs/product/hub-orchestration.md`.
+**Where the hand is the agent's own, the user answers in the session's terminal**, and the status leaves *waiting for
+the user* on the agent's next event — or, where the answer was a decline and no event follows, on the decline showing
+up in the agent's own record of the conversation, which only Claude Code sessions are read for (see "Declining a
+Claude Code prompt or question" below). Nobody can answer for them: a session driving others — a console session, or a
+project session that started sessions — is told to leave such a session alone, and a message addressed to it is held
+until the user is done — see "Messages held until a session can take them" in `docs/product/hub-orchestration.md`.
+
+A hand Octoboard raised for a waiting request for a console session is answered in that request's dialog instead, so a
+message addressed to such a session is not held (see "The call" in `docs/product/requesting-a-console-session.md`).
 
 Where the user's own Codex configuration **resolves approval requests by itself**, Octoboard raises
 no hand at all: the permission event still fires, but Codex resolves the request, no dialog ever
@@ -295,6 +304,10 @@ hand and notifies afresh, as any other does.
 - If the record cannot be read — the pending-decision event named no transcript file, or the file is
   unreadable — nothing lowers the hand, and the session keeps it up until something else moves its
   status.
+- A decline is noticed the same way while a request for a console session holds that session's hand
+  up (see "The call" in `docs/product/requesting-a-console-session.md`). The hand stays up until the
+  request ends, since it is the request's own; the session is then *awaiting instructions*, where the
+  decline left its agent.
 
 **What this costs to keep working.** The transcript is a file format Claude Code owns and rewrites on
 upgrade, and a decline is recognised by two fixed marker strings inside it; the behaviour was

@@ -111,7 +111,10 @@ pub fn write_message(
             &[("session", id)],
         ));
     }
-    let writable = matches!(session.status, SessionStatus::Working | SessionStatus::Idle);
+    // The agent's own status, not the record's: a console-session request's hand is answered in a
+    // dialog and leaves the agent's prompt as free to take a message as it was.
+    let agent_status = state.agent_status(&session);
+    let writable = matches!(agent_status, SessionStatus::Working | SessionStatus::Idle);
     if !writable && when_blocked == WhenBlocked::Refuse {
         return Err(CodedError::raised(
             error_code::SESSION_WAITING_FOR_USER,
@@ -133,7 +136,7 @@ pub fn write_message(
 
     // Queued even when the session looks ready, so messages cannot overtake one another.
     state.queue_message(id, text);
-    match state.flush_outbox(id, session.status) {
+    match state.flush_outbox(id, agent_status) {
         Drain::Clear => Ok(Delivery::Written),
         Drain::Pending => Ok(Delivery::Queued),
         Drain::Lost => Err(CodedError::raised(

@@ -175,10 +175,13 @@ being its owner. A copy that cannot be delivered — the owner has no process ru
 receiver; the sender is told the owner was not copied. A copy for an owner that cannot take a message right now is
 queued.
 
-Delivery is the same as for any other message: sanitized as in "Messages held until a session can take them", held when
-the receiver is waiting for the user or may be at its trust confirmation, and refused when it has no process running. The two tools are on by default and
-have no setting. A session launched before they existed keeps the role description it was first given, and on resume
-sees the tools without being told about them or about its owner.
+Delivery is the same as for any other message: sanitized as in "Messages held until a session can take them", held
+when the receiver's own agent is waiting for the user — at a permission prompt or a question of its own — or may be at
+its trust confirmation, and refused when it has no process running. A receiver reading as *waiting for the user* only
+because a request for a console session of its own is waiting takes the message straight away, since what has to be
+answered there is a dialog (see "The call" in `docs/product/requesting-a-console-session.md`). The two tools are on by
+default and have no setting. A session launched before they existed keeps the role description it was first given, and
+on resume sees the tools without being told about them or about its owner.
 
 ## Handing out a task: the brief
 

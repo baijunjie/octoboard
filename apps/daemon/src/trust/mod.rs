@@ -306,7 +306,7 @@ fn release_when_the_screen_goes(state: &Arc<AppState>, live: &Arc<LiveSession>) 
 /// Writes out whatever was queued for the session while its trust screen held it.
 fn release_held(state: &Arc<AppState>, session_id: &str) {
     if let Ok(session) = state.session_record(session_id) {
-        state.spawn_flush_outbox(session_id, session.status);
+        state.spawn_flush_outbox(session_id, state.agent_status(&session));
     }
 }
 

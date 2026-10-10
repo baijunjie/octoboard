@@ -527,7 +527,8 @@ fn read_turn_boundary(
         return true;
     }
     match hooks::turn_end(agent, event, payload) {
-        // A session with its hand up has not finished its turn — it is waiting for a person. Grok's
+        // A session with its hand up has not finished its turn — it is waiting for a person (the
+        // agent's own hand: a console-session request's hand says nothing of its turn). Grok's
         // clock-attributed end would otherwise lower the hand and report "it said nothing" for any
         // prompt left unanswered longer than the backstop delay.
         Some(turn)
@@ -537,7 +538,9 @@ fn read_turn_boundary(
                     .get_session(session_id)
                     .ok()
                     .flatten()
-                    .is_some_and(|session| session.status == SessionStatus::WaitingUser) =>
+                    .is_some_and(|session| {
+                        state.agent_status(&session) == SessionStatus::WaitingUser
+                    }) =>
         {
             false
         }

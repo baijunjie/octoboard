@@ -30,10 +30,23 @@ The call **waits for the user's answer for up to 8 minutes**. The limit is Octob
 and lies below the 10 minutes within which Octoboard forwards any tool call from the session to the daemon, leaving
 room for an approval given at the last moment to be carried out. No agent's own time limit on a tool call is followed.
 
-Octoboard does not change the session's status while the call waits. Claude Code (observed on 2.1.295) moves an MCP
-tool call that is still running after 120 seconds to the background: its turn ends and the session reads *awaiting
-instructions* while the request is still waiting, and the call's result reaches it later as the background task's
-notification.
+**While the call waits, the session reads *waiting for the user*.** The hand goes up as the call starts waiting and
+comes down as the request ends — when the user answers, and equally when the request times out or is withdrawn; a
+request that takes an earlier one's place continues the same wait. It is the ordinary raised hand throughout: shown
+wherever a hand is shown, counted in the rail's waiting count and firing the same system notification as any other
+(see "The raised hand" in `docs/product/sessions.md`). What answers it is the dialog, not the session's terminal, so
+unlike a hand the agent itself raised it holds nothing back: a message addressed to the session is still accepted
+rather than queued (see "Messages held until a session can take them" in `docs/product/hub-orchestration.md`).
+
+Once the request has ended, the session's status follows its own agent again, from wherever the agent was last seen to
+be while the hand was up — *working* where it is still in the turn that made the call, *awaiting instructions* where
+it has since reported itself at its prompt, or where a Claude Code prompt declined during the wait left it (see
+"Declining a Claude Code prompt or question" in `docs/product/sessions.md`). That is also where the session is left
+when no further event from the agent arrives at all — as when a request times out after its agent gave up on the call.
+
+Claude Code (observed on 2.1.295) moves an MCP tool call that is still running after 120 seconds to the background:
+its turn ends with the call still waiting, and the call's result reaches it later as the background task's
+notification. None of that moves the session out of *waiting for the user* while the request is waiting.
 
 ## How a request ends
 
