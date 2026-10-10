@@ -227,9 +227,9 @@ function TagPicker({
  * that drops just the keyword (the Clear filter button at that row's end clears it with the tags). A group of
  * its own, so it has a name of its own and is one tab stop apart from the picked tags. It goes
  * away with the keyword, so a removal while it holds focus moves focus to `returnFocusTo`, the
- * element around the filter button, rather than let it drop to `<body>`. The ring
- * there follows the modality already set; after Tabbing in, a click on the remove button also
- * shows it, as the browser treats the scripted `focus()` as focus-visible. */
+ * element around the filter button, rather than let it drop to `<body>`. The ring there follows
+ * react-aria's interaction modality, not the browser's `:focus-visible`: a removal from the keyboard
+ * shows it, a click on the remove button does not. */
 export function ProjectFilterTag({
   keyword,
   onRemove,
@@ -275,10 +275,8 @@ export function ProjectFilterTag({
  * button at that row's end clears them with the keyword. The group goes away with its last tag, so a removal that empties
  * it while it holds focus moves focus to `returnFocusTo`, the element around the filter button;
  * the tag unmounting would drop it to `<body>`, and the terminal would stop receiving keystrokes.
- * The button's focus ring follows whatever modality the interaction had already set, so it shows
- * for a removal from the keyboard. One edge: after Tabbing into the group, a click on a tag's
- * remove button also shows the ring, as the browser treats the scripted `focus()` as
- * focus-visible. */
+ * The filter button's focus ring follows react-aria's interaction modality, not the browser's
+ * `:focus-visible`, so it shows for a removal from the keyboard and not for a click. */
 export function ProjectFilterTags({
   tags,
   onRemove,
