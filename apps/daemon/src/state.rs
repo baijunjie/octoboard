@@ -46,13 +46,18 @@ pub struct AppState {
     /// correlating turn ids. Entries are added on a turn start and removed when the session's
     /// process goes away.
     turns: Mutex<HashMap<String, TurnState>>,
-    /// The generation each session's transcript watch (`crate::transcript`) is currently on.
+    /// The generation each session's transcript watch (`crate::transcript`, and for Codex
+    /// `crate::rollout`) is currently on.
     /// Starting a watch records a fresh value here; the watch keeps polling only while its own
     /// value is still the one recorded, which is what lets a newer watch for the same session
     /// retire an older one rather than race it. The counter it is drawn from is global, not
     /// per-session, because uniqueness is all that is asked of it.
     transcript_watch_generations: Mutex<HashMap<String, u64>>,
     next_transcript_watch_generation: std::sync::atomic::AtomicU64,
+    /// How far into its rollout file each Codex session's watches have read, with the file's path.
+    /// A new turn's watch resumes from there rather than rescanning the whole file, which on a long
+    /// session runs to megabytes; what an earlier watch read it has already judged.
+    rollout_offsets: Mutex<HashMap<String, (std::path::PathBuf, u64)>>,
     /// The per-session write queues. Every message Octoboard sends into a running agent goes
     /// through them; see `crate::outbox`.
     outbox: Outbox,
@@ -154,6 +159,7 @@ impl AppState {
             request_hands: Mutex::new(HashMap::new()),
             transcript_watch_generations: Mutex::new(HashMap::new()),
             next_transcript_watch_generation: std::sync::atomic::AtomicU64::new(0),
+            rollout_offsets: Mutex::new(HashMap::new()),
             outbox: Outbox::default(),
             git_statuses: RwLock::new(HashMap::new()),
             git_checks: Mutex::new(HashMap::new()),
@@ -825,6 +831,10 @@ impl AppState {
             .lock()
             .expect("transcript watch lock poisoned")
             .remove(id);
+        self.rollout_offsets
+            .lock()
+            .expect("rollout offset lock poisoned")
+            .remove(id);
     }
 
     // -- transcript watch bookkeeping -----------------------------------------
@@ -842,6 +852,34 @@ impl AppState {
             .expect("transcript watch lock poisoned")
             .insert(id.to_string(), generation);
         generation
+    }
+
+    /// Where a watch of the rollout at `path` may start reading: past what an earlier watch of the
+    /// same file already read, or zero for a file not seen before.
+    pub fn rollout_offset(&self, id: &str, path: &std::path::Path) -> u64 {
+        self.rollout_offsets
+            .lock()
+            .expect("rollout offset lock poisoned")
+            .get(id)
+            .filter(|(seen, _)| seen == path)
+            .map_or(0, |(_, offset)| *offset)
+    }
+
+    /// Records how far a watch has read into the rollout at `path`.
+    pub fn note_rollout_offset(&self, id: &str, path: &std::path::Path, offset: u64) {
+        self.rollout_offsets
+            .lock()
+            .expect("rollout offset lock poisoned")
+            .insert(id.to_string(), (path.to_path_buf(), offset));
+    }
+
+    /// Retires the session's transcript watch, if any, because the turn it was watching is over: a
+    /// new turn is about to open, and a watch left current could close that one instead.
+    pub fn end_transcript_watch(&self, id: &str) {
+        self.transcript_watch_generations
+            .lock()
+            .expect("transcript watch lock poisoned")
+            .remove(id);
     }
 
     /// Whether `generation` is still this session's current transcript watch — false once a newer

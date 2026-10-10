@@ -21,7 +21,7 @@ use anyhow::{bail, Result};
 
 use crate::outbox::Drain;
 use crate::protocol::{error_code, CodedError, Role, Session, SessionStatus};
-use crate::state::AppState;
+use crate::state::{AppState, TurnClose};
 use crate::{coordinator, hooks, term};
 
 /// What a session is handed as its opening prompt, rendered from the console session's `brief`.
@@ -273,6 +273,24 @@ pub fn deliver_report(
     })
 }
 
+/// Closes the session's open turn on `turn` ending it, and has a report synthesised for the owner
+/// when the session reported nothing itself. What closing amounted to is returned, for the caller to
+/// decide what else the ending says about the session.
+pub fn close_turn_and_report(
+    state: &Arc<AppState>,
+    session_id: &str,
+    turn: hooks::TurnEnd,
+) -> TurnClose {
+    let close = state.close_turn(session_id, turn.backstop);
+    if close == TurnClose::OwesReport {
+        let state = state.clone();
+        let session_id = session_id.to_string();
+        // Delivery writes into the owner's PTY, which blocks, so it goes off the caller's path.
+        tokio::task::spawn_blocking(move || synthesise_report(&state, &session_id, turn));
+    }
+    close
+}
+
 /// Reports to the owner for a session that stopped without reporting for itself. The
 /// caller has already closed the turn and established that a report is owed.
 ///
@@ -280,7 +298,7 @@ pub fn deliver_report(
 /// stopped to wait for its sessions, not stopped working.
 ///
 /// **Blocks** on writing into the owner.
-pub fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::TurnEnd) {
+fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::TurnEnd) {
     let session = match state.store.get_session(session_id) {
         Ok(Some(session)) if session.bound_to.is_some() => session,
         // An unbound session has nobody to report to, and a record that is gone is nothing to

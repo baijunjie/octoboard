@@ -191,11 +191,14 @@ Transitions:
 ### What the statuses are derived from
 
 Status comes from hook events Octoboard injects into each agent per launch, never from reading the terminal's rendered
-output. Two things besides those events bear on a running session's status, and only these two.
+output. Three things besides those events bear on a running session's status, and only these three.
 
 - While a **Claude Code** session is *waiting for the user*, Octoboard also reads that session's own transcript file —
   the machine-readable record the agent keeps of the conversation, still not its rendered output — because a declined
   prompt is reported by no hook event at all; see "Declining a Claude Code prompt or question" below.
+- While a **Codex** session has a turn open, Octoboard also reads that session's own rollout file — the record Codex
+  keeps of the session, again not its rendered output — because a turn that ends in an error is reported by no hook
+  event at all; see "A Codex turn that ends in an error" below.
 - A `request_console_session` call waiting for the user's answer holds its session at *waiting for the user* for the
   whole wait, whatever the agent's own events say meanwhile; when the request ends the session goes back to where its
   agent was last seen to be (see "The call" in `docs/product/requesting-a-console-session.md`).
@@ -316,6 +319,35 @@ application against 2.1.289. A release that renames those markers breaks this
 silently and completely — there is no error, nothing is reported as having failed, and the only
 symptom is a declined prompt leaving the raised hand up with nothing to lower it. Nothing Octoboard
 can observe by itself tells that apart from a user who simply has not answered yet.
+
+### A Codex turn that ends in an error
+
+A Codex turn that **ends in an error** — the account's usage limit reached, for one — is reported by
+no hook event at all: Codex has no failure event and no notification event, so nothing follows the
+turn's prompt submission, while the agent is already back at its prompt. So for this one case
+Octoboard reads the session's own rollout file, the record Codex keeps of the session, and moves the
+session to *awaiting instructions* once the turn appears there as ended with an error — normally
+within about a second of the prompt, and so up to about half a second behind Codex's own return to
+its prompt. Every turn of a session is covered, its first included.
+
+- The agent's process is still running, so the session is *awaiting instructions* and not
+  *interrupted*.
+- The turn is reported on: a session bound to an owner has a report synthesised for it with status
+  *failed*, carrying Codex's own error text and the usual line saying the session stopped without
+  reporting (see "When a session does not report" in `docs/product/hub-orchestration.md`).
+- **Codex sessions only.** Claude Code and Grok Build report a failed turn through their own hook
+  events, and the file read here is Codex's own format; neither is watched this way.
+- A turn Codex ends normally, and one the user cancels, are reported by Codex's own hook events, and
+  nothing is read from the rollout for them.
+- If the record cannot be read — the prompt submission named no rollout file or no turn, or the
+  turn's end never appears there — nothing moves the session, and it keeps reading *working* until
+  something else does.
+
+**What this costs to keep working.** The rollout is a file format Codex owns and rewrites on upgrade,
+and a failed turn is recognised by the shape of the record Codex writes for the turn's end; the
+behaviour was measured against Codex 0.160.0. A release that changes that shape breaks this silently
+— there is no error and nothing is reported as having failed — and the only symptom is a session
+reading *working* while Codex sits at its prompt.
 
 ## Archiving, interruption and resuming
 

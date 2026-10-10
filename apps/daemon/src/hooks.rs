@@ -15,7 +15,9 @@
 //!   at teardown with `reason: "shutdown"` — so an unfiltered mapping ends every session with a
 //!   phantom finished turn. Payload keys exist in both camelCase and snake_case.
 //! - **Codex**: `Interrupt` replaces `Stop` for a cancelled turn, and `PermissionRequest` fires
-//!   before the modal reaches the user.
+//!   before the modal reaches the user. A turn that ends in an error fires neither: only its
+//!   `UserPromptSubmit`, with nothing after it, so that ending is read from Codex's rollout file
+//!   instead (see `crate::rollout`).
 //!
 //! Three gaps are accepted rather than worked around, all of them settled during validation: a turn
 //! that ends with a plain-text question to the user is indistinguishable from a finished turn on
@@ -29,6 +31,7 @@
 //! interrupt lands — declining a permission prompt or its `AskUserQuestion` is silent in exactly the
 //! same way, and leaving it would strand the session's raised hand with nothing to lower it. That one
 //! is recovered outside this mapping, from the agent's own transcript; see `crate::transcript`.
+//! Codex's turn that ends in an error is recovered the same way, from its rollout file.
 //!
 //! For the payload fields behind these decisions — what each event carries, what it can be
 //! correlated on, and what never fires — see `docs/agent-cli-reference.md`.
@@ -97,7 +100,9 @@ fn claude_status(event: &str, payload: &Value) -> Option<SessionStatus> {
 
 fn codex_status(event: &str) -> Option<SessionStatus> {
     match event {
-        "SessionStart" => Some(SessionStatus::Idle),
+        // No `SessionStart` arm: Codex defers it to the first prompt submission, so it arrives
+        // together with that prompt's `UserPromptSubmit` and, handled last, would put a working
+        // first turn back to idle. The launch and the resume already set `Idle` themselves.
         "UserPromptSubmit" | "PreToolUse" | "PostToolUse" => Some(SessionStatus::Working),
         "PermissionRequest" => Some(SessionStatus::WaitingUser),
         // Mutually exclusive with `Stop`, and the only cancellation signal any of the three agents
@@ -459,6 +464,31 @@ mod tests {
         )
         .expect("a turn end");
         assert!(end.failed);
+    }
+
+    /// Codex defers `SessionStart` to the first prompt, where it arrives together with that
+    /// prompt's `UserPromptSubmit`; read as `Idle` it would race the turn it came with.
+    #[test]
+    fn codex_session_start_says_nothing_about_status() {
+        assert_eq!(codex_status("SessionStart"), None);
+        assert_eq!(
+            codex_status("UserPromptSubmit"),
+            Some(SessionStatus::Working)
+        );
+    }
+
+    /// A normal Codex `Stop` is a turn end that did not fail; a failure comes from the rollout, not
+    /// from any hook event.
+    #[test]
+    fn a_codex_stop_is_a_turn_end_that_did_not_fail() {
+        let end = turn_end(
+            Agent::Codex,
+            "Stop",
+            &json!({"last_assistant_message": "done"}),
+        )
+        .expect("a turn end");
+        assert!(!end.failed);
+        assert!(turn_end(Agent::Codex, "UserPromptSubmit", &json!({})).is_none());
     }
 
     /// Grok's backstop carries nothing but the fact that the turn is over.

@@ -142,7 +142,10 @@ Turn-scoped events add `turn_id`, the per-turn key. The compaction events are th
 
 - `SessionStart` — `source` is one of `startup`, `resume`, `clear`, `compact`, `fork`. Its `session_id` is the only
   place Codex ever publishes its own id, and the thread id is the same value. `~/.codex/session_index.jsonl` is not an
-  alternative source: it records only *named* threads, and is written late.
+  alternative source: it records only *named* threads, and is written late. **It does not fire until the first prompt
+  is submitted**, and then arrives together with that prompt's `UserPromptSubmit`, in either order — measured 40 s
+  after the process started, both within the same second, and the order varied run to run. A mapping that gives it a
+  status therefore races the turn the prompt opens.
 - `Stop` — `turn_id`, `last_assistant_message`, `stop_hook_active`.
 - `Interrupt` — fires on Esc or Ctrl+C during an in-flight turn (Ctrl+C confirmed by hand). It carries the base
   payload plus the cancelled turn's own `turn_id` and is mutually exclusive with `Stop`. Esc pressed while the session
@@ -158,6 +161,24 @@ Turn-scoped events add `turn_id`, the per-turn key. The compaction events are th
   reopening. `PostCompact` carries no summary and no token counts.
 - **There is no question or notification event.** The two features that would produce a structured question to the
   user, `default_mode_request_user_input` and `request_permissions_tool`, are off in this build.
+- **There is no failure event either**, no counterpart to Claude Code's `StopFailure`. A turn that ends in an error
+  fires `UserPromptSubmit` and **nothing else** — no `Stop`, no `Interrupt`, nothing — while Codex returns to its
+  prompt about 0.7 s later and the terminal goes completely silent. Measured with an account at its usage limit,
+  three sessions, every turn, with a wrapper logging every hook invocation. Esc pressed on such a session fires
+  nothing either, so there is no event anywhere that ends the turn.
+
+**A turn's own outcome is in Codex's session record**, the rollout file whose path every hook payload carries as
+`transcript_path` (its naming and location are in "Moving a conversation to another config directory" below).
+Each turn is an `event_msg` line whose `payload` is `task_started`, then one whose `payload` is `task_complete`,
+both carrying the same `turn_id` as that turn's hook payloads. A turn that **failed** has `last_agent_message: null`
+and an `error` object (`message`, and `codex_error_info` — `"usage_limit_exceeded"` for the measured cause); a turn
+that **ended normally** has `last_agent_message` set and no `error` key at all (its keys are exactly `completed_at`,
+`duration_ms`, `last_agent_message`, `started_at`, `time_to_first_token_ms`, `turn_id`, `type`). An interrupted turn
+was seen with a null message, no `error` and no `time_to_first_token_ms`, so a null message alone does not mean a
+failure. The file is created about 0.25 s **after** the first prompt of a session — not at launch — and Codex
+flushes it per record: a failed turn's `task_complete` was readable 1.26 s after the prompt, with the process still
+running. The record can land before that turn's hook callback does: the margin measured on a session's first turn was
+0.249 s.
 
 **The user's own configuration can remove the prompt entirely.** With `approvals_reviewer = "auto_review"` Codex
 resolves an approval request itself: the hook fires, no modal is shown and the tool proceeds. A raised hand would ask

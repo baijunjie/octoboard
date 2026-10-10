@@ -20,6 +20,7 @@ use crate::protocol::{
     BROWSE_REQUEST_TYPES,
 };
 use crate::reporting;
+use crate::rollout;
 use crate::state::{AppState, TurnClose};
 use crate::transcript;
 
@@ -462,6 +463,11 @@ async fn hook_callback(
                     tracing::debug!(session = %session_id, %err, "recording the session's first turn failed");
                 }
                 let prompt = agent.and_then(|agent| hooks::submitted_prompt(agent, &payload));
+                // The previous turn's watch goes before the new turn opens: a watch still current
+                // when it opens could find the previous turn's failure and close this one.
+                if agent == Some(Agent::Codex) {
+                    state.end_transcript_watch(&session_id);
+                }
                 state.turn_started(&session_id, prompt);
             }
             if let Some(agent) = agent {
@@ -492,6 +498,18 @@ async fn hook_callback(
                                     .and_then(serde_json::Value::as_str),
                             );
                         }
+                        // A Codex turn that ends in an error fires nothing after its
+                        // `UserPromptSubmit`, so its own rollout is the only place that says so.
+                        if agent == Agent::Codex && event == "UserPromptSubmit" {
+                            rollout::watch_for_failure(
+                                &state,
+                                &session_id,
+                                payload
+                                    .get("transcript_path")
+                                    .and_then(serde_json::Value::as_str),
+                                payload.get("turn_id").and_then(serde_json::Value::as_str),
+                            );
+                        }
                         // Releasing a message queued while the session could not take one writes
                         // into its PTY, which blocks; it must not sit on this response, where the
                         // adapters' few-second hook timeout would surface as agent-visible noise.
@@ -517,7 +535,7 @@ async fn hook_callback(
 fn read_turn_boundary(
     state: &Arc<AppState>,
     session_id: &str,
-    agent: crate::protocol::Agent,
+    agent: Agent,
     event: &str,
     payload: &serde_json::Value,
 ) -> bool {
@@ -545,20 +563,11 @@ fn read_turn_boundary(
         {
             false
         }
-        Some(turn) => match state.close_turn(session_id, turn.backstop) {
-            // Talking about a turn that is already over, so nothing it says about the session holds.
+        Some(turn) => match reporting::close_turn_and_report(state, session_id, turn) {
+            // Talking about a turn that is already over, so nothing it says about the session
+            // holds.
             TurnClose::NotThisTurn => false,
-            TurnClose::NoTurn | TurnClose::Reported => true,
-            TurnClose::OwesReport => {
-                let state = state.clone();
-                let session_id = session_id.to_string();
-                // Delivery writes into the console session's PTY, which blocks, so it goes off
-                // this response.
-                tokio::task::spawn_blocking(move || {
-                    reporting::synthesise_report(&state, &session_id, turn)
-                });
-                true
-            }
+            TurnClose::NoTurn | TurnClose::Reported | TurnClose::OwesReport => true,
         },
         None => {
             // Anything that is not a turn boundary is the session still working on its turn, which

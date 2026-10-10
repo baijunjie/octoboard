@@ -26,6 +26,7 @@ mod ptyio;
 mod relocate;
 mod reporting;
 mod ringbuf;
+mod rollout;
 mod saved_output;
 mod server;
 mod session;
