@@ -157,10 +157,13 @@ export function Unreadable(): React.ReactElement {
   return <p className="text-sm text-muted">{t("viewer.change.unreadable")}</p>;
 }
 
+/** Visual only. The viewer's loading is spoken from its own status region, so this overlay, inserted
+ * already holding its text, stays silent; only the renderer's pause while it draws a large file's
+ * code goes unspoken. */
 export function Loading(): React.ReactElement {
   const t = useT();
   return (
-    <div role="status" className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted">
+    <div aria-hidden="true" className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted">
       <Spinner size="sm" aria-hidden="true" />
       {t("viewer.loading")}
     </div>

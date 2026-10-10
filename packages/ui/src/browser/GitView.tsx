@@ -5,6 +5,7 @@ import React, { useRef } from "react";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { PathText } from "../components/PathText";
+import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import type { Translate } from "../i18n/catalog";
 import { useT } from "../i18n/react";
@@ -46,7 +47,36 @@ export interface WorktreeViewProps {
  * comparison. A worktree that has gone is said to be unavailable, never replaced by another one;
  * the user chooses another.
  */
-export function GitView({
+export function GitView(props: React.ComponentProps<typeof GitContent>): React.ReactElement {
+  const t = useT();
+  const { source, view, worktree, compare } = props;
+  // One region for every loading the mode shows, outside `GitContent`, which swaps its whole tree
+  // as the source loads. The source's loading and the worktree list's say the same words, so the
+  // handoff between them leaves the text as it is and it is said once, not again for the list.
+  let loading: string | undefined;
+  if (source.state === "loading") loading = t("git.loading");
+  else if (source.state === "loaded" && source.source.git) {
+    if (view === "worktree") {
+      const git = source.source.git;
+      if (worktree.list.state === "loading" && !worktreeGone(git.worktrees, git.worktree, worktree.worktree, worktree.list)) loading = t("git.loading");
+    } else if (compare.comparison.state === "loading") loading = t("git.compare.loading");
+  }
+  return (
+    <>
+      <StatusAnnouncer text={loading} />
+      <GitContent {...props} />
+    </>
+  );
+}
+
+/** Whether the worktree the view shows has gone: no longer listed, or reported unavailable by the
+ * list read from it. */
+function worktreeGone(worktrees: WorktreeInfo[], own: string, worktree: string | undefined, list: ChangeListState): boolean {
+  const shown = worktrees.find((w) => w.id === (worktree ?? own));
+  return !shown || (list.state === "error" && list.unavailable);
+}
+
+function GitContent({
   source,
   view,
   onViewChange,
@@ -129,7 +159,7 @@ function WorktreeChanges({
   const handoff = useFocusHandoff(() => selectRef.current?.querySelector<HTMLElement>("button")?.focus());
   const shownId = worktree ?? own;
   const shown = worktrees.find((w) => w.id === shownId);
-  const gone = !shown || (list.state === "error" && list.unavailable);
+  const gone = worktreeGone(worktrees, own, worktree, list);
   return (
     <>
       <WorktreeSelect
@@ -141,7 +171,7 @@ function WorktreeChanges({
         onChange={(id) => onWorktreeChange(id === own ? undefined : id)}
       />
       <div className="flex min-h-0 flex-1 flex-col" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
-        {!gone && !shown.scope_present && <p className="shrink-0 px-3 py-2 text-xs text-muted">{t("git.worktree.scopeMissing")}</p>}
+        {shown && !gone && !shown.scope_present && <p className="shrink-0 px-3 py-2 text-xs text-muted">{t("git.worktree.scopeMissing")}</p>}
         {gone ? (
           <EmptyPanel icon={TriangleAlert} message={t("git.worktree.gone")} />
         ) : list.state === "loading" ? (

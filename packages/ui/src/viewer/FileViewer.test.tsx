@@ -61,6 +61,7 @@ beforeEach(() => {
 
 afterEach(() => {
   act(() => root.unmount());
+  vi.useRealTimers();
   container.remove();
 });
 
@@ -178,13 +179,13 @@ it("moves to the previous and next subject with Left and Right, as its buttons d
 
 // The library draws nothing until its worker pool has started; the frame says it is loading until
 // the renderer reports the code drawn, rather than standing blank.
-it("says it is loading until the renderer has drawn the code", async () => {
+it("shows it is loading until the renderer has drawn the code", async () => {
   const code: ViewerSubject = {
     key: "t",
     path: "src/t.ts",
     content: { state: "file", body: { kind: "text", text: "const a = 1;\n", size: 13 } },
   };
-  const loading = () => dialog()?.querySelector("[role=region] [role=status]") ?? null;
+  const loading = () => [...(dialog()?.querySelectorAll("[role=region] *") ?? [])].find((e) => e.textContent === "Loading…") ?? null;
   drawing.held = true;
   try {
     show(code);
@@ -248,10 +249,12 @@ it("shows the raw patch when the diff cannot be rendered", () => {
 });
 
 it("says a lost connection in neutral text, not as a failure", () => {
+  vi.useFakeTimers();
   show({ key: "d", path: "src/d.ts", content: { state: "disconnected", what: "file" } });
+  act(() => void vi.advanceTimersByTime(1600));
   expect(document.querySelector("[role=alert]")).toBeNull();
   expect(dialog()?.textContent).not.toContain("Could not open this file");
-  expect(dialog()?.querySelector("[role=status]")?.textContent).toBe(
+  expect(dialog()?.querySelector("[role=status]:not([aria-hidden])")?.textContent).toBe(
     "The connection to the daemon was lost. This file is read again when the connection is back.",
   );
 });
@@ -266,7 +269,8 @@ it("says a change whose patch has no lines has no diff, rather than loading for 
     content: { state: "change", change: { old: { state: "absent" }, new: { state: "present", path: "e", kind: "file" }, patch } },
   });
   expect(dialog()?.textContent).toContain("This change has no diff to show.");
-  expect(dialog()?.querySelector("[role=status], [data-renderer], [aria-label='Diff layout']")).toBeNull();
+  expect(dialog()?.querySelector("[data-renderer], [aria-label='Diff layout']")).toBeNull();
+  expect(dialog()?.querySelector("[role=status]:not([aria-hidden])")?.textContent).toBe("");
 });
 
 // The same subject's content can be replaced under the viewer — read again, or the connection lost
@@ -377,4 +381,35 @@ it("reads the stored layout, and falls back to unified for anything else", async
   };
   expect(await read("split")).toBe("split");
   expect(await read("sideways")).toBe("unified");
+});
+
+// A live region inserted already holding its text is not announced (WebKit, VoiceOver), so the
+// loading and the lost connection are said from a status region that is mounted empty, says its
+// first text after the dialog's own focus announcement, and stays while the content changes.
+it("says loading and a lost connection from one status region that stays mounted", () => {
+  vi.useFakeTimers();
+  show({ key: "l", path: "src/l.ts", content: { state: "loading" } });
+  const region = dialog()!.querySelector("[role=status]:not([aria-hidden])")!;
+  expect(region.textContent).toBe("");
+  expect(dialog()!.querySelectorAll("[role=status]:not([aria-hidden])")).toHaveLength(1);
+  act(() => void vi.advanceTimersByTime(1400));
+  expect(region.textContent).toBe("");
+  act(() => void vi.advanceTimersByTime(200));
+  expect(region.textContent).toBe("Loading…");
+
+  show({ key: "d", path: "src/l.ts", content: { state: "disconnected", what: "file" } });
+  expect(dialog()!.querySelector("[role=status]:not([aria-hidden])")).toBe(region);
+  expect(region.textContent).toContain("The connection to the daemon was lost");
+
+  show({ key: "f", path: "src/l.ts", content: { state: "file", body: { kind: "text", text: "a\n", size: 2 } } });
+  expect(dialog()!.querySelector("[role=status]:not([aria-hidden])")).toBe(region);
+  expect(region.textContent).toBe("");
+});
+
+it("says nothing for a loading that ends before the first text is written", () => {
+  vi.useFakeTimers();
+  show({ key: "q", path: "src/q.ts", content: { state: "loading" } });
+  show({ key: "q", path: "src/q.ts", content: { state: "file", body: { kind: "text", text: "a\n", size: 2 } } });
+  act(() => void vi.advanceTimersByTime(1600));
+  expect(dialog()!.querySelector("[role=status]:not([aria-hidden])")!.textContent).toBe("");
 });

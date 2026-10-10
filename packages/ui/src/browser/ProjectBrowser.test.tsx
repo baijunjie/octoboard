@@ -175,3 +175,39 @@ it("keeps spinning after two quick presses until the last refresh settles", asyn
   await answer("list_project_dir", dir("files-twice"));
   expect(spinning(icon())).toBe(false);
 });
+
+// A live region inserted already holding its text is not announced (WebKit, VoiceOver), so each
+// status region is on the page empty and says its text a moment later, then follows the loading.
+// The spinner is a `role=status` of HeroUI's, hidden from assistive technology here.
+const statuses = () => [...document.querySelectorAll("[role=status]:not([aria-hidden])")];
+
+it("says the files are loading from a status region that outlives the loading", async () => {
+  await mount("files-live", "files");
+  const [region] = statuses();
+  expect(statuses()).toHaveLength(1);
+  expect(region?.textContent).toBe("");
+  await wait(150);
+  expect(region?.textContent).toBe("Loading files…");
+
+  await answer("list_project_dir", dir("files-live"));
+  expect(region?.isConnected).toBe(true);
+  expect(region?.textContent).toBe("");
+});
+
+it("says the changes are loading once, from one status region, across the source and the list", async () => {
+  await mount("git-live", "git");
+  const [region] = statuses();
+  expect(statuses()).toHaveLength(1);
+  expect(region?.textContent).toBe("");
+  await wait(150);
+  expect(region?.textContent).toBe("Loading changes…");
+
+  // The source arrives and the change list starts loading: the same words, in the same region.
+  await answer("get_project_source", source("git-live"));
+  expect(statuses()).toEqual([region]);
+  expect(region?.textContent).toBe("Loading changes…");
+
+  await answer("list_project_changes", changes("git-live"));
+  expect(statuses()).toEqual([region]);
+  expect(region?.textContent).toBe("");
+});

@@ -4,11 +4,12 @@ import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "reac
 
 import { FadeOverflow } from "../components/FadeOverflow";
 import { PathText } from "../components/PathText";
+import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { TitledControl } from "../components/TitledControl";
 import { Dialog, useRefocusIfLost } from "../dialogs/Dialog";
 import { joinPhrases } from "../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
-import type { PlainMessageKey } from "../i18n/catalog";
+import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { useOctoboardTheme } from "../theme";
 import { displayWirePath, wireBaseName } from "../wirePath";
 import { arrowNavigation } from "./arrowKeys";
@@ -21,6 +22,7 @@ import {
   type ViewerBody,
   type ViewerChange,
   type ViewerChangeSide,
+  type ViewerContent,
   type ViewerSubject,
 } from "./content";
 import { diffLayout, LayoutSlot, LayoutToggle, type DiffLayout } from "./diffLayout";
@@ -253,7 +255,33 @@ function RenamedFrom({ path }: { path: string }): React.ReactElement {
   );
 }
 
-function ViewerContentView({
+/** How long the viewer's status region waits before its first text. The dialog takes focus as it
+ * opens and VoiceOver announces that, replacing a status written within about 300 ms of it; a
+ * write 1.5 s later is spoken after it (verified). Moving to another file in an open viewer has
+ * no such focus move and is announced at once. */
+const FIRST_ANNOUNCEMENT_DELAY_MS = 1500;
+
+/** Whether the content is still on its way: the file or change being read, or a conflict waiting
+ * for its file. */
+function isWaiting(content: ViewerContent): boolean {
+  return content.state === "loading" || (content.state === "conflict" && !content.body && content.message === undefined);
+}
+
+function ViewerContentView(props: React.ComponentProps<typeof ViewerContentBody>): React.ReactElement {
+  const t = useT();
+  const { content } = props.subject;
+  const announcement = isWaiting(content) ? t("viewer.loading") : content.state === "disconnected" ? disconnectedMessage(t, content.what) : undefined;
+  // Outside the body, which swaps its whole tree as the content arrives, so the region is there
+  // before its text is.
+  return (
+    <>
+      <StatusAnnouncer text={announcement} firstWriteDelayMs={FIRST_ANNOUNCEMENT_DELAY_MS} />
+      <ViewerContentBody {...props} />
+    </>
+  );
+}
+
+function ViewerContentBody({
   subject,
   name,
   layout,
@@ -264,6 +292,7 @@ function ViewerContentView({
   layout: DiffLayout;
   onLayoutChange: (layout: DiffLayout) => void;
 }): React.ReactElement {
+  const t = useT();
   const { resolved: theme } = useOctoboardTheme();
   const { content, key } = subject;
   switch (content.state) {
@@ -272,7 +301,7 @@ function ViewerContentView({
     case "error":
       return <Failure message={content.message} />;
     case "disconnected":
-      return <Disconnected what={content.what} />;
+      return <Disconnected message={disconnectedMessage(t, content.what)} />;
     case "file":
       return <BodyView resetKey={key} name={name} body={content.body} theme={theme} />;
     case "conflict":
@@ -306,17 +335,21 @@ function ViewerContentView({
   }
 }
 
+function disconnectedMessage(t: Translate, what: "file" | "change"): string {
+  return t(what === "file" ? "viewer.disconnected.file" : "viewer.disconnected.change");
+}
+
 /**
  * Nothing read yet while the connection to the daemon is lost: a passing state, not a failure of
- * the file or change, so it is said in neutral text, announced as a status, rather than as an
- * error. The subject is read again once the connection is back.
+ * the file or change, so it is said in neutral text, announced as a status (by `ViewerContentView`,
+ * whose region stays mounted) rather than as an error, and hidden from screen readers here so it is
+ * not read twice. The subject is read again once the connection is back.
  */
-function Disconnected({ what }: { what: "file" | "change" }): React.ReactElement {
-  const t = useT();
+function Disconnected({ message }: { message: string }): React.ReactElement {
   return (
-    <div role="status" className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-center text-sm text-muted">
+    <div aria-hidden="true" className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-center text-sm text-muted">
       <Unplug aria-hidden="true" className="size-8" />
-      <p>{t(what === "file" ? "viewer.disconnected.file" : "viewer.disconnected.change")}</p>
+      <p>{message}</p>
     </div>
   );
 }

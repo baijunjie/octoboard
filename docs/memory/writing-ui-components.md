@@ -296,9 +296,13 @@ marked as it is, and do not add a new exception without the user's say. Concrete
   user acting (connection, a terminal problem) is announced from a `role="status"` element, an error from
   `role="alert"`. A `role="status"` region meant to announce text that comes and goes stays mounted, empty when there
   is nothing to say, and only its contents change: one rendered conditionally, already holding its text when it is
-  inserted, is not reliably announced (VoiceOver in WebKit among others). HeroUI's `Alert` renders no role at all,
-  its name notwithstanding, so an error that can appear in one after the user has moved on puts `role="alert"` on an
-  element of your own inside it.
+  inserted, is not reliably announced (VoiceOver in WebKit among others). Even a region that stays mounted afterwards
+  is not announced for the text it was first rendered with; `StatusAnnouncer` defers its first write for that, so
+  announce a state with it. VoiceOver also drops a status written within about 300 ms of a focus move (a dialog
+  opening, say), so a surface that takes focus as it opens delays its first status write
+  (`StatusAnnouncer`'s `firstWriteDelayMs`). HeroUI's `Alert` renders no role at all, its name notwithstanding, so
+  an error that can appear in one after the user has moved on puts `role="alert"` on an element of your own inside
+  it.
 - **Contrast**: text at least 4.5:1 against its background (3:1 for large text); an icon or a state indicator at
   least 3:1 against what it sits on, and a boundary too when it alone shows where a control is. Contrast is not a
   reason to change how a HeroUI component looks: the user had the `style.css` overrides that gave every field and

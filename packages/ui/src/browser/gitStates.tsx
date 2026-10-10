@@ -4,10 +4,11 @@ import React, { useRef } from "react";
 
 import { useT } from "../i18n/react";
 
-/** The Git mode's loading line: what is being read. */
+/** The Git mode's loading line: what is being read. Seen only; a `StatusAnnouncer` mounted beside
+ * it says it. */
 export function GitLoading({ label }: { label: string }): React.ReactElement {
   return (
-    <div role="status" className="flex flex-1 items-center justify-center gap-2 text-sm text-muted">
+    <div aria-hidden="true" className="flex flex-1 items-center justify-center gap-2 text-sm text-muted">
       <Spinner size="sm" aria-hidden="true" />
       {label}
     </div>

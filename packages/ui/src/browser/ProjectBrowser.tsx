@@ -5,6 +5,7 @@ import type { Key } from "react-aria-components";
 
 import { EmptyPanel } from "../components/EmptyPanel";
 import { handFocusOff } from "../components/handFocusOff";
+import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { FADE_SIZE } from "../components/useScrollFade";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
@@ -144,6 +145,7 @@ export function ProjectBrowser({
   }, [tree.files, viewedPath]);
 
   const root = dirs.listings.get("");
+  const rootLoading = root === undefined || root.state === "loading";
   return (
     <AsidePane layout={layout} label={t("browser.label", { project: project.name })}>
       <Tabs selectedKey={mode} onSelectionChange={(key) => browser.setMode(key as BrowserMode)} className="flex min-h-0 flex-1 flex-col gap-0">
@@ -173,8 +175,9 @@ export function ProjectBrowser({
           </TitledControl>
         </div>
         <Tabs.Panel id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
-      {root === undefined || root.state === "loading" ? (
-        <div role="status" className="flex flex-1 items-center justify-center gap-2 text-sm text-muted">
+      <StatusAnnouncer text={rootLoading ? t("browser.loading") : undefined} />
+      {rootLoading ? (
+        <div aria-hidden="true" className="flex flex-1 items-center justify-center gap-2 text-sm text-muted">
           <Spinner size="sm" aria-hidden="true" />
           {t("browser.loading")}
         </div>
