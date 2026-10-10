@@ -3,7 +3,8 @@
 //! tokens, the turn bookkeeping a synthesised report rests on, a facade over the write queue in
 //! `crate::outbox`, and each project's live git status together with the claim that keeps two
 //! checks of one project from racing and the timestamp that keeps them from piling up across
-//! several clients, and each ended session's saved terminal output.
+//! several clients, each ended session's saved terminal output, and the requests for a console
+//! session waiting for the user's answer (`crate::console_request`).
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
@@ -79,6 +80,9 @@ pub struct AppState {
     /// The bounds every connection's browse requests share: how many reads run at once, and how
     /// many bytes their replies may hold before they are written.
     pub browse_gate: Arc<crate::browse::lane::Gate>,
+    /// The `request_console_session` calls waiting for the user's answer; see
+    /// `crate::console_request`. Held in memory only: no caller outlives the daemon.
+    pub console_requests: crate::console_request::ConsoleRequests,
     events: broadcast::Sender<Event>,
     shutdown: tokio::sync::Notify,
 }
@@ -104,6 +108,10 @@ struct TurnState {
     /// quiet, and the previous turn's echo would then close it. The echo is consumed rather than
     /// acted on.
     echo_pending: bool,
+    /// Turns not started yet that are credited as reported, because what starts each is something
+    /// of Octoboard's own that needs no report back: the turn whose prompt opens with that text
+    /// (`credit_turn_opened_by`). Each is spent by that turn's start.
+    credits: Vec<String>,
 }
 
 /// What closing a turn amounted to.
@@ -158,6 +166,7 @@ impl AppState {
             ),
             saved_output: SavedOutput::new(saved_output_dir),
             browse_gate: Arc::new(crate::browse::lane::Gate::with_budget()),
+            console_requests: Default::default(),
             events,
             shutdown: tokio::sync::Notify::new(),
         }
@@ -267,6 +276,14 @@ impl AppState {
         live.sessions.contains_key(id) || live.launching.contains(id)
     }
 
+    /// Whether a launch, resume or switch of the session is under way: its claim is held. Unlike
+    /// [`Self::has_process`] this is false for a session whose process is up and whose claim is
+    /// already released.
+    pub fn is_launching(&self, id: &str) -> bool {
+        let live = self.live.read().expect("live sessions lock poisoned");
+        live.launching.contains(id)
+    }
+
     /// Whether any session matching is running or still being launched or resumed. Deleting a
     /// console or a project in that state is refused rather than silently killing them.
     pub fn has_live_sessions_where(&self, matches: impl Fn(&Session) -> bool) -> Result<bool> {
@@ -327,6 +344,10 @@ impl AppState {
             }
         }
         drop(live);
+        if is_current {
+            // Its call has nobody left to return to.
+            crate::console_request::withdraw_for_session(self, &session.id);
+        }
         self.forget_session_bookkeeping(&session.id);
     }
 
@@ -457,13 +478,30 @@ impl AppState {
 
     // -- turn bookkeeping ----------------------------------------------------
 
-    /// A turn has begun. This is also what re-arms the turn-end signal, so a session that reported
-    /// in its previous turn is not credited for this one.
-    pub fn turn_started(&self, id: &str) {
+    /// A turn has begun, with `prompt` the text that started it where the agent reports one. This
+    /// is also what re-arms the turn-end signal, so a session that reported in its previous turn is
+    /// not credited for this one.
+    ///
+    /// A credit given ahead of it covers this turn only if `prompt` opens with the credited text,
+    /// and otherwise waits for the turn that does: the next turn to start is not always the one
+    /// credited, since a backgrounded tool call's result arrives as a turn of its own and nothing
+    /// orders it against a message written into the session. With no prompt to go by, the oldest
+    /// credit is spent by this turn.
+    pub fn turn_started(&self, id: &str, prompt: Option<&str>) {
         let mut turns = self.turns.lock().expect("turn lock poisoned");
         let turn = turns.entry(id.to_string()).or_default();
         turn.open = true;
-        turn.reported = false;
+        let credit = match prompt {
+            Some(prompt) => turn
+                .credits
+                .iter()
+                .position(|opening| prompt.starts_with(opening.as_str())),
+            None => (!turn.credits.is_empty()).then_some(0),
+        };
+        turn.reported = credit.is_some();
+        if let Some(credit) = credit {
+            turn.credits.remove(credit);
+        }
         turn.last_event_at = now_millis();
     }
 
@@ -504,6 +542,26 @@ impl AppState {
     /// The session reported during its current turn, so its stop needs nothing synthesised.
     pub fn mark_reported(&self, id: &str) {
         self.set_reported(id, true);
+    }
+
+    /// Credits as reported the turn something of Octoboard's own will start, one the session has
+    /// nothing to report back on and whose prompt opens with `opening`. The credit is spent by that
+    /// turn's start (see `turn_started`) and otherwise goes with the session's bookkeeping when its
+    /// process ends. Crediting the same turn again changes nothing.
+    pub fn credit_turn_opened_by(&self, id: &str, opening: String) {
+        let mut turns = self.turns.lock().expect("turn lock poisoned");
+        let credits = &mut turns.entry(id.to_string()).or_default().credits;
+        if !credits.contains(&opening) {
+            credits.push(opening);
+        }
+    }
+
+    /// Takes the credit for the turn opening with `opening` back, for something that will not
+    /// start one after all.
+    pub fn clear_turn_credit(&self, id: &str, opening: &str) {
+        if let Some(turn) = self.turns.lock().expect("turn lock poisoned").get_mut(id) {
+            turn.credits.retain(|credit| credit != opening);
+        }
     }
 
     /// Takes that credit back, for a report that turned out not to reach the console session. Left
@@ -1054,6 +1112,7 @@ mod tests {
             status,
             has_conversation: false,
             bound_to: None,
+            lead: false,
             colour: None,
             ordinal: None,
             account_id: None,
@@ -1159,16 +1218,45 @@ mod tests {
         // start (an agent's own teardown, a slash command) must not produce one.
         assert_eq!(state.close_turn("s", false), TurnClose::NoTurn);
 
-        state.turn_started("s");
+        state.turn_started("s", None);
         assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
         assert_eq!(state.close_turn("s", false), TurnClose::NoTurn);
 
-        state.turn_started("s");
+        state.turn_started("s", None);
         state.mark_reported("s");
         assert_eq!(state.close_turn("s", false), TurnClose::Reported);
 
         // A session credited for one turn is not credited for the next.
-        state.turn_started("s");
+        state.turn_started("s", None);
+        assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
+    }
+
+    /// A credit given ahead of a turn covers the turn its message starts, and only that one: the
+    /// turn open when it is given keeps its own account, and a turn something else starts first
+    /// does not spend it.
+    #[test]
+    fn a_credit_is_spent_by_the_turn_its_message_starts() {
+        let (state, _dir) = app_state("state-turn-credit");
+        state.turn_started("s", Some("work"));
+        state.credit_turn_opened_by("s", "Message from Octoboard".to_string());
+        assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
+        state.turn_started("s", Some("<task-notification>"));
+        assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
+        state.turn_started("s", Some("Message from Octoboard about it"));
+        assert_eq!(state.close_turn("s", false), TurnClose::Reported);
+        state.turn_started("s", Some("Message from Octoboard about it"));
+        assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
+    }
+
+    /// Where the agent's prompt is not read, there is nothing to tell the credited turn by, so the
+    /// next turn to start is the one credited.
+    #[test]
+    fn without_a_prompt_the_next_turn_spends_the_credit() {
+        let (state, _dir) = app_state("state-turn-credit-fallback");
+        state.credit_turn_opened_by("s", "Message from Octoboard".to_string());
+        state.turn_started("s", None);
+        assert_eq!(state.close_turn("s", false), TurnClose::Reported);
+        state.turn_started("s", None);
         assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
     }
 
@@ -1178,7 +1266,7 @@ mod tests {
     #[test]
     fn a_clock_attributed_end_is_refused_while_the_open_turn_is_still_active() {
         let (state, _dir) = app_state("state-backstop");
-        state.turn_started("s");
+        state.turn_started("s", None);
         assert_eq!(state.close_turn("s", true), TurnClose::NotThisTurn);
         // Still open, so its own end is still reportable.
         assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
@@ -1190,12 +1278,12 @@ mod tests {
     #[test]
     fn the_echo_of_an_ending_already_acted_on_is_consumed_not_acted_on() {
         let (state, _dir) = app_state("state-echo");
-        state.turn_started("s");
+        state.turn_started("s", None);
         assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
         assert!(state.echo_pending("s"));
 
         // The next turn begins and is still running when the previous turn's echo arrives.
-        state.turn_started("s");
+        state.turn_started("s", None);
         assert_eq!(state.close_turn("s", true), TurnClose::NotThisTurn);
         assert!(!state.echo_pending("s"));
         // And this turn's own ending is still reportable.
@@ -1208,7 +1296,7 @@ mod tests {
     #[test]
     fn an_echo_that_arrives_with_no_turn_open_is_still_spent() {
         let (state, _dir) = app_state("state-echo-idle");
-        state.turn_started("s");
+        state.turn_started("s", None);
         assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
         // The echo of that ending, with nothing open.
         assert_eq!(state.close_turn("s", true), TurnClose::NoTurn);
@@ -1221,7 +1309,7 @@ mod tests {
     #[test]
     fn credit_for_reporting_can_be_taken_back() {
         let (state, _dir) = app_state("state-reported");
-        state.turn_started("s");
+        state.turn_started("s", None);
         state.mark_reported("s");
         state.clear_reported("s");
         assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
@@ -1232,7 +1320,7 @@ mod tests {
     #[test]
     fn an_abandoned_turn_is_closed_without_owing_a_report() {
         let (state, _dir) = app_state("state-abandon");
-        state.turn_started("s");
+        state.turn_started("s", None);
         state.abandon_turn("s");
         assert_eq!(state.close_turn("s", false), TurnClose::NoTurn);
     }

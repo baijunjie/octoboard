@@ -3,9 +3,9 @@
 //!
 //! The calling session is resolved from the token the call arrived with, never from an argument,
 //! so a child that rewrote its own arguments still cannot act on another session. Which tools it
-//! may call follows from that session's role and whether it is bound, checked here as well as in
-//! the child: the child is a separate process and its announcement is not something the daemon can
-//! rely on.
+//! may call follows from that session's role and whether it has the role of a bound session,
+//! checked here as well as in the child: the child is a separate process and its announcement is
+//! not something the daemon can rely on.
 //!
 //! Every tool goes through the same coordinator functions the control socket uses. The console
 //! session is a second client of the same operations, not a second implementation of them, and an
@@ -18,6 +18,7 @@ use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
+use crate::console_request;
 use crate::coordinator::{self, OpenRequest};
 use crate::protocol::{
     now_millis, Agent, Event, Origin, Page, Project, ProjectSource, Role, Session, SessionStatus,
@@ -39,7 +40,7 @@ pub async fn call(
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
     let session = state.session_record(session_id)?;
-    if super::tool_by_name(session.role, session.bound_to.is_some(), tool).is_none() {
+    if super::tool_by_name(session.role, session.has_bound_role(), tool).is_none() {
         bail!("`{tool}` is not a tool this session can call");
     }
 
@@ -56,6 +57,7 @@ pub async fn call(
         "report" => report(state, &session, arguments).await,
         "list_project_sessions" => list_project_sessions(state, &session),
         "share_info" => share_info(state, &session, arguments).await,
+        "request_console_session" => request_console_session(state, &session, arguments).await,
         // Unreachable while the catalogue and this dispatch agree; a tool added to one and not the
         // other should say so rather than look like a refusal.
         _ => bail!("`{tool}` is announced but not implemented"),
@@ -383,17 +385,7 @@ async fn report(
     let status = ReportStatus::parse(status_text).ok_or_else(|| {
         anyhow!("`{status_text}` is not one of `done`, `failed` or `needs_decision`")
     })?;
-    let open_items: Vec<String> = arguments
-        .get("open_items")
-        .and_then(Value::as_array)
-        .map(|items| {
-            items
-                .iter()
-                .filter_map(Value::as_str)
-                .map(str::to_string)
-                .collect()
-        })
-        .unwrap_or_default();
+    let open_items = string_list(arguments, "open_items");
 
     // Recorded before delivery: the session is credited with having reported even if its owner
     // cannot take the message yet, so its stop does not also produce a synthesised report.
@@ -423,6 +415,22 @@ async fn report(
     Ok(json!({ "note": note }))
 }
 
+/// Asks the user for a console session on the caller's behalf, and waits for the answer; see
+/// `crate::console_request`. Shaped like a report, since what it hands over arrives as the caller's
+/// first report.
+async fn request_console_session(
+    state: &Arc<AppState>,
+    caller: &Session,
+    arguments: &Map<String, Value>,
+) -> Result<Value> {
+    let asked = console_request::Asked {
+        request: required_str(arguments, "request")?.to_string(),
+        summary: required_str(arguments, "summary")?.to_string(),
+        open_items: string_list(arguments, "open_items"),
+    };
+    console_request::ask(state, caller, asked, console_request::ANSWER_TIME_LIMIT).await
+}
+
 // -- argument and record helpers ---------------------------------------------
 
 fn required_str<'a>(arguments: &'a Map<String, Value>, key: &str) -> Result<&'a str> {
@@ -432,6 +440,21 @@ fn required_str<'a>(arguments: &'a Map<String, Value>, key: &str) -> Result<&'a 
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .ok_or_else(|| anyhow!("`{key}` is required"))
+}
+
+/// The strings of an optional array argument; anything in it that is not a string is skipped.
+fn string_list(arguments: &Map<String, Value>, key: &str) -> Vec<String> {
+    arguments
+        .get(key)
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn optional_string(arguments: &Map<String, Value>, key: &str) -> Option<String> {
@@ -723,6 +746,7 @@ mod tests {
             status: SessionStatus::Idle,
             has_conversation: false,
             bound_to: None,
+            lead: false,
             colour: None,
             ordinal: None,
             account_id: None,
@@ -1032,6 +1056,8 @@ mod tests {
             ("starter", "add_project"),
             ("starter", "show_page"),
             ("a", "report"),
+            ("mine", "request_console_session"),
+            ("a", "request_console_session"),
         ] {
             let err = call(
                 &state,
@@ -1046,6 +1072,93 @@ mod tests {
                 "{caller} {tool}: {err}"
             );
         }
+    }
+
+    /// `peer_state` with `starter` bound to the console session `a` as its lead session, still
+    /// owning `mine`.
+    fn lead_state(name: &str) -> (Arc<AppState>, ScratchDir) {
+        let (state, dir) = peer_state(name);
+        state.store.bind_session("starter", "a").unwrap().unwrap();
+        (state, dir)
+    }
+
+    /// A lead session keeps the unbound project session's tools, so its `start_session` gets as
+    /// far as the launch (an unavailable agent is refused there), binding the new session to it,
+    /// and its `request_console_session` is refused in prose; a session bound to it still has no
+    /// `start_session`.
+    #[tokio::test]
+    async fn a_lead_session_keeps_its_tools_and_its_sessions_still_cannot_start_any() {
+        let (state, _dir) = lead_state("lead-tools");
+        state.set_agent_availability(vec![AgentAvailability {
+            agent: Agent::Claude,
+            availability: Availability::Unavailable,
+            default_account_dir: Some("/home/user/.claude".to_string()),
+        }]);
+        let brief = arguments(json!({ "brief": { "goal": "x" }, "agent": "claude" }));
+
+        let err = call(&state, "starter", "start_session", &brief)
+            .await
+            .expect_err("agent unavailable");
+        assert!(err.to_string().contains("Claude Code"), "{err}");
+        let err = call(&state, "mine", "start_session", &brief)
+            .await
+            .expect_err("not offered");
+        assert!(err.to_string().contains("is not a tool"), "{err}");
+
+        // It is still offered `request_console_session`, and its call is refused in prose: a
+        // session becomes bound only once.
+        let request = arguments(json!({ "request": "x", "summary": "y" }));
+        let err = call(&state, "starter", "request_console_session", &request)
+            .await
+            .expect_err("already bound");
+        assert!(
+            err.to_string()
+                .contains("already bound to the console session `a`"),
+            "{err}"
+        );
+    }
+
+    /// The console session reads a lead session as bound to a console session and yours, and the
+    /// lead session's own sessions as bound to a project session and not yours; acting on one of
+    /// those is refused, naming the lead session as its owner.
+    #[tokio::test]
+    async fn the_console_session_reads_a_lead_sessions_sessions_but_cannot_drive_them() {
+        let (state, _dir) = lead_state("lead-reads");
+        for (target, owner, kind, yours) in [
+            ("starter", "a", "console", true),
+            ("mine", "starter", "project", false),
+        ] {
+            let read = call(
+                &state,
+                "a",
+                "get_session",
+                &arguments(json!({ "session": target })),
+            )
+            .await
+            .unwrap();
+            assert_eq!(read["owner"], owner, "{target}");
+            assert_eq!(read["owner_kind"], kind, "{target}");
+            assert_eq!(read["yours"], yours, "{target}");
+        }
+        for tool in ["send_message", "archive_session"] {
+            let err = call(
+                &state,
+                "a",
+                tool,
+                &arguments(json!({ "session": "mine", "text": "hello" })),
+            )
+            .await
+            .expect_err("not the console session's");
+            assert!(
+                err.to_string()
+                    .contains("bound to a project session, `starter`"),
+                "{tool}: {err}"
+            );
+        }
+        assert_eq!(
+            state.store.get_session("mine").unwrap().unwrap().status,
+            SessionStatus::Idle
+        );
     }
 
     /// An unbound project session starts sessions only in its own project: another project of the

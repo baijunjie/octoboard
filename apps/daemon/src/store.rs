@@ -131,6 +131,9 @@ impl Store {
                 -- would remove rows behind the daemon's back, so no `session_deleted` would be
                 -- broadcast and every client would keep a ghost row.
                 bound_to         TEXT,
+                -- 1 for a lead session: a project session bound to a console session after it
+                -- was opened (see `Session::lead`).
+                lead             INTEGER NOT NULL DEFAULT 0,
                 -- Set only for a console session (`role = 'console'`); NULL for a project session.
                 colour           TEXT,
                 ordinal          INTEGER,
@@ -167,13 +170,20 @@ impl Store {
         // No migration runs here: the application has not shipped, so a database whose schema is
         // not this one has already been moved aside by `supersede_if_outdated`, above, rather than
         // upgraded in place. `CREATE TABLE IF NOT EXISTS` therefore only ever meets either a brand
-        // new file or one already in this shape. Two exceptions are changed in place, since moving
-        // the file aside would cost the user every console, project and account over a change
-        // that loses nothing: an optional setting gained after a database was created is added,
-        // and the project's trust permission, once Claude Code's alone and now shared by every
-        // agent, is renamed with its values kept.
+        // new file or one already in this shape. Three exceptions are changed in place, since
+        // moving the file aside would cost the user every console, project and account over a
+        // change that loses nothing: an optional setting gained after a database was created is
+        // added, so is a session's lead flag, which no session stored before it can have, and the
+        // project's trust permission, once Claude Code's alone and now shared by every agent, is
+        // renamed with its values kept.
         if !column_exists(&conn, "settings", "default_clone_dir")? {
             conn.execute("ALTER TABLE settings ADD COLUMN default_clone_dir TEXT", [])?;
+        }
+        if !column_exists(&conn, "sessions", "lead")? {
+            conn.execute(
+                "ALTER TABLE sessions ADD COLUMN lead INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
         }
         if column_exists(&conn, "projects", "claude_trust_consent")? {
             conn.execute(
@@ -704,11 +714,12 @@ impl Store {
     }
 
     /// Writes back the fields that change over a session's life. Identity and placement
-    /// (`console_id`, `project_id`, `role`, `origin`, `bound_to`, `colour`, `ordinal`) never change,
-    /// and `account_id` and `config_dir` change only through [`Self::set_session_account`], the
-    /// one write path a switch of the session's account uses, so a record read before a switch
-    /// can never write the old account back over it. `pinned` is the user's own statement
-    /// ([`Self::set_session_pinned`]), which a record read earlier must not overwrite.
+    /// (`console_id`, `project_id`, `role`, `origin`, `colour`, `ordinal`) never change, `bound_to`
+    /// and `lead` change only through [`Self::bind_session`], once, and `account_id` and
+    /// `config_dir` change only through [`Self::set_session_account`], the one write path a switch
+    /// of the session's account uses, so a record read before a switch can never write the old
+    /// account back over it. `pinned` is the user's own statement ([`Self::set_session_pinned`]),
+    /// which a record read earlier must not overwrite.
     /// Returns whether a row was written: `false` means the session is gone (deleted meanwhile).
     pub fn update_session(&self, session: &Session) -> Result<bool> {
         let changed = self.lock().execute(
@@ -773,6 +784,30 @@ impl Store {
         let changed = conn.execute(
             "UPDATE sessions SET account_id = ?2, config_dir = ?3 WHERE id = ?1",
             params![id, account_id, config_dir],
+        )?;
+        if changed == 0 {
+            return Ok(None);
+        }
+        Ok(conn
+            .query_row(
+                &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1"),
+                params![id],
+                read_session,
+            )
+            .optional()?)
+    }
+
+    /// Binds the unbound project session `id` to `owner` and marks it a lead session, in one
+    /// statement that only matches while it is still an unbound project session, so of two
+    /// bindings racing for it only one lands. Returns the record as it now stands, or `None` when
+    /// nothing was bound: the session is gone, is a console session, or is already bound. What
+    /// `owner` may be is the caller's to check.
+    pub fn bind_session(&self, id: &str, owner: &str) -> Result<Option<Session>> {
+        let conn = self.lock();
+        let changed = conn.execute(
+            "UPDATE sessions SET bound_to = ?2, lead = 1
+             WHERE id = ?1 AND role = ?3 AND bound_to IS NULL",
+            params![id, owner, enum_to_text(&Role::Project)],
         )?;
         if changed == 0 {
             return Ok(None);
@@ -933,7 +968,8 @@ const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agen
 
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
                                role, origin, title, status, has_conversation, bound_to, colour,
-                               ordinal, account_id, config_dir, pinned, started_at, ended_at";
+                               ordinal, account_id, config_dir, pinned, started_at, ended_at,
+                               lead";
 
 const CONSOLE_COLUMNS: &str = "id, name, workdir, console_session_agent, default_agent,
                                claude_account_id, codex_account_id, grok_account_id, icon,
@@ -946,8 +982,9 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
         "INSERT INTO sessions
             (id, agent, agent_session_id, console_id, project_id, host_id, role, origin, title,
              status, has_conversation, bound_to, colour, ordinal, account_id, config_dir, pinned,
-             started_at, ended_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
+             started_at, ended_at, lead)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
+                 ?19, ?20)",
         params![
             session.id,
             enum_to_text(&session.agent),
@@ -968,6 +1005,7 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             session.pinned,
             session.started_at,
             session.ended_at,
+            session.lead,
         ],
     )?;
     Ok(())
@@ -1071,6 +1109,7 @@ fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         pinned: row.get(16)?,
         started_at: row.get(17)?,
         ended_at: row.get(18)?,
+        lead: row.get(19)?,
     })
 }
 
@@ -1171,6 +1210,7 @@ mod tests {
             status: SessionStatus::Idle,
             has_conversation: false,
             bound_to: None,
+            lead: false,
             colour: None,
             ordinal: None,
             account_id: None,
@@ -1257,6 +1297,29 @@ mod tests {
         let store = Store::open(&path).expect("reopened in place");
         let project = store.get_project("project-1").unwrap().expect("kept");
         assert!(project.trust_consent);
+    }
+
+    /// A database from before a session could be a lead session keeps its sessions, none of them
+    /// one, and gains the column in place.
+    #[test]
+    fn the_lead_column_is_added_in_place() {
+        let path = temp_db("lead-column");
+        {
+            let store = Store::open(&path).expect("store");
+            store
+                .insert_console(&console(None, None, None))
+                .expect("console");
+            store.insert_session(&session(None)).expect("session");
+        }
+        {
+            let conn = Connection::open(&path).expect("database");
+            conn.execute("ALTER TABLE sessions DROP COLUMN lead", [])
+                .expect("the older shape");
+        }
+
+        let store = Store::open(&path).expect("reopened in place");
+        let session = store.get_session("session-1").unwrap().expect("kept");
+        assert!(!session.lead);
     }
 
     /// A reporter whose conclusion only holds while the session has not moved on writes through

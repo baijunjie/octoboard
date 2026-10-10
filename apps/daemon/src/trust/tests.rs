@@ -419,6 +419,7 @@ fn session(id: &str, agent: Agent, role: Role, project_id: Option<&str>) -> Sess
         status: SessionStatus::Idle,
         has_conversation: false,
         bound_to: None,
+        lead: false,
         colour: None,
         ordinal: None,
         account_id: None,

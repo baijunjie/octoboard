@@ -72,6 +72,14 @@ export function focusAfterSelect(
   return enterFocus ? { consoleSession: session } : focusFor(focus, session, sessions);
 }
 
+/** Whether a window that approved a request for a console session moves to the console session it
+ * started: only one in the focus mode of the requesting session's own project (`requestingProject`)
+ * does, into the console session's own. One in another project's or a console session's focus mode,
+ * or not in focus mode, stays as it is. */
+export function followsStartedConsoleSession(focus: FocusTarget | undefined, requestingProject: string | null): boolean {
+  return focus !== undefined && "project" in focus && focus.project.id === requestingProject;
+}
+
 /** How ⌃Tab selects the console session it moves to: its focus mode is entered, as with a press on
  * its chip, but an interrupted session is only shown, not resumed — a held or repeated ⌃Tab passes
  * over console sessions on its way, and must not start an agent in each. */

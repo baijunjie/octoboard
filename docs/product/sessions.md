@@ -48,8 +48,11 @@ An **unbound** project session — one the user opened by hand without choosing 
 (see "Opening a session" below) — is given a narrower set of the orchestration tools, scoped to its own project: it can
 start sessions there, which are bound to it and report to it, and drive them (see "The unbound project session's
 tools" in `docs/product/hub-orchestration.md`). A session it starts carries no binding badge and cannot start sessions
-of its own. A session's **owner** is the session it is bound to: a console session, or the unbound project session that
-started it (an unbound session's own owner is the user). Every project session, bound or not, can also list the other
+of its own. A session's **owner** is the session it is bound to: a console session, or the project session that started
+it (an unbound session's own owner is the user). A project session opened unbound can later become bound to a console
+session while keeping the sessions it started, which makes it a **lead session**: it asks for a console session, and
+once the user approves, Octoboard starts one and binds it there (see `docs/product/requesting-a-console-session.md`);
+orchestration is at most two levels deep (see "Lead sessions" in `docs/product/hub-orchestration.md`). Every project session, bound or not, can also list the other
 running sessions of its project and share information with them; it takes work only from its owner, and what comes from
 another session is information to weigh (see "Information between sessions of a project" in
 `docs/product/hub-orchestration.md`).
@@ -88,8 +91,8 @@ A session is opened under a project with:
   archived, the most recently started first, each shown beside its colour, the same one the session's binding badge
   will carry (see "The binding badge" in `docs/product/sidebar.md`), or none. A chosen console session receives this
   session's reports, instead of the session staying outside the orchestration. A console with no console session that
-  is not archived shows no choice at all, and the session is unbound. The binding is fixed for the session's lifetime
-  once set. A session the console session itself starts is always bound to it, and one an unbound project session
+  is not archived shows no choice at all, and the session is unbound. A binding, once set, is never changed or undone.
+  A session the console session itself starts is always bound to it, and one an unbound project session
   starts is bound to that project session; see "Which sessions an owner drives" in
   `docs/product/hub-orchestration.md`. The choice is offered only from the project list. Opened from a project's focus
   mode the dialog has no such field and the session is always unbound; opened from a console session's focus mode it
@@ -98,7 +101,7 @@ A session is opened under a project with:
 
 The dialog takes no task: a session the user opens by hand starts in *awaiting instructions*, sitting at the agent's
 prompt, and is given its work by typing into its terminal. Only a session started with `start_session` — by a console
-session or an unbound project session — is handed an opening prompt, the brief it is started with (see "Handing out a
+session or a project session — is handed an opening prompt, the brief it is started with (see "Handing out a
 task: the brief" in `docs/product/hub-orchestration.md`); it starts in *working*.
 
 A session in a folder its agent has not been told to trust can first stop on that agent's own trust confirmation,
@@ -173,11 +176,11 @@ Transitions:
   *awaiting instructions*.
 - The process ending for any reason other than archiving — the agent exiting on its own, a crash, the application
   quitting — leaves the session *interrupted*.
-- Archiving leaves the session *archived*. Archiving an owner also archives the *interrupted* sessions bound to it,
-  and is refused while any session bound to it has a process running (see "Archiving, interruption and resuming").
+- Archiving leaves the session *archived*. Archiving an owner also archives the *interrupted* sessions under it, and
+  is refused while any session under it has a process running (see "Archiving, interruption and resuming").
 - Resuming an *interrupted* or *archived* session puts it in *awaiting instructions*, whichever of the two it came
   from. A resume that fails to launch leaves the session exactly where it was, archived included. Resuming a session
-  whose owner is *archived* first does the same to the owner.
+  whose owner is *archived* first does the same to its archived owners, the topmost first.
 - Switching a session to another account of its agent ends and relaunches its process without archiving it: it reads
   as *interrupted* while the process is down and comes back in *awaiting instructions*, and a switch that fails leaves
   it *interrupted* on the account it had (see "Switching a session's account").
@@ -252,8 +255,9 @@ own row:
 agent's next event — or, where the answer was a decline and no event follows, on the decline showing
 up in the agent's own record of the conversation, which only Claude Code sessions are read for (see
 "Declining a Claude Code prompt or question" below). Nobody can answer for them: a session driving others — a console
-session, or an unbound project session — is told to leave such a session alone, and a message addressed to it is held
-until the user is done — see "Messages held until a session can take them" in `docs/product/hub-orchestration.md`.
+session, or a project session that started sessions — is told to leave such a session alone, and a message addressed to
+it is held until the user is done — see "Messages held until a session can take them" in
+`docs/product/hub-orchestration.md`.
 
 Where the user's own Codex configuration **resolves approval requests by itself**, Octoboard raises
 no hand at all: the permission event still fires, but Codex resolves the request, no dialog ever
@@ -312,20 +316,23 @@ first. An archived session keeps its pin, if it had one (see "Order of projects 
 
 Besides the user, two things archive a session: its owner, explicitly, and a project session's own report saying the
 work is finished with nothing left open (see "Automatic archiving" in `docs/product/hub-orchestration.md`). Both
-archive that one project session and nothing else.
+archive that one project session and nothing else, except that an owner archiving a lead session archives it as an
+owner, under the rules below.
 
-**Archiving an owner — a console session, or a project session that has started sessions — goes along its binding,
-and is decided by whether a process is running — not by the status.** An interrupted session has no process but is
-not archived, and a session at its prompt, at work or waiting for the user does have one.
+**Archiving an owner — a console session, or a project session that has started sessions — goes along its bindings,
+and is decided by whether a process is running — not by the status.** It reaches every session **under** it: the
+sessions bound to it and, for a console session, the sessions bound to a lead session bound to it (see "Lead sessions"
+in `docs/product/hub-orchestration.md`). An interrupted session has no process but is not archived, and a session at
+its prompt, at work or waiting for the user does have one.
 
-- **While any session bound to it has a process running, archiving the owner is refused**, whatever that session's
-  status, and nothing is changed. The refusal says how many sessions it is and names them; the user archives those
-  sessions, or waits for them to finish, and tries again. A session being launched, resumed or switched at that moment
-  counts as running.
-- **With none running, archiving the owner archives its bound sessions too** — every one that is not archived yet,
-  which can only be interrupted ones — so nothing bound to it is left outside the archive. The
-  confirmation says how many will be archived with it.
-- Sessions that are not bound to it, and sessions bound to another session of the same console, are not touched.
+- **While any session under it has a process running, archiving the owner is refused**, whatever that session's
+  status and at whichever level, and nothing is changed. The refusal says how many sessions it is and names them; the
+  user archives those sessions, or waits for them to finish, and tries again. A session being launched, resumed or
+  switched at that moment counts as running.
+- **With none running, archiving the owner archives the sessions under it too** — every one that is not archived yet,
+  which can only be interrupted ones — so nothing under it is left outside the archive. The confirmation says how many
+  will be archived with it.
+- Sessions that are not under it, among them sessions bound to another session of the same console, are not touched.
 - Ending an owner's process for a switch of its account is not archiving, and archives nothing (see "Switching a
   session's account" below).
 
@@ -347,12 +354,15 @@ Octoboard injects.
   reference — and is refused if that directory no longer exists, but only when the session has a conversation to
   resume; one that was opened and never typed into launches into the missing directory instead (see "Agent config
   directories" in `docs/product/consoles-and-projects.md`).
-- **Reopening a session whose owner is archived reopens the owner first**, then the session itself, so what the
-  session reports reaches a running owner. If the owner cannot be reopened, the whole reopen fails with its reason and
-  both stay as they were. An owner that is only interrupted is not relaunched by this. If the owner came back and it
-  is the session's own relaunch that then fails, the owner stays reopened.
-- **Reopening an owner on its own reopens nothing bound to it.** The group comes back one session at a time, from the
-  session the user asked for.
+- **Reopening a session whose owner is archived reopens its archived owners first, level by level from the topmost
+  down**, then the session itself, so what the session reports reaches a running owner: a session bound to an archived
+  lead session whose console session is archived too brings back the console session, then the lead session, then
+  itself. The walk goes up through the owners that are archived and stops at the first that is not; an owner that is
+  only interrupted is not relaunched by this. If an owner cannot be reopened, the whole reopen fails with its reason:
+  the owners already brought back stay reopened, and the rest, the session included, stay as they were. Likewise, if
+  the owners came back and it is the session's own relaunch that then fails, they stay reopened.
+- **Reopening an owner on its own reopens nothing bound to it**, and reopening a session reopens none of the other
+  sessions bound to the same owners. The group comes back one session at a time, from the session the user asked for.
 - Resuming a session whose process is already running is refused. The refusal a double-click produces is not surfaced
   to the user.
 
@@ -410,7 +420,7 @@ project is removed or the console is deleted. They are listed most recently arch
 - from the project's "View archive" submenu, or for console sessions the console sessions section's
   "Archived console sessions" submenu, with the newest five;
 - from the project's focus mode, with the newest ten, bound sessions included; from a console session's focus mode,
-  the archived sessions bound to it, again the newest ten;
+  the archived sessions under it, again the newest ten;
 - from the archive view, with all of them.
 
 How each of those looks and behaves is in "Project rows" and "The archive view" in `docs/product/sidebar.md`, and in
@@ -419,14 +429,17 @@ How each of those looks and behaves is in "Project rows" and "The archive view" 
 ### Deleting archived sessions
 
 Only an archived session can be deleted: one at a time, or at once every archived session of a project, every
-archived session bound to a console session, or every archived console session of a console. The user is asked to
+archived session under a console session, or every archived console session of a console. The user is asked to
 confirm either way.
 
-**Deleting an archived owner deletes the archived sessions bound to it.** Left behind, reopening one of them would
-have no owner to come back with, and its binding would point at nothing. The confirmation says how many that is
-before anything is deleted. Deleting every archived console session of a console takes their archived bound sessions
-in the same way, and says how many. Deleting an archived bound session on its own leaves its owner alone, and neither
-deleting a project's archived sessions nor deleting a console session's own archive of bound sessions touches a
+**Deleting an archived owner deletes the archived sessions bound to it, at both levels**: an archived lead session
+among them takes its own archived sessions along, so deleting an archived console session or an archived lead session
+leaves no archived session under it. Left behind, reopening one of them would have no owner to come back with, and its
+binding would point at nothing. The confirmation says how many that is, counting both levels, before anything is
+deleted. Deleting every archived console session of a console, and deleting every archived session under a console
+session, take the archived sessions under them in the same way, and the confirmation says how many. A lead session that
+is not archived keeps its own sessions. Deleting an archived bound session on its own leaves its owner alone, and
+neither deleting a project's archived sessions nor deleting the archived sessions under a console session touches a
 console session.
 
 - **Deleting removes only Octoboard's record of the session**, for good, and the last output Octoboard kept for it. The

@@ -487,6 +487,7 @@ mod tests {
             status: SessionStatus::WaitingUser,
             has_conversation: true,
             bound_to: None,
+            lead: false,
             colour: None,
             ordinal: None,
             account_id: None,

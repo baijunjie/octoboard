@@ -126,8 +126,8 @@ export const en = {
   "daemon.session_not_running": "This session is not running.",
   "daemon.session_not_archived": "Only an archived session can be deleted.",
   "daemon.session_has_running_sessions": {
-    one: "This session cannot be archived while {count} session bound to it is running: {sessions}. Archive that session or let it finish first.",
-    other: "This session cannot be archived while {count} sessions bound to it are running: {sessions}. Archive those sessions or let them finish first.",
+    one: "This session cannot be archived while {count} session under it is running: {sessions}. Archive that session or let it finish first.",
+    other: "This session cannot be archived while {count} sessions under it are running: {sessions}. Archive those sessions or let them finish first.",
   },
   "daemon.session_waiting_for_user": "This session is waiting for you. Answer it in the terminal first.",
   "daemon.session_trust_pending":
@@ -159,6 +159,8 @@ export const en = {
   "daemon.trust_home_unknown": "The home directory could not be determined, so no folder can be checked against it.",
   "daemon.trust_not_waiting": "This session is no longer waiting at its agent's trust confirmation.",
   "daemon.console_session_trust_not_asked": "{appName} presses a console session's trust confirmation without asking.",
+  "daemon.console_request_not_waiting": "This session is no longer waiting for an answer, so no console session was started.",
+  "daemon.console_request_answered": "This request for a console session has already been answered.",
   "daemon.binary_not_found": "“{binary}” was not found on PATH in the snapshotted shell environment.",
   "daemon.shell_environment_timeout":
     "“{shell} -l -i -c '{command}'” did not finish within {timeout}. A shell startup file is probably blocked on something other than stdin, or it left a background process holding the shell's output open. {appName} will not launch while the environment is unknown, because it will not guess at one. Fix or skip the slow step in the shell's rc files.",
@@ -572,8 +574,8 @@ export const en = {
   "dialog.archiveSession.title": "Archive “{title}”?",
   "dialog.archiveSession.message": "Its process ends. You can reopen it later.",
   "dialog.archiveSession.bound": {
-    one: "{count} session bound to it is archived with it",
-    other: "{count} sessions bound to it are archived with it",
+    one: "{count} session under it is archived with it",
+    other: "{count} sessions under it are archived with it",
   },
   "dialog.switchAccount.title": "Switch “{title}” to {account}?",
   "dialog.switchAccount.message":
@@ -585,16 +587,16 @@ export const en = {
   "dialog.deleteSession.title": "Delete “{title}” permanently?",
   "dialog.deleteSession.message": "This deletes the session. The agent's own transcript and the project's files are kept.",
   "dialog.deleteSession.bound": {
-    one: "{count} archived session bound to it is deleted with it",
-    other: "{count} archived sessions bound to it are deleted with it",
+    one: "{count} archived session under it is deleted with it",
+    other: "{count} archived sessions under it are deleted with it",
   },
   "dialog.deleteArchived.message": {
     one: "This deletes the archived session. The agent's own transcript and the project's files are kept.",
     other: "This deletes the archived sessions. The agents' own transcripts and the project's files are kept.",
   },
   "dialog.deleteArchived.bound": {
-    one: "{count} archived session bound to a console session in the view is deleted too",
-    other: "{count} archived sessions bound to console sessions in the view are deleted too",
+    one: "{count} archived session under a console session in the view is deleted too",
+    other: "{count} archived sessions under console sessions in the view are deleted too",
   },
   "dialog.deleteArchived.title": {
     one: "Delete {count} archived session permanently?",
@@ -619,6 +621,11 @@ export const en = {
   "dialog.trust.parent": "Trust parent folder",
   "dialog.trust.alreadyAnswered":
     "The trust confirmation was already answered, so this folder was not trusted. Use this dialog again for the next one.",
+  "dialog.consoleRequest.title": "Start a console session?",
+  "dialog.consoleRequest.question":
+    "The session “{session}” in {project} asks to start a console session in “{console}”.",
+  "dialog.consoleRequest.confirm": "Start console session",
+  "dialog.consoleRequest.refuse": "Refuse",
 
   "directoryPicker.path": "Directory path",
   "directoryPicker.go": "Go",

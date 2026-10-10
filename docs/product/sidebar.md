@@ -238,9 +238,10 @@ adds no tab stop. The agent's icon carries the same tooltip on a focus mode's se
 - **Archive** — it asks for confirmation, then archives the session (see "Archiving, interruption and resuming" in
   `docs/product/sessions.md`). For a console session this is the only way to archive it, since it cannot archive
   itself (see "The console session's tools" in `docs/product/hub-orchestration.md`); its confirmation lists the
-  interrupted sessions bound to it, under a warning with their number, as the ones archived with it, and the archive is
-  refused, with the sessions named, while any session bound to it has a process running. A project session that has
-  started sessions is archived under the same rule, with the same confirmation.
+  interrupted sessions under it — bound to it, or to a lead session bound to it (see "Lead sessions" in
+  `docs/product/hub-orchestration.md`) — under a warning with their number, as the ones archived with it, and the
+  archive is refused, with the sessions named, while any session under it has a process running. A project session that
+  has started sessions is archived under the same rule, with the same confirmation.
 
 ## The binding badge
 
@@ -374,7 +375,8 @@ mirrored under a right-to-left language, and nothing moves where the system asks
 
 **View all (n)** — in a project's "View archive" submenu, in a focus mode's archived list, or in the console sessions
 section's "Archived console sessions" submenu — opens the archive view: **every** archived session of that project,
-every archived session bound to that console session, or every archived console session of that console.
+every archived session under that console session (bound to it, or to an archived lead session bound to it, listed
+together in one list), or every archived console session of that console.
 
 - It **covers the terminal's area only**: the sidebar and the right pane stay as they are.
   The terminal goes on running beneath it and is not resized.
@@ -387,11 +389,11 @@ every archived session bound to that console session, or every archived console 
   account and how long ago it was archived. Its **Reopen** and **Delete** buttons show while the row is hovered or holds
   keyboard focus, and are still reached with Tab.
 - **Reopen** resumes the session and selects it, which closes the view (see "Selecting a session" above).
-- **Delete** asks for confirmation, then deletes that session — for an archived console session, listing the archived
-  sessions bound to it that are deleted with it; **Delete all** asks for confirmation, naming how many, then deletes
-  every archived session in the view's scope — for a console session's archive, its archived bound sessions and not
-  the console session itself; for a console's archived console sessions it also says how many archived sessions
-  bound to them are deleted with them. What deleting does and does not remove is in "Deleting archived sessions" in
+- **Delete** asks for confirmation, then deletes that session — for an archived owner, listing the archived sessions
+  under it that are deleted with it; **Delete all** asks for confirmation, naming how many, then deletes every archived
+  session in the view's scope — for a console session's archive, the archived sessions under it and not the console
+  session itself; for a console's archived console sessions it also says how many archived sessions under them are
+  deleted with them. What deleting does and does not remove is in "Deleting archived sessions" in
   `docs/product/sessions.md`.
 - With nothing archived — including after everything has been deleted — the view stays open and says there are no
   archived sessions.

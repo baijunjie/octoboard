@@ -7,6 +7,7 @@ mod access;
 mod adapter;
 mod availability;
 mod browse;
+mod console_request;
 mod coordinator;
 mod crash_cleanup;
 mod env_shell;

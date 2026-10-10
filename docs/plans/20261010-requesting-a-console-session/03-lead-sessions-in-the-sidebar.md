@@ -8,6 +8,19 @@
 > UI tests cover the ordering.
 > Depends on 01 and 02.
 
+## Handoff
+
+- A console session's archive (the archive view's console-session scope and its focus mode's archived list) already
+  includes a lead session's archived sessions, through `boundArchivedSessions` in `packages/ui/src/sidebar/order.ts`,
+  but lists them flat among the console session's own; grouping them under the lead session is this milestone's
+  "Archive view" item. Remove the `TODO` on `ArchiveView` once they are grouped.
+- The archive and delete confirmations in `packages/ui/src/dialogs/RequestedDialog.tsx` already count and list both
+  levels (`boundArchivedSessions`, `boundSessionsArchivedWith`); keep them consistent with the nesting.
+- After an approved console session request, the approving window follows into the new console session's focus mode
+  only when it was in the focus mode of the requesting session's own project (`followsStartedConsoleSession` in
+  `packages/ui/src/sidebar/focus.ts`, described in `docs/product/focus-mode.md`). Where focus mode lists the lead
+  session and its team must stay consistent with that.
+
 ## Technical design
 
 - [ ] In a project's session list, sessions bound to a project session are nested under that session, one level below

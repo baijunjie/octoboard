@@ -76,12 +76,25 @@ export function boundSessions(sessions: Session[], ownerId: string): Session[] {
   return sessions.filter((s) => s.bound_to === ownerId).sort(compareSessions);
 }
 
-/** An owner's own archived bound sessions — the project sessions that are bound to it and have
- * since been archived. This is a third filter over the same session records the archive view
+/** The archived sessions bound to `ownerId`, and those bound to an archived one of them (a lead
+ * session's own sessions, two levels under a console session) — exactly what deleting an archived
+ * owner takes with it. These are a third filter over the same session records the archive view
  * already serves for a project (`project_id`) and for a console's console sessions (`role`);
  * `ArchiveScope`'s `consoleSession` selects it. */
 export function boundArchivedSessions(sessions: Session[], ownerId: string): Session[] {
-  return archivedSessions(sessions.filter((s) => s.bound_to === ownerId));
+  const direct = archivedSessions(sessions.filter((s) => s.bound_to === ownerId));
+  const ids = new Set(direct.map((s) => s.id));
+  return archivedSessions(sessions.filter((s) => s.bound_to === ownerId || (s.bound_to && ids.has(s.bound_to))));
+}
+
+/** The sessions that go into the archive with `ownerId`: the interrupted ones bound to it and
+ * those bound to each of them (a lead session's own sessions, two levels under a console
+ * session), which is how far archiving reaches. */
+export function boundSessionsArchivedWith(sessions: Session[], ownerId: string): Session[] {
+  const direct = boundSessions(sessions, ownerId).filter((s) => s.status === "interrupted");
+  const ids = new Set(direct.map((s) => s.id));
+  const nested = sessions.filter((s) => s.bound_to && ids.has(s.bound_to) && s.status === "interrupted");
+  return [...direct, ...nested.sort(compareSessions)];
 }
 
 /** The sessions not bound to a console session of `owners`: unbound ones, and ones bound to a

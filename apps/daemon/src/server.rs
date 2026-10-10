@@ -71,7 +71,7 @@ async fn handle_control(socket: WebSocket, state: Arc<AppState>) {
 
     // Subscribed before anything is collected, so that a broadcast between collecting the state and
     // listening for changes is not lost. A repeat is harmless: the records are whole and the
-    // application ignores a prompt it already holds.
+    // application ignores a prompt or request it already holds.
     let broadcasts = state.subscribe();
 
     // The snapshot is unprompted and goes first: it is the only way a client that just connected
@@ -81,10 +81,10 @@ async fn handle_control(socket: WebSocket, state: Arc<AppState>) {
             if outbound.send(snapshot).await.is_err() {
                 return;
             }
-            // The snapshot cannot say that a session is waiting for the user's go-ahead, and the
-            // prompt was broadcast only once.
-            for prompt in crate::trust::pending_prompts(&state) {
-                if outbound.send(prompt).await.is_err() {
+            // The snapshot cannot say that a session is waiting for the user's go-ahead or answer,
+            // and the prompt or request was broadcast only once.
+            for question in pending_questions(&state) {
+                if outbound.send(question).await.is_err() {
                     return;
                 }
             }
@@ -270,10 +270,10 @@ async fn forward_broadcasts(
                     if outbound.send(snapshot).await.is_err() {
                         return;
                     }
-                    // Whatever prompt the client lagged past is asked again; see the initial
-                    // snapshot.
-                    for prompt in crate::trust::pending_prompts(&state) {
-                        if outbound.send(prompt).await.is_err() {
+                    // Whatever prompt or request the client lagged past is asked again; see the
+                    // initial snapshot.
+                    for question in pending_questions(&state) {
+                        if outbound.send(question).await.is_err() {
                             return;
                         }
                     }
@@ -290,6 +290,14 @@ async fn forward_broadcasts(
             return;
         }
     }
+}
+
+/// What the daemon is waiting on the user for, to put to a client again after a `snapshot`: the
+/// trust prompts, then the requests for a console session, oldest first.
+fn pending_questions(state: &AppState) -> Vec<Event> {
+    let mut questions = crate::trust::pending_prompts(state);
+    questions.extend(crate::console_request::pending_events(state));
+    questions
 }
 
 /// Parses and runs one request, and returns what goes back on the asking socket.
@@ -452,9 +460,17 @@ async fn hook_callback(
                 if let Err(err) = state.mark_conversation_started(&session_id) {
                     tracing::debug!(session = %session_id, %err, "recording the session's first turn failed");
                 }
-                state.turn_started(&session_id);
+                let prompt = agent.and_then(|agent| hooks::submitted_prompt(agent, &payload));
+                state.turn_started(&session_id, prompt);
             }
             if let Some(agent) = agent {
+                crate::console_request::note_backgrounded(
+                    &state,
+                    &session_id,
+                    agent,
+                    &event,
+                    &payload,
+                );
                 let believable = read_turn_boundary(&state, &session_id, agent, &event, &payload);
                 if believable {
                     if let Some(status) = hooks::status_from_event(agent, &event, &payload) {

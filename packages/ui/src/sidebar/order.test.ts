@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Project, Session, SessionStatus } from "../protocol";
-import { boundArchivedSessions, boundElsewhere, focusGroups, liveSessions, notBoundToConsoleSession, sortProjects, switchStrip } from "./order";
+import { boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessions, notBoundToConsoleSession, sortProjects, switchStrip } from "./order";
 
 const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to?: string): Session => ({
   id,
@@ -47,14 +47,30 @@ describe("liveSessions", () => {
 });
 
 describe("boundArchivedSessions", () => {
-  it("keeps only the archived sessions bound to the given console session", () => {
+  it("keeps only the archived sessions bound to the given owner, or to an archived one bound to it", () => {
     const sessions = [
       session("bound-archived", "archived", 1, false, "s-console"),
+      session("nested-archived", "archived", 5, false, "bound-archived"),
+      session("nested-live-owner", "idle", 6, false, "s-console"),
+      session("under-live-owner", "archived", 7, false, "nested-live-owner"),
       session("bound-live", "idle", 2, false, "s-console"),
       session("unbound-archived", "archived", 3),
       session("other-owner-archived", "archived", 4, false, "s-other"),
     ];
-    expect(boundArchivedSessions(sessions, "s-console").map((s) => s.id)).toEqual(["bound-archived"]);
+    expect(boundArchivedSessions(sessions, "s-console").map((s) => s.id)).toEqual(["nested-archived", "bound-archived"]);
+  });
+});
+
+describe("boundSessionsArchivedWith", () => {
+  it("keeps the interrupted sessions bound to the owner or to an interrupted one bound to it", () => {
+    const sessions = [
+      session("lead", "interrupted", 1, false, "s-console"),
+      session("under-lead", "interrupted", 2, false, "lead"),
+      session("under-lead-live", "idle", 3, false, "lead"),
+      session("bound-live", "idle", 4, false, "s-console"),
+      session("under-live", "interrupted", 5, false, "bound-live"),
+    ];
+    expect(boundSessionsArchivedWith(sessions, "s-console").map((s) => s.id)).toEqual(["lead", "under-lead"]);
   });
 });
 

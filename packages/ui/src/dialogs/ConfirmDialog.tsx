@@ -6,7 +6,7 @@ import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
 import { useTrimmedField } from "./useTrimmedField";
 
-interface ConfirmDialogProps {
+export interface ConfirmDialogProps {
   title: string;
   /** What the dialog says: a string is one paragraph; a node lays out its own structure. */
   message: React.ReactNode;

@@ -7,7 +7,7 @@ import { StatusIcon } from "../components/StatusIcon";
 import { useT } from "../i18n/react";
 import { isLive, type Session } from "../protocol";
 import { sessionAgentLabel } from "../sessionLabel";
-import { boundArchivedSessions, boundSessions, compareSessions } from "../sidebar/order";
+import { boundArchivedSessions, boundSessionsArchivedWith, compareSessions } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ConsoleDialog } from "./ConsoleDialog";
@@ -156,10 +156,11 @@ export function RequestedDialog({
         />
       );
     case "archive-session": {
-      // The sessions bound to an owner that go into the archive with it. Read live, like
-      // the running ones above. One that has a process running is not among them: the daemon
-      // refuses the archive while there is such a session, and the dialog shows that refusal.
-      const withIt = boundSessions(Array.from(sessions.values()), dialog.session.id).filter((s) => s.status === "interrupted");
+      // The sessions under an owner (bound to it, or to one bound to it) that go into the
+      // archive with it. Read live, like the running ones above. One that has a process running
+      // is not among them: the daemon refuses the archive while there is such a session, and the
+      // dialog shows that refusal.
+      const withIt = boundSessionsArchivedWith(Array.from(sessions.values()), dialog.session.id);
       return (
         <ConfirmDialog
           title={t("dialog.archiveSession.title", { title: dialog.session.title })}
@@ -193,7 +194,7 @@ export function RequestedDialog({
         />
       );
     case "delete-session": {
-      // An archived owner takes the archived sessions bound to it along.
+      // An archived owner takes the archived sessions bound to it, and those bound to those, along.
       const withIt = boundArchivedSessions(Array.from(sessions.values()), dialog.session.id);
       return (
         <ConfirmDialog

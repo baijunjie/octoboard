@@ -16,7 +16,8 @@
 //!   prompt on the conversation's first request and replays it verbatim afterwards, so different
 //!   text passed on a later launch is silently ignored; Grok persists `--rules` into the session
 //!   record. The role text is therefore a function of the session's role, its binding and its
-//!   agent alone, all three fixed for the session's lifetime. It is still passed on every launch,
+//!   agent alone, all three fixed for the session's lifetime (a lead session, bound only after it
+//!   was launched unbound, is launched as unbound every time). It is still passed on every launch,
 //!   because Claude Code re-renders its snapshot from whatever *that* launch passed after a
 //!   compaction.
 //! - **Hooks must fail fast and silently.** Every agent surfaces a failing hook to the user, and a

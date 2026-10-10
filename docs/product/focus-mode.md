@@ -65,8 +65,9 @@ choice: the session is always unbound.
   line saying the session reports to this console session, which it will be bound to.
 - **With no project in the console at all** there is nothing to open a session in: the header's **+** is disabled, and
   in place of the sessions a message says the console has no projects yet, with an **Add project** button.
-- **Archived (n)** is this console session's archived bound sessions, and **View all** opens the archive view
-  scoped to them (see "The archive view" in `docs/product/sidebar.md`).
+- **Archived (n)** is the archived sessions under this console session — bound to it, or to an archived lead session
+  bound to it (see "Lead sessions" in `docs/product/hub-orchestration.md`), listed together in one list — and
+  **View all** opens the archive view scoped to them (see "The archive view" in `docs/product/sidebar.md`).
 
 ## The switch strip
 
@@ -133,6 +134,14 @@ project and console session menus show it.
 - In either focus mode it leaves focus mode.
 - It does nothing while a dialog or a menu is open, and during an input-method composition.
 - The key combination never reaches the terminal, so the agent never receives it.
+
+## Approving a request for a console session
+
+A window that approves a project session's request for a console session (see
+`docs/product/requesting-a-console-session.md`) while it is in the focus mode of the requesting session's own project
+moves, once the console session has started, into that console session's focus mode with it selected. A window in
+another project's focus mode, in a console session's focus mode or not in focus mode stays as it is, and so does every
+other connected window.
 
 ## Keyboard focus on entering and leaving
 

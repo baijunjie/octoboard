@@ -264,9 +264,12 @@ pub async fn handle(
             if stop_sessions {
                 // Archived the way the user's own archive request does it; a process still
                 // exiting when its rows are gone is tolerated by `watch_exit` and the hook paths.
-                // The bound sessions go first: archiving an owner is refused while a session
-                // bound to it still has a process, and all of them are in this project. A console
-                // session belongs to no project and is not in this loop.
+                // The deepest level goes first: archiving an owner is refused while a session
+                // bound to it still has a process, and all of them are in this project. So the
+                // sessions bound to a lead session go before it, and it, bound to a console
+                // session, before the unbound ones. A console session belongs to no project and
+                // is not in this loop; a lead session's binding to one is left as any bound
+                // session's is, and goes with its record.
                 let mut in_this_project = Vec::new();
                 for live in state.live_sessions() {
                     if let Some(session) = state.store.get_session(&live.id)? {
@@ -275,7 +278,11 @@ pub async fn handle(
                         }
                     }
                 }
-                in_this_project.sort_by_key(|session| session.bound_to.is_none());
+                let levels = in_this_project
+                    .iter()
+                    .map(|session| Ok((session.id.clone(), binding_depth(state, session)?)))
+                    .collect::<Result<HashMap<String, usize>>>()?;
+                in_this_project.sort_by_key(|session| std::cmp::Reverse(levels[&session.id]));
                 for session in in_this_project {
                     archive_session(state, &session.id)?;
                 }
@@ -444,6 +451,18 @@ pub async fn handle(
         RequestBody::RemoveTrustedDirectory { path } => {
             trust::remove_trusted_directory(state, &path)?;
             Ok(None)
+        }
+
+        RequestBody::AnswerConsoleSessionRequest {
+            request_id: asked,
+            approve,
+        } => {
+            // An approval is answered with the console session it started, a refusal with an ack.
+            let started = crate::console_request::answer(state, &asked, approve).await?;
+            Ok(started.map(|session| Event::SessionOpened {
+                id: request_id,
+                session,
+            }))
         }
 
         RequestBody::UpdateSettings {
@@ -669,11 +688,13 @@ fn agent_is_available(state: &Arc<AppState>, agent: Agent) -> bool {
 
 /// What a new session should be bound to: always `None` for a console session, which is never
 /// bound; for a project session, whatever `requested` names, which must be a console session of
-/// `console_id`, or an unbound project session of the new session's own project, or the request
-/// is refused with `unknown_session` — a binding is fixed for the session's lifetime once set, so
-/// naming one that does not exist, or belongs to another console, must not be let through to be
-/// discovered later. An owner that is itself bound is refused for the same reason: a bound session
-/// cannot start sessions, so one that owns another is a chain nothing is meant to build.
+/// `console_id`, or a project session of the new session's own project that is unbound or a lead
+/// session, or the request is refused with `unknown_session` — a binding is fixed for the
+/// session's lifetime once set, so naming one that does not exist, or belongs to another console,
+/// must not be let through to be discovered later. A project session with the role of a bound one
+/// is refused as an owner for the same reason, and this is where the depth limit is enforced, not
+/// only by which tools are offered: a session bound to a lead session would otherwise make a
+/// third level.
 fn resolve_bound_to(
     state: &Arc<AppState>,
     console_id: &str,
@@ -695,7 +716,7 @@ fn resolve_bound_to(
                 && match target.role {
                     Role::Console => true,
                     Role::Project => {
-                        target.bound_to.is_none()
+                        !target.has_bound_role()
                             && target.project_id.is_some()
                             && target.project_id.as_deref() == project_id
                     }
@@ -802,6 +823,8 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         account_id,
         config_dir,
         bound_to,
+        // A session is opened bound or unbound; only binding it afterwards makes it a lead session.
+        lead: false,
         // Assigned by `insert_console_session` below for a console session; a project session
         // carries no colour or ordinal of its own.
         colour: None,
@@ -838,10 +861,55 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
     }
 }
 
-/// Who `session` reports to, for the launch that tells it so. An owner that is no longer on record
-/// reads as a console session: the text is the generic one, and a report to it fails on its own.
+/// Binds the unbound project session `session_id` to the running console session
+/// `console_session_id` of the same console, making it a lead session, and tells every client.
+/// The sessions already bound to it stay bound to it: they were told at launch that it is their
+/// owner, and why they were started is in its conversation, not the console session's.
+///
+/// Refused, with the reason in prose and nothing changed, for a session that is already bound, a
+/// console session, an owner that is not a console session, is not running or belongs to another
+/// console. Nothing undoes a binding.
+pub fn bind_to_console_session(
+    state: &Arc<AppState>,
+    session_id: &str,
+    console_session_id: &str,
+) -> Result<Session> {
+    let session = state.session_record(session_id)?;
+    if session.role == Role::Console {
+        anyhow::bail!("a console session cannot be bound to another session");
+    }
+    if session.bound_to.is_some() {
+        anyhow::bail!("this session is already bound to a session, and a binding is never changed");
+    }
+    let owner = state.session_record(console_session_id)?;
+    if owner.role != Role::Console {
+        anyhow::bail!("a project session can only be bound to a console session this way");
+    }
+    if owner.console_id != session.console_id {
+        anyhow::bail!("the console session belongs to another console");
+    }
+    if owner.status.is_dormant() || !state.has_process(&owner.id) {
+        anyhow::bail!("the console session is not running");
+    }
+    let bound = state
+        .store
+        .bind_session(session_id, console_session_id)?
+        // Bound, or gone, since it was read just now.
+        .ok_or_else(|| anyhow::anyhow!("this session is already bound to a session, or is gone"))?;
+    state.publish_session(&bound);
+    Ok(bound)
+}
+
+/// Who `session` reports to, for the launch that tells it so: `None` for a session that launches
+/// with an unbound project session's role description and tools, which a lead session does on
+/// every launch, as at its first. An owner that is no longer on record reads as a console session:
+/// the text is the generic one, and a report to it fails on its own.
 fn owner_of(state: &Arc<AppState>, session: &Session) -> Result<Option<mcp::Owner>> {
-    let Some(owner_id) = &session.bound_to else {
+    let Some(owner_id) = session
+        .bound_to
+        .as_ref()
+        .filter(|_| session.has_bound_role())
+    else {
         return Ok(None);
     };
     Ok(Some(match state.store.get_session(owner_id)? {
@@ -870,10 +938,14 @@ fn resumable_agent_session_id(session: &Session) -> Option<String> {
 /// starts, so it has to be in the queue before the launch and out again if the launch never happens.
 ///
 /// A session bound to an archived owner (a console session, or a project session that started it)
-/// brings that owner back first, so what it reports reaches a process; if the owner cannot be
-/// relaunched the whole reopen fails and the session stays as it was. The owner stays reopened
-/// when it is the session's own relaunch that then fails. Reopening an owner reopens nothing bound
-/// to it: the group comes back one session at a time, from the one the user asked for.
+/// brings its archived owners back first, level by level from the topmost down — a session bound
+/// to an archived lead session brings back the lead session's archived console session, then the
+/// lead session — so what it reports reaches a process. The walk stops at the first owner that is
+/// not archived; one that is only interrupted is not relaunched. If an owner cannot be relaunched
+/// the whole reopen fails with its reason: the owners already brought back stay reopened, and the
+/// rest, the session included, stay as they were. Reopening an owner reopens nothing bound to it,
+/// and no other session bound to the same owners is reopened: the group comes back one session at
+/// a time, from the one the user asked for.
 pub async fn resume_session(
     state: &Arc<AppState>,
     id: &str,
@@ -882,29 +954,58 @@ pub async fn resume_session(
     // Claimed before anything else, so two overlapping relaunches cannot both get through, and
     // before the record is read, so a delete cannot slip in between reading and launching.
     let claim = state.begin_launch(id)?;
-    if let Some(owner) = archived_owner(state, id)? {
-        // An owner is bound to nothing, so this never goes round again. Two bound
-        // sessions reopened at once are kept apart by the window, not by anything held: nothing
-        // awaits between this claim and the owner's status write, so the second reopen reads an
-        // owner that is no longer archived and skips this step. One that does land inside the
-        // window is refused on the owner's claim, and the user's next click goes through.
+    for owner in archived_owners(state, id)? {
+        // The owners were listed before the awaits of the earlier relaunches, so a reopen of a
+        // sibling bound session may have brought this one back since: skip it unless it still
+        // needs reopening. Two reopens can both read an owner as archived; the launch claim lets
+        // one through and refuses the other, and the user's next click goes through.
+        if !needs_reopening(state, &owner)? {
+            continue;
+        }
         let owner_claim = state.begin_launch(&owner)?;
         relaunch_session(state, &owner_claim, &owner, None, true, None).await?;
     }
     relaunch_session(state, &claim, id, instruction, true, None).await
 }
 
-/// The session a dormant session is bound to, when that session is archived.
-fn archived_owner(state: &Arc<AppState>, id: &str) -> Result<Option<String>> {
+/// Whether an owner listed by [`archived_owners`] is still to be relaunched by a reopen: it is
+/// archived, or a launch of it is in flight (its claim is held). That launch writes the owner's
+/// status before its process is up and puts it back to archived if it fails, so it is left to the
+/// launch claim, which refuses this reopen rather than letting it start sessions under an owner
+/// that may not stay up. An owner that is neither (brought back since, with its process up, or only
+/// interrupted) is skipped, and one that is gone is left to fail on its claim.
+fn needs_reopening(state: &Arc<AppState>, owner: &str) -> Result<bool> {
+    Ok(match state.store.get_session(owner)? {
+        Some(record) => record.status == SessionStatus::Archived || state.is_launching(owner),
+        None => true,
+    })
+}
+
+/// The archived owners a dormant session brings back before itself, topmost first: its owner when
+/// that is archived, then that owner's owner when that is archived too, stopping at the first that
+/// is not (or is not on record). Empty for a session that is not dormant.
+fn archived_owners(state: &Arc<AppState>, id: &str) -> Result<Vec<String>> {
     let session = state.session_record(id)?;
-    let Some(owner) = session.bound_to.filter(|_| session.status.is_dormant()) else {
-        return Ok(None);
-    };
-    Ok(state
-        .store
-        .get_session(&owner)?
-        .filter(|owner| owner.status == SessionStatus::Archived)
-        .map(|owner| owner.id))
+    let mut owners = Vec::new();
+    let mut next = session.bound_to.filter(|_| session.status.is_dormant());
+    while let Some(owner_id) = next {
+        let Some(owner) = state
+            .store
+            .get_session(&owner_id)?
+            .filter(|owner| owner.status == SessionStatus::Archived)
+        else {
+            break;
+        };
+        // Bindings are at most two levels deep and never form a cycle; the check only keeps
+        // corrupt data from looping here.
+        if owners.contains(&owner.id) || owner.id == id {
+            break;
+        }
+        next = owner.bound_to.clone();
+        owners.push(owner.id);
+    }
+    owners.reverse();
+    Ok(owners)
 }
 
 /// The relaunch a resume and a switch of the session's account both end in: everything Octoboard
@@ -1056,17 +1157,19 @@ async fn start_process(
 /// Ends the session's process and archives it. What archiving means beyond ending the process
 /// belongs here and not in [`stop_process`], which a switch of the session's account shares.
 ///
-/// Archiving a session that has sessions bound to it — a console session, or an unbound project
-/// session that started some — is a group operation along the binding, decided by whether a
-/// process is running and not by status: refused, with nothing changed, while any session bound to
-/// it has one (working, awaiting instructions or waiting for the user alike; the refusal counts and
-/// names them), and otherwise archiving every bound session that is not archived yet, before the
-/// owner itself. Nothing bound to it is left outside the archive. The order is deliberate: bound
-/// sessions first and the owner last, so a failure part way leaves only a state the user could
-/// have produced by hand, never an archived owner with a bound session still outside the archive.
-/// A session with nothing bound to it — a bound session, or an unbound one that started none —
-/// never reaches another session: the user's request, an owner's tool, a `done` report with no
-/// open items, a `delete_project` that stops sessions.
+/// Archiving a session that has sessions bound to it — a console session, or a project session
+/// that started some — is a group operation along the binding, at both levels: a console
+/// session's bound sessions include its lead sessions, and theirs come along. It is decided by
+/// whether a process is running and not by status: refused, with nothing changed, while any
+/// session in the group has one (working, awaiting instructions or waiting for the user alike, at
+/// either level; the refusal counts and names them), and otherwise archiving every session in the
+/// group that is not archived yet, before the owner itself. Nothing bound to it is left outside the
+/// archive. The order is deliberate: the deepest level first and the owner last, so a failure part
+/// way leaves only a state the user could have produced by hand, never an archived owner with a
+/// session bound to it still outside the archive. A session with nothing bound to it — one with
+/// the role of a bound session, or an owner that started none — never reaches another session: the
+/// user's request, an owner's tool, a `done` report with no open items, a `delete_project` that
+/// stops sessions.
 pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<()> {
     let session = state.session_record(id)?;
     // "Not running" is taken to mean interrupted by exclusion: a status that is neither archived
@@ -1075,7 +1178,7 @@ pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<()> {
     // the launch claim, so in between a bound session reads as neither archived nor
     // process-backed. Nothing awaits in that gap, so no archive can land in it, and it is not
     // closed.
-    let (running, dormant): (Vec<Session>, Vec<Session>) = bound_sessions(state, &session)?
+    let (running, dormant): (Vec<Session>, Vec<Session>) = team(state, &session)?
         .into_iter()
         .filter(|bound| bound.status != SessionStatus::Archived)
         .partition(|bound| state.has_process(&bound.id));
@@ -1083,7 +1186,7 @@ pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<()> {
         return Err(CodedError::raised(
             error_code::SESSION_HAS_RUNNING_SESSIONS,
             format!(
-                "this session cannot be archived while sessions bound to it have a process \
+                "this session cannot be archived while sessions under it have a process \
                  running: {}; archive them or wait for them to finish first",
                 quoted_titles(&running)
             ),
@@ -1099,9 +1202,10 @@ pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<()> {
     archive_record(state, id)
 }
 
-/// The sessions bound to `owner`, in any status. A bound session owns none, so it is not looked up.
-fn bound_sessions(state: &Arc<AppState>, owner: &Session) -> Result<Vec<Session>> {
-    if owner.bound_to.is_some() {
+/// The sessions bound to `owner`, in any status. A session with the role of a bound one owns none,
+/// so it is not looked up.
+pub(crate) fn bound_sessions(state: &Arc<AppState>, owner: &Session) -> Result<Vec<Session>> {
+    if owner.has_bound_role() {
         return Ok(Vec::new());
     }
     Ok(state
@@ -1110,6 +1214,31 @@ fn bound_sessions(state: &Arc<AppState>, owner: &Session) -> Result<Vec<Session>
         .into_iter()
         .filter(|session| session.bound_to.as_deref() == Some(owner.id.as_str()))
         .collect())
+}
+
+/// Every session below `owner` along the bindings, in any status, the deepest level first: the
+/// sessions bound to its lead sessions, then the sessions bound to it.
+fn team(state: &Arc<AppState>, owner: &Session) -> Result<Vec<Session>> {
+    let bound = bound_sessions(state, owner)?;
+    let mut sessions = Vec::new();
+    for session in &bound {
+        sessions.extend(bound_sessions(state, session)?);
+    }
+    sessions.extend(bound);
+    Ok(sessions)
+}
+
+/// How many owners up `session`'s bindings go: 0 for an unbound session, 1 for one bound to an
+/// owner that is itself unbound, 2 for one bound to a lead session.
+fn binding_depth(state: &Arc<AppState>, session: &Session) -> Result<usize> {
+    let Some(owner) = &session.bound_to else {
+        return Ok(0);
+    };
+    let owner_bound = state
+        .store
+        .get_session(owner)?
+        .is_some_and(|owner| owner.bound_to.is_some());
+    Ok(if owner_bound { 2 } else { 1 })
 }
 
 /// The titles of `sessions`, each in quotes, comma separated. The separator is half-width and
@@ -1396,9 +1525,9 @@ fn session_ids_where(
 }
 
 /// Removes Octoboard's record of one archived session, and with an archived owner (a console
-/// session, or a project session that started some) the archived sessions bound to it: left
-/// behind, reopening one would have no owner to come back with. Deleting an archived bound session
-/// on its own leaves its owner alone.
+/// session, or a project session that started some) the archived sessions bound to it, at both
+/// levels: left behind, reopening one would have no owner to come back with. Deleting an archived
+/// bound session on its own leaves its owner alone.
 /// The record takes its saved terminal output with it. Nothing else of Octoboard's hangs off a
 /// session: its queue, MCP token and turn bookkeeping go when its process does, and so does its
 /// scratch directory (clearing the run directory at startup is only the fallback). The agent's own
@@ -1416,25 +1545,28 @@ fn delete_session(state: &Arc<AppState>, id: &str) -> Result<()> {
 }
 
 /// Deletes `session` if it is archived and says whether it did; the archived sessions bound to it
-/// go along. Deleting the owner first means a refusal, which only that first step can give,
-/// deletes nothing. It does not make the whole atomic: if a later step is skipped (a session being
-/// launched right now) or fails, the owner is already gone. That is left, because a bound session
-/// can only be mid-launch through a resume, which reopens the owner first, so the owner was no
-/// longer archived and the delete was refused. One that stopped being archived meanwhile is
-/// skipped.
+/// go along, each with its own archived bound sessions, so an archived console session takes its
+/// archived lead sessions' archived sessions too. Deleting the owner first means a refusal, which
+/// only that first step can give, deletes nothing. It does not make the whole atomic: if a later
+/// step is skipped (a session being launched right now) or fails, the owner is already gone. That
+/// is left, because a bound session can only be mid-launch through a resume, which reopens the
+/// owner first, so the owner was no longer archived and the delete was refused. One that stopped
+/// being archived meanwhile is skipped.
 fn delete_archived_group(state: &Arc<AppState>, session: &Session) -> Result<bool> {
     if !state.delete_if_archived(&session.id)? {
         return Ok(false);
     }
     for bound in bound_sessions(state, session)? {
-        state.delete_if_archived(&bound.id)?;
+        // One that is not archived keeps its own bound sessions, which still have an owner.
+        delete_archived_group(state, &bound)?;
     }
     Ok(true)
 }
 
 /// Deletes every archived session of `project`, or every archived session bound to the console
 /// session `console_session_id`, or with neither every archived console session of `console` along
-/// with the archived sessions bound to them. One that stopped being archived meanwhile (a resume
+/// with the archived sessions bound to them; an archived lead session in either of the last two
+/// takes its own archived sessions along. One that stopped being archived meanwhile (a resume
 /// got there first) is skipped.
 fn delete_archived_sessions(
     state: &Arc<AppState>,
@@ -2054,6 +2186,7 @@ mod tests {
                     status,
                     has_conversation: false,
                     bound_to: None,
+                    lead: false,
                     colour: None,
                     ordinal: None,
                     account_id: None,
@@ -2165,6 +2298,7 @@ mod tests {
                 status: SessionStatus::Archived,
                 has_conversation: false,
                 bound_to: None,
+                lead: false,
                 colour: None,
                 ordinal: None,
                 account_id: None,
@@ -2499,6 +2633,7 @@ mod tests {
             status: SessionStatus::Idle,
             has_conversation: false,
             bound_to: None,
+            lead: false,
             colour: None,
             ordinal: None,
             account_id: None,
@@ -2607,11 +2742,11 @@ mod tests {
         }
     }
 
-    /// An unbound project session of the new session's own project may own it. One of another
-    /// project, or one that is itself bound, may not: a bound session cannot start sessions, so a
-    /// chain of owners is not something to let in.
+    /// An unbound project session or a lead session of the new session's own project may own it.
+    /// One of another project, or one with the role of a bound session, may not — among them a
+    /// session bound to a lead session, which would make a third level.
     #[test]
-    fn a_project_session_binds_only_to_an_unbound_session_of_its_own_project() {
+    fn a_project_session_binds_only_to_an_unbound_or_lead_session_of_its_own_project() {
         let (state, _dir) = crate::test_support::app_state("coordinator-resolve-bound-to-project");
         state
             .store
@@ -2639,14 +2774,22 @@ mod tests {
                 })
                 .unwrap();
         }
-        for (id, project, owner) in [
-            ("starter", "project-1", None),
-            ("elsewhere", "project-2", None),
-            ("bound-starter", "project-1", Some("console-session-1")),
+        for (id, project, owner, lead) in [
+            ("starter", "project-1", None, false),
+            ("elsewhere", "project-2", None, false),
+            (
+                "bound-starter",
+                "project-1",
+                Some("console-session-1"),
+                false,
+            ),
+            ("lead", "project-1", Some("console-session-1"), true),
+            ("of-lead", "project-1", Some("lead"), false),
         ] {
             let mut session = bare_session(id, Role::Project);
             session.project_id = Some(project.to_string());
             session.bound_to = owner.map(str::to_string);
+            session.lead = lead;
             state.store.insert_session(&session).unwrap();
         }
         let resolve = |target: &str| {
@@ -2660,7 +2803,8 @@ mod tests {
         };
 
         assert_eq!(resolve("starter").unwrap(), Some("starter".to_string()));
-        for target in ["elsewhere", "bound-starter"] {
+        assert_eq!(resolve("lead").unwrap(), Some("lead".to_string()));
+        for target in ["elsewhere", "bound-starter", "of-lead"] {
             let err = resolve(target).expect_err(target);
             let coded = err.downcast_ref::<CodedError>().expect("a coded error");
             assert_eq!(coded.code, error_code::UNKNOWN_SESSION, "{target}");
@@ -3517,40 +3661,66 @@ mod tests {
         assert_eq!(status_of(&state, "hub"), Some(SessionStatus::Idle));
     }
 
-    /// Which console session a relaunch brings back first: the archived one a dormant session is
-    /// bound to, and nothing else — not an owner that is only interrupted or already running, not
-    /// for an unbound session, and never for a console session, so reopening one reopens nothing
-    /// bound to it.
+    /// A lead session in `status`: bound to the console session `owner` after it was opened.
+    fn lead_session(id: &str, status: SessionStatus, owner: &str) -> Session {
+        Session {
+            lead: true,
+            ..bound_session(id, status, owner)
+        }
+    }
+
+    /// Which owners a relaunch brings back first, topmost first: the archived owner a dormant
+    /// session is bound to and, when that is an archived lead session, its archived console
+    /// session above it. The walk stops at the first owner that is not archived — only
+    /// interrupted, running or gone — and nothing is brought back for an unbound session, for one
+    /// that is not dormant, or for a console session, so reopening an owner reopens nothing bound
+    /// to it.
     #[test]
-    fn a_reopen_brings_back_only_an_archived_owner() {
+    fn a_reopen_brings_back_the_archived_owners_above_it_topmost_first() {
         use SessionStatus::{Archived, Idle, Interrupted};
-        let (state, _dir) = switch_fixture("archived-owner");
+        let (state, _dir) = switch_fixture("archived-owners");
         for session in [
             console_session("archived-hub", Archived),
             console_session("interrupted-hub", Interrupted),
             console_session("running-hub", Idle),
+            lead_session("archived-lead", Archived, "archived-hub"),
+            lead_session("interrupted-lead", Interrupted, "archived-hub"),
+            lead_session("lead-under-running-hub", Archived, "running-hub"),
         ] {
             state.store.insert_session(&session).unwrap();
         }
-        // (the session's status, what it is bound to, the owner it brings back)
-        let cases = [
+        // (the session's status, what it is bound to, the owners it brings back)
+        let cases: [(&str, SessionStatus, Option<&str>, &[&str]); 10] = [
             (
                 "archived",
                 Archived,
                 Some("archived-hub"),
-                Some("archived-hub"),
+                &["archived-hub"],
             ),
             (
                 "interrupted",
                 Interrupted,
                 Some("archived-hub"),
-                Some("archived-hub"),
+                &["archived-hub"],
             ),
-            ("owner interrupted", Archived, Some("interrupted-hub"), None),
-            ("owner running", Archived, Some("running-hub"), None),
-            ("owner gone", Archived, Some("no-such-hub"), None),
-            ("unbound", Archived, None, None),
-            ("not dormant", Idle, Some("archived-hub"), None),
+            ("owner interrupted", Archived, Some("interrupted-hub"), &[]),
+            ("owner running", Archived, Some("running-hub"), &[]),
+            ("owner gone", Archived, Some("no-such-hub"), &[]),
+            ("unbound", Archived, None, &[]),
+            ("not dormant", Idle, Some("archived-hub"), &[]),
+            (
+                "both levels archived",
+                Archived,
+                Some("archived-lead"),
+                &["archived-hub", "archived-lead"],
+            ),
+            ("lead interrupted", Archived, Some("interrupted-lead"), &[]),
+            (
+                "lead's owner running",
+                Archived,
+                Some("lead-under-running-hub"),
+                &["lead-under-running-hub"],
+            ),
         ];
         for (name, status, owner, expected) in cases {
             let session = Session {
@@ -3558,35 +3728,62 @@ mod tests {
                 ..project_session("s", Agent::Claude, status)
             };
             state.store.insert_session(&session).unwrap();
-            assert_eq!(
-                archived_owner(&state, "s").unwrap().as_deref(),
-                expected,
-                "{name}"
-            );
+            assert_eq!(archived_owners(&state, "s").unwrap(), expected, "{name}");
             state.store.delete_session("s").unwrap();
         }
-        assert_eq!(archived_owner(&state, "archived-hub").unwrap(), None);
+        assert!(archived_owners(&state, "archived-hub").unwrap().is_empty());
     }
 
-    /// The console session is relaunched before the session asked for, and the reopen fails as a
-    /// whole when it cannot be: the session is never attempted (its ended time is untouched) and
-    /// both stay archived. The console's working directory is missing here and the project's is
-    /// not, so the failure can only be the console session's.
+    /// An owner is left to the reopen while it is archived or a launch of it is in flight (the
+    /// claim then refuses the reopen); one that is idle, running or interrupted and not in flight
+    /// is skipped.
+    #[test]
+    fn a_reopen_skips_an_owner_that_is_neither_archived_nor_being_launched() {
+        use SessionStatus::{Archived, Idle, Interrupted};
+        let (state, _dir) = switch_fixture("needs-reopening");
+        for session in [
+            console_session("archived", Archived),
+            console_session("idle", Idle),
+            console_session("interrupted", Interrupted),
+            console_session("launching", Idle),
+            console_session("running", Idle),
+        ] {
+            state.store.insert_session(&session).unwrap();
+        }
+        let _claim = state.begin_launch("launching").unwrap();
+        // Brought back by a sibling reopen, whose claim is already released.
+        let running = idle_stand_in("running");
+        state.register_live(running.clone());
+
+        let needs = |id: &str| needs_reopening(&state, id).unwrap();
+        assert!(needs("archived"));
+        assert!(needs("launching"));
+        assert!(!needs("idle"));
+        assert!(!needs("running"));
+        assert!(!needs("interrupted"));
+    }
+
+    /// The topmost owner is relaunched first, and the reopen fails as a whole when it cannot be:
+    /// nothing below it is attempted (the ended times are untouched) and all of them stay
+    /// archived. The console's working directory is missing here and the project's is not, so the
+    /// failure can only be the console session's.
     #[tokio::test]
-    async fn a_bound_session_is_not_reopened_when_its_console_session_cannot_be() {
+    async fn a_reopen_fails_as_a_whole_when_its_topmost_owner_cannot_be_reopened() {
         let (state, dir) = switch_fixture("reopen-owner-fails");
         std::fs::create_dir_all(dir.join("no-such-project")).unwrap();
-        state
-            .store
-            .insert_session(&console_session("hub", SessionStatus::Archived))
-            .unwrap();
-        state
-            .store
-            .insert_session(&Session {
+        for session in [
+            console_session("hub", SessionStatus::Archived),
+            Session {
                 ended_at: Some(5),
-                ..bound_session("worker", SessionStatus::Archived, "hub")
-            })
-            .unwrap();
+                ..lead_session("lead", SessionStatus::Archived, "hub")
+            },
+            Session {
+                ended_at: Some(5),
+                ..bound_session("worker", SessionStatus::Archived, "lead")
+            },
+        ] {
+            state.store.insert_session(&session).unwrap();
+        }
 
         let err = resume_session(&state, "worker", None)
             .await
@@ -3594,17 +3791,23 @@ mod tests {
 
         assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
         assert_eq!(status_of(&state, "hub"), Some(SessionStatus::Archived));
-        let worker = state.store.get_session("worker").unwrap().unwrap();
-        assert_eq!(
-            (worker.status, worker.ended_at),
-            (SessionStatus::Archived, Some(5))
-        );
-        assert!(!state.has_process("hub") && !state.has_process("worker"));
+        for id in ["lead", "worker"] {
+            let session = state.store.get_session(id).unwrap().unwrap();
+            assert_eq!(
+                (session.status, session.ended_at),
+                (SessionStatus::Archived, Some(5)),
+                "{id}"
+            );
+        }
+        assert!(["hub", "lead", "worker"]
+            .iter()
+            .all(|id| !state.has_process(id)));
     }
 
-    /// Deleting an archived console session takes the archived sessions bound to it and no others;
-    /// one bound session on its own leaves the console session; a console session that is not
-    /// archived is refused and takes nothing with it.
+    /// Deleting an archived console session takes the archived sessions bound to it, at both
+    /// levels, and no others; an archived lead session takes its own archived sessions and leaves
+    /// its console session; one bound session on its own leaves the console session; a console
+    /// session that is not archived is refused and takes nothing with it.
     #[tokio::test]
     async fn deleting_an_archived_console_session_deletes_its_archived_bound_sessions() {
         use SessionStatus::{Archived, Idle, Interrupted};
@@ -3612,13 +3815,16 @@ mod tests {
         for session in [
             console_session("hub", Archived),
             bound_session("a", Archived, "hub"),
-            bound_session("b", Archived, "hub"),
+            lead_session("b", Archived, "hub"),
+            bound_session("of-b", Archived, "b"),
             bound_session("still-here", Interrupted, "hub"),
             console_session("other-hub", Archived),
             bound_session("c", Archived, "other-hub"),
             project_session("unbound", Agent::Claude, Archived),
             console_session("live-hub", Idle),
             bound_session("d", Archived, "live-hub"),
+            lead_session("lead", Archived, "live-hub"),
+            bound_session("of-lead", Archived, "lead"),
         ] {
             state.store.insert_session(&session).unwrap();
         }
@@ -3626,7 +3832,23 @@ mod tests {
         delete_session(&state, "hub").unwrap();
         assert_eq!(
             session_ids(&state),
-            ["c", "d", "live-hub", "other-hub", "still-here", "unbound"]
+            [
+                "c",
+                "d",
+                "lead",
+                "live-hub",
+                "of-lead",
+                "other-hub",
+                "still-here",
+                "unbound"
+            ]
+        );
+
+        delete_session(&state, "lead").unwrap();
+        assert_eq!(
+            session_ids(&state),
+            ["c", "d", "live-hub", "other-hub", "still-here", "unbound"],
+            "the lead session takes its own and leaves its console session"
         );
 
         delete_session(&state, "c").unwrap();
@@ -3645,9 +3867,10 @@ mod tests {
     }
 
     /// Deleting every archived console session of a console takes their archived bound sessions
-    /// too; deleting a project's archived sessions takes the bound ones among them and leaves the
-    /// console sessions; deleting a console session's archive takes its archived bound sessions
-    /// and nothing else, and a project together with a console session is refused.
+    /// too, at both levels; deleting a project's archived sessions takes the bound ones among them
+    /// and leaves the console sessions; deleting a console session's archive takes its archived
+    /// bound sessions, a lead session's own included, and nothing else, and a project together
+    /// with a console session is refused.
     #[tokio::test]
     async fn deleting_archived_sessions_in_bulk_follows_the_binding_for_console_sessions_only() {
         use SessionStatus::Archived;
@@ -3656,6 +3879,8 @@ mod tests {
             for session in [
                 console_session("hub", Archived),
                 bound_session("a", Archived, "hub"),
+                lead_session("lead", Archived, "hub"),
+                bound_session("of-lead", Archived, "lead"),
                 project_session("unbound", Agent::Claude, Archived),
             ] {
                 state.store.insert_session(&session).unwrap();
@@ -3688,6 +3913,173 @@ mod tests {
             assert_eq!(code_of(&refused), code);
         }
         assert_eq!(session_ids(&state), ["hub", "unbound"]);
+    }
+
+    /// Binding an unbound project session to a running console session of its console makes it a
+    /// lead session and leaves the sessions bound to it bound to it. Each refusal names its reason
+    /// and changes nothing: a session already bound, a console session, an owner that is not a
+    /// console session, one of another console, and one that is not running.
+    #[tokio::test]
+    async fn binding_makes_a_lead_session_that_keeps_its_own_sessions() {
+        use SessionStatus::{Idle, Interrupted};
+        let (state, dir) = switch_fixture("bind");
+        state
+            .store
+            .insert_console(&Console {
+                id: "console-2".to_string(),
+                ..console(Agent::Claude, &dir.join("no-such-workdir-2"))
+            })
+            .unwrap();
+        for session in [
+            console_session("hub", Idle),
+            console_session("sleeping-hub", Interrupted),
+            Session {
+                console_id: "console-2".to_string(),
+                ..console_session("foreign-hub", Idle)
+            },
+            project_session("starter", Agent::Claude, Idle),
+            project_session("other-starter", Agent::Claude, Idle),
+            bound_session("mine", Idle, "starter"),
+            bound_session("bound", Idle, "hub"),
+        ] {
+            state.store.insert_session(&session).unwrap();
+        }
+        let hub = idle_stand_in("hub");
+        let foreign_hub = idle_stand_in("foreign-hub");
+        state.register_live(hub.clone());
+        state.register_live(foreign_hub.clone());
+
+        for (session, owner, reason) in [
+            ("bound", "hub", "already bound"),
+            ("hub", "hub", "console session cannot be bound"),
+            (
+                "starter",
+                "other-starter",
+                "only be bound to a console session",
+            ),
+            ("starter", "foreign-hub", "another console"),
+            ("starter", "sleeping-hub", "not running"),
+        ] {
+            let err = bind_to_console_session(&state, session, owner).expect_err(reason);
+            assert!(err.to_string().contains(reason), "{session} {owner}: {err}");
+        }
+        let starter = state.store.get_session("starter").unwrap().unwrap();
+        assert_eq!((starter.bound_to, starter.lead), (None, false));
+
+        let lead = bind_to_console_session(&state, "starter", "hub").unwrap();
+        assert_eq!((lead.bound_to.as_deref(), lead.lead), (Some("hub"), true));
+        let stored = state.store.get_session("starter").unwrap().unwrap();
+        assert_eq!(
+            (stored.bound_to.as_deref(), stored.lead),
+            (Some("hub"), true)
+        );
+        let mine = state.store.get_session("mine").unwrap().unwrap();
+        assert_eq!(mine.bound_to.as_deref(), Some("starter"));
+        let again = bind_to_console_session(&state, "starter", "hub").expect_err("bound once");
+        assert!(again.to_string().contains("already bound"), "{again}");
+    }
+
+    /// Every launch of a session — opening, resuming, reopening, a switch of its account — tells it
+    /// who it reports to through `owner_of`, and a lead session is told nobody: it gets an unbound
+    /// project session's role description and tools, as at its first launch, while a session
+    /// bound to it is told the lead session owns it.
+    #[test]
+    fn a_lead_session_launches_as_an_unbound_project_session() {
+        let (state, _dir) = switch_fixture("lead-launch");
+        let lead = lead_session("lead", SessionStatus::Interrupted, "hub");
+        let of_lead = bound_session("of-lead", SessionStatus::Interrupted, "lead");
+        for session in [
+            console_session("hub", SessionStatus::Idle),
+            lead.clone(),
+            of_lead.clone(),
+        ] {
+            state.store.insert_session(&session).unwrap();
+        }
+
+        assert_eq!(owner_of(&state, &lead).unwrap(), None);
+        assert_eq!(
+            owner_of(&state, &of_lead).unwrap(),
+            Some(mcp::Owner::Project {
+                session_id: "lead".to_string()
+            })
+        );
+    }
+
+    /// Archiving a console session reaches through its lead session to the lead session's own
+    /// sessions: refused, naming it, while one of those has a process although the lead session
+    /// itself has none, and otherwise archiving both levels.
+    #[tokio::test]
+    async fn archiving_a_console_session_covers_its_lead_sessions_own_sessions() {
+        use SessionStatus::{Archived, Idle, Interrupted, Working};
+        let (state, _dir) = switch_fixture("archive-two-levels");
+        for session in [
+            console_session("hub", Idle),
+            lead_session("lead", Interrupted, "hub"),
+            bound_session("running", Working, "lead"),
+            bound_session("dormant", Interrupted, "lead"),
+        ] {
+            state.store.insert_session(&session).unwrap();
+        }
+        let running = idle_stand_in("running");
+        state.register_live(running.clone());
+
+        let err = archive_session(&state, "hub").expect_err("a session two levels down runs");
+        assert_eq!(code_of(&err), error_code::SESSION_HAS_RUNNING_SESSIONS);
+        let coded = err.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(coded.params["count"], "1");
+        assert!(coded.params["sessions"].contains("running"));
+        for (id, status) in [
+            ("hub", Idle),
+            ("lead", Interrupted),
+            ("dormant", Interrupted),
+        ] {
+            assert_eq!(status_of(&state, id), Some(status), "{id}");
+        }
+
+        drop(running);
+        state.store.delete_session("running").unwrap();
+        archive_session(&state, "hub").unwrap();
+        for id in ["hub", "lead", "dormant"] {
+            assert_eq!(status_of(&state, id), Some(Archived), "{id}");
+        }
+    }
+
+    /// Removing a project that holds a running lead session and its running sessions stops them
+    /// all, the lead session's own first, and leaves the console session it is bound to running.
+    #[tokio::test]
+    async fn removing_a_project_with_a_lead_session_leaves_its_console_session_alone() {
+        use SessionStatus::{Idle, Working};
+        let (state, _dir) = switch_fixture("delete-project-lead");
+        for session in [
+            console_session("hub", Idle),
+            lead_session("lead", Idle, "hub"),
+            bound_session("worker", Working, "lead"),
+        ] {
+            state.store.insert_session(&session).unwrap();
+        }
+        let live: Vec<_> = ["hub", "lead", "worker"]
+            .into_iter()
+            .map(|id| {
+                let stand_in = idle_stand_in(id);
+                state.register_live(stand_in.clone());
+                stand_in
+            })
+            .collect();
+
+        handle(
+            &state,
+            None,
+            RequestBody::DeleteProject {
+                project: "project-1".to_string(),
+                stop_sessions: true,
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(session_ids(&state), ["hub"]);
+        assert_eq!(status_of(&state, "hub"), Some(Idle));
+        assert!(!live[0].poll_exit(), "the console session keeps running");
     }
 
     fn page_of(id: &str, console_session_id: &str, created_at: i64) -> crate::protocol::Page {

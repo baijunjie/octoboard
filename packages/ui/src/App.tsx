@@ -15,8 +15,8 @@ import { Toasts } from "./components/Toasts";
 import { DaemonRequestError } from "./daemon-client";
 import { ConfirmDialog } from "./dialogs/ConfirmDialog";
 import type { DialogRequest } from "./dialogs/dialogRequest";
+import { PendingQuestionDialog, usePendingQuestion } from "./dialogs/PendingQuestionDialog";
 import { RequestedDialog } from "./dialogs/RequestedDialog";
-import { TrustPromptDialog } from "./dialogs/TrustPromptDialog";
 import { useT } from "./i18n/react";
 import type { AsideLayout } from "./layout/AsidePane";
 import { ASIDE_LABELS, liveOwner, ownerAfterMove, ownerForSession, ownerKey, sameOwner, type AsideOwner } from "./layout/asideOwner";
@@ -35,7 +35,7 @@ import { ALREADY_RUNNING_CODES, type Console, type Project, type Session } from 
 import { ReportPanel } from "./report/ReportPanel";
 import { SettingsDialog } from "./settings/SettingsDialog";
 import { useSettingsDialog } from "./settings/useSettingsDialog";
-import { belongsToFocus, focusAfterSelect, focusFor, focusKey, KEY_SWITCH_SELECTION, resolveFocus, shortcutOutcome } from "./sidebar/focus";
+import { belongsToFocus, focusAfterSelect, focusFor, focusKey, followsStartedConsoleSession, KEY_SWITCH_SELECTION, resolveFocus, shortcutOutcome } from "./sidebar/focus";
 import { useFocusShortcut } from "./sidebar/focusShortcut";
 import { switchStrip } from "./sidebar/order";
 import { Sidebar } from "./sidebar/Sidebar";
@@ -55,8 +55,8 @@ export function App(): React.ReactElement {
   const projects = useDaemonStore((s) => s.projects);
   const sessions = useDaemonStore((s) => s.sessions);
   const accounts = useDaemonStore((s) => s.settings.accounts);
-  // One dialog at a time, oldest prompt first; answering or declining it brings up the next.
-  const trustPrompt = useDaemonStore((s) => s.trustPrompts[0]);
+  // Keeps Settings out of the way of the question's dialog.
+  const questionPending = usePendingQuestion();
   const [selectedSessionId, setSelectedSessionId] = useState<string>();
   const [dialogRequest, setDialogRequest] = useState<DialogRequest>();
   const dialogRequestRef = useRef(dialogRequest);
@@ -192,7 +192,7 @@ export function App(): React.ReactElement {
 
   const { settingsOpen, settingsSection, openSettings, openSettingsAt, closeSettings } = useSettingsDialog({
     ready: hosts !== undefined,
-    otherModalOpen: dialogRequest !== undefined || trustPrompt !== undefined || exitConfirmOpen,
+    otherModalOpen: dialogRequest !== undefined || questionPending || exitConfirmOpen,
     focusTerminal,
   });
 
@@ -320,6 +320,14 @@ export function App(): React.ReactElement {
     // shows, and is reopened by typing to it (`TerminalPane`) or an explicit Reopen (`reopenSession`).
     if (resume && session.status === "interrupted") void resumeSession(session.id);
   };
+
+  // What approving a request for a console session does in this window, called once the daemon has
+  // started it, which can be after the user has moved on, so through a ref to the latest render.
+  const consoleSessionStarted = (session: Session, requestingProject: string | null) => {
+    if (followsStartedConsoleSession(sidebarView.focus, requestingProject)) selectSession(session, { enterFocus: true });
+  };
+  const consoleSessionStartedRef = useRef(consoleSessionStarted);
+  consoleSessionStartedRef.current = consoleSessionStarted;
 
   const reopenSession = (session: Session) => {
     selectSession(session);
@@ -618,9 +626,7 @@ export function App(): React.ReactElement {
           onSwitchAccount={switchAccount}
         />
       )}
-      {trustPrompt && (
-        <TrustPromptDialog prompt={trustPrompt} sessionTitle={sessions.get(trustPrompt.session)?.title} />
-      )}
+      <PendingQuestionDialog onConsoleSessionStarted={(session, project) => consoleSessionStartedRef.current(session, project)} />
       {exitConfirmOpen && (
         <ConfirmDialog
           title={t("app.quit.title")}

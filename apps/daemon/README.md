@@ -42,13 +42,14 @@ the repository root and cover both crates; `-p octoboardd` narrows either to thi
 | `src/access.rs` | The middleware every route sits behind: turns away, with `403`, a request whose `Host` or `Origin` is not one a local client or the application's own UI would send; the rule is in `PROTOCOL.md` |
 | `src/server.rs` | The HTTP/WebSocket router described in `PROTOCOL.md`, including `POST /mcp/:token` |
 | `src/protocol.rs` | Rust types for the wire protocol; kept in sync with `PROTOCOL.md` and with `packages/ui/src/protocol.ts` by hand |
-| `src/coordinator.rs` | Coordinator role: what each control-socket request does to the stored consoles/projects/sessions/pages/accounts, and which host-role work it triggers, including the launch flow a resume and a switch of a session's account share; projects are stored with absolute, lexically normalised paths |
-| `src/reporting.rs` | The channel between an owner (a console session, or an unbound project session that started sessions) and the project sessions bound to it: the brief a task is handed over as, writing a message into a running session, a report reaching its owner, the report synthesised when a session stops without sending one, automatic archiving, and rendering a report panel form submission into the console session's message |
+| `src/coordinator.rs` | Coordinator role: what each control-socket request does to the stored consoles/projects/sessions/pages/accounts, and which host-role work it triggers, including the launch flow a resume and a switch of a session's account share, the binding of an unbound project session to a console session as a lead session (`bind_to_console_session`), and the archive, reopen and delete cascades over the sessions bound under a session, down to a lead session's own; projects are stored with absolute, lexically normalised paths |
+| `src/console_request.rs` | A project session's request for a console session (`request_console_session`): the requests waiting for the user's answer, held in memory and put to every client again after a snapshot, the call that waits for the answer up to a time limit of Octoboard's own, its withdrawal when the caller's process ends, the call's connection is dropped or the caller asks again, and carrying out an approval — a console session started as one opened by hand, the caller bound to it as a lead session through `coordinator::bind_to_console_session`, its request delivered as its first report and the outcome also written into the caller's session, with the turns that outcome and a backgrounded call's result start spared a synthesised report |
+| `src/reporting.rs` | The channel between an owner (a console session, or an unbound or lead project session that started sessions) and the project sessions bound to it: the brief a task is handed over as, writing a message into a running session, a report reaching its owner (a lead session's final report is held back until its sessions are archived), the report synthesised when a session stops without sending one (withheld for a lead session while its sessions have a process), automatic archiving, and rendering a report panel form submission into the console session's message |
 | `src/sharing.rs` | Information one project session shares with another: the quoted, framed message the receiver reads, and the copy sent to the receiver's owner, delivered through `reporting.rs`'s message writing |
 | `src/relocate.rs` | Copying one session's conversation record from one account's config directory into another's, for a switch of the session's account: finding the record by name under the agent's root, and copying it to the same path relative to the directory, staged and checked before it replaces anything |
 | `src/outbox.rs` | The per-session queue every message Octoboard writes into an agent passes through: order-preserving, one drainer per session, and what happens to a message the session only partly accepted |
 | `src/store.rs` | Coordinator's SQLite storage for consoles, projects, sessions, pages, agent accounts, the trusted folders, the user settings and the host table |
-| `src/state.rs` | Shared daemon state: the session status transitions, each project's live git status and check claim, and every agent's current availability and resolved default account |
+| `src/state.rs` | Shared daemon state: the session status transitions, the turn bookkeeping a synthesised report rests on (including the credits that make a turn started by Octoboard's own message, or by the result of a call the agent moved to the background, count as reported, each told apart by the prompt it opens with where the agent's prompt is read), each project's live git status and check claim, the requests for a console session waiting for an answer, and every agent's current availability and resolved default account |
 | `src/availability.rs` | Working out, once per daemon start, which agents are available and what each one's default account resolves to |
 | `src/git_env.rs` | The base every `git` the daemon runs in a user's repository or against a user's remote is built from: `non_interactive`, a command that cannot prompt, and `read_only`, which keeps a read from rewriting the repository's index; the git command builders of `hostfs.rs`, `git_status.rs` and `browse/git.rs` start from it |
 | `src/git_status.rs` | Checks one project's git status against its remote and fast-forwards it: automatically when auto-sync is on, and for one project right now on the manual `sync_project_git` request (`sync_project_now`, which ignores the check floor and the setting; a request that finds a check in flight is owed one forced rerun, recorded in the claim map in `state.rs`) — see `PROTOCOL.md`'s "Daemon behaviour, per project" |
@@ -62,7 +63,7 @@ the repository root and cover both crates; `-p octoboardd` narrows either to thi
 | `src/hostfs.rs` | Host role's filesystem work: browsing directories, finding git repositories under a parent directory, cloning one, probing a remote, detecting which agent a directory or remote is set up for, lexical path normalisation |
 | `src/env_shell.rs` | Captures the user's real shell environment (`$SHELL -l -i -c 'env -0 && printf <marker>'`) that every agent is launched with; also a cached variant for a caller on its own repeating schedule (`cached_snapshot`, used by `git_status.rs`) and resolving a binary on that environment's `PATH` |
 | `src/subprocess.rs` | Running one subprocess the daemon spawned directly to completion within bounds — a deadline, a ceiling on its output, a cancel, the whole process group killed on any stop: `run_bounded` (output bounded while it is read) and `run_with_timeout` (a thin wrapper over it); used by `hostfs.rs`, `git_status.rs` and `browse/` |
-| `src/hooks.rs` | Turns one agent's hook event payload into a session status; each agent's events and payload shape differ |
+| `src/hooks.rs` | Reads what one agent's hook event payload says — the session's status, its turn boundaries, the prompt a turn was started with, and the tool calls it moved to the background; each agent's events and payload shape differ |
 | `src/transcript.rs` | Watches a Claude Code session's own transcript JSONL for the one status change its hooks never report — a declined permission prompt or `AskUserQuestion` — and lowers the raised hand when found; the only place a session's status comes from something other than a hook event |
 | `src/hook_mode.rs` | The `octoboardd hook` CLI mode itself |
 | `src/loopback.rs` | A minimal HTTP client for the daemon's own loopback address, shared by `hook_mode.rs` and `mcp/stdio.rs` — the two CLI modes that call the running daemon from a separate process |
@@ -76,9 +77,10 @@ the repository root and cover both crates; `-p octoboardd` narrows either to thi
 ### `src/mcp/`
 
 The Octoboard MCP server: the orchestration tools the console session drives Octoboard with, the narrower set an
-unbound project session drives its own project with, the reporting tool a bound project session answers through, and
-the two tools every project session shares information with its project's other sessions through.
-Which set a session sees follows from its role and from whether it is bound (`--bound`), both fixed for its lifetime.
+unbound project session, or a lead session, drives its own project with and asks for a console session through
+(`request_console_session`, carried out by `src/console_request.rs`), the reporting tool a bound project session answers
+through, and the two tools every project session shares information with its project's other sessions through.
+Which set a session sees follows from its role and from whether it has the role of a bound session (`--bound`: bound to an owner and not a lead session), both fixed for its lifetime; a lead session, bound only after it was launched unbound, keeps the unbound set.
 The tool catalogue is shared by both sides of the stdio bridge, so the child process, the daemon, and the role
 descriptions cannot drift apart. The wire-level `POST /mcp/:token` contract is in `PROTOCOL.md`; "The console
 session's tools", "The unbound project session's tools", "Information between sessions of a project" and "Reporting"
@@ -86,10 +88,10 @@ in `docs/product/hub-orchestration.md` list the tools and what each one does.
 
 | File | Role |
 |---|---|
-| `mod.rs` | The tool catalogue, and which tools a session may see, by its role (`console` / `project`) and whether it is bound |
+| `mod.rs` | The tool catalogue, and which tools a session may see, by its role (`console` / `project`) and whether it has the bound role |
 | `role.rs` | The role description injected at launch, and the console session instruction file written into a console's working directory |
 | `exec.rs` | Runs one tool call against the real consoles, projects and sessions, through the same coordinator/reporting functions the control socket uses; the project-scoped reads and `share_info` resolve their targets within the caller's own project |
-| `stdio.rs` | `octoboardd mcp` itself: the stdio child process each adapter registers, forwarding every call to the daemon over loopback |
+| `stdio.rs` | `octoboardd mcp` itself: the stdio child process each adapter registers, forwarding every call to the daemon over loopback, and closing the connection of a `request_console_session` call the agent cancels |
 
 ### `src/browse/`
 

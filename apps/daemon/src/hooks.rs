@@ -1,4 +1,5 @@
-//! Turning one agent's hook event into a session status.
+//! Reading what one agent's hook event says: the session's status, where its turns begin and end,
+//! the prompt a turn was started with, and the tool calls it moved to the background.
 //!
 //! Each agent names its events and shapes its payloads differently, and each has traps that make a
 //! naive mapping wrong in a way nothing reports. What is handled here:
@@ -173,6 +174,62 @@ pub fn starts_conversation(event: &str) -> bool {
     event == "UserPromptSubmit"
 }
 
+/// The text a `UserPromptSubmit` submitted, with the wrapper Claude Code puts around a paste taken
+/// off: Octoboard writes every message as a paste, and Claude Code (2.1.295) hands a long one over
+/// as `<pasted_content id="…">` and the text on the lines after it.
+///
+/// Claude Code's alone. Codex's schema has a `prompt` and Grok's documentation names none, but how
+/// either hands over a pasted message is unmeasured, and a prompt read wrongly would make a turn
+/// unrecognisable rather than unread — so for them, as for a payload without one, this is `None`.
+pub fn submitted_prompt(agent: Agent, payload: &Value) -> Option<&str> {
+    if agent != Agent::Claude {
+        return None;
+    }
+    let prompt = payload.get("prompt")?.as_str()?.trim_start();
+    Some(match prompt.strip_prefix("<pasted_content") {
+        Some(tag) => tag
+            .split_once('>')
+            .map_or(tag, |(_, text)| text)
+            .trim_start(),
+        None => prompt,
+    })
+}
+
+/// The id the agent gave a running call of `server`'s `tool` that it moved to the background, if
+/// this event is a paused `Stop` listing one. Only Claude Code is known to do this: (2.1.295) it
+/// moves an MCP call still running after 120 s to the background, lists it in `background_tasks`
+/// as `{"id", "type": "MCP task", "status": "running", "server", "tool", …}`, and later delivers
+/// its result as a turn of its own, opened by [`task_notification_opening`].
+pub fn backgrounded_mcp_call<'a>(
+    agent: Agent,
+    event: &str,
+    payload: &'a Value,
+    server: &str,
+    tool: &str,
+) -> Option<&'a str> {
+    if agent != Agent::Claude || event != "Stop" {
+        return None;
+    }
+    let field = |task: &'a Value, key: &str| task.get(key).and_then(Value::as_str);
+    payload
+        .get("background_tasks")?
+        .as_array()?
+        .iter()
+        .find(|task| {
+            field(task, "status") == Some("running")
+                && field(task, "server") == Some(server)
+                && field(task, "tool") == Some(tool)
+        })?
+        .get("id")?
+        .as_str()
+}
+
+/// How the prompt of the turn in which Claude Code (2.1.295) delivers a background task's result
+/// opens: `<task-notification>`, then the task's id on the next line.
+pub fn task_notification_opening(task_id: &str) -> String {
+    format!("<task-notification>\n<task-id>{task_id}</task-id>")
+}
+
 /// The event name as the payload itself reports it. This is the only source: the hook script is
 /// argument-free and the callback URL carries the session, not the event.
 pub fn event_name(payload: &Value) -> Option<String> {
@@ -312,6 +369,17 @@ fn text_field(payload: &Value, key: &str) -> Option<String> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// Octoboard's messages reach Claude Code as pastes, and a long paste is handed to the hook
+    /// wrapped (Claude Code 2.1.295); a turn they start is only recognisable with the wrapper off.
+    #[test]
+    fn a_pasted_prompt_comes_through_without_its_wrapper() {
+        let pasted = json!({
+            "prompt": "\n\n<pasted_content id=\"7fb6\">\nMessage from Octoboard\n</pasted_content id=\"7fb6\">\n",
+        });
+        let prompt = submitted_prompt(Agent::Claude, &pasted).unwrap();
+        assert!(prompt.starts_with("Message from Octoboard"), "{prompt}");
+    }
 
     /// Grok fires `Stop` twice per session and `idle_prompt` after every turn, so the events that
     /// are *not* a reportable turn end are the ones worth pinning.

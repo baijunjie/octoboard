@@ -10,7 +10,9 @@
 //!   prompt on the conversation's first request and replays it verbatim on every resume, so text
 //!   changed later is silently ignored. Nothing here may therefore depend on anything that can
 //!   change after the session starts. Whether a project session is bound, and to whom, may,
-//!   because a binding is fixed for the session's lifetime once it is set.
+//!   because what a session is told of its binding is fixed for its lifetime: a binding is never
+//!   changed once set, and a lead session, bound only after it was launched unbound, is told on
+//!   every launch what it was told at its first.
 //! - **A Grok console session gets no instruction file.** Grok locates a project by walking up for
 //!   a `.git` directory and reads no instructions without one, and a console's working directory is
 //!   not a repository. Its guidance travels in `--rules` instead, which is why

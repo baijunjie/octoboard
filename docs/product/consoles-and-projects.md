@@ -313,7 +313,9 @@ Removing a project asks for confirmation. **Sessions of the project that are sti
   sessions starting or stopping while the confirmation is open. Confirming ends each running session's process the way
   archiving does (see "Archiving, interruption and resuming" in `docs/product/sessions.md`), then removes the project
   with all its sessions and the last output Octoboard kept for each. Sessions bound to another session of the project
-  are ended before the session they are bound to, so ending that one is never refused over them.
+  are ended before the session they are bound to, the deepest level first, so ending that one is never refused over
+  them. A lead session's console session belongs to no project and is left as it is; the lead session's binding to it
+  goes with the lead session's record (see "Lead sessions" in `docs/product/hub-orchestration.md`).
 
 Removal is refused only while a session of the project is being launched or resumed at that moment, since that
 session has no process yet that could be ended; the error names the reason, and nothing is ended or removed.

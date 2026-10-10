@@ -14,16 +14,31 @@ use std::time::Duration;
 /// because both callers sit on a path where a wedged daemon would otherwise be charged to the
 /// agent's turn.
 pub fn post(port: u16, path: &str, body: &[u8], timeout: Duration) -> std::io::Result<Vec<u8>> {
-    let authority = format!("127.0.0.1:{port}");
-    let address = authority.parse().map_err(|_| {
+    exchange(connect(port, timeout)?, port, path, body)
+}
+
+/// Opens the connection an [`exchange`] goes over, with every read and write on it bounded by
+/// `timeout`. Kept apart from the exchange so a caller can keep a clone of the stream and shut it
+/// down from elsewhere, which ends a blocked exchange and tells the daemon the call is gone.
+pub fn connect(port: u16, timeout: Duration) -> std::io::Result<TcpStream> {
+    let address = format!("127.0.0.1:{port}").parse().map_err(|_| {
         std::io::Error::new(std::io::ErrorKind::InvalidInput, "unusable daemon address")
     })?;
-    let mut stream = TcpStream::connect_timeout(&address, timeout)?;
+    let stream = TcpStream::connect_timeout(&address, timeout)?;
     stream.set_write_timeout(Some(timeout))?;
     stream.set_read_timeout(Some(timeout))?;
+    Ok(stream)
+}
 
+/// Posts a body over a stream from [`connect`] and returns the response body.
+pub fn exchange(
+    mut stream: TcpStream,
+    port: u16,
+    path: &str,
+    body: &[u8],
+) -> std::io::Result<Vec<u8>> {
     let request = format!(
-        "POST {path} HTTP/1.1\r\nHost: {authority}\r\nContent-Type: application/json\r\n\
+        "POST {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\n\
          Content-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     );

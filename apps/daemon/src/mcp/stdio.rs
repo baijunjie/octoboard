@@ -65,8 +65,8 @@ struct OctoboardMcp {
     /// on a session other than its own.
     session: Arc<String>,
     role: Role,
-    /// Whether the session reports to another one, which decides the catalogue along with the
-    /// role. Fixed for the session's lifetime, so a launch argument can carry it.
+    /// Whether the session has the role of one bound to an owner, which decides the catalogue
+    /// along with the role. Fixed for the session's lifetime, so a launch argument can carry it.
     bound: bool,
     port: u16,
     token: Arc<String>,
@@ -120,7 +120,7 @@ impl ServerHandler for OctoboardMcp {
     async fn call_tool(
         &self,
         request: CallToolRequestParam,
-        _context: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         // A name outside this role's catalogue is a protocol-level mistake rather than a tool
         // that failed, so it does not come back as a tool result the model is invited to retry.
@@ -137,14 +137,25 @@ impl ServerHandler for OctoboardMcp {
         }))
         .map_err(|err| ErrorData::internal_error(err.to_string(), None))?;
         let path = format!("/mcp/{}", self.token);
-        let port = self.port;
-
-        // The loopback client is blocking, and a tool call can take minutes.
-        let response = tokio::task::spawn_blocking(move || {
-            crate::loopback::post(port, &path, &body, CALL_TIMEOUT)
-        })
-        .await
-        .map_err(|err| ErrorData::internal_error(err.to_string(), None))?;
+        // Only a request for a console session is withdrawn when its call is cancelled. Any other
+        // call is left to finish in the daemon, as before: the daemon stops serving a call whose
+        // connection goes, and a `start_session` or a `report` cut off part-way would leave its
+        // work half done.
+        let cancelled = async {
+            if request.name == WITHDRAWN_ON_CANCEL {
+                context.ct.cancelled().await;
+            } else {
+                std::future::pending::<()>().await;
+            }
+        };
+        let response = match forward_until(self.port, path, body, cancelled).await {
+            Forwarded::Answered(response) => response,
+            Forwarded::Cancelled => {
+                return Ok(CallToolResult::error(vec![Content::text(
+                    "The call was cancelled.",
+                )]))
+            }
+        };
 
         Ok(match response {
             Ok(body) => read_outcome(&body),
@@ -156,6 +167,56 @@ impl ServerHandler for OctoboardMcp {
                 self.session
             ))]),
         })
+    }
+}
+
+/// What became of a call forwarded to the daemon.
+enum Forwarded {
+    Answered(std::io::Result<Vec<u8>>),
+    /// The agent cancelled the call, and the connection carrying it was closed.
+    Cancelled,
+}
+
+/// The tool whose call the daemon has to learn the agent cancelled: a request for a console session
+/// waits in front of the user, and is withdrawn when its call's connection to the daemon goes.
+const WITHDRAWN_ON_CANCEL: &str = "request_console_session";
+
+/// Forwards one call to the daemon and waits for its answer, unless `cancelled` completes first —
+/// for a call the agent cancels (`notifications/cancelled`, which cancels the call's context). A
+/// cancelled call's connection is shut down rather than left to finish: that is how the daemon
+/// learns the call is gone.
+async fn forward_until(
+    port: u16,
+    path: String,
+    body: Vec<u8>,
+    cancelled: impl std::future::Future<Output = ()>,
+) -> Forwarded {
+    tokio::pin!(cancelled);
+    // The loopback client is blocking: the connect as well as the exchange, which can take minutes.
+    let connecting = tokio::task::spawn_blocking(move || {
+        let stream = crate::loopback::connect(port, CALL_TIMEOUT)?;
+        let closer = stream.try_clone()?;
+        Ok::<_, std::io::Error>((stream, closer))
+    });
+    let (stream, closer) = tokio::select! {
+        connected = connecting => match connected {
+            Ok(Ok(connected)) => connected,
+            Ok(Err(err)) => return Forwarded::Answered(Err(err)),
+            Err(err) => return Forwarded::Answered(Err(std::io::Error::other(err.to_string()))),
+        },
+        // Nothing has reached the daemon yet; a connection made after this is dropped unused.
+        () = &mut cancelled => return Forwarded::Cancelled,
+    };
+    let exchange =
+        tokio::task::spawn_blocking(move || crate::loopback::exchange(stream, port, &path, &body));
+    tokio::select! {
+        answered = exchange => Forwarded::Answered(answered.unwrap_or_else(|err| {
+            Err(std::io::Error::other(err.to_string()))
+        })),
+        () = &mut cancelled => {
+            let _ = closer.shutdown(std::net::Shutdown::Both);
+            Forwarded::Cancelled
+        }
     }
 }
 
@@ -205,6 +266,40 @@ mod tests {
         let result = read_outcome(br#"{"ok":false,"error":"this session is waiting for you"}"#);
         assert_eq!(result.is_error, Some(true));
         assert!(format!("{:?}", result.content).contains("waiting for you"));
+    }
+
+    /// A call the agent cancels has its connection closed at once, which is the only way the
+    /// daemon learns of the cancellation; the daemon's side here never answers.
+    #[tokio::test]
+    async fn a_cancelled_call_closes_its_connection_to_the_daemon() {
+        use tokio::io::AsyncReadExt;
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (cancel, cancelled) = tokio::sync::oneshot::channel::<()>();
+        let call = tokio::spawn(forward_until(
+            port,
+            "/mcp/token".to_string(),
+            b"{}".to_vec(),
+            async {
+                let _ = cancelled.await;
+            },
+        ));
+        let (mut daemon_side, _) = listener.accept().await.unwrap();
+        let mut request = vec![0u8; 1024];
+        let read = daemon_side.read(&mut request).await.unwrap();
+        assert!(read > 0, "the call was sent");
+
+        cancel.send(()).unwrap();
+        assert!(matches!(call.await.unwrap(), Forwarded::Cancelled));
+        let mut rest = Vec::new();
+        tokio::time::timeout(
+            crate::test_support::PATIENCE,
+            daemon_side.read_to_end(&mut rest),
+        )
+        .await
+        .expect("the connection is closed rather than left open")
+        .unwrap();
     }
 
     #[test]

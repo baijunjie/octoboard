@@ -33,9 +33,14 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   repositories switch — what it fast-forwards, what it never does, where it is kept, and the immediate
   fast-forward pass turning it on runs.
 - [Orchestration](product/hub-orchestration.md) — how an owner (a console session, or an unbound project session in
-  its own project) starts and drives sessions: each one's tools and a bound session's `report`, the brief a task is
+  its own project) starts and drives sessions: each one's tools and a bound session's `report`, lead sessions (a
+  project session bound to a console session that keeps its own sessions, two levels deep), the brief a task is
   handed over as, the reporting loop and what happens when a session stops without reporting, automatic archiving,
   which sessions an owner drives, and the information sessions of one project share with each other.
+- [Requesting a console session](product/requesting-a-console-session.md) — how an unbound project session asks for a
+  console session with `request_console_session` and becomes a lead session: who is offered the tool, the call and its
+  8-minute wait, how a request ends (approval, refusal, time limit, withdrawal), what approval does, and the
+  confirmation dialog.
 - [Report panel](product/report-panel.md) — what a console session shows in the right pane: pushing a page with
   `show_page` and what the page id is for, paging back through the kept history, why a history page is read-only and
   where that is enforced, why a page is a static document whose scripts never run and what is stripped from it, why it

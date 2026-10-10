@@ -48,6 +48,17 @@ export interface TrustPrompt {
   trustDir: string | null;
 }
 
+/** An unbound project session's request for a console session, waiting for the user's answer. */
+export interface ConsoleRequest {
+  requestId: string;
+  /** The requesting session. */
+  session: string;
+  /** The console the console session would be started in: the requesting session's. */
+  console: string;
+  project: string | null;
+  requestedAt: number;
+}
+
 /** The components of an absolute path with `.` dropped and each `..` folded into the one before it,
  * or undefined for a path that is not absolute. */
 function pathParts(path: string): string[] | undefined {
@@ -98,6 +109,10 @@ export interface State {
   /** The directories whose projects Octoboard presses every agent's trust confirmation for, as the
    * last `snapshot` or `trusted_directories_updated` said. */
   trustedDirectories: string[];
+  /** Oldest first; the first is the one the dialog shows. Held by the daemon, not here: a request
+   * leaves only when the daemon says it stopped waiting (answered from any client, timed out or
+   * withdrawn), and on a `snapshot`, after which the daemon sends the ones still waiting again. */
+  consoleRequests: ConsoleRequest[];
   /** Keyed by project id. Absent for a project the daemon has not reported on yet, or that is not
    * a git repository at all. Dropped when its project is deleted — the daemon sends no deletion
    * event for a `GitStatus` (see `protocol.ts`), so the client has to drop it itself. */
@@ -134,6 +149,7 @@ const initialState: State = {
   snapshotEpoch: 0,
   trustPrompts: [],
   trustedDirectories: [],
+  consoleRequests: [],
   gitStatuses: new Map(),
   settings: { auto_sync_repositories: false, default_clone_dir: "", accounts: [] },
   agentAvailability: new Map(INITIAL_AGENT_AVAILABILITY.map((a) => [a.agent, a])),
@@ -170,6 +186,7 @@ function reducer(state: State, action: Action): State {
             snapshotEpoch: state.snapshotEpoch + 1,
             trustPrompts: [],
             trustedDirectories: event.trusted_directories,
+            consoleRequests: [],
             gitStatuses: new Map(event.git_statuses.map((s) => [s.project, s])),
             settings: event.settings,
             agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])),
@@ -272,6 +289,25 @@ function reducer(state: State, action: Action): State {
           };
           return { ...state, trustPrompts: [...state.trustPrompts, prompt] };
         }
+        case "console_session_request": {
+          if (state.consoleRequests.some((r) => r.requestId === event.request_id)) return state;
+          const request: ConsoleRequest = {
+            requestId: event.request_id,
+            session: event.session,
+            console: event.console,
+            project: event.project,
+            requestedAt: event.requested_at,
+          };
+          // Kept in the order they were made, whatever order the broadcast and the repeat after a
+          // snapshot arrive in.
+          const consoleRequests = [...state.consoleRequests, request].sort((a, b) => a.requestedAt - b.requestedAt);
+          return { ...state, consoleRequests };
+        }
+        case "console_session_request_closed":
+          return {
+            ...state,
+            consoleRequests: state.consoleRequests.filter((r) => r.requestId !== event.request_id),
+          };
         case "page_list": {
           // The reply to a `list_pages` request, but requests and broadcasts are not ordered
           // against each other (see "Client to daemon" and "Daemon to client" in

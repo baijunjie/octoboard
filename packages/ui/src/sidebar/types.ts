@@ -2,13 +2,13 @@ import type { DialogRequest } from "../dialogs/dialogRequest";
 import type { Console, Project, Session } from "../protocol";
 import type { SettingsSectionId } from "../settings/SettingsDialog";
 
-/** Which archive the archive view lists: a project's archived sessions, a console session's own
- * archived bound sessions, or with neither `project` nor `consoleSession` the console's archived
- * console sessions. A discriminated union rather than two optional fields, so `project` and
- * `consoleSession` being mutually exclusive is enforced by the type rather than left to prose: a
- * value naming both does not type-check, and narrowing one in by `"project" in scope` (or the
- * reverse) rules the other out too. A console session's focus mode opens the `consoleSession`
- * scope. */
+/** Which archive the archive view lists: a project's archived sessions, the archived sessions
+ * under a console session (bound to it, or to an archived lead session bound to it), or with
+ * neither `project` nor `consoleSession` the console's archived console sessions. A discriminated
+ * union rather than two optional fields, so `project` and `consoleSession` being mutually
+ * exclusive is enforced by the type rather than left to prose: a value naming both does not
+ * type-check, and narrowing one in by `"project" in scope` (or the reverse) rules the other out
+ * too. A console session's focus mode opens the `consoleSession` scope. */
 export type ArchiveScope = { console: string } &
   (
     | { project: string; consoleSession?: never }

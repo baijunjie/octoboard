@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
-import { belongsToFocus, cycleConsoleSession, focusAfterSelect, focusFor, focusKey, focusTargetId, resolveFocus, shortcutOutcome } from "./focus";
+import { belongsToFocus, cycleConsoleSession, focusAfterSelect, focusFor, focusKey, focusTargetId, followsStartedConsoleSession, resolveFocus, shortcutOutcome } from "./focus";
 import type { FocusTarget } from "./types";
 
 const main = consoleOf("c-1", "Main");
@@ -122,5 +122,16 @@ describe("focusAfterSelect", () => {
     expect(focusAfterSelect(hubFocus, hub, false, sessions)).toBe(hubFocus);
     expect(focusAfterSelect(projectFocus, hub, false, sessions)).toBeUndefined();
     expect(focusAfterSelect(undefined, hub, false, sessions)).toBeUndefined();
+  });
+});
+
+describe("followsStartedConsoleSession", () => {
+  it.each([
+    ["the requesting project's focus mode", projectFocus, true],
+    ["another project's focus mode", { project: projectOf("p-2", main.id, "Other") }, false],
+    ["a console session's focus mode", hubFocus, false],
+    ["no focus mode", undefined, false],
+  ])("%s", (_, focus, expected) => {
+    expect(followsStartedConsoleSession(focus, project.id)).toBe(expected);
   });
 });

@@ -7,7 +7,7 @@ import { Message, useT } from "../i18n/react";
 import { TRUST_NOT_WAITING, TRUST_REFUSED_CODES, type Agent } from "../protocol";
 import { abbreviateHome } from "../pathDisplay";
 import { useDaemon, useDaemonStore, type TrustPrompt } from "../store";
-import { ConfirmDialog } from "./ConfirmDialog";
+import type { ConfirmDialogProps } from "./ConfirmDialog";
 
 /** A file path or directory in the dialog's text. A block one (the project's path) breaks at any
  * character, so it wraps to the dialog's width rather than splitting at a hyphen; an inline one
@@ -87,17 +87,17 @@ function TrustPromptMessage({
   );
 }
 
-/** The dialog for a session waiting at its agent's folder-trust confirmation. `sessionTitle` names
- * the session when it is known. */
-export function TrustPromptDialog({
-  prompt,
-  sessionTitle,
-}: {
-  prompt: TrustPrompt;
-  sessionTitle: string | undefined;
-}): React.ReactElement {
+/** What the dialog for a session waiting at its agent's folder-trust confirmation shows and does,
+ * or nothing without a prompt. `sessionTitle` names the session when it is known. A hook rather
+ * than a component, so the one dialog slot it shares with the requests for a console session
+ * (`PendingQuestionDialog`) stays mounted between them. */
+export function useTrustPromptDialogProps(
+  prompt: TrustPrompt | undefined,
+  sessionTitle: string | undefined,
+): ConfirmDialogProps | undefined {
   const t = useT();
   const { request, toastError, dismissTrustPrompt } = useDaemon();
+  if (!prompt) return undefined;
 
   const answer = async (trustParentDir: boolean) => {
     // Dismissed whether or not the request worked: the daemon answers a confirmation once, so retrying
@@ -126,30 +126,26 @@ export function TrustPromptDialog({
     dismissTrustPrompt(prompt.session);
   };
 
-  return (
-    <ConfirmDialog
-      // Not keyed on the session: remounting the modal for the next queued prompt would leave its
-      // focus scope restoring focus to the element the previous one was holding, by then detached.
-      resetKey={prompt.session}
-      // Wide enough for the three buttons on one row.
-      size="lg"
-      title={t("dialog.trust.title")}
-      message={<TrustPromptMessage prompt={prompt} sessionTitle={sessionTitle} />}
-      confirmLabel={t("dialog.trust.confirm")}
-      cancelLabel={t("dialog.trust.notNow")}
-      onCancel={() => dismissTrustPrompt(prompt.session)}
-      onConfirm={() => answer(false)}
-      extraAction={
-        prompt.trustDir
-          ? {
-              // Short, so the three buttons fit one row; the message names the folder, and the
-              // button's tooltip gives its full path.
-              label: t("dialog.trust.parent"),
-              title: prompt.trustDir,
-              onClick: () => answer(true),
-            }
-          : undefined
-      }
-    />
-  );
+  return {
+    // Not keyed on the session: remounting the modal for the next queued prompt would leave its
+    // focus scope restoring focus to the element the previous one was holding, by then detached.
+    resetKey: `trust:${prompt.session}`,
+    // Wide enough for the three buttons on one row.
+    size: "lg",
+    title: t("dialog.trust.title"),
+    message: <TrustPromptMessage prompt={prompt} sessionTitle={sessionTitle} />,
+    confirmLabel: t("dialog.trust.confirm"),
+    cancelLabel: t("dialog.trust.notNow"),
+    onCancel: () => dismissTrustPrompt(prompt.session),
+    onConfirm: () => answer(false),
+    extraAction: prompt.trustDir
+      ? {
+          // Short, so the three buttons fit one row; the message names the folder, and the
+          // button's tooltip gives its full path.
+          label: t("dialog.trust.parent"),
+          title: prompt.trustDir,
+          onClick: () => answer(true),
+        }
+      : undefined,
+  };
 }

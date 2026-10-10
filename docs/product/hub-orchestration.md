@@ -2,7 +2,7 @@
 
 Orchestration is one session starting other sessions, handing them work, following them up and taking their reports.
 The session doing it is the **owner** of the sessions it starts; every session it starts is bound to it and reports to
-it. Two kinds of session can be an owner:
+it. Three kinds of session can be an owner:
 
 - A **console session** — a session the user brings a request to; a console may run several of them at once (see
   "Several console sessions per console" below). It does not change project code itself: it works out which project a
@@ -12,6 +12,8 @@ it. Two kinds of session can be an owner:
 - An **unbound project session** — a project session the user opened by hand without binding it to a console session.
   It works in its own project and can also start sessions in that project and drive them (see "The unbound project
   session's tools" below).
+- A **lead session** — a project session that was opened unbound and later became bound to a console session, at its
+  own request and with the user's approval, keeping the sessions it had started (see "Lead sessions" below).
 
 The sessions an owner starts are ordinary project sessions, described in `docs/product/sessions.md`. Archiving,
 resuming and deleting an owner follow the same rules whichever kind it is (see "Archiving, interruption and resuming"
@@ -21,9 +23,10 @@ Octoboard injects the tools into the session. A console session gets the full se
 below), an unbound project session a narrower set scoped to its own project, and a session bound to an owner gets one
 tool back the other way, `report`. Every project session, bound or not, also gets the two tools for sharing information
 with the other sessions of its project (see "Information between sessions of a project" below). **Which tools a session
-sees follows from its role and from whether it is bound**, both fixed for its lifetime: a bound session cannot start or
-archive sessions, so orchestration under an unbound project session is one level deep, and an owner cannot report to
-itself.
+sees follows from its role and from whether it was opened bound**, both fixed for its lifetime: a session opened bound
+cannot start or archive sessions, and an owner cannot report to itself. A lead session keeps the tools of the unbound
+project session it was opened as. Orchestration is therefore at most two levels deep: a console session, a lead session
+bound to it, and the lead session's own sessions.
 
 ## Several console sessions per console
 
@@ -84,7 +87,8 @@ way a console session drives its console's:
 | `get_session` | `session` | As the console session's, for any session of the caller's own project. |
 | `archive_session` | `session` | As the console session's. |
 | `reopen_session` | `session`, `text?` | As the console session's. |
-| `report` | as in "Reporting" below | Offered, but always refused: an unbound session has nobody to report to. |
+| `request_console_session` | `request`, `summary`, `open_items?` | Asks the user for a console session to reach other projects through; on approval the caller becomes its lead session. Refused for a lead session. See `docs/product/requesting-a-console-session.md`. |
+| `report` | as in "Reporting" below | Offered, but refused while the session is unbound: it has nobody to report to. A lead session's `report` is accepted and goes to its console session (see "Lead sessions" below). |
 | `list_project_sessions`, `share_info` | as in "Information between sessions of a project" below | As for every project session. |
 
 It has no `list_projects`, `list_archived`, `add_project` or `show_page`.
@@ -99,6 +103,39 @@ itself, or a session outside its project.
 A session an unbound project session starts is bound to it, so it is offered `report` and the two information tools and
 cannot start sessions of its own. It reports to the project session that started it exactly as a console session's
 sessions report to their console session: see "Reporting" below.
+
+## Lead sessions
+
+A **lead session** is a project session that was opened unbound and was later bound to a console session of its
+console. A session becomes one through its own `request_console_session` call, once the user approves it: Octoboard
+starts a console session for it and binds it there (see `docs/product/requesting-a-console-session.md`).
+
+- **Becoming bound happens once.** Only an unbound project session can become bound after it was opened, only through
+  that request, only to a console session of its own console that is running, and only once. A binding, once set, is
+  never changed or undone.
+- **It keeps its sessions.** The sessions it had started stay bound to it, and it goes on driving them with the
+  unbound project session's tools (see "The unbound project session's tools" above), starting more in its own project
+  as before.
+- **It keeps what it was launched with.** Every launch of it — a resume, a reopen, a switch of account — gives it the
+  unbound project session's role description and tool list, as at its first launch, not those of a session bound to a
+  console session.
+- **It reports to its console session**, as any session bound to one does: its `report` is accepted and delivered
+  there. Its `done` report with no open items is refused while its own sessions are unfinished, and no report is
+  synthesised for it while they run (see "Reporting" and "When a session does not report" below).
+- **Its sessions stay ordinary bound sessions.** A session bound to a lead session gets `report` and the information
+  tools and no `start_session`, and can never be an owner: naming one as the owner of a new session is refused. There
+  is no third level and no cycle.
+
+A session is **under** an owner when it is bound to it, or bound to a lead session that is bound to it. Archiving,
+reopening and deleting follow the bindings across both levels; see "Archiving, interruption and resuming" and
+"Deleting archived sessions" in `docs/product/sessions.md`.
+
+**The console session sees the lead session's sessions but does not drive them.** A lead session's `owner_kind` reads
+`console`; its own sessions read `project`, with the lead session as their `owner`. The console session's reads stay
+console-wide, so those sessions appear in its `list_projects` and `get_session`, not as its own; `send_message`,
+`archive_session` and `reopen_session` aimed at one are refused, naming the lead session as its owner (see "Which
+sessions an owner drives" below). The lead session itself is bound to the console session and is driven by it like any
+other session of its own.
 
 ## Information between sessions of a project
 
@@ -186,7 +223,7 @@ A bound project session reports a round of work with `report`:
 | `open_items` | no | Strings naming what is left unfinished. Empty when nothing is. |
 
 The report is written into the session the reporting session is **bound to**, its **owner** — a console session,
-or the unbound project session that started it — named by its own binding rather than looked up, since a console may
+or the project session that started it — named by its own binding rather than looked up, since a console may
 hold several console sessions. It arrives as a user message naming the reporting session's id, its title and project,
 the status, the open items, and then the summary. The reporting session is told either that it was delivered or that
 it was accepted and will reach its owner as soon as the owner can take a message, the note calling the owner a console
@@ -199,7 +236,11 @@ Reporting fails, and leaves the session exactly as it was, when:
 - its owner has no process running — it is interrupted or archived. The binding names the owner by its id and
   outlives this, so once the owner is resumed or reopened the session's reports reach it again;
 - the session has already been wrapped up — a session archived by its own `done` report cannot
-  report a second time.
+  report a second time;
+- the session is a lead session, the report has `status: done` and no open items, and a session bound to it is not
+  archived. The reason names those sessions. Its sessions archive themselves when they report they are done, so one
+  that is not archived has not finished, and neither has the lead session. Its other reports go through, and none of
+  them archives it.
 
 ### When a session does not report
 
@@ -211,6 +252,10 @@ ended in an error, and the open-items list is empty. A session whose turn produc
 is reported as such, with the suggestion that the owner check it with `get_session`.
 
 A synthesised report never archives the session: only a session's own `done` report does that.
+
+**No report is synthesised for a lead session's turn while any session bound to it has a process** — running, or being
+launched or resumed: it has stopped to wait for its sessions, not stopped working. With none of them running, its turn
+is reported on as any bound session's is.
 
 Grok Build reports no turn end at all for some turns, and the backstop Octoboard falls back on
 there fires about a minute after the turn ends, so a synthesised report for one of those turns
@@ -233,10 +278,12 @@ covered in "Archiving, interruption and resuming" in `docs/product/sessions.md`.
 
 ## Which sessions an owner drives
 
-A session started with `start_session` is always bound to the session that started it — a console session, or an
-unbound project session — so it always reports to it. A session **the user opens by hand is not**, unless they choose
-a console session under "Report to" in the session dialog (see "Opening a session" in `docs/product/sessions.md`); the
-choice is none by default and offers console sessions only. The binding is fixed for the session's lifetime once set.
+A session started with `start_session` is always bound to the session that started it — a console session, or a
+project session that is unbound or a lead session — so it always reports to it. A session **the user opens by hand is
+not**, unless they choose a console session under "Report to" in the session dialog (see "Opening a session" in
+`docs/product/sessions.md`); the choice is none by default and offers console sessions only. A binding, once set, is
+never changed or undone; the one way a session opened unbound becomes bound is as a lead session, through its own
+request for a console session (see "Lead sessions" above).
 
 An owner drives only the sessions bound to it. Every session record it reads names that session's owner, and a session
 that is unbound, or bound to any other session, is not this one's to drive: it can read such a session, but is told

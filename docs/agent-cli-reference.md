@@ -8,9 +8,11 @@ conversation into another config directory.
 Established against **Claude Code 2.1.274**, **Codex 0.160.0** and **Grok Build 1.0.46**; what the Claude Code section
 says about a declined prompt was measured on **2.1.286** as well, and held identically on both. What "Moving a
 conversation to another config directory" says was measured on **Claude Code 2.1.289**, **Codex 0.160.0** and **Grok
-Build 1.0.46**. What "Folder-trust confirmations" says about Codex and Grok Build was measured on **Codex 0.161.0**
-and **Grok Build 1.0.50**. All three rewrite their hook surface, their payload fields, their configuration layering and
-their on-disk layout on upgrade, so check a detail here against the installed version before relying on it.
+Build 1.0.46**. What "Folder-trust confirmations" says about Codex and Grok Build was measured on **Codex 0.161.0** and
+**Grok Build 1.0.50**. What "A long MCP tool call is moved to the background" and "A pasted prompt reaches
+`UserPromptSubmit` wrapped" say was observed on **Claude Code 2.1.295**. All three rewrite their hook surface, their
+payload fields, their configuration layering and their on-disk layout on upgrade, so check a detail here against the
+installed version before relying on it.
 
 How Octoboard's status mapping handles these traps is encoded in `apps/daemon/src/hooks.rs`; the product behavior
 built on them is in the product docs.
@@ -103,6 +105,22 @@ Precedence among permission rules is by rule *kind* rather than by source — `d
 further config path, resolved against the cwd: `claude --mcp-config '<json>' mcp list` fails with
 `MCP config file not found: <cwd>/mcp`. Anything positional — the task prompt in particular — has
 to come before it rather than after.
+
+**A long MCP tool call is moved to the background.** Claude Code moves an MCP tool call still running after 120 seconds
+to the background (it reports that the MCP tool is still running after 120s and was moved to the background as a task).
+The turn ends and the session goes idle while the call is pending, and the call's result arrives later as a task
+notification. Observed on 2.1.295, where the pieces a hook sees are:
+
+- The `Stop` that ends the turn lists the call in `background_tasks` as an MCP entry: `id` (the task id), `type`
+  `"MCP task"`, `status` `"running"`, `description` (`<server>/<tool>`), `server` and `tool` (the unqualified tool
+  name).
+- The notification is delivered as a turn of its own, with its own `UserPromptSubmit`, whose `prompt` opens with
+  `<task-notification>` and, on the next line, `<task-id>…</task-id>` carrying that same id; the call's result follows
+  further down. Nothing orders this turn against a message written into the session meanwhile.
+
+**A pasted prompt reaches `UserPromptSubmit` wrapped.** A long paste — every message Octoboard writes is one — is handed
+over in `prompt` as `<pasted_content id="…">` on its own line, after a leading blank line, then the pasted text, then a
+closing `</pasted_content id="…">`. Observed on 2.1.295.
 
 **An appended system prompt is recorded once per conversation** and replayed verbatim on every resume, because
 `--system-prompt-snapshot` defaults to `on`; different text passed on a later launch is silently ignored. It must still

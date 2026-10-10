@@ -1,7 +1,7 @@
 //! The Octoboard MCP server: the orchestration tools the console session drives Octoboard with, the
-//! narrower set an unbound project session drives its own project with, the reporting tool a
-//! bound project session answers through, and the two tools every project session shares
-//! information with its project's other sessions through.
+//! narrower set an unbound project session drives its own project with and asks for a console
+//! session through, the reporting tool a bound project session answers through, and the two tools
+//! every project session shares information with its project's other sessions through.
 //!
 //! **Transport is a stdio child process, not an HTTP endpoint the agent connects to.** Each
 //! adapter registers `octoboardd mcp --session … --role … --port … --token …` as a `command`-type
@@ -32,13 +32,13 @@ use crate::protocol::{Agent, Role};
 /// spawned.
 pub const SERVER_KEY: &str = "octoboard";
 
-/// Who a bound session reports to, as far as what the session is told depends on it. Fixed for the
-/// session's lifetime, like the binding itself.
+/// Who a session with the role of a bound one reports to, as far as what the session is told
+/// depends on it. Fixed for the session's lifetime, like the binding itself.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Owner {
     Console,
-    /// An unbound project session, named by Octoboard's id for it: a title can be renamed after the
-    /// text naming it has been recorded for good.
+    /// A project session that is unbound or a lead session, named by Octoboard's id for it: a
+    /// title can be renamed after the text naming it has been recorded for good.
     Project {
         session_id: String,
     },
@@ -57,9 +57,10 @@ pub struct ToolDef {
 /// The tools a session of this role may call. Nothing else is announced to it, so a bound project
 /// session cannot start or archive sessions and the console session cannot report to itself.
 ///
-/// `bound` says whether the session reports to another one; it is fixed for the session's
-/// lifetime once set, which is what lets the catalogue follow from it. A console session is never
-/// bound, and it is ignored for one.
+/// `bound` says whether the session has the role of a bound one (`Session::has_bound_role`): it
+/// reports to another session and owns none. That is fixed for the session's lifetime, which is
+/// what lets the catalogue follow from it: a lead session, bound only after it was launched
+/// unbound, keeps the unbound set. A console session is never bound, and it is ignored for one.
 pub fn tools_for(role: Role, bound: bool) -> &'static [ToolDef] {
     match (role, bound) {
         (Role::Console, _) => CONSOLE_SESSION_TOOLS,
@@ -383,10 +384,52 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     },
     ARCHIVE_SESSION,
     REOPEN_SESSION,
+    REQUEST_CONSOLE_SESSION,
     REPORT,
     LIST_PROJECT_SESSIONS,
     SHARE_INFO,
 ];
+
+/// How a project session nobody dispatched reaches other projects: through a console session the
+/// user agrees to start for it. Announced to a lead session too, which keeps the unbound set, and
+/// refused there in prose. Its arguments are shaped like a report, since what it hands over reaches
+/// the console session as the caller's first report.
+const REQUEST_CONSOLE_SESSION: ToolDef = ToolDef {
+    name: "request_console_session",
+    description: "Ask for a console session, when this work needs sessions in other projects of \
+                  this console: you can start sessions only in this project. The user is asked \
+                  first, and the call waits for their answer, for several minutes at most. On \
+                  approval Octoboard starts a console session in this console and binds this \
+                  session to it: what you hand over here reaches it as your first report, it \
+                  dispatches the work in the other projects, and from then on you report to it \
+                  with the `report` tool, keeping and driving the sessions you started here. A \
+                  refusal, or no answer in time, comes back as an error and changes nothing. \
+                  Refused once this session is bound to a console session.",
+    schema: || {
+        object_schema(
+            json!({
+                "request": {
+                    "type": "string",
+                    "description": "What you need done that takes sessions in other projects, in \
+                                    natural language: the outcome, and which projects or what \
+                                    kind of work it involves where you know.",
+                },
+                "summary": {
+                    "type": "string",
+                    "description": "What you have done and found out so far that the console \
+                                    session needs to know, in natural language.",
+                },
+                "open_items": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "The separate pieces of work you need done elsewhere, when it \
+                                    divides into several. Empty when it does not.",
+                },
+            }),
+            &["request", "summary"],
+        )
+    },
+};
 
 /// The schema of `start_session`. `with_project` is for the console session, which chooses a
 /// project; a project session always starts in its own, so it is not asked.
@@ -460,6 +503,7 @@ mod tests {
                 "get_session",
                 "archive_session",
                 "reopen_session",
+                "request_console_session",
                 "report",
                 "list_project_sessions",
                 "share_info"
@@ -470,6 +514,10 @@ mod tests {
         assert!(tool_by_name(Role::Console, false, "start_session").is_some());
         assert!(tool_by_name(Role::Console, false, "report").is_none());
         assert!(tool_by_name(Role::Project, true, "start_session").is_none());
+        // Asking for a console session is for a session nobody dispatched; a console session
+        // already is one.
+        assert!(tool_by_name(Role::Project, true, "request_console_session").is_none());
+        assert!(tool_by_name(Role::Console, false, "request_console_session").is_none());
         assert!(tool_by_name(Role::Project, false, "list_projects").is_none());
         // Console sessions are outside every project, so they take no part in the exchange.
         assert!(tool_by_name(Role::Console, false, "share_info").is_none());

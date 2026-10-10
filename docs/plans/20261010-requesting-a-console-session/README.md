@@ -140,6 +140,7 @@ call is refused. Sessions an unbound project session starts and console sessions
 
 ## Milestones
 
-1. [01 Lead sessions in the binding model](01-lead-sessions-in-the-binding-model.md)
-2. [02 The request tool and its confirmation](02-request-tool-and-confirmation.md)
+1. 01 Lead sessions in the binding model (closed)
+2. 02 The request tool and its confirmation (closed)
 3. [03 Lead sessions and their teams in the sidebar](03-lead-sessions-in-the-sidebar.md)
+4. [04 Final confirmation](04-final-confirmation.md)

@@ -196,10 +196,14 @@ Entities: console, host, project, session, account, report, report-panel page, a
 - `Session.id` is Octoboard's own and `agent_session_id` the agent's. They are separate because some agents cannot
   pre-allocate an id.
 - `Session.bound_to` is the id of the session a session reports to — a console session, or an unbound project session
-  of the same project — or unset. It is always set to the starting session for a session started through
-  `start_session`, and fixed for the session's lifetime; a console session itself is never bound, and a bound session
-  owns no other. Reports are routed by this field rather than by a lookup for "the" console session of a console,
-  because a console may hold several at once.
+  or lead session of the same project — or unset. It is always set to the starting session for a session started
+  through `start_session`, and once set it is never changed or undone. An unbound project session may be bound to a
+  console session once, after launch, which makes it a lead session: it keeps the sessions bound to it, so
+  orchestration is at most two levels deep. `Session.lead` (stored, never sent to clients) marks such a session,
+  because nothing else in the record tells a session bound later from one opened bound, and only the former keeps
+  the unbound project session's role description and tools on every launch. A console session itself is never
+  bound, and a session bound to a lead session owns no other. Reports are routed by this field rather than by a
+  lookup for "the" console session of a console, because a console may hold several at once.
 - `Session.colour` and `Session.ordinal` are set only for a console session: a badge colour from a fixed palette,
   assigned on creation and never reused while still in use among the console's other console sessions, and a
   per-console ordinal that is one past the highest ever handed out there — kept on the console record itself

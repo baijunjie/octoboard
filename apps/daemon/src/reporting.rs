@@ -1,7 +1,7 @@
-//! The channel between an owner — a console session, or an unbound project session that started
-//! sessions — and the project sessions bound to it: the brief a task is handed over as, the
-//! message writing that carries both directions, the report that comes back, and the report
-//! Octoboard synthesises when a session stops without having sent one.
+//! The channel between an owner — a console session, or a project session that started sessions,
+//! unbound or a lead session — and the project sessions bound to it: the brief a task is handed
+//! over as, the message writing that carries both directions, the report that comes back, and the
+//! report Octoboard synthesises when a session stops without having sent one.
 //!
 //! That is the one concern the console session's tools, the project session's `report` tool and
 //! the hook callback all share, which is why it sits apart from the control-socket handling in
@@ -185,6 +185,11 @@ impl ReportStatus {
 /// project session that started it — and wraps the session up when the report says there is
 /// nothing left.
 ///
+/// A lead session's `done` report with no open items is refused while any session bound to it is
+/// not archived: its sessions archive themselves when they finish, so one that is not archived has
+/// not finished, and neither has the lead session. Its other reports go through as any bound
+/// session's do.
+///
 /// Archiving happens once the report has been *accepted* for the owner rather than once the owner
 /// has read it: an owner that is merely busy still has the report queued for it, and leaving a
 /// finished session alive until the owner gets round to it would strand it. An owner that is not
@@ -204,6 +209,25 @@ pub fn deliver_report(
     // work to the owner twice.
     if session.status.is_dormant() {
         bail!("this session has already been wrapped up; there is nothing further to report");
+    }
+    let finished = report.status == ReportStatus::Done && report.open_items.is_empty();
+    if finished {
+        let unfinished: Vec<Session> = coordinator::bound_sessions(state, &session)?
+            .into_iter()
+            .filter(|bound| bound.status != SessionStatus::Archived)
+            .collect();
+        if !unfinished.is_empty() {
+            let named = unfinished
+                .iter()
+                .map(|bound| format!("`{}` (\"{}\")", bound.id, bound.title))
+                .collect::<Vec<_>>()
+                .join(", ");
+            bail!(
+                "a `done` report with no open items is refused while sessions bound to you are \
+                 not archived: {named}. Each archives itself when it reports it is done; wait for \
+                 them, archive them, or report with open items instead"
+            );
+        }
     }
 
     // The binding names the owner directly, so this is a plain lookup by id rather than a search
@@ -227,7 +251,6 @@ pub fn deliver_report(
     // archived on the strength of a report its owner never got.
     let delivery = write_message(state, &owner.id, &message, WhenBlocked::Queue)?;
 
-    let finished = report.status == ReportStatus::Done && report.open_items.is_empty();
     if finished {
         coordinator::archive_session(state, session_id)?;
     }
@@ -250,13 +273,28 @@ pub fn deliver_report(
 /// Reports to the owner for a session that stopped without reporting for itself. The
 /// caller has already closed the turn and established that a report is owed.
 ///
+/// Nothing is reported for a lead session while a session bound to it has a process: it has
+/// stopped to wait for its sessions, not stopped working.
+///
 /// **Blocks** on writing into the owner.
 pub fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::TurnEnd) {
-    match state.store.get_session(session_id) {
-        Ok(Some(session)) if session.bound_to.is_some() => {}
+    let session = match state.store.get_session(session_id) {
+        Ok(Some(session)) if session.bound_to.is_some() => session,
         // An unbound session has nobody to report to, and a record that is gone is nothing to
         // report about.
         _ => return,
+    };
+    match coordinator::bound_sessions(state, &session) {
+        Ok(bound) if bound.iter().all(|bound| !state.has_process(&bound.id)) => {}
+        Ok(_) => return,
+        Err(err) => {
+            tracing::debug!(
+                session = %session_id,
+                %err,
+                "reading the sessions bound to a session failed"
+            );
+            return;
+        }
     }
 
     let summary = turn.last_assistant_message.unwrap_or_else(|| {
@@ -381,6 +419,7 @@ mod tests {
             status: SessionStatus::Idle,
             has_conversation: true,
             bound_to: Some("console-session-1".to_string()),
+            lead: false,
             colour: None,
             ordinal: None,
             account_id: None,
@@ -635,6 +674,7 @@ mod tests {
             status: SessionStatus::Idle,
             has_conversation: false,
             bound_to: None,
+            lead: false,
             colour: None,
             ordinal: None,
             account_id: None,
@@ -756,6 +796,123 @@ mod tests {
         let status = |id: &str| state.store.get_session(id).unwrap().unwrap().status;
         assert_eq!(status("worker"), SessionStatus::Archived);
         assert_eq!(status("starter"), SessionStatus::Idle);
+    }
+
+    /// A console session `hub` with a stand-in process, and the sessions given, each `(id, owner,
+    /// lead, status)`, on record. The stand-in's output is pumped into its ring buffer, so what
+    /// reaches it can be read back.
+    fn team_state(
+        label: &str,
+        sessions: &[(&str, &str, bool, SessionStatus)],
+    ) -> (
+        Arc<AppState>,
+        crate::test_support::ScratchDir,
+        crate::test_support::StandIn,
+    ) {
+        let (state, dir) = crate::test_support::app_state(label);
+        state.store.insert_console(&console()).unwrap();
+        let hub = Session {
+            id: "hub".to_string(),
+            role: Role::Console,
+            bound_to: None,
+            ..project_session("hub")
+        };
+        state.store.insert_session(&hub).unwrap();
+        let live = crate::test_support::idle_stand_in("hub");
+        state.register_live(live.clone());
+        crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
+        for (id, owner, lead, status) in sessions {
+            let session = Session {
+                id: id.to_string(),
+                bound_to: Some(owner.to_string()),
+                lead: *lead,
+                status: *status,
+                ..project_session(id)
+            };
+            state.store.insert_session(&session).unwrap();
+        }
+        (state, dir, live)
+    }
+
+    /// A lead session's `done` report with no open items is refused, naming them, while a session
+    /// bound to it is not archived, and leaves it as it was; a report with open items goes through
+    /// meanwhile and archives nothing; once its sessions are all archived the `done` report is
+    /// delivered and archives it.
+    #[test]
+    fn a_lead_sessions_done_report_waits_until_its_sessions_are_archived() {
+        use SessionStatus::{Archived, Idle};
+        let (state, _dir, _hub) = team_state(
+            "reporting-lead-done",
+            &[
+                ("lead", "hub", true, Idle),
+                ("busy", "lead", false, Idle),
+                ("finished", "lead", false, Archived),
+            ],
+        );
+        let status = |id: &str| state.store.get_session(id).unwrap().unwrap().status;
+
+        let err = deliver_report(&state, "lead", done_report()).expect_err("busy is not archived");
+        assert!(err.to_string().contains("`busy`"), "{err}");
+        assert!(!err.to_string().contains("finished"), "{err}");
+        assert_eq!(status("lead"), Idle);
+
+        let open = ["the rest".to_string()];
+        deliver_report(
+            &state,
+            "lead",
+            Report {
+                open_items: &open,
+                ..done_report()
+            },
+        )
+        .expect("a report with open items goes through");
+        assert_eq!(status("lead"), Idle);
+
+        let mut busy = state.store.get_session("busy").unwrap().unwrap();
+        busy.status = Archived;
+        state.store.update_session(&busy).unwrap();
+        let note = deliver_report(&state, "lead", done_report()).expect("delivered");
+        assert!(note.contains("console session"), "{note}");
+        assert_eq!(status("lead"), Archived);
+    }
+
+    /// No report is synthesised for a lead session's turn while a session bound to it has a
+    /// process; one whose sessions have none is reported on as any bound session is. Both are
+    /// synthesised in that order into the same console session, so the second report arriving
+    /// without the first shows the first was withheld rather than not yet written.
+    #[test]
+    fn no_report_is_synthesised_for_a_lead_session_while_its_sessions_run() {
+        use SessionStatus::{Idle, Interrupted, Working};
+        let (state, _dir, hub) = team_state(
+            "reporting-lead-synthesis",
+            &[
+                ("waiting-lead", "hub", true, Idle),
+                ("running", "waiting-lead", false, Working),
+                ("idle-lead", "hub", true, Idle),
+                ("stopped", "idle-lead", false, Interrupted),
+            ],
+        );
+        let running = crate::test_support::idle_stand_in("running");
+        state.register_live(running.clone());
+        let turn = || hooks::TurnEnd {
+            last_assistant_message: Some("waiting on my sessions".to_string()),
+            failed: false,
+            backstop: false,
+        };
+
+        synthesise_report(&state, "waiting-lead", turn());
+        synthesise_report(&state, "idle-lead", turn());
+
+        let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
+        let output = loop {
+            let output = String::from_utf8_lossy(&hub.recent_output(8 * 1024)).into_owned();
+            if output.contains("idle-lead") || std::time::Instant::now() >= deadline {
+                break output;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        assert!(output.contains("Report from session idle-lead"), "{output}");
+        assert!(!output.contains("waiting-lead"), "{output}");
     }
 
     /// Several sessions in one project have to be told apart in the menu, and the goal is the only

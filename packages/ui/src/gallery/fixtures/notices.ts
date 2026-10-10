@@ -55,14 +55,44 @@ export const noticeScenarios: Scenario[] = [
     }),
   },
   {
+    id: "console-session-request",
+    group: TRUST,
+    title: "Request for a console session, a second one queued",
+    description:
+      "A project session asking for a console session; a second request waits behind it.",
+    state: snapshotState({
+      consoles: [console_],
+      projects: [web, api],
+      sessions,
+      consoleRequests: [
+        {
+          requestId: "r-1",
+          session: "s-web-1",
+          console: console_.id,
+          project: web.id,
+          requestedAt: 1,
+        },
+        {
+          requestId: "r-2",
+          session: codexSession.id,
+          console: console_.id,
+          project: api.id,
+          requestedAt: 2,
+        },
+      ],
+    }),
+  },
+  {
     id: "toast-error",
     group: TRUST,
     title: "Error toasts",
-    description: "Daemon error codes worded from the catalog, one naming a session, one with a code the catalog lacks.",
+    description:
+      "Daemon error codes worded from the catalog, two naming a session (one an approval given after the session stopped waiting), one with a code the catalog lacks.",
     state: snapshotState({ consoles: [console_], projects: [web, api], sessions }),
     toasts: [
       { kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "" },
       { kind: "error", code: "session_not_running", params: {}, message: "", session: "s-web-2" },
+      { kind: "error", code: "console_request_not_waiting", params: { session: "s-web-1" }, message: "", session: "s-web-1" },
       { kind: "error", code: "a_code_from_a_newer_daemon", params: {}, message: "The daemon's own English text, shown as is." },
     ],
   },

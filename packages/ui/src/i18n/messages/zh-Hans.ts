@@ -107,7 +107,7 @@ export const zhHans: Translation<"other"> = {
   "daemon.session_not_running": "此会话未在运行。",
   "daemon.session_not_archived": "只能删除已归档的会话。",
   "daemon.session_has_running_sessions": {
-    other: "无法归档此会话：绑定到它的会话仍在运行，共 {count} 个（{sessions}）。请先归档运行中的会话，或等待其完成。",
+    other: "无法归档此会话：它名下的会话仍在运行，共 {count} 个（{sessions}）。请先归档运行中的会话，或等待其完成。",
   },
   "daemon.session_waiting_for_user": "此会话正在等你回应。请先在终端中回答。",
   "daemon.session_trust_pending": "此会话的智能体正在显示或可能即将显示其信任确认。请在回应此确认后再发送消息；如果没有出现，请在会话启动完成后再发送。",
@@ -138,6 +138,8 @@ export const zhHans: Translation<"other"> = {
   "daemon.trust_home_unknown": "无法确定家目录，因此无法据此检查任何文件夹。",
   "daemon.trust_not_waiting": "此会话已不再在智能体的信任确认处等待。",
   "daemon.console_session_trust_not_asked": "控制台会话的信任确认由 {appName} 直接按下，无需询问。",
+  "daemon.console_request_not_waiting": "此会话已不再等待回应，因此没有启动控制台会话。",
+  "daemon.console_request_answered": "此控制台会话请求已得到回应。",
   "daemon.binary_not_found": "在已快照的 shell 环境的 PATH 中找不到“{binary}”。",
   "daemon.shell_environment_timeout":
     "“{shell} -l -i -c '{command}'”未在 {timeout} 内完成。某个 shell 启动文件可能卡在了 stdin 以外的地方，或留下了占住 shell 输出的后台进程。{appName} 不会在环境未知时凭猜测启动。请修复 shell 的 rc 文件中缓慢的步骤，或跳过它。",
@@ -533,7 +535,7 @@ export const zhHans: Translation<"other"> = {
   "dialog.archiveSession.title": "确认归档“{title}”？",
   "dialog.archiveSession.message": "会话进程将结束。之后可以重新打开。",
   "dialog.archiveSession.bound": {
-    other: "绑定到它的 {count} 个会话将一并归档",
+    other: "它名下的 {count} 个会话将一并归档",
   },
   "dialog.switchAccount.title": "确认将“{title}”切换到 {account}？",
   "dialog.switchAccount.message": "会话进程将在新账户下重新启动，对话会在其中继续。会话将采用该账户自己的设置，当前账户中会保留一份对话副本。",
@@ -543,13 +545,13 @@ export const zhHans: Translation<"other"> = {
   "dialog.deleteSession.title": "确认永久删除“{title}”？",
   "dialog.deleteSession.message": "将删除此会话。智能体自己的对话记录和项目文件会保留。",
   "dialog.deleteSession.bound": {
-    other: "绑定到它的 {count} 个已归档会话将一并删除",
+    other: "它名下的 {count} 个已归档会话将一并删除",
   },
   "dialog.deleteArchived.message": {
     other: "将删除这些已归档会话。智能体自己的对话记录和项目文件会保留。",
   },
   "dialog.deleteArchived.bound": {
-    other: "绑定到视图中控制台会话的 {count} 个已归档会话也将被删除",
+    other: "视图中控制台会话名下的 {count} 个已归档会话也将被删除",
   },
   "dialog.deleteArchived.title": {
     other: "确认永久删除 {count} 个已归档会话？",
@@ -570,6 +572,10 @@ export const zhHans: Translation<"other"> = {
   "dialog.trust.notNow": "暂不",
   "dialog.trust.parent": "信任父文件夹",
   "dialog.trust.alreadyAnswered": "信任确认已被回应，因此没有信任该文件夹。请在下一次确认出现时再次使用此对话框。",
+  "dialog.consoleRequest.title": "启动控制台会话？",
+  "dialog.consoleRequest.question": "{project} 中的会话“{session}”请求在“{console}”中启动一个控制台会话。",
+  "dialog.consoleRequest.confirm": "启动控制台会话",
+  "dialog.consoleRequest.refuse": "拒绝",
 
   "directoryPicker.path": "目录路径",
   "directoryPicker.go": "前往",

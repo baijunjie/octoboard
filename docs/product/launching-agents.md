@@ -59,10 +59,12 @@ Three things, and nothing else:
   and how to `report` to it; one bound to a project session is told which project session, by its id, dispatched it and
   that it reports there. One the user opened without a console session to report to is told that it was opened directly,
   that nobody is waiting on it, and not to call `report`, and that it may start sessions in its own project and drive
-  them, which report back to it. All of this follows from what is fixed for the session's lifetime, so the text never
-  changes under it. The role and whether the session is bound decide which tools the session is offered, so an unbound
-  project session still has `report`, and calling it is refused (see "Reporting" and "The unbound project session's
-  tools" in `docs/product/hub-orchestration.md`).
+  them, which report back to it. A lead session, bound to a console session only after it was opened, is given that
+  same unbound project session's text and tools on every launch, as at its first (see "Lead sessions" in
+  `docs/product/hub-orchestration.md`). All of this follows from what is fixed for the session's lifetime, so the text
+  never changes under it. The role and whether the session was opened bound decide which tools the session is offered,
+  so an unbound project session still has `report`, and calling it is refused while it is unbound (see "Reporting" and
+  "The unbound project session's tools" in `docs/product/hub-orchestration.md`).
 
 The injected hooks are built to be invisible. They never steer the agent, never print anything, never fail the turn,
 and carry a short timeout (3 seconds) so a daemon that is unreachable costs a turn a fraction of a second rather than

@@ -434,8 +434,9 @@ export type RequestBody =
    * otherwise. The agent's own transcript is never touched. */
   | { type: "delete_session"; session: string }
   /** With `project`: every archived session of that project. With `console_session`: every
-   * archived session bound to it. With neither: every archived console session of the console.
-   * Naming both is refused. Each removal is broadcast as `session_deleted`. */
+   * archived session under it (bound to it, or to an archived lead session bound to it). With
+   * neither: every archived console session of the console. Naming both is refused. Each removal
+   * is broadcast as `session_deleted`. */
   | { type: "delete_archived_sessions"; console: string; project?: string; console_session?: string }
   | { type: "set_session_pinned"; session: string; pinned: boolean }
   | { type: "send_message"; session: string; text: string }
@@ -453,6 +454,13 @@ export type RequestBody =
   | { type: "confirm_trust"; session: string; remember: boolean; trust_parent_dir?: boolean }
   /** Stops trusting a directory; projects' own consents are untouched. */
   | { type: "remove_trusted_directory"; path: string }
+  /** The user's answer to a `console_session_request`: `approve` starts a console session in the
+   * requesting session's console and binds that session to it; a refusal, dismissing the dialog
+   * included, changes nothing. The first answer from any client wins; a later one is refused with
+   * `CONSOLE_REQUEST_ANSWERED`, or `CONSOLE_REQUEST_NOT_WAITING` when the session stopped
+   * waiting. An approval is answered with `session_opened` for the console session it started, a
+   * refusal with `ack`. */
+  | { type: "answer_console_session_request"; request_id: string; approve: boolean }
   /** Each settable field is optional: absent means leave it as it is. Answered with `ack`;
    * broadcasts `settings_updated` only when something actually changed (the trusted-folders
    * pattern). */
@@ -560,9 +568,10 @@ export type Event =
    * once, when the session starts; nothing stores it, so a client that connects later never sees
    * it. */
   | { type: "session_notice"; session: string; code: string; params: MessageParams; message: string }
-  /** The reply to `open_session`: the session that was started. The same record is also
-   * broadcast as `session_upserted`, but that broadcast carries no request id, so this is the
-   * only way the caller can tell which session in the tree is the one it just opened. */
+  /** The reply to `open_session`, and to an approving `answer_console_session_request`: the session
+   * that was started. The same record is also broadcast as `session_upserted`, but that broadcast
+   * carries no request id, so this is the only way the caller can tell which session in the tree
+   * is the one it just opened. */
   | { type: "session_opened"; id?: string; session: Session }
   /** A session of a project the user has not agreed Octoboard may press trust confirmations for is
    * at its agent's folder-trust confirmation, which asks whether `path` is trusted; `agent` is the
@@ -578,6 +587,29 @@ export type Event =
       /** The directory `trust_parent_dir` would trust, or null when there is none to offer (too broad
        * to trust, the home directory cannot be determined, or `path` is not absolute): the button is shown only when it is not null. */
       trust_dir: string | null;
+    }
+  /** An unbound project session asked for a console session (`request_console_session`) and its
+   * call is waiting for the user's answer. Broadcast once, and sent again right after each
+   * `snapshot`, oldest first, for every request still waiting; a repeat is ignored. `request`,
+   * `summary` and `open_items` are the session's own words. */
+  | {
+      type: "console_session_request";
+      request_id: string;
+      session: string;
+      console: string;
+      project: string | null;
+      request: string;
+      summary: string;
+      open_items: string[];
+      /** Milliseconds since the epoch; several requests are shown oldest first. */
+      requested_at: number;
+    }
+  /** A `console_session_request` stopped waiting — answered, timed out or withdrawn — and every
+   * client closes its dialog. */
+  | {
+      type: "console_session_request_closed";
+      request_id: string;
+      reason: "approved" | "refused" | "timed_out" | "withdrawn";
     }
   | { type: "dir_listing"; id?: string; path: string; entries: DirEntry[] }
   /** The reply to `detect_directory_agent` and `probe_git_remote`: the one agent the project is set
@@ -664,7 +696,8 @@ export type Event =
   | { type: "ack"; id?: string }
   /** A failure, worded from `code` and `params` (see `daemonMessage.ts`); `message` is the English
    * text, shown for a code the client does not know. A client also branches on some codes — see
-   * `ALREADY_RUNNING_CODES`, `TRUST_REFUSED_CODES`, `TRUST_NOT_WAITING`, `REQUEST_SUPERSEDED`,
+   * `ALREADY_RUNNING_CODES`, `TRUST_REFUSED_CODES`, `TRUST_NOT_WAITING`,
+   * `CONSOLE_REQUEST_NOT_WAITING`, `CONSOLE_REQUEST_ANSWERED`, `REQUEST_SUPERSEDED`,
    * `SOURCE_CHANGED` and `WORKTREE_UNAVAILABLE`. */
   | { type: "error"; id?: string; code: string; params: MessageParams; message: string };
 
@@ -687,6 +720,14 @@ export const TRUST_REFUSED_CODES: readonly string[] = [
 /** The go-ahead was for a trust confirmation no longer waiting: nothing is wrong, so nothing is
  * shown. */
 export const TRUST_NOT_WAITING = "trust_not_waiting";
+
+/** An approval of a request for a console session whose session is no longer waiting for it
+ * (withdrawn, or timed out): nothing was started, which the user is told in a toast. */
+export const CONSOLE_REQUEST_NOT_WAITING = "console_request_not_waiting";
+
+/** An answer to a request for a console session already answered, here or from another client:
+ * nothing is wrong, so nothing is shown. */
+export const CONSOLE_REQUEST_ANSWERED = "console_request_answered";
 
 /** A browse request given up for a newer one in its slot, as the client asked: nothing is shown. */
 export const REQUEST_SUPERSEDED = "request_superseded";

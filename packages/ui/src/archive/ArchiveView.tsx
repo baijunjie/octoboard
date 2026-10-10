@@ -19,12 +19,15 @@ import { archivedSessions, boundArchivedSessions } from "../sidebar/order";
 const PAGE = 30;
 
 /**
- * Every archived session of a project, every archived console session of a console, or a console
- * session's own archived bound sessions, newest first: the full archive the sidebar's menus and
- * focus mode lead to ("The archive view" in docs/product/sidebar.md). It covers the terminal while
- * open, which stays mounted beneath it. The list is rendered a page at a time, adding the next page
- * as its end scrolls into view; the records themselves are all in the daemon's snapshot already.
+ * Every archived session of a project, every archived console session of a console, or the
+ * archived sessions under a console session (bound to it, or to an archived lead session bound to
+ * it, listed flat), newest first: the full archive the sidebar's menus and focus mode lead to
+ * ("The archive view" in docs/product/sidebar.md). It covers the terminal while open, which stays
+ * mounted beneath it. The list is rendered a page at a time, adding the next page as its end
+ * scrolls into view; the records themselves are all in the daemon's snapshot already.
  */
+// TODO: a lead session's archived sessions are listed flat among the console session's until
+// they are grouped under it (plan 20261010-requesting-a-console-session, milestone 03).
 export function ArchiveView({
   console: owner,
   project,
@@ -38,11 +41,12 @@ export function ArchiveView({
 }: {
   console: Console;
   project?: Project;
-  /** The console session whose own archived bound sessions this lists, instead of a project's or
-   * the console's. Never set together with `project`. */
+  /** The console session whose archived sessions this lists (bound to it, or to an archived lead
+   * session bound to it), instead of a project's or the console's. Never set together with
+   * `project`. */
   boundTo?: Session;
   /** The scope's sessions; only the archived ones are listed, or, with `boundTo`, only the ones
-   * archived and bound to it. */
+   * archived and under it. */
   sessions: Session[];
   /** Every stored account, to name the one each row's session ran under. */
   accounts: Account[];
