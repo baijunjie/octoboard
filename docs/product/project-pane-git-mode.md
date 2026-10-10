@@ -126,7 +126,8 @@ long for their space" in `docs/product/labels-and-tooltips.md`).
 
 ### What the list says instead
 
-- **Loading** while the worktrees or the changes are read.
+- **Loading** while the worktrees or the changes are read, announced to assistive technology — once, when reading
+  the worktrees gives way to reading the changes.
 - **No uncommitted changes** in this worktree.
 - **Not every change is shown**, under the list, when it was cut short: at most 10,000 changes, or 2 MiB of paths, are
   listed — those Git reported first, not a chosen subset. A worktree whose whole `git status` output is more than
@@ -230,7 +231,7 @@ until the new one is in.
 
 - **To choose a branch on each side**, while a branch is missing on either side, or, when the repository has no
   branches, that it has none yet.
-- **Comparing** while a comparison is made with none on screen.
+- **Comparing** while a comparison is made with none on screen, announced to assistive technology.
 - **The commits compared**, From's and then To's, each by its first seven characters, in a line above what the
   comparison found:
   - the changed files, in one section, **Changed files**, headed with how many changes it holds. Its rows, their

@@ -84,11 +84,11 @@ A folder that is not simply listed says so in a row of its own under it:
 - **cut short** — "not every entry is shown" — after the entries read before a limit stopped the listing: at most
   10,000 entries of one folder, or 2 MiB of names, are listed. These are the entries read first, not a chosen subset.
 
-For the project's own directory the same states take the whole pane: a loading line while it is first read, a line
-saying the project folder is empty, a line under the tree when it is cut short, and, when it cannot be read at all, an
-error naming the reason (with the folder shown as its path, `~` standing for the home directory) and **Try again** in
-place of the tree. Try again pressed from the keyboard hands keyboard focus to the header's Refresh, which stays while
-the error and its button go.
+For the project's own directory the same states take the whole pane: a loading line while it is first read, announced
+to assistive technology, a line saying the project folder is empty, a line under the tree when it is cut short, and,
+when it cannot be read at all, an error naming the reason (with the folder shown as its path, `~` standing for the home
+directory) and **Try again** in place of the tree. Try again pressed from the keyboard hands keyboard focus to the
+header's Refresh, which stays while the error and its button go.
 
 ## The selected file
 
@@ -159,7 +159,9 @@ place, and the description gives way first. Moving from file to file therefore n
   decoded is shown as its text instead.
 - **Any other binary file** says it cannot be displayed, with its size.
 - **While a file is being read**, and until its code is drawn, the viewer says it is loading. It never shows another
-  file's content under this file's name, not even for a moment while moving between files.
+  file's content under this file's name, not even for a moment while moving between files. Assistive technology is
+  told it is loading while the file is read — in a viewer just opened, after the viewer itself has been announced —
+  but not while its code is drawn.
 - **A file that cannot be shown** says why (see "Errors" below).
 
 ### Selecting and copying
