@@ -38,7 +38,7 @@ Where focus lands in each region:
 | Rail | the current console's avatar, or the rail's first control when there is no console |
 | Sidebar | the selected session's row, or the sidebar's first control when that row is not on screen |
 | Archive view | its first control |
-| Terminal | the terminal, so typing reaches the agent |
+| Terminal | the terminal, so typing reaches the agent; its cover's Reconnect button instead while that is offered (see "The terminal" in `docs/product/sessions.md`) |
 | Right pane, showing a report panel | the pager's first enabled button, else the report page itself |
 | Right pane, showing a project pane | its header's tab for the mode shown (Files or Git), from which Tab goes on to Refresh and then to the file tree, or in Git to the tab of the view shown (Uncommitted or Compare); Try again while the pane failed to load |
 | Connection banner | its Retry button; it has none while the banner only says it is reconnecting, and F6 then skips it |

@@ -206,8 +206,8 @@ react-aria-components control to hang the shape on: `IndicatorTooltip` in
 gets wrong: the trigger hardcodes `role="button"` (so one left without a `role` exposes an unnamed button) and is
 focusable, so it always sets `tabIndex={-1}`, cancels `mousedown` so a press does not take focus off the terminal, and
 takes either a `label` (`role="img"` and `aria-label`) or `role="presentation"` (browsers ignore that role on a
-focusable element, so it only keeps the unnamed button role off). A deliberately focusable indicator, as
-`TerminalConnection`'s reconnecting arrow is, uses `Tooltip.Trigger` itself.
+focusable element, so it only keeps the unnamed button role off). A deliberately focusable indicator would use
+`Tooltip.Trigger` itself.
 
 ## Every string the user reads goes through the catalog, in a shape a translation can follow
 

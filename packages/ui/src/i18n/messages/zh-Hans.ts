@@ -191,9 +191,6 @@ export const zhHans: Translation<"other"> = {
   "titleBar.forward": "前进",
   "titleBar.sidebar.hide": "隐藏会话列表",
   "titleBar.sidebar.show": "显示会话列表",
-  "terminalConnection.reconnecting": "终端正在重新连接…",
-  "terminalConnection.disconnected": "终端已断开连接",
-  "terminalConnection.reconnect": "终端已断开连接。重新连接。",
 
   "rail.label": "控制台和窗口控制",
   "rail.newConsole": "新建控制台",
@@ -319,9 +316,12 @@ export const zhHans: Translation<"other"> = {
   "terminal.empty": "选择一个会话以查看其终端。",
   "terminal.loading": "终端加载中…",
   "terminal.resuming": "正在恢复会话…",
+  "terminal.reconnecting": "终端正在重新连接…",
+  "terminal.disconnected": "终端已断开连接",
   "terminal.archived": "已归档。输入内容即可重新打开。",
   "terminal.notRunning": "未在运行",
   "terminal.resume": "恢复",
+  "terminal.reconnect": "重新连接",
 
   "report.empty": "还没有页面",
   "report.previous": "上一页",

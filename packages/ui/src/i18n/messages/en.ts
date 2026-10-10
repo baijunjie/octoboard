@@ -218,9 +218,6 @@ export const en = {
   "titleBar.forward": "Forward",
   "titleBar.sidebar.hide": "Hide sessions",
   "titleBar.sidebar.show": "Show sessions",
-  "terminalConnection.reconnecting": "Reconnecting the terminal…",
-  "terminalConnection.disconnected": "Terminal disconnected",
-  "terminalConnection.reconnect": "Terminal disconnected. Reconnect it.",
 
   "rail.label": "Consoles and window controls",
   "rail.newConsole": "New console",
@@ -356,9 +353,12 @@ export const en = {
   "terminal.empty": "Select a session to view its terminal.",
   "terminal.loading": "Loading terminal…",
   "terminal.resuming": "Resuming session…",
+  "terminal.reconnecting": "Reconnecting the terminal…",
+  "terminal.disconnected": "Terminal disconnected",
   "terminal.archived": "Archived. Type to reopen it.",
   "terminal.notRunning": "Not running",
   "terminal.resume": "Resume",
+  "terminal.reconnect": "Reconnect",
 
   "report.empty": "No pages yet",
   "report.previous": "Previous page",

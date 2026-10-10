@@ -470,17 +470,38 @@ focus between regions with F6" in `docs/product/moving-focus-between-regions.md`
   against its cell's background whatever colours the agent prints — see "What follows the choice" in
   `docs/product/appearance.md`.
 - A client that stops draining output for more than a few seconds is dropped by the daemon rather than letting output
-  buffer without bound. The application then reconnects by itself, with a backoff, up to five times. Meanwhile the
-  terminal connection indicator after the session's status icon in the top bar shows the terminal is reconnecting;
-  once the attempts are spent it shows the terminal is disconnected, and pressing it starts them over (see "The
-  terminal connection indicator" in `docs/product/window-layout.md`). A reconnect in the background never steals
-  keyboard focus.
+  buffer without bound. The application then reconnects by itself, with a backoff, up to five times. **While those
+  attempts are under way the terminal is covered by a spinner and a line saying it is reconnecting**, over whatever
+  output was on screen. **Once the attempts are spent the cover becomes a disconnected panel**: a muted unplugged-cord
+  icon, a line saying the terminal is disconnected, and a **Reconnect** button. The top bar shows nothing about the
+  terminal's connection in either state. Assistive technology is told each of these states as it begins, by the
+  terminal's area alone; the disconnected panel's message and button can also be reached when browsing, while the
+  spinner covers cannot. A reconnect in the background never steals keyboard focus.
+- **The Reconnect button is offered only while the connection to the daemon is open.** While it is not, the
+  disconnected panel shows its message without the button, and the connection banner and its Retry are the way back
+  (see "Losing the daemon connection" in `docs/product/application-lifecycle.md`).
+- **Pressing Reconnect starts the automatic attempts over and moves keyboard focus to the terminal.** A mouse press
+  on the button does not itself take keyboard focus.
+- **Keyboard focus and the Reconnect button**: whatever hands keyboard focus to the terminal — `F6` reaching the
+  terminal's region, for one (see "Moving focus between regions with F6" in
+  `docs/product/moving-focus-between-regions.md`) — puts it on the Reconnect button instead while the button is
+  offered, since the terminal's own `Tab` goes to the agent. When the button appears while keyboard focus is in the
+  terminal's area, focus moves to it; focus anywhere else in the window is left where it is. When the button goes away
+  while it holds focus, focus goes to the terminal, or to the top bar's first enabled control when the terminal
+  cannot take it.
+- **A terminal whose automatic attempts are spent is tried again only** by pressing Reconnect, by selecting another
+  session and then this one again, or, by itself and without moving keyboard focus, when the application re-reads the
+  daemon's whole state, as it does on each new connection to the daemon (see "Losing the daemon connection" in
+  `docs/product/application-lifecycle.md`). Each of these starts the five attempts over. An update to the session's status does not try it again.
 - **Until the session's first output is on screen, the terminal is covered by a loading state** — a spinner and a
   line saying the session is being resumed, while a resume of it is under way or it has no process yet, and that the
   terminal is loading otherwise. It covers whatever comes before that first output, every time the terminal attaches
   — when a session is selected, resumed or reconnected: the resume starting the process, the connection being made,
-  and a freshly started agent drawing its first screen. An agent that prints nothing does not keep it up: after
-  10 seconds without output the bare terminal is shown.
+  and a freshly started agent drawing its first screen. An agent that prints nothing does not keep it up: once the
+  terminal has been connected for 10 seconds without output, the bare terminal is shown. While the terminal is not
+  connected — a first connection that hangs, an attempt started with Reconnect, a resume still starting the process —
+  the loading state stays, however long that takes. While the terminal is reconnecting
+  or disconnected, the cover described above is shown in its place.
 - Selecting an interrupted session resumes it rather than attaching. Two ways of reaching one only show it, with its
   card, and never resume it: moving with Back or Forward (see "Moving back and forward" in
   `docs/product/navigation-history.md`), and `Ctrl+Tab` / `Ctrl+Shift+Tab` in a console session's focus mode (see

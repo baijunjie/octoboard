@@ -234,5 +234,6 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
       store.setState((state) => ({ trustPrompts: state.trustPrompts.filter((p) => p.session !== session) })),
     reconnect: () => {},
     terminalUrl: (session) => terminalFixtureUrl(scenario.terminal ?? "output", session),
+    terminalReconnectDelay: scenario.terminalRetriesImmediate ? () => 0 : undefined,
   };
 }

@@ -58,8 +58,8 @@ export function EmptyPanel({
       </span>
       <p>{message}</p>
       {action && (
-        // The sidebar's controls never take focus on a mouse press (see `ActionMenu`); the dialog
-        // the action opens takes it instead.
+        // A press never takes focus: it would drop to `<body>` when the panel goes away, and
+        // whatever the action opens or starts places focus itself.
         <Button size="sm" variant="secondary" preventFocusOnPress onPress={action.onPress}>
           {ActionIcon && <ActionIcon aria-hidden="true" className="size-4" />}
           {action.label}

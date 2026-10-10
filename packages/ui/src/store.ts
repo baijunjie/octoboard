@@ -340,6 +340,9 @@ export interface Daemon {
   /** The URL of a session's terminal stream (`GET /ws/term/:session`), on the same daemon the
    * control connection goes to. */
   terminalUrl: (session: string) => string;
+  /** Overrides the delay before a terminal's automatic reconnect attempt number `attempt` (from 0);
+   * only the gallery sets it, so that a spent budget can be shown without waiting for it. */
+  terminalReconnectDelay?: (attempt: number) => number;
 }
 
 export function createDaemon(origin: DaemonOrigin): Daemon {

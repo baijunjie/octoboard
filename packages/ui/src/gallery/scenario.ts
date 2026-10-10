@@ -56,6 +56,9 @@ export interface Scenario {
   /** How a session's terminal behaves: `output` connects and draws a sample (default), `refuse`
    * never connects, which is a terminal in trouble. */
   terminal?: TerminalBehaviour;
+  /** The terminal's automatic reconnect attempts follow one another at once, so a `refuse`d
+   * terminal reaches its disconnected state without the backoff's wait. */
+  terminalRetriesImmediate?: boolean;
   /** What `list_dir` answers per path; a path not listed gets a generic listing. */
   directories?: Record<string, DirEntry[]>;
   /** What `detect_directory_agent` and `probe_git_remote` answer per path or URL: an agent (or null

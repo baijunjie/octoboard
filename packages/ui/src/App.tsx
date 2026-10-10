@@ -43,7 +43,7 @@ import { useSidebarView } from "./sidebar/sidebarView";
 import { useSwitchShortcut } from "./sidebar/switchShortcut";
 import type { ArchiveScope } from "./sidebar/types";
 import { useDaemon, useDaemonStore } from "./store";
-import { TerminalPane, type TerminalPaneHandle, type TerminalProblem } from "./terminal/TerminalPane";
+import { TerminalPane, type TerminalPaneHandle } from "./terminal/TerminalPane";
 import { nextWaitingSession, waitingSessionsInTreeOrder } from "./waiting";
 
 export function App(): React.ReactElement {
@@ -61,7 +61,6 @@ export function App(): React.ReactElement {
   const [dialogRequest, setDialogRequest] = useState<DialogRequest>();
   const dialogRequestRef = useRef(dialogRequest);
   dialogRequestRef.current = dialogRequest;
-  const [terminalProblem, setTerminalProblem] = useState<TerminalProblem>();
   const [archiveScope, setArchiveScope] = useState<ArchiveScope>();
   // Sessions whose `resume_session` is in flight, for the terminal's loading state.
   const [resumingIds, setResumingIds] = useState<ReadonlySet<string>>(new Set());
@@ -479,9 +478,6 @@ export function App(): React.ReactElement {
         onBack={navigation.back}
         onForward={navigation.forward}
         selectedSession={selectedSession}
-        // The terminal's socket cannot be better than the daemon behind it, whose state `ConnectionBanner` shows.
-        terminalProblem={connectionState === "open" ? terminalProblem : undefined}
-        focusTerminal={focusTerminal}
         viewTrail={
           archiveOpen && archiveConsole
             ? archiveProject
@@ -580,7 +576,6 @@ export function App(): React.ReactElement {
                 session={selectedSession}
                 onResume={resumeSession}
                 resuming={selectedSessionId !== undefined && resumingIds.has(selectedSessionId)}
-                onProblemChange={setTerminalProblem}
               />
             </div>
             {/* Keyed on what owns the aside, so a new owner mounts a fresh instance: a report does not

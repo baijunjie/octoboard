@@ -8,9 +8,7 @@ A control shown only as an icon has a tooltip naming it, shown both when the mou
 keyboard focus. The tooltip's text is the same name assistive technology announces for the control, except on the
 consoles' avatars, the ⋮ buttons and the pin buttons below. These are:
 
-- the top bar's controls — Back, Forward, the sidebar toggle, whose tooltip follows its "Show …" / "Hide …" label, and
-  the terminal connection indicator at the breadcrumb's end, in both its states (see "The terminal connection
-  indicator" in `docs/product/window-layout.md`);
+- the top bar's controls — Back, Forward, and the sidebar toggle, whose tooltip follows its "Show …" / "Hide …" label;
 - the rail's buttons — each console's avatar, whose tooltip is the console's name while the name announced for it also
   says what is going on in it (see "The console switcher" in `docs/product/sidebar.md`), New console, the waiting
   count, whose tooltip says how many sessions are waiting and that pressing it goes to the next one, Turn on
