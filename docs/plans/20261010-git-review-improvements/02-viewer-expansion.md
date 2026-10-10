@@ -13,6 +13,8 @@
 - [ ] Separators are expandable only when the bodies can be offered; otherwise they keep today's form.
 - [ ] One expansion reveals a small step; repeated expansions of the same gap grow until the whole gap is shown (see
   the overview's design decisions).
+- [ ] The separator's text ("1 unmodified line" and its plurals) comes from the renderer library in English; it is
+  shown in the app's language instead.
 
 ## Implementation plan
 
