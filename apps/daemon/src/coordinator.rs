@@ -1038,6 +1038,7 @@ async fn relaunch_session(
     }
 
     let previous_status = session.status;
+    let previous_ended_at = session.ended_at;
     let cwd = session_cwd(state, &session)?;
     let resume_id = resumable_agent_session_id(&session);
     // A relaunch carries no task, so the agent comes up at its prompt rather than working. On
@@ -1088,9 +1089,13 @@ async fn relaunch_session(
         }
         Err(err) => {
             // Back to where it was, archived included: a reopen that failed to launch must not
-            // quietly move a session out of its project's Archive group.
+            // quietly move a session out of its project's Archive group. The recorded end time is
+            // written back rather than left alone, since the relaunch above cleared it and
+            // persisted that before launching; the archive is ordered and labelled by it (see
+            // "The archive view" in `docs/product/sidebar.md`), so a session this attempt did not
+            // change would otherwise jump to the top reading "archived now".
             session.status = previous_status;
-            session.ended_at = Some(now_millis());
+            session.ended_at = previous_ended_at;
             state.save_session(&session)?;
             state.revoke_mcp_tokens(&session.id);
             // Nothing will ever release what was queued for this relaunch, and leaving it would
@@ -3464,6 +3469,30 @@ mod tests {
             state.store.get_session("s").unwrap().unwrap().status,
             SessionStatus::Archived
         );
+    }
+
+    /// A reopen whose launch fails leaves the session exactly as it was archived: the rollback
+    /// puts its status back, and the time it was archived at is not re-stamped, so its place in
+    /// the archive and the time its row reports both stay where they were.
+    #[tokio::test]
+    async fn a_reopen_that_fails_to_launch_keeps_the_time_it_was_archived_at() {
+        let (state, _dir) = switch_fixture("reopen-launch-refused");
+        state
+            .store
+            .insert_session(&Session {
+                ended_at: Some(5),
+                ..project_session("s", Agent::Claude, SessionStatus::Archived)
+            })
+            .unwrap();
+
+        let err = resume_session(&state, "s", None)
+            .await
+            .expect_err("the project's directory does not exist");
+        assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
+
+        let after = state.store.get_session("s").unwrap().unwrap();
+        assert_eq!(after.status, SessionStatus::Archived);
+        assert_eq!(after.ended_at, Some(5));
     }
 
     /// A project session bound to the console session `owner`, titled by its id so a refusal that

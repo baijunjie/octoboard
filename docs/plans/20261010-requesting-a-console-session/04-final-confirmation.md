@@ -31,5 +31,5 @@ the console session's own working directory stays reachable, so only the project
 verification copy of the bundle its own identifier if the user's own Octoboard is running, so a scripted click
 cannot land on their window.
 
-A defect found while confirming them, filed separately as it predates this topic and fires for any session:
-`docs/bugs/20261010-failed-relaunch-restamps-ended-at.md`.
+A defect found while confirming them, filed separately as it predates this topic and fires for any session: a
+relaunch that failed to launch re-stamped the session's archived time. Since fixed.
