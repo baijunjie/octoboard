@@ -27,9 +27,10 @@ the real route — an unbound project session's `request_console_session` sent t
 read out of the agent process's own `--mcp-config` argv, answered with `answer_console_session_request`. One file of
 recorded argv per spawned process is what shows which sessions were launched at all. The launch of the lead session
 was made to fail by renaming the project's directory away, which `term::launch` refuses on before spawning anything;
-the console session's own working directory stays reachable, so only the project sessions below it fail. Give the
-verification copy of the bundle its own identifier if the user's own Octoboard is running, so a scripted click
-cannot land on their window.
+the console session's own working directory stays reachable, so only the project sessions below it fail. With the
+user's own Octoboard running, keep the verification copy on the real bundle identifier — a re-identified copy never
+shows a window at all — and keep a scripted click off their window by confirming our own is frontmost before each
+one (see `docs/memory/building-and-launching-the-app-for-verification.md`).
 
 A defect found while confirming them, filed separately as it predates this topic and fires for any session: a
 relaunch that failed to launch re-stamped the session's archived time. Since fixed.

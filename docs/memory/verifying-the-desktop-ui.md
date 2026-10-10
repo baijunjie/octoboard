@@ -24,6 +24,16 @@ build-only Vite plugin changes are not settled there either: the gallery runs Vi
 `git worktree add --detach` case in the "Creating" section of `.claude/skills/git-worktree/SKILL.md`) whose `main.tsx`
 renders the gallery's scenarios in place of the app.
 
+## Stage a defect's states in the order it was reported, not in whatever order is easy to reach
+
+The order the states are brought up in decides the outcome on its own often enough — whether an element was already
+mounted when an overlay opened, what held focus when a region appeared, which of two things observed the other — that
+a run reaching the same final state by another route proves nothing about the route that was reported. A gallery
+scenario here raised the connection banner and then opened a dialog over it, where the defect had been filed the other
+way round; every measurement passed, and the fix it passed still failed in the packaged app. So when reproducing a
+defect or verifying its fix, put the steps in the order the report gives, and where a scenario cannot reach the state
+that way, extend it until it can rather than reporting the pass the other order gives.
+
 ## Check the page in WebKit with real pointer input, and with long and CJK text
 
 The app renders in WKWebView, so a pass in Chrome says nothing: a HeroUI tag's remove button that ignored the mouse

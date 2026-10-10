@@ -102,6 +102,13 @@ go-ahead up front and is possible only while no app with that identifier is runn
 the shared profile, note each setting the run will change (the appearance and the language first of all) beforehand,
 and put it back afterwards, because the user's own app reads the same values.
 
+Giving the copy an identifier of its own is not a way out of sharing that profile, nor of a scripted click landing on
+the user's window: a built `.app` copied aside and re-identified never shows a window at all — its webview and GPU
+processes start, and nothing appears, long after the safety net that reveals the window regardless of the frontend
+would have fired — so there is no run left to measure. A verification therefore runs under the real identifier and on
+the shared profile, and a key it leaves behind in that profile can only be removed once no app with that identifier is
+running, so plan that cleanup for after the user's own app is stopped, or hand it to them.
+
 The app's defaults domain is shared the same way, so to run it under other system languages pass them for that launch
 only — `open <bundle>.app --args -AppleLanguages '(zh-Hans-CN, en)'` — and never `defaults write dev.octoboard.app
 AppleLanguages`, which the user's own app then reads too. This steers only a launch whose profile has no

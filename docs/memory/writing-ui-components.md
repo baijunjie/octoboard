@@ -107,6 +107,26 @@ Check it where it shows: the listener is installed only while an overlay is up, 
 layout breakpoint, with the pane as a drawer, or with a docked pane hidden and floated in on hover. A gallery scenario
 at a normal width, both panes docked, never reaches it.
 
+## A surface that stays usable while a dialog is open is marked a top layer before the dialog opens
+
+While a modal is open React Aria sets `inert` on everything outside it (`ariaHideOutside`) and dismisses it on a press
+outside it (`useInteractOutside`); both make an exception for an element carrying `data-react-aria-top-layer="true"` —
+and for the ancestors containing it — which is how HeroUI's own toast region stays usable over a dialog. So that
+marking is how a surface of this project's own is kept reachable there, but it counts only on an element that was
+already in the DOM when the dialog opened: the `MutationObserver` that `ariaHideOutside` watches later additions with
+skips anything added inside a subtree it has already hidden, and never looks at the marking on it. Keep the marked
+element mounted whatever the state therefore — empty, and a flex item of no height, when there is nothing to show — or
+portal it to `document.body` as the toast region does, and never mark it only while its content is on screen.
+
+The marking does not lift the surface over the modal's backdrop, which covers the whole viewport, so the two have to
+be ordered as well or the press lands on the backdrop. Lower the backdrop rather than raise the surface: React Aria
+puts its popover-level overlays (a menu, a select's list, a tooltip) at the same level as the backdrop and anchors
+them to the viewport's own bottom edge, knowing nothing about the window's chrome, so a surface raised above that
+level ends up over the lowest rows of a list where every press is swallowed — the marking makes React Aria ignore a
+press inside the surface, so such a press does not even dismiss what it covers. Having the marking without the
+ordering reads as a contradiction that sends a diagnosis the wrong way: the surface paints undimmed on top of the
+backdrop and still takes no pointer event at all.
+
 ## A single-line field hands its form the trimmed value
 
 Leading and trailing whitespace is never meant, so a form never holds it: every single-line text field in
