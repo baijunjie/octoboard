@@ -12,14 +12,14 @@ always available and costs about a minute.
 ## Build the daemon and confirm what the running sidecar executes before trusting any verification of it
 
 Launching the app in dev mode does not build the daemon: the dev command starts the frontend dev server only (for the
-build step itself and when to rerun it, see the "Development" section of `apps/desktop/README.md`). In a worktree that has never
-been built, the missing sidecar fails loudly at compile time; in one that has been built before, the launch silently
-uses the binary already sitting there, and a verification of a daemon-side change then measures the *old* behaviour and
-reports a pass or a failure that has nothing to do with the change. So build the daemon first, then confirm positively
-that the running sidecar is executing it: take the content hash of the executable the live sidecar process has open and
-compare it against the fresh build output. The sidecar directory the build script copies into is not that executable —
-the process runs from a further copy under the Tauri crate's own target directory — so an up-to-date sidecar directory
-on its own proves nothing about what is running.
+build step itself and when to rerun it, see the "Development" section of `apps/desktop/README.md`). In a worktree that
+has never been built, the missing sidecar fails loudly at compile time; in one that has been built before, the launch
+silently uses the binary already sitting there, and a verification of a daemon-side change then measures the *old*
+behaviour and reports a pass or a failure that has nothing to do with the change. So build the daemon first, then
+confirm positively that the running sidecar is executing it: take the content hash of the executable the live sidecar
+process has open and compare it against the fresh build output. The sidecar directory the build script copies into is
+not that executable — the process runs from a further copy under the Tauri crate's own target directory — so an
+up-to-date sidecar directory on its own proves nothing about what is running.
 
 ## Read what the shipped webview sends to the daemon off a packaged build, through a wrapped sidecar
 
@@ -32,6 +32,21 @@ daemon instead, without touching the source: in a copy of the built `.app`, rena
 print the daemon's `octoboardd listening on 127.0.0.1:<port>` line again with its own port, because the shell connects
 to whatever port that line on the sidecar's stdout names. This relies on the build being unsigned, as the swap breaks
 a signed bundle's signature.
+
+## Nothing the daemon logs once the application is gone is readable, and putting its log on a file changes what it does
+
+Applies to verifying what the daemon does after the application exits, crashes or is killed. The daemon's log goes to
+its stderr, and that stderr is a pipe whose read end the application holds and forwards to its own stderr
+(`apps/desktop/src-tauri/src/sidecar.rs`), so on a packaged build the daemon's lines land wherever the application's
+own output does. Every line the daemon writes after the application is gone therefore goes into a dead pipe and is
+readable nowhere — and a `tracing` call added to diagnose such a path leaves no trace at all, as does a task that
+panics on one, since Tokio swallows a task's panic.
+
+Starting the daemon by hand with its stderr on a file does make those lines readable, but it also takes the broken
+pipe away, which is part of the condition being investigated: a daemon that misbehaves under the application can
+behave perfectly with its log on a file. So treat a stderr-on-a-file run as the control showing that the pipe is what
+matters, not as the observation, and get the evidence off the path another way — in a throwaway build, have the code
+under investigation write to a file of its own, around a `catch_unwind` where a panic is the suspicion.
 
 ## Build the bundle a verification runs against with `pnpm build:app`, never a bare `cargo build`
 

@@ -129,20 +129,32 @@ fn main() -> Result<()> {
         return mcp::stdio::run(session, role.into(), bound, port, token);
     }
 
-    // stdout carries the port handshake line the application reads, so logs always go to stderr.
-    tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive(tracing::Level::INFO.into()),
-        )
-        .init();
+    init_logging();
     crash_cleanup::install();
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?
         .block_on(run_daemon(cli.parent_pid))
+}
+
+/// Sends the daemon's log to stderr, at `INFO` and above. Never to stdout: that carries the port
+/// handshake line the application reads.
+///
+/// The application owns the read end of that stderr, so from the moment it is gone every write to
+/// the log fails. Reporting those failures is therefore turned off: the report is an `eprintln!`
+/// of its own, which panics on the same dead stderr, and that panic would take out whichever task
+/// logged — the parent watch among them, leaving the daemon running with no application (see
+/// `spawn_parent_watch`). A log that cannot be written is dropped instead.
+fn init_logging() {
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive(tracing::Level::INFO.into()),
+        )
+        .log_internal_errors(false)
+        .init();
 }
 
 async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
@@ -292,4 +304,105 @@ fn remove_port_file() {
 
 fn port_file_path() -> std::path::PathBuf {
     std::env::temp_dir().join("octoboardd.port")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    use crate::test_support::{app_state, ScratchDir, PATIENCE};
+
+    /// Where [`parent_watch_child`] records that the watch got as far as the shutdown. Its presence
+    /// in the environment is also what tells that case it is being run as one.
+    const DONE_FILE_VAR: &str = "OCTOBOARDD_TEST_PARENT_WATCH_DONE";
+
+    /// The parent watch ends the daemon even when the log line it writes on the way cannot be
+    /// written. The application owns the read end of the daemon's stderr, so from its death every
+    /// such write fails, which is the state this test puts the child in by closing the read end of
+    /// its stderr.
+    #[test]
+    fn the_parent_watch_asks_for_the_shutdown_with_a_dead_log() {
+        let dir = ScratchDir::new("parent-watch");
+        let done = dir.join("done");
+        let log = dir.join("child.log");
+        let mut child = Command::new(std::env::current_exe().expect("the binary"))
+            .args([
+                "--exact",
+                "tests::parent_watch_child",
+                "--ignored",
+                // The case has to run uncaptured: libtest's capture would take the subscriber's own
+                // `eprintln!` about the failed write, which is the very thing that must land on the
+                // dead stderr, and the test would pass whether that report is turned off or not.
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env(DONE_FILE_VAR, &done)
+            .stdout(std::fs::File::create(&log).expect("the child's log"))
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("the child test started");
+        drop(child.stderr.take());
+
+        let deadline = Instant::now() + PATIENCE;
+        let status = loop {
+            match child.try_wait().expect("the child was waited on") {
+                Some(status) => break status,
+                None if Instant::now() >= deadline => {
+                    child.kill().ok();
+                    panic!("the child never ended; it said {}", said(&log));
+                }
+                None => std::thread::sleep(Duration::from_millis(50)),
+            }
+        };
+        assert!(
+            status.success(),
+            "the child ended with {status}; it said {}",
+            said(&log)
+        );
+        // A child that exits cleanly without having run the case at all — a filter that matched
+        // nothing, because the case was renamed or moved — would otherwise read as a pass.
+        assert!(
+            done.exists(),
+            "the child never ran the case; it said {}",
+            said(&log)
+        );
+    }
+
+    /// What the child wrote where libtest reports its result, for a failure to be read by.
+    fn said(log: &std::path::Path) -> String {
+        std::fs::read_to_string(log).unwrap_or_else(|err| format!("<unreadable: {err}>"))
+    }
+
+    /// The case [`the_parent_watch_asks_for_the_shutdown_with_a_dead_log`] runs in a child process;
+    /// does nothing when run any other way. It has to be a process of its own in any case: it
+    /// installs the daemon's own log subscriber, which is installed once per process.
+    #[test]
+    #[ignore = "run in a child process by the_parent_watch_asks_for_the_shutdown_with_a_dead_log"]
+    fn parent_watch_child() {
+        let Ok(done) = std::env::var(DONE_FILE_VAR) else {
+            return;
+        };
+        super::init_logging();
+        let (state, _dir) = app_state("parent-watch-child");
+        // Stands in for the application: spawned and reaped here, so the watch finds its pid gone
+        // the first time it looks.
+        let mut gone = Command::new("/usr/bin/true")
+            .spawn()
+            .expect("the stand-in application ran");
+        let parent_pid = gone.id();
+        gone.wait().expect("the stand-in application was reaped");
+
+        // Unbounded on purpose: the parent bounds the whole case by `PATIENCE`, and a second
+        // deadline inside it would only ever expire after that one.
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime")
+            .block_on(async {
+                super::spawn_parent_watch(state.clone(), parent_pid);
+                state.await_shutdown().await;
+            });
+        std::fs::write(&done, "reached").expect("the marker was written");
+    }
 }

@@ -154,9 +154,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   how to build, launch and isolate the app for a verification: when to launch the real window, building the daemon and
   confirming the running sidecar's binary, `pnpm build:app` (a `tauri build` that cannot sign), `open` rather than
   exec'ing the binary, a throwaway `HOME` and `TMPDIR` and the webview profile they still share (and running under
-  other system languages for one launch), reading the wire through a wrapped sidecar, sharing the machine with other
-  worktrees' dev apps (fixed port, stopping by PID only), and fully reloading a dev window before judging a defect in
-  it.
+  other system languages for one launch), reading the wire through a wrapped sidecar, why nothing the daemon logs after
+  the application is gone can be read and why putting its log on a file removes the condition under investigation,
+  sharing the machine with other worktrees' dev apps (fixed port, stopping by PID only), and fully reloading a dev
+  window before judging a defect in it.
 - [Verifying the desktop UI](memory/verifying-the-desktop-ui.md) — how to verify terminal and UI behaviour in the real
   app: why a verification stays as narrow as the change, looking at a UI state in the gallery before staging it through
   a daemon and what the gallery cannot settle, checking in WebKit with real pointer input and with long and CJK text,
