@@ -243,9 +243,10 @@ async fn submit_browse(state: &Arc<AppState>, lane: &Arc<Lane>, request: BrowseR
             budget::READ_RESERVATION
         }
         BrowseBody::ListProjectChanges { .. } => budget::CHANGE_LIST_RESERVATION,
-        BrowseBody::ReadProjectChange { .. } | BrowseBody::ReadProjectComparisonChange { .. } => {
-            budget::DIFF_RESERVATION
-        }
+        BrowseBody::ReadProjectChange { .. }
+        | BrowseBody::ReadProjectComparisonChange { .. }
+        | BrowseBody::ReadProjectChangeBodies { .. }
+        | BrowseBody::ReadProjectComparisonChangeBodies { .. } => budget::DIFF_RESERVATION,
         BrowseBody::ListProjectBranches { .. } => budget::BRANCH_LIST_RESERVATION,
         BrowseBody::CompareProjectBranches { .. } => budget::COMPARISON_RESERVATION,
     };

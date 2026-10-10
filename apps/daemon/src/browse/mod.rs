@@ -20,6 +20,8 @@ pub mod source;
 pub mod wire_path;
 
 #[cfg(test)]
+mod body_tests;
+#[cfg(test)]
 mod change_tests;
 #[cfg(test)]
 mod compare_tests;
@@ -273,6 +275,54 @@ pub fn serve(
                 old: Box::new(read.old),
                 new: Box::new(read.new),
                 patch: read.patch.map(file_content),
+            })
+        }
+        BrowseBody::ReadProjectChangeBodies {
+            project,
+            worktree,
+            change,
+            old,
+            new,
+        } => {
+            let record = stored_project(state, &project)?;
+            let at = locate(&record, worktree.as_deref(), &git, cancel)?;
+            let expected = changes::Expected {
+                old: &old,
+                new: &new,
+            };
+            let read = changes::read_bodies(git.env()?, &at, &change, &expected, cancel)?;
+            Ok(Event::ProjectChangeBodies {
+                id,
+                project,
+                worktree,
+                group: change.group,
+                old: Box::new(read.old),
+                new: Box::new(read.new),
+            })
+        }
+        BrowseBody::ReadProjectComparisonChangeBodies {
+            project,
+            left,
+            right,
+            change,
+            old,
+            new,
+        } => {
+            let record = stored_project(state, &project)?;
+            let at = locate(&record, None, &git, cancel)?;
+            let expected = changes::Expected {
+                old: &old,
+                new: &new,
+            };
+            let read =
+                compare::read_bodies(git.env()?, &at, &left, &right, &change, &expected, cancel)?;
+            Ok(Event::ProjectComparisonChangeBodies {
+                id,
+                project,
+                left,
+                right,
+                old: Box::new(read.old),
+                new: Box::new(read.new),
             })
         }
     }

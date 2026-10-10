@@ -56,10 +56,24 @@ area and the Git mode panel, and shows a type change as one diff.
   component rather than by hand.
 - **Every diff looks the same.** A type change is one diff with the layout choice, like any other change; the
   Before/After split was a presentation choice, not a renderer limit.
+- **One expansion reveals 20 lines, and the third opens the rest.** The separator also offers expanding the whole
+  file at once.
+- **One wrap choice covers files and diffs**, and nothing is wrapped by default — Markdown and plain text included.
+- **Flat is the default list form**, and a chain of single-child directories is compacted into one row in the tree
+  form.
+- **The filter matches the file name only**, and both the filter and the row action button stay in the change list;
+  the Files mode's tree is outside this topic.
+- **A separator that cannot be expanded keeps today's form.** A file over the limit, and a side that does not exist,
+  offer no expansion rather than a partial one, and say nothing extra.
+- **Markdown opens as a document.** The document view is the default for a Markdown file and the source/document
+  choice is remembered; a Markdown diff keeps only the source view. The renderer is `react-markdown` with
+  `remark-gfm`, with fenced code highlighted through the viewer's existing Shiki renderer.
+- **The neutral tag is fixed by overriding HeroUI's whole `--default` family for the dialog**, as the sidebar already
+  does for its own surface.
 
 ## Milestones
 
-1. [Reading a diff's full file bodies](01-diff-file-bodies.md)
+1. 01 diff-file-bodies (closed)
 2. [Expanding collapsed lines in the viewer](02-viewer-expansion.md)
 3. [Word wrap in the viewer](03-word-wrap.md)
 4. [The change list as a directory tree](04-change-tree.md)
@@ -69,20 +83,3 @@ area and the Git mode panel, and shows a type change as one diff.
 8. [The viewer header's layout and tags](08-viewer-header-layout.md)
 9. [Surfaces and light-mode contrast in the viewer and Git mode](09-surfaces-and-contrast.md)
 10. [Showing a type change as one diff](10-type-change-diff.md)
-
-## Open
-
-- The exact step: how many lines one expansion reveals, and after how many expansions the whole gap opens; whether
-  there is also an "expand all" for the file.
-- Whether word wrap applies to diffs as well as files, and whether non-code text (Markdown, plain text) wraps by
-  default.
-- Whether the file-name filter and the row action button also come to the Files mode's tree, and whether the filter
-  matches the name only or the path too.
-- Whether a tree compacts single-child directories into one row (`utils/kickback`), and the default of the flat/tree
-  choice.
-- What the separator says for a file over the limit, and for a side that does not exist (an added or deleted file
-  has only one side).
-- Whether the Markdown document view is the default for Markdown, whether the choice is remembered, whether a
-  Markdown diff also gets a document view, and which Markdown library to use.
-- Which fill the neutral tag takes: another Chip colour or variant, or the `--default` family overridden for the
-  dialog.

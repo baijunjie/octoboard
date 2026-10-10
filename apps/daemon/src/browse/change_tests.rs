@@ -4,6 +4,7 @@
 
 use std::path::Path;
 
+use super::body_tests::version;
 use super::changes::AFTER_PATCH;
 use super::tests::{bytes_of, code, Fixture};
 use super::*;
@@ -17,11 +18,11 @@ use crate::test_support::{
 
 /// A change as `read_project_change` answered it.
 #[derive(Debug)]
-struct Diff {
+pub(super) struct Diff {
     head: Option<String>,
-    old: SideRead,
-    new: SideRead,
-    patch: Option<String>,
+    pub(super) old: SideRead,
+    pub(super) new: SideRead,
+    pub(super) patch: Option<String>,
     /// The whole reply as it goes on the wire.
     json: String,
 }
@@ -50,7 +51,7 @@ impl Fixture {
         }
     }
 
-    fn change(
+    pub(super) fn change(
         &self,
         project: &str,
         worktree: Option<&str>,
@@ -1087,6 +1088,13 @@ fn no_browse_request_writes_to_the_repository() {
             .change(&project, worktree, group, present(path), present(path))
             .unwrap();
     }
+    for (group, path) in [
+        (ChangeGroup::Unstaged, "same.txt"),
+        (ChangeGroup::Unstaged, "b.txt"),
+        (ChangeGroup::Staged, "c.txt"),
+    ] {
+        fixture.bodies_of_diff(&project, group, path);
+    }
     fixture
         .change(
             &project,
@@ -1108,6 +1116,14 @@ fn no_browse_request_writes_to_the_repository() {
                 .unwrap();
         }
     }
+    let compared = fixture.compare(&project, "main", "wt").unwrap();
+    let diff = fixture
+        .compared_change(&project, &compared, SideRef::Absent, present("d.txt"))
+        .unwrap();
+    let versions = (version(&diff.old), version(&diff.new));
+    fixture
+        .compared_bodies(&project, &compared, "d.txt", versions)
+        .unwrap();
 
     let after = snapshot(&repo.join(".git"));
     let changed: Vec<_> = before

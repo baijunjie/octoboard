@@ -24,8 +24,8 @@ pub(super) struct Compared {
 /// One change of a comparison as `read_project_comparison_change` answered it.
 #[derive(Debug)]
 pub(super) struct ComparedRead {
-    old: SideRead,
-    new: SideRead,
+    pub(super) old: SideRead,
+    pub(super) new: SideRead,
     patch: Option<String>,
     /// The whole reply as it goes on the wire.
     json: String,
@@ -126,7 +126,12 @@ impl Fixture {
 
 /// Commits `files` (a body, or `None` to delete it) on branch `branch`, started from `from`, and
 /// checks `main` out again, so the branch is left as no worktree's checkout.
-fn commit_on(repo: &Path, branch: &str, from: &str, files: &[(&str, Option<&[u8]>)]) -> String {
+pub(super) fn commit_on(
+    repo: &Path,
+    branch: &str,
+    from: &str,
+    files: &[(&str, Option<&[u8]>)],
+) -> String {
     git(repo, &["checkout", "-q", "-B", branch, from]);
     for (path, body) in files {
         match body {

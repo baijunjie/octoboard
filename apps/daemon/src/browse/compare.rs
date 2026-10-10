@@ -249,6 +249,31 @@ pub fn read(
     )
 }
 
+/// Reads the whole bodies of one change of a comparison of `left` and `right`, checked first as
+/// [`read`] checks them, and read only when both sides are the versions `expected` names.
+pub fn read_bodies(
+    env: &GitEnv,
+    at: &Located,
+    left: &ComparisonEndpoint,
+    right: &ComparisonEndpoint,
+    change: &ComparedChangeRef,
+    expected: &changes::Expected,
+    cancel: &AtomicBool,
+) -> Result<changes::BodiesRead> {
+    for endpoint in [left, right] {
+        blob::branch_refname(env, &at.root, &endpoint.branch, cancel)?;
+        blob::verify_commit(env, &at.root, &endpoint.commit, cancel)?;
+    }
+    changes::read_bodies_between(
+        env,
+        at,
+        (&left.commit, &right.commit),
+        (&change.old, &change.new),
+        expected,
+        cancel,
+    )
+}
+
 /// The budget of the `git diff-tree` behind a comparison; a test can lower it, as nothing short of
 /// tens of thousands of changed files reaches the real one.
 fn comparison_stdout() -> usize {

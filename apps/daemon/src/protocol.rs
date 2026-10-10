@@ -473,7 +473,7 @@ pub enum ReadFrom {
 }
 
 /// What a file body was actually read from, so a reply identifies the content it carries.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ContentSource {
     /// The file on disk; `version` changes whenever its content may have.
@@ -484,6 +484,7 @@ pub enum ContentSource {
     /// The blob in a commit; `branch` is the branch it was resolved from, when it was.
     Commit {
         commit: String,
+        #[serde(default)]
         branch: Option<String>,
         blob: String,
     },
@@ -636,6 +637,15 @@ pub struct ComparedChangeRef {
     pub new: SideRef,
 }
 
+/// The version of one side of a change as a diff reply reported it, which a body request names back
+/// so the bodies are read only from the sides the patch was made from.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum SideVersion {
+    Present { source: ContentSource },
+    Absent,
+}
+
 /// One side of a change as `read_project_change` or `read_project_comparison_change` read it.
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
@@ -676,6 +686,8 @@ pub const BROWSE_REQUEST_TYPES: &[&str] = &[
     "list_project_branches",
     "compare_project_branches",
     "read_project_comparison_change",
+    "read_project_change_bodies",
+    "read_project_comparison_change_bodies",
 ];
 
 #[derive(Debug, Deserialize)]
@@ -723,6 +735,25 @@ pub enum BrowseBody {
         left: ComparisonEndpoint,
         right: ComparisonEndpoint,
         change: ComparedChangeRef,
+    },
+    /// The full bodies of the two sides of a change `read_project_change` made a patch of; `old`
+    /// and `new` are the versions that reply reported for its sides.
+    ReadProjectChangeBodies {
+        project: String,
+        #[serde(default)]
+        worktree: Option<String>,
+        change: ChangeRef,
+        old: SideVersion,
+        new: SideVersion,
+    },
+    /// As `ReadProjectChangeBodies`, for a change of a comparison.
+    ReadProjectComparisonChangeBodies {
+        project: String,
+        left: ComparisonEndpoint,
+        right: ComparisonEndpoint,
+        change: ComparedChangeRef,
+        old: SideVersion,
+        new: SideVersion,
     },
 }
 
@@ -1201,6 +1232,25 @@ pub enum Event {
         old: Box<SideRead>,
         new: Box<SideRead>,
         patch: Option<FileContent>,
+    },
+    /// The reply to `read_project_change_bodies`: both sides with their whole bodies in `file`,
+    /// each present or absent, never out of scope.
+    ProjectChangeBodies {
+        id: Option<String>,
+        project: String,
+        worktree: Option<String>,
+        group: ChangeGroup,
+        old: Box<SideRead>,
+        new: Box<SideRead>,
+    },
+    /// The reply to `read_project_comparison_change_bodies`: `left` and `right` echo the request.
+    ProjectComparisonChangeBodies {
+        id: Option<String>,
+        project: String,
+        left: ComparisonEndpoint,
+        right: ComparisonEndpoint,
+        old: Box<SideRead>,
+        new: Box<SideRead>,
     },
     Ack {
         id: Option<String>,

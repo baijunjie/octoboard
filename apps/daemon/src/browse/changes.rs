@@ -13,6 +13,12 @@
 //! looked at before and after the patch is made, and a reply whose patch may have been made from
 //! another version than the sides it reports is refused as `source_changed` rather than returned.
 //!
+//! The whole bodies of a change's two sides (`read_bodies`, `read_bodies_between`) are read for a
+//! client expanding the lines its patch collapsed. The change is resolved exactly as for its patch,
+//! the sides found are compared with the versions the client names, and only a match is read; a
+//! body is then read from the very object or file version that matched, so nothing mixes
+//! revisions.
+//!
 //! A change between two commits — one of a branch comparison's (`read_between`) — is read the way a
 //! staged one is, its two sides from the two commits; nothing it reads can move, so nothing is
 //! looked at again.
@@ -28,10 +34,10 @@ use crate::browse::blob::{self, IndexEntry};
 use crate::browse::git::{paths_nest, GitEnv, GitError};
 use crate::browse::source::{self, ProjectRoot};
 use crate::browse::wire_path::{self, RelPath};
-use crate::browse::{budget, git_error, git_failed, json_escaped_len, live, Located};
+use crate::browse::{budget, file_content, git_error, git_failed, json_escaped_len, live, Located};
 use crate::protocol::{
     error_code, ChangeEntry, ChangeGroup, ChangeRef, ChangeSide, CodedError, ConflictKind,
-    ContentSource, SideKind, SideRead, SideRef,
+    ContentSource, SideKind, SideRead, SideRef, SideVersion,
 };
 use crate::subprocess::BoundedFailure;
 
@@ -443,6 +449,17 @@ pub fn read(
     change: &ChangeRef,
     cancel: &AtomicBool,
 ) -> Result<ChangeRead> {
+    read_with(env, at, change, cancel, true)
+}
+
+/// [`read`], its sides carrying their bodies beside the patch where `inline_bodies` allows.
+fn read_with(
+    env: &GitEnv,
+    at: &Located,
+    change: &ChangeRef,
+    cancel: &AtomicBool,
+    inline_bodies: bool,
+) -> Result<ChangeRead> {
     let (old, new) = (side_path(&change.old)?, side_path(&change.new)?);
     let out_of_scope =
         matches!(change.old, SideRef::OutOfScope) || matches!(change.new, SideRef::OutOfScope);
@@ -462,12 +479,118 @@ pub fn read(
     // addition's old side is whatever its source holds at the added path now.
     let old_path = old.clone().or_else(|| new.clone());
     let new_path = new.or(old);
-    let reader = Reader { env, at, cancel };
+    let reader = Reader {
+        env,
+        at,
+        cancel,
+        inline_bodies,
+    };
     match change.group {
         ChangeGroup::Staged => reader.staged(change, old_path, new_path, out_of_scope),
         ChangeGroup::Unstaged => reader.unstaged(old_path.unwrap(), new_path.unwrap()),
         ChangeGroup::Untracked => reader.untracked(new_path.unwrap()),
     }
+}
+
+/// What a client names of the diff it expands: the versions its two sides were reported at.
+pub struct Expected<'a> {
+    pub old: &'a SideVersion,
+    pub new: &'a SideVersion,
+}
+
+/// The whole bodies of a change's two sides.
+#[derive(Debug)]
+pub struct BodiesRead {
+    pub old: SideRead,
+    pub new: SideRead,
+}
+
+/// Reads the whole bodies of the change `change` names in the worktree `at` names. Only a change
+/// that has a patch has bodies to expand: an untracked file, and a change with a side outside the
+/// project, are `invalid_change`. See the module doc.
+pub fn read_bodies(
+    env: &GitEnv,
+    at: &Located,
+    change: &ChangeRef,
+    expected: &Expected,
+    cancel: &AtomicBool,
+) -> Result<BodiesRead> {
+    if change.group == ChangeGroup::Untracked {
+        return Err(no_bodies());
+    }
+    let read = read_with(env, at, change, cancel, false)?;
+    bodies_of(env, at, read, expected, cancel)
+}
+
+/// As [`read_bodies`], for a change between two commits, read as [`read_between`] reads it.
+pub(super) fn read_bodies_between(
+    env: &GitEnv,
+    at: &Located,
+    commits: (&str, &str),
+    sides: (&SideRef, &SideRef),
+    expected: &Expected,
+    cancel: &AtomicBool,
+) -> Result<BodiesRead> {
+    let read = read_between_with(env, at, commits, sides, cancel, false)?;
+    bodies_of(env, at, read, expected, cancel)
+}
+
+fn no_bodies() -> anyhow::Error {
+    CodedError::raised(
+        error_code::INVALID_CHANGE,
+        "the change has no patch whose lines could be expanded",
+        &[],
+    )
+}
+
+/// The bodies of the sides `read` found, once their versions are those `expected` names. The
+/// patch the read made is dropped first, so it is not held beside the bodies.
+fn bodies_of(
+    env: &GitEnv,
+    at: &Located,
+    read: ChangeRead,
+    expected: &Expected,
+    cancel: &AtomicBool,
+) -> Result<BodiesRead> {
+    let ChangeRead {
+        old, new, patch, ..
+    } = read;
+    drop(patch);
+    let (old_expected, new_expected) = (expected.old, expected.new);
+    // A side outside the project means a change with no patch, which has nothing to expand.
+    if matches!(old, SideRead::OutOfScope) || matches!(new, SideRead::OutOfScope) {
+        return Err(no_bodies());
+    }
+    for (side, expected) in [(&old, old_expected), (&new, new_expected)] {
+        let same = match (side, expected) {
+            (SideRead::Absent, SideVersion::Absent) => true,
+            (SideRead::Present { source, .. }, SideVersion::Present { source: named }) => {
+                source == named
+            }
+            _ => false,
+        };
+        if !same {
+            let path = [&new, &old].into_iter().find_map(|side| match side {
+                SideRead::Present { path, .. } => RelPath::parse(path),
+                _ => None,
+            });
+            return Err(path.map_or_else(
+                || git_failed("the change's sides are not the ones named"),
+                |path| live::changed(&path),
+            ));
+        }
+    }
+    let reader = Reader {
+        env,
+        at,
+        cancel,
+        inline_bodies: false,
+    };
+    let scope = reader.scope_dir();
+    Ok(BodiesRead {
+        old: reader.whole(scope.as_ref(), old)?,
+        new: reader.whole(scope.as_ref(), new)?,
+    })
 }
 
 /// Reads a change between two commits, `old_commit` holding its old side and `new_commit` its new
@@ -477,8 +600,20 @@ pub(super) fn read_between(
     env: &GitEnv,
     at: &Located,
     commits: (&str, &str),
+    sides: (&SideRef, &SideRef),
+    cancel: &AtomicBool,
+) -> Result<ChangeRead> {
+    read_between_with(env, at, commits, sides, cancel, true)
+}
+
+/// [`read_between`], its sides carrying their bodies beside the patch where `inline_bodies` allows.
+fn read_between_with(
+    env: &GitEnv,
+    at: &Located,
+    commits: (&str, &str),
     (old, new): (&SideRef, &SideRef),
     cancel: &AtomicBool,
+    inline_bodies: bool,
 ) -> Result<ChangeRead> {
     let (old_named, new_named) = (side_path(old)?, side_path(new)?);
     if old_named.is_none() && new_named.is_none() {
@@ -492,7 +627,12 @@ pub(super) fn read_between(
     // As in `read`: a side named absent is looked up at the other side's path.
     let old_path = old_named.clone().or_else(|| new_named.clone());
     let new_path = new_named.or(old_named);
-    let reader = Reader { env, at, cancel };
+    let reader = Reader {
+        env,
+        at,
+        cancel,
+        inline_bodies,
+    };
     reader.between(commits, (old, new), old_path, new_path, out_of_scope)
 }
 
@@ -515,6 +655,9 @@ struct Reader<'a> {
     env: &'a GitEnv,
     at: &'a Located,
     cancel: &'a AtomicBool,
+    /// Whether a reply may carry its sides' bodies beside the patch (`carries_bodies`); false
+    /// when the bodies are asked for apart.
+    inline_bodies: bool,
 }
 
 impl Reader<'_> {
@@ -794,7 +937,7 @@ impl Reader<'_> {
                 new_path.as_ref().or(old_path.as_ref()).unwrap(),
             ));
         }
-        let bodies = carries_bodies(&patch);
+        let bodies = self.inline_bodies && carries_bodies(&patch);
         Ok(ChangeRead {
             head: commit.clone(),
             old: self.side(
@@ -847,7 +990,7 @@ impl Reader<'_> {
             let commits: &[&[u8]] = &[old_commit.as_bytes(), new_commit.as_bytes()];
             Some(self.patch(commits, &paths)?)
         };
-        let bodies = patch.as_deref().is_none_or(carries_bodies);
+        let bodies = self.inline_bodies && patch.as_deref().is_none_or(carries_bodies);
         Ok(ChangeRead {
             head: None,
             old: self.side(
@@ -903,7 +1046,7 @@ impl Reader<'_> {
         if old_path == new_path && has(b"new file mode ") && !has(b"deleted file mode ") {
             old_found = Found::Absent;
         }
-        let bodies = carries_bodies(&patch);
+        let bodies = self.inline_bodies && carries_bodies(&patch);
         let root_id = scope.as_ref().map(|s| s.id.clone()).unwrap_or_default();
         let source_old = |oid: &str| ContentSource::Index {
             worktree: self.at.worktree.clone(),
@@ -947,6 +1090,44 @@ impl Reader<'_> {
             old: SideRead::Absent,
             new: self.side(scope.as_ref(), Some(&path), Some(&found), &source, true)?,
             patch: None,
+        })
+    }
+
+    /// `side`, a present file's whole body read from the version it names, which is checked once
+    /// more as it is read: a link or a submodule has no body. Anything else comes back as it is.
+    fn whole(&self, scope: Option<&ProjectRoot>, side: SideRead) -> Result<SideRead> {
+        let SideRead::Present {
+            path, kind, source, ..
+        } = side
+        else {
+            return Ok(side);
+        };
+        let rel = RelPath::parse(&path).ok_or_else(|| git_failed("the side's path is invalid"))?;
+        if kind != SideKind::File {
+            let name = match kind {
+                SideKind::Symlink => "symlink",
+                _ => "submodule",
+            };
+            return Err(live::unsupported(&rel, name));
+        }
+        let found = match &source {
+            ContentSource::Live { version, .. } => Found::Disk {
+                kind,
+                version: version.clone(),
+            },
+            ContentSource::Index { blob, .. } | ContentSource::Commit { blob, .. } => {
+                Found::Object {
+                    kind,
+                    oid: blob.clone(),
+                }
+            }
+        };
+        let file = self.body(scope, &rel, &found)?.map(file_content);
+        Ok(SideRead::Present {
+            path,
+            kind,
+            source,
+            file,
         })
     }
 
