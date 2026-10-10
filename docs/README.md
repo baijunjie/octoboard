@@ -197,5 +197,6 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   rather than at the call site and bounded in time there, with the two consequences that make a call site reach for
   it — a `git` that can prompt hangs the daemon with nothing naming the stuck call, and a read that rewrites the index
   fails an agent's `git add` on `index.lock`; what a test proving a read leaves the repository alone has to set up
-  first; and how to type-check Linux-only code from macOS (a scratch crate, since bundled SQLite blocks a cross-check
-  of the daemon).
+  first; how to type-check Linux-only code from macOS (a scratch crate, since bundled SQLite blocks a cross-check
+  of the daemon); and why a test fixture is built only from Git 2.36's commands, since the Mac's newer git lets a
+  fixture needing more pass every local run.

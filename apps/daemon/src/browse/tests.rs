@@ -266,18 +266,13 @@ fn a_subdirectory_maps_into_another_worktree_and_never_broadens() {
     );
     std::fs::write(other.join("sub/a.txt"), b"other copy\n").unwrap();
     let bare = linked.join("bare");
+    // A worktree on a branch with no files, made without `worktree add --orphan` (Git 2.42).
     git(
         &repo,
-        &[
-            "worktree",
-            "add",
-            "-q",
-            "--orphan",
-            "-b",
-            "empty",
-            bare.to_str().unwrap(),
-        ],
+        &["worktree", "add", "-q", "--detach", bare.to_str().unwrap()],
     );
+    git(&bare, &["checkout", "-q", "--orphan", "empty"]);
+    git(&bare, &["rm", "-rfq", "."]);
 
     // A worktree in which the scope is a link to the worktree's own root.
     let linked_scope = linked.join("linked-scope");

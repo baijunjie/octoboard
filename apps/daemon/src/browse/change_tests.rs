@@ -11,7 +11,9 @@ use crate::protocol::{
     ChangeEntry, ChangeGroup, ChangeRef, ChangeSide, ConflictKind, ContentSource, SideKind,
     SideRead, SideRef,
 };
-use crate::test_support::{fixture_git, git, git_stdin, repo_with, ScratchDir};
+use crate::test_support::{
+    fixture_git, git, git_has_show_ref_exists, git_stdin, repo_with, ScratchDir,
+};
 
 /// A change as `read_project_change` answered it.
 #[derive(Debug)]
@@ -1258,10 +1260,13 @@ fn a_head_that_names_no_commit_is_a_failure_not_an_empty_baseline() {
             present("a.txt"),
         )
     };
-    // A branch that is there but names a missing object, then a `HEAD` detached at one.
+    // A branch that is there but names a missing object, then a `HEAD` detached at one. Before
+    // Git 2.43 the first cannot be told from a branch not born yet, so it is left out there.
     let missing = format!("{}\n", "1".repeat(40));
-    std::fs::write(repo.join(".git/refs/heads/main"), &missing).unwrap();
-    assert_eq!(code(staged(&fixture)), error_code::GIT_FAILED);
+    if git_has_show_ref_exists(&repo) {
+        std::fs::write(repo.join(".git/refs/heads/main"), &missing).unwrap();
+        assert_eq!(code(staged(&fixture)), error_code::GIT_FAILED);
+    }
     std::fs::write(repo.join(".git/HEAD"), &missing).unwrap();
     assert_eq!(code(staged(&fixture)), error_code::GIT_FAILED);
 }

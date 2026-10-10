@@ -298,6 +298,23 @@ pub(crate) fn git(dir: &Path, args: &[&str]) -> Vec<u8> {
     git_bytes(dir, &args)
 }
 
+/// Whether the `git` on this machine knows `show-ref --exists` (Git 2.43), which is what tells a
+/// branch that is broken from one not born yet; before it a broken branch is taken for an unborn
+/// one. `dir` must be inside a repository, since outside one `git` exits 128 and this panics.
+pub(crate) fn git_has_show_ref_exists(dir: &Path) -> bool {
+    let status = fixture_git(dir)
+        .args(["show-ref", "--exists", "refs/heads/none"])
+        .output()
+        .expect("git runs")
+        .status;
+    // Exit 2 is "no such reference"; an older Git rejects the option itself with 129.
+    match status.code() {
+        Some(0 | 2) => true,
+        Some(129) => false,
+        other => panic!("git show-ref --exists exited {other:?}"),
+    }
+}
+
 /// [`git`] with arguments that need not be UTF-8.
 pub(crate) fn git_bytes(dir: &Path, args: &[&[u8]]) -> Vec<u8> {
     use std::os::unix::ffi::OsStrExt;

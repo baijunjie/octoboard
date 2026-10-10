@@ -73,13 +73,22 @@ are developing on macOS. `cargo check`, `cargo clippy` and the test suite on mac
 run says nothing about it, and `--target x86_64-unknown-linux-gnu` from macOS fails in rusqlite's `bundled` build
 script without a Linux C cross-compiler. So run `cargo test -p octoboardd` inside a Linux container (Docker).
 
-A stock Rust image on Debian bookworm fails some browse tests for reasons unrelated to the code, which reads as a
-Linux bug in the daemon: its git (2.39) is too old, and at least one of them needs `git worktree add --orphan` (git
-2.42 or later). Use an image whose git is new enough (Debian trixie's is). To exercise a fallback for a refused system call (the browse
-reads' `openat2` refused as `ENOSYS` or `EPERM`), run the container with a seccomp profile that returns that errno for
-the call.
+To exercise a fallback for a refused system call (the browse reads' `openat2` refused as `ENOSYS` or `EPERM`), run
+the container with a seccomp profile that returns that errno for the call.
 
 Without a container runtime, the fallback is a compile check only: copy the Linux-only functions into a scratch crate
 outside the repository that depends only on what they use (typically `libc`), and run
 `cargo check --target x86_64-unknown-linux-gnu` there after `rustup target add x86_64-unknown-linux-gnu`; say when
 reporting that it proves it compiles, not how it behaves.
+
+## Build daemon test fixtures from Git 2.36's commands
+
+The daemon supports Git 2.36 and later (`apps/daemon/PROTOCOL.md`, "Browse"), but the Mac it is developed on has a
+newer git, so a fixture that needs a newer one passes every local run and fails only on an older host. The Debian
+bookworm Rust image (git 2.39) is the oldest run available, and it checks 2.39, not the floor. So a fixture uses only
+commands and options Git 2.36 has: an empty-branch worktree, for one, is `worktree add --detach` then
+`checkout --orphan`, not `worktree add --orphan` (2.42).
+
+A test of behavior that only a newer git has — telling a broken branch from an unborn one needs `show-ref --exists`,
+2.43 — runs that part only where `test_support::git_has_show_ref_exists` says the git has it, since the older git's
+documented fallback gives a different answer.
