@@ -1,7 +1,7 @@
-import { Header, ListBox, SearchField } from "@heroui/react";
+import { SearchField } from "@heroui/react";
 import { SearchX } from "lucide-react";
 import React, { useMemo } from "react";
-import { Collection, ListLayout, Virtualizer, type Key } from "react-aria-components";
+import { Collection, GridList, GridListHeader, GridListItem, GridListSection, ListLayout, Virtualizer, type Key } from "react-aria-components";
 
 import { EmptyPanel } from "../components/EmptyPanel";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
@@ -12,7 +12,7 @@ import type { ChangeLayout } from "./changeLayout";
 import { ChangeRowBody, changeRowText, HEADING_CLASS, HEADING_HEIGHT, SectionHeadingText } from "./changeRow";
 import { changeGroups, filterChanges, sections, visibleNodes, type ChangeItem, type ChangeSection } from "./changes";
 import { ChangeTree } from "./ChangeTree";
-import { ROW_HEIGHT } from "./treeRow";
+import { ROW_CLASS, ROW_HEIGHT, RowContent } from "./treeRow";
 
 /** How far below the top of the list's content the row of `key` is, or nothing when the list has
  * no such row on screen (a change under a collapsed directory has none). Rows and headings are each
@@ -43,11 +43,12 @@ export interface ChangeListView {
 
 /**
  * A worktree's changes as a list in sections — staged, in conflict, unstaged, untracked — each
- * headed with its count: HeroUI's `ListBox`, virtualized, one row per change; or, when the layout
- * is the tree, the same sections with their changes grouped under directories (`ChangeTree`). A
- * row's action is to open its change in the viewer; nothing is selectable in the list's sense. The
- * change the viewer showed last is tinted and named as selected in its row's label instead, as the
- * file tree marks its file. A field above the list narrows its rows to the changes whose file name
+ * headed with its count: a react-aria `GridList`, virtualized, one row per change; or, when the
+ * layout is the tree, the same sections with their changes grouped under directories
+ * (`ChangeTree`). A row's action is to open its change in the viewer, and a button at its end opens
+ * a menu of the others (`ChangeRowActions`); nothing is selectable in the list's sense. The change
+ * the viewer showed last is tinted and named as selected in its row's label instead, as the file
+ * tree marks its file. A field above the list narrows its rows to the changes whose file name
  * contains the text (`filterChanges`); the sections' counts follow the rows left, and the field
  * stays when none are.
  */
@@ -135,21 +136,24 @@ function FlatChangeList({
     if (item) onOpen(item);
   };
   return (
-    // No side padding on the scroll container (`px-0` clears HeroUI's own): the virtualized layout
-    // makes each row as wide as the list's inner width and places it inside that padding, so the
-    // list would overflow sideways. The rows and headings carry the inset themselves.
+    // No side padding on the scroll container: the virtualized layout makes each row as wide as the
+    // list's inner width and places it inside that padding, so the list would overflow sideways. The
+    // rows (`mx-1`) and headings carry the inset themselves.
+    // Not HeroUI's `ListBox`, which has no place for a control inside an option: a row's action
+    // button has to be reached by keyboard, and a `GridList` row (like the tree's) hands focus to its
+    // children with the arrow keys that run along the row, HeroUI having no equivalent.
     <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: ROW_HEIGHT, headingHeight: HEADING_HEIGHT }}>
-      <ListBox
+      <GridList
         ref={fade.ref}
         {...fade.props}
         aria-label={label}
         items={groups}
         onAction={onAction}
         dependencies={[language, selected]}
-        className={`${fade.className} min-h-0 flex-1 overflow-auto px-0 py-1 outline-none`}
+        className={`${fade.className} min-h-0 flex-1 overflow-auto py-1 outline-none`}
       >
         {(group) => <ChangeSectionView key={group.section} section={group.section} items={group.items} selected={selected} />}
-      </ListBox>
+      </GridList>
     </Virtualizer>
   );
 }
@@ -165,14 +169,14 @@ function ChangeSectionView({
 }): React.ReactElement {
   const language = useCurrentLanguage();
   return (
-    <ListBox.Section id={section}>
-      <Header className={HEADING_CLASS}>
+    <GridListSection id={section}>
+      <GridListHeader className={HEADING_CLASS}>
         <SectionHeadingText section={section} count={items.length} />
-      </Header>
+      </GridListHeader>
       <Collection items={items} dependencies={[language, selected]}>
         {(item) => <ChangeRow item={item} isSelected={item.key === selected} />}
       </Collection>
-    </ListBox.Section>
+    </GridListSection>
   );
 }
 
@@ -182,14 +186,10 @@ function ChangeRow({ item, isSelected }: { item: ChangeItem; isSelected: boolean
   // Marked `data-current`, not `data-selected`: react-aria-components writes the row's
   // `data-selected` itself, from a selection the list does not have.
   return (
-    <ListBox.Item
-      id={item.key}
-      textValue={name}
-      aria-label={ariaLabel}
-      data-current={isSelected || undefined}
-      className="mx-1 h-7 min-h-0 w-auto gap-2 rounded-md px-2 py-0 text-sm data-[current]:bg-panel-selected"
-    >
-      <ChangeRowBody item={item} name={name} detail={detail} />
-    </ListBox.Item>
+    <GridListItem id={item.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={`${ROW_CLASS} mx-1`}>
+      <RowContent flat>
+        <ChangeRowBody item={item} name={name} detail={detail} />
+      </RowContent>
+    </GridListItem>
   );
 }

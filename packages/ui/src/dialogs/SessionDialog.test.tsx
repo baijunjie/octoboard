@@ -19,6 +19,7 @@ function fakeDaemon(initial: Partial<State> = {}): Daemon {
     store: createStateStore(initial),
     request: vi.fn(),
     toastError: vi.fn(),
+    toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},
     reconnect: () => {},

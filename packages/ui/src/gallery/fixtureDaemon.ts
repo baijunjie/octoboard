@@ -248,6 +248,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
       }
     },
     toastError: (message, session) => emitToast({ kind: "error", message, session }),
+    toastNotice: (message) => emitToast({ kind: "notice", message }),
     onToast: (listener) => {
       toastListeners.add(listener);
       // StrictMode subscribes, unsubscribes and subscribes again; by the time this fires only the

@@ -70,6 +70,31 @@ the bytes — the offset the real caller would have started from, the truncation
 leaves. Commit the near-miss capture next to the matching one: the shape that must *not* be
 recognised is what makes recognising the other one mean anything.
 
+## A jsdom test leaves nothing running, and the cleanup is bound to the test that armed it
+
+Applies to the `packages/ui` component tests (`vitest` under jsdom). Work a test leaves running outlives the file:
+the timer fires once the file's tests are over, its `setState` lands outside `act`, React hands the update to the
+real scheduler, and the environment is disposed before that work runs — the scheduler then dies reading `window`,
+and vitest reports an unhandled `ReferenceError: window is not defined` with the warning that it "might cause false
+positive tests".
+
+- Clearing the document (`document.body.replaceChildren()`) is not teardown: it leaves the tree mounted, so no
+  effect cleanup runs and the timers the tree armed stay armed — a list's status region (`StatusAnnouncer`) delays
+  its first write by one. Unmount the root instead, which also takes a popover portalled to `<body>` with it.
+- Register the cleanup inside the mounting helper with `onTestFinished`, bound to the test that mounted the root,
+  rather than as a file-level `afterEach` the next file has to remember to write. Unmounting is itself a render, so
+  it goes through `act`.
+- A root is not the only thing a test arms. Whatever it set going it also stops or awaits before it ends: a
+  module-level singleton's own queue and timers (HeroUI's toast queue, which a later unmount cannot reach), a
+  `React.lazy` import a `Suspense` boundary has not resolved yet.
+
+The symptom names the wrong file, so do not start from the one it is reported against: the crash is attributed to
+whichever file was running when the stray work fired, it does not reproduce when that file is run alone, and the
+count varies run to run because it is a race. Look instead for a test anywhere in the package that left work
+running, and judge the fix over repeated full runs — one such leak showed up about 3 times in 18 — never over a
+single clean one. A "not wrapped in act" warning out of a file that passes is the audible half of the same leak and
+is tracked down the same way, not shrugged at.
+
 ## A jsdom test cannot tell where focus ends after a session is selected
 
 Applies to `packages/ui` component tests, which run under jsdom without the terminal. In the app, selecting a live

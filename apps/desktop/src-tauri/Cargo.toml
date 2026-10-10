@@ -27,6 +27,7 @@ serde_json = "=1.0.151"
 tauri = { version = "=2.11.6", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-shell = "=2.0.2"
 tauri-plugin-notification = "=2.4.0"
+tauri-plugin-clipboard-manager = "=2.3.3"
 anyhow = "1"
 # For the saved window state in `window_state.rs`. Pinned to the versions already resolved
 # transitively through `tauri`, so promoting them to direct dependencies shifts nothing else.
@@ -65,6 +66,12 @@ uuid = "=1.26.1"
 # attributes a notification to, which is what decides the icon macOS shows on it. Pinned for the
 # same MSRV reason as the rest of this list — its current release requires rustc 1.89.
 notify-rust = "=4.11.7"
+# Reached only through `tauri-plugin-clipboard-manager` (by way of `arboard`), whose newest release
+# requires rustc 1.88; this is the last one within the floor. `default-features = false` because its
+# defaults pull a whole codec set (AV1 encoding among it) that feature unification would then apply
+# to this crate's build, while `arboard` asks for one format; without the flag the pin would shift
+# far more than the version.
+image = { version = "=0.25.8", default-features = false }
 # For the `applicationShouldTerminate:` override in `exit.rs` that catches the Dock icon's own Quit
 # (see the comment there), and in `background.rs` for hiding and unhiding the app, the Dock badge,
 # the window's Cmd+H and the notification that the app became active. Pinned to the exact versions

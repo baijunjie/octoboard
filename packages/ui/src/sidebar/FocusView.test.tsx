@@ -50,6 +50,7 @@ function mount(render: (handlers: SidebarHandlers) => React.ReactElement): { tex
     store: createStateStore({ settings: { auto_sync_repositories: false, default_clone_dir: "/p", accounts: [{ id: "work", agent: "claude", name: "Work", config_dir: "/w" }] } }),
     request: vi.fn(),
     toastError: vi.fn(),
+    toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},
     reconnect: () => {},

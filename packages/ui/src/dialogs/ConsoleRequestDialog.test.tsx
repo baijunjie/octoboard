@@ -30,6 +30,7 @@ async function withDialog(
     store: createStateStore({ consoleRequests: [request] }),
     request: vi.fn(reply) as never,
     toastError: vi.fn(),
+    toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},
     reconnect: () => {},

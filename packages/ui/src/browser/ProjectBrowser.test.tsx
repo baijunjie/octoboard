@@ -30,6 +30,7 @@ const daemon: Daemon = {
   store: createStateStore({ connectionState: "open", snapshotEpoch: 1 }),
   request: (body) => new Promise((resolve, reject) => pending.push({ body, resolve, reject })),
   toastError: () => {},
+  toastNotice: () => {},
   onToast: () => () => {},
   dismissTrustPrompt: () => {},
   reconnect: () => {},

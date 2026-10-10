@@ -1,47 +1,28 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { createRoot } from "react-dom/client";
-import { afterEach, expect, it, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 
-import type { ChangeEntry } from "../protocol";
 import { ChangeTree } from "./ChangeTree";
+import { change, mountRows } from "./changeListTestSupport";
 import { changeItems, directoryKey } from "./changes";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-// jsdom has no ResizeObserver, which the rows' names (FadeOverflow) need.
-class StubResizeObserver {
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
-}
-globalThis.ResizeObserver ??= StubResizeObserver as unknown as typeof ResizeObserver;
-
-afterEach(() => document.body.replaceChildren());
-
-const change = (group: "staged" | "unstaged", path: string): ChangeEntry => ({
-  group,
-  old: { state: "present", path, kind: "file", source: { kind: "index", worktree: "w", blob: "b" } },
-  new: { state: "present", path, kind: "file", source: { kind: "live", root_id: "r", version: "v" } },
-});
 const items = changeItems([change("staged", "src/utils/kickback/a.ts"), change("staged", "src/b.ts"), change("unstaged", "src/b.ts"), change("unstaged", "top.ts")]);
 
 function render(collapsed: ReadonlySet<string>, handlers: { onOpen?: () => void; onCollapsedChange?: (next: ReadonlySet<string>) => void } = {}) {
-  const container = document.body.appendChild(document.createElement("div"));
-  act(() =>
-    createRoot(container).render(
-      <ChangeTree
-        items={items}
-        selected={items[1].key}
-        label="Changes"
-        onOpen={handlers.onOpen ?? (() => {})}
-        listRef={() => {}}
-        collapsed={collapsed}
-        onCollapsedChange={handlers.onCollapsedChange ?? (() => {})}
-      />,
-    ),
+  return mountRows(
+    <ChangeTree
+      items={items}
+      selected={items[1].key}
+      label="Changes"
+      onOpen={handlers.onOpen ?? (() => {})}
+      listRef={() => {}}
+      collapsed={collapsed}
+      onCollapsedChange={handlers.onCollapsedChange ?? (() => {})}
+    />,
+    { clipboard: { writeText: async () => {} } },
   );
-  return container;
 }
 const labels = (container: HTMLElement) => [...container.querySelectorAll("[role=row]")].map((row) => row.getAttribute("aria-label") ?? row.textContent);
 

@@ -184,11 +184,12 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   and plural messages instead of joined fragments), how layout follows the reading direction (logical utilities,
   mirrored directional icons, two-glyph chevrons, `dir` on paths and typed names, `docked:rtl:` twins), why only
   icon-only chrome sits on the translucent window material and text goes on the opaque panel, and the WCAG 2.2 AA bar
-  the UI is held to (keyboard, visible focus, names, roles and states (`aria-current` only on hand-built rows, a status
-  region kept mounted so what appears in it is announced), contrast — auditing every gallery scenario in both themes,
-  fills against their surface and animations at their faintest frame, overriding HeroUI's whole `--default` family on a
-  region with its own surface, which token an outline meant to be seen is built from, and why HeroUI's own text colours
-  are measured rather than trusted — colour, motion).
+  the UI is held to (keyboard — Tab, except inside the row of a react-aria collection that manages its own focus, where
+  the row is the tab stop and an arrow key reaches the controls in it — visible focus, names, roles and states
+  (`aria-current` only on hand-built rows, a status region kept mounted so what appears in it is announced), contrast —
+  auditing every gallery scenario in both themes, fills against their surface and animations at their faintest frame,
+  overriding HeroUI's whole `--default` family on a region with its own surface, which token an outline meant to be seen
+  is built from, and why HeroUI's own text colours are measured rather than trusted — colour, motion).
 - [Reading daemon state in the UI](memory/reading-daemon-state-in-the-ui.md) — why a map read through
   `useDaemonStore` has a new identity after every daemon event of its kind, so an effect or memo meant to fire on one
   change depends on the resolved values it reads and never on the map, and the derivations that do take the map.
@@ -202,7 +203,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   test flakes only under a parallel run, why every wait on a spawned process is bounded by the shared `PATIENCE`
   (exec stalls of seconds on machines with endpoint-security software) and how to tell that stall apart, and how to
   verify behaviour the daemon derives from an agent's own output by replaying a committed capture rather than staging
-  a live session, and why a jsdom test cannot tell where keyboard focus ends after a session is selected.
+  a live session, why a jsdom test must leave nothing running when it ends with the cleanup bound to the test that
+  armed it, since stray work crashes a later file and the failure names the wrong one, and why a jsdom test cannot tell
+  where keyboard focus ends after a session is selected.
 - [Writing daemon code](memory/writing-daemon-code.md) — conventions for the Rust daemon: live state the daemon derives
   held on `AppState` and published by its own event rather than as a field on a stored record, with the cleanups that
   follow from there being no deletion event for it; why a repeating refresh is timed by the client and has to be bounded

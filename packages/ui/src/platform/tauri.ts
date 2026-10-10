@@ -1,6 +1,7 @@
 import type {
   AppMenuCapability,
   BadgeCapability,
+  ClipboardCapability,
   ExitCapability,
   NativeWindowCapability,
   NotificationCapability,
@@ -23,6 +24,7 @@ export function tauriPlatform(): PlatformAdapter {
     translucentWindow: onMac(),
     appMenu: tauriAppMenu(),
     statusItem: tauriStatusItem(),
+    clipboard: tauriClipboard(),
   };
 }
 
@@ -177,6 +179,17 @@ function tauriNotifications(): NotificationCapability {
     async notify(notification) {
       const { sendNotification } = await import("@tauri-apps/plugin-notification");
       sendNotification(notification);
+    },
+  };
+}
+
+/** Through the shell's plugin, not `navigator.clipboard`: the web API is only offered to a secure
+ * context, and the packaged window's custom scheme is not reliably counted as one. */
+function tauriClipboard(): ClipboardCapability {
+  return {
+    async writeText(text) {
+      const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
+      await writeText(text);
     },
   };
 }

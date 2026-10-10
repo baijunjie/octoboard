@@ -13,6 +13,7 @@ const daemon: Daemon = {
   store: createStateStore({}),
   request: vi.fn(),
   toastError: vi.fn(),
+  toastNotice: vi.fn(),
   onToast: () => () => {},
   dismissTrustPrompt: () => {},
   reconnect: () => {},

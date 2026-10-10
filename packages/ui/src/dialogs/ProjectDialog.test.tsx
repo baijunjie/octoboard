@@ -26,6 +26,7 @@ function render() {
     store: createStateStore({}),
     request: (body) => new Promise((resolve) => pending.push({ body, resolve })),
     toastError: vi.fn(),
+    toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},
     reconnect: () => {},

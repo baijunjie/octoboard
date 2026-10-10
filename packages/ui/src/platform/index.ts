@@ -35,6 +35,8 @@ export interface PlatformAdapter {
   /** The shell's menu bar icon, which keeps the app reachable while its window is closed: its menu
    * lists the sessions the UI hands it, and choosing one comes back here. */
   readonly statusItem?: StatusItemCapability;
+  /** The system clipboard, for text the UI puts there on the user's say-so. */
+  readonly clipboard?: ClipboardCapability;
 }
 
 export interface ExitHandlers {
@@ -140,6 +142,12 @@ export interface StatusItemCapability {
   /** Subscribes to a session being chosen in that menu, returning the function that undoes it. The
    * shell has already brought the window to the front. */
   onSessionChosen(handler: (sessionId: string) => void): () => void;
+}
+
+export interface ClipboardCapability {
+  /** Puts `text` on the clipboard; rejects when the environment refuses (no permission, no
+   * focused document). */
+  writeText(text: string): Promise<void>;
 }
 
 /** Picks the implementation once, at startup, from the environment the page is running in. */

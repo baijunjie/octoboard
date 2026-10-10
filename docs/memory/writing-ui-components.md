@@ -162,13 +162,14 @@ only a real pointer in the running page shows the miss.
 ## A HeroUI `ListBox` or a `Tree`: where its padding and its fade go
 
 For a list rendered inside react-aria's `Virtualizer` with `ListLayout` (a HeroUI `ListBox`, one in a `Select`'s
-popover included, or a react-aria `Tree`):
+popover included, or a react-aria `Tree` or `GridList`):
 
 - `ListLayout` makes every row as wide as the scroll container's inner width and then places it inside the
   container's padding, so any side padding on the list — HeroUI's own `p-1` on `ListBox`, `p-1.5` on a `Select`
   popover's list — makes it overflow sideways (a horizontal scrollbar) and clips the rows' focus rings. Clear it with
-  `px-0` on the list and give the inset to the rows and headings instead (`mx-1 w-auto` on an item, padding on a
-  `Header`). HeroUI corrects this only inside its `Autocomplete`.
+  `px-0` on the list and give the inset to the rows and headings instead (`mx-1` on an item, with `w-auto` where the
+  item's own styles set a width as HeroUI's `ListBox.Item` does, and padding on a `Header`). HeroUI corrects this only
+  inside its `Autocomplete`.
 - The list has to be the element that scrolls, so a HeroUI `ScrollShadow` wrapped around it fades nothing. Put the
   fade on the list itself through `useScrollFade` (`packages/ui/src/components/useScrollFade.ts`).
 
@@ -281,14 +282,18 @@ Every control and view in `packages/ui` meets WCAG 2.2 level AA, checked in both
 The user has kept a few shortfalls on purpose, each marked by a comment at its code saying so; leave one that is
 marked as it is, and do not add a new exception without the user's say. Concretely:
 
-- **Keyboard**: every interactive control is reachable with Tab and operable with Enter / Space. `preventFocusOnPress`
-  only keeps a *mouse* press from taking focus; the control still has to be a tab stop. Every button is HeroUI's
-  `Button`; a native `<button>` is allowed only where a custom button is needed that HeroUI's cannot be, with the
-  reason in a comment there. A hand-built `role="button"` element needs `tabIndex={0}` and its own Enter / Space
-  handling. The terminal keeps Tab and Shift+Tab for the agent, so F6 / Shift+F6 region cycling
-  (`packages/ui/src/layout/useRegionCycle.ts`) is the only keyboard way out of it: every new region of the window
-  that holds controls — a pane, a panel, an overlay — is marked `data-region` and added to that hook's `REGIONS` and
-  `shown`, or F6 skips it and a keyboard user in the terminal has no way to reach it.
+- **Keyboard**: every interactive control is reachable from the keyboard and operable with Enter / Space. Tab is how it
+  is reached, except for a control inside the row of a react-aria collection that manages focus itself (a `GridList`, a
+  `Tree`): there the row is the tab stop and Tab moves past the whole list, while the arrow key that runs along the row
+  (`keyboardNavigationBehavior` defaults to `"arrow"`) moves between the row and its controls. That is the grid and tree
+  pattern, it meets this rule, and both the change list's row actions and the Files tree's chevron rely on it, so do not
+  give such a control a tab stop of its own. `preventFocusOnPress` only keeps a *mouse* press from taking focus; the
+  control still has to be reachable. Every button is HeroUI's `Button`; a native `<button>` is allowed only where a
+  custom button is needed that HeroUI's cannot be, with the reason in a comment there. A hand-built `role="button"`
+  element needs `tabIndex={0}` and its own Enter / Space handling. The terminal keeps Tab and Shift+Tab for the agent,
+  so F6 / Shift+F6 region cycling (`packages/ui/src/layout/useRegionCycle.ts`) is the only keyboard way out of it: every
+  new region of the window that holds controls — a pane, a panel, an overlay — is marked `data-region` and added to that
+  hook's `REGIONS` and `shown`, or F6 skips it and a keyboard user in the terminal has no way to reach it.
 - **Visible focus**: HeroUI controls draw their own focus ring. A hand-built focusable element that removes the
   outline puts a ring back, never `outline-none` alone, and takes it from `useFocusVisibleProps`
   (`packages/ui/src/components/useFocusVisibleProps.ts`): spread its props on the element and style with

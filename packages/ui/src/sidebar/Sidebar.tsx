@@ -19,6 +19,7 @@ import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
 import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { handFocusOff } from "../components/handFocusOff";
+import { RowControls } from "../components/RowControls";
 import { ActivityMarker, StatusIcon } from "../components/StatusIcon";
 import { withGitBadge } from "../gitStatusLabel";
 import { useCurrentLanguage, useT } from "../i18n/react";
@@ -37,7 +38,7 @@ import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectF
 import { archiveSubmenu, consoleMenu, projectMenu, sessionMenu } from "./menus";
 import { archivedSessions, consoleActivity, isInactiveProject, liveSessionRows, liveSessions, sortProjects } from "./order";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
-import { NESTED_ROW_CLASS, PinButton, RowControls, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
+import { NESTED_ROW_CLASS, PinButton, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
 import { focusTargetId } from "./focus";
 import type { FocusTarget, SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";

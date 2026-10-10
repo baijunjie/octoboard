@@ -78,7 +78,7 @@ area and the Git mode panel, and shows a type change as one diff.
 3. 03 word-wrap (closed)
 4. 04 change-tree (closed)
 5. 05 change-filter (closed)
-6. [A row action button with Copy path](06-row-actions.md)
+6. 06 row-actions (closed)
 7. [A document view for Markdown in the viewer](07-markdown-document-view.md)
 8. [The viewer header's layout and tags](08-viewer-header-layout.md)
 9. [Surfaces and light-mode contrast in the viewer and Git mode](09-surfaces-and-contrast.md)

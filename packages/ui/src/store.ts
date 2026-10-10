@@ -23,17 +23,18 @@ import {
 
 /**
  * Something to tell the user in a toast: a daemon `error` or `session_notice`, or a message with
- * nowhere inline to show it (see `toastError` below). `kind` is the only thing that tells an error
- * from a notice apart. The store does not keep them: the toast stack (`Toasts.tsx`) subscribes
- * through `Daemon.onToast` and owns what is on screen.
+ * nowhere inline to show it (see `toastError` and `toastNotice` below). `kind` is the only thing
+ * that tells an error from a notice apart. The store does not keep them: the toast stack
+ * (`Toasts.tsx`) subscribes through `Daemon.onToast` and owns what is on screen.
  */
 export interface ToastRequest {
   kind: "error" | "notice";
   message: string;
-  /** The session the toast is about, so the stack can say where it is. A `notice` always has one.
-   * An `error` has one only where the call site knows which session the daemon's message is
-   * about — the daemon says "this session" without naming it, having no notion of what the client
-   * calls it, so the toast's title is the only thing that tells the user which one. */
+  /** The session the toast is about, so the stack can say where it is. A daemon `notice` always
+   * has one; a notice the UI raises itself (`toastNotice`) has none. An `error` has one only where
+   * the call site knows which session the daemon's message is about — the daemon says "this
+   * session" without naming it, having no notion of what the client calls it, so the toast's title
+   * is the only thing that tells the user which one. */
   session?: string;
 }
 
@@ -364,8 +365,11 @@ export interface Daemon {
   /** `session` is passed by a caller that knows which session the message is about, so the toast
    * can name it; see `ToastRequest.session`. */
   toastError: (message: string, session?: string) => void;
+  /** Confirms something the user just did, which has no inline place to say so (a path copied);
+   * about no session, so the toast is the message alone. */
+  toastNotice: (message: string) => void;
   /** Calls `listener` for every toast to show from now on: the daemon's errors and notices that
-   * belong to no request, and what `toastError` is given. Returns the unsubscribe. */
+   * belong to no request, and what `toastError` and `toastNotice` are given. Returns the unsubscribe. */
   onToast: (listener: (toast: ToastRequest) => void) => () => void;
   /** Drops a trust prompt from the queue, whether it was answered or declined — declining leaves the
    * confirmation for the user in the terminal, and the daemon asks again for it only after a
@@ -419,6 +423,7 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
         throw new DaemonRequestError(message, err.code, err.params);
       }),
     toastError: (message, session) => emitToast({ kind: "error", message, session }),
+    toastNotice: (message) => emitToast({ kind: "notice", message }),
     onToast: (listener) => {
       toastListeners.add(listener);
       return () => void toastListeners.delete(listener);

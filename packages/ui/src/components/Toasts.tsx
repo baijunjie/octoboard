@@ -32,22 +32,23 @@ const isNarrow = () => !window.matchMedia(WIDE_QUERY).matches;
 const shownToasts = new Map<string, string>();
 
 /**
- * Surfaces the daemon's errors and notices, and what callers hand to `toastError`, in HeroUI's own
- * toast stack (`Toast.Provider` over its queue), floating over the bottom end corner (above the
- * connection banner while that is shown, see `style.css`) or, in a window narrower than 640 px,
- * over the top centre (below the top bar), so it does not move the layout. An error is the danger
- * variant; a notice, which is something the user has to know rather than something that went wrong,
- * is the accent one. The stack dismisses toasts by itself after a few seconds and pauses while the
- * pointer is over it or focus is inside it, which is what WCAG 2.2.1 (timing adjustable) asks for.
- * The stack's own Alt+T hotkey is off (`hotkey={[]}`): it would swallow Option+T typed into the
- * terminal and pull focus into the stack. The region is marked `data-region="toast"`, which makes it
- * a stop of the window's F6 cycle while a toast is shown.
+ * Surfaces the daemon's errors and notices, and what callers hand to `toastError` and
+ * `toastNotice`, in HeroUI's own toast stack (`Toast.Provider` over its queue), floating over the
+ * bottom end corner (above the connection banner while that is shown, see `style.css`) or, in a
+ * window narrower than 640 px, over the top centre (below the top bar), so it does not move the
+ * layout. An error is the danger variant; a notice, which is something the user has to know rather
+ * than something that went wrong, is the accent one. The stack dismisses toasts by itself after a
+ * few seconds and pauses while the pointer is over it or focus is inside it, which is what WCAG
+ * 2.2.1 (timing adjustable) asks for. The stack's own Alt+T hotkey is off (`hotkey={[]}`): it would
+ * swallow Option+T typed into the terminal and pull focus into the stack. The region is marked
+ * `data-region="toast"`, which makes it a stop of the window's F6 cycle while a toast is shown.
  *
  * A toast that carries a session is titled with where that session is and carries the message as
  * its description: the daemon's own messages say "this session" without naming it, since it has no
  * notion of what the client calls that session, so the title is the only thing that tells the user
- * which one is meant. Every notice carries one; an error carries one when its call site knows which
- * session the daemon was talking about.
+ * which one is meant. Every daemon notice carries one; an error carries one when its call site
+ * knows which session the daemon was talking about; a notice the UI raises itself (`toastNotice`)
+ * has none, and is just the message.
  *
  * An identical toast arriving while one is still shown replaces it with a fresh one at the front
  * of the stack and a restarted countdown, instead of stacking another or updating the old one in

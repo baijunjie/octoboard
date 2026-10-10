@@ -7,6 +7,7 @@ import { StatusChip } from "../viewer/StatusChip";
 import { STATUS_MARKS, type StatusKey } from "../viewer/statusMarks";
 import { displayWirePath, wireBaseName } from "../wirePath";
 import { SECTION_LABELS, type ChangeItem, type ChangeSection } from "./changes";
+import { ChangeRowActions } from "./ChangeRowActions";
 
 /** Every section heading is one line of this height, which, with the rows' (`ROW_HEIGHT`), is what
  * lets the list be virtualized, flat or as a tree. */
@@ -58,7 +59,8 @@ export function changeRowText(
   return { name, detail, ariaLabel };
 }
 
-/** What a change's row shows: its status mark, its file's name and the detail beside it. */
+/** What a change's row shows: its status mark, its file's name and the detail beside it, and at its
+ * end the button of the row's actions. */
 export function ChangeRowBody({ item, name, detail }: { item: ChangeItem; name: string; detail: string }): React.ReactElement {
   return (
     <>
@@ -73,6 +75,7 @@ export function ChangeRowBody({ item, name, detail }: { item: ChangeItem; name: 
           {detail}
         </FadeOverflow>
       )}
+      <ChangeRowActions item={item} name={name} />
     </>
   );
 }

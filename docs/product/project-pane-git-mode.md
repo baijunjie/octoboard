@@ -106,7 +106,7 @@ Within a section, changes are in the order the file tree would show their paths 
 Each row shows a status letter, the file's name, and then the folder it is in — or, for a rename, where it came from,
 and for a rename across the project's boundary, where it came from or went, outside the project. Grouped by folder a
 row drops the folder, which its parent row carries instead, and keeps the rest (see "Flat or grouped by folder"
-below). The letters:
+below). At the row's end is the button of its own actions (see "A row's actions" below). The letters:
 
 | Letter | Status |
 |---|---|
@@ -127,6 +127,37 @@ long for their space" in `docs/product/labels-and-tooltips.md`).
   selectable otherwise.
 - The change the viewer showed last is the list's **selected change**: its row is tinted, assistive technology hears
   it named as selected, and the list keeps it in view behind the viewer while the viewer moves from change to change.
+
+### A row's actions
+
+Every change's row ends with an icon button that opens a **menu of what can be done with that change**, in both the
+Uncommitted and the Compare view and in both forms of the list, flat or grouped by folder. **Copy path** is its only
+action so far. A folder's row in the grouped form has no such button, and neither has the Files mode's tree.
+
+- **Copy path** puts the change's path on the clipboard as the row names it: the path within the project, slash
+  separated, which for a rename is its new path — the old one only where the new side is absent (a deletion) or
+  outside the project. A **toast** then confirms that the path was copied; where the clipboard refuses it, an error
+  toast says it could not be copied (see `docs/product/toasts.md`).
+- **The button shows while its row is hovered, holds keyboard focus, is the selected change, or has its menu open**,
+  fading and opening out as it appears, as the sidebar's row controls do (see "Rows, names and keyboard focus" in
+  `docs/product/sidebar.md`). While hidden it takes up no width, so the file name has the room; it is reachable from
+  the keyboard either way.
+- **The keyboard reaches it along the row, not with Tab.** Tab moves into the change list and out of it again, never
+  along a row's parts; it is the arrow key that runs along the row — Right, Left under a right-to-left language —
+  that moves from the row to its button and back. Grouped by folder, a folder's row keeps those keys for opening and
+  closing it (see "Flat or grouped by folder" below).
+- **The row keeps its own action**: a click or Enter on the row opens the change in the file viewer, and neither on
+  the button does. The button is the only way to the menu — a right-click on a change row opens none, unlike a
+  sidebar row (see "Right-click menus" in `docs/product/window-layout.md`). A menu opened from the keyboard hands
+  keyboard focus back to the button when it closes; one opened with the pointer hands it back to whatever had it
+  before, as a sidebar row's menu does.
+- Its **accessible name names the file** — "Actions for file server.ts" — so each row's button is told apart, while
+  its tooltip is the short one every such button has (see "Tooltips on icon-only controls" in
+  `docs/product/labels-and-tooltips.md`).
+- **Where the platform has no clipboard there is no button on the row at all**, rather than a menu whose only action
+  cannot act: Copy path being the only action, nothing is left to offer. That is the case in a plain browser whose
+  page is not a secure context — served over `http` from anywhere but `localhost`. The packaged desktop app always
+  has a clipboard.
 
 ### Flat or grouped by folder
 
@@ -298,9 +329,10 @@ until the new one is in.
 - **The commits compared**, From's and then To's, each by its first seven characters, in a line above what the
   comparison found:
   - the changed files, in one section, **Changed files**, headed with how many changes it holds. Its rows, their
-    order, their status letters (A, M, D, R or T here), the keyboard and the selected change are as in the Uncommitted
-    view (see "Rows and the keyboard" above), and it is grouped by folder with it (see "Flat or grouped by folder"
-    above) and narrowed by the same filter (see "Filtering by file name" above);
+    order, their status letters (A, M, D, R or T here), the keyboard, their action button and the selected change are
+    as in the Uncommitted view (see "Rows and the keyboard" and "A row's actions" above), and it is grouped by folder
+    with it (see "Flat or grouped by folder" above) and narrowed by the same filter (see "Filtering by file name"
+    above);
   - **Not every change is shown**, under a list cut short: at most 10,000 changes, or 2 MiB of paths, are listed —
     those Git reported first;
   - **both branches are at the same commit**, so there are no differences;

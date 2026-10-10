@@ -16,7 +16,7 @@ export function focusFirst(list: HTMLElement | null, fallback: HTMLElement | nul
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
       if (document.activeElement !== document.body && !list?.contains(document.activeElement)) return;
-      (list?.querySelector<HTMLElement>("[role=option], [role=row][data-key]") ?? fallback?.querySelector<HTMLElement>("button"))?.focus();
+      (list?.querySelector<HTMLElement>("[role=row][data-key]") ?? fallback?.querySelector<HTMLElement>("button"))?.focus();
     }),
   );
 }

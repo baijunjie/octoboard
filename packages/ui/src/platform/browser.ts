@@ -4,13 +4,22 @@ import type { PlatformAdapter } from "./index";
  * A plain browser has no shell: no quit flow (closing the tab is not quitting anything — the
  * daemon outlives it), no application icon to badge, no native window to theme or reveal, no
  * window controls of its own to keep clear and no menu bar to answer. Desktop notifications map
- * onto the Web Notifications API, absent where the browser does not have it.
+ * onto the Web Notifications API, absent where the browser does not have it; the clipboard is the
+ * async Clipboard API, absent where the page is not a secure context.
  */
 export function browserPlatform(): PlatformAdapter {
   return {
     kind: "browser",
     notifications: typeof Notification === "undefined" ? undefined : webNotifications(),
+    clipboard: webClipboard(),
   };
+}
+
+/** The async Clipboard API, which writes text from a user gesture without a permission prompt;
+ * absent where the page is not a secure context. */
+function webClipboard(): NonNullable<PlatformAdapter["clipboard"]> | undefined {
+  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return undefined;
+  return { writeText: (text) => navigator.clipboard.writeText(text) };
 }
 
 function webNotifications(): NonNullable<PlatformAdapter["notifications"]> {

@@ -54,6 +54,9 @@ pub fn run() {
         // Carries no daemon traffic either: the frontend asks for a notification, the plugin
         // shows it.
         .plugin(tauri_plugin_notification::init())
+        // The frontend writes text to the clipboard through it (the webview's own clipboard API is
+        // refused outside a secure context, which the custom scheme may not count as).
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(ExitState::default())
         .manage(BackgroundState::default())
         .manage(DaemonState::default())
