@@ -66,8 +66,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   in the right pane: its Files and Git modes and what is remembered of the mode, opening it with Browse files or by
   selecting a project session without starting or resuming anything, the file tree (what is listed, its order, rows and
   the keyboard, the selected file and a removed one), when the tree is listed again, what is remembered per project, the
-  read-only file viewer (what it shows, Previous/Next and the arrow keys, closing it, a file that changes while open),
-  its errors, and a pane that fails to load.
+  read-only file viewer (what it shows, wrapping long lines, Previous/Next and the arrow keys, closing it, a file that
+  changes while open), its errors, and a pane that fails to load.
 - [Project pane: Git mode](product/project-pane-git-mode.md) — the project pane's read-only review of a repository in
   two views — Uncommitted (a worktree's uncommitted changes: the worktree selector and a worktree that goes away, the
   Staged, Conflicted, Unstaged and Untracked list, a subdirectory project and renames across its boundary, states and

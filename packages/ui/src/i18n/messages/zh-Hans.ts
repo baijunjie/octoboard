@@ -437,6 +437,7 @@ export const zhHans: Translation<"other"> = {
   "viewer.layout": "差异布局",
   "viewer.layout.unified": "统一",
   "viewer.layout.split": "并排",
+  "viewer.wrap": "自动换行",
   "viewer.expand.unmodified": {
     other: "{count} 行未修改内容",
   },

@@ -280,15 +280,16 @@ commit and its new side from To's, and is shown as a staged change is below; it 
 ### What it shows
 
 - **A text change** is a diff, drawn from the patch Git makes for it: unified at first, or split into its two sides
-  side by side, chosen at the end of the row under the title. The choice is offered only for a diff with lines on both
-  sides: an added or a deleted file reads the same either way, so it has none. The choice is remembered: later diffs
-  open in the layout last chosen, across changes and after the app restarts. Only the patch's hunks and the lines
-  around them are shown, each run of unchanged lines between them collapsed into a separator that can be expanded (see
-  "Expanding the collapsed lines" below). A change whose patch has no lines — an empty file added or removed, say —
-  says it has no diff to show. Long lines wrap. A patch of more than 1,000,000 characters or 10,000 lines is shown as
-  the plain patch, with a line saying it is shown that way because the change is large; so is a patch the diff could
-  not be drawn from. A patch that is not valid UTF-8 — of a file in another encoding — is shown with replacement
-  characters.
+  side by side, chosen among the view controls at the end of the row under the title. The choice is offered only for a
+  diff with lines on both sides: an added or a deleted file reads the same either way, so it has none. It is
+  remembered: later diffs open in the layout last chosen, across changes and after the app restarts. Only the patch's
+  hunks and the lines around them are shown, each run of unchanged lines between them collapsed into a separator that
+  can be expanded (see "Expanding the collapsed lines" below). A change whose patch has no lines — an empty file added
+  or removed, say — says it has no diff to show. Whether its long lines wrap is the viewer's own choice, which a diff
+  shares with every file (see "Wrapping long lines" in `docs/product/project-pane.md`). A patch of more than 1,000,000
+  characters or 10,000 lines is shown as the plain patch, with a line saying it is shown that way because the change is
+  large; so is a patch the diff could not be drawn from. A patch that is not valid UTF-8 — of a file in another
+  encoding — is shown with replacement characters.
 - **A missing newline at the end** of either version is said in a line above the diff — the old version, the new one,
   or neither has one — rather than as a line of it. A symbolic link's change never says so, a link's target having
   no newline at its end anyway. A plain patch keeps Git's own marker lines.

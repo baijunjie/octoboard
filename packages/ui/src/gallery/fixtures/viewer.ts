@@ -280,6 +280,22 @@ function generated(lines: number, line: (index: number) => string): string {
 const largeLog = () => generated(40_000, (i) => `2026-10-08T12:${String(i % 60).padStart(2, "0")}:00Z INFO request ${i} served in ${i % 97} ms`);
 const minified = () => `!function(){${generated(1, () => Array.from({ length: 4_000 }, (_, i) => `var a${i}=${i}*2;`).join(""))}}();`;
 const nearBudget = () => generated(9_000, (i) => `export const value${i} = { id: ${i}, label: "Item ${i}", enabled: ${i % 2 === 0} };`);
+// Lines longer than the viewer is wide, in code and in prose, for the word wrap choice.
+const LONG_LINE = "const message = `The session ${session.title} has been waiting for ${minutes} minutes for an answer to ${request.question}, which was last asked by ${request.agent} at ${request.askedAt}`;";
+const longLines = () => ["export function describe(session: Session): string {", `  ${LONG_LINE}`, "  return message;", "}", `// ${"A comment that goes on and on without ever finding a place to stop. ".repeat(4)}`, ""].join("\n");
+const LONG_LINES_PATCH = `diff --git a/src/describe.ts b/src/describe.ts
+index 1111111..2222222 100644
+--- a/src/describe.ts
++++ b/src/describe.ts
+@@ -1,5 +1,5 @@
+ export function describe(session: Session): string {
+-  ${LONG_LINE.replace("waiting for", "idle for")}
++  ${LONG_LINE}
+   return message;
+ }
+-// ${"A comment that goes on and on without ever finding a place to stop. ".repeat(3)}
++// ${"A comment that goes on and on without ever finding a place to stop. ".repeat(4)}
+`;
 const largePatch = () =>
   "diff --git a/data/table.ts b/data/table.ts\nindex 1111111..2222222 100644\n--- a/data/table.ts\n+++ b/data/table.ts\n@@ -1,12000 +1,12000 @@\n" +
   generated(12_000, (i) => `-export const row${i} = ${i};\n+export const row${i} = ${i + 1};`);
@@ -295,6 +311,7 @@ async function files(): Promise<ViewerSubject[]> {
     file("src/session.ts", text("src/session.ts", NEW_SESSION)),
     file("scripts/build.py", text("scripts/build.py", PYTHON)),
     file("crates/words/src/lib.rs", text("crates/words/src/lib.rs", RUST)),
+    file("src/describe.ts", text("src/describe.ts", longLines())),
     file("README.md", text("README.md", MARKDOWN)),
     file("package.json", text("package.json", JSON_TEXT)),
     file("notes/plan.zzplan", text("notes/plan.zzplan", UNKNOWN)),
@@ -356,6 +373,7 @@ function untracked(path: string, body: ViewerBody): ViewerSubject {
 async function changes(): Promise<ViewerSubject[]> {
   return [
     change("src/session.ts", present("src/session.ts", oldSession), present("src/session.ts", newSession), MODIFIED_PATCH),
+    change("src/describe.ts", present("src/describe.ts"), present("src/describe.ts"), LONG_LINES_PATCH),
     change("src/badge.ts", { state: "absent" }, present("src/badge.ts"), ADDED_PATCH),
     change("src/legacy.ts", present("src/legacy.ts"), { state: "absent" }, DELETED_PATCH),
     change("src/badgeLabel.ts", present("src/badge.ts"), present("src/badgeLabel.ts"), RENAMED_PATCH),
@@ -411,7 +429,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     title: "Files",
     description:
-      "Code in several languages, every image format, an SVG and HTML whose scripts must not run, unsupported binary, a grammar that fails, files past the budgets, loading and failed reads. Previous / Next walks them in the same mounted viewer.",
+      "Code in several languages (one file with lines wider than the viewer), every image format, an SVG and HTML whose scripts must not run, unsupported binary, a grammar that fails, files past the budgets, loading and failed reads. Previous / Next walks them in the same mounted viewer.",
     viewer: { subjects: files },
   },
   {
@@ -426,7 +444,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     title: "Changes",
     description:
-      "Modified, added, deleted, renamed and type-changed files from patches, sides outside the project, image changes, a binary change, a patch past the budget, a patch that cannot be read and a change without a patch.",
+      "Modified (one with lines wider than the viewer), added, deleted, renamed and type-changed files from patches, sides outside the project, image changes, a binary change, a patch past the budget, a patch that cannot be read and a change without a patch.",
     viewer: { subjects: changes },
   },
 ];

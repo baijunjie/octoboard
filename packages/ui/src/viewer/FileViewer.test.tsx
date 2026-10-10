@@ -8,6 +8,7 @@ import { ThemeProvider } from "../theme";
 import type { ViewerChangeSide, ViewerContent, ViewerSubject } from "./content";
 import { diffLayout } from "./diffLayout";
 import { FileViewer, type ViewerNavigation } from "./FileViewer";
+import { wordWrap } from "./wordWrap";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -17,26 +18,34 @@ import { FileViewer, type ViewerNavigation } from "./FileViewer";
 const drawing = vi.hoisted(() => ({ held: false }));
 vi.mock("./renderer", async () => {
   const { useEffect } = await import("react");
-  const Stand = ({ text, onDrawn }: { text: string; onDrawn?: () => void }) => {
+  const Stand = ({ text, wrap, onDrawn }: { text: string; wrap: boolean; onDrawn?: () => void }) => {
     useEffect(() => {
       if (!drawing.held) onDrawn?.();
     }, [text, onDrawn]);
-    return <pre data-renderer="">{text}</pre>;
+    return (
+      <pre data-renderer="" data-wrap={String(wrap)}>
+        {text}
+      </pre>
+    );
   };
   return {
-    HighlightedFile: ({ text, onDrawn }: { text: string; onDrawn?: () => void }) => <Stand text={text} onDrawn={onDrawn} />,
+    HighlightedFile: ({ text, wrap, onDrawn }: { text: string; wrap: boolean; onDrawn?: () => void }) => (
+      <Stand text={text} wrap={wrap} onDrawn={onDrawn} />
+    ),
     // A patch marked "unrenderable" stands for one the library rejects.
     // The stand-in tells whether it was handed a way to expand, and each button reports the state the
     // real one would.
     RenderedDiff: ({
       patch,
       layout,
+      wrap,
       onDrawn,
       loadBodies,
       onExpansion,
     }: {
       patch: string;
       layout: string;
+      wrap: boolean;
       onDrawn?: () => void;
       loadBodies?: () => void;
       onExpansion?: (status: unknown) => void;
@@ -44,7 +53,7 @@ vi.mock("./renderer", async () => {
       if (patch.includes("unrenderable")) throw new Error("The patch cannot be read");
       return (
         <div data-layout={layout} data-expandable={String(loadBodies !== undefined)}>
-          <Stand text={patch} onDrawn={onDrawn} />
+          <Stand text={patch} wrap={wrap} onDrawn={onDrawn} />
           <button type="button" data-report="changed" onClick={() => onExpansion?.({ kind: "changed" })} />
           <button type="button" data-report="failed" onClick={() => onExpansion?.({ kind: "failed", message: "No luck." })} />
         </div>
@@ -70,6 +79,7 @@ let root: Root;
 beforeEach(() => {
   // The layout choice outlives a viewer, so a test that makes one must not leave it for the next.
   diffLayout.set("unified");
+  wordWrap.set(false);
   localStorage.clear();
   container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
@@ -332,6 +342,14 @@ it("keeps focus in the dialog when the subject's content is replaced", () => {
   expect(dialog()?.contains(document.activeElement)).toBe(true);
 });
 
+// The wrap choice goes when the subject has no code left, a commit after the content changes.
+it("keeps focus in the dialog when the wrap choice it was on goes", () => {
+  show(modified());
+  act(() => [...dialog()!.querySelectorAll("button")].find((b) => b.textContent === "Wrap lines")!.focus());
+  show(binary);
+  expect(dialog()?.contains(document.activeElement)).toBe(true);
+});
+
 // The title's accessible name: the one screen-reader-only string the drawn tags and name are hidden from.
 const titleName = () => dialog()!.querySelector("h2 > .sr-only")!.textContent;
 
@@ -460,4 +478,84 @@ it("says nothing for a loading that ends before the first text is written", () =
   show({ key: "q", path: "src/q.ts", content: { state: "file", body: { kind: "text", text: "a\n", size: 2 } } });
   act(() => void vi.advanceTimersByTime(1600));
   expect(dialog()!.querySelector("[role=status]:not([aria-hidden])")!.textContent).toBe("");
+});
+
+// One wrap choice serves files and diffs: nothing is wrapped until the user asks, and what they chose
+// holds for the next file of either kind and is stored for the next run.
+it("wraps nothing by default, then wraps files and diffs alike once chosen, and stores it", () => {
+  const wrapped = () => dialog()?.querySelector("[data-renderer]")?.getAttribute("data-wrap");
+  const toggle = () => [...dialog()!.querySelectorAll("button")].find((b) => b.textContent === "Wrap lines")!;
+  show({ key: "w", path: "src/w.ts", content: { state: "file", body: { kind: "text", text: "a\n", size: 2 } } });
+  expect(wrapped()).toBe("false");
+  expect(toggle().getAttribute("aria-pressed")).toBe("false");
+  expect(toggle().closest("[data-viewer-description]")).not.toBeNull();
+  act(() => toggle().click());
+  expect(wrapped()).toBe("true");
+  expect(toggle().getAttribute("aria-pressed")).toBe("true");
+  expect(localStorage.getItem(PREFERENCE_KEYS.wordWrap)).toBe("true");
+  show(modified("src/b.ts"));
+  expect(wrapped()).toBe("true");
+  expect(toggle().getAttribute("aria-pressed")).toBe("true");
+});
+
+// The two controls portal into places of their own, so the Tab order stays the order on screen
+// whichever mounts first: stepping from a one-sided diff (the wrap choice only) to a two-sided one
+// brings the layout choice in after it.
+it("keeps the layout choice before the wrap choice when the layout choice mounts second", () => {
+  const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
+  const change = (key: string, patch: string, old: ViewerChangeSide): ViewerSubject => ({
+    key,
+    path: "src/c.ts",
+    content: { state: "change", change: { old, new: side, patch } },
+  });
+  const controls = () => [...dialog()!.querySelector("[data-viewer-description]")!.querySelectorAll("button")].map((b) => b.textContent);
+  show(change("one", "@@ -0,0 +1 @@\n+a\n", { state: "absent" }));
+  expect(controls()).toEqual(["Wrap lines"]);
+  show(change("two", "@@ -1 +1 @@\n-a\n+b\n", side));
+  expect(controls()).toEqual(["Unified", "Split", "Wrap lines"]);
+});
+
+// An image that cannot be decoded falls back to its text on whichever side it happens to, and the
+// wrap choice must be there for the text that shows, once.
+it.each([
+  ["the old side only", [true, false], 1],
+  ["the new side only", [false, true], 1],
+  ["both sides", [true, true], 1],
+  ["neither side", [false, false], 0],
+])("offers one wrap choice for an image change whose text shows on %s", async (_, [oldFails, newFails], expected) => {
+  const svg = (text: string) => ({
+    kind: "image" as const,
+    mediaType: "image/svg+xml",
+    url: `data:image/svg+xml,${encodeURIComponent(text)}`,
+    size: text.length,
+    text,
+  });
+  const side = (text: string): ViewerChangeSide => ({ state: "present", path: "logo.svg", kind: "file", body: svg(text) });
+  show({ key: "img", path: "logo.svg", content: { state: "change", change: { old: side("<svg id='old'/>"), new: side("<svg id='new'/>") } } });
+  const images = [...document.querySelectorAll<HTMLImageElement>("img")];
+  act(() => {
+    if (oldFails) images[0].dispatchEvent(new Event("error"));
+    if (newFails) images[1].dispatchEvent(new Event("error"));
+  });
+  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  const toggles = [...dialog()!.querySelectorAll("button")].filter((b) => b.textContent === "Wrap lines");
+  expect(toggles).toHaveLength(expected);
+});
+
+it("offers no wrap choice where there is no code", () => {
+  const toggles = () => [...dialog()!.querySelectorAll("button")].filter((b) => b.textContent === "Wrap lines");
+  show(binary);
+  expect(toggles()).toHaveLength(0);
+  show(failed);
+  expect(toggles()).toHaveLength(0);
+});
+
+it("reads the stored wrap choice, and falls back to unwrapped for anything else", async () => {
+  const read = async (raw: string) => {
+    vi.resetModules();
+    localStorage.setItem(PREFERENCE_KEYS.wordWrap, raw);
+    return (await import("./wordWrap")).wordWrap.get();
+  };
+  expect(await read("true")).toBe(true);
+  expect(await read("sideways")).toBe(false);
 });

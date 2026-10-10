@@ -71,19 +71,21 @@ function diffCss(theme: "light" | "dark"): string {
  * Options shared by every rendering. The library's own header is off (the viewer's title names the
  * file), and so is everything interactive it can add inside the code — line selection, hover
  * utilities — so the rendered code holds no control that keyboard access would have to reach, apart
- * from the separators of collapsed lines (`expansion.ts`). Long lines wrap: the library would
- * otherwise scroll them sideways inside its shadow root, in an element that cannot take focus, so
- * they could not be scrolled from the keyboard; wrapped, the one scrolling element is the caller's
- * focusable frame. `disableErrorHandling` makes a failure throw to the caller's error boundary
- * instead of printing the library's English stack trace into the page.
+ * from the separators of collapsed lines (`expansion.ts`). Whether long lines wrap is the caller's
+ * choice (`overflowOption`), added to these. `disableErrorHandling` makes a failure throw to the
+ * caller's error boundary instead of printing the library's English stack trace into the page.
  */
 const BASE_OPTIONS = {
   theme: THEMES,
   disableFileHeader: true,
   disableErrorHandling: true,
-  overflow: "wrap",
   tokenizeMaxLineLength: RENDER_BUDGETS.tokenizeLineLength,
 } as const;
+
+/** The library's name for the wrap choice. Unwrapped, it scrolls long lines sideways in its own
+ * elements inside its shadow root, which cannot take keyboard focus; wrapped, the one scrolling
+ * element is the caller's focusable frame. */
+const overflowOption = (wrap: boolean) => (wrap ? "wrap" : "scroll");
 
 /**
  * The worker pool. Highlighting runs in workers so a large file cannot stall the window; when they
@@ -148,6 +150,8 @@ export interface FileRenderProps {
   name: string;
   text: string;
   theme: "light" | "dark";
+  /** Whether long lines wrap. */
+  wrap: boolean;
   /** Told whether the file is shown without highlighting because its grammar or a theme failed to
    * load; the caller passes a new callback for each file, so a second file in the same failing
    * language is reported too. */
@@ -164,6 +168,7 @@ export const HighlightedFile = memo(function HighlightedFile({
   name,
   text,
   theme,
+  wrap,
   onPlainChange,
   onDrawn,
 }: FileRenderProps): React.ReactElement | null {
@@ -178,7 +183,10 @@ export const HighlightedFile = memo(function HighlightedFile({
     [name, text, language?.lang],
   );
   const onPostRender = useDrawnCallback(onDrawn);
-  const options = useMemo(() => ({ ...BASE_OPTIONS, themeType: theme, onPostRender }), [theme, onPostRender]);
+  const options = useMemo(
+    () => ({ ...BASE_OPTIONS, themeType: theme, overflow: overflowOption(wrap), onPostRender }) as const,
+    [theme, wrap, onPostRender],
+  );
   return (
     <WorkerPoolContext.Provider value={rendererPool()}>
       {file && <File file={file} options={options} disableWorkerPool={file.lang === "text"} />}
@@ -193,6 +201,8 @@ export interface DiffRenderProps {
   patch: string;
   layout: DiffLayout;
   theme: "light" | "dark";
+  /** Whether long lines wrap. */
+  wrap: boolean;
   /** As `FileRenderProps.onDrawn`. */
   onDrawn?: () => void;
   /** Reads both sides' whole text, for expanding the lines the patch collapses; without it the
@@ -210,6 +220,7 @@ export const RenderedDiff = memo(function RenderedDiff({
   patch,
   layout,
   theme,
+  wrap,
   onDrawn,
   loadBodies,
   labels,
@@ -259,6 +270,7 @@ export const RenderedDiff = memo(function RenderedDiff({
       ({
         ...BASE_OPTIONS,
         themeType: theme,
+        overflow: overflowOption(wrap),
         diffStyle: layout,
         diffIndicators: "classic",
         hunkSeparators: "line-info-basic",
@@ -269,7 +281,7 @@ export const RenderedDiff = memo(function RenderedDiff({
         loadDiffFiles: expansion && expandable && how !== "stopped" ? expansion.files : undefined,
         onPostRender,
       }) as const,
-    [theme, layout, onPostRender, expansion, expandable, how],
+    [theme, layout, wrap, onPostRender, expansion, expandable, how],
   );
   return (
     <WorkerPoolContext.Provider value={rendererPool()}>

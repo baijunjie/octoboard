@@ -477,6 +477,7 @@ export const en = {
   "viewer.layout": "Diff layout",
   "viewer.layout.unified": "Unified",
   "viewer.layout.split": "Split",
+  "viewer.wrap": "Wrap lines",
   "viewer.expand.unmodified": {
     one: "{count} unmodified line",
     other: "{count} unmodified lines",

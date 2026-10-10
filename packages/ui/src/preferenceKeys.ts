@@ -13,4 +13,5 @@ export const PREFERENCE_KEYS = {
   sidebarFocus: "octoboard.sidebarFocus",
   projectBrowsers: "octoboard.projectBrowsers",
   diffLayout: "octoboard.diffLayout",
+  wordWrap: "octoboard.wordWrap",
 } as const;

@@ -11,6 +11,7 @@ import { LayoutToggle, type DiffLayout } from "./diffLayout";
 import type { ExpansionStatus, SeparatorLabels } from "./expansion";
 import { focusFirstSeparatorControl } from "./rendererDom";
 import { isSelectAll, selectCode } from "./selectAll";
+import { WrapToggle, wordWrap } from "./wordWrap";
 
 // The renderer module, with the library and its grammars, loads the first time code is shown.
 let rendererLoaded = false;
@@ -69,9 +70,11 @@ function Notice({ children }: { children: React.ReactNode }): React.ReactElement
 }
 
 /** Text as it is, laid out by the browser as one preformatted node: what the viewer falls back to
- * past a budget or when the renderer fails, and cheap at any size the daemon sends. */
+ * past a budget or when the renderer fails, and cheap at any size the daemon sends. It wraps long
+ * lines when the user's word wrap choice says so. */
 export function PlainText({ text, label, theme }: { text: string; label: string; theme: "light" | "dark" }): React.ReactElement {
   const frame = useCodeFrame();
+  const wrap = wordWrap.useValue();
   const colours = CODE_THEMES[theme];
   return (
     <pre
@@ -81,7 +84,7 @@ export function PlainText({ text, label, theme }: { text: string; label: string;
       aria-label={label}
       {...frame}
       style={{ backgroundColor: colours.background, color: colours.foreground }}
-      className="min-h-0 flex-1 overflow-auto rounded-xl p-3 font-mono text-xs leading-5 break-words whitespace-pre-wrap outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
+      className={`min-h-0 flex-1 overflow-auto rounded-xl p-3 font-mono text-xs leading-5 outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus ${wrap ? "break-words whitespace-pre-wrap" : "whitespace-pre"}`}
     >
       {text}
     </pre>
@@ -189,9 +192,11 @@ export function CodeSurface({
   const [plainFor, setPlainFor] = useState<string>();
   const onPlainChange = useCallback((plain: boolean) => setPlainFor(plain ? resetKey : undefined), [resetKey]);
   const label = t("viewer.contents", { name });
+  const wrap = wordWrap.useValue();
   if (textPlan(text) === "plain") {
     return (
       <>
+        <WrapToggle />
         <Notice>{t("viewer.plain.large")}</Notice>
         <PlainText text={text} label={label} theme={theme} />
       </>
@@ -199,6 +204,7 @@ export function CodeSurface({
   }
   const fallback = (
     <>
+      <WrapToggle />
       <Notice>{t("viewer.plain.failed")}</Notice>
       <PlainText text={text} label={label} theme={theme} />
     </>
@@ -207,8 +213,11 @@ export function CodeSurface({
     <>
       {plainFor === resetKey && <Notice>{t("viewer.plain.failed")}</Notice>}
       <RendererBoundary resetKey={resetKey} fallback={fallback}>
+        <WrapToggle />
         <CodeFrame label={label} resetKey={resetKey} theme={theme}>
-          {(onDrawn) => <HighlightedFile name={name} text={text} theme={theme} onPlainChange={onPlainChange} onDrawn={onDrawn} />}
+          {(onDrawn) => (
+            <HighlightedFile name={name} text={text} theme={theme} wrap={wrap} onPlainChange={onPlainChange} onDrawn={onDrawn} />
+          )}
         </CodeFrame>
       </RendererBoundary>
     </>
@@ -218,7 +227,8 @@ export function CodeSurface({
 /**
  * A change as a diff, rendered from its patch within the budget, with the choice of layout (left to
  * the caller when `onLayoutChange` is absent, for several diffs sharing one); past the budget, or
- * when rendering fails, the patch as plain text, without the layout choice it no longer has.
+ * when rendering fails, the patch as plain text, without the layout choice it no longer has. The
+ * word wrap choice is offered in every one of these forms.
  *
  * Git's "\ No newline at end of file" marker lines are taken out before rendering and said in a
  * notice of their own: the library draws the marker as a line of the change, in English.
@@ -243,6 +253,7 @@ export function DiffSurface({
 }): React.ReactElement {
   const t = useT();
   const label = t("viewer.contents", { name });
+  const wrap = wordWrap.useValue();
   const marked = useMemo(() => withoutNoNewlineMarkers(patch), [patch]);
   const labels = useMemo<SeparatorLabels>(
     () => ({
@@ -270,6 +281,7 @@ export function DiffSurface({
         : undefined;
   const asText = (reason: string) => (
     <>
+      <WrapToggle />
       <Notice>{reason}</Notice>
       <PlainText text={patch} label={label} theme={theme} />
     </>
@@ -280,6 +292,7 @@ export function DiffSurface({
   return (
     <RendererBoundary resetKey={resetKey} fallback={asText(t("viewer.change.patchFailed"))}>
       {onLayoutChange && <LayoutToggle layout={layout} onLayoutChange={onLayoutChange} />}
+      <WrapToggle />
       {ending && <Notice>{t(ending)}</Notice>}
       {expansionNote !== undefined && <Notice>{expansionNote}</Notice>}
       <StatusAnnouncer text={status?.kind === "loading" ? t("viewer.expand.loading") : expansionNote} />
@@ -290,6 +303,7 @@ export function DiffSurface({
             patch={marked.patch}
             layout={layout}
             theme={theme}
+            wrap={wrap}
             onDrawn={onDrawn}
             loadBodies={loadBodies}
             labels={labels}

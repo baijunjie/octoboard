@@ -20,6 +20,16 @@ keyboard walk and the reconnect. These four could not be settled then:
 - [ ] A window below 800 px. "Show whole file" is positioned absolutely and may cover the end of a long separator
   label.
 
+## Carried from milestone 03 (word wrap in the viewer)
+
+The wrap choice was verified in headless WebKit over the gallery and in unit tests; the machine's screen was locked
+throughout, so the packaged app never showed it:
+
+- [ ] The wrap toggle in the viewer header, with the header's rows unchanged by it.
+- [ ] Wrapping on for a file and for a diff in both layouts, the split layout's two sides staying level.
+- [ ] The choice surviving a real restart of the app, not only a written preference.
+- [ ] A diff with wrapping off, scrolled sideways: its separator controls still usable and not clipped.
+
 ## Notes for the developer
 
 **Reference docs**

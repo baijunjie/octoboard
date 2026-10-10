@@ -1,6 +1,6 @@
 import { Alert, Button, Chip } from "@heroui/react";
 import { ChevronLeft, ChevronRight, FileQuestion, Unplug } from "lucide-react";
-import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { FadeOverflow } from "../components/FadeOverflow";
 import { PathText } from "../components/PathText";
@@ -25,10 +25,12 @@ import {
   type ViewerContent,
   type ViewerSubject,
 } from "./content";
-import { diffLayout, LayoutSlot, LayoutToggle, type DiffLayout } from "./diffLayout";
+import { ControlsSlot } from "./controlsSlot";
+import { diffLayout, LayoutToggle, type DiffLayout } from "./diffLayout";
 import { formatFileSize, formatSideSize } from "./format";
 import { StatusChip } from "./StatusChip";
 import type { StatusKey } from "./statusMarks";
+import { useWrapClaims, WrapToggleHost } from "./wordWrap";
 
 const STATUS_LABELS: Record<StatusKey, PlainMessageKey> = {
   added: "viewer.change.added",
@@ -70,6 +72,8 @@ export function FileViewer({
   // The user's last choice, kept across files and restarts (`diffLayout`).
   const layout = diffLayout.useValue();
   const [layoutSlot, setLayoutSlot] = useState<HTMLElement | null>(null);
+  const { claimWrap, claimed: wrapClaimed } = useWrapClaims();
+  const controls = useMemo(() => ({ layout: layoutSlot, claimWrap }), [layoutSlot, claimWrap]);
   const name = wireBaseName(subject.path);
   const { content } = subject;
   useRendererScope();
@@ -95,9 +99,10 @@ export function FileViewer({
     (other ?? headerRef.current?.closest<HTMLElement>("[role=dialog]"))?.focus();
   }, [subject.key, hasPrevious, hasNext]);
   // The subject's content can be replaced under the same subject — read again, or the connection
-  // lost — taking the code region that held focus with it; the dialog takes focus back, or its
-  // Escape and Tab would stop working.
-  useRefocusIfLost(() => headerRef.current?.closest<HTMLElement>("[role=dialog]"), [content]);
+  // lost — taking the code region that held focus with it, and the wrap choice goes once the last
+  // claim on it is released, a commit after the content changed; the dialog takes focus back, or
+  // its Escape and Tab would stop working.
+  useRefocusIfLost(() => headerRef.current?.closest<HTMLElement>("[role=dialog]"), [content, wrapClaimed]);
   // The latest callbacks, for a listener added once.
   const latestNavigation = useRef(navigation);
   latestNavigation.current = navigation;
@@ -138,10 +143,10 @@ export function FileViewer({
   ) : null;
 
   // The header is two rows of fixed height, whatever the subject is: the title, with the tags of what
-  // the change is before the name, and under it one row of path and description with the diff layout
-  // choice at its end. Every part that only some subjects have (the tags, the choice, the size) sits
-  // in a row that is as tall without it, and each row is one line cut by a fade, never wrapped, so
-  // moving between files cannot move the code below.
+  // the change is before the name, and under it one row of path and description with the view
+  // controls (the diff layout and word wrap choices) at its end. Every part that only some subjects
+  // have (the tags, the controls, the size) sits in a row that is as tall without it, and each row
+  // is one line cut by a fade, never wrapped, so moving between files cannot move the code below.
   // An untracked file is a change with an absent old side, which `changeStatus` calls added; the
   // list marks it untracked and says so in `subject.status`, which also holds while the content is
   // not read (yet). Without one, a change's sides give it, and a path in conflict has none to compare.
@@ -199,11 +204,17 @@ export function FileViewer({
             {renamedFrom !== undefined && <RenamedFrom path={renamedFrom} />}
           </FadeOverflow>
         </div>
-        <div ref={setLayoutSlot} className="shrink-0" />
+        {/* Two fixed places, the layout choice before the wrap choice, so the Tab order is the
+            order on screen whichever of them mounts first. The layout slot has no box of its own
+            while empty, so it takes none of the gap. */}
+        <div className="flex shrink-0 items-center gap-2">
+          <div ref={setLayoutSlot} className="contents" />
+          {wrapClaimed && <WrapToggleHost />}
+        </div>
       </div>
-      <LayoutSlot value={layoutSlot}>
+      <ControlsSlot value={controls}>
         <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} />
-      </LayoutSlot>
+      </ControlsSlot>
     </Dialog>
   );
 }
@@ -555,6 +566,8 @@ function ChangeView({
       return (
         <div className="@container flex min-h-0 flex-1">
           <div className="grid min-h-0 flex-1 grid-rows-2 gap-3 @2xl:grid-cols-2 @2xl:grid-rows-1">
+            {/* An image that cannot be decoded can fall back to its text, on either side; the wrap
+                choice in the header serves whichever sides did. */}
             <ImageSide label={t("viewer.change.before")} side={change.old} name={name} resetKey={`${resetKey}:old`} theme={theme} />
             <ImageSide label={t("viewer.change.after")} side={change.new} name={name} resetKey={`${resetKey}:new`} theme={theme} />
           </div>

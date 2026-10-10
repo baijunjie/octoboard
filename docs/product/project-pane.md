@@ -141,18 +141,19 @@ is the file's name; under it are the file's path within the project and its size
 same viewer; what it shows of a change is in "Opening a change" in `docs/product/project-pane-git-mode.md`.
 
 The header is two rows, and the same height for every file, a change, or one still loading or failed: the title row, and
-under it a single row for the path, the size or the branches of a comparison and, at its end, the diff layout choice
-where there is one. A title or a row that is too long for the window fades out at its end rather than wrapping (the path
-from its start, so the name of its folder stays visible, and the full text is the tooltip); the layout choice keeps its
-place, and the description gives way first. Moving from file to file therefore never moves the code below it.
+under it a single row for the path, the size or the branches of a comparison and, at its end, the view controls the
+subject has — the diff layout choice, and after it the wrap choice (see "Wrapping long lines" below). A title or a row
+that is too long for the window fades out at its end rather than wrapping (the path from its start, so the name of its
+folder stays visible, and the full text is the tooltip); the view controls keep their place, and the description gives
+way first. Moving from file to file therefore never moves the code below it.
 
 ### What it shows
 
 - **Text** is shown as code, highlighted for its language as told from the file's name, in colours that follow the
-  window's appearance (see "What follows the choice" in `docs/product/appearance.md`). Long lines wrap. A file of more
-  than 10,000 lines or 1,000,000 characters is shown as plain text, with a line saying it is shown without highlighting
-  because it is large; within highlighted code, a line longer than 1,000 characters is left unhighlighted. Where
-  highlighting is not available for a file, or fails to load, the file is shown as plain text.
+  window's appearance (see "What follows the choice" in `docs/product/appearance.md`). A file of more than 10,000 lines
+  or 1,000,000 characters is shown as plain text, with a line saying it is shown without highlighting because it is
+  large; within highlighted code, a line longer than 1,000 characters is left unhighlighted. Where highlighting is not
+  available for a file, or fails to load, the file is shown as plain text.
 - **Images** — PNG, JPEG, GIF, WebP, BMP, ICO and SVG; AVIF on macOS 13 and later — are shown scaled down to fit and
   never scaled up, on a checkerboard that shows their transparent areas. An image is only displayed: an SVG's scripts
   never run and nothing it refers to is fetched. An image that cannot be decoded says so; an SVG that cannot be
@@ -163,6 +164,23 @@ place, and the description gives way first. Moving from file to file therefore n
   told it is loading while the file is read — in a viewer just opened, after the viewer itself has been announced —
   but not while its code is drawn.
 - **A file that cannot be shown** says why (see "Errors" below).
+
+### Wrapping long lines
+
+**Wrap lines**, the last of the header's view controls, chooses whether lines too long for the viewer's width are
+broken onto the next line. **Nothing wraps until it is turned on**, whatever is shown — prose as much as code. It is
+one choice for everything the viewer shows as text, files and changes alike: code, a file shown as plain text, a diff,
+a plain patch, and the file behind a path in conflict. The choice is remembered, like the diff layout choice: it holds
+for the next file and the next change, and after the application restarts.
+
+- The control is there only while the viewer shows text whose lines could wrap. A change shown in sections, and an
+  image change whose sides fell back to their text, have the one choice between them rather than one for each part. An
+  image shown as an image, a binary file, a change with no differences, one with nothing to show and an error offer
+  none.
+- **While lines do not wrap, a long one is read by scrolling sideways with the pointer.** Those scrollers take no
+  keyboard focus, and Left and Right in the viewer move between subjects (see "Moving between files" below), so from
+  the keyboard the way to the end of a long line is to turn wrapping on.
+- In the split layout, wrapped lines keep the two sides' rows level with each other.
 
 ### Selecting and copying
 
