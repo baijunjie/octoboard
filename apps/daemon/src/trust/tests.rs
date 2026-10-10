@@ -190,8 +190,8 @@ fn show(var: &str) -> String {
 }
 
 /// Reads `count` bytes of what the stand-in is sent and appends them to `received`. `read -n`
-/// is the builtin that takes bytes rather than a line; it is bash's, which is what `/bin/sh`
-/// is on macOS. While it reads, bash turns the terminal's `ICRNL`, `ISIG` and `IEXTEN` on,
+/// is the builtin that takes bytes rather than a line; it is bash's, which is what the stand-in
+/// runs under. While it reads, bash turns the terminal's `ICRNL`, `ISIG` and `IEXTEN` on,
 /// so a carriage return arrives as a newline and the two cannot be told apart: the newline
 /// is turned back into a `\r`, and that `DOWN` and `ENTER` are the bytes they should be is
 /// pinned by `the_keys_are_the_bytes_the_screen_expects`. For the same reason the tests must

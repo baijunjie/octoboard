@@ -73,12 +73,11 @@ are developing on macOS. `cargo check`, `cargo clippy` and the test suite on mac
 run says nothing about it, and `--target x86_64-unknown-linux-gnu` from macOS fails in rusqlite's `bundled` build
 script without a Linux C cross-compiler. So run `cargo test -p octoboardd` inside a Linux container (Docker).
 
-A stock Rust image on Debian bookworm fails about twenty tests for reasons unrelated to the code, which reads as a
-Linux bug in the daemon: its git (2.39) lacks `git worktree add --orphan`, which the browse tests use (needs 2.42 or
-later), and its `/bin/sh` is dash, while the stand-in scripts the trust tests run under `/bin/sh` use bash builtins
-(as macOS's `/bin/sh` is bash). Use an image whose git is new enough (Debian trixie's is) and point `/bin/sh` at bash
-before the run. To exercise a fallback for a refused system call (the browse reads' `openat2` refused as `ENOSYS` or
-`EPERM`), run the container with a seccomp profile that returns that errno for the call.
+A stock Rust image on Debian bookworm fails some browse tests for reasons unrelated to the code, which reads as a
+Linux bug in the daemon: its git (2.39) is too old, and at least one of them needs `git worktree add --orphan` (git
+2.42 or later). Use an image whose git is new enough (Debian trixie's is). To exercise a fallback for a refused system call (the browse
+reads' `openat2` refused as `ENOSYS` or `EPERM`), run the container with a seccomp profile that returns that errno for
+the call.
 
 Without a container runtime, the fallback is a compile check only: copy the Linux-only functions into a scratch crate
 outside the repository that depends only on what they use (typically `libc`), and run

@@ -131,7 +131,7 @@ pub(crate) fn idle_stand_in(id: &str) -> StandIn {
     fake_live_session(id, Agent::Claude, 80, 24, "sleep 30")
 }
 
-/// A stand-in live session on a real PTY, with `/bin/sh` running `script` behind it instead of a
+/// A stand-in live session on a real PTY, with `/bin/bash` running `script` behind it instead of a
 /// real agent: enough for whatever a test needs a `LiveSession` to write into, read from, or just
 /// stay alive on. `LiveSession` has no `Drop` that ends its process, so this guard does: the
 /// process is terminated when the guard drops, which a test that fails part-way reaches too.
@@ -188,7 +188,9 @@ pub(crate) fn watched_live_session(
             pixel_height: 0,
         })
         .expect("a PTY");
-    let mut cmd = CommandBuilder::new("/bin/sh");
+    // Bash rather than `/bin/sh`: callers' scripts may use bash builtins and syntax that dash, the
+    // `/bin/sh` of Debian and Ubuntu, lacks.
+    let mut cmd = CommandBuilder::new("/bin/bash");
     cmd.args(["-c", script]);
     let child = pty.slave.spawn_command(cmd).expect("the stand-in");
     let pid = child.process_id().expect("a pid");
