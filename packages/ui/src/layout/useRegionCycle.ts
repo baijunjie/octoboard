@@ -57,7 +57,7 @@ function focusRegion(region: Region, focusTerminal: () => void): boolean {
  * the terminal takes Tab and Shift+Tab for the agent, so without this a keyboard user could never
  * leave it (WCAG 2.2 SC 2.1.2). `shown` says which regions are on screen right now; the others,
  * including a floating pane that is merely able to slide in, are skipped, as is a region with
- * nothing to focus. The connection banner is a stop, after the aside, while it is mounted. The
+ * nothing to focus. The connection banner is a stop, after the aside, while its strip is shown. The
  * toast stack joins the cycle, last, while a toast is shown.
  *
  * Registered on the window's capture phase so the key never reaches xterm.js, which would write

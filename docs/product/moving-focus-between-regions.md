@@ -49,4 +49,7 @@ goes to the terminal.
 
 The control focus lands on shows its focus ring, even when the last input before `F6` was the mouse.
 
-`F6` does nothing while a modal dialog, Settings included, or a menu is open; focus stays where it is.
+`F6` does nothing while a modal dialog, Settings included, or a menu is open; focus stays where it is. That holds for
+the connection banner too, even though a mouse press does reach its Retry button while a dialog, a menu or a popover
+is open (see "What an open dialog, menu or popover covers" in `docs/product/window-layout.md`): what is open has to be
+dismissed before `F6` reaches the banner.

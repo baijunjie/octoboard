@@ -1,5 +1,6 @@
 import { format, type MessageArgs, type MessageKey } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
+import type { Daemon } from "../store";
 
 /** Everything a pressable thing is looked up among. A hand-built row is a `role="button"`, and a tag
  * in a tag group is a `role="row"`. */
@@ -26,6 +27,8 @@ const TIMEOUT_MS = 5000;
  * What a scenario's steps drive the mounted app with: they press controls the way a user would, by
  * name, so a dialog or a view that lives in component state opens through the app's own code. Names
  * are looked up in the language the window is in (`t`), so a step reads the same in every language.
+ * A step may also move the fixture daemon itself (`dropConnection`), for a state the app's own
+ * controls cannot be driven into.
  */
 export interface Ui {
   /** The catalog's message in the window's language, for naming a control. */
@@ -45,9 +48,14 @@ export interface Ui {
   type: (text: string) => Promise<void>;
   /** Waits for `ms`, for an animation to settle. */
   wait: (ms: number) => Promise<void>;
+  /** Drops the control connection with its automatic attempts already spent — the banner's Retry
+   * offer — for a state only reachable once the window is showing something: a scenario that
+   * starts at `closed` answers no request, so nothing a step would open over it, the file viewer
+   * among them, ever lists. */
+  dropConnection: () => Promise<void>;
 }
 
-export function createUi(doc: Document, language: Language): Ui {
+export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui {
   const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
   const find = (matcher: Matcher): HTMLElement | undefined =>
@@ -65,6 +73,11 @@ export function createUi(doc: Document, language: Language): Ui {
       return (name) => name.startsWith(prefix);
     },
     wait,
+    async dropConnection() {
+      if (!daemon) throw new Error("This scenario has no daemon behind it to drop the connection to");
+      daemon.store.setState({ connectionState: "closed" });
+      await wait(300);
+    },
     async key(key) {
       const target = doc.activeElement ?? doc.body;
       for (const type of ["keydown", "keyup"]) {

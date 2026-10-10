@@ -46,6 +46,40 @@ export const connectionScenarios: Scenario[] = [
     steps: [(ui) => ui.press(ui.session("Fix the summary layout"))],
   },
   {
+    id: "daemon-lost-behind-dialog",
+    group: STARTUP_AND_CONNECTION,
+    title: "Reconnect budget spent with a dialog open",
+    description:
+      "The file viewer is opened first and the connection dropped under it, the order a user meets this in. A modal's backdrop covers the whole viewport, the banner's strip included, so a press where Try again is drawn has to reach the button rather than the backdrop, and must not dismiss the viewer.",
+    width: 1440,
+    state: connected("open"),
+    steps: [
+      (ui) => ui.press(ui.session("Fix the summary layout")),
+      (ui) => ui.wait(400),
+      (ui) => ui.press("src"),
+      (ui) => ui.press("main.ts"),
+      (ui) => ui.wait(600),
+      (ui) => ui.dropConnection(),
+    ],
+  },
+  {
+    id: "daemon-lost-behind-dialog-narrow",
+    group: STARTUP_AND_CONNECTION,
+    title: "Reconnect budget spent with a dialog open, narrow",
+    description:
+      "The same state below the docked breakpoint, where a dialog fills the window inside a margin smaller than the strip: the dialog has to end clear of the strip rather than run under it, and its bottom edge and rounded corners have to be drawn.",
+    width: 800,
+    state: connected("open"),
+    steps: [
+      (ui) => ui.press(ui.session("Fix the summary layout")),
+      (ui) => ui.wait(400),
+      (ui) => ui.press("src"),
+      (ui) => ui.press("main.ts"),
+      (ui) => ui.wait(600),
+      (ui) => ui.dropConnection(),
+    ],
+  },
+  {
     id: "terminal-output",
     group: TERMINAL,
     title: "A terminal with output",

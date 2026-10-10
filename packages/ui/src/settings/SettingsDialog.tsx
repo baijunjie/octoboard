@@ -67,11 +67,13 @@ export function SettingsDialog({
   return (
     <Modal.Backdrop isOpen onOpenChange={(open) => !open && onClose()}>
       {/* HeroUI pads the container 40px from `sm` up; narrow, the dialog fills the window inside a
-          16px margin on every side instead, so the padding stays 16px until `docked`. */}
+          16px margin on every side instead, so the padding stays 16px until `docked`. The height
+          also gives way to the connection banner's strip, which the container ends above (see the
+          same note in `dialogs/Dialog.tsx`). */}
       <Modal.Container className="sm:p-4 docked:p-10">
         <Modal.Dialog
           aria-label={t("settings.title")}
-          className="flex h-[calc(100dvh-32px)] w-[calc(100vw-32px)] max-w-none flex-col overflow-hidden p-0 docked:h-[min(85vh,calc(100vh-96px))] docked:w-[min(1000px,calc(100vw-96px))] docked:flex-row"
+          className="flex h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none flex-col overflow-hidden p-0 docked:h-[min(85vh,calc(100vh-96px-var(--bottom-chrome-height)))] docked:w-[min(1000px,calc(100vw-96px))] docked:flex-row"
         >
           <TitledControl title={t("common.close")}>
             <Modal.CloseTrigger aria-label={t("common.close")} />

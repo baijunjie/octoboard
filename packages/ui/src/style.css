@@ -50,11 +50,25 @@
      top, so the bar's controls stay reachable whatever is open. */
   --top-chrome-height: var(--title-bar-height);
 
-  /* How much of the window's bottom edge the chrome takes: the connection banner's height (0 when
-     it is not mounted, see `ConnectionBanner.tsx`). Anything that overlays the content area, or
+  /* How much of the window's bottom edge the chrome takes: the connection banner's height (0 while
+     its strip is not shown, see `ConnectionBanner.tsx`). Anything that overlays the content area, or
      runs along an edge that ends there, ends this far above the window bottom rather than at it,
      so the banner's Retry stays reachable whatever is open. */
   --bottom-chrome-height: var(--connection-banner-height, 0px);
+
+  /* Where the connection banner's strip is stacked, and where a dialog's backdrop is stacked under
+     it: the strip has to be above the backdrop, which covers the whole viewport, so the Retry it
+     offers can be pressed while a dialog is open (`components/ConnectionBanner.tsx`). It is the
+     backdrop that gives way rather than the strip that rises, so the strip stays level with
+     React Aria's own popover-level overlays (menus, selects, tooltips, all at
+     `--z-index-overlay`), which the portal order then draws above it: a popover reaching the
+     window's bottom edge is anchored to the viewport and knows nothing about the chrome, and a
+     strip over its lowest rows would swallow every press landing there. The trade is the other
+     way round: a popover drawn over the strip covers the Retry under it until it is dismissed.
+     Both are built from HeroUI's own level rather than literals, so a bump of theirs cannot
+     invert them. */
+  --z-index-banner: var(--z-index-overlay);
+  --z-index-dialog-backdrop: calc(var(--z-index-overlay) - 1);
 
   /* The console session colour palette (`ConsoleSessionColour` in `protocol.ts`), light variant:
      one token per entry, assigned to a console session on creation from the entries not already in
@@ -350,6 +364,31 @@
   --console-session-azure: oklch(0.78 0.16 220);
   --console-session-violet: oklch(0.78 0.16 298);
   --console-session-rose: oklch(0.78 0.18 342);
+}
+
+/* A dialog's positioning container ends above the bottom chrome rather than at the window bottom, so the connection
+   banner's strip — stacked above a dialog as well as above its backdrop, `--z-index-banner` — never crosses the
+   dialog's own bottom edge, where it would swallow every press that landed there (React Aria ignores a press inside
+   a top layer, so such a press does not even dismiss the dialog). The container keeps its padding and HeroUI's own
+   auto margins still centre the dialog in what is left, so a dialog that fills the window takes the strip out of
+   its height too (`dialogs/Dialog.tsx`, `settings/SettingsDialog.tsx`) rather than overflowing. Unlayered, so it
+   wins over HeroUI's layered rule. Every modal here scrolls inside its own dialog; the one HeroUI variant this
+   would fight, `--scroll-outside`, grows with its content from a `min-height` instead and is left out. Being
+   unlayered the rule also wins over a utility a caller puts on the container, so the height and the anchoring are
+   not overridable per dialog. */
+.modal__backdrop,
+.alert-dialog__backdrop {
+  z-index: var(--z-index-dialog-backdrop);
+}
+
+.modal__container:not(.modal__container--scroll-outside),
+.alert-dialog__container:not(.alert-dialog__container--scroll-outside) {
+  height: calc(var(--visual-viewport-height) - var(--bottom-chrome-height));
+  /* The backdrop centres its container, which would spend half the height taken off above the
+     dialog and leave the other half of the strip's own height crossing it; anchored to the top
+     instead, the whole of it goes where the strip is. A container at full height fills the
+     backdrop, so this does nothing while the strip is down. */
+  align-self: flex-start;
 }
 
 /* HeroUI's toast region sits 1rem above the window bottom; lifted by the bottom chrome, it floats

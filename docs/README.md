@@ -50,14 +50,15 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   on whatever the window's appearance is, and right-clicking inside a page.
 - [Window layout](product/window-layout.md) — the window chrome (the top bar and the left rail, over the translucent
   macOS material or an opaque colour in a browser) and the opaque content panel it frames, what the top bar holds and
-  how it doubles as the macOS titlebar, what the rail holds (the console switcher, the waiting count, the
-  notifications bell, the right pane's toggle, Settings), the three panes and what each is allowed to give up, what
-  the right pane shows (a console session's report or a project's files) and how that changes on selecting a session,
-  Browse files, switching consoles, Back and Forward and deleting its owner, resizing the sidebar and the right pane,
-  hiding either and floating it back in on hover, the macOS window's 1148×600 minimum and the arithmetic behind it,
-  the narrow layout a plain browser gets below 1148 px, where the sidebar and the right pane become drawers over the
-  terminal, which right-click menus the desktop app and a browser show, and how all of it mirrors under a
-  right-to-left language (and what never does).
+  how it doubles as the macOS titlebar, what an open dialog, menu or popover puts out of reach and the connection
+  banner's strip that stays usable through it, what the rail holds (the console switcher, the waiting count, the
+  notifications bell, the right pane's toggle, Settings), the three panes and what each is allowed to give up, what the
+  right pane shows (a console session's report or a project's files) and how that changes on selecting a session, Browse
+  files, switching consoles, Back and Forward and deleting its owner, resizing the sidebar and the right pane, hiding
+  either and floating it back in on hover, the macOS window's 1148×600 minimum and the arithmetic behind it, the narrow
+  layout a plain browser gets below 1148 px, where the sidebar and the right pane become drawers over the terminal,
+  which right-click menus the desktop app and a browser show, and how all of it mirrors under a right-to-left language
+  (and what never does).
 - [Moving focus between regions](product/moving-focus-between-regions.md) — F6 and Shift+F6: the order of the window's
   regions, which ones are skipped, and where focus lands in each, the right pane included.
 - [Window size and position](product/window-size-and-position.md) — how the macOS window's size, position and maximized

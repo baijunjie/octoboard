@@ -97,7 +97,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 // The scenario's interactions, once the app has mounted. A failed one is shown over the page as
 // well as logged, since the scenario then shows less than it says.
 try {
-  const ui = createUi(document, language);
+  const ui = createUi(document, language, daemon);
   await ui.wait(300);
   for (const step of scenario?.steps ?? []) await step(ui);
 } catch (error) {

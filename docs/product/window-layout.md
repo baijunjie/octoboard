@@ -44,6 +44,41 @@ dark one.
 On the screens shown before there is anything to show — while connecting to the daemon, and the screens for a daemon
 that could not start or a UI that failed — there is no rail: under the top bar, the content panel spans the window.
 
+## What an open dialog, menu or popover covers
+
+**A dialog** — Settings, the file viewer, a console, project or session dialog, a confirmation — is drawn over a dimmed
+overlay that covers the whole window: the top bar, the rail and the content panel are dimmed behind it and none of
+them can be used while it is open, and a press anywhere on the dimmed area dismisses the dialog.
+
+**A menu or a popover** — a row's, a header's or an avatar's action menu, the project filter's popover, a worktree or
+branch selector's list of choices, a selector's list inside a dialog — takes the window around it the same way: while
+one is open, nothing outside it can be used, and a press outside dismisses it. It has no dimmed overlay of its own, so
+nothing behind it is dimmed; what it shares with a dialog is that the rest of the window is out of reach until it is
+gone.
+
+**The connection banner's strip is the one part of the window that stays usable.** While the daemon connection is down
+the strip is drawn above a dialog's overlay and above an open menu or popover, so it is not dimmed along with
+everything else — it looks exactly as it does with nothing open — and a press where it is drawn lands on the strip
+rather than on what the strip is drawn over (for what its button then does, see "Losing the daemon connection" in
+`docs/product/application-lifecycle.md`). **That press dismisses nothing**: the dialog, menu or popover it was drawn
+over stays open, where a press anywhere else outside a menu or popover — in the terminal, say — closes it. Retry
+pressed with a selector's list open inside a dialog leaves both the list and the dialog open. Toasts float above in
+the same way (see `docs/product/toasts.md`), and nothing else does: everything else stays unusable, dimmed as well
+behind a dialog, and `Escape` still closes what is open.
+
+Because the strip is stacked above a dialog as well as above its overlay, dialogs give way to it rather than running
+under it and losing their bottom edge and any press landing there. While the strip is up, a dialog that fills the
+window — Settings and the file viewer in the narrow layout, the file viewer at 1148 px and wider too — keeps the same
+margin from the strip's top edge that it would have kept from the window's bottom edge, 16 px in the narrow layout and
+40 px at 1148 px and wider, whatever the strip's height; its margin above is the same either way. A dialog with room
+to spare, a confirmation say, centres in the space above the strip rather than in the whole window, so it sits half
+the strip's height higher than it otherwise would. With the strip gone, every dialog sits exactly where it would with
+no connection banner at all.
+
+Only the pointer reaches the strip there. `F6` does not move keyboard focus out from under an open dialog or menu, so
+a keyboard user has to dismiss it first (see "Moving focus between regions with F6" in
+`docs/product/moving-focus-between-regions.md`).
+
 ## The top bar
 
 The top bar is on every screen, the same height everywhere. On the screens shown before there is anything to

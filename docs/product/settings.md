@@ -8,11 +8,13 @@ folders** and **Notifications**; the dialog opens on General unless it was asked
 
 ## In a narrow window
 
-Below 1148 px — the width under which the window's panes become drawers (see "Below 1148 px: the sidebar and the
-right pane become drawers" in `docs/product/window-layout.md`), so only a client with no window minimum of its own,
-such as a plain browser, gets here — the dialog fills the window inside a 16 px margin on every side, and the list of
-sections becomes a row of tabs along its top, above the selected section. When the tabs do not fit the row's width,
-the row scrolls sideways, and the selected section's tab is scrolled into view when the dialog opens.
+Below 1148 px — the width under which the window's panes become drawers (see "Below 1148 px: the sidebar and the right
+pane become drawers" in `docs/product/window-layout.md`), so only a client with no window minimum of its own, such as a
+plain browser, gets here — the dialog fills the window inside a 16 px margin on every side, and the list of sections
+becomes a row of tabs along its top, above the selected section. When the tabs do not fit the row's width, the row
+scrolls sideways, and the selected section's tab is scrolled into view when the dialog opens. While the connection
+banner's strip is on screen the dialog keeps that 16 px clear of the strip's top edge instead of the window's bottom
+edge, and is that much shorter (see "What an open dialog, menu or popover covers" in `docs/product/window-layout.md`).
 
 Below 640 px each setting row puts its control under its name and description instead of beside them.
 
