@@ -86,6 +86,19 @@ positive tests".
   it goes through `act`.
 - A root is not the only thing a test arms. Whatever it set going it also stops or awaits before it ends — a
   module-level singleton's own queue and timers, such as HeroUI's toast queue, which a later unmount cannot reach.
+- Settling HeroUI's toast queue in a test that has queued a toast: fake the timers for that test (restored with
+  `onTestFinished`), run `toast.clear()` and `vi.runOnlyPendingTimers()` together inside one `act`, and assert after
+  the unmount that `toast.getQueue().visibleToasts` is empty. The assertion is the load-bearing half rather than the
+  fake timers: faking alone moves the queue's exits onto a virtual clock that `vi.useRealTimers()` then discards,
+  which hides the leak instead of settling it. An empty `visibleToasts` covers the queue's own timers too, because
+  `close()` parks one per toast and a toast leaves `visibleToasts` only inside that timer's callback. Two near-misses
+  to turn down: the queue's exported `destroy()`, advertised for HMR and test teardown, clears those timers but
+  leaves every toast in `visibleToasts`; and having the test's `matchMedia` stub answer `true` to
+  `(prefers-reduced-motion: reduce)` takes a synchronous close path needing no timers at all, but stops exercising
+  the path the app runs.
+- A test that fakes timers can show it left none pending only by asserting `vi.getTimerCount()` is 0 itself. The
+  instrumented run this class of leak is hunted with wraps `globalThis.setTimeout`, which `vi.useFakeTimers()`
+  replaces, so it reports nothing pending for such a test whether or not that test ever ran its timers.
 
 The symptom names the wrong file, so do not start from the one it is reported against: the crash is attributed to
 whichever file was running when the stray work fired, it does not reproduce when that file is run alone, and the
