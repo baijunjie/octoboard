@@ -136,10 +136,14 @@ impl AgentAdapter for CodexAdapter {
         ));
         // Octoboard's own tools are not a decision to put to the user: every one of them is
         // something the console session was told to do, and a modal for each would make
-        // orchestration unusable.
+        // orchestration unusable. `approve` is the one value that runs them unasked. `auto` leaves
+        // the decision to Codex, which asks for a tool carrying no annotations, as Octoboard's own
+        // do — and under an approval policy of `never` it does not even ask, it refuses the call
+        // outright without sending it. The value is per server, so nothing else the session may
+        // need approval for is widened.
         args.push("-c".to_string());
         args.push(format!(
-            "mcp_servers.{key}.default_tools_approval_mode=\"auto\""
+            "mcp_servers.{key}.default_tools_approval_mode=\"approve\""
         ));
 
         // Codex's own update prompt ("Update now / Skip") would otherwise come up before its trust
@@ -354,8 +358,9 @@ mod tests {
             .expect("the server's arguments");
         assert!(args.contains(&fixture.session_id));
         assert!(args.contains(&fixture.mcp_token));
-        assert!(overrides
-            .contains(&"mcp_servers.octoboard.default_tools_approval_mode=\"auto\"".to_string()));
+        assert!(overrides.contains(
+            &"mcp_servers.octoboard.default_tools_approval_mode=\"approve\"".to_string()
+        ));
     }
 
     /// `instructions` would replace the system prompt outright; `developer_instructions` adds a

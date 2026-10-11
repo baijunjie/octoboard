@@ -228,6 +228,22 @@ running. The record can land before that turn's hook callback does: the margin m
 resolves an approval request itself: the hook fires, no modal is shown and the tool proceeds. A raised hand would ask
 the user to answer something they never see.
 
+**An MCP server's tools are pre-approved per server, and `approve` is the value that asks nothing.**
+`mcp_servers.<key>.default_tools_approval_mode` takes `auto`, `prompt`, `writes` or `approve` — the four variants of the
+binary's own `AppToolApproval` enum, which `codex app-server generate-json-schema` reports too, and the same four the
+per-tool `mcp_servers.<key>.tools.<tool>.approval_mode` takes. Only `auto` and `approve` were exercised; what `prompt`
+and `writes` do is unmeasured. `approve` was measured on 0.160.0 and is unmeasured on anything older; an unknown value
+in a `-c` override is likely a startup failure rather than a silent fallback. With `auto` a tool carrying no MCP
+annotations is put to the user: an interactive session opens `Allow the <key> MCP server to run tool "<tool>"?` with
+Allow / Allow for this session / Always allow / Cancel, and nothing reaches the server until it is answered — while an
+approval policy of `never`, which `codex exec` runs under, does not ask at all and fails the call with `MCP tool call
+requires approval, but approval policy is never` without ever sending it. With `approve` the call is sent, no dialog
+appears and the `PermissionRequest` hook does not fire; measured headlessly under `never` and in the TUI under
+`on-request`, against a stub server whose tool declares no annotations. The value reaches that one server only: a shell
+command needing escalated permissions in the same turn still raised its own approval. Annotations are no substitute —
+they could at most speak for the tools that change nothing, while the per-server value settles every tool whatever it
+does.
+
 **A Codex older than the *async* hook support Octoboard injects** (0.142.5 was seen, resolved through the login-shell
 `PATH`; inferred from the warning, since the session ended on an API error before status could be observed) prints
 "skipping async hook ... async hooks are not supported yet", so hook-driven status cannot work with it.
@@ -448,7 +464,7 @@ edit of the project's or the user's files, and was exercised against the version
 | Launch with an initial task | `claude "<task>"` | `codex "<task>"` | `grok "<task>"` |
 | Pre-allocate a session id | `--session-id <uuid>` | **Not possible.** Take it from the `SessionStart` payload; the interactive thread is created lazily on the first prompt, so a session opened without a task has no id until the user types | `--session-id <uuid>` (new sessions only) |
 | Inject hooks | `--settings <json-or-path>`, merged with the project settings | `-c 'hooks.<Event>=[{hooks=[{type="command",command=…,timeout=3,async=true}]}]'`, one per event, plus the hook-trust step | A per-session `GROK_HOME` whose `hooks/` directory is Octoboard's and whose other entries symlink to the source home |
-| Inject MCP | `--mcp-config <json>` | `-c 'mcp_servers.octoboard.command=…'`, `.args=[…]` and `.default_tools_approval_mode="auto"` | An `[mcp_servers.octoboard]` block appended to the `config.toml` copy inside that `GROK_HOME` |
+| Inject MCP | `--mcp-config <json>` | `-c 'mcp_servers.octoboard.command=…'`, `.args=[…]` and `.default_tools_approval_mode="approve"` | An `[mcp_servers.octoboard]` block appended to the `config.toml` copy inside that `GROK_HOME` |
 | Inject a role description | `--append-system-prompt` | `-c 'developer_instructions="…"'`, which adds a developer message and leaves the rest of the prompt byte-identical; not `-c instructions=`, which replaces the system prompt | `--rules "…"`, appended to the system prompt and persisted into the session record |
 | Resume | `claude --resume <id>` | `codex resume <id>` | `grok --resume <id>` |
 | Choose the model and reasoning effort | `--model <id>`, `--effort <level>` | `-c model="<id>"`, `-c model_reasoning_effort="<level>"` | `--model <id>`, `--reasoning-effort <level>` |
