@@ -255,6 +255,15 @@ command needing escalated permissions in the same turn still raised its own appr
 they could at most speak for the tools that change nothing, while the per-server value settles every tool whatever it
 does.
 
+**A long MCP tool call is abandoned after 300 seconds, silently.** `tool_timeout_sec`, a per-server key under
+`mcp_servers.<key>`, sets the limit; the default is 300. When it passes Codex gives up on the call client-side and
+tells its own model `timed out awaiting tools/call after 300s` — and the server is sent **nothing at all**: no
+`notifications/cancelled`, no `$/cancelRequest`, not one further frame until the process exits, and no stdin EOF.
+Measured on 0.160.0 against a recording stdio server that answered `initialize` and `tools/list` and never answered
+`tools/call`, and confirmed in the app. Unlike Claude Code's move to the background above, nothing marks the call as
+still running, so a server holding the call sees no signal to withdraw it and an answer sent after the limit reaches a
+caller that is no longer listening.
+
 **A Codex older than the *async* hook support Octoboard injects** (0.142.5 was seen, resolved through the login-shell
 `PATH`; inferred from the warning, since the session ended on an API error before status could be observed) prints
 "skipping async hook ... async hooks are not supported yet", so hook-driven status cannot work with it.

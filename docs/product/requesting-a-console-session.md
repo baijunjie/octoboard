@@ -48,6 +48,13 @@ Claude Code (observed on 2.1.295) moves an MCP tool call that is still running a
 its turn ends with the call still waiting, and the call's result reaches it later as the background task's
 notification. None of that moves the session out of *waiting for the user* while the request is waiting.
 
+Codex gives up on an MCP tool call well before Octoboard's limit, and sends nothing at all when it does — no
+cancellation, no end of the connection, no frame of any kind (for its own limit see "Codex" in
+`docs/agent-cli-reference.md`). Octoboard therefore never learns of it, and nothing about the request changes: the
+dialog stays up, the request goes on waiting, and an approval given after that point still starts the console session,
+binds the caller and delivers the request as its first report. All the caller loses is the call's result, which the
+outcome written into its session as a message covers (see "On approval" below).
+
 ## How a request ends
 
 A request is held by the daemon, in memory only, until one of the following happens. Each closes its dialog in every
@@ -107,12 +114,13 @@ The call returns:
 every message takes (see "Messages held until a session can take them" in `docs/product/hub-orchestration.md`). It
 carries the same note, says it is from Octoboard about the `request_console_session` call, and that there is nothing
 more to do if the call already returned it. This is how a caller whose agent gave up on the call by a time limit of its
-own, without any signal reaching Octoboard, still learns that it is bound. No report is synthesised for the turn this
-message starts. On Claude Code that turn is recognised by the prompt it opens with; with Codex and Grok Build, whose
-prompts Octoboard does not read, the next turn to start is the one spared a report instead. Nor is a report
-synthesised for the turn in which Claude Code delivers the call's result after moving the call to the background, as
-described above: the turn that ended when it did names the call's task, and the turn whose prompt is that task's
-notification is spared too. The two turns can start in either order.
+own, without any signal reaching Octoboard, still learns that it is bound — the case a Codex caller is in once Codex's
+own limit has passed (see "The call" above). No report is synthesised for the turn this message starts. On Claude Code
+that turn is recognised by the prompt it opens with; with Codex and Grok Build, whose prompts Octoboard does not read,
+the next turn to start is the one spared a report instead. Nor is a report synthesised for the turn in which Claude Code
+delivers the call's result after moving the call to the background, as described above: the turn that ended when it did
+names the call's task, and the turn whose prompt is that task's notification is spared too. The two turns can start in
+either order.
 
 **When an approval cannot be carried out**, the call returns a tool error saying the user approved but it could not be
 carried out, with the reason, and the window that approved shows the reason as a toast about the requesting session:
