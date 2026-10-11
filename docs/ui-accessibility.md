@@ -31,6 +31,20 @@ Every button is HeroUI's `Button`. A native `<button>` is allowed only where a c
 cannot be, with the reason in a comment there. A hand-built `role="button"` element needs `tabIndex={0}` and its own
 Enter / Space handling.
 
+### A control inside a rendering library's shadow root
+
+The diff viewer's separators of collapsed lines are drawn by `@pierre/diffs` into a shadow root, where no React tree
+reaches, so a control made out of that markup is built by hand and every rule above is met by hand with it: the
+element takes `role="button"`, an explicit `tabindex`, an accessible name, a native `title` in place of the HeroUI
+tooltip that cannot be rendered there, and Enter / Space handling of the viewer's own
+(`packages/ui/src/viewer/rendererDom.ts`, which holds every read and write of that markup). The library draws each
+separator more than once — in the gutter and in the code column, and once per side of a split diff — so only the first
+copy of a control is a tab stop and is named; the rest take `tabindex="-1"` and `aria-hidden="true"`, or the same
+control is announced several times over.
+
+Tab does not reach into a shadow root from the dialog's own focus containment either, so the walk along those controls
+is made by hand from the code frame (`focusFirstSeparatorControl`, `moveAlongControls`).
+
 ### Leaving the terminal with F6
 
 The terminal keeps Tab and Shift+Tab for the agent, so F6 / Shift+F6 region cycling
@@ -55,6 +69,11 @@ a click, the app's WKWebView does not match `:focus-visible` on an element focus
 press. So every keyboard move made by script — F6 region cycling, Tab inside a react-aria focus-trapped dialog — lands
 without a ring. Playwright's `webkit` matches it in those cases, so only the packaged app shows the miss.
 
+Inside a rendering library's shadow root the app's `useFocusVisibleProps` cannot be spread on an element either, so
+the ring is drawn from a `data-focus-visible` attribute set and cleared by hand, styled from the stylesheet injected
+into that root (`[data-expand-button][data-focus-visible]` and `[data-separator-content][data-focus-visible]` in
+`packages/ui/src/viewer/renderer.tsx`).
+
 ### Focus moved by a change the user did not make
 
 A hand-off that runs because what held focus went away — a pane hidden, a region unmounted by a daemon event — also
@@ -62,6 +81,11 @@ calls `setInteractionModality("keyboard")` before it focuses the destination. Th
 they have to be able to see where focus went, and the previous input was often a pointer press, which leaves the
 destination without a ring. `handFocusOff` takes a `showRing` flag for the hand-off whose trigger is a press, where the
 ring follows how the press came; `HandOffOnUnmount` always sets it, its trigger being a render.
+
+A separator of collapsed lines taken off the screen is such a move: the bar for the run past a diff's last hunk goes
+once the daemon's reply says that hunk reaches the end of the file, and the hand-off to the code frame sets the
+modality itself. `handFocusOff` cannot be used there, since it looks at `document.activeElement` and cannot see into a
+shadow root.
 
 ### A keyboard handler that moves focus itself
 
@@ -76,6 +100,12 @@ Every control has an accessible name: its visible text, or an `aria-label` when 
 
 - An icon beside a name is `aria-hidden="true"`.
 - An icon that is the only carrier of a meaning gets `role="img"` and an `aria-label`.
+- A control carrying visible text *and* an `aria-label` has the visible text inside the name, verbatim, numbers
+  included (WCAG 2.2 A 2.5.3), so that saying what is on screen reaches it by voice. A separator of collapsed lines is
+  the instance: its visible text counts the lines it hides and its name is "Show all 17 unmodified lines", which is why
+  that message takes the count as a placeholder rather than reading "Show the unmodified lines". Check such a name
+  against every state the visible text has, not only the first: the same bar also says it is loading, says a read
+  failed, and says the count is unknown.
 - An element that takes an `aria-label` without being a control — a scrolling `div` or `pre` made focusable with
   `tabIndex={0}` — also gets a role that can be named (`role="region"`). ARIA prohibits naming a generic element, so
   the name may never be spoken.
@@ -252,6 +282,18 @@ Where the drawn size has to stay under 24, extend the target rather than the dra
 select clear button (`.select__clear-button:after{inset:-2px}`): an absolutely positioned `::after` with a negative
 inset enlarges what the pointer hits and changes nothing visible. The avatar field's delete button
 (`packages/ui/src/dialogs/AvatarField.tsx`) is drawn at 20 and hit at 24 that way.
+
+A control whose height is set in units of something else inherits that thing's constraint. The separators of
+collapsed lines are sized in multiples of the diff's own code line height rather than in pixels, so that they keep
+their proportion to the code, and the rendering library halves a bar carrying two controls between them
+(`grid-template-rows: 50% 50%`, under `pointer: fine`). So it is the multiplier, not the drawn glyph, that sets such a
+control's target, and it is the thing to check whenever that line height changes.
+
+One shortfall sits here, kept on purpose and marked at its code (`diffCss` in `packages/ui/src/viewer/renderer.tsx`):
+those bars take GitHub's own proportions, 1.4 lines for one control and 2 for a pair, which at a 20-pixel line is the
+28 and 40 pixels GitHub draws. Halved, the pair are 20-pixel targets, under this floor — as GitHub's own are. The user
+chose the proportions over the criterion knowing that. Every other control of a separator clears 24: the one-control
+bar at 28, the separator's own text and Show whole file at the full height of their bar.
 
 ## Not by colour alone
 

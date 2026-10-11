@@ -89,7 +89,27 @@ function diffCss(theme: "light" | "dark"): string {
       overflow: hidden;
     }
     [data-separator] [data-whole-file]:hover { text-decoration: underline; }
-    [data-expand-button][data-focus-visible] { outline: 2px solid var(--focus); outline-offset: -2px; }
+    /* A separator's height is counted in lines of code, so it keeps its proportion to them, in
+       place of the fixed 32px the library gives every one: 1.4 lines for a bar with one control
+       and 2 lines for one carrying the two controls of a run longer than one step, which the
+       library squeezes into that same single bar. At the 20px line height those are the 28 and 40
+       GitHub draws for the same two bars, which is where the proportions come from.
+
+       A SHORTFALL THE USER HAS KEPT ON PURPOSE: the library halves a two-control bar between its
+       controls (grid-template-rows: 50% 50%, under pointer: fine), so at 2 lines each of them is
+       a 20px pointer target, under the 24px this project otherwise holds to — see
+       docs/ui-accessibility.md's "Pointer target size" section. The user chose GitHub's
+       proportions over the floor, knowing GitHub's own arrows miss it the same way. Raising this
+       multiplier to 2.4 is the fix if that is ever reconsidered; the one-control bar, the
+       separator's text and Show whole file all clear 24 as they are.
+
+       Both copies of the separator carry the rule — the gutter's, which shows the controls, and
+       the code column's, where the library hides the wrapper — so the two grids keep their rows
+       aligned; the wrapper is matched in both. */
+    [data-separator="line-info-basic"] { height: calc(var(--diffs-line-height, 20px) * 1.4); }
+    [data-separator="line-info-basic"]:has(> [data-separator-multi-button]) { height: calc(var(--diffs-line-height, 20px) * 2); }
+    [data-expand-button][data-focus-visible],
+    [data-separator-content][data-focus-visible] { outline: 2px solid var(--focus); outline-offset: -2px; }
     [data-line-type="change-addition"] [data-diff-span],
     [data-line-type="change-deletion"] [data-diff-span] {
       background-color: transparent;
@@ -259,6 +279,8 @@ export interface DiffRenderProps {
   loadBodies?: () => Promise<ChangeBodies>;
   /** What the separators say, in the app's language. */
   labels: SeparatorLabels;
+  /** How many unmodified lines follow the last hunk, where the files' lengths settle it. */
+  trailing?: number;
   /** Told how the expansion stands: reading the text, failed, or the change having moved on. */
   onExpansion?: (status: ExpansionStatus) => void;
 }
@@ -273,6 +295,7 @@ export const RenderedDiff = memo(function RenderedDiff({
   onDrawn,
   loadBodies,
   labels,
+  trailing,
   onExpansion,
 }: DiffRenderProps): React.ReactElement | null {
   const language = useLanguage(name);
@@ -288,8 +311,8 @@ export const RenderedDiff = memo(function RenderedDiff({
   const [ended, setEnded] = useState<{ diff: FileDiffMetadata; how: "all" | "stopped" }>();
   const how = ended && ended.diff === fileDiff ? ended.how : undefined;
   // Called back with the latest props, so a new callback each render does not reset the expansion.
-  const latest = useRef({ loadBodies, labels, onExpansion });
-  latest.current = { loadBodies, labels, onExpansion };
+  const latest = useRef({ loadBodies, labels, trailing, onExpansion });
+  latest.current = { loadBodies, labels, trailing, onExpansion };
   // Also for a diff that cannot be expanded: its separators are worded in the app's language all the same.
   const expansion = useMemo(
     () =>
@@ -297,6 +320,10 @@ export const RenderedDiff = memo(function RenderedDiff({
         ? new Expansion({
             load: () => latest.current.loadBodies!(),
             labels: () => latest.current.labels,
+            trailing: () => {
+              const lines = latest.current.trailing;
+              return lines === undefined ? undefined : { gap: fileDiff.hunks.length, lines };
+            },
             report: (status) => latest.current.onExpansion?.(status),
             showAll: () => setEnded({ diff: fileDiff, how: "all" }),
             stop: () => setEnded({ diff: fileDiff, how: "stopped" }),
@@ -306,7 +333,7 @@ export const RenderedDiff = memo(function RenderedDiff({
   );
   const expandable = loadBodies !== undefined;
   useEffect(() => () => expansion?.detach(), [expansion]);
-  useEffect(() => expansion?.decorate(), [expansion, labels]);
+  useEffect(() => expansion?.decorate(), [expansion, labels, trailing]);
   // A read of the change again that yields the same patch keeps this expansion, so a failure of the
   // earlier read is dropped by hand.
   useEffect(() => expansion?.forgetFailure(), [expansion, loadBodies]);

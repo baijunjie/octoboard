@@ -709,25 +709,44 @@ as it is now, and the next listing agrees with it.
 
 A side's `file` is its body, carried only where no patch shows the content: the in-scope side of a change that crosses
 the project's boundary, an untracked file, and both file sides of a binary change, whose patch `git` writes as one line.
-A text change's content is in its patch alone. The patch is a `FileContent`, `text` or `binary` by the same rule as a
-body, so a patch that is not valid UTF-8 — of a file in another encoding, or with a header naming a path that is not
-UTF-8 — is `binary`. A patch over its budget is refused with `limit_exceeded` (`patch_bytes`), never cut: an incomplete
-patch is not presented as a diff. A change whose paths nest — a rename from `foo` to `foo/bar`, or back — cannot keep
-what lies below the outer path out of a diff restricted to its paths, so it is read in one of two ways. When both of
-its sides resolved to an object that is a file or a symbolic link, in the staged group or a comparison, its patch is
-the diff `git` computes between the two versions themselves, each named by revision and path:
-`git diff --no-ext-diff --no-textconv --no-color --no-relative --src-prefix=a/ --dst-prefix=b/ <old-rev>:<old-path>
-<new-rev>:<new-path> --`, where the old revision is the pinned `HEAD` commit (or the comparison's left commit) and the
-new one is the index (`:0`, so `:0:<new-path>`) or the comparison's right commit. For a change that keeps its kind it
-is one section with the ordinary `index`, `---`, `+++` and hunk lines, so its collapsed lines can be expanded;
-identical content is an empty patch, an executable-bit-only change an `old mode` / `new mode` pair, a binary side one
-`Binary files … differ` line (so both bodies still come with the reply), a link renamed to another link an
-`index … 120000` section, and a type change (a file that became a link) the two sections `git` always writes for one,
-a removal and an addition, which the client joins. Nothing below the outer path is given to `git`, listed or counted
-against a budget, and the patch is returned as `git` wrote it. Revision and path are named, never bare object ids, so
-the repository's attributes (a path marked as not to be diffed, say) stay in effect; the operands are followed by `--`,
-so a file in the worktree named like one cannot be taken for a path; and the diff takes no pathspec, so
-`GIT_LITERAL_PATHSPECS` stays set. Every other such change keeps the earlier description: a side that is absent, a
+A text change's content is in its patch alone. A present file side also carries `lines`, the number of lines its content
+holds: the newlines in it, and one more when the last line is unterminated, so an empty side is 0. It is counted of the
+very blob the patch was made from, so a hunk whose `start + count - 1` equals it is one that reaches that side's end,
+and since the lines past a patch's last hunk are the same on both sides, one count is enough to tell how long that run
+is. It is `null` where the daemon read no content for the side: a link or a submodule, every absent or out-of-scope
+side, and a side read from the disk unless its body is carried, and both sides of a patch with no hunk (a change of mode
+alone, a pure rename), where no separator bar needs a count. A disk side is not counted from the disk on purpose: `git`
+numbers the lines of its cleaned content (a configured clean filter, such as Git LFS's), which the file's own lines need
+not match. The listing carries none, since it reads no content. A reply that carries a side's body counts the body's
+bytes; for a file side that is an object of the index or a commit, whose patch shows its content, one `git grep
+--no-textconv --no-color -G -c -e '' <old-blob> <new-blob> --` counts both blobs at once, named by bare object id, as
+`<id>:<count>` per blob (an empty blob prints no line, and when neither blob prints one `git` exits 1, which is not a
+failure). It takes no pathspec, so nothing of the worktree is searched and `GIT_LITERAL_PATHSPECS` stays set.
+`--no-color` is the flag that cannot be left out: with `color.grep` set to `always` the output wraps the id and the `:`
+in escape sequences, which no parse of `<id>:<count>` survives and which would turn the read into `git_failed`;
+`--no-textconv` is `git grep`'s default and only guards against that changing; `-G` takes the pattern type out of the
+user's hands, since a configured `grep.patternType` of `perl` on a `git` built without PCRE2 fails the command (the
+empty pattern counts every line under any type that works); the trailing `--` ends the revisions, so that an id is never
+read as a path. Only a file side is ever named, since a submodule's commit given to it would have `git` walk its tree.
+Ids are enough here, unlike for a diff, because a count of stored bytes depends on no attribute. The patch is a
+`FileContent`, `text` or `binary` by the same rule as a body, so a patch that is not valid UTF-8 — of a file in another
+encoding, or with a header naming a path that is not UTF-8 — is `binary`. A patch over its budget is refused with
+`limit_exceeded` (`patch_bytes`), never cut: an incomplete patch is not presented as a diff. A change whose paths nest —
+a rename from `foo` to `foo/bar`, or back — cannot keep what lies below the outer path out of a diff restricted to its
+paths, so it is read in one of two ways. When both of its sides resolved to an object that is a file or a symbolic link,
+in the staged group or a comparison, its patch is the diff `git` computes between the two versions themselves, each
+named by revision and path: `git diff --no-ext-diff --no-textconv --no-color --no-relative --src-prefix=a/
+--dst-prefix=b/ <old-rev>:<old-path> <new-rev>:<new-path> --`, where the old revision is the pinned `HEAD` commit (or
+the comparison's left commit) and the new one is the index (`:0`, so `:0:<new-path>`) or the comparison's right commit.
+For a change that keeps its kind it is one section with the ordinary `index`, `---`, `+++` and hunk lines, so its
+collapsed lines can be expanded; identical content is an empty patch, an executable-bit-only change an `old mode` / `new
+mode` pair, a binary side one `Binary files … differ` line (so both bodies still come with the reply), a link renamed to
+another link an `index … 120000` section, and a type change (a file that became a link) the two sections `git` always
+writes for one, a removal and an addition, which the client joins. Nothing below the outer path is given to `git`,
+listed or counted against a budget, and the patch is returned as `git` wrote it. Revision and path are named, never bare
+object ids, so the repository's attributes (a path marked as not to be diffed, say) stay in effect; the operands are
+followed by `--`, so a file in the worktree named like one cannot be taken for a path; and the diff takes no pathspec,
+so `GIT_LITERAL_PATHSPECS` stays set. Every other such change keeps the earlier description: a side that is absent, a
 submodule side (two of them, named that way, would be resolved to their commits and have `git` diff the whole trees,
 content the change never named), and a nesting pair in the unstaged group, which cannot have two present sides, since
 the index cannot hold a path as both a file and a directory. Its index lookup is still matched exactly, and its patch
@@ -738,9 +757,9 @@ and its new path's addition. What lies below the outer path still counts against
 change with very much below it is refused with `limit_exceeded` rather than read. The index entries of a nesting pair
 are looked up once per path, so that nothing below the outer path is listed or counted against the metadata budget in
 either route; the two lookups are two reads of the index, and an entry that moved between them is caught by the
-comparison of the index before and after the patch that answers `source_changed`.
-A `change` naming no side its group can read — both sides absent, an `out_of_scope` side outside the staged group,
-an untracked change with an old side — is `invalid_change`.
+comparison of the index before and after the patch that answers `source_changed`. A `change` naming no side its group
+can read — both sides absent, an `out_of_scope` side outside the staged group, an untracked change with an old side — is
+`invalid_change`.
 
 #### Reading a change's bodies
 
@@ -759,7 +778,8 @@ the patch again, and so never shows a patch beside bodies of another revision. A
 or file version that matched, so the two bodies and the patch come from one state.
 
 The reply carries `old` and `new` as `SideRead` records with the body in `file`, a `FileContent` as in `project_file`,
-or `absent` for the side an added or deleted file does not have. A body is read with the file budget: one over 4 MiB is
+or `absent` for the side an added or deleted file does not have. The records also carry `lines`, counted from the very
+bytes the body carries. A body is read with the file budget: one over 4 MiB is
 refused with `limit_exceeded` (`file_bytes`, carrying its `size` when known), never cut, and so is the whole request,
 since half the bodies cannot expand anything; the reply as a whole is held to the reservation of a change's diff (see
 "Browse budgets"). Because the change is resolved by making its patch first, a change whose patch is itself over the
@@ -803,15 +823,16 @@ them, and the daemon reads from those two commits only: each `commit` must be th
 (`invalid_commit`, `unknown_commit`) and each `branch` a branch name (`invalid_branch_name`), but the branches are not
 looked up again. A branch moved or deleted since its comparison was listed therefore never repoints the comparison; it
 reads as it was until the comparison is asked for again, which resolves the branches' new tips, or is refused with
-`unknown_branch` for a branch that is gone. A commit the repository no longer has — a deleted branch's, once pruned —
-is `unknown_commit`, and an object missing from the repository fails the read with `git_failed`; nothing is read in its
+`unknown_branch` for a branch that is gone. A commit the repository no longer has — a deleted branch's, once pruned — is
+`unknown_commit`, and an object missing from the repository fails the read with `git_failed`; nothing is read in its
 place. Otherwise the change is read as a staged one is, its old side from the left commit and its new side from the
 right one: a side named absent is looked up at the other side's path, a side outside the scope gets no body and the
-change no patch, the patch is made between the two commits over exactly the change's paths (paths that nest
-read as "Changes and comparisons" describes), a side's `file` is carried where no patch shows its content, and both sides absent is `invalid_change`.
-Since a commit's content never changes, nothing is looked at again once the patch is made, and the reply never mixes
-versions. The daemon does not check that the change a read names is one the comparison listed: like a
-`read_project_file` of a commit, a read is held only to the project's scope and the two commits it names.
+change no patch, the patch is made between the two commits over exactly the change's paths (paths that nest read as
+"Changes and comparisons" describes), a side's `file` is carried where no patch shows its content, a file side carries
+its `lines` by the rule "Changes and comparisons" gives (a commit's blob is counted like an index's), and both sides
+absent is `invalid_change`. Since a commit's content never changes, nothing is looked at again once the patch is made,
+and the reply never mixes versions. The daemon does not check that the change a read names is one the comparison listed:
+like a `read_project_file` of a commit, a read is held only to the project's scope and the two commits it names.
 
 #### Git invocation
 
@@ -824,7 +845,8 @@ as every other `git` the daemon runs does:
 - `GIT_LITERAL_PATHSPECS=1`, so a file name is never a pattern — except where a change is read: its index lookups and
   its diff match each path exactly and nothing below it with `:(literal)<path>` and `:(exclude,glob)<path>/**` (the
   path's glob characters escaped) (see "Changes and comparisons" for a change whose paths nest), and so run without it.
-  The diff between two versions of a nesting pair takes no pathspec at all and keeps the setting;
+  The diff between two versions of a nesting pair, and the line count of a change's blobs, take no pathspec at all and
+  keep the setting;
   `GIT_NO_REPLACE_OBJECTS=1`, so an object id names the object stored under it; `GIT_NO_LAZY_FETCH=1`, so a partial
   clone's missing object fails the read instead of going to the network; `GIT_OPTIONAL_LOCKS=0`, so `git status` never
   takes the index lock to write back what it refreshed; the non-interactive settings every daemon `git` has; and
@@ -859,7 +881,7 @@ born yet, and its staged changes are compared with the empty tree.
 | `git for-each-ref` output for a branch list | 4 MiB | One branch past the budget is asked for, each a line of about 90 bytes beside its name, so this is room for names averaging some 300 bytes. Past it the branch list is refused (`git_output`) |
 | `git diff-tree` output for a comparison | 8 MiB | As a change list's `git status`, it covers the whole tree, so a rename into the project is found against the rest of the repository; a record is about 100 bytes and its paths. Past it a project below the repository's root is compared within its own directory instead (see "Comparing two branches"), and a project at the root is refused (`git_output`), as is a directory's own comparison past it. That second run can double a comparison's worst-case time: two runs of up to the 30 s `git` deadline each |
 | `git status` output for a change list | 8 MiB | The status covers the whole worktree, since a rename into the project is only found against the rest of the repository; a record is about 120 bytes and its path, so this holds tens of thousands of changes. Past it the change list is refused (`git_output`) rather than built from part of the output |
-| `git` metadata output | 1 MiB | A `worktree list` entry is about 200 bytes; one path's index or tree entry is one line |
+| `git` metadata output | 1 MiB | A `worktree list` entry is about 200 bytes; one path's index or tree entry is one line; a change's line counts are one line per object |
 | `git` stderr kept | 64 KiB | A `git` message is a few hundred bytes; the rest of a longer one is read and dropped |
 | `git` deadline | 30 s | Browse reads are local, so this only catches a wedged repository (a dead network volume, a held lock) |
 | Reads at once, daemon-wide | 4 | A viewer, its neighbour and a couple of directory expansions in parallel; more waits its turn. A read from disk has no deadline, so a volume that stops answering can hold these |

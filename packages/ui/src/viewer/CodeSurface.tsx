@@ -2,6 +2,7 @@ import React, { Suspense, useCallback, useMemo, useState } from "react";
 
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
+import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
 import { diffPlan, textPlan } from "./budgets";
 import { CODE_THEMES } from "./codeTheme";
@@ -10,11 +11,19 @@ import type { ChangeBodies } from "./content";
 import { LayoutToggle, type DiffLayout } from "./diffLayout";
 import type { ExpansionStatus, SeparatorLabels } from "./expansion";
 import { FrameSurface } from "./FrameSurface";
-import { hasHunks, withoutNoNewlineMarkers } from "./patch";
+import { hasHunks, linesAfterLastHunk, withoutNoNewlineMarkers } from "./patch";
 import { focusFirstSeparatorControl } from "./rendererDom";
 import { isSelectAll, selectCode } from "./selectAll";
 import { LoadingOverlay, Notice, Unreadable } from "./viewerStates";
 import { WrapToggle, wordWrap } from "./wordWrap";
+
+/** What is said beside the diff when its collapsed lines cannot be expanded, by why (`failed` takes
+ * the reason, so it is worded where it is shown). */
+const EXPANSION_NOTES: Partial<Record<ExpansionStatus["kind"], PlainMessageKey>> = {
+  changed: "viewer.expand.changed",
+  overBudget: "viewer.expand.overBudget",
+  unavailable: "viewer.expand.unavailable",
+};
 
 /** Text as it is, laid out by the browser as one preformatted node: what the viewer falls back to
  * past a budget or when the renderer fails, and cheap at any size the daemon sends. It wraps long
@@ -167,6 +176,7 @@ export function DiffSurface({
   onLayoutChange,
   theme,
   loadBodies,
+  lines,
 }: {
   resetKey: string;
   name: string;
@@ -176,11 +186,14 @@ export function DiffSurface({
   theme: "light" | "dark";
   /** Reads the whole text of both sides, which offers expanding the lines the patch collapses. */
   loadBodies?: () => Promise<ChangeBodies>;
+  /** How many lines each side holds, where the daemon counted them. */
+  lines?: { old?: number | null; new?: number | null };
 }): React.ReactElement {
   const t = useT();
   const label = t("viewer.contents", { name });
   const wrap = wordWrap.useValue();
   const marked = useMemo(() => withoutNoNewlineMarkers(patch), [patch]);
+  const trailing = useMemo(() => linesAfterLastHunk(marked.patch, { old: lines?.old, new: lines?.new }), [marked.patch, lines?.old, lines?.new]);
   const labels = useMemo<SeparatorLabels>(
     () => ({
       unmodified: (count) => t("viewer.expand.unmodified", { count }),
@@ -188,6 +201,7 @@ export function DiffSurface({
       above: t("viewer.expand.above"),
       below: t("viewer.expand.below"),
       between: t("viewer.expand.between"),
+      hiddenAll: (count) => t("viewer.expand.hiddenAll", { count }),
       all: t("viewer.expand.all"),
       loading: t("viewer.expand.loading"),
       failedHere: t("viewer.expand.failedHere"),
@@ -199,12 +213,8 @@ export function DiffSurface({
   const [reported, setReported] = useState<{ key: string; read?: () => Promise<ChangeBodies>; status: ExpansionStatus }>();
   const status = reported?.key === resetKey && reported.read === loadBodies ? reported.status : undefined;
   const onExpansion = useCallback((next: ExpansionStatus) => setReported({ key: resetKey, read: loadBodies, status: next }), [resetKey, loadBodies]);
-  const expansionNote =
-    status?.kind === "changed"
-      ? t("viewer.expand.changed")
-      : status?.kind === "failed"
-        ? t("viewer.expand.failed", { reason: status.message })
-        : undefined;
+  const note = status && EXPANSION_NOTES[status.kind];
+  const expansionNote = status?.kind === "failed" ? t("viewer.expand.failed", { reason: status.message }) : note ? t(note) : undefined;
   const asText = (reason: string) => (
     <>
       <WrapToggle />
@@ -233,6 +243,7 @@ export function DiffSurface({
             onDrawn={onDrawn}
             loadBodies={loadBodies}
             labels={labels}
+            trailing={trailing}
             onExpansion={onExpansion}
           />
         )}

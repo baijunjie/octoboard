@@ -9,17 +9,27 @@
  * against it.
  */
 
-/** What a control of a separator expands: lines above its gap's hunk below it, below the hunk above
- * it, both, or the whole file. */
-export type ExpandKind = "up" | "down" | "both" | "all";
+import { setInteractionModality } from "react-aria";
 
-/** The attribute naming each kind of control, in the order Tab walks a gap's controls. */
+/** What a control of a separator expands: lines above its gap's hunk below it, below the hunk above
+ * it, both, the whole of its gap, or the whole file. `gap` is the separator's own text, which is no
+ * control of the library's: it carries no `data-expand-*` attribute, and the viewer makes it one
+ * (`describeControl`). */
+export type ExpandKind = "up" | "down" | "both" | "gap" | "all";
+
+/** The attribute naming each kind of control, in the order Tab walks a gap's controls (the order
+ * they are read in: the arrows, then the label beside them, then the whole-file control at the end
+ * of the bar). The label has no attribute of the library's for this, so its own element is named. */
 const KIND_ATTRIBUTES: [ExpandKind, string][] = [
   ["up", "data-expand-up"],
   ["down", "data-expand-down"],
   ["both", "data-expand-both"],
+  ["gap", "data-separator-content"],
   ["all", "data-expand-all-button"],
 ];
+
+/** What marks a separator's label element as the control `describeControl` made it. */
+const LABEL_CONTROL = "[data-separator-content][role='button']";
 
 function kindOf(control: Element): ExpandKind | undefined {
   return KIND_ATTRIBUTES.find(([, attribute]) => control.hasAttribute(attribute))?.[0];
@@ -91,7 +101,8 @@ export function hiddenCount(label: HTMLElement): string {
 
 /** Replaces a separator's text. Its direction is its own (in an Arabic app, the sentence is Arabic)
  * whatever the code frame's. A tooltip repeats it, for a label cut short by the room beside the
- * whole-file control. */
+ * whole-file control; where the label is a control its element's tooltip says that instead
+ * (`describeControl`), which says the same text. */
 export function writeLabel(label: HTMLElement, text: string): void {
   label.dir = "auto";
   label.title = text;
@@ -99,14 +110,28 @@ export function writeLabel(label: HTMLElement, text: string): void {
   label.dataset.written = text;
 }
 
+/** Whether a separator has an arrow to expand from: the label counts as a control only where it has,
+ * as the bars of a diff that offers no expansion have none. The library draws the arrows and
+ * `data-expand-index` under one condition, so where `gapOf` finds a gap this holds; it is kept as
+ * defence against a library upgrade that draws them apart, not as a branch that is taken now. */
+function hasArrows(separator: Element | null): boolean {
+  return Array.from(separator?.querySelectorAll("[data-expand-button]") ?? []).some((control) => {
+    const kind = kindOf(control);
+    return kind !== undefined && kind !== "all";
+  });
+}
+
 /** A separator's controls with what each expands, apart from the library's own "expand all", which
- * it draws only for a long gap, never shows, and expands that gap alone with. */
+ * it draws only for a long gap, never shows, and expands that gap alone with. The label element
+ * (`gap`) comes last, and only where the separator has an arrow. */
 export function controlsOf(separator: HTMLElement): { control: HTMLElement; kind: ExpandKind }[] {
   const found: { control: HTMLElement; kind: ExpandKind }[] = [];
   for (const control of separator.querySelectorAll<HTMLElement>("[data-expand-button]")) {
     const kind = kindOf(control);
     if (kind && (kind !== "all" || control.hasAttribute("data-whole-file"))) found.push({ control, kind });
   }
+  const label = separator.querySelector<HTMLElement>("[data-separator-content]");
+  if (label && hasArrows(separator)) found.push({ control: label, kind: "gap" });
   return found;
 }
 
@@ -128,22 +153,39 @@ export function setWholeFile(separator: HTMLElement, offered: boolean): void {
   separator.append(all);
 }
 
+/** Takes a separator off the screen, with every control in it. Focus inside it goes to the code
+ * frame first, as a removed focused element would otherwise drop it to the page. The user did not
+ * trigger that hand-off (a daemon reply did), so the modality is set to keyboard for the focus ring
+ * to show where focus went. */
+export function removeSeparator(separator: HTMLElement): void {
+  const root = separator.getRootNode();
+  if (root instanceof ShadowRoot && root.activeElement && separator.contains(root.activeElement)) {
+    setInteractionModality("keyboard");
+    focusCodeRegion(root, { preventScroll: true });
+  }
+  separator.remove();
+}
+
 /**
  * Names a control and makes it reachable. Of the copies the library draws of a separator only the
  * `first` of each control is a tab stop and is named; the rest are hidden from assistive technology.
- * A control `disabled` says it is not available for now.
+ * A control `disabled` says it is not available for now. The tooltip is `title`, which is the name
+ * unless the control shows other text it must give back whole (the label, whose text an ellipsis
+ * may cut off); the name is the action and `aria-label` wins as the accessible name.
  */
-export function describeControl(control: HTMLElement, kind: ExpandKind, name: string, first: boolean, disabled: boolean): void {
+export function describeControl(control: HTMLElement, kind: ExpandKind, name: string, title: string, first: boolean, disabled: boolean): void {
   if (kind === "all") control.textContent = name;
   control.setAttribute("tabindex", first ? "0" : "-1");
   if (!first) {
     control.setAttribute("aria-hidden", "true");
     return;
   }
+  // The library draws the label as a plain div; it becomes a button here, being what a reader aims at.
+  if (kind === "gap") control.setAttribute("role", "button");
   control.setAttribute("aria-label", name);
   // A native tooltip, and not `TitledControl`'s HeroUI one, for the same reason as the hand-built
   // control (`setWholeFile`): there is no React tree here to render a tooltip into.
-  control.setAttribute("title", name);
+  control.setAttribute("title", title);
   control.removeAttribute("aria-hidden");
   if (disabled) control.setAttribute("aria-disabled", "true");
   else control.removeAttribute("aria-disabled");
@@ -151,11 +193,13 @@ export function describeControl(control: HTMLElement, kind: ExpandKind, name: st
 
 /** The event's target when it is a control of a separator. */
 export function controlOf(event: Event): HTMLElement | undefined {
-  return event.target instanceof HTMLElement && event.target.hasAttribute("data-expand-button") ? event.target : undefined;
+  const target = event.target;
+  return target instanceof HTMLElement && (target.hasAttribute("data-expand-button") || target.matches(LABEL_CONTROL)) ? target : undefined;
 }
 
-/** The gap and control an event landed on, when it landed on an expandable separator: the label
- * counts as its first button. */
+/** The gap and control an event landed on, when it landed on an expandable separator: the label is
+ * a control of its own, which reveals the whole of its gap, and counts as one only where that gap
+ * has controls at all — a separator of a diff that offers no expansion has none. */
 export function expandTargetOf(event: Event): { gap: number; kind: ExpandKind } | undefined {
   for (const node of event.composedPath()) {
     if (!(node instanceof HTMLElement)) continue;
@@ -163,11 +207,7 @@ export function expandTargetOf(event: Event): { gap: number; kind: ExpandKind } 
     if (!isLabel && !node.hasAttribute("data-expand-button")) continue;
     const gap = gapOf(node);
     if (gap === undefined) return undefined;
-    const kind = isLabel
-      ? Array.from(node.closest("[data-separator]")?.querySelectorAll("[data-expand-button]") ?? [])
-          .map(kindOf)
-          .find((found) => found !== undefined && found !== "all")
-      : kindOf(node);
+    const kind = isLabel ? (hasArrows(node.closest("[data-separator]")) ? ("gap" as const) : undefined) : kindOf(node);
     return kind ? { gap, kind } : undefined;
   }
   return undefined;
@@ -177,7 +217,7 @@ export function expandTargetOf(event: Event): { gap: number; kind: ExpandKind } 
 function separatorTabStops(root: ParentNode): HTMLElement[] {
   const rank = (control: HTMLElement) => KIND_ATTRIBUTES.findIndex(([, attribute]) => control.hasAttribute(attribute));
   const gap = (control: HTMLElement) => gapOf(control) ?? Number.POSITIVE_INFINITY;
-  return Array.from(root.querySelectorAll<HTMLElement>("[data-expand-button][tabindex='0']")).sort((a, b) => gap(a) - gap(b) || rank(a) - rank(b));
+  return Array.from(root.querySelectorAll<HTMLElement>(`[data-expand-button][tabindex='0'], ${LABEL_CONTROL}[tabindex='0']`)).sort((a, b) => gap(a) - gap(b) || rank(a) - rank(b));
 }
 
 /** Focuses a control with the focus ring a keyboard move draws: the ring is on the control's own
@@ -227,7 +267,7 @@ export function moveAlongControls(root: ShadowRoot, from: HTMLElement, backwards
  * was, or there was one to give it to). */
 export function refocusControl(root: ShadowRoot, wanted: { gap: number; kind: ExpandKind }): boolean {
   const active = root.activeElement;
-  if (active?.isConnected && active.hasAttribute("data-expand-button")) return true;
+  if (active?.isConnected && (active.hasAttribute("data-expand-button") || active.matches(LABEL_CONTROL))) return true;
   const controls = separatorTabStops(root);
   const sameGap = controls.filter((control) => gapOf(control) === wanted.gap);
   const target =

@@ -169,6 +169,13 @@ pub(super) fn read_kind(side: &SideRead) -> SideKind {
     }
 }
 
+pub(super) fn read_lines(side: &SideRead) -> Option<u64> {
+    match side {
+        SideRead::Present { lines, .. } => *lines,
+        other => panic!("not present: {other:?}"),
+    }
+}
+
 pub(super) fn head_of(dir: &Path) -> String {
     String::from_utf8(git(dir, &["rev-parse", "HEAD"]))
         .unwrap()
@@ -514,6 +521,11 @@ fn renames_type_changes_and_binary_changes_keep_their_sides() {
         patch.contains("+r2.txt\n"),
         "the link's target is in the patch: {patch}"
     );
+    assert_eq!(
+        (read_lines(&type_change.old), read_lines(&type_change.new)),
+        (Some(1), None),
+        "a link has no lines to count"
+    );
 
     let image = fixture
         .change(
@@ -530,6 +542,12 @@ fn renames_type_changes_and_binary_changes_keep_their_sides() {
         .contains("Binary files a/i.png and b/i.png differ"));
     assert_eq!(read_body(&image.old).unwrap(), png(1), "the index's body");
     assert_eq!(read_body(&image.new).unwrap(), png(2), "the disk's body");
+    // The signature holds two newlines, and the run of marker bytes after them is unterminated.
+    assert_eq!(
+        (read_lines(&image.old), read_lines(&image.new)),
+        (Some(3), Some(3)),
+        "each carried body's own count"
+    );
     let SideRead::Present {
         file: Some(file), ..
     } = &image.new
@@ -537,6 +555,183 @@ fn renames_type_changes_and_binary_changes_keep_their_sides() {
         panic!("no body");
     };
     assert_eq!(file.media_type, Some("image/png"));
+}
+
+/// The line each side's last hunk ends at, from the patch's last `@@ -a,b +c,d @@` header: where
+/// a hunk with no lines (`count` 0) is placed at the line before it.
+fn last_hunk_ends(patch: &str) -> (u64, u64) {
+    let header = patch.lines().rfind(|line| line.starts_with("@@ ")).unwrap();
+    let end = |range: &str| {
+        let (start, count) = range[1..].split_once(',').unwrap_or((&range[1..], "1"));
+        let (start, count): (u64, u64) = (start.parse().unwrap(), count.parse().unwrap());
+        start + count.saturating_sub(1)
+    };
+    let mut ranges = header.split(' ').skip(1);
+    (end(ranges.next().unwrap()), end(ranges.next().unwrap()))
+}
+
+#[test]
+fn a_patch_reply_carries_each_object_sides_line_count() {
+    let fixture = Fixture::new();
+    // A latin-1 line first, out of reach of the change's context, so the patch stays UTF-8.
+    let latin = [
+        &b"caf\xe9\n"[..],
+        &[b"x\n".repeat(20), b"end\n".to_vec()].concat(),
+    ]
+    .concat();
+    let long_before = [&b"x\n"[..], &b"y\n".repeat(29)].concat();
+    let latin_after = [&latin[..latin.len() - 4], b"END\n"].concat();
+    // (name, before, after), each changed at its end. `from_empty` and `to_empty` both stay: the
+    // parse is keyed per asked id, and each pins "one of two ids prints no line" from one side.
+    // The exit 1 of an asked set that is all empty is pinned by `idx_empty` below, since `mode`'s
+    // patch has no hunk and never asks for a count.
+    let table: [(&str, &[u8], &[u8]); 6] = [
+        ("terminated", b"a\nb\nc\n", b"a\nb\nC\n"),
+        ("unterminated", b"a\nb\nc", b"a\nb\nC"),
+        ("from_empty", b"", b"x\n"),
+        ("to_empty", b"x\n", b""),
+        ("crlf", b"a\r\nb\r\n", b"a\r\nB\r\n"),
+        ("latin", &latin, &latin_after),
+    ];
+    let mut files: Vec<(&[u8], &[u8])> = table
+        .iter()
+        .map(|(name, before, _)| (name.as_bytes(), *before))
+        .collect();
+    files.push((b"wip", b"a\nb\n"));
+    files.push((b"mode", b""));
+    files.push((b"long", &long_before));
+    let repo = repo_with("changes-line-counts", &files);
+    for (name, _, after) in table {
+        write(repo.join(name), after);
+        git(&repo, &["add", name]);
+    }
+    git(&repo, &["update-index", "--chmod=+x", "mode"]);
+    write(repo.join("wip"), b"a\nB\n");
+    let project = fixture.project("p", &repo);
+
+    for (name, _, _) in table {
+        let diff = fixture
+            .change(
+                &project,
+                None,
+                ChangeGroup::Staged,
+                present(name),
+                present(name),
+            )
+            .unwrap();
+        let patch = diff.patch.unwrap();
+        let (old_end, new_end) = last_hunk_ends(&patch);
+        assert_eq!(
+            (read_lines(&diff.old), read_lines(&diff.new)),
+            (Some(old_end), Some(new_end)),
+            "{name}: {patch}"
+        );
+    }
+
+    // A change at the start of a long file: the last hunk ends well short of the file's end, so
+    // `lines` can only be the blob's own length, not where the last hunk stops.
+    let long_after = [&b"X\n"[..], &b"y\n".repeat(29)].concat();
+    write(repo.join("long"), &long_after);
+    git(&repo, &["add", "long"]);
+    let long = fixture
+        .change(
+            &project,
+            None,
+            ChangeGroup::Staged,
+            present("long"),
+            present("long"),
+        )
+        .unwrap();
+    let patch = long.patch.unwrap();
+    let (old_end, new_end) = last_hunk_ends(&patch);
+    assert_eq!((old_end, new_end), (4, 4), "{patch}");
+    assert_eq!(
+        (read_lines(&long.old), read_lines(&long.new)),
+        (Some(30), Some(30))
+    );
+
+    // A change of mode alone has no hunk, so no count is fetched.
+    let mode = fixture
+        .change(
+            &project,
+            None,
+            ChangeGroup::Staged,
+            present("mode"),
+            present("mode"),
+        )
+        .unwrap();
+    assert!(mode.patch.unwrap().contains("new mode 100755"));
+    assert_eq!((read_lines(&mode.old), read_lines(&mode.new)), (None, None));
+
+    // The index's side is the empty blob and the disk holds content: the one hunked change that
+    // asks for nothing but empty blobs, so `git grep` prints nothing and exits 1.
+    write(repo.join("idx_empty"), b"");
+    git(&repo, &["add", "idx_empty"]);
+    write(repo.join("idx_empty"), b"x\n");
+    let idx_empty = fixture
+        .change(
+            &project,
+            None,
+            ChangeGroup::Unstaged,
+            present("idx_empty"),
+            present("idx_empty"),
+        )
+        .unwrap();
+    assert!(idx_empty.patch.unwrap().contains("@@ -0,0 +1 @@"));
+    assert_eq!(
+        (read_lines(&idx_empty.old), read_lines(&idx_empty.new)),
+        (Some(0), None)
+    );
+
+    // The disk side is never counted: only the index's.
+    let wip = fixture
+        .change(
+            &project,
+            None,
+            ChangeGroup::Unstaged,
+            present("wip"),
+            present("wip"),
+        )
+        .unwrap();
+    assert_eq!(
+        (read_lines(&wip.old), read_lines(&wip.new)),
+        (Some(2), None)
+    );
+}
+
+#[test]
+fn a_configured_grep_colour_does_not_stop_a_patch_reply_from_counting_lines() {
+    let fixture = Fixture::new();
+    let repo = repo_with("changes-grep-colour", &[(b"a.txt", b"a\nb\nc\n")]);
+    write(repo.join("a.txt"), b"a\nb\nC\n");
+    git(&repo, &["add", "a.txt"]);
+    let project = fixture.project("p", &repo);
+    let counts = || {
+        let diff = fixture
+            .change(
+                &project,
+                None,
+                ChangeGroup::Staged,
+                present("a.txt"),
+                present("a.txt"),
+            )
+            .unwrap();
+        (read_lines(&diff.old), read_lines(&diff.new))
+    };
+    // The control: uncoloured, the counts come back.
+    assert_eq!(counts(), (Some(3), Some(3)));
+
+    // With `color.grep` set to `always`, an unguarded `git grep` wraps the id and the `:` in escape
+    // sequences, which fail the parse of `<id>:<count>` and would turn every read into `git_failed`.
+    git(&repo, &["config", "color.grep", "always"]);
+    let blob = String::from_utf8(git(&repo, &["rev-parse", "HEAD:a.txt"])).unwrap();
+    let unguarded = git(&repo, &["grep", "-G", "-c", "-e", "", blob.trim(), "--"]);
+    assert!(
+        unguarded.contains(&b'\x1b'),
+        "the configuration colours nothing, so this test guards nothing: {}",
+        String::from_utf8_lossy(&unguarded)
+    );
+    assert_eq!(counts(), (Some(3), Some(3)));
 }
 
 #[test]
@@ -990,6 +1185,11 @@ fn a_submodule_change_and_a_nested_repository_stay_listed_with_their_kind() {
     );
     let patch = diff.patch.unwrap();
     assert_eq!(patch.matches("Subproject commit").count(), 2, "{patch}");
+    // The read succeeding is the point: a submodule's commit id handed to the count command is
+    // not a blob. Here the commit is not in this repository's object store, so `git grep` exits
+    // 128 with "bad object" and the unwrap above panics; where it were reachable, `git grep`
+    // would walk its tree and print `<commit>:<path>:<count>` lines that `line_counts` refuses.
+    assert_eq!((read_lines(&diff.old), read_lines(&diff.new)), (None, None));
     let alone = fixture
         .change(
             &project,
@@ -1000,6 +1200,7 @@ fn a_submodule_change_and_a_nested_repository_stay_listed_with_their_kind() {
         )
         .unwrap();
     assert_eq!(read_kind(&alone.new), SideKind::Submodule);
+    assert_eq!(read_lines(&alone.new), None);
     assert_eq!(
         read_body(&alone.new),
         None,

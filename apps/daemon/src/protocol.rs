@@ -729,11 +729,16 @@ pub enum SideVersion {
 pub enum SideRead {
     /// `file` is the side's body, when the reply carries it: only a file side's, and only when no
     /// patch shows the change's content (a binary change, a side alone).
+    ///
+    /// `lines` is the number of lines the side's stored content holds (its newlines, and one more
+    /// when the last line is unterminated), counted of the very blob the patch was made from;
+    /// `None` where the daemon read no content for the side.
     Present {
         path: String,
         kind: SideKind,
         source: ContentSource,
         file: Option<FileContent>,
+        lines: Option<u64>,
     },
     Absent,
     OutOfScope,

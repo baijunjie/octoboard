@@ -10,6 +10,7 @@ const labels: SeparatorLabels = {
   above: "above",
   below: "below",
   between: "between",
+  hiddenAll: (count) => `all ${count}`,
   all: "whole file",
   loading: "loading",
   failedHere: "failed",
@@ -34,6 +35,7 @@ let expanded: [number, string, number][];
 let load: ReturnType<typeof vi.fn<() => Promise<ChangeBodies>>>;
 let showAll: ReturnType<typeof vi.fn<() => void>>;
 let stop: ReturnType<typeof vi.fn<() => void>>;
+let trailing: { gap: number; lines: number } | undefined;
 let expansion: Expansion;
 
 const expander: HunkExpander = { expandHunk: (gap, direction, lines) => expanded.push([gap, direction, lines]) };
@@ -56,7 +58,8 @@ beforeEach(() => {
   load = vi.fn(async () => ({ old: "a\n", new: "b\n" }));
   showAll = vi.fn();
   stop = vi.fn();
-  expansion = new Expansion({ load, labels: () => labels, report: (next) => status.push(next), showAll, stop });
+  trailing = undefined;
+  expansion = new Expansion({ load, labels: () => labels, trailing: () => trailing, report: (next) => status.push(next), showAll, stop });
   expansion.attach(host, expander);
 });
 
@@ -77,6 +80,30 @@ it("words the separators, makes the first copy of each control a tab stop, and o
   ]);
 });
 
+it("makes the label a button, a tab stop and named in the first copy only, hidden in the rest", () => {
+  const labelsOf = Array.from(host.shadowRoot!.querySelectorAll<HTMLElement>("[data-separator-content]"));
+  expect(labelsOf.map((label) => [label.getAttribute("role"), label.getAttribute("tabindex"), label.getAttribute("aria-label"), label.getAttribute("title"), label.getAttribute("aria-hidden")])).toEqual([
+    ["button", "0", "all 53", "53 hidden", null],
+    [null, "-1", null, null, "true"],
+  ]);
+});
+
+it("leaves the labels of a separator the library drew with no expansion as plain text", () => {
+  // Without `loadBodies`, or after `stop()`, the library draws no `data-expand-index` and no arrows.
+  host.shadowRoot!.innerHTML = `
+    <div data-gutter>
+      <div data-separator="line-info-basic">
+        <div data-separator-wrapper>
+          <div data-separator-content><span data-unmodified-lines>53 unmodified lines</span></div>
+        </div>
+      </div>
+    </div>`;
+  expansion.decorate();
+  const label = control("[data-separator-content]");
+  expect([label.getAttribute("role"), label.getAttribute("tabindex"), key(label, "Enter").defaultPrevented]).toEqual([null, null, false]);
+  expect(expanded).toEqual([]);
+});
+
 it("reads the bodies on the first expansion only, then reveals 20 lines each time and the rest on the third", async () => {
   await press(control("[data-expand-up]"));
   expect(status).toEqual([{ kind: "loading" }, { kind: "idle" }]);
@@ -89,6 +116,19 @@ it("reads the bodies on the first expansion only, then reveals 20 lines each tim
     [1, "both", Number.POSITIVE_INFINITY],
   ]);
   expect((await expansion.files({ name: "a.ts" })).newFile).toEqual({ name: "a.ts", contents: "b\n" });
+});
+
+it("reveals the whole gap when the separator's own text is used", async () => {
+  await press(control("[data-unmodified-lines]"));
+  expect(expanded).toEqual([[1, "both", Number.POSITIVE_INFINITY]]);
+});
+
+it.each(["Enter", " "])("reveals the whole gap on %j pressed on the separator's label", async (name) => {
+  const label = control("[data-separator-content]");
+  label.focus();
+  expect(key(label, name).defaultPrevented).toBe(true);
+  await new Promise((resolve) => setTimeout(resolve));
+  expect(expanded).toEqual([[1, "both", Number.POSITIVE_INFINITY]]);
 });
 
 it("shows the loading state at the separator while the bodies are read, and expands nothing while it waits", async () => {
@@ -129,7 +169,7 @@ it("drops a failure said at the separator when the change is read again", async 
 });
 
 it.each([
-  [new ChangeBodiesError("unavailable"), { kind: "idle" }],
+  [new ChangeBodiesError("unavailable"), { kind: "unavailable" }],
   [new ChangeBodiesError("changed"), { kind: "changed" }],
 ])("stops offering expansion when the bodies %j cannot be had", async (error, last) => {
   load.mockRejectedValueOnce(error);
@@ -143,22 +183,56 @@ it("keeps the lines collapsed when the bodies are past the render budget", async
   load.mockResolvedValueOnce({ old: "x\n".repeat(20_000), new: "" });
   await press(control("[data-expand-up]"));
   expect(stop).toHaveBeenCalledTimes(1);
+  expect(status.at(-1)).toEqual({ kind: "overBudget" });
   expect(expanded).toEqual([]);
+});
+
+// The bar after the last hunk (gap 2 here): the file's length settles what it hides.
+// The library draws it without a number until the bodies are handed over (as it cannot count the run
+// before), and with the number still hidden after; `drawn` is what it wrote.
+const UNCOUNTED = "More unchanged context may be available";
+it.each<[string, string, { gap: number; lines: number } | undefined, [string, string] | null]>([
+  ["the real count when lines follow", UNCOUNTED, { gap: 2, lines: 17 }, ["17 hidden", "all 17"]],
+  ["its old wording when the length is unknown", UNCOUNTED, undefined, ["more may follow", "between"]],
+  ["nothing when no line follows", UNCOUNTED, { gap: 2, lines: 0 }, null],
+  ["the library's own count once part of the run is revealed", "30 unmodified lines", { gap: 2, lines: 50 }, ["30 hidden", "all 30"]],
+  ["the library's own count over a daemon count of none", "30 unmodified lines", { gap: 2, lines: 0 }, ["30 hidden", "all 30"]],
+])("words the bar after the last hunk with %s", (_, drawn, run, expected) => {
+  host.shadowRoot!.innerHTML += (separator("gutter", 2) + separator("content", 2)).replaceAll("53 unmodified lines", drawn);
+  trailing = run;
+  expansion.decorate();
+  const bars = Array.from(host.shadowRoot!.querySelectorAll<HTMLElement>('[data-separator][data-expand-index="2"]'));
+  if (expected === null) {
+    expect(bars).toEqual([]);
+    expect(host.shadowRoot!.querySelectorAll("[data-expand-button][tabindex='0']")).toHaveLength(3);
+    return;
+  }
+  expect(bars.map((bar) => bar.querySelector("[data-unmodified-lines]")!.textContent)).toEqual(Array(2).fill(expected[0]));
+  // The control's tooltip is the visible sentence and its name the action.
+  const label = bars[0].querySelector<HTMLElement>("[data-separator-content]")!;
+  expect([label.getAttribute("title"), label.getAttribute("aria-label")]).toEqual([expected[0], expected[1]]);
 });
 
 it("moves Tab along the controls gap by gap and leaves the diff after the last", () => {
   host.shadowRoot!.innerHTML += separator("gutter", 2) + separator("content", 2);
   expansion.decorate();
   const root = host.shadowRoot!;
-  const stops = Array.from(root.querySelectorAll<HTMLElement>("[data-expand-button][tabindex='0']"));
-  const order = [control("[data-expand-up]"), control("[data-expand-down]"), root.querySelector<HTMLElement>("[data-content] [data-whole-file]")!];
-  expect(stops).toHaveLength(6);
+  const stops = Array.from(root.querySelectorAll<HTMLElement>("[data-expand-button][tabindex='0'], [data-separator-content][tabindex='0']"));
+  const order = [
+    control("[data-expand-up]"),
+    control("[data-expand-down]"),
+    control("[data-separator-content]"),
+    root.querySelector<HTMLElement>("[data-content] [data-whole-file]")!,
+  ];
+  expect(stops).toHaveLength(8);
   order[0].focus();
   expect(key(order[0], "Tab").defaultPrevented).toBe(true);
   expect(root.activeElement).toBe(order[1]);
   key(order[1], "Tab");
   expect(root.activeElement).toBe(order[2]);
   key(order[2], "Tab");
+  expect(root.activeElement).toBe(order[3]);
+  key(order[3], "Tab");
   expect(root.activeElement?.closest("[data-separator]")).toBe(root.querySelectorAll("[data-gutter] [data-separator]")[1]);
   const last = root.querySelectorAll<HTMLElement>("[data-content] [data-whole-file]")[1];
   last.focus();
@@ -188,4 +262,26 @@ it("gives focus back after a redraw to the same control, or the nearest one", as
   root.innerHTML = (separator("gutter") + separator("content")).replaceAll("data-expand-down", "data-expand-gone");
   expansion.attach(host, expander);
   expect(root.activeElement).toBe(control("[data-expand-up]"));
+});
+
+it("gives focus back after the label revealed its whole gap to the next gap's control, else to the code", async () => {
+  const root = host.shadowRoot!;
+  const label = control("[data-separator-content]");
+  label.focus();
+  key(label, "Enter");
+  await new Promise((resolve) => setTimeout(resolve));
+  root.innerHTML = separator("gutter", 2) + separator("content", 2);
+  expansion.attach(host, expander);
+  expect(root.activeElement).toBe(control("[data-expand-up]"));
+  expect(root.activeElement?.closest("[data-separator]")?.getAttribute("data-expand-index")).toBe("2");
+  const region = document.body.appendChild(document.createElement("div"));
+  region.setAttribute("role", "region");
+  region.tabIndex = 0;
+  region.append(host);
+  key(control("[data-separator-content]"), "Enter");
+  await new Promise((resolve) => setTimeout(resolve));
+  root.innerHTML = "";
+  expansion.attach(host, expander);
+  expect(document.activeElement).toBe(region);
+  region.remove();
 });

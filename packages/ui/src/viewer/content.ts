@@ -31,9 +31,11 @@ export type ViewerBody =
 
 /** One side of a change, mirroring the daemon's `ChangeSide` (see "Changes and comparisons" in
  * `apps/daemon/PROTOCOL.md`). `path` is a wire path relative to the project; `body` is present
- * only for a `file` side whose content was read. */
+ * only for a `file` side whose content was read, and `lines` is the number of lines the side holds
+ * where the daemon counted them. `null` is a side the daemon did not count (see "Changes and comparisons" in
+ * `apps/daemon/PROTOCOL.md`); `undefined` is a side that came from the listing and was never read. */
 export type ViewerChangeSide =
-  | { state: "present"; path: string; kind: "file" | "symlink" | "submodule"; body?: ViewerBody }
+  | { state: "present"; path: string; kind: "file" | "symlink" | "submodule"; body?: ViewerBody; lines?: number | null }
   | { state: "absent" }
   | { state: "out_of_scope"; repositoryPath: string };
 
@@ -63,7 +65,8 @@ export interface ChangeBodies {
  * Why a change's bodies were not delivered:
  *
  * - `unavailable`: they cannot be shown, whatever is tried again — a body past the daemon's limit,
- *   or a side that is no file. The viewer then keeps the collapsed lines as they are, without a word.
+ *   or a side that is no file. The viewer then keeps the collapsed lines as they are and says so
+ *   (`viewer.expand.unavailable`).
  * - `changed`: the change moved on after its patch was read, so the bodies would not match it.
  * - `failed`: the read failed; `message` says why, and asking again is fine.
  * - `superseded`: the read was given up for a newer one, and nothing is said.

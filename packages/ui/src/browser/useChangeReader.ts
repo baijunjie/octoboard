@@ -100,7 +100,7 @@ function listedSide(side: ChangeSide): ViewerChangeSide {
 function readSide(side: SideRead, listed: ChangeSide): ViewerChangeSide {
   switch (side.state) {
     case "present":
-      return { state: "present", path: side.path, kind: side.kind, body: side.file ? bodyFromFileContent(side.path, side.file) : undefined };
+      return { state: "present", path: side.path, kind: side.kind, body: side.file ? bodyFromFileContent(side.path, side.file) : undefined, lines: side.lines };
     case "absent":
       return side;
     case "out_of_scope":

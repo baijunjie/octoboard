@@ -22,8 +22,9 @@ pub const MAX_DIR_ENTRIES: usize = 10_000;
 pub const MAX_LISTING_NAME_BYTES: usize = 2 * 1024 * 1024;
 
 /// The most stdout a metadata `git` command (`rev-parse`, `worktree list`, `ls-files` and
-/// `ls-tree` for one path) may print. A `worktree list` entry is about 200 bytes, so this is
-/// thousands of worktrees; past it the command is killed rather than read further.
+/// `ls-tree` for one path, `grep -c` over a change's two blobs) may print. A `worktree list` entry
+/// is about 200 bytes, so this is thousands of worktrees; past it the command is killed rather
+/// than read further.
 pub const GIT_METADATA_STDOUT: usize = 1024 * 1024;
 
 /// The most stderr kept from any `git` command. A `git` error message is a few hundred bytes; the

@@ -32,9 +32,9 @@
 //! is where a `-c` has to stand. A diff-family command (`diff*`, `log`, `show`) gets
 //! `--no-ext-diff --no-textconv --no-color` right after its name: an external diff or a textconv
 //! filter is a configured program that would both run and rewrite the bytes the reply claims to
-//! carry. Clean and smudge filters
-//! are left alone — they define what a file's content is in the repository, which is not a
-//! presentation choice. Output is read as bytes, never as text.
+//! carry. A `grep` gets the last two of those (`--no-textconv --no-color`), the only ones it takes.
+//! Clean and smudge filters are left alone — they define what a file's content is in the
+//! repository, which is not a presentation choice. Output is read as bytes, never as text.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -100,6 +100,11 @@ pub(crate) fn paths_nest(paths: &[&[u8]]) -> bool {
 }
 
 /// The subcommands whose output a configured diff driver can change.
+///
+/// `grep` is one too (its `--textconv` option is what lets a driver change what it matches), but
+/// it accepts only two of [`DIFF_SAFETY`]'s flags, not `--no-ext-diff`, so it cannot join this
+/// list: [`GitEnv::command`] gives it [`GREP_SAFETY`] instead. A new subcommand of this kind
+/// belongs in one of the two.
 fn is_diff_family(subcommand: &str) -> bool {
     subcommand.starts_with("diff") || subcommand == "log" || subcommand == "show"
 }
@@ -107,6 +112,12 @@ fn is_diff_family(subcommand: &str) -> bool {
 /// The flags that keep a diff-family command's output to what is stored: no external diff, no
 /// textconv, no colour escapes.
 const DIFF_SAFETY: &[&str] = &["--no-ext-diff", "--no-textconv", "--no-color"];
+
+/// [`DIFF_SAFETY`] as far as `git grep` takes it. `--no-color` is the one that matters: with
+/// `color.grep` set to `always`, the object id and the `:` before a count come wrapped in escape
+/// sequences, which no parse of `<id>:<count>` survives. `--no-textconv` is `git grep`'s documented
+/// default and only guards against that changing.
+const GREP_SAFETY: &[&str] = &["--no-textconv", "--no-color"];
 
 /// The `git` binary and the environment a browse read runs it with, before isolation.
 #[derive(Debug, Clone)]
@@ -185,6 +196,8 @@ impl GitEnv {
         command.arg(subcommand);
         if is_diff_family(subcommand) {
             command.args(DIFF_SAFETY);
+        } else if subcommand == "grep" {
+            command.args(GREP_SAFETY);
         }
         for arg in args {
             command.arg(std::ffi::OsStr::from_bytes(arg));

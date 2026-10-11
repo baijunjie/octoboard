@@ -422,12 +422,12 @@ commit and its new side from To's, and is shown as a staged change is below; it 
   other change: its diff is the one between exactly its two versions. Identical content therefore says the change was
   renamed and nothing more, as the bullet below it says, and edited content gives an ordinary diff — hunks with
   context, the runs between them collapsed into separators that can be expanded, the layout choice, Show whole file
-  and the trailing separator, all as above. It shows under Renamed, with the path it came from among the details, and
-  nothing below the outer path is read, named in its diff or counted against the limits the read is held to. This
-  holds in the Staged section and in the Compare view, in both directions of the nesting, and it takes both sides
-  being a file or a symbolic link: with a side that is a repository of its own the change is shown instead as the old
-  path's removal followed by the new path's addition in one diff, collapsing nothing and with no separator to expand,
-  as a type change is.
+  and the run beyond the last hunk, all as above. It shows under Renamed, with the path it came from among the
+  details, and nothing below the outer path is read, named in its diff or counted against the limits the read is held
+  to. This holds in the Staged section and in the Compare view, in both directions of the nesting, and it takes both
+  sides being a file or a symbolic link: with a side that is a repository of its own the change is shown instead as
+  the old path's removal followed by the new path's addition in one diff, collapsing nothing and with no separator to
+  expand, as a type change is.
 - **A rename with nothing else changed** says it was renamed and its content is unchanged. It is the wording of every
   rename whose patch shows nothing but the path changed — an empty patch, or one holding the rename's header alone —
   wherever it was listed and whether or not its two paths nest. A rename whose patch shows that something else did
@@ -451,8 +451,9 @@ code is focused, selected and copied as a file's is (see "Selecting and copying"
 ### Expanding the collapsed lines
 
 Each run of unchanged lines a diff leaves out stands in it as a **separator** saying how many lines it holds — "6
-unmodified lines" — in the current language (see "What follows the language" in `docs/product/language.md`). Where the
-lines can be shown, the separator reveals them, in both the Uncommitted and the Compare view and in both diff layouts:
+unmodified lines" — in the current language (see "What follows the language" in `docs/product/language.md`); once part
+of a run has been revealed, its separator counts the lines of it that are still hidden. Where the lines can be shown,
+the separator reveals them, in both the Uncommitted and the Compare view and in both diff layouts:
 
 - **One expansion reveals 20 lines.** A run between two hunks longer than that offers two controls: one reveals the 20
   lines at the run's top, which appear above the separator, the other the 20 at its bottom, which appear below it. A
@@ -461,9 +462,17 @@ lines can be shown, the separator reveals them, in both the Uncommitted and the 
 - **Show whole file**, at the end of a separator, reveals the file's every line at once, leaving no separator behind.
   Each run offers it once — in the split layout on one side only. With wrapping off it stays at the visible end of the
   bar as the diff is scrolled sideways, as the separator's text and controls do.
-- **A separator's text is a control too**: clicking it does what the first of that separator's controls does.
-- An expandable diff also ends in a separator for the lines beyond its last hunk, whose number the patch does not say;
-  it says instead that more unmodified lines may follow.
+- **A separator's text is a control of its own**, which **reveals the whole of its run at once**, however long the run
+  is and however many of its lines the other controls have revealed already. It is named for that, with the count it
+  shows — "Show all 53 unmodified lines" — so what it offers, and not only how many lines are hidden, is announced;
+  on a separator whose count came from the file's length rather than from the patch the name carries no count. It is
+  a tab stop and is used with Enter or Space like the other controls. The text of a separator that offers no
+  expansion is inert.
+- **The run beyond the last hunk** is a separator of its own, with the one control such a run has. A patch never says
+  how long a file is, so the run's length comes from the length of the file the change was read at: where the last hunk
+  reaches the file's end there is nothing beyond it and **no separator is drawn at all**; where lines do follow, the
+  separator counts them as every other one does. Where the length is not known, it says instead that more unmodified
+  lines may follow.
 - **The lines are read only when the user expands.** Nothing of them comes with the patch, with a refresh, or when the
   connection to the daemon comes back. The first expansion of a diff reads both of its sides whole, and every later
   expansion of the same diff uses what that read returned. The read writes nothing to the repository and takes no
@@ -486,21 +495,24 @@ Then:
 - **Moving on to another change** while the lines are being read gives that read up, saying nothing.
 
 **A diff that offers no expansion** keeps its separators with their counts and nothing else: no controls, and no
-trailing separator for the lines beyond the last hunk, which only an expandable diff has. That is so from the start for
-a diff whose two sides are not both files whose content can be read — an added or a deleted file, which has one side
-only, a symbolic link or a submodule, hence a type change, and a version outside the project. A type change has no
-separator at all, its diff holding both of its sides whole so that nothing in it is collapsed (see "What it shows"
-above). The rest is found only on the first expansion, and the diff is then drawn again in that form, so its trailing
-separator goes on that press: a side larger than the 4 MiB a read opens, a side past the viewer's own budget of 10,000
-lines or 1,000,000 characters, and the change having moved on. Of the three only the last says anything; the two limits
-pass without a word.
+separator for the run beyond the last hunk, which only an expandable diff has. That is so from the start for a diff
+whose two sides are not both files whose content can be read — an added or a deleted file, which has one side only, a
+symbolic link or a submodule, hence a type change, and a version outside the project. A type change has no separator
+at all, its diff holding both of its sides whole so that nothing in it is collapsed (see "What it shows" above). The
+rest is found only on the first expansion, and the diff is then drawn again in that form, so the separator for the run
+beyond its last hunk goes on that press: a side the daemon will not deliver whole — one larger than the 4 MiB a read
+opens, a file type it does not read, a change it cannot make sense of — a side past the viewer's own budget of 10,000
+lines or 1,000,000 characters, and the change having moved on. Each of the three puts a note above the diff, and each
+note is announced: that the whole file is not delivered for this change, that the file is too large to be shown in
+full here, or, as the bullet above says, that the change has moved on since it was read.
 
 From the keyboard, **Tab** from the code region moves into the separators' controls and then along them, run by run
-from the top of the diff, and after the last one leaves the diff; **Shift+Tab** from the first goes back to the code
-region. **Enter** or **Space** uses a control, and once the diff is drawn again keyboard focus is back on it, or on the
-nearest control left where that one is gone, or on the code region where none is left at all — after Show whole file,
-and after a diff turns out to offer no expansion. A control reached from the keyboard shows a focus ring, in either
-appearance; pressing one with the mouse leaves keyboard focus where it was.
+from the top of the diff and, within a run, in the order they are read — the control or pair that reveals part of the
+run, the separator's own text, then Show whole file — and after the last one leaves the diff; **Shift+Tab** from the
+first goes back to the code region. **Enter** or **Space** uses a control, and once the diff is drawn again keyboard
+focus is back on it, or on the nearest control left where that one is gone, or on the code region where none is left
+at all — after Show whole file, and after a diff turns out to offer no expansion. A control reached from the keyboard
+shows a focus ring, in either appearance; pressing one with the mouse leaves keyboard focus where it was.
 
 ### Moving between changes
 

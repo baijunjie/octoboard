@@ -19,6 +19,7 @@ import {
   labelOf,
   moveAlongControls,
   refocusControl,
+  removeSeparator,
   separatorsOf,
   setWholeFile,
   writeLabel,
@@ -37,13 +38,22 @@ export interface SeparatorLabels {
   above: string;
   below: string;
   between: string;
+  /** The label's name as a control. It holds the count the label shows, so the name contains the
+   * visible text (a voice command saying that text finds the control). */
+  hiddenAll: (count: number) => string;
   all: string;
   loading: string;
   failedHere: string;
 }
 
 /** Where the expansion stands, as the caller words it beside the code. */
-export type ExpansionStatus = { kind: "idle" } | { kind: "loading" } | { kind: "failed"; message: string } | { kind: "changed" };
+export type ExpansionStatus =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "failed"; message: string }
+  | { kind: "changed" }
+  | { kind: "overBudget" }
+  | { kind: "unavailable" };
 
 /** What of the library's diff the expansion drives: a gap is the run of lines before hunk `gap`
  * (the one after the last hunk is numbered past it), `up` revealing lines from the hunk above it and
@@ -56,6 +66,9 @@ export interface HunkExpander {
 export interface ExpansionHooks {
   load: () => Promise<ChangeBodies>;
   labels: () => SeparatorLabels;
+  /** The run of unmodified lines after the last hunk when the patch's file length settles it: the
+   * number of that hunk's gap (the one past the last hunk) and how many lines it holds. */
+  trailing: () => { gap: number; lines: number } | undefined;
   report: (status: ExpansionStatus) => void;
   /** Shows the whole file, with no separator left. */
   showAll: () => void;
@@ -122,8 +135,9 @@ function bind(root: ShadowRoot): { current?: Expansion } {
 /**
  * The expansion of one diff's separators, for as long as that diff is shown. The first expansion
  * reads both sides' text (`hooks.load`) and the library expands from it; each expansion of a gap
- * reveals `EXPANSION_STEP` lines, and the `REST_AT`th reveals the rest of that gap. A separator also
- * offers the whole file at once.
+ * from one of its arrows reveals `EXPANSION_STEP` lines, and the `REST_AT`th reveals the rest of
+ * that gap. A separator's text reveals the whole of its gap at once, and a separator also offers
+ * the whole file at once.
  *
  * It never lets the library read the text itself: the library is handed the text only once it is
  * here, so a failed read leaves the diff as it was, to be asked again from the same separator.
@@ -210,10 +224,10 @@ export class Expansion {
       (bodies) => {
         this.loadingGap = undefined;
         if (this.ended) return;
-        // Past the render budget the lines stay collapsed, as when the daemon refuses the bodies.
+        // Past the render budget the lines stay collapsed, and it is said.
         if (bodiesPlan(bodies) === "none") {
           this.hooks.stop();
-          this.hooks.report({ kind: "idle" });
+          this.hooks.report({ kind: "overBudget" });
           return;
         }
         this.bodies = bodies;
@@ -227,7 +241,7 @@ export class Expansion {
         const reason = error instanceof ChangeBodiesError ? error.reason : "failed";
         if (reason === "unavailable" || reason === "changed") {
           this.hooks.stop();
-          this.hooks.report(reason === "changed" ? { kind: "changed" } : { kind: "idle" });
+          this.hooks.report({ kind: reason });
         } else if (reason === "failed") {
           this.failedGap = gap;
           this.decorate();
@@ -245,6 +259,13 @@ export class Expansion {
       this.hooks.showAll();
       return;
     }
+    // The separator's own text reveals the whole of its gap at once, which is what its wording —
+    // the number of lines it hides — reads as an offer of.
+    if (kind === "gap") {
+      this.counts.set(gap, REST_AT);
+      this.expander?.expandHunk(gap, "both", Number.POSITIVE_INFINITY);
+      return;
+    }
     const count = (this.counts.get(gap) ?? 0) + 1;
     this.counts.set(gap, count);
     if (count >= REST_AT) this.expander?.expandHunk(gap, "both", Number.POSITIVE_INFINITY);
@@ -255,29 +276,45 @@ export class Expansion {
    * separator (each gap's, in the gutter and in the code column) the gutter's shows the label and the
    * controls and the code column's shows only its whole-file control (its `[data-separator-wrapper]`
    * is hidden), and only the first of each control is a tab stop and is named. While a read is out every control says it is unavailable, as `activate`
-   * lets none through until it is answered. */
+   * lets none through until it is answered. The bar after the last hunk says how many lines follow
+   * when the file's length is known and the library has not yet counted it itself, and is taken away
+   * when none do. */
   decorate(): void {
     const root = this.root;
     if (!root) return;
     const labels = this.hooks.labels();
+    const trailing = this.hooks.trailing();
     const seen = new Set<string>();
     const wholeFile = new Set<number>();
     for (const separator of separatorsOf(root)) {
       const gap = gapOf(separator);
+      const ends = trailing !== undefined && gap === trailing.gap;
       const label = labelOf(separator);
-      if (label) {
-        const count = hiddenCount(label);
-        writeLabel(
-          label,
-          gap !== undefined && gap === this.loadingGap
-            ? labels.loading
-            : gap !== undefined && gap === this.failedGap
-              ? labels.failedHere
-              : count
-                ? labels.unmodified(Number(count))
-                : labels.unknown,
-        );
+      // The library words what it knows: before the bodies are handed over it cannot count the run
+      // after the last hunk and draws no number, and from then on it names what is still hidden,
+      // which `trailing.lines` (the run as the daemon counted it, whole) no longer is once part of
+      // it is revealed. So the library's number wins whenever it names one, and the daemon's is
+      // used only where it does not; the two never both apply.
+      const count = label ? hiddenCount(label) : undefined;
+      // The file ends with the last hunk: the bar for what follows it has nothing to offer. A bar
+      // the library drew with a count has lines to reveal, whatever the daemon counted.
+      if (ends && !count && trailing.lines === 0) {
+        removeSeparator(separator);
+        continue;
       }
+      const text =
+        gap !== undefined && gap === this.loadingGap
+          ? labels.loading
+          : gap !== undefined && gap === this.failedGap
+            ? labels.failedHere
+            : count
+              ? labels.unmodified(Number(count))
+              : ends
+                ? labels.unmodified(trailing.lines)
+                : labels.unknown;
+      if (label) writeLabel(label, text);
+      // How many lines the label's control would reveal, where either side counted them.
+      const revealed = count ? Number(count) : ends ? trailing.lines : undefined;
       if (gap === undefined) continue;
       // The library never shows its "expand all" and expands that gap alone; ours is drawn for every
       // gap, once (a split diff has a bar on each side), in the code column's copy because that
@@ -289,8 +326,16 @@ export class Expansion {
         const id = `${gap}:${kind}`;
         const first = !seen.has(id);
         seen.add(id);
-        const name = labels[kind === "all" ? "all" : kind === "up" ? "above" : kind === "down" ? "below" : "between"];
-        describeControl(control, kind, name, first, this.loadingGap !== undefined);
+        // The label's control is named for its action and its tooltip says the visible sentence,
+        // whatever state that is in (counted, loading, failed...): the tooltip also gives back what
+        // the label's ellipsis cuts off.
+        const name =
+          kind === "gap"
+            ? revealed !== undefined
+              ? labels.hiddenAll(revealed)
+              : labels.between
+            : labels[kind === "all" ? "all" : kind === "up" ? "above" : kind === "down" ? "below" : "between"];
+        describeControl(control, kind, name, kind === "gap" ? text : name, first, this.loadingGap !== undefined);
       }
     }
   }

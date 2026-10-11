@@ -25,6 +25,10 @@
 //! body is then read from the very object or file version that matched, so nothing mixes
 //! revisions.
 //!
+//! A reply whose patch shows a change's content also carries the line count of each side that is a
+//! file object, so a client can tell whether a last hunk reaches the end of a file; see
+//! `Reader::object_lines`. A side on the disk is never counted.
+//!
 //! A change between two commits — one of a branch comparison's (`read_between`) — is read the way a
 //! staged one is, its two sides from the two commits; nothing it reads can move, so nothing is
 //! looked at again.
@@ -40,7 +44,9 @@ use crate::browse::blob::{self, IndexEntry};
 use crate::browse::git::{paths_nest, GitEnv, GitError};
 use crate::browse::source::{self, ProjectRoot};
 use crate::browse::wire_path::{self, RelPath};
-use crate::browse::{budget, file_content, git_error, git_failed, json_escaped_len, live, Located};
+use crate::browse::{
+    budget, file_content, git_error, git_failed, json_escaped_len, line_count, live, Located,
+};
 use crate::protocol::{
     error_code, ChangeEntry, ChangeGroup, ChangeRef, ChangeSide, CodedError, ConflictKind,
     ContentSource, SideKind, SideRead, SideRef, SideVersion,
@@ -983,6 +989,7 @@ impl Reader<'_> {
                     found.as_ref(),
                     source,
                     self.inline_bodies,
+                    &HashMap::new(),
                 )
             };
             return Ok(ChangeRead {
@@ -1017,6 +1024,11 @@ impl Reader<'_> {
             ));
         }
         let bodies = self.inline_bodies && carries_bodies(&patch);
+        let lines = self.object_lines(
+            Some(&patch),
+            bodies,
+            [old_found.as_ref(), new_found.as_ref()],
+        )?;
         Ok(ChangeRead {
             head: commit.clone(),
             old: self.side(
@@ -1025,6 +1037,7 @@ impl Reader<'_> {
                 old_found.as_ref(),
                 &source_old,
                 bodies,
+                &lines,
             )?,
             new: self.side(
                 None,
@@ -1032,6 +1045,7 @@ impl Reader<'_> {
                 new_found.as_ref(),
                 &source_new,
                 bodies,
+                &lines,
             )?,
             patch: Some(patch),
         })
@@ -1080,6 +1094,11 @@ impl Reader<'_> {
             })
         };
         let bodies = self.inline_bodies && patch.as_deref().is_none_or(carries_bodies);
+        let lines = self.object_lines(
+            patch.as_deref(),
+            bodies,
+            [old_found.as_ref(), new_found.as_ref()],
+        )?;
         Ok(ChangeRead {
             head: None,
             old: self.side(
@@ -1088,6 +1107,7 @@ impl Reader<'_> {
                 old_found.as_ref(),
                 &source_old,
                 bodies,
+                &lines,
             )?,
             new: self.side(
                 None,
@@ -1095,6 +1115,7 @@ impl Reader<'_> {
                 new_found.as_ref(),
                 &source_new,
                 bodies,
+                &lines,
             )?,
             patch,
         })
@@ -1136,6 +1157,7 @@ impl Reader<'_> {
             old_found = Found::Absent;
         }
         let bodies = self.inline_bodies && carries_bodies(&patch);
+        let lines = self.object_lines(Some(&patch), bodies, [Some(&old_found), None])?;
         let root_id = scope.as_ref().map(|s| s.id.clone()).unwrap_or_default();
         let source_old = |oid: &str| ContentSource::Index {
             worktree: self.at.worktree.clone(),
@@ -1153,6 +1175,7 @@ impl Reader<'_> {
                 Some(&old_found),
                 &source_old,
                 bodies,
+                &lines,
             )?,
             new: self.side(
                 scope.as_ref(),
@@ -1160,6 +1183,7 @@ impl Reader<'_> {
                 Some(&new_found),
                 &source_new,
                 bodies,
+                &lines,
             )?,
             patch: Some(patch),
         })
@@ -1183,6 +1207,7 @@ impl Reader<'_> {
                 Some(&found),
                 &source,
                 self.inline_bodies,
+                &HashMap::new(),
             )?,
             patch: None,
         })
@@ -1190,6 +1215,10 @@ impl Reader<'_> {
 
     /// `side`, a present file's whole body read from the version it names, which is checked once
     /// more as it is read: a link or a submodule has no body. Anything else comes back as it is.
+    ///
+    /// The side's `lines` are counted from the body read, which makes this the one place a side
+    /// read from the disk gets a count: it is the bytes the reply carries that are counted, not
+    /// what `git` would number of the file once its clean filter had run.
     fn whole(&self, scope: Option<&ProjectRoot>, side: SideRead) -> Result<SideRead> {
         let SideRead::Present {
             path, kind, source, ..
@@ -1217,17 +1246,24 @@ impl Reader<'_> {
                 }
             }
         };
-        let file = self.body(scope, &rel, &found)?.map(file_content);
+        let body = self.body(scope, &rel, &found)?;
+        let lines = body.as_deref().map(line_count);
         Ok(SideRead::Present {
             path,
             kind,
             source,
-            file,
+            file: body.map(file_content),
+            lines,
         })
     }
 
     /// One side of the reply: out of scope when nothing was looked up for it (`found` is `None`),
     /// absent when nothing is there, and otherwise present, with its body when `with_body`.
+    ///
+    /// Its line count is its body's where the body is carried, and otherwise `counts`' for the
+    /// object a file side is: a side on the disk is never counted from the disk, since `git`
+    /// numbers the lines of its cleaned content (a clean filter such as Git LFS's), not of the
+    /// file.
     fn side(
         &self,
         scope: Option<&ProjectRoot>,
@@ -1235,6 +1271,7 @@ impl Reader<'_> {
         found: Option<&Found>,
         source: &dyn Fn(&str) -> ContentSource,
         with_body: bool,
+        counts: &HashMap<String, u64>,
     ) -> Result<SideRead> {
         let (Some(path), Some(found)) = (path, found) else {
             return Ok(SideRead::OutOfScope);
@@ -1244,17 +1281,62 @@ impl Reader<'_> {
             Found::Object { kind, oid } => (*kind, oid.as_str()),
             Found::Disk { kind, version } => (*kind, version.as_str()),
         };
-        let file = if with_body {
-            self.body(scope, path, found)?.map(file_content)
+        let body = if with_body {
+            self.body(scope, path, found)?
         } else {
             None
+        };
+        let lines = match (&body, found) {
+            (Some(body), _) => Some(line_count(body)),
+            (
+                None,
+                Found::Object {
+                    kind: SideKind::File,
+                    oid,
+                },
+            ) => counts.get(oid).copied(),
+            _ => None,
         };
         Ok(SideRead::Present {
             path: path.to_wire(),
             kind,
             source: source(identity),
-            file,
+            file: body.map(file_content),
+            lines,
         })
+    }
+
+    /// The line counts of the file objects among `found`, for a reply whose patch shows the
+    /// change's content: none for a reply that carries its bodies (it counts those), has no patch
+    /// or one without a hunk (a change of mode or a pure rename: with no hunk there is no
+    /// separator bar, so a count has no use), or is read for its bodies apart (`inline_bodies` is
+    /// false).
+    ///
+    /// It is read after the patch and the check of the sources that follows it, which costs
+    /// nothing in consistency: an object id never changes meaning, so these are the counts of the
+    /// very blobs the patch was made from whenever they are asked. Only a file's object is named
+    /// (see [`blob::line_counts`]); the disk side of an unstaged change is left out on purpose.
+    fn object_lines(
+        &self,
+        patch: Option<&[u8]>,
+        bodies: bool,
+        found: [Option<&Found>; 2],
+    ) -> Result<HashMap<String, u64>> {
+        let has_hunk = |patch: &[u8]| patch.split(|&b| b == b'\n').any(|l| l.starts_with(b"@@ "));
+        if !self.inline_bodies || bodies || !patch.is_some_and(has_hunk) {
+            return Ok(HashMap::new());
+        }
+        let oids: Vec<&str> = found
+            .into_iter()
+            .filter_map(|found| match found {
+                Some(Found::Object {
+                    kind: SideKind::File,
+                    oid,
+                }) => Some(oid.as_str()),
+                _ => None,
+            })
+            .collect();
+        blob::line_counts(self.env, &self.at.root, &oids, self.cancel)
     }
 }
 

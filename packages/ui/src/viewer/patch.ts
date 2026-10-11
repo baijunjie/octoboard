@@ -27,9 +27,19 @@ export function withoutNoNewlineMarkers(patch: string): { patch: string; old: bo
   return { patch: kept.join("\n"), old: marked.old && !link, new: marked.new && !link };
 }
 
+/** Where each hunk of a patch starts and how many lines it holds, on the old side and the new. */
+function hunks(patch: string): { oldStart: number; oldCount: number; newStart: number; newCount: number }[] {
+  return [...patch.matchAll(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm)].map(([, oldStart, oldCount, newStart, newCount]) => ({
+    oldStart: Number(oldStart),
+    oldCount: Number(oldCount ?? 1),
+    newStart: Number(newStart),
+    newCount: Number(newCount ?? 1),
+  }));
+}
+
 /** The line counts of each hunk of a patch, old side then new. */
 function hunkCounts(patch: string): [number, number][] {
-  return [...patch.matchAll(/^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/gm)].map(([, old, next]) => [Number(old ?? 1), Number(next ?? 1)]);
+  return hunks(patch).map(({ oldCount, newCount }) => [oldCount, newCount]);
 }
 
 /** Whether a patch has any line to draw: one with no hunk — an empty file added or removed, a mode
@@ -93,4 +103,24 @@ export function joinedPatch(patch: string): string {
   if (old + next === 0) return patch;
   const header = sections[additionAt].slice(0, sections[additionAt].indexOf("\n") + 1);
   return `${header}@@ -${old === 0 ? 0 : 1},${old} +${next === 0 ? 0 : 1},${next} @@\n${removal.lines}${addition.lines}`;
+}
+
+/**
+ * How many unmodified lines follow a patch's last hunk, given how many lines each side holds where
+ * that is known. The lines after the last hunk are the same on both sides, so one side's count
+ * settles it; `undefined` when no count is known, when the two counts disagree, or for a patch of
+ * more than one section (a type change), which has no single end.
+ */
+export function linesAfterLastHunk(patch: string, totals: { old?: number | null; new?: number | null }): number | undefined {
+  if (patchSections(patch).length !== 1) return undefined;
+  const last = hunks(patch).at(-1);
+  if (!last) return undefined;
+  // A hunk with no lines on a side writes its start as the line before it, or 0.
+  const consumed = (start: number, count: number) => (count > 0 ? start + count - 1 : start);
+  const after = [
+    totals.old == null ? undefined : totals.old - consumed(last.oldStart, last.oldCount),
+    totals.new == null ? undefined : totals.new - consumed(last.newStart, last.newCount),
+  ].filter((count) => count !== undefined);
+  if (after.length === 0 || after.some((count) => count < 0 || count !== after[0])) return undefined;
+  return after[0];
 }

@@ -7,6 +7,7 @@
 //! A branch name is checked as a reference name and looked up as exactly `refs/heads/<name>`
 //! before anything is read; a commit is accepted only as the full object id of a commit.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 
@@ -239,6 +240,70 @@ pub fn read_blob(env: &GitEnv, root: &Path, oid: &str, cancel: &AtomicBool) -> R
         .map_err(git_error)?;
     let size = parse_size(&stdout)?;
     Ok(read_object(env, root, oid.to_string(), size, cancel)?.bytes)
+}
+
+/// The number of lines each of the blobs `oids` holds, in the sense of
+/// [`line_count`](crate::browse::line_count): of the stored bytes, so no filter, attribute or
+/// textconv takes part.
+///
+/// Every id must be that of a blob: given a commit or a tree, `git grep` walks its whole tree and
+/// prints a line for every file in it.
+///
+/// The blobs are named by bare object id rather than `<revision>:<path>`. That form is for a diff,
+/// where the path's attributes decide whether the versions are text and what the section's header
+/// calls them; a line count of stored bytes depends on no attribute (a configured textconv
+/// changed nothing). The command takes no pathspec, so nothing of the worktree is searched and
+/// `GIT_LITERAL_PATHSPECS` stays in force.
+///
+/// The flags: `--no-color` (added by [`GitEnv::run`] with `--no-textconv`, see `GREP_SAFETY`) is
+/// the load-bearing one, since with `color.grep` set to `always` the output reads
+/// `ESC[35m<id>ESC[mESC[36m:ESC[m3`, which fails the parse below and would turn the read into
+/// `git_failed`; `--no-textconv` is `git grep`'s default and only guards against that changing.
+/// `-G` takes the pattern type out of the user's hands: a configured `grep.patternType` of `perl`
+/// on a `git` built without PCRE2 fails the command outright (the empty pattern counts every line
+/// under any type that works). The trailing `--` ends the revisions, so that an id is never read
+/// as a path.
+///
+/// `git grep -c` prints `<id>:<count>` for a blob with a match, nothing for an empty one, and exits
+/// 1 when it printed nothing at all; an id with no line is therefore 0 lines. It writes nothing.
+pub fn line_counts(
+    env: &GitEnv,
+    root: &Path,
+    oids: &[&str],
+    cancel: &AtomicBool,
+) -> Result<HashMap<String, u64>> {
+    let mut counts: HashMap<String, u64> = oids.iter().map(|oid| (oid.to_string(), 0)).collect();
+    if counts.is_empty() {
+        return Ok(counts);
+    }
+    // The ids go on the command line as given, not in the map's order, so that a logged or
+    // reproduced command is the same every run.
+    let mut args: Vec<&[u8]> = vec![b"-G", b"-c", b"-e", b""];
+    args.extend(oids.iter().map(|oid| oid.as_bytes()));
+    args.push(b"--");
+    let stdout = match env.run(root, "grep", &args, budget::GIT_METADATA_STDOUT, cancel) {
+        Ok(stdout) => stdout,
+        Err(GitError::Failed(failed)) if failed.code == Some(1) => return Ok(counts),
+        Err(err) => return Err(git_error(err)),
+    };
+    for line in stdout
+        .split(|&b| b == b'\n')
+        .filter(|line| !line.is_empty())
+    {
+        let parsed = std::str::from_utf8(line)
+            .ok()
+            .and_then(|line| line.split_once(':'))
+            .and_then(|(oid, count)| Some((oid, count.parse::<u64>().ok()?)))
+            .filter(|(oid, _)| counts.contains_key(*oid));
+        let Some((oid, count)) = parsed else {
+            let shown = String::from_utf8_lossy(line);
+            return Err(git_failed(&format!(
+                "git printed `{shown}` where a blob's line count belongs"
+            )));
+        };
+        counts.insert(oid.to_string(), count);
+    }
+    Ok(counts)
 }
 
 /// Refuses a link or a submodule entry: their "content" is not a file body.

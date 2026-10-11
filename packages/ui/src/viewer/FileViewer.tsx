@@ -564,6 +564,7 @@ function ChangeView({
           onLayoutChange={twoSides ? onLayoutChange : undefined}
           theme={theme}
           loadBodies={presentation.expandable ? change.loadBodies : undefined}
+          lines={{ old: change.old.state === "present" ? change.old.lines : undefined, new: change.new.state === "present" ? change.new.lines : undefined }}
         />
       );
     }

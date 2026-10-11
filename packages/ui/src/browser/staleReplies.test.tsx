@@ -204,7 +204,7 @@ const change = (path: string, patch: string): Event => ({
   worktree: null,
   group: "unstaged",
   head: null,
-  old: { state: "present", path, kind: "file", source: { kind: "index", worktree: "w", blob: "b" }, file: null },
+  old: { state: "present", path, kind: "file", source: { kind: "index", worktree: "w", blob: "b" }, file: null, lines: null },
   new: { state: "absent" },
   patch: { size: patch.length, kind: "text", media_type: null, text: patch, data: null },
 });
@@ -342,7 +342,7 @@ it("reads a compared change from the comparison's two commits, and never takes a
     project: "p",
     left: endpoint("main", "c1"),
     right: endpoint("topic", rightCommit),
-    old: { state: "present", path: "a.ts", kind: "file", source: { kind: "commit", commit: "c1", branch: null, blob: "o" }, file: null },
+    old: { state: "present", path: "a.ts", kind: "file", source: { kind: "commit", commit: "c1", branch: null, blob: "o" }, file: null, lines: null },
     new: { state: "absent" },
     patch: { size: patch.length, kind: "text", media_type: null, text: patch, data: null },
   });
@@ -354,7 +354,7 @@ it("reads a compared change from the comparison's two commits, and never takes a
   expect(hook.current().subject?.key).toContain("c3");
 });
 
-const indexSide = (blob: string) => ({ state: "present", path: "a.ts", kind: "file", source: { kind: "index", worktree: "w", blob } }) as const;
+const indexSide = (blob: string) => ({ state: "present", path: "a.ts", kind: "file", source: { kind: "index", worktree: "w", blob }, lines: null }) as const;
 const bodiesOf = (text: (side: "old" | "new") => string): Event => ({
   type: "project_change_bodies",
   project: "p",

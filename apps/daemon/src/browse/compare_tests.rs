@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use super::change_tests::{present, read_body, read_kind, read_source, summary, write};
+use super::change_tests::{present, read_body, read_kind, read_lines, read_source, summary, write};
 use super::tests::{code, Fixture};
 use super::*;
 use crate::protocol::{
@@ -310,6 +310,30 @@ fn a_comparison_is_tip_to_tip_in_either_direction_never_from_the_merge_base() {
 }
 
 #[test]
+fn a_pure_rename_between_two_commits_has_no_hunk_and_so_no_line_count() {
+    let fixture = Fixture::new();
+    let repo = repo_with("compare-pure-rename", &[(b"old.txt", b"a\nb\nc\n")]);
+    commit_on(
+        &repo,
+        "renamed",
+        "main",
+        &[("old.txt", None), ("new.txt", Some(b"a\nb\nc\n"))],
+    );
+    let project = fixture.project("p", &repo);
+    let compared = fixture.compare(&project, "main", "renamed").unwrap();
+    let read = fixture
+        .compared_change(&project, &compared, present("old.txt"), present("new.txt"))
+        .unwrap();
+    let patch = read.patch.unwrap();
+    assert!(
+        patch.contains("similarity index 100%") && !patch.contains("@@"),
+        "{patch}"
+    );
+    // Both sides are file blobs, yet with no hunk there is no separator bar for a count to serve.
+    assert_eq!((read_lines(&read.old), read_lines(&read.new)), (None, None));
+}
+
+#[test]
 fn the_same_commit_on_both_sides_is_an_explicit_empty_comparison() {
     let fixture = Fixture::new();
     let repo = repo_with("compare-same", &[(b"a.txt", b"a\n")]);
@@ -459,14 +483,24 @@ fn additions_deletions_renames_images_and_binaries_read_both_sides_from_their_co
     let added = read(SideRef::Absent, present("new.txt"));
     assert!(matches!(added.old, SideRead::Absent));
     assert!(added.patch.unwrap().contains("new file mode 100644"));
+    assert_eq!(
+        read_lines(&added.new),
+        Some(1),
+        "both sides come from a commit"
+    );
     let deleted = read(present("gone.txt"), SideRef::Absent);
     assert!(matches!(deleted.new, SideRead::Absent));
     assert!(deleted.patch.unwrap().contains("-gone\n"));
+    assert_eq!(read_lines(&deleted.old), Some(1));
     let renamed = read(present("r.txt"), present("r2.txt"));
     let patch = renamed.patch.unwrap();
     assert!(
         patch.contains("rename from r.txt\nrename to r2.txt\n") && patch.contains("+line 20\n"),
         "{patch}"
+    );
+    assert_eq!(
+        (read_lines(&renamed.old), read_lines(&renamed.new)),
+        (Some(20), Some(21))
     );
 
     let image = read(present("i.png"), present("i.png"));
@@ -483,17 +517,30 @@ fn additions_deletions_renames_images_and_binaries_read_both_sides_from_their_co
         panic!("no body");
     };
     assert_eq!(file.media_type, Some("image/png"));
+    // The signature holds two newlines, and the run of marker bytes after them is unterminated.
+    assert_eq!(
+        (read_lines(&image.old), read_lines(&image.new)),
+        (Some(3), Some(3))
+    );
     assert_eq!(commit_and_blob(&image.old).0, compared.left.commit);
     assert_eq!(commit_and_blob(&image.new).0, compared.right.commit);
 
     let binary = read(present("data.bin"), present("data.bin"));
     assert_eq!(read_body(&binary.old).unwrap(), b"\x00\x01binary one");
     assert_eq!(read_body(&binary.new).unwrap(), b"\x00\x02binary two");
+    assert_eq!(
+        (read_lines(&binary.old), read_lines(&binary.new)),
+        (Some(1), Some(1))
+    );
 
     let type_change = read(present("t.txt"), present("t.txt"));
     assert_eq!(
         (read_kind(&type_change.old), read_kind(&type_change.new)),
         (SideKind::File, SideKind::Symlink)
+    );
+    assert_eq!(
+        (read_lines(&type_change.old), read_lines(&type_change.new)),
+        (Some(1), None)
     );
     let patch = type_change.patch.unwrap();
     assert_eq!(

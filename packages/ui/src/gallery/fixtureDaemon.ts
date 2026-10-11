@@ -8,7 +8,7 @@ import { terminalFixtureUrl } from "./fakeTerminal";
 import { SAMPLE_MODELS } from "./fixtures/agentModels";
 import { text } from "./fixtures/builders";
 import { SAMPLE_FILES, type FixtureError, type FixtureFile, type FixtureFiles } from "./fixtures/projectFiles";
-import { SAMPLE_GIT } from "./fixtures/projectGit";
+import { SAMPLE_GIT, type FixtureChange } from "./fixtures/projectGit";
 
 /** How long after the app subscribes to toasts the scenario's own are raised, for the stack to be
  * on screen to receive them. */
@@ -26,6 +26,13 @@ function genericListing(path: string): { path: string; entries: DirEntry[] } {
     is_git_repo: i % 2 === 0,
   }));
   return { path: resolved, entries };
+}
+
+/** How many lines a text holds: its newlines, and one more when the last line is unterminated. It
+ * repeats `countLines` of `viewer/budgets.ts` on purpose: the fixture stands in for the daemon's
+ * count and does not depend on a viewer render-budget helper. */
+function lineCount(content: string): number {
+  return content === "" ? 0 : content.split("\n").length - (content.endsWith("\n") ? 1 : 0);
 }
 
 /** The entries directly under `dir` among `files`, as `list_project_dir` sends them. */
@@ -72,9 +79,24 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
   const fail = ({ code, params, message }: FixtureError): never => {
     throw new DaemonRequestError(daemonMessage(currentLanguage(), code, params, message, store.getState()), code, params);
   };
-  /** A side of a fixture change as `read_project_change` reads it, with its body when it has one. */
-  const readSide = (side: ChangeSide, body: FileContent | undefined): SideRead =>
-    side.state === "present" ? { ...side, file: body ?? null } : side.state === "absent" ? side : { state: "out_of_scope" };
+  /** A side of a fixture change as `read_project_change` reads it, with its body when it has one and its
+   * line count when `content`, the whole text of the version, is known, as the daemon counts it: not
+   * for a link or a submodule, nor for a side read from the worktree disk unless its body is carried,
+   * nor for either side of a patch with no hunk (`hunks` false). */
+  const readSide = (side: ChangeSide, body: FileContent | undefined, content?: string, hunks = true): SideRead =>
+    side.state === "present"
+      ? {
+          ...side,
+          file: body ?? null,
+          lines: hunks && content !== undefined && side.kind === "file" && (side.source.kind !== "live" || body) ? lineCount(content) : null,
+        }
+      : side.state === "absent"
+        ? side
+        : { state: "out_of_scope" };
+  /** The whole text of a fixture change that a diff reply gives its sides' line counts from, if it has one. */
+  const wholeOf = (found: { expand?: FixtureChange["expand"] }) => (found.expand && "old" in found.expand ? found.expand : undefined);
+  /** Whether a fixture change's patch has a hunk, which a count of its sides is for. */
+  const hasHunk = (found: { patch?: string }) => /^@@ /m.test(found.patch ?? "");
   const sameSide = (listed: ChangeSide, asked: SideRef) =>
     listed.state === asked.state && (listed.state !== "present" || (asked.state === "present" && asked.path === listed.path));
   /** A browse request's path, or the daemon error it is answered with, worded as the store words one. */
@@ -164,13 +186,14 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const found = changes.find(({ entry }) => entry.group === "committed" && sameSide(entry.old, body.change.old) && sameSide(entry.new, body.change.new));
           if (!found || found.entry.group === "conflicted") return fail({ code: "file_not_found", params: { path: "" }, message: "no such change" });
           if (found.error) return fail(found.error);
+          const whole = wholeOf(found);
           return {
             type: "project_comparison_change",
             project: body.project,
             left: body.left,
             right: body.right,
-            old: readSide(found.entry.old, found.bodies?.old),
-            new: readSide(found.entry.new, found.bodies?.new),
+            old: readSide(found.entry.old, found.bodies?.old, whole?.old, hasHunk(found)),
+            new: readSide(found.entry.new, found.bodies?.new, whole?.new, hasHunk(found)),
             patch: found.patch === undefined ? null : { size: found.patch.length, kind: "text", media_type: null, text: found.patch, data: null },
           };
         }
@@ -187,14 +210,15 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
             return fail({ code: "file_not_found", params: { path: "" }, message: "no such change" });
           }
           if (found.error) return fail(found.error);
+          const whole = wholeOf(found);
           return {
             type: "project_change",
             project: body.project,
             worktree: body.worktree ?? null,
             group: found.entry.group,
             head: null,
-            old: readSide(found.entry.old, found.bodies?.old),
-            new: readSide(found.entry.new, found.bodies?.new),
+            old: readSide(found.entry.old, found.bodies?.old, whole?.old, hasHunk(found)),
+            new: readSide(found.entry.new, found.bodies?.new, whole?.new, hasHunk(found)),
             patch: found.patch === undefined ? null : { size: found.patch.length, kind: "text", media_type: null, text: found.patch, data: null },
           };
         }
@@ -217,7 +241,11 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const { delay, ...expand } = found.expand;
           if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
           if ("code" in expand) return fail(expand);
-          const sides = { old: readSide(found.entry.old, text(expand.old)), new: readSide(found.entry.new, text(expand.new)) };
+          if (expand.error) return fail(expand.error);
+          const sides = {
+            old: readSide(found.entry.old, text(expand.old), expand.old),
+            new: readSide(found.entry.new, text(expand.new), expand.new),
+          };
           return asked
             ? { type: "project_change_bodies", project: body.project, worktree: body.worktree ?? null, group: body.change.group, ...sides }
             : { type: "project_comparison_change_bodies", project: body.project, left: body.left, right: body.right, ...sides };

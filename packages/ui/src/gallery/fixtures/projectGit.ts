@@ -18,8 +18,10 @@ export interface FixtureChange {
   bodies?: { old?: FileContent; new?: FileContent };
   error?: FixtureError;
   /** What reading its whole bodies answers, for expanding its diff: both sides' text, or an error;
-   * with `delay` the answer comes that many milliseconds late. */
-  expand?: ({ old: string; new: string } | FixtureError) & { delay?: number };
+   * with `delay` the answer comes that many milliseconds late. The text is also what the diff reply
+   * counts its sides' lines from, so one with an `error` has the text the daemon counted at the
+   * patch and the error only the bodies request meets. */
+  expand?: ({ old: string; new: string; error?: FixtureError } | FixtureError) & { delay?: number };
 }
 
 /** A fixture project's repository: its worktrees, the first holding the project, and each one's
@@ -72,6 +74,15 @@ const SERVER_UNSTAGED_PATCH = [
   "+export const PORT = 8080;",
   "",
 ].join("\n");
+
+/** The whole text of the small files the sample changes rewrite, so that their sides carry the line
+ * counts a patch reply carries: each of these changes ends at its file's last line, and its diff is
+ * drawn with no bar for lines beyond it. */
+const SERVER_HEAD = 'import http from "node:http";\n\nexport const createServer = () => http.createServer();\n';
+const SERVER_STAGED = 'import http from "node:http";\nimport { logRequests } from "./log";\n\nexport const createServer = () => http.createServer(logRequests);\n';
+const SERVER_DISK = `${SERVER_STAGED}\nexport const PORT = 8080;\n`;
+const CONF_OLD = "export function loadConfig(env: NodeJS.ProcessEnv) {\n  return { port: Number(env.PORT) };\n}\n";
+const CONF_NEW = "export function loadConfig(env: NodeJS.ProcessEnv) {\n  return { port: Number(env.PORT ?? 8080) };\n}\n";
 
 const RENAME_PATCH = `diff --git a/src/conf.ts b/src/config.ts
 similarity index 82%
@@ -141,17 +152,31 @@ function editedSource(path: string, count: number, edits: number[], tail = ""): 
 }
 
 /** The lines of the long file the expansion scenarios change: a run of unmodified lines before the
- * first hunk, a long one between the hunks, and a short one after the last. */
+ * first hunk, a long one between the hunks, and none after the last (the viewer takes that bar away). */
 const PIPELINE = editedSource("src/pipeline.ts", 120, [10, 70, 117]);
 
-/** The same shape with every line far wider than a window, for the diff unwrapped. */
+/** The same shape with a run of unmodified lines after the last hunk, which its bar counts. */
+const PIPELINE_TAIL = editedSource("src/pipeline.ts", 120, [10, 70, 100]);
+
+/** Runs of both kinds in one file of 80 lines. A run between two hunks no longer than one expansion
+ * gets one control revealing all of it, and a longer one gets the pair. The edits at 10, 20, 36 and
+ * 70 leave runs of 6 lines before the first hunk, 3, 9 and 27 between the hunks, and 7 after the
+ * last: the 27 gets the pair, and every other run, the one before the first hunk and the one after
+ * the last included, gets one control. */
+const SHORT_GAP = editedSource("src/pipeline.ts", 80, [10, 20, 36, 70]);
+
+/** A file past the viewer's render budget (`RENDER_BUDGETS.diffLines`) whose patch stays small, so
+ * its bodies are refused by the viewer itself and not by the daemon. */
+const HUGE = editedSource("src/pipeline.ts", 11000, [10, 70, 100]);
+
+/** The same shape as `PIPELINE` with every line far wider than a window, for the diff unwrapped. */
 const WIDE = editedSource("src/pipeline.ts", 120, [10, 70, 117], ` // ${"a note that runs on well past the edge of the window ".repeat(8)}`);
 
 /** How long reading the bodies of an expandable change takes, long enough to see it loading. */
 const EXPAND_DELAY_MS = 600;
 
 /** A change of a file whose diff can be expanded: `source` is what reading its bodies answers
- * (its text, or the `error` given). */
+ * (its text, or the `error` given in its place; the text is counted either way). */
 function expandable(
   group: "staged" | "unstaged" | "committed",
   path: string,
@@ -163,7 +188,7 @@ function expandable(
   return {
     entry: { group, old: file(path, from), new: file(path, to) },
     patch: source.patch.replaceAll("src/pipeline.ts", path),
-    expand: { ...(error ?? { old: source.old, new: source.new }), delay: EXPAND_DELAY_MS },
+    expand: { old: source.old, new: source.new, ...(error && { error }), delay: EXPAND_DELAY_MS },
   };
 }
 
@@ -188,8 +213,16 @@ function nested(from: string, to: string, source: { old: string; new: string; pa
 const UNCHANGED = { old: "", new: "", patch: "" };
 
 const MAIN_CHANGES: FixtureChange[] = [
-  { entry: { group: "staged", old: file("src/server.ts", commit("1a2b3c4")), new: file("src/server.ts", index("5d6e7f8")) }, patch: SERVER_PATCH },
-  { entry: { group: "staged", old: file("src/conf.ts", commit("0f1e2d3")), new: file("src/config.ts", index("4c5b6a7")) }, patch: RENAME_PATCH },
+  {
+    entry: { group: "staged", old: file("src/server.ts", commit("1a2b3c4")), new: file("src/server.ts", index("5d6e7f8")) },
+    patch: SERVER_PATCH,
+    expand: { old: SERVER_HEAD, new: SERVER_STAGED },
+  },
+  {
+    entry: { group: "staged", old: file("src/conf.ts", commit("0f1e2d3")), new: file("src/config.ts", index("4c5b6a7")) },
+    patch: RENAME_PATCH,
+    expand: { old: CONF_OLD, new: CONF_NEW },
+  },
   {
     entry: { group: "staged", old: { state: "out_of_scope", repository_path: "shared/search-index.ts" }, new: file("src/index.ts", index("2e3d4c5")) },
     bodies: { new: text("export const buildIndex = (docs: string[]) => new Map(docs.map((d, i) => [i, d]));\n") },
@@ -205,6 +238,9 @@ const MAIN_CHANGES: FixtureChange[] = [
   nested("nest", "nest/leaf.ts", PIPELINE, ["3b18e51", "9c8d7e6"]),
   nested("nest2/leaf.ts", "nest2", UNCHANGED, ["3b18e51", "3b18e51"]),
   expandable("staged", "src/pipeline.ts", commit("a1b2c3d"), index("b2c3d4e"), PIPELINE),
+  expandable("staged", "src/tail.ts", commit("8b9c0d1"), index("2d3e4f5"), PIPELINE_TAIL),
+  expandable("staged", "src/stages.ts", commit("5e6f7a8"), index("7a8b9c0"), SHORT_GAP),
+  expandable("staged", "src/huge.ts", commit("1d2e3f4"), index("4f5a6b7"), HUGE),
   expandable("staged", "src/wide.ts", commit("9a8b7c6"), index("6c7d8e9"), WIDE),
   expandable("staged", "src/limits.ts", commit("c3d4e5f"), index("d4e5f6a"), PIPELINE, {
     code: "limit_exceeded",
@@ -222,7 +258,13 @@ const MAIN_CHANGES: FixtureChange[] = [
     message: "git failed: fatal: unable to read the object",
   }),
   { entry: { group: "conflicted", path: "package.json", conflict: "both_modified" } },
-  { entry: { group: "unstaged", old: file("src/server.ts", index("5d6e7f8")), new: file("src/server.ts", live("v2")) }, patch: SERVER_UNSTAGED_PATCH },
+  {
+    // Its new side is the file on disk, which carries no line count; the old side's settles the
+    // run past the last hunk on its own, the lines past a hunk being the same on both sides.
+    entry: { group: "unstaged", old: file("src/server.ts", index("5d6e7f8")), new: file("src/server.ts", live("v2")) },
+    patch: SERVER_UNSTAGED_PATCH,
+    expand: { old: SERVER_STAGED, new: SERVER_DISK },
+  },
   { entry: { group: "unstaged", old: file("docs/old-notes.md", index("7c6b5a4")), new: { state: "absent" } }, patch: DELETED_PATCH },
   {
     entry: { group: "unstaged", old: file("docs/logo.png", index("6a5b4c3")), new: file("docs/logo.png", live("v3")) },
@@ -380,6 +422,26 @@ export const projectGitScenarios: Scenario[] = [
     steps: openChange(/^pipeline\.ts, modified/),
   },
   {
+    id: "git-expand-short-gap",
+    group: GROUP,
+    title: "A change with a run short enough to reveal at once",
+    description:
+      "src/stages.ts has runs of unmodified lines of 6, 3, 9, 27 and 7 lines. The 27-line run between the third and fourth hunks offers the pair of controls; each of the others is no more than one expansion reveals, or lies before the first hunk or after the last, and offers one control, which shows all of it.",
+    width: 1440,
+    state,
+    steps: openChange(/^stages\.ts, modified/),
+  },
+  {
+    id: "git-expand-over-budget",
+    group: GROUP,
+    title: "A change whose files are past the viewer's limit",
+    description:
+      "src/huge.ts holds more lines than the viewer renders, though its patch is small: expanding a separator keeps the lines collapsed and says the file is too large to show in full.",
+    width: 1440,
+    state,
+    steps: openChange(/^huge\.ts, modified/),
+  },
+  {
     id: "git-expand-wide",
     group: GROUP,
     title: "A change with collapsed lines wider than the window",
@@ -403,7 +465,7 @@ export const projectGitScenarios: Scenario[] = [
     id: "git-expand-too-large",
     group: GROUP,
     title: "A change whose files are too large to expand",
-    description: "Expanding a separator finds the file past the limit: the separators keep their form and offer nothing more.",
+    description: "Expanding a separator finds the file past the limit: the lines stay collapsed, with a note saying the daemon does not provide the whole file.",
     width: 1440,
     state,
     steps: openChange(/^limits\.ts, modified/),

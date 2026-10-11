@@ -1,7 +1,7 @@
 //! The whole bodies of a change's two sides, read end to end against real repositories: each kind
 //! of diff side, a version that no longer matches the patch's, and a body past the file budget.
 
-use super::change_tests::{present, read_body, write};
+use super::change_tests::{present, read_body, read_lines, write};
 use super::compare_tests::{commit_on, Compared};
 use super::tests::{code, Fixture};
 use super::*;
@@ -127,10 +127,17 @@ fn bodies_come_from_the_index_the_disk_head_and_a_compared_commit() {
     let (old, new) = fixture.bodies_of_diff(&project, ChangeGroup::Staged, "a.txt");
     assert_eq!(text(&old).as_deref(), Some("1\n2\n3\n"));
     assert_eq!(text(&new).as_deref(), Some("1\nTWO\n3\n"));
+    // Each body carries the count of the very bytes it holds.
+    assert_eq!((read_lines(&old), read_lines(&new)), (Some(3), Some(3)));
     // Unstaged: the index against the disk.
     let (old, new) = fixture.bodies_of_diff(&project, ChangeGroup::Unstaged, "a.txt");
     assert_eq!(text(&old).as_deref(), Some("1\nTWO\n3\n"));
     assert_eq!(text(&new).as_deref(), Some("1\nTWO\nTHREE\n"));
+    assert_eq!(
+        read_lines(&new),
+        Some(3),
+        "the disk's body, counted as read"
+    );
 
     // An added file has no old side and a deleted one no new side.
     let diff = fixture
@@ -152,6 +159,7 @@ fn bodies_come_from_the_index_the_disk_head_and_a_compared_commit() {
         .unwrap();
     assert!(matches!(old, SideRead::Absent));
     assert_eq!(text(&new).as_deref(), Some("fresh\n"));
+    assert_eq!(read_lines(&new), Some(1));
     let diff = fixture
         .change(
             &project,
@@ -194,6 +202,7 @@ fn bodies_come_from_the_index_the_disk_head_and_a_compared_commit() {
         .unwrap();
     assert_eq!(text(&old).as_deref(), Some("1\nTWO\nTHREE\n"));
     assert_eq!(text(&new).as_deref(), Some("1\nTWO\nTHREE\nFOUR\n"));
+    assert_eq!((read_lines(&old), read_lines(&new)), (Some(3), Some(4)));
 }
 
 #[test]

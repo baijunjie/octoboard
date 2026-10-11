@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use super::change_tests::{present, read_body, read_kind, write};
+use super::change_tests::{present, read_body, read_kind, read_lines, write};
 use super::changes::AFTER_PATCH;
 use super::compare_tests::commit_on;
 use super::tests::{code, Fixture};
@@ -98,6 +98,12 @@ fn a_compared_rename_below_or_above_itself_is_one_diff_between_its_versions() {
             );
             assert!(patch.contains("@@") && patch.contains("changed"), "{patch}");
             assert!(!patch.contains("file mode"), "{patch}");
+            // The pair's patch comes from `git diff <rev>:<path> <rev>:<path>`, and the count from
+            // the two blobs it names.
+            assert_eq!(
+                (read_lines(&read.old), read_lines(&read.new)),
+                (Some(12), Some(12))
+            );
         } else {
             assert_eq!(patch, "", "identical content is an empty diff");
         }
@@ -135,6 +141,8 @@ fn the_shapes_git_writes_for_a_pair_pass_through_as_they_are() {
         patch.contains("old mode 100644\nnew mode 100755\n") && !patch.contains("@@"),
         "{patch}"
     );
+    // With no hunk there is no separator bar for a count to serve.
+    assert_eq!((read_lines(&diff.old), read_lines(&diff.new)), (None, None));
 
     // A binary side is one line, so both bodies still come with the reply.
     git(&repo, &["rm", "-q", "bin"]);

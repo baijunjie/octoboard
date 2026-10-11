@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { hasHunks, hasTwoSides, joinedPatch, withoutNoNewlineMarkers } from "./patch";
+import { hasHunks, hasTwoSides, joinedPatch, linesAfterLastHunk, withoutNoNewlineMarkers } from "./patch";
 
 const REMOVED_FILE = "diff --git a/t b/t\ndeleted file mode 100644\n@@ -1 +0,0 @@\n-x\n";
 const ADDED_LINK = "diff --git a/t b/t\nnew file mode 120000\n@@ -0,0 +1 @@\n+y\n";
@@ -76,4 +76,24 @@ it.each([
   ["an empty file added, with no hunk", "diff --git a/x b/x\nnew file mode 100644\nindex 0000000..e69de29\n", false, false],
 ])("tells the lines and sides of %s", (_, patch, lines, sides) => {
   expect([hasHunks(patch), hasTwoSides(patch)]).toEqual([lines, sides]);
+});
+
+// The unmodified lines after the last hunk are the same on both sides, so one side's count settles
+// them; a hunk with no lines on a side writes its start as the line before it.
+const patchOf = (hunks: string) => `diff --git a/t b/t\n${hunks}`;
+it.each<[string, string, { old?: number | null; new?: number | null }, number | undefined]>([
+  ["the old side counted", patchOf("@@ -3,2 +3,2 @@\n-a\n-b\n+c\n+d\n"), { old: 10, new: null }, 6],
+  ["the new side counted", patchOf("@@ -3,2 +3,3 @@\n-a\n-b\n+c\n+d\n+e\n"), { old: null, new: 10 }, 5],
+  ["both sides counted and agreeing", patchOf("@@ -3,2 +3,3 @@\n-a\n-b\n+c\n+d\n+e\n"), { old: 9, new: 10 }, 5],
+  ["both sides counted and disagreeing", patchOf("@@ -3,2 +3,3 @@\n-a\n-b\n+c\n+d\n+e\n"), { old: 9, new: 12 }, undefined],
+  ["no side counted", patchOf("@@ -1 +1 @@\n-a\n+b\n"), { old: null }, undefined],
+  ["a hunk running to the end", patchOf("@@ -1,3 +1,3 @@\n-a\n+b\n c\n d\n"), { old: 3 }, 0],
+  ["a hunk with no old lines", patchOf("@@ -0,0 +1,2 @@\n+a\n+b\n"), { old: 0, new: 2 }, 0],
+  ["a hunk with no new lines", patchOf("@@ -4,2 +3,0 @@\n-a\n-b\n"), { new: 8 }, 5],
+  ["a count smaller than the hunk reaches", patchOf("@@ -3,2 +3,2 @@\n-a\n-b\n+c\n+d\n"), { old: 2 }, undefined],
+  ["only the last hunk", patchOf("@@ -1 +1 @@\n-a\n+b\n@@ -8,2 +8,2 @@\n-c\n-d\n+e\n+f\n"), { old: 12 }, 3],
+  ["a patch with more than one section", REMOVED_FILE + ADDED_LINK, { old: 1, new: 1 }, undefined],
+  ["a patch with no hunk", patchOf("rename from a\nrename to b\n"), { old: 1 }, undefined],
+])("counts the lines after the last hunk: %s", (_, patch, totals, expected) => {
+  expect(linesAfterLastHunk(patch, totals)).toBe(expected);
 });

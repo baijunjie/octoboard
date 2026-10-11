@@ -580,6 +580,13 @@ pub(crate) fn file_content(bytes: Vec<u8>) -> FileContent {
     }
 }
 
+/// The number of lines `bytes` holds: its newlines, and one more when the last line is
+/// unterminated, so empty bytes hold none.
+pub(crate) fn line_count(bytes: &[u8]) -> u64 {
+    let newlines = bytes.iter().filter(|&&b| b == b'\n').count() as u64;
+    newlines + u64::from(bytes.last().is_some_and(|&b| b != b'\n'))
+}
+
 /// The image type `bytes` starts like, by its magic number.
 fn sniff_image(bytes: &[u8]) -> Option<&'static str> {
     let starts = |magic: &[u8]| bytes.starts_with(magic);
