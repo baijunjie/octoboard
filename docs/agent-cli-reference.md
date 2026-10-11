@@ -52,6 +52,14 @@ hold state against.
   **armed by `Stop`**, so a turn that never fires one never produces an `idle_prompt` either, and `idle_prompt` is no
   use as a general backstop.
 
+**A configuration that names no permission mode does not ask.** On 2.1.296 a config directory whose `settings.json`
+carries no `permissions` block runs in *auto mode* (status line `⏵⏵ auto mode on (shift+tab to cycle)`), and a `Write`
+creating a new file in the session's own working directory went through with no prompt and no `PermissionRequest`. The
+mode that prompts has to be asked for: `permissions.defaultMode: "default"` in that directory's `settings.json`, since
+a launch passes no `--permission-mode`. The running session then calls that mode `⏸ manual mode on`, which matches
+neither the settings value nor the word "normal" — read the mode off the session's own transcript instead, where it is
+recorded unambiguously as `{"type":"permission-mode","permissionMode":"default"}` and `{"type":"mode","mode":"normal"}`.
+
 **A pending permission prompt** is `PermissionRequest`; a question put through the agent's own ask-the-user tool is also
 reported. A question asked as plain prose is not: the turn simply ends, and no payload field tells it from a finished
 one.
@@ -59,9 +67,18 @@ one.
 **A declined prompt emits no hook event whatsoever** — not for a permission prompt answered **No**, and not for the
 agent's own `AskUserQuestion` cancelled with Esc. Measured on both 2.1.274 and 2.1.286, each run carrying a positive
 control: no `Stop`, `StopFailure`, `PostToolUse`, `PostToolUseFailure`, `PostToolBatch`, `Notification` of any type, or
-`SessionEnd`, through 211.7 s / 139.5 s (permission) and 93 s / 37 s (question) of waiting. Answering **No** from the
-menu and pressing **Esc** are indistinguishable; the TUI prints `Interrupted · What should Claude do instead?` and sits
-at an empty prompt. The only thing that ever breaks the silence is the user's next `UserPromptSubmit`.
+`SessionEnd`, through 211.7 s / 139.5 s (permission) and 93 s / 37 s (question) of waiting. On those versions answering
+**No** from the menu and pressing **Esc** are indistinguishable; the TUI prints `Interrupted · What should Claude do
+instead?` and sits at an empty prompt. The only thing that ever breaks the silence is the user's next
+`UserPromptSubmit`.
+
+**The prompt and what follows it have moved since.** On 2.1.296 a `Write` permission prompt offers `1. Yes`,
+`2. Yes, and switch to accept edits (auto-approve file edits and common file commands) for this session (shift+tab)`
+and `3. No`, with a footer `Esc to cancel · Tab to amend` — there is no "No, and tell Claude what to do differently"
+option and no feedback field, and the highlighted default is `1. Yes`, so Enter approves. A decline prints no
+`Interrupted` line: under the tool call the TUI writes `⎿ User rejected write to <file>` and the rejected body, then
+the turn's own summary line (`✻ Brewed for 2s · done <time>`), then sits at an empty prompt. Only `Esc` was pressed on
+2.1.296; `3. No` was not tried there, so the two being indistinguishable stands for 2.1.274 / 2.1.286 alone.
 
 A decline is recorded as a **user interrupt** rather than as its own kind of event, so its only machine-readable trace is
 the pair of transcript records described under "A user interrupt emits no hook event" below — which is what makes the
@@ -89,8 +106,18 @@ and should close the dangling `PreToolUse`; until then the session reads as work
 The interrupted tool's own child process is already gone. The only machine-readable trace is in the transcript at
 `transcript_path`: a `tool_result` with `is_error: true` beginning "The user doesn't want to proceed with this tool
 use", followed by a user block `[Request interrupted by user for tool use]`. Both are entries whose `message.content` is
-an **array** of blocks, and the pair also carries `"toolDenialKind": "user-rejected"`. A declined prompt and a declined
-`AskUserQuestion` write this same pair, which is why one mechanism recovers all three cases.
+an **array** of blocks, and the first of them — the one holding the `tool_result` — also carries
+`"toolDenialKind": "user-rejected"`, at entry level rather than inside the block; the
+`[Request interrupted by user for tool use]` entry carries none. A declined prompt and a declined `AskUserQuestion`
+write this same pair, which is why one mechanism recovers all three cases.
+
+**Both marker strings survive 2.1.296**, re-measured byte for byte on a declined `Write` prompt: the `tool_result` has
+`is_error: true` with `content` a **plain string** beginning "The user doesn't want to proceed with this tool use.",
+and the entry after it is a `text` block whose text equals `[Request interrupted by user for tool use]` exactly. The
+rejection text continues past that opening sentence ("… The tool use was rejected (eg. if it was a file edit, the
+new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.", and
+then a note about the user's next message), which is why matching the prefix rather than the whole sentence is what
+keeps working across versions.
 
 **A failing hook**: a non-zero exit renders an error block in the TUI carrying the hook's stderr, while hook stdout is
 never shown. `exit 2` *blocks*, event-specifically, and feeds stderr to the model. A hook entry with no `timeout`
@@ -335,6 +362,16 @@ name derived from the config directory, so two directories hold two independent 
 reports `Not logged in` while the default directory is logged in, and copying the logged-in directory's own account
 record into it changes nothing. Read out of the 2.1.289 executable and not measured: the service name appears to be
 `Claude Code-credentials`, with `-<first 8 hex of sha256(config directory)>` appended when `CLAUDE_CONFIG_DIR` is set.
+That suffix is why **setting the variable costs the login whatever directory it names** — pointed at the real
+`~/.claude`, under the real `HOME`, `claude auth status` still answers `loggedIn: false` / `authMethod: "none"` while
+echoing back the right `configDirectory` (measured on 2.1.296 across a real and a throwaway `HOME`, with a fresh
+directory and with the real one named explicitly). So a pinned directory needs its own `claude auth login` and cannot
+borrow the default directory's; whether one signed in that way then stays signed in was not tried. Two preconditions
+for reading any of this back, both measured the same day: the environment has to keep `USER` — without it the binary
+answers `loggedIn: false` even under the real `HOME` with the variable unset — and a throwaway `HOME` needs the
+`Library/Keychains` symlink, without which the unset-variable case answers `loggedIn: false` too. Codex differs on
+every count: `CODEX_HOME` pointed at the user's real `~/.codex` keeps Codex logged in under a throwaway `HOME`, and it
+needs neither `USER` nor the symlink.
 Codex and Grok Build keep the login in a file inside the directory (`auth.json` in both), which is inferred from the
 layout, not measured. A fresh Grok home is signed in without a terminal by `GROK_HOME=<dir> grok login` (a browser
 device code; plain `grok` needs a TTY and fails with `Device not configured` without one), and one turn of

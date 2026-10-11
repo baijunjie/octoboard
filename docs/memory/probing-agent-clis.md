@@ -20,8 +20,12 @@ agent and stripping what is there and only there. The daemon has to filter its e
 the "Known pitfalls of the Tauri / Rust approach" section of `docs/architecture.md`.
 
 Stripping the enumerated markers does not disturb login state, the credential-bridge variables included: Claude Code
-still resolves its Keychain credentials and reports `loggedIn: true`. So a "Not logged in" result from a correctly
-filtered probe is a real finding, not an artefact of the filtering.
+still resolves its Keychain credentials and reports `loggedIn: true`. **The filtered environment does have to keep
+`USER`**, which no marker list contains and a bare `env -i HOME=…` drops: without it Claude Code cannot reach its
+Keychain credential and answers `loggedIn: false` even under the real `HOME` with no `CLAUDE_CONFIG_DIR` set, which
+reads exactly like filtering that broke the login (Claude Code 2.1.296, macOS; Codex 0.160.0 needs no such variable).
+With `USER` in place, a "Not logged in" result from a correctly filtered probe is a real finding, not an artefact of
+the filtering.
 
 ## `--help` is not the authority on what a CLI supports
 
@@ -94,21 +98,24 @@ event, because the event you were waiting for is armed by a step the path under 
 Establish that mechanism, not a duration; without it the probe has measured its own patience and "wait longer" stays an
 objection you cannot answer.
 
-## A permission probe runs under the user's own settings, and they void the obvious probe command
+## A permission probe cannot assume that anything prompts: set the mode yourself and read it back
 
 Permission-prompt behaviour cannot be probed before reading the settings file of the config directory the CLI resolves
 (`settings.json` for Claude Code): a default-mode setting there can put every session into a mode that never asks, and
 the allow list can pre-approve the very call the probe meant to be denied on. Both produce the same lone observation —
 no prompt appeared — and it reads as "this build does not prompt here".
 
-So pick a call that neither the allow list nor any pattern in it covers, and ask for the mode explicitly on the command
-line. A reproduction command copied from a bug ticket is among the likeliest things to be allowlisted, exactly because
-it is something the user runs often. The command line overrides the default-mode setting; nothing overrides the allow
-list.
+So pick a call that neither the allow list nor any pattern in it covers — a reproduction command copied from a bug
+ticket is among the likeliest things to be allowlisted, exactly because it is something the user runs often — and
+**write the prompting mode into the probe's own config directory instead of relying on any default**: neither the
+user's settings nor a fresh directory's own default can be assumed to be a mode that asks, and a fresh directory
+carrying no permission rules at all is not. For Claude Code that is `permissions.defaultMode: "default"` in the
+throwaway directory's `settings.json`. Nothing overrides the allow list.
 
-Then confirm from the running session itself — its status line names the permission mode in effect — that the mode you
-asked for is the mode you got, before reading anything into a prompt that did not appear. Asking for a mode is not
-getting it.
+Then confirm the mode in effect from the running session's own transcript records, not from its status line, before
+reading anything into a prompt that did not appear. Asking for a mode is not getting it, and the status line's wording
+for a mode need match neither the settings value that asked for it nor any ordinary name for it, so it settles nothing
+on its own.
 
 ## A probe is not read-only: give it its own scratch directory
 
@@ -155,13 +162,22 @@ Codex session: with no login under that `HOME` it stops at its sign-in screen.
 Launch it from an emptied environment, `env -i HOME=<dir> TMPDIR=<dir> … /usr/bin/open -n <app>`, never with
 `open --env` overrides alone: `open` hands the app the calling shell's whole environment besides the variables it
 names, so a `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `GROK_HOME` exported there — an agent session exports
-`CLAUDE_CONFIG_DIR` routinely — points the run's agents at the user's own configuration and login despite the
-throwaway `HOME`. The same goes for a daemon started straight from the shell.
+`CLAUDE_CONFIG_DIR` routinely — points the run's agents at the user's own configuration despite the throwaway `HOME`,
+and for Codex and Grok Build at the login kept there too. The same goes for a daemon started straight from the shell.
 
 A throwaway `HOME` hides Claude Code's keychain login as well: the login keychain is looked up under
 `$HOME/Library/Keychains`, so there Claude Code comes up logged out. When a run needs it logged in, symlink
 `<throwaway HOME>/Library/Keychains` to the real `~/Library/Keychains`, which brings back every account's login
-without copying a credential.
+without copying a credential. That symlink is still what carries the login as of 2.1.296: removing it alone, with
+everything else left in place, flips the same probe back to `loggedIn: false`.
+
+**Leave `CLAUDE_CONFIG_DIR` unset in such a run, and never set it to repair a login that looks broken.** Setting it
+at all costs Claude Code the login, whatever directory it names — pointed at the real `~/.claude`, or at the
+`<throwaway HOME>/.claude` that the unset variable resolves to anyway, the probe answers `loggedIn: false` (2.1.296).
+Unset is what a probe wants regardless: the config directory then lands inside the throwaway `HOME`, where the probe
+owns it and can write its own `settings.json`. The agents are not symmetric here — Codex comes up logged in with
+`CODEX_HOME` pointed at the user's real `~/.codex` under a throwaway `HOME` (0.160.0) — so the arrangement that
+worked for a Codex probe is the wrong one to carry over to Claude Code.
 
 A fake agent CLI for such a daemon goes on `PATH` from the throwaway `HOME`'s shell rc file (`.zshrc` when `$SHELL`
 is zsh), never by prepending it to the `PATH` the daemon is started with. The daemon launches every agent with the
