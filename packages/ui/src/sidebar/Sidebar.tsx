@@ -4,7 +4,6 @@ import {
   ChevronRight,
   FolderOpen,
   FolderPlus,
-  LayoutDashboard,
   ListChevronsDownUp,
   ListChevronsUpDown,
   MessageSquarePlus,
@@ -48,8 +47,9 @@ interface SidebarProps extends SidebarHandlers {
   sessions: Session[];
   selectedSessionId?: string;
   /** The console the sidebar shows: the current one, or while the hidden sidebar floats in, the one
-   * whose avatar the pointer is on. The caller resolves it to an existing one. */
-  shownConsole?: Console;
+   * whose avatar the pointer is on. The caller resolves it to an existing one, and does not render
+   * the sidebar while there is none. */
+  shownConsole: Console;
   /** The project or console session in focus mode, if any; it belongs to `shownConsole`. */
   focus?: FocusTarget;
   /** Whether the drawer is open below the `docked` breakpoint; above it the docked sidebar is
@@ -172,7 +172,7 @@ export function Sidebar({
     ? `docked:rounded-xl docked:border ${drawerClass("start", "floating", open, dock.insetShown)}`
     : `${drawerClass("start", "drawer", open)} docked:h-full docked:border-e-0`;
 
-  const consoleSessions = shownConsole ? sessions.filter((s) => s.console_id === shownConsole.id) : [];
+  const consoleSessions = sessions.filter((s) => s.console_id === shownConsole.id);
   // Every project session's binding badge names the console session it is bound to (`bound_to`) by
   // looking it up here, once, rather than each row searching the console's sessions itself.
   const owners = new Map(consoleSessions.filter((s) => s.role === "console").map((s) => [s.id, s]));
@@ -180,7 +180,7 @@ export function Sidebar({
   // What the sidebar is showing, and how it arrived there: going down into a focus mode slides the
   // new view in from the end, coming back up slides it in from the start, and switching to another
   // console fades it in.
-  const viewKey = !shownConsole ? "none" : focusId ? `focus:${focusId}` : `console:${shownConsole.id}`;
+  const viewKey = focusId ? `focus:${focusId}` : `console:${shownConsole.id}`;
   const viewRef = useRef<HTMLDivElement>(null);
   const previousViewRef = useRef(viewKey);
   // Played in place rather than by remounting the view, so a console switch leaves what is mounted
@@ -189,30 +189,21 @@ export function Sidebar({
     const previous = previousViewRef.current;
     previousViewRef.current = viewKey;
     if (previous === viewKey || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    // Between two focus modes (following a chip) there is no level to go down or up.
+    // Going into or out of a focus mode slides sideways; between two views of the same level (two
+    // focus modes, or two consoles) there is no level to go down or up, so the view rises in place.
+    const enters = viewKey.startsWith("focus:");
+    const leaves = previous.startsWith("focus:");
     const from =
-      viewKey.startsWith("focus:") && previous.startsWith("focus:")
+      enters === leaves
         ? { transform: "translateY(6px)" }
-        : viewKey.startsWith("focus:")
+        : enters
           ? { transform: "translateX(var(--view-shift))" }
-          : previous.startsWith("focus:")
-            ? { transform: "translateX(calc(-1 * var(--view-shift)))" }
-            : previous.startsWith("console:")
-              ? { transform: "translateY(6px)" }
-              : undefined;
-    if (from) viewRef.current?.animate([{ ...from, opacity: 0 }, {}], { duration: 240, easing: "cubic-bezier(0.2, 0, 0, 1)" });
+          : { transform: "translateX(calc(-1 * var(--view-shift)))" };
+    viewRef.current?.animate([{ ...from, opacity: 0 }, {}], { duration: 240, easing: "cubic-bezier(0.2, 0, 0, 1)" });
   }, [viewKey]);
 
   let content: React.ReactNode;
-  if (!shownConsole) {
-    content = (
-      <EmptyPanel
-        icon={LayoutDashboard}
-        message={t("sidebar.noConsoles")}
-        action={{ label: t("sidebar.newConsole"), icon: Plus, onPress: () => handlers.onOpenDialog({ kind: "new-console" }) }}
-      />
-    );
-  } else if (focus && "project" in focus) {
+  if (focus && "project" in focus) {
     content = (
       <ProjectFocusView
         handlers={handlers}

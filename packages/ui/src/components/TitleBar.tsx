@@ -104,6 +104,8 @@ interface TitleBarProps {
    * only floating in on hover (from a console's avatar on the rail) does not count, since pressing
    * the toggle docks it. */
   sidebarShown: boolean;
+  /** Whether there is a sidebar at all; with no console there is none, and its toggle would control nothing. */
+  hasSidebar: boolean;
   onToggleSidebar: () => void;
   canGoBack: boolean;
   canGoForward: boolean;
@@ -125,6 +127,7 @@ interface TitleBarProps {
  */
 export function TitleBar({
   sidebarShown,
+  hasSidebar,
   onToggleSidebar,
   canGoBack,
   canGoForward,
@@ -148,18 +151,20 @@ export function TitleBar({
           <ChromeButton label={t("titleBar.forward")} onPress={onForward} isDisabled={!canGoForward}>
             <ArrowRight aria-hidden="true" className="size-4 rtl:-scale-x-100" />
           </ChromeButton>
-          <ChromeButton
-            label={sidebarShown ? t("titleBar.sidebar.hide") : t("titleBar.sidebar.show")}
-            onPress={onToggleSidebar}
-            expanded={sidebarShown}
-            controls={PANE_ID.sidebar}
-          >
-            {sidebarShown ? (
-              <PanelLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
-            ) : (
-              <PanelLeftDashed aria-hidden="true" className="size-4 rtl:-scale-x-100" />
-            )}
-          </ChromeButton>
+          {hasSidebar && (
+            <ChromeButton
+              label={sidebarShown ? t("titleBar.sidebar.hide") : t("titleBar.sidebar.show")}
+              onPress={onToggleSidebar}
+              expanded={sidebarShown}
+              controls={PANE_ID.sidebar}
+            >
+              {sidebarShown ? (
+                <PanelLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+              ) : (
+                <PanelLeftDashed aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+              )}
+            </ChromeButton>
+          )}
         </div>
       </div>
       <div className="flex min-w-0 flex-1 items-center px-3">

@@ -48,6 +48,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   has no route to the network, submitting a native form and how its fields reach the console session, Escape and F6
   inside a page, the window shortcuts (⌘[ / ⌘], ⌃Tab) a page passes on to the window, the light surface a page renders
   on whatever the window's appearance is, and right-clicking inside a page.
+- [Welcome screen](product/welcome-screen.md) — what the window shows with no console at all: the screen that fills the
+  content panel and its New console button, the install prompt it carries once every agent is known to be missing and
+  why New console stays enabled anyway, what is not on screen in that state (the sidebar, the right pane, the
+  terminal's empty state, the top bar's sidebar toggle), the pane visibility and widths that are kept rather than
+  reset, and where keyboard focus goes as the first console is made and as the last one goes away.
 - [Window layout](product/window-layout.md) — the window chrome (the top bar and the left rail, over the translucent
   macOS material or an opaque colour in a browser) and the opaque content panel it frames, what the top bar holds and
   how it doubles as the macOS titlebar, what an open dialog, menu or popover puts out of reach and the connection
@@ -129,8 +134,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [UI accessibility standard](ui-accessibility.md) — the WCAG 2.2 AA bar `packages/ui` is held to and how to check a
   control or view against it, in both appearances: keyboard access (Tab, the exception for a react-aria collection that
   manages its own focus, F6 as the way out of the terminal), visible focus and why it never uses CSS `:focus-visible` in
-  the app's WKWebView, accessible names, including the one an icon-only control needs beside its tooltip, roles and
-  states and the status region that has to stay mounted, contrast (thresholds, measuring HeroUI's own colours, where a
+  the app's WKWebView and which moves made by script have to set the modality themselves, accessible names, including
+  the one an icon-only control needs beside its tooltip, roles and states — the status region that has to stay mounted,
+  a visual heading being a heading element, and the one `main` the content panel always holds — contrast (thresholds, measuring HeroUI's own colours, where a
   fix belongs, auditing a token or surface change, a region with a surface of its own and a glyph on the window
   material), colour never the only carrier, motion, and the shortfalls the user has kept on purpose.
 
@@ -210,7 +216,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   ordered against the backdrop.
 - [Reading daemon state in the UI](memory/reading-daemon-state-in-the-ui.md) — why a map read through
   `useDaemonStore` has a new identity after every daemon event of its kind, so an effect or memo meant to fire on one
-  change depends on the resolved values it reads and never on the map, and the derivations that do take the map.
+  change depends on the resolved values it reads and never on the map, and the derivations that do take the map; why an
+  empty collection stands for "nothing has arrived yet" until `hosts` is set, so a predicate meaning "the daemon has
+  none of these" is gated on that rather than on the collection, and why no gallery scenario can catch a missing gate;
+  and why the reply to a request arrives after the change it made is already in the store, so code after
+  `await request(...)` has to be correct under either order.
 - [Sending browse requests from the UI](memory/sending-browse-requests-from-the-ui.md) — why the window's browse
   requests are bounded by one count shared across the window rather than one per component (the daemon's per-connection
   bound, and a sent request that is never timed out or cancelled when its component unmounts), sizing a new kind of

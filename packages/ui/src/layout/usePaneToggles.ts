@@ -165,13 +165,16 @@ export interface PaneToggles {
  * pressing the toggle docks it for good. The two never float together: revealing one hides the
  * other.
  *
+ * `hasSidebar` is whether the sidebar is rendered at all (it is not while there is no console);
  * `hasAside` is whether anything owns the aside at the moment; `focusTerminal` is where keyboard
  * focus goes when the pane holding it is hidden.
  */
 export function usePaneToggles({
+  hasSidebar,
   hasAside,
   focusTerminal,
 }: {
+  hasSidebar: boolean;
   hasAside: boolean;
   focusTerminal: () => void;
 }): PaneToggles {
@@ -180,7 +183,7 @@ export function usePaneToggles({
   const [asideOpen, setAsideOpen] = useState(false);
   const [sidebarDocked, setSidebarDocked] = useDockedPanelVisible("sidebar");
   const [asideDocked, setAsideDocked] = useDockedPanelVisible("aside");
-  const sidebarPeek = usePanePeek("sidebar", !isNarrow && !sidebarDocked, focusTerminal);
+  const sidebarPeek = usePanePeek("sidebar", !isNarrow && !sidebarDocked && hasSidebar, focusTerminal);
   const asidePeek = usePanePeek("aside", !isNarrow && !asideDocked && hasAside, focusTerminal);
   const revealPeek = (mine: PeekControl, other: PeekControl) => () => {
     if (!mine.peekable) return;
@@ -211,6 +214,13 @@ export function usePaneToggles({
   useEffect(() => {
     if (!hasAside) setAsideOpen(false);
   }, [hasAside]);
+
+  // The sidebar going away (the last console deleted, perhaps by another client) leaves
+  // `sidebarOpen` with nothing to mean: a drawer left open would keep the Escape listener armed with
+  // nothing to close, and would be open already when a console comes back.
+  useEffect(() => {
+    if (!hasSidebar) setSidebarOpen(false);
+  }, [hasSidebar]);
 
   const closeSidebar = () => {
     releaseFocus("sidebar", focusTerminal);

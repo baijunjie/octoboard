@@ -1,7 +1,8 @@
 # Moving focus between regions
 
-How `F6` moves keyboard focus between the window's regions: the top bar, the rail, the panes, the connection banner
-and the toasts, whose places in the window are in `docs/product/window-layout.md`.
+How `F6` moves keyboard focus between the window's regions: the top bar, the rail, the panes (or the welcome screen
+standing in for them, see `docs/product/welcome-screen.md`), the connection banner and the toasts, whose places in the
+window are in `docs/product/window-layout.md`.
 
 ## Moving focus between regions with F6
 
@@ -10,12 +11,14 @@ order:
 
 1. the top bar;
 2. the rail;
-3. the sidebar;
-4. the archive view, only while it is open (see "The archive view" in `docs/product/sidebar.md`);
-5. the terminal;
-6. the right pane;
-7. the connection banner, only while it is shown;
-8. the toasts, only while at least one toast is shown.
+3. the welcome screen, only while there is no console, when it is the only region of the content panel (see
+   `docs/product/welcome-screen.md`);
+4. the sidebar;
+5. the archive view, only while it is open (see "The archive view" in `docs/product/sidebar.md`);
+6. the terminal;
+7. the right pane;
+8. the connection banner, only while it is shown;
+9. the toasts, only while at least one toast is shown.
 
 It works wherever focus is, the terminal included: there `Tab` and `Shift+Tab` still go to the agent, and `F6` and
 `Shift+F6` never do. It works from inside a report page too (see "Escape and F6 inside a page" in
@@ -25,10 +28,12 @@ It works wherever focus is, the terminal included: there `Tab` and `Shift+Tab` s
 **A region not on screen is skipped**: a docked pane the user has hidden, a drawer that is closed, a hidden pane that
 is only floating in, the right pane when nothing owns it or it has nothing to take focus (a report panel before its
 pages have arrived or with no pages yet, a project pane while it is still loading, see "Loading the project pane" in
-`docs/product/project-pane.md`), and the terminal when no session is selected or while the archive view covers it. A
-pane counts as shown when it is docked in the row at 1148 px and wider, or its drawer is open below that. A docked
-sidebar column that is still easing closed already counts as hidden, and one that is still easing open already counts
-as shown (see "The two pane toggles" in `docs/product/window-layout.md`).
+`docs/product/project-pane.md`), and the terminal when no session is selected or while the archive view covers it.
+With no console the sidebar, the archive view, the terminal and the right pane are all skipped together, none of them
+being on screen, and the welcome screen is the only stop between the rail and the connection banner; with a console
+the welcome screen is the one skipped. A pane counts as shown when it is docked in the row at 1148 px and wider, or
+its drawer is open below that. A docked sidebar column that is still easing closed already counts as hidden, and one
+that is still easing open already counts as shown (see "The two pane toggles" in `docs/product/window-layout.md`).
 
 Where focus lands in each region:
 
@@ -36,6 +41,7 @@ Where focus lands in each region:
 |---|---|
 | Top bar | its first enabled control |
 | Rail | the current console's avatar, or the rail's first control when there is no console |
+| Welcome screen | its New console button |
 | Sidebar | the selected session's row, or the sidebar's first control when that row is not on screen |
 | Archive view | its first control |
 | Terminal | the terminal, so typing reaches the agent; its cover's Reconnect button instead while that is offered (see "The terminal" in `docs/product/sessions.md`) |
@@ -45,7 +51,8 @@ Where focus lands in each region:
 | Toasts | the newest toast |
 
 Pressing Retry from the keyboard works as with the mouse, and when the banner goes away while Retry holds focus, focus
-goes to the terminal.
+goes to the terminal — or, where the terminal cannot take it, where it goes instead (see "The terminal" in
+`docs/product/sessions.md` and "Keyboard focus" in `docs/product/welcome-screen.md`).
 
 The control focus lands on shows its focus ring, even when the last input before `F6` was the mouse.
 

@@ -8,6 +8,9 @@ project's, a console session's or a console's full archive opens in the **archiv
 What consoles, projects and sessions are is in `docs/product/consoles-and-projects.md` and
 `docs/product/sessions.md`.
 
+**With no console at all there is no sidebar**: the content panel shows the welcome screen instead, which is where the
+first console is made (see `docs/product/welcome-screen.md`).
+
 Archived sessions are never listed among a project's or a console's sessions. A project's are reached through its
 "View archive" submenu, through its focus mode, and through the archive view; the archived sessions bound to a console
 session through its focus mode and the archive view; a console's archived console sessions through the console
@@ -23,8 +26,8 @@ another console is the one exception, see "Previewing a console from the rail" b
 that console the current one, its view fading in (see "How the sidebar's view changes" below); pressing it with the
 mouse leaves keyboard focus where it was. Each avatar's tooltip is its console's name (when it opens is in "Tooltips
 on icon-only controls" in `docs/product/labels-and-tooltips.md`). A console created from this window — by the rail's
-New console or the sidebar's own button when there is no console — becomes the current one as soon as it appears; one
-created from another client is only added to the rail.
+New console or the welcome screen's (see `docs/product/welcome-screen.md`) — becomes the current one as soon as it
+appears; one created from another client is only added to the rail.
 
 An avatar carries a badge at its bottom corner while something is going on in its console, taken from all its
 sessions, its console sessions included, so a raised hand in a console that is not shown is in sight too:
@@ -73,8 +76,6 @@ The top of the sidebar names the console being shown, with its action menu besid
 console** and **Delete console** (see "Associating a project", "Editing a console" and "Deleting a console" in
 `docs/product/consoles-and-projects.md`; deleting asks for a typed confirmation first). The console's avatar is not
 repeated here; the rail marks it.
-
-With no console at all, the sidebar shows a message saying so and a **New console** button.
 
 ## The console sessions section and the project list
 
@@ -380,7 +381,9 @@ open. A session that appears any other way, such as one the console session star
 daemon opened, is listed unselected and is put on screen by the user selecting it.
 
 When the selected session stops existing — deleted from the archive, by this client or another, for instance — nothing
-is selected in its place, and the terminal's area shows its empty state.
+is selected in its place, and the terminal's area shows its empty state. The one exception is the session going with
+the last console: there is then no terminal at all, and the content panel shows the welcome screen (see
+`docs/product/welcome-screen.md`).
 
 ## How the sidebar's view changes
 

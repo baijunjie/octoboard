@@ -212,10 +212,8 @@ export const zhHans: Translation<"other"> = {
   "pane.resizeProjectPane": "调整项目面板大小",
 
   "sidebar.sessions": "会话",
-  "sidebar.noConsoles": "还没有控制台",
   "sidebar.noProjects": "还没有项目",
   "sidebar.noSessions": "还没有会话",
-  "sidebar.newConsole": "新建控制台",
   "sidebar.projects": "项目",
   "sidebar.filter.open": "筛选项目",
   "sidebar.filter.field": "项目名称包含",
@@ -314,6 +312,12 @@ export const zhHans: Translation<"other"> = {
   "archive.delete": "删除 {title}",
   "archive.meta": "{agent} · {archived}归档",
   "archive.loadingMore": "更多内容加载中…",
+
+  // What the content area shows while there is no console: the only thing to do is make one.
+  "welcome.label": "欢迎",
+  "welcome.heading": "还没有控制台",
+  "welcome.description": "控制台包含你的项目，以及在项目中运行的会话。",
+  "welcome.newConsole": "新建控制台",
 
   "terminal.empty": "选择一个会话以查看其终端。",
   "terminal.input": "终端输入",

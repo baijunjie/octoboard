@@ -5,18 +5,21 @@ import React from "react";
 import { TitledControl } from "./TitledControl";
 
 /** HeroUI's `EmptyState` with the shape every empty list in the app takes: a glyph, a line
- * saying what is missing, and the action that fills it when there is one. `compact` is a row, for
- * a list nested inside another (a project with no sessions); with an action the whole row is the
- * button that runs it. A message too long for the row wraps rather than being cut, since some (the
- * install prompt) are instructions to act on. */
+ * saying what is missing, an optional line explaining it and the action that fills it when there is
+ * one. `compact` is a row, for a list nested inside another (a project with no sessions); with an
+ * action the whole row is the button that runs it. A message too long for the row wraps rather than
+ * being cut, since some (the install prompt) are instructions to act on. */
 export function EmptyPanel({
   icon: Icon,
   message,
+  description,
   action,
   compact,
 }: {
   icon: LucideIcon;
   message: string;
+  /** The full panel's line under `message`, which then makes `message` a heading; a compact row has no room for one. */
+  description?: string;
   /** `icon` shows only on the full panel's button; a compact row already leads with its glyph. */
   action?: { label: string; icon?: LucideIcon; onPress: () => void };
   compact?: boolean;
@@ -56,7 +59,8 @@ export function EmptyPanel({
       <span className="flex size-12 items-center justify-center rounded-full bg-default text-muted">
         <Icon aria-hidden="true" className="size-6" />
       </span>
-      <p>{message}</p>
+      {description ? <h2 className="text-sm font-semibold">{message}</h2> : <p>{message}</p>}
+      {description && <p className="max-w-sm text-sm text-muted">{description}</p>}
       {action && (
         // A press never takes focus: it would drop to `<body>` when the panel goes away, and
         // whatever the action opens or starts places focus itself.

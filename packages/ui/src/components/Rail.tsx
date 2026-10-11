@@ -17,6 +17,13 @@ import { NotificationsBell } from "./NotificationsBell";
 import { ActivityBadge } from "./StatusIcon";
 import { TitledControl } from "./TitledControl";
 
+const NEW_CONSOLE_ID = "rail-new-console";
+
+/** Puts focus on the rail's New console button, by identity: the console tiles come before it. */
+export function focusNewConsole(): void {
+  document.getElementById(NEW_CONSOLE_ID)?.focus();
+}
+
 /** The badges on the rail are cut out of what they sit on: the glyph or avatar under one is masked
  * away in a ring around it, so the badge reads as separate from it and the ring shows whatever is
  * behind (the native material, the browser's chrome colour, a hover or selected tint) rather than a
@@ -195,7 +202,7 @@ export function Rail({
             />
           ))}
         </div>
-        <ChromeButton label={t("rail.newConsole")} onPress={() => onOpenDialog({ kind: "new-console" })} tooltipPlacement="end" className="shrink-0">
+        <ChromeButton id={NEW_CONSOLE_ID} label={t("rail.newConsole")} onPress={() => onOpenDialog({ kind: "new-console" })} tooltipPlacement="end" className="shrink-0">
           <Plus aria-hidden="true" className="size-4" />
         </ChromeButton>
       </div>

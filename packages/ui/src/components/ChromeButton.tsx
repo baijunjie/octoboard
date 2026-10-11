@@ -17,6 +17,7 @@ export const CHROME_CURRENT_FILLS =
  * focus on the terminal, so every one of them is built from this. `TitledControl` gives it the
  * tooltip; a control on the rail opens it toward the content (`tooltipPlacement`). */
 export function ChromeButton({
+  id,
   label,
   onPress,
   children,
@@ -27,6 +28,7 @@ export function ChromeButton({
   tooltipPlacement,
   className = "",
 }: {
+  id?: string;
   label: string;
   onPress: () => void;
   children: React.ReactNode;
@@ -44,6 +46,7 @@ export function ChromeButton({
   return (
     <TitledControl title={label} placement={tooltipPlacement}>
       <Button
+        id={id}
         isIconOnly
         isDisabled={isDisabled}
         size="sm"

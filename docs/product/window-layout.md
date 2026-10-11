@@ -12,6 +12,11 @@ connection is down, is a full-width strip along the window's bottom edge, under 
 "Losing the daemon connection" in `docs/product/application-lifecycle.md`). Toasts float over the bottom right, above
 the banner while it is shown (see `docs/product/toasts.md`).
 
+**With no console at all the content panel holds none of those panes**: a single **welcome screen** fills it instead,
+offering the one thing there is to do, and the top bar carries no sidebar toggle (see
+`docs/product/welcome-screen.md`). Everything this doc says of the three panes is what the window looks like once a
+console exists.
+
 How the three panes are arranged depends on one width, **1148 px**. At that width and above they sit side by
 side in a row, the layout the macOS window is always in; a pane the user has hidden there can still float in over
 the terminal for a moment. Below it the sidebar and the right pane become overlay drawers over the terminal; only
@@ -88,7 +93,8 @@ It runs, left to right:
 
 - **Back** and **Forward**, which move through the places the window has shown (see
   `docs/product/navigation-history.md`); each is disabled while there is nowhere to go in its direction.
-- The sidebar toggle ("Show sessions" / "Hide sessions").
+- The sidebar toggle ("Show sessions" / "Hide sessions"), there only while there is a sidebar — so not while the
+  window shows the welcome screen (see `docs/product/welcome-screen.md`).
 - The selected session's **breadcrumb** — *console › project › session title* for a project session, *console › session
   title* for a console session, which belongs to no project — followed by the session's status icon. Nothing in the
   bar reports the session's terminal connection; the terminal itself does (see "The terminal" in
@@ -137,6 +143,10 @@ The rail runs from under the top bar to the window's bottom (or the connection b
 The rail is the same at every width; below 1148 px it stays beside the drawers, which open past it.
 
 ### The two pane toggles
+
+**Each toggle is there only while its pane exists**: the sidebar toggle while there is a console for the sidebar to
+show (see `docs/product/welcome-screen.md`), the right pane's toggle while the right pane has an owner (see "What the
+right pane shows" below). A toggle with nothing to control is left out rather than shown disabled.
 
 What the sidebar toggle in the top bar and the right pane's toggle on the rail do depends on the window's width: see
 "Hiding the sidebar and the right pane" and "Below 1148 px: the sidebar and the right pane become drawers" below.
@@ -343,14 +353,16 @@ default**:
   top bar to above the connection banner (when it is shown), and the dimmed area beside an open drawer leaves the rail
   out, so the top bar, the rail and the banner's Retry stay usable while a drawer is open.
 - Each is opened and closed with the same toggle that hides and shows it at 1148 px and wider — the sidebar
-  toggle in the top bar, the right pane's toggle on the rail, which is there only while the right pane has an owner.
+  toggle in the top bar, the right pane's toggle on the rail — each there only while its pane exists (see "The two
+  pane toggles" above).
   Browse files opens the right pane's drawer too (see "What the right pane shows" above).
 - A drawer closes on its toggle, on a press anywhere in the dimmed area beside it, or on `Escape`.
   While a drawer is open `Escape` closes it and **does not reach the running agent**; in a field in the drawer that
   holds text (the project pane's change filter) it only clears the field, and the next one closes the drawer.
 - Opening one drawer closes the other; at most one is ever open.
 - Widening the window to 1148 px or more closes both. The right pane's drawer stays open when its owner changes,
-  showing the new owner's content, and closes when the right pane is left with no owner.
+  showing the new owner's content, and closes when the right pane is left with no owner; the sidebar's drawer closes
+  the same way when the last console goes and there is no sidebar left (see `docs/product/welcome-screen.md`).
 - Closing a drawer that holds keyboard focus moves focus to the terminal, and so does widening the window past 1148 px
   while it is open when that pane is hidden in the wider layout.
 

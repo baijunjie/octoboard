@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useImperativeHandle, useLayoutEffect, us
 
 import "@xterm/xterm/css/xterm.css";
 import { EmptyPanel } from "../components/EmptyPanel";
-import { focusTopBar } from "../components/focusTopBar";
+import { focusTopBar } from "../components/regionFocus";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useT } from "../i18n/react";
 import { isDormant as isDormantStatus, isLive, type Session } from "../protocol";

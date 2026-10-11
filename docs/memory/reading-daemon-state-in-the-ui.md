@@ -17,3 +17,32 @@ route.
 
 The exception is a derivation whose job is to re-run on every event of that kind — the menu bar's session list, the
 waiting notifications, a rail badge's activity — which does take the map itself.
+
+## An empty collection means "nothing has arrived yet" until `hosts` is set
+
+The store starts with `consoles`, `projects` and `sessions` empty and `hosts` undefined, and only the first `snapshot`
+fills them (`State` in `packages/ui/src/store.ts`). `App` registers its hooks above the `if (!hosts)` early return, so
+every hook does run through those pre-snapshot renders, on every launch. A predicate that reads like a fact about the
+daemon — `consoles.size === 0`, no project under this host, this session is gone — is therefore true at the start of
+*every* launch, and an effect keyed on its true-to-false edge fires on every launch that has any records at all, not
+only in the case it was written for.
+
+So gate anything that stands for "the daemon has none of these" on `hosts !== undefined`, and never on a collection
+being empty alone; the hooks that need it take it as the `ready` flag `App` already passes them. A gallery scenario
+cannot catch a missing gate: fixture scenarios are built with `hosts` already populated
+(`packages/ui/src/gallery/fixtures/builders.ts`), so the pre-snapshot renders never happen there. Either keep the gate
+visible at the call site in `App.tsx`, or drive the pre-snapshot inputs directly in a unit test of the hook.
+
+## A request's reply arrives after its own change is already in the store
+
+A mutating request's handler in `apps/daemon/src/coordinator.rs` broadcasts the change first and answers the caller
+second, and those are two separate messages on the one control socket. `DaemonClient` applies each event to the store as
+it arrives and resolves `request` only on the correlated reply, so by the time the code after an `await request(...)`
+runs, the store already holds the change — and React may already have rendered on it, which is what decides whether the
+component that sent the request, or anything the new state hides, is still mounted. That interleaving is not fixed, and
+nothing fails loudly when it goes the other way.
+
+So write what follows an `await request(...)` to be correct under either order: do not sample "has it happened yet?"
+once, and do not assume the sender, or the surface the change replaces, is still there to act on. When something has to
+happen exactly once after such a change, hold it as a debt — a ref set when the change is observed and cleared only once
+the work is actually done — so whichever side lands first, the other finishes the job.

@@ -64,7 +64,7 @@ Per-package commands are in that package's doc.
 
 - [`packages/ui/`](../packages/ui/README.md) — `@octoboard/ui`, the HeroUI + React 19 UI of the desktop application: the
   daemon client, store and platform adapter, the window chrome (the top bar and the left rail with the console
-  switcher), the content panel with the sidebar (projects and sessions, the project and console session focus modes),
+  switcher), the content panel with the sidebar (projects and sessions, the project and console session focus modes) or, while there is no console, the welcome screen,
   the archive view, the xterm.js terminal pane, the pane-layout state, Back/Forward navigation history, the settings
   dialog, the other dialogs, the read-only file viewer (code, rendered Markdown, image and diff rendering behind an application-owned
   interface), the aside at the end side of the content panel (a console session's report panel or a project's

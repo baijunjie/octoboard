@@ -1,19 +1,15 @@
 import { setInteractionModality } from "react-aria";
 import { useEffect, useRef } from "react";
 
+import { FOCUSABLE } from "../components/regionFocus";
+
 /** The window's regions in visual order, each an element (or several) marked `data-region`. The
  * toast stack comes last and is a stop only while a toast is on screen; unlike the others it is not
  * for the caller to say: the stack is in the DOM while it holds a toast, and one that is closing
  * (kept mounted for its exit animation, `data-exiting`) is not a landing place. */
-const REGIONS = ["topbar", "rail", "sidebar", "archive", "terminal", "aside", "banner", "toast"] as const;
+const REGIONS = ["topbar", "rail", "welcome", "sidebar", "archive", "terminal", "aside", "banner", "toast"] as const;
 export type Region = (typeof REGIONS)[number];
 type ShownRegion = Exclude<Region, "toast">;
-
-/** What a region's focus lands on, beyond the terminal's own method: its first control a keyboard
- * can reach. A report page's own frame counts, as the last thing in the aside; the connection
- * banner's is its Retry, and it has none while it only says it is reconnecting. */
-const FOCUSABLE =
-  'a[href], button:not([disabled]), iframe, [tabindex]:not([tabindex="-1"]):not([aria-disabled="true"])';
 
 /** A toast that is on screen, not one fading out. */
 const LIVE_TOAST = '[data-slot="toast"]:not([data-exiting="true"]):not([data-hidden="true"])';

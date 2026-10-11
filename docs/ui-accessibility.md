@@ -55,6 +55,14 @@ a click, the app's WKWebView does not match `:focus-visible` on an element focus
 press. So every keyboard move made by script — F6 region cycling, Tab inside a react-aria focus-trapped dialog — lands
 without a ring. Playwright's `webkit` matches it in those cases, so only the packaged app shows the miss.
 
+### Focus moved by a change the user did not make
+
+A hand-off that runs because what held focus went away — a pane hidden, a region unmounted by a daemon event — also
+calls `setInteractionModality("keyboard")` before it focuses the destination. The user did not ask for the move, so
+they have to be able to see where focus went, and the previous input was often a pointer press, which leaves the
+destination without a ring. `handFocusOff` takes a `showRing` flag for the hand-off whose trigger is a press, where the
+ring follows how the press came; `HandOffOnUnmount` always sets it, its trigger being a render.
+
 ### A keyboard handler that moves focus itself
 
 Such a handler calls react-aria's `setInteractionModality("keyboard")` first when the handler sits on the window's
@@ -92,6 +100,18 @@ bare verb with no placeholder, or the row's own text is announced twice.
 - A control that shows or hides a region carries `aria-expanded`.
 - The selected row of a hand-built list or tree carries `aria-current` (as the sidebar rows do).
 - HeroUI's `Tabs` and `ListBox` mark their selection themselves with `aria-selected` and get no `aria-current` on top.
+
+### A visual heading is a heading element
+
+Text drawn to read as a heading is `<h1>`-`<h6>`, never a `<p>` carrying a heavier weight: the structure a screen
+reader navigates by is the element, not the look. `EmptyPanel` renders its message as a heading once it is given a
+description under it, and as a paragraph when it stands alone.
+
+### Landmarks
+
+The content panel always holds exactly one `main`, whichever of its views is on screen — the terminal pane, or the
+welcome screen that replaces the three panes while there is no console. A view that is a region rather than the
+window's main content carries `role="region"` with a name (`<section aria-label>`), per the naming rule above.
 
 ### Announcing a change
 

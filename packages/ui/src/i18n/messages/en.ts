@@ -240,10 +240,8 @@ export const en = {
   "pane.resizeProjectPane": "Resize project pane",
 
   "sidebar.sessions": "Sessions",
-  "sidebar.noConsoles": "No consoles yet",
   "sidebar.noProjects": "No projects yet",
   "sidebar.noSessions": "No sessions yet",
-  "sidebar.newConsole": "New console",
   "sidebar.projects": "Projects",
   "sidebar.filter.open": "Filter projects",
   "sidebar.filter.field": "Project name contains",
@@ -353,6 +351,12 @@ export const en = {
   "archive.delete": "Delete {title}",
   "archive.meta": "{agent} · archived {archived}",
   "archive.loadingMore": "Loading more…",
+
+  // What the content area shows while there is no console: the only thing to do is make one.
+  "welcome.label": "Welcome",
+  "welcome.heading": "No consoles yet",
+  "welcome.description": "A console holds the projects you work in and the sessions you run in them.",
+  "welcome.newConsole": "New console",
 
   "terminal.empty": "Select a session to view its terminal.",
   "terminal.input": "Terminal input",

@@ -57,6 +57,17 @@ export const dialogScenarios: Scenario[] = [
     steps: [(ui) => ui.press(ui.t("rail.newConsole"))],
   },
   {
+    id: "dialog-new-console-over-welcome",
+    group: GROUP,
+    title: "New console, over the welcome screen",
+    description: "The first console is created over the welcome screen, with no sidebar behind the dialog.",
+    state: snapshotState({}),
+    // The rail's button, not the welcome screen's: both carry the same name, and `press` finds the
+    // first of them in the DOM. What this scenario is for is the dialog over the welcome screen, and
+    // either button puts it there; that the welcome screen's own button opens it is a unit test.
+    steps: [(ui) => ui.press(ui.t("rail.newConsole"))],
+  },
+  {
     id: "dialog-edit-console",
     group: GROUP,
     title: "Edit console",

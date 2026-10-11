@@ -7,9 +7,7 @@ import { setInteractionModality } from "react-aria";
  * it off where the ring should follow how the press came. The caller makes sure `holder` is there
  * whenever `from` is.
  *
- * This is the pre-emptive half of the pair: it is called while `from` is still there, by whatever
- * is about to take it away. For a control that has already gone, taking focus with it, see
- * `useFocusHandoff`. */
+ * Use it where the code taking `from` away can call it first, while `from` is still there. */
 export function handFocusOff(
   from: Element | null | undefined,
   holder: HTMLElement | null | undefined,

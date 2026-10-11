@@ -146,6 +146,9 @@ belonging to it, archived sessions included, with the last output Octoboard kept
 sessions pushed to the report panel, and removes the console's own working directory under `~/.octoboard`. No project
 directory is touched.
 
+Deleting the **last** console leaves the window with none, which it shows as the welcome screen (see
+`docs/product/welcome-screen.md`); the same holds when another client deletes it.
+
 ## Projects
 
 A project carries a name, the directory it points at, an optional default agent, how it was associated, the remote

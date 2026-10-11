@@ -45,7 +45,7 @@ function entriesUnder(files: FixtureFiles, dir: string): BrowseEntry[] {
 /**
  * A `Daemon` with no connection behind it, for the gallery: the store holds the scenario's state as
  * it is, requests are answered from the scenario (`list_dir`, `list_pages`, the browse requests) or accepted and
- * ignored, and the scenario's toasts are raised once the app is listening.
+ * ignored (a new console excepted, which is added), and the scenario's toasts are raised once the app is listening.
  */
 export function createFixtureDaemon(scenario: Scenario): Daemon {
   const store = createStateStore(scenario.state);
@@ -242,6 +242,24 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
               : { pages: new Map(state.pages).set(body.console_session, pages) },
           );
           return { type: "page_list", console_session_id: body.console_session, pages };
+        }
+        case "create_console": {
+          // As the daemon does, the new console reaches the store before the request is answered
+          // (`coordinator.rs` broadcasts first), so a scenario can reach the first console's arrival.
+          const { name, console_session_agent, default_agent, icon } = body;
+          const id = `console-${Date.now()}`;
+          store.setState((state) => ({
+            consoles: new Map(state.consoles).set(id, {
+              id,
+              name,
+              workdir: `${HOME}/.octoboard/consoles/${id}`,
+              console_session_agent,
+              default_agent,
+              icon,
+              created_at: Date.now(),
+            }),
+          }));
+          return { type: "ack" };
         }
         default:
           return { type: "ack" };
