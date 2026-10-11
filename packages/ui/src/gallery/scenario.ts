@@ -1,5 +1,5 @@
 import type { MacosPermissionsStatus } from "../platform";
-import type { Agent, DirEntry, MessageParams } from "../protocol";
+import type { Agent, AgentModel, DirEntry, MessageParams, ModelsUnavailable } from "../protocol";
 import type { FixtureError, FixtureFiles } from "./fixtures/projectFiles";
 import type { GroupTitle } from "./fixtures/groups";
 import type { FixtureGit } from "./fixtures/projectGit";
@@ -70,6 +70,10 @@ export interface Scenario {
    * for none), a daemon error, or `"pending"` for a request that is never answered. One not listed
    * answers with no agent. */
   detections?: Record<string, { agent: Agent | null } | FixtureError | "pending">;
+  /** What `list_agent_models` answers per agent: a list, a reason there is none, or `"pending"` for a
+   * request that is never answered. An agent not listed gets `SAMPLE_CLAUDE_MODELS` for Claude Code
+   * and an empty list for the others. */
+  agentModels?: Partial<Record<Agent, { models: AgentModel[]; unavailable?: ModelsUnavailable } | "pending">>;
   /** The files every project's browser shows (`list_project_dir`, `read_project_file`); without it,
    * `SAMPLE_FILES`. */
   files?: FixtureFiles;

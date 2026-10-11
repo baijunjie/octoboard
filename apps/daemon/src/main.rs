@@ -5,6 +5,7 @@
 
 mod access;
 mod adapter;
+mod agent_models;
 mod availability;
 mod browse;
 mod console_request;
@@ -198,6 +199,7 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
         port,
         self_exe,
         paths::saved_output_dir(),
+        paths::consoles_dir(),
     ));
     // Saved output whose session is gone (a daemon that died between deleting the record and the
     // file) or whose write was cut short has nothing else to remove it.

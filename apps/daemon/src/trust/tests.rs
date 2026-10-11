@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use super::*;
-use crate::protocol::{Console, Origin, ProjectSource, SessionStatus};
+use crate::protocol::{Console, Origin, ProjectAccount, ProjectSource, SessionStatus};
 use crate::session::spawn_reader_thread;
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::{watched_live_session, ScratchDir, StandIn, PATIENCE};
@@ -384,6 +384,12 @@ fn console() -> Console {
         claude_account_id: None,
         codex_account_id: None,
         grok_account_id: None,
+        claude_console_session_model: None,
+        claude_console_session_effort: None,
+        codex_console_session_model: None,
+        codex_console_session_effort: None,
+        grok_console_session_model: None,
+        grok_console_session_effort: None,
         icon: None,
         created_at: 0,
     }
@@ -399,6 +405,15 @@ fn project(consent: bool) -> Project {
         default_agent: None,
         source: ProjectSource::Local,
         remote_url: None,
+        claude_account_id: ProjectAccount::Inherit,
+        codex_account_id: ProjectAccount::Inherit,
+        grok_account_id: ProjectAccount::Inherit,
+        claude_session_model: None,
+        claude_session_effort: None,
+        codex_session_model: None,
+        codex_session_effort: None,
+        grok_session_model: None,
+        grok_session_effort: None,
         trust_consent: consent,
         pinned: false,
         tags: Vec::new(),

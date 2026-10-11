@@ -62,6 +62,10 @@ pub struct LaunchRequest {
     /// The configuration directory of the session's own agent that it is pinned to; see
     /// `protocol::Session::config_dir`.
     pub config_dir: Option<PathBuf>,
+    /// The model to launch with; see `LaunchSpec::model`.
+    pub model: Option<String>,
+    /// The reasoning effort to launch with; see `LaunchSpec::effort`.
+    pub effort: Option<String>,
     /// A shell environment already snapshotted for this launch, used as it is instead of taking
     /// another. Only a caller that has already resolved something from one passes it — a switch
     /// to the default account, which resolved that account's directory from it to copy the
@@ -85,6 +89,8 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         task,
         resume_agent_session_id,
         config_dir,
+        model,
+        effort,
         preresolved_shell_env,
         daemon_port,
         self_exe,
@@ -134,6 +140,8 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         hook_script: &hook_script,
         shell_env: &shell_env,
         config_dir: config_dir.as_deref(),
+        model: model.as_deref(),
+        effort: effort.as_deref(),
         self_exe: &self_exe,
         daemon_port,
         mcp_token: &mcp_token,

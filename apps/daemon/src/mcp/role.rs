@@ -264,7 +264,7 @@ pub fn write_console_session_instructions(console: &Console) -> Result<()> {
     let workdir = Path::new(&console.workdir);
     std::fs::create_dir_all(workdir).with_context(|| format!("creating {}", workdir.display()))?;
 
-    let wanted = console_session_instruction_filename(console.console_session_agent);
+    let wanted = console_session_instruction_filename(console.default_agent);
     for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
         let Some(name) = console_session_instruction_filename(agent) else {
             continue;
@@ -290,7 +290,7 @@ pub fn write_console_session_instructions(console: &Console) -> Result<()> {
         let temp_path = workdir.join(format!("{name}.octoboard-tmp-{}", uuid::Uuid::new_v4()));
         std::fs::write(
             &temp_path,
-            console_session_instructions(console.console_session_agent),
+            console_session_instructions(console.default_agent),
         )
         .with_context(|| format!("writing {}", temp_path.display()))?;
         std::fs::rename(&temp_path, &path)

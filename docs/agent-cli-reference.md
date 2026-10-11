@@ -10,9 +10,11 @@ says about a declined prompt was measured on **2.1.286** as well, and held ident
 conversation to another config directory" says was measured on **Claude Code 2.1.289**, **Codex 0.160.0** and **Grok
 Build 1.0.46**. What "Folder-trust confirmations" says about Codex and Grok Build was measured on **Codex 0.161.0** and
 **Grok Build 1.0.50**. What "A long MCP tool call is moved to the background" and "A pasted prompt reaches
-`UserPromptSubmit` wrapped" say was observed on **Claude Code 2.1.295**. All three rewrite their hook surface, their
-payload fields, their configuration layering and their on-disk layout on upgrade, so check a detail here against the
-installed version before relying on it.
+`UserPromptSubmit` wrapped" say was observed on **Claude Code 2.1.295**. Each agent's "Model and reasoning effort" note
+was measured on **Claude Code 2.1.296**, **Codex 0.160.0** and **Grok Build 1.0.50**; the Codex facts were not
+re-checked on **0.161.0**, which the folder-trust facts above were measured on. All three rewrite their hook surface,
+their payload fields, their configuration layering and their on-disk layout on upgrade, so check a detail here against
+the installed version before relying on it.
 
 How Octoboard's status mapping handles these traps is encoded in `apps/daemon/src/hooks.rs`; the product behavior
 built on them is in the product docs.
@@ -155,6 +157,20 @@ be passed on every launch, because after a compaction the snapshot is re-rendere
 Passing `--system-prompt-snapshot off` inverts this, at the price of the role vanishing from any launch that omits it
 and of prompt-cache replay.
 
+**Model and reasoning effort**: `--model <id>` and `--effort <level>`, both global flags, so they work alongside
+`--resume`. They sit at the end of the flag list, after `--append-system-prompt`, so nothing non-flag follows a
+list-valued flag such as `--mcp-config`. On a model that does not support `max` or `xhigh`, Claude Code **silently
+lowers the level to `high`** rather than refusing it.
+
+**Discovering models** (Claude Code 2.1.296): there is **no `models` subcommand**, but there is a real alias layer.
+`opus`, `sonnet` and `haiku` resolve to the newest member of each family through the catalogue Claude Code fetches from
+its server (opus-5-5, sonnet-5-5 and haiku-5-5 when measured), so nothing needs listing and no version has to be
+written down. `best` means "the top model if the account has it, else Opus" and **degrades by construction, so it
+cannot be refused**. Three traps: `fable` on its own is gated by the account and **can be refused**; `latest` is a
+reserved word and **not an alias**; `mythos` has no alias. The list Octoboard offers is therefore the four strings
+`best`, `opus`, `sonnet`, `haiku`. `--effort` takes `low`, `medium`, `high`, `xhigh` and `max`, and a level the resolved
+model lacks is silently lowered, so no level is ever refused.
+
 ## Codex
 
 12 hook events, payload as JSON on stdin. The binary embeds the **full JSON Schema of every hook payload**, with
@@ -237,6 +253,23 @@ folder-trust confirmation and showed no update prompt after it either.
 **Two visible side effects of passing any `-c` override**: it forces embedded mode, so the TUI carries a permanent
 `⚠ 1 warning` badge explaining that command-line overrides require it, and the session is invisible to `codex agents`.
 
+**Model and reasoning effort**: the model has a flag, `-m <model>`; the effort has **none** and is reachable only as the
+config override `-c model_reasoning_effort=<level>`. Octoboard passes both as `-c` overrides (`-c model="<id>"`) so the
+two are set the same way, ahead of the positional task, which Codex takes last. Codex **rejects an effort the chosen
+model does not advertise**, with an error specific to that model, rather than lowering it.
+
+**Discovering models** (Codex 0.160.0): Codex has **no alias, family or "latest" indirection**, so a model is only ever
+its catalogue slug. `codex debug models` prints the catalogue as JSON, `{"models": [...]}`, after refreshing it over
+the network (about 600 KB, because every entry carries its full instructions); `--bundled` skips the refresh and prints
+the built-in fallback. The fields that matter per entry: `slug` (what `-c model=` takes), `display_name`, `visibility`
+(`list` or `hide`; hidden entries are internal or retired and not for a picker), `priority` (ascending is display
+order), and `supported_reasoning_levels`, a list of `{effort, description}` whose `effort` values are exactly what
+`model_reasoning_effort` accepts for that model (a level set can include ones Claude Code has no word for, such as
+`ultra`), with `default_reasoning_level`. **The server's answer arrives sorted by `priority`; the bundled fallback does
+not** (it was observed in an unrelated order), so sort it yourself. The command reads `CODEX_HOME`, so a catalogue is
+that account's. **An unknown slug is not rejected at launch**: the session boots and fails only at its first turn, which
+is why a list that is wrong cannot be left to the launch to catch.
+
 ## Grok Build
 
 16 hook events, payload as JSON on stdin, with **every field present in both camelCase and snake_case**. The hook
@@ -291,6 +324,23 @@ observe must emit no JSON at all.
 
 **Project configuration layering**: hooks are additive across the global, project and managed layers, and
 byte-identical handlers are deduplicated across them.
+
+**Model and reasoning effort**: `--model <id>` and `--reasoning-effort <level>`, placed after the `--rules` pair and
+before the positional task. Grok persists some session settings back into `config.toml`; the per-session `GROK_HOME`
+farm keeps `config.toml` as a copy, so a flag cannot leak into the user's own configuration.
+
+**Discovering models** (Grok Build 1.0.50): Grok has **no alias or "latest" indirection** either. `grok models` prints
+to stdout the login line, a blank line, `Default model: <id>`, a blank line, `Available models:` and then one bullet
+line per model, `  * <id> (default)` for the default and `  - <id>` for the others, in the order Grok shows them. It
+carries no display name and no effort levels. It also refreshes `models_cache.json` in the config directory (`GROK_HOME`),
+a JSON object with `fetched_at`, `grok_version`, `etag` and `models`, a map **keyed by model id**; each value's `info`
+carries `name` (the display name), `hidden`, `supports_reasoning_effort`, `reasoning_effort` (the default) and
+`reasoning_efforts`, a list of `{id, value, label, description, default}` whose `value` is what `--reasoning-effort`
+takes (the level set differs per model: the oldest of the four measured lacked `xhigh`). Octoboard takes the id list
+from the text, which is the one Grok itself shows, and the names, efforts and `hidden` flag from the file; the file
+alone would do for the data but only exists after Grok has run in that home, and the text is what refreshes it. The
+cache is per account (its `identity` differs). **An unknown id is refused loudly at launch** with `Couldn't set model
+'<id>'.`, the opposite of Codex's silent deferred failure.
 
 ## Across the three agents
 
@@ -401,6 +451,7 @@ edit of the project's or the user's files, and was exercised against the version
 | Inject MCP | `--mcp-config <json>` | `-c 'mcp_servers.octoboard.command=…'`, `.args=[…]` and `.default_tools_approval_mode="auto"` | An `[mcp_servers.octoboard]` block appended to the `config.toml` copy inside that `GROK_HOME` |
 | Inject a role description | `--append-system-prompt` | `-c 'developer_instructions="…"'`, which adds a developer message and leaves the rest of the prompt byte-identical; not `-c instructions=`, which replaces the system prompt | `--rules "…"`, appended to the system prompt and persisted into the session record |
 | Resume | `claude --resume <id>` | `codex resume <id>` | `grok --resume <id>` |
+| Choose the model and reasoning effort | `--model <id>`, `--effort <level>` | `-c model="<id>"`, `-c model_reasoning_effort="<level>"` | `--model <id>`, `--reasoning-effort <level>` |
 | Identity seen by the MCP child | `CLAUDE_CODE_SESSION_ID` is set | argv or an explicit `env` table; no `CODEX_*` variable reaches the child | `GROK_SESSION_ID` is set; `{{session_id}}` templating does *not* work |
 
 - **Claude Code** injects cleanly through flags. Never pass `--setting-sources` (it silently drops the project's own

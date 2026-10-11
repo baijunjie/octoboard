@@ -18,7 +18,6 @@ export function consoleOf(id: string, name: string, extra: Partial<Console> = {}
     id,
     name,
     workdir: `/Users/dev/octoboard/${id}`,
-    console_session_agent: "claude",
     default_agent: "claude",
     created_at: minutesAgo(60 * 24 * 30),
     ...extra,
@@ -36,6 +35,9 @@ export function projectOf(id: string, consoleId: string, name: string, extra: Pa
     trust_consent: false,
     pinned: false,
     tags: [],
+    claude_account_id: { kind: "inherit" },
+    codex_account_id: { kind: "inherit" },
+    grok_account_id: { kind: "inherit" },
     ...extra,
   };
 }

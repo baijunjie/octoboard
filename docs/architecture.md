@@ -20,7 +20,7 @@ the retention and cleanup of session data follows each agent's own rules.
 
 | Concept | Description |
 |---|---|
-| Console | A management unit for a group of projects, independent of other consoles. It has its own working directory and its own console session agent. |
+| Console | A management unit for a group of projects, independent of other consoles. It has its own working directory and its own default agent, which its console sessions run and the sessions under its projects fall back to. |
 | Host | A machine that runs sessions. Only the local machine exists today; every project and session still carries a `host_id`. |
 | Project | A directory on some host, associated with a console. |
 | Session | An agent CLI process running in a project directory, created by the user, a console session or an unbound project session. |
@@ -213,10 +213,22 @@ Entities: console, host, project, session, account, report, report-panel page, a
   entries are compared with it component by component.
 - `Account` is a named config directory of one agent, kept once for the whole application. A console refers to one
   account per agent by id (`claude_account_id` and its two siblings), rather than holding a path directly; `None`
-  means that agent's default account, the state of pinning nothing. `Session.account_id` is the account the
+  means that agent's default account, the state of pinning nothing. A project carries the same three fields with one
+  state more — inherit its console's reference, the agent's default account, or a named account — since pinning
+  nothing is a choice of its own that a project may make against a console that names an account. It travels as a
+  tagged value, and in storage the id column still only ever holds an account id, the default state living in a
+  separate per-agent flag, so nothing stored can be mistaken for an id. `Session.account_id` is the account the
   session's own agent reads, and `Session.config_dir` is that account's directory at the moment the session was
   opened (`None` for the default account) — both copied onto the session when it is opened, because the agent keeps
   its transcripts there and a resume must find them.
+- A console's and a project's **per-agent model and reasoning effort** are the opposite: read from the console or the
+  project at every launch rather than copied onto the session, so a changed value reaches the session at its next
+  resume. Nothing but the agent interprets them, which is why they are stored as free text per agent rather than as an
+  enumeration, and why the models a dialog offers are asked of the agent itself for the account in question, kept only
+  as a short-lived cache in the daemon: a list maintained in Octoboard would be a second source of truth that goes
+  stale with every agent release. A console's `console_session_agent` is no longer a setting of its own: it is kept
+  equal to `default_agent`, is not sent to clients, and survives only so that no existing database has to be
+  rewritten.
 - Every project and session carries a `host_id` while the host table holds a single local record, so going remote needs
   no data migration. Trusted-folder entries ignore `host_id`, which is harmless while every host is local.
 - `Page.console_session_id` is the console session that pushed the page, not its console: a console may hold several

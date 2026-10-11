@@ -5,6 +5,7 @@ import type { BrowseEntry, ChangeSide, DirEntry, Event, FileContent, SideRead, S
 import { createStateStore, type Daemon, type ToastRequest } from "../store";
 import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
+import { SAMPLE_MODELS } from "./fixtures/agentModels";
 import { text } from "./fixtures/builders";
 import { SAMPLE_FILES, type FixtureError, type FixtureFile, type FixtureFiles } from "./fixtures/projectFiles";
 import { SAMPLE_GIT } from "./fixtures/projectGit";
@@ -232,6 +233,12 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           if (detected && "code" in detected) return fail(detected);
           return { type: "agent_detected", agent: detected?.agent ?? null };
         }
+        case "list_agent_models": {
+          const listed = scenario.agentModels?.[body.agent];
+          if (listed === "pending") return new Promise<Event>(() => {});
+          const { models, unavailable = null } = listed ?? { models: SAMPLE_MODELS[body.agent] };
+          return { type: "agent_models", agent: body.agent, account: body.account ?? null, models, unavailable };
+        }
         case "list_pages": {
           // As the real client's reply reaches the reducer, so a console session with no fixture
           // pages ends up listed as empty rather than not listed yet.
@@ -246,14 +253,13 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
         case "create_console": {
           // As the daemon does, the new console reaches the store before the request is answered
           // (`coordinator.rs` broadcasts first), so a scenario can reach the first console's arrival.
-          const { name, console_session_agent, default_agent, icon } = body;
+          const { name, default_agent, icon } = body;
           const id = `console-${Date.now()}`;
           store.setState((state) => ({
             consoles: new Map(state.consoles).set(id, {
               id,
               name,
               workdir: `${HOME}/.octoboard/consoles/${id}`,
-              console_session_agent,
               default_agent,
               icon,
               created_at: Date.now(),

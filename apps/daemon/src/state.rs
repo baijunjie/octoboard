@@ -85,12 +85,16 @@ pub struct AppState {
     /// Each ended session's last terminal output, written as its process ends and removed with its
     /// record.
     saved_output: SavedOutput,
+    /// Parent of the consoles' working directories; see [`AppState::console_workdir`].
+    consoles_dir: std::path::PathBuf,
     /// The bounds every connection's browse requests share: how many reads run at once, and how
     /// many bytes their replies may hold before they are written.
     pub browse_gate: Arc<crate::browse::lane::Gate>,
     /// The `request_console_session` calls waiting for the user's answer; see
     /// `crate::console_request`. Held in memory only: no caller outlives the daemon.
     pub console_requests: crate::console_request::ConsoleRequests,
+    /// The model lists read lately, per agent and account directory (`crate::agent_models`).
+    pub agent_models: crate::agent_models::ModelCache,
     /// For each session with a console-session request waiting, the status its agent's own events
     /// say it has, while the record shows `WaitingUser` for the request. Kept so that the daemon's
     /// decisions about the agent (can a message be written, did a turn end) keep reading the agent
@@ -148,6 +152,7 @@ impl AppState {
         port: u16,
         self_exe: String,
         saved_output_dir: std::path::PathBuf,
+        consoles_dir: std::path::PathBuf,
     ) -> Self {
         let (events, _) = broadcast::channel(1024);
         Self {
@@ -181,11 +186,19 @@ impl AppState {
                     .collect(),
             ),
             saved_output: SavedOutput::new(saved_output_dir),
+            consoles_dir,
             browse_gate: Arc::new(crate::browse::lane::Gate::with_budget()),
             console_requests: Default::default(),
+            agent_models: Default::default(),
             events,
             shutdown: tokio::sync::Notify::new(),
         }
+    }
+
+    /// The working directory a console of this id gets, under the directory the daemon was started
+    /// with for them rather than a fixed one, so a test points it at a scratch directory.
+    pub fn console_workdir(&self, console_id: &str) -> std::path::PathBuf {
+        self.consoles_dir.join(console_id)
     }
 
     /// Asks the daemon to shut down. The application sends this once the user has confirmed the
@@ -1296,6 +1309,12 @@ mod tests {
                 claude_account_id: None,
                 codex_account_id: None,
                 grok_account_id: None,
+                claude_console_session_model: None,
+                claude_console_session_effort: None,
+                codex_console_session_model: None,
+                codex_console_session_effort: None,
+                grok_console_session_model: None,
+                grok_console_session_effort: None,
                 icon: None,
                 created_at: 0,
             })

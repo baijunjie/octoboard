@@ -82,7 +82,7 @@ waiting.
 Once the user approves, the dialog closes everywhere at once, and then:
 
 1. **A console session is started in the caller's console exactly as one the user opens by hand**: the console's
-   console session agent and account, its default title, and no opening prompt of its own.
+   default agent and its account for that agent, its default title, and no opening prompt of its own.
 2. **The caller is bound to it as its lead session.** It keeps the sessions it had started and goes on driving them
    (see "Lead sessions" in `docs/product/hub-orchestration.md`).
 3. **The request reaches the console session as the lead session's first report**, through the ordinary reporting path

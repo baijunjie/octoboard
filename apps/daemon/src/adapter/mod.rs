@@ -78,6 +78,13 @@ pub struct LaunchSpec<'a> {
     /// through [`pinned_config_dir`], which refuses a directory that has vanished, and passes the
     /// result on to whatever else needs it.
     pub config_dir: Option<&'a Path>,
+    /// The model to launch with, in the agent's own spelling; `None` leaves it to the agent. Read
+    /// from the setting for this agent of the session's console (a console session) or of its
+    /// project (a project session), and `None` when that setting is unset.
+    pub model: Option<&'a str>,
+    /// The reasoning effort to launch with, in the agent's own spelling; `None` leaves it to the
+    /// agent. Set under the same conditions as [`Self::model`].
+    pub effort: Option<&'a str>,
     /// The daemon binary, which is also the MCP server and the hook forwarder.
     pub self_exe: &'a str,
     /// Where the daemon is listening, for the MCP server this launch registers.
@@ -153,6 +160,25 @@ pub fn refuse_unlaunchable_account(agent: Agent, pinned: Option<&Path>) -> Resul
     }
 }
 
+/// The environment variable this agent reads its configuration directory from — the one an
+/// adapter exports for a pinned account and a snapshot may already carry for the default one.
+pub fn config_dir_var(agent: Agent) -> &'static str {
+    match agent {
+        Agent::Claude => "CLAUDE_CONFIG_DIR",
+        Agent::Codex => "CODEX_HOME",
+        Agent::Grok => "GROK_HOME",
+    }
+}
+
+/// The agent's own usual configuration directory under the home directory.
+fn default_dir_name(agent: Agent) -> &'static str {
+    match agent {
+        Agent::Claude => ".claude",
+        Agent::Codex => ".codex",
+        Agent::Grok => ".grok",
+    }
+}
+
 /// The directory this agent's default account resolves to — what "pinning nothing" means at
 /// launch: the directory its own variable is exported to in `shell_env`, else the agent's own
 /// usual default under the home directory the snapshot carries, else the daemon's own. For
@@ -164,11 +190,7 @@ pub fn refuse_unlaunchable_account(agent: Agent, pinned: Option<&Path>) -> Resul
 /// session has opened, and by `grok::default_grok_home`, which a launch with no pinned account
 /// builds the farm from.
 pub fn default_account_dir(agent: Agent, shell_env: &HashMap<String, String>) -> PathBuf {
-    let (var, default_name) = match agent {
-        Agent::Claude => ("CLAUDE_CONFIG_DIR", ".claude"),
-        Agent::Codex => ("CODEX_HOME", ".codex"),
-        Agent::Grok => ("GROK_HOME", ".grok"),
-    };
+    let (var, default_name) = (config_dir_var(agent), default_dir_name(agent));
     if let Some(dir) = shell_env.get(var).filter(|dir| !dir.is_empty()) {
         return PathBuf::from(dir);
     }
@@ -285,6 +307,8 @@ pub mod tests {
         pub hook_script: PathBuf,
         pub shell_env: HashMap<String, String>,
         pub config_dir: Option<PathBuf>,
+        pub model: Option<String>,
+        pub effort: Option<String>,
         pub self_exe: String,
         pub mcp_token: String,
     }
@@ -303,6 +327,8 @@ pub mod tests {
                 hook_script: &self.hook_script,
                 shell_env: &self.shell_env,
                 config_dir: self.config_dir.as_deref(),
+                model: self.model.as_deref(),
+                effort: self.effort.as_deref(),
                 self_exe: &self.self_exe,
                 daemon_port: 4321,
                 mcp_token: &self.mcp_token,
@@ -329,6 +355,8 @@ pub mod tests {
             hook_script,
             shell_env: HashMap::new(),
             config_dir: None,
+            model: None,
+            effort: None,
             self_exe: "/opt/octoboard/octoboardd".to_string(),
             mcp_token: "token-1".to_string(),
         }

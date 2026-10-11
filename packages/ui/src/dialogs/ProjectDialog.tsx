@@ -1,15 +1,25 @@
 import { Button } from "@heroui/react";
 import React, { useMemo, useState } from "react";
 
-import { AGENT_LABEL } from "../agents";
+import { consoleAccount, resolveProjectAccount, settledProjectAccount } from "../accountChoices";
+import { changedAgentFields, changedProjectAccounts, readAgentFields, readProjectAccounts } from "../agentFields";
+import {
+  AGENT_ACCOUNT_FIELD,
+  AGENT_LABEL,
+  AGENT_OPTIONS,
+  AGENT_PROJECT_EFFORT_FIELD,
+  AGENT_PROJECT_MODEL_FIELD,
+} from "../agents";
 import { AGENT_ICON_OPTIONS, AgentIcon } from "../components/AgentIcon";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
 import { tagVocabulary } from "../projectFiltering";
-import type { Agent, Project, ProjectSource } from "../protocol";
+import type { Agent, Project, ProjectAccount, ProjectSource } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
+import { AgentAccountField } from "./AgentAccountField";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "./Dialog";
 import { DirectoryPicker } from "./DirectoryPicker";
+import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import { OptionSelect } from "./OptionSelect";
 import { TagsInput } from "./TagsInput";
 import { TextInput } from "./TextInput";
@@ -20,6 +30,22 @@ const SOURCE_OPTIONS: { value: ProjectSource; label: PlainMessageKey }[] = [
   { value: "parent", label: "dialog.project.source.parent" },
   { value: "git", label: "dialog.project.source.git" },
 ];
+
+/** Every per-agent text field of a project: each agent's model and effort. The account is not one,
+ * as it has three states (`ProjectAccount`) and is held apart. */
+const FIELDS = AGENT_OPTIONS.flatMap(({ value: agent }) => [
+  AGENT_PROJECT_MODEL_FIELD[agent],
+  AGENT_PROJECT_EFFORT_FIELD[agent],
+]);
+
+/** The account picker's option values: `""` inherits the console's, which the picker opens on;
+ * `"default"` and `"account:<id>"` cannot be taken for one another or for an id. */
+const accountValue = (account: ProjectAccount): string =>
+  account.kind === "account" ? `account:${account.id}` : account.kind === "default" ? "default" : "";
+const accountOfValue = (value: string): ProjectAccount =>
+  value.startsWith("account:") ? { kind: "account", id: value.slice("account:".length) } : value === "default" ? { kind: "default" } : { kind: "inherit" };
+
+const INHERIT: ProjectAccount = { kind: "inherit" };
 
 /** How long the path or URL must stay unchanged before the daemon is asked about it; a repository
  * is asked about later, since each ask reaches over the network. */
@@ -38,7 +64,9 @@ export function ProjectDialog({
 }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
-  const consoleAgent = useDaemonStore((s) => s.consoles.get(consoleId)?.default_agent);
+  const owner = useDaemonStore((s) => s.consoles.get(consoleId));
+  const consoleAgent = owner?.default_agent;
+  const accounts = useDaemonStore((s) => s.settings.accounts);
   const [source, setSource] = useState<ProjectSource>(editing?.source ?? "local");
   const defaultCloneDir = useDaemonStore((s) => s.settings.default_clone_dir);
   // The clone directory is kept apart from the other sources' directory, so switching the source
@@ -57,6 +85,14 @@ export function ProjectDialog({
     if (next === "parent") setDefaultAgent("detect");
     else if (defaultAgent === "detect") setDefaultAgent("");
   };
+  // What the project holds for each agent when the dialog opens, and the edits since: the model and
+  // effort, `null` being unset (the agent's own), and the account, which may be inheriting the
+  // console's. Kept per agent as the names are the agent's own, so a value set for one says nothing
+  // about another.
+  const [initial] = useState(() => readAgentFields(FIELDS, editing ?? {}));
+  const [fields, setFields] = useState(initial);
+  const [initialAccounts] = useState(() => readProjectAccounts(editing ?? {}));
+  const [accountFields, setAccountFields] = useState(initialAccounts);
   const [tags, setTags] = useState<string[]>(editing?.tags ?? []);
   // The tags to offer are the ones this console's projects carry now; there is no registry of them.
   const projects = useDaemonStore((s) => s.projects);
@@ -98,9 +134,27 @@ export function ProjectDialog({
   const nameError = editing && !name ? t("dialog.nameRequired") : undefined;
   const { shown, attempt } = useSubmitValidation();
 
+  // The agent the account and the launch settings belong to: the one picked, else the console's for
+  // "Inherit from console", and none for "Detect from files", which stands for a different agent
+  // per repository.
+  const agent = defaultAgent === "detect" ? undefined : defaultAgent === "" ? consoleAgent : defaultAgent;
+  const accountField = agent && AGENT_ACCOUNT_FIELD[agent];
+  const modelField = agent && AGENT_PROJECT_MODEL_FIELD[agent];
+  const effortField = agent && AGENT_PROJECT_EFFORT_FIELD[agent];
+  // Offered only where there is something to choose between: an agent with no account of its own
+  // has the console's reference to inherit and nothing else.
+  const ownAccounts = agent ? accounts.filter((account) => account.agent === agent) : [];
+  const consoleAccountId = owner && agent ? consoleAccount(owner, agent, accounts) : null;
+  const picked = accountField && agent ? settledProjectAccount(accountFields[accountField], agent, accounts) : INHERIT;
+  // The account the project's sessions of `agent` run under, whose models the launch settings offer.
+  const launchAccount = resolveProjectAccount(picked, consoleAccountId);
+
   const submit = () => {
     if (locked || !attempt(pathError, nameError)) return;
     void run(async () => {
+      // Under "Detect from files" the controls are out of sight, so what was set in them is not sent.
+      const sent = defaultAgent === "detect" ? initial : fields;
+      const sentAccounts = defaultAgent === "detect" ? initialAccounts : accountFields;
       if (editing) {
         await request({
           type: "update_project",
@@ -110,6 +164,8 @@ export function ProjectDialog({
           // is an explicit `null` (clear), never an omitted field — omitting it means "leave
           // whatever was there alone" instead.
           default_agent: defaultAgent === "" || defaultAgent === "detect" ? null : defaultAgent,
+          ...changedAgentFields("update", sent, initial),
+          ...changedProjectAccounts("update", sentAccounts, initialAccounts),
           // Always sent, the whole list: a present array replaces the tags, and the field shows them all.
           tags,
         });
@@ -125,6 +181,8 @@ export function ProjectDialog({
           // What the form shows is what is stored: "Inherit from console" is not detected again,
           // whether it was preselected after a pre-read or chosen; only "Detect from files" is.
           detect_default_agent: defaultAgent === "detect" ? undefined : false,
+          ...changedAgentFields("create", sent, initial),
+          ...changedProjectAccounts("create", sentAccounts, initialAccounts),
           tags,
         });
       }
@@ -202,14 +260,45 @@ export function ProjectDialog({
           description={t("dialog.project.tagsHint")}
           isDisabled={locked}
         />
-        <OptionSelect
+        <AgentAccountField
           label={t("dialog.project.defaultAgent")}
           options={defaultAgentOptions}
           value={defaultAgent}
           onChange={setDefaultAgent}
           description={!editing && source === "parent" ? t("dialog.project.agentDetectHint") : undefined}
           isDisabled={locked}
+          account={
+            agent && accountField && ownAccounts.length > 0
+              ? {
+                  label: t("dialog.agentSettings.account", { agent: AGENT_LABEL[agent] }),
+                  options: [
+                    {
+                      value: accountValue(INHERIT),
+                      label: t("dialog.project.accountInherit", {
+                        account: ownAccounts.find((account) => account.id === consoleAccountId)?.name ?? t("settings.accounts.defaultName"),
+                      }),
+                    },
+                    { value: accountValue({ kind: "default" }), label: t("settings.accounts.defaultName") },
+                    ...ownAccounts.map((account) => ({ value: accountValue({ kind: "account", id: account.id }), label: account.name })),
+                  ],
+                  value: accountValue(picked),
+                  onChange: (value) => setAccountFields({ ...accountFields, [accountField]: accountOfValue(value) }),
+                }
+              : undefined
+          }
         />
+        {agent && modelField && effortField && (
+          <LaunchSettingsFields
+            agent={agent}
+            account={launchAccount}
+            model={fields[modelField]}
+            effort={fields[effortField]}
+            onModelChange={(value) => setFields({ ...fields, [modelField]: value })}
+            onEffortChange={(value) => setFields({ ...fields, [effortField]: value })}
+            note={t("dialog.project.launchSettingsNote")}
+            isDisabled={locked}
+          />
+        )}
         <DialogError message={error} />
       </Dialog>
       {pickingDirectory && (

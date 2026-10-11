@@ -1,0 +1,164 @@
+{
+ "fetched_at": "2026-10-11T06:55:18.914512Z",
+ "grok_version": "1.0.50",
+ "models": {
+  "grok-4.7": {
+   "info": {
+    "id": "grok-4.7",
+    "name": "Grok 4.7",
+    "hidden": false,
+    "supports_reasoning_effort": true,
+    "reasoning_effort": "high",
+    "reasoning_efforts": [
+     {
+      "id": "xhigh",
+      "value": "xhigh",
+      "label": "Extra High",
+      "description": "Maximum reasoning for the hardest tasks.",
+      "default": false
+     },
+     {
+      "id": "high",
+      "value": "high",
+      "label": "High",
+      "description": "Thorough reasoning and quality. Recommended.",
+      "default": true
+     },
+     {
+      "id": "medium",
+      "value": "medium",
+      "label": "Medium",
+      "description": "Strong quality with a faster turnaround.",
+      "default": false
+     },
+     {
+      "id": "low",
+      "value": "low",
+      "label": "Low",
+      "description": "Fastest responses. Best for simple tasks.",
+      "default": false
+     }
+    ]
+   }
+  },
+  "grok-4.7-build-fast": {
+   "info": {
+    "id": "grok-4.7-build-fast",
+    "name": "Grok 4.7 Fast",
+    "hidden": false,
+    "supports_reasoning_effort": true,
+    "reasoning_effort": "high",
+    "reasoning_efforts": [
+     {
+      "id": "xhigh",
+      "value": "xhigh",
+      "label": "Extra High",
+      "description": "Maximum reasoning for the hardest tasks.",
+      "default": false
+     },
+     {
+      "id": "high",
+      "value": "high",
+      "label": "High",
+      "description": "Thorough reasoning and quality. Recommended.",
+      "default": true
+     },
+     {
+      "id": "medium",
+      "value": "medium",
+      "label": "Medium",
+      "description": "Strong quality with a faster turnaround.",
+      "default": false
+     },
+     {
+      "id": "low",
+      "value": "low",
+      "label": "Low",
+      "description": "Fastest responses. Best for simple tasks.",
+      "default": false
+     }
+    ]
+   }
+  },
+  "grok-4.6": {
+   "info": {
+    "id": "grok-4.6",
+    "name": "Grok 4.6",
+    "hidden": false,
+    "supports_reasoning_effort": true,
+    "reasoning_effort": "high",
+    "reasoning_efforts": [
+     {
+      "id": "xhigh",
+      "value": "xhigh",
+      "label": "Extra High",
+      "description": "Highest effort and reasoning level",
+      "default": false
+     },
+     {
+      "id": "high",
+      "value": "high",
+      "label": "High",
+      "description": "Higher implementation quality with extensive reasoning",
+      "default": true
+     },
+     {
+      "id": "medium",
+      "value": "medium",
+      "label": "Medium",
+      "description": "Balanced effort with standard implementation and testing",
+      "default": false
+     },
+     {
+      "id": "low",
+      "value": "low",
+      "label": "Low",
+      "description": "Quick, fast implementations",
+      "default": false
+     }
+    ]
+   }
+  },
+  "grok-4.5": {
+   "info": {
+    "id": "grok-4.5",
+    "name": "Grok 4.5",
+    "hidden": false,
+    "supports_reasoning_effort": true,
+    "reasoning_effort": "high",
+    "reasoning_efforts": [
+     {
+      "id": "high",
+      "value": "high",
+      "label": "High",
+      "description": "Highest implementation quality with extensive reasoning",
+      "default": true
+     },
+     {
+      "id": "medium",
+      "value": "medium",
+      "label": "Medium",
+      "description": "Balanced effort with standard implementation and testing",
+      "default": false
+     },
+     {
+      "id": "low",
+      "value": "low",
+      "label": "Low",
+      "description": "Quick, fast implementations",
+      "default": false
+     }
+    ]
+   }
+  },
+  "grok-internal": {
+   "info": {
+    "id": "grok-internal",
+    "name": "Internal",
+    "hidden": true,
+    "supports_reasoning_effort": false,
+    "reasoning_efforts": []
+   }
+  }
+ }
+}

@@ -1,5 +1,14 @@
 import type { Translate } from "./i18n/catalog";
-import type { Account, AccountField, Agent, AgentAvailability } from "./protocol";
+import type {
+  Account,
+  AccountField,
+  Agent,
+  AgentAvailability,
+  ConsoleEffortField,
+  ConsoleModelField,
+  ProjectEffortField,
+  ProjectModelField,
+} from "./protocol";
 
 /** Display labels for the three supported agents (see "Rows, names and keyboard focus" in
  * docs/product/sidebar.md). */
@@ -26,6 +35,32 @@ export const AGENT_ACCOUNT_FIELD: Record<Agent, AccountField> = {
   codex: "codex_account_id",
   grok: "grok_account_id",
 };
+
+/** The console fields holding each agent's console-session model and reasoning effort. */
+export const AGENT_CONSOLE_MODEL_FIELD = {
+  claude: "claude_console_session_model",
+  codex: "codex_console_session_model",
+  grok: "grok_console_session_model",
+} as const satisfies Record<Agent, ConsoleModelField>;
+
+export const AGENT_CONSOLE_EFFORT_FIELD = {
+  claude: "claude_console_session_effort",
+  codex: "codex_console_session_effort",
+  grok: "grok_console_session_effort",
+} as const satisfies Record<Agent, ConsoleEffortField>;
+
+/** The project fields holding each agent's model and reasoning effort for the project's sessions. */
+export const AGENT_PROJECT_MODEL_FIELD = {
+  claude: "claude_session_model",
+  codex: "codex_session_model",
+  grok: "grok_session_model",
+} as const satisfies Record<Agent, ProjectModelField>;
+
+export const AGENT_PROJECT_EFFORT_FIELD = {
+  claude: "claude_session_effort",
+  codex: "codex_session_effort",
+  grok: "grok_session_effort",
+} as const satisfies Record<Agent, ProjectEffortField>;
 
 /** Whether availability has been determined and found `agent` missing — never while it has not
  * yet been determined, which must not be read as "not installed". */

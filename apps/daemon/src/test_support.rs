@@ -121,6 +121,7 @@ pub(crate) fn app_state(label: &str) -> (Arc<AppState>, ScratchDir) {
             1234,
             "/opt/octoboardd".to_string(),
             dir.join("output"),
+            dir.join("consoles"),
         )),
         dir,
     )

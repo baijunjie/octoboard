@@ -31,7 +31,7 @@ from any one row, but from the console sessions section's own menu, which offers
 sessions** — a submenu of the console's newest archived console sessions, each of which can be
 selected, and the way to the archive view of all of them (see "The archive view" in
 `docs/product/sidebar.md`). The section's own **New console session** button opens one with the
-console's current console session agent and its account for that agent — whereas resuming or reopening a
+console's current default agent and its account for that agent — whereas resuming or reopening a
 console session keeps the ones it has recorded, which only a switch changes (see "Agent config directories" in
 `docs/product/consoles-and-projects.md` and "Switching a session's account" below).
 
@@ -77,12 +77,13 @@ A session is opened under a project with:
 
 - **Agent and account** — one grouped list that settles both at once, so no combination that does not exist can be
   chosen. Each group is an agent, headed by its icon and name, and lists that agent's accounts with its default account
-  first, each entry named by the account alone. It opens on the agent and account chosen as below, and any other entry
-  can be picked for this session only. All three agents are listed every time; one Octoboard has determined
-  unavailable (its binary does not resolve on the user's login shell `PATH`) keeps its group, headed as not installed,
-  with none of its entries selectable — they are still reached with the arrow keys and announced as disabled — and the
-  list opens on a selectable entry whenever there is one. Before that
-  determination has landed every group is selectable and none is labelled as not installed. Until accounts have been
+  first, each entry named by the account alone. It opens on the agent resolved as in "Which agent a session uses"
+  below, and on the account that agent resolves to when none is chosen (the project's, else the console's, see "Which account a
+  session uses" below), and any other entry can be picked for this session only. All three agents are listed every time; one Octoboard has
+  determined unavailable (its binary does not resolve on the user's login shell `PATH`) keeps its group, headed as not
+  installed, with none of its entries selectable — they are still reached with the arrow keys and announced as
+  disabled — and the list opens on a selectable entry whenever there is one. Before that determination has landed
+  every group is selectable and none is labelled as not installed. Until accounts have been
   added an agent's group holds its default account alone.
 - **Title** (optional) — defaults to the project's name. A console session's title defaults to "Hub" for ordinal 1
   and "Hub `<ordinal>`" for any later one ("Hub 2", "Hub 3", …), where the ordinal is one past the highest ever used in
@@ -133,7 +134,10 @@ In descending priority:
 2. the project's default agent;
 3. the console's default agent.
 
-A console session uses the console's console session agent instead.
+**A console session always runs the console's default agent.** No agent is chosen for one when it is opened, and an
+agent named in the request that opens it is ignored; the console session instruction file in the console's working
+directory is written for that same agent (see "The console session's instruction file" in
+`docs/product/launching-agents.md`).
 
 A session's agent is fixed for its lifetime. Resuming or reopening a session always relaunches the same agent —
 session records belong to a specific agent and cannot be moved across agents.
@@ -143,13 +147,31 @@ session records belong to a specific agent and cannot be moved across agents.
 The account of the session's agent, in descending priority:
 
 1. the account chosen for this session when it was opened;
-2. the console's account for that agent;
-3. that agent's default account.
+2. the project's account for that agent, where the project does not leave it to its console — a project set to **the
+   agent's default account** ends the chain there, whatever the console names;
+3. the console's account for that agent;
+4. that agent's default account.
 
-The project contributes the agent alone, never an account. A session opened without touching the list therefore runs
-under what it always has: the console's account for the agent, or the default account when the console pins nothing.
-Where a session's agent is named in the sidebar, its account is named with it (see "Session rows" in
+A console session carries no project, so its chain starts at the console's reference. A project leaves the account to
+the console for every agent it inherits for, which is how every project starts (see "The project's account, model and
+reasoning effort" in `docs/product/consoles-and-projects.md`). A session opened without touching the list therefore
+runs under the project's account for its agent, or the console's, or the agent's default account when neither pins
+anything. Where a session's agent is named in the sidebar, its account is named with it (see "Session rows" in
 `docs/product/sidebar.md`).
+
+A session that makes no choice of its own — one a console session or a project session starts with its own
+`start_session` tool — takes the project's setting. The dialog that opens a session by hand always makes a choice,
+opening on the account the rest of the chain resolves to (the project's setting for the agent, else the console's, else
+the agent's default account) and sending that as the session's own choice, so a session opened there runs under that
+account unless the user picks another in the list.
+
+### Which model and reasoning effort a session uses
+
+A console session is launched with its console's pair for its agent, a project session with its project's pair for its
+agent. Neither falls back to the other, and unset means the agent's own choice. Both are read when the session is
+opened or resumed, so a running session keeps what it started with. The settings themselves are in
+`docs/product/model-and-reasoning-effort.md`, and how they reach the agent in "The model and reasoning effort" in
+`docs/product/launching-agents.md`.
 
 ## Session statuses
 

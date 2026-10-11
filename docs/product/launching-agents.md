@@ -79,6 +79,10 @@ A resume reassembles the full injection, because all three agents resolve hooks 
 arguments every time and a resume that omitted them would leave a session nobody can observe and nothing to report
 with.
 
+A model and a reasoning effort set for the session's console or project are passed on the launch as well (see "The
+model and reasoning effort" below). They are not part of the injection: they are the user's own choice carried to the
+agent, not a capability Octoboard adds.
+
 ### The console session's instruction file
 
 A console session whose agent reads an instruction file gets one generated in the console's working
@@ -88,11 +92,29 @@ project code itself — and how to use the orchestration tools. A **Grok Build c
 such file**, because Grok reads no instructions in a directory that is not a git repository and a
 console's working directory is not one; its whole role travels in a launch flag instead.
 
-The file is written when the console is created, rewritten when the console's console session agent
-changes, and refreshed immediately before every console session launch — so an edit the user makes to
-it does not survive the next launch. Only the file for the console's current console session agent is
+The file is written when the console is created, rewritten when the console's default agent — the agent its console
+sessions run — changes, and refreshed immediately before every console session launch, so an edit the user makes to
+it does not survive the next launch. Only the file for the console's current default agent is
 kept: one left behind by a previous agent is removed, because every agent matches instruction
 filenames by exact spelling and some read more than one of them.
+
+## The model and reasoning effort
+
+A console session is launched with the model and reasoning effort its console holds for its agent, a project session
+with the ones its project holds (see `docs/product/model-and-reasoning-effort.md`). Each value set is passed as that
+agent's own launch argument, on every launch, a resume included, and nothing else about the launch changes. A session
+with neither set is launched exactly as the agent would run it unasked.
+
+Octoboard checks neither value against anything at launch. Which models and which effort levels exist is the agent's
+own business — the dialogs that set them offer what the agent itself answers, and the agent is what answers for a
+value it does not know anyway, in the session's own output, like any other complaint it has about its arguments. What
+the three do differs, and is worth knowing before a value is set:
+
+- **Claude Code** silently lowers an effort the chosen model does not support down to `high`, rather than refusing it.
+- **Codex** refuses an effort the chosen model does not advertise, with an error of its own naming that model.
+- **Grok Build** takes both as flags. Because its session runs against a per-session copy of the Grok configuration
+  file, neither value, and no change the session makes to them while it runs, reaches the user's own Grok
+  configuration (see "Per-agent specifics a user will notice" below).
 
 ## The launch environment
 

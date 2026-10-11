@@ -130,6 +130,17 @@ impl AgentAdapter for ClaudeAdapter {
             spec.owner.as_ref(),
             Agent::Claude,
         ));
+        // Last, after every list-valued flag has closed. Both are global flags, so they sit
+        // alongside `--resume` too. Claude Code quietly lowers `max` and `xhigh` to `high` on a
+        // model that does not support them.
+        if let Some(model) = spec.model {
+            args.push("--model".to_string());
+            args.push(model.to_string());
+        }
+        if let Some(effort) = spec.effort {
+            args.push("--effort".to_string());
+            args.push(effort.to_string());
+        }
 
         let mut env = Vec::new();
         if let Some(dir) = pinned {
@@ -222,6 +233,28 @@ fn untrusted_workspace_notice(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> O
 mod tests {
     use super::*;
     use crate::adapter::tests::spec_fixture;
+
+    /// With no model or effort set, neither flag is passed, so Claude Code keeps its own choice.
+    #[test]
+    fn no_model_or_effort_adds_no_flags() {
+        let fixture = spec_fixture();
+        let plan = ClaudeAdapter.plan(&fixture.spec()).expect("plan");
+        for flag in ["--model", "--effort"] {
+            assert!(!plan.args.iter().any(|arg| arg == flag), "{flag}");
+        }
+    }
+
+    #[test]
+    fn a_model_and_effort_are_appended_after_every_other_flag() {
+        let mut fixture = spec_fixture();
+        fixture.model = Some("opus".to_string());
+        fixture.effort = Some("high".to_string());
+        let plan = ClaudeAdapter.plan(&fixture.spec()).expect("plan");
+        assert_eq!(
+            plan.args[plan.args.len() - 4..],
+            ["--model", "opus", "--effort", "high"]
+        );
+    }
 
     #[test]
     fn never_passes_the_flags_that_drop_the_projects_own_configuration() {

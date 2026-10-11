@@ -144,8 +144,10 @@ stored trimmed, and one left blank is refused. A name has to be unique within it
 letter case; accounts of different agents may share a name. A name already taken by another account of the same agent,
 or by the default account — its name in the current language, and the English word "Default", which is reserved in
 every language — is reported under the name field. Removing an account asks first and says that consoles referring to it go
-back to the agent's default account and that sessions already open are not affected. What an account is and how
-consoles and sessions use one are in "Agent config directories" in `docs/product/consoles-and-projects.md`.
+back to the agent's default account and that sessions already open are not affected. A project referring to it is put
+back to inheriting its console's reference at the same time (see "The project's account, model and reasoning effort" in
+`docs/product/consoles-and-projects.md`). What an account is and how
+consoles, projects and sessions use one are in "Agent config directories" in `docs/product/consoles-and-projects.md`.
 
 ## Trusted folders
 

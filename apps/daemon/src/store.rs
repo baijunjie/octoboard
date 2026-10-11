@@ -21,7 +21,8 @@ use serde::Serialize;
 
 use crate::protocol::{
     error_code, now_millis, Account, Agent, CodedError, Console, ConsoleSessionColour, Host,
-    HostKind, Origin, Page, Project, ProjectSource, Role, Session, SessionStatus, Settings,
+    HostKind, Origin, Page, Project, ProjectAccount, ProjectSource, Role, Session, SessionStatus,
+    Settings,
 };
 
 /// The single local host record every project and session points at. There is no other host yet,
@@ -89,6 +90,15 @@ impl Store {
                 claude_account_id TEXT,
                 codex_account_id  TEXT,
                 grok_account_id   TEXT,
+                -- The model and reasoning effort a console session here is launched with, per
+                -- agent because each has its own model names; NULL means the agent's own default.
+                -- Read at launch, so nothing is copied onto the session.
+                claude_console_session_model  TEXT,
+                claude_console_session_effort TEXT,
+                codex_console_session_model   TEXT,
+                codex_console_session_effort  TEXT,
+                grok_console_session_model    TEXT,
+                grok_console_session_effort   TEXT,
                 icon          TEXT,
                 -- The ordinal a console session created in this console is given next, one past
                 -- the highest ever used here. Kept on the console rather than derived from the
@@ -106,6 +116,27 @@ impl Store {
                 default_agent TEXT,
                 source        TEXT NOT NULL,
                 remote_url    TEXT,
+                -- The account each agent's sessions here read, by id; NULL with the flag clear
+                -- inherits the console's reference for that agent. The flag, set only where the id
+                -- is NULL, says the project pins the agent's default account instead, even where
+                -- the console names an account: a separate column so that no stored value in the
+                -- id column can be mistaken for an account id. The id is cleared by
+                -- `Store::delete_account`, like the console's; the flag names no account.
+                claude_account_id TEXT,
+                codex_account_id  TEXT,
+                grok_account_id   TEXT,
+                claude_account_default INTEGER NOT NULL DEFAULT 0,
+                codex_account_default  INTEGER NOT NULL DEFAULT 0,
+                grok_account_default   INTEGER NOT NULL DEFAULT 0,
+                -- The model and reasoning effort a session here is launched with, per agent;
+                -- NULL means the agent's own default. Read at launch, so nothing is copied onto
+                -- the session.
+                claude_session_model  TEXT,
+                claude_session_effort TEXT,
+                codex_session_model   TEXT,
+                codex_session_effort  TEXT,
+                grok_session_model    TEXT,
+                grok_session_effort   TEXT,
                 trust_consent INTEGER NOT NULL DEFAULT 0,
                 pinned        INTEGER NOT NULL DEFAULT 0,
                 tags          TEXT NOT NULL DEFAULT '[]'
@@ -170,12 +201,16 @@ impl Store {
         // No migration runs here: the application has not shipped, so a database whose schema is
         // not this one has already been moved aside by `supersede_if_outdated`, above, rather than
         // upgraded in place. `CREATE TABLE IF NOT EXISTS` therefore only ever meets either a brand
-        // new file or one already in this shape. Three exceptions are changed in place, since
-        // moving the file aside would cost the user every console, project and account over a
-        // change that loses nothing: an optional setting gained after a database was created is
-        // added, so is a session's lead flag, which no session stored before it can have, and the
-        // project's trust permission, once Claude Code's alone and now shared by every agent, is
-        // renamed with its values kept.
+        // new file or one already in this shape. Moving the file aside would cost the user every
+        // console, project and account, so six changes that lose nothing are made in place
+        // instead. Five add a column: an optional setting gained after a database was created, a
+        // session's lead flag (which no session stored before it can have), a console's per-agent
+        // console session model and effort, a project's per-agent account, model and effort, and
+        // a project's per-agent flag for pinning the default account.
+        // The sixth renames the project's trust permission, once Claude Code's alone and now shared
+        // by every agent, keeping its values. A seventh, a data change rather than a column, brings
+        // each console's console session agent in line with its default agent; it is explained
+        // where it runs, below.
         if !column_exists(&conn, "settings", "default_clone_dir")? {
             conn.execute("ALTER TABLE settings ADD COLUMN default_clone_dir TEXT", [])?;
         }
@@ -185,6 +220,38 @@ impl Store {
                 [],
             )?;
         }
+        for column in CONSOLE_SESSION_LAUNCH_COLUMNS {
+            if !column_exists(&conn, "consoles", column)? {
+                conn.execute(
+                    &format!("ALTER TABLE consoles ADD COLUMN {column} TEXT"),
+                    [],
+                )?;
+            }
+        }
+        for column in PROJECT_SETTING_COLUMNS {
+            if !column_exists(&conn, "projects", column)? {
+                conn.execute(
+                    &format!("ALTER TABLE projects ADD COLUMN {column} TEXT"),
+                    [],
+                )?;
+            }
+        }
+        for column in PROJECT_ACCOUNT_DEFAULT_COLUMNS {
+            if !column_exists(&conn, "projects", column)? {
+                conn.execute(
+                    &format!("ALTER TABLE projects ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0"),
+                    [],
+                )?;
+            }
+        }
+        // A console session always runs the console's default agent now; the column is kept, but
+        // no longer a setting of its own. Rows from before that may differ, and this is a no-op
+        // on every open after the first.
+        conn.execute(
+            "UPDATE consoles SET console_session_agent = default_agent
+             WHERE console_session_agent <> default_agent",
+            [],
+        )?;
         if column_exists(&conn, "projects", "claude_trust_consent")? {
             conn.execute(
                 "ALTER TABLE projects RENAME COLUMN claude_trust_consent TO trust_consent",
@@ -247,8 +314,11 @@ impl Store {
     pub fn insert_console(&self, console: &Console) -> Result<()> {
         self.lock().execute(
             "INSERT INTO consoles (id, name, workdir, console_session_agent, default_agent, claude_account_id,
-                                   codex_account_id, grok_account_id, icon, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                                   codex_account_id, grok_account_id, claude_console_session_model,
+                                   claude_console_session_effort, codex_console_session_model,
+                                   codex_console_session_effort, grok_console_session_model,
+                                   grok_console_session_effort, icon, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             params![
                 console.id,
                 console.name,
@@ -258,6 +328,12 @@ impl Store {
                 console.claude_account_id,
                 console.codex_account_id,
                 console.grok_account_id,
+                console.claude_console_session_model,
+                console.claude_console_session_effort,
+                console.codex_console_session_model,
+                console.codex_console_session_effort,
+                console.grok_console_session_model,
+                console.grok_console_session_effort,
                 console.icon,
                 console.created_at,
             ],
@@ -269,7 +345,12 @@ impl Store {
         self.lock().execute(
             "UPDATE consoles SET name = ?2, console_session_agent = ?3, default_agent = ?4,
                                  claude_account_id = ?5, codex_account_id = ?6,
-                                 grok_account_id = ?7, icon = ?8
+                                 grok_account_id = ?7, claude_console_session_model = ?8,
+                                 claude_console_session_effort = ?9,
+                                 codex_console_session_model = ?10,
+                                 codex_console_session_effort = ?11,
+                                 grok_console_session_model = ?12,
+                                 grok_console_session_effort = ?13, icon = ?14
              WHERE id = ?1",
             params![
                 console.id,
@@ -279,6 +360,12 @@ impl Store {
                 console.claude_account_id,
                 console.codex_account_id,
                 console.grok_account_id,
+                console.claude_console_session_model,
+                console.claude_console_session_effort,
+                console.codex_console_session_model,
+                console.codex_console_session_effort,
+                console.grok_console_session_model,
+                console.grok_console_session_effort,
                 console.icon,
             ],
         )?;
@@ -369,16 +456,20 @@ impl Store {
         Ok(rows)
     }
 
-    /// Removes the account, after clearing it from every console that refers to it — which puts
-    /// each one back on its agent's default account — in the same locked step, so no reader ever
-    /// sees a console still pointing at an id the `accounts` table no longer has.
+    /// Removes the account, after clearing it from every console and project that refers to it —
+    /// which puts each console back on its agent's default account and each project back to
+    /// inheriting its console's — in the same locked step, so no reader ever sees one still
+    /// pointing at an id the `accounts` table no longer has. A project that pins the default
+    /// account refers to no id, so it is left alone.
     pub fn delete_account(&self, id: &str) -> Result<()> {
         let conn = self.lock();
         for column in ["claude_account_id", "codex_account_id", "grok_account_id"] {
-            conn.execute(
-                &format!("UPDATE consoles SET {column} = NULL WHERE {column} = ?1"),
-                params![id],
-            )?;
+            for table in ["consoles", "projects"] {
+                conn.execute(
+                    &format!("UPDATE {table} SET {column} = NULL WHERE {column} = ?1"),
+                    params![id],
+                )?;
+            }
         }
         conn.execute("DELETE FROM accounts WHERE id = ?1", params![id])?;
         Ok(())
@@ -389,8 +480,14 @@ impl Store {
     pub fn insert_project(&self, project: &Project) -> Result<()> {
         self.lock().execute(
             "INSERT INTO projects (id, console_id, host_id, name, path, default_agent, source,
-                                   remote_url, trust_consent, pinned, tags)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                                   remote_url, claude_account_id, codex_account_id,
+                                   grok_account_id, claude_account_default,
+                                   codex_account_default, grok_account_default,
+                                   claude_session_model, claude_session_effort,
+                                   codex_session_model, codex_session_effort, grok_session_model,
+                                   grok_session_effort, trust_consent, pinned, tags)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+                     ?18, ?19, ?20, ?21, ?22, ?23)",
             params![
                 project.id,
                 project.console_id,
@@ -400,6 +497,18 @@ impl Store {
                 project.default_agent.as_ref().map(enum_to_text),
                 enum_to_text(&project.source),
                 project.remote_url,
+                project.claude_account_id.account_id(),
+                project.codex_account_id.account_id(),
+                project.grok_account_id.account_id(),
+                project.claude_account_id == ProjectAccount::Default,
+                project.codex_account_id == ProjectAccount::Default,
+                project.grok_account_id == ProjectAccount::Default,
+                project.claude_session_model,
+                project.claude_session_effort,
+                project.codex_session_model,
+                project.codex_session_effort,
+                project.grok_session_model,
+                project.grok_session_effort,
                 project.trust_consent,
                 project.pinned,
                 tags_to_text(&project.tags),
@@ -421,12 +530,31 @@ impl Store {
 
     pub fn update_project(&self, project: &Project) -> Result<()> {
         self.lock().execute(
-            "UPDATE projects SET name = ?2, default_agent = ?3, pinned = ?4, tags = ?5
+            "UPDATE projects SET name = ?2, default_agent = ?3, claude_account_id = ?4,
+                                 codex_account_id = ?5, grok_account_id = ?6,
+                                 claude_account_default = ?7, codex_account_default = ?8,
+                                 grok_account_default = ?9,
+                                 claude_session_model = ?10, claude_session_effort = ?11,
+                                 codex_session_model = ?12, codex_session_effort = ?13,
+                                 grok_session_model = ?14, grok_session_effort = ?15,
+                                 pinned = ?16, tags = ?17
              WHERE id = ?1",
             params![
                 project.id,
                 project.name,
                 project.default_agent.as_ref().map(enum_to_text),
+                project.claude_account_id.account_id(),
+                project.codex_account_id.account_id(),
+                project.grok_account_id.account_id(),
+                project.claude_account_id == ProjectAccount::Default,
+                project.codex_account_id == ProjectAccount::Default,
+                project.grok_account_id == ProjectAccount::Default,
+                project.claude_session_model,
+                project.claude_session_effort,
+                project.codex_session_model,
+                project.codex_session_effort,
+                project.grok_session_model,
+                project.grok_session_effort,
                 project.pinned,
                 tags_to_text(&project.tags),
             ],
@@ -913,7 +1041,9 @@ const CURRENT_SHAPE_COLUMNS: [(&str, &str); 3] = [
 /// the two columns together tell an outdated table apart from a current one. A `pages` table that
 /// still names the console rather than the console session (milestone 9) is outdated the same way;
 /// see [`CURRENT_SHAPE_COLUMNS`]. A `projects` table whose trust permission column still has its
-/// older name is not: `Store::open` renames that column in place.
+/// older name is not: `Store::open` renames that column in place. Nor is a `consoles` or `projects`
+/// table without its per-agent launch or account columns: `Store::open` adds those in place
+/// (see [`CONSOLE_SESSION_LAUNCH_COLUMNS`] and [`PROJECT_SETTING_COLUMNS`]).
 ///
 /// The old file is renamed rather than deleted, so a user who needs what was in it still has it on
 /// disk; see "the files Octoboard keeps under `~/.octoboard`" in
@@ -964,7 +1094,35 @@ fn supersede_if_outdated(path: &Path) -> Result<()> {
 }
 
 const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agent, source,
-                               remote_url, trust_consent, pinned, tags";
+                               remote_url, claude_account_id, codex_account_id, grok_account_id,
+                               claude_account_default, codex_account_default, grok_account_default,
+                               claude_session_model, claude_session_effort, codex_session_model,
+                               codex_session_effort, grok_session_model, grok_session_effort,
+                               trust_consent, pinned, tags";
+
+/// The projects columns flagging that a project pins an agent's default account. Added in place
+/// like [`PROJECT_SETTING_COLUMNS`] and absent from `CURRENT_SHAPE_COLUMNS` for the same reason;
+/// a row from before them reads as clear, which is inheriting.
+const PROJECT_ACCOUNT_DEFAULT_COLUMNS: [&str; 3] = [
+    "claude_account_default",
+    "codex_account_default",
+    "grok_account_default",
+];
+
+/// The projects columns holding a project's per-agent account, model and reasoning effort. Added
+/// in place to a database that predates them, and deliberately absent from
+/// `CURRENT_SHAPE_COLUMNS`: listing them there would move every existing database aside.
+const PROJECT_SETTING_COLUMNS: [&str; 9] = [
+    "claude_account_id",
+    "codex_account_id",
+    "grok_account_id",
+    "claude_session_model",
+    "claude_session_effort",
+    "codex_session_model",
+    "codex_session_effort",
+    "grok_session_model",
+    "grok_session_effort",
+];
 
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
                                role, origin, title, status, has_conversation, bound_to, colour,
@@ -972,8 +1130,23 @@ const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_
                                lead";
 
 const CONSOLE_COLUMNS: &str = "id, name, workdir, console_session_agent, default_agent,
-                               claude_account_id, codex_account_id, grok_account_id, icon,
+                               claude_account_id, codex_account_id, grok_account_id,
+                               claude_console_session_model, claude_console_session_effort,
+                               codex_console_session_model, codex_console_session_effort,
+                               grok_console_session_model, grok_console_session_effort, icon,
                                created_at";
+
+/// The consoles columns holding the model and reasoning effort a console session is launched
+/// with. Added in place to a database that predates them, and deliberately absent from
+/// `CURRENT_SHAPE_COLUMNS`: listing them there would move every existing database aside.
+const CONSOLE_SESSION_LAUNCH_COLUMNS: [&str; 6] = [
+    "claude_console_session_model",
+    "claude_console_session_effort",
+    "codex_console_session_model",
+    "codex_console_session_effort",
+    "grok_console_session_model",
+    "grok_console_session_effort",
+];
 
 /// Shared by [`Store::insert_session`] and [`Store::insert_console_session`], which differ only in
 /// how `colour`, `ordinal` and `title` are decided before this runs.
@@ -1021,8 +1194,14 @@ fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
         claude_account_id: row.get(5)?,
         codex_account_id: row.get(6)?,
         grok_account_id: row.get(7)?,
-        icon: row.get(8)?,
-        created_at: row.get(9)?,
+        claude_console_session_model: row.get(8)?,
+        claude_console_session_effort: row.get(9)?,
+        codex_console_session_model: row.get(10)?,
+        codex_console_session_effort: row.get(11)?,
+        grok_console_session_model: row.get(12)?,
+        grok_console_session_effort: row.get(13)?,
+        icon: row.get(14)?,
+        created_at: row.get(15)?,
     })
 }
 
@@ -1062,7 +1241,7 @@ fn read_account(row: &Row<'_>) -> rusqlite::Result<Account> {
 
 fn read_project(row: &Row<'_>) -> rusqlite::Result<Project> {
     let id: String = row.get(0)?;
-    let tags = tags_from_text(&id, &row.get::<_, String>(10)?);
+    let tags = tags_from_text(&id, &row.get::<_, String>(22)?);
     Ok(Project {
         id,
         console_id: row.get(1)?,
@@ -1072,10 +1251,29 @@ fn read_project(row: &Row<'_>) -> rusqlite::Result<Project> {
         default_agent: enum_from_row_opt::<Agent>(row, 5)?,
         source: enum_from_row::<ProjectSource>(row, 6)?,
         remote_url: row.get(7)?,
-        trust_consent: row.get(8)?,
-        pinned: row.get(9)?,
+        claude_account_id: project_account(row.get(8)?, row.get(11)?),
+        codex_account_id: project_account(row.get(9)?, row.get(12)?),
+        grok_account_id: project_account(row.get(10)?, row.get(13)?),
+        claude_session_model: row.get(14)?,
+        claude_session_effort: row.get(15)?,
+        codex_session_model: row.get(16)?,
+        codex_session_effort: row.get(17)?,
+        grok_session_model: row.get(18)?,
+        grok_session_effort: row.get(19)?,
+        trust_consent: row.get(20)?,
+        pinned: row.get(21)?,
         tags,
     })
+}
+
+/// A project's account setting from its id column and its pins-the-default flag. An id wins over
+/// the flag, though nothing writes both.
+fn project_account(id: Option<String>, pins_default: bool) -> ProjectAccount {
+    match id {
+        Some(id) => ProjectAccount::Account { id },
+        None if pins_default => ProjectAccount::Default,
+        None => ProjectAccount::Inherit,
+    }
 }
 
 fn read_page(row: &Row<'_>) -> rusqlite::Result<Page> {
@@ -1182,6 +1380,12 @@ mod tests {
             claude_account_id: claude.map(str::to_string),
             codex_account_id: codex.map(str::to_string),
             grok_account_id: grok.map(str::to_string),
+            claude_console_session_model: None,
+            claude_console_session_effort: None,
+            codex_console_session_model: None,
+            codex_console_session_effort: None,
+            grok_console_session_model: None,
+            grok_console_session_effort: None,
             icon: None,
             created_at: 0,
         }
@@ -1322,6 +1526,283 @@ mod tests {
         assert!(!session.lead);
     }
 
+    /// A database from before a console carried a console session model and effort keeps its
+    /// consoles, and gains the columns in place.
+    #[test]
+    fn the_console_session_launch_columns_are_added_in_place() {
+        let path = temp_db("console-session-launch-columns");
+        {
+            let store = Store::open(&path).expect("store");
+            store
+                .insert_console(&console(None, None, None))
+                .expect("console");
+        }
+        {
+            let conn = Connection::open(&path).expect("database");
+            for column in CONSOLE_SESSION_LAUNCH_COLUMNS {
+                conn.execute(&format!("ALTER TABLE consoles DROP COLUMN {column}"), [])
+                    .expect("the older shape");
+            }
+        }
+
+        let store = Store::open(&path).expect("reopened in place");
+        let mut kept = store.get_console("console-1").unwrap().expect("kept");
+        assert_eq!(kept.claude_console_session_model, None);
+        // Six distinct values, so a pair of columns swapped between the SELECT list and the
+        // positional reads fails here.
+        kept.claude_console_session_model = Some("claude-model".to_string());
+        kept.claude_console_session_effort = Some("claude-effort".to_string());
+        kept.codex_console_session_model = Some("codex-model".to_string());
+        kept.codex_console_session_effort = Some("codex-effort".to_string());
+        kept.grok_console_session_model = Some("grok-model".to_string());
+        kept.grok_console_session_effort = Some("grok-effort".to_string());
+        store.update_console(&kept).expect("writes the new columns");
+        let reread = store.get_console("console-1").unwrap().expect("kept");
+        assert_eq!(
+            reread.claude_console_session_model.as_deref(),
+            Some("claude-model")
+        );
+        assert_eq!(
+            reread.claude_console_session_effort.as_deref(),
+            Some("claude-effort")
+        );
+        assert_eq!(
+            reread.codex_console_session_model.as_deref(),
+            Some("codex-model")
+        );
+        assert_eq!(
+            reread.codex_console_session_effort.as_deref(),
+            Some("codex-effort")
+        );
+        assert_eq!(
+            reread.grok_console_session_model.as_deref(),
+            Some("grok-model")
+        );
+        assert_eq!(
+            reread.grok_console_session_effort.as_deref(),
+            Some("grok-effort")
+        );
+
+        // A console inserted with all six set reads them back the same way.
+        let mut inserted = console(None, None, None);
+        inserted.id = "console-2".to_string();
+        inserted.workdir = "/tmp/console-2".to_string();
+        inserted.claude_console_session_model = kept.claude_console_session_model.clone();
+        inserted.claude_console_session_effort = kept.claude_console_session_effort.clone();
+        inserted.codex_console_session_model = kept.codex_console_session_model.clone();
+        inserted.codex_console_session_effort = kept.codex_console_session_effort.clone();
+        inserted.grok_console_session_model = kept.grok_console_session_model.clone();
+        inserted.grok_console_session_effort = kept.grok_console_session_effort.clone();
+        store.insert_console(&inserted).expect("insert");
+        let listed = store.get_console("console-2").unwrap().expect("listed");
+        assert_eq!(
+            [
+                listed.claude_console_session_model,
+                listed.claude_console_session_effort,
+                listed.codex_console_session_model,
+                listed.codex_console_session_effort,
+                listed.grok_console_session_model,
+                listed.grok_console_session_effort,
+            ]
+            .map(|field| field.expect("set")),
+            [
+                "claude-model",
+                "claude-effort",
+                "codex-model",
+                "codex-effort",
+                "grok-model",
+                "grok-effort",
+            ]
+        );
+
+        // Reopened once more, the same values are read back from the stored columns.
+        drop(store);
+        let store = Store::open(&path).expect("reopened again");
+        let again = store.get_console("console-1").unwrap().expect("kept");
+        assert_eq!(
+            again.codex_console_session_effort.as_deref(),
+            Some("codex-effort")
+        );
+    }
+
+    /// The three states of a project's account for an agent round-trip through insert, update and
+    /// read, each agent's independent, and the id column never holds anything but an account id.
+    #[test]
+    fn a_projects_three_account_states_round_trip() {
+        let path = temp_db("project-account-states");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        let mut stored = project(false);
+        stored.claude_account_id = named("claude-acct");
+        stored.codex_account_id = ProjectAccount::Default;
+        store.insert_project(&stored).expect("insert");
+        let read = || store.get_project("project-1").unwrap().unwrap();
+        let states = |project: &Project| {
+            [
+                project.claude_account_id.clone(),
+                project.codex_account_id.clone(),
+                project.grok_account_id.clone(),
+            ]
+        };
+        assert_eq!(
+            states(&read()),
+            [
+                named("claude-acct"),
+                ProjectAccount::Default,
+                ProjectAccount::Inherit
+            ]
+        );
+
+        // Every state can be moved to every other by an update.
+        let all = [
+            ProjectAccount::Inherit,
+            ProjectAccount::Default,
+            named("claude-acct"),
+        ];
+        for from in &all {
+            for to in &all {
+                stored.grok_account_id = from.clone();
+                store.update_project(&stored).expect("update");
+                assert_eq!(read().grok_account_id, *from);
+                stored.grok_account_id = to.clone();
+                store.update_project(&stored).expect("update");
+                assert_eq!(read().grok_account_id, *to);
+            }
+        }
+
+        // The default state stores no id at all, only its flag.
+        stored.grok_account_id = ProjectAccount::Default;
+        store.update_project(&stored).expect("update");
+        let (id, flag): (Option<String>, bool) = store
+            .lock()
+            .query_row(
+                "SELECT grok_account_id, grok_account_default FROM projects WHERE id = 'project-1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((id, flag), (None, true));
+    }
+
+    /// A database from before a project carried its own accounts, models and efforts keeps its
+    /// projects, and gains the columns in place; all nine are written and read back distinct.
+    #[test]
+    fn the_project_setting_columns_are_added_in_place() {
+        let path = temp_db("project-setting-columns");
+        {
+            let store = Store::open(&path).expect("store");
+            store
+                .insert_console(&console(None, None, None))
+                .expect("console");
+            store.insert_project(&project(true)).expect("project");
+        }
+        {
+            let conn = Connection::open(&path).expect("database");
+            for column in PROJECT_SETTING_COLUMNS
+                .into_iter()
+                .chain(PROJECT_ACCOUNT_DEFAULT_COLUMNS)
+            {
+                conn.execute(&format!("ALTER TABLE projects DROP COLUMN {column}"), [])
+                    .expect("the older shape");
+            }
+        }
+
+        let store = Store::open(&path).expect("reopened in place");
+        let mut kept = store.get_project("project-1").unwrap().expect("kept");
+        assert!(kept.trust_consent);
+        assert_eq!(kept.claude_account_id, ProjectAccount::Inherit);
+        assert_eq!(kept.grok_session_effort, None);
+        kept.claude_account_id = named("claude-account");
+        kept.codex_account_id = named("codex-account");
+        kept.grok_account_id = named("grok-account");
+        kept.claude_session_model = Some("claude-model".to_string());
+        kept.claude_session_effort = Some("claude-effort".to_string());
+        kept.codex_session_model = Some("codex-model".to_string());
+        kept.codex_session_effort = Some("codex-effort".to_string());
+        kept.grok_session_model = Some("grok-model".to_string());
+        kept.grok_session_effort = Some("grok-effort".to_string());
+        store.update_project(&kept).expect("writes the new columns");
+
+        let fields = |project: &Project| {
+            [
+                project.claude_account_id.account_id().map(str::to_string),
+                project.codex_account_id.account_id().map(str::to_string),
+                project.grok_account_id.account_id().map(str::to_string),
+                project.claude_session_model.clone(),
+                project.claude_session_effort.clone(),
+                project.codex_session_model.clone(),
+                project.codex_session_effort.clone(),
+                project.grok_session_model.clone(),
+                project.grok_session_effort.clone(),
+            ]
+            .map(|field| field.expect("set"))
+        };
+        let expected = [
+            "claude-account",
+            "codex-account",
+            "grok-account",
+            "claude-model",
+            "claude-effort",
+            "codex-model",
+            "codex-effort",
+            "grok-model",
+            "grok-effort",
+        ];
+        let reread = store.get_project("project-1").unwrap().expect("kept");
+        assert_eq!(fields(&reread), expected);
+        // The trust permission and the pin sit after the new columns in the row and are read by
+        // position, so they are checked to have stayed where they were.
+        assert!(reread.trust_consent);
+        assert!(!reread.pinned);
+
+        // A project inserted with all nine set reads them back the same way.
+        let mut inserted = project(false);
+        inserted.id = "project-2".to_string();
+        inserted.path = "/tmp/project-2".to_string();
+        inserted.claude_account_id = kept.claude_account_id.clone();
+        inserted.codex_account_id = kept.codex_account_id.clone();
+        inserted.grok_account_id = kept.grok_account_id.clone();
+        inserted.claude_session_model = kept.claude_session_model.clone();
+        inserted.claude_session_effort = kept.claude_session_effort.clone();
+        inserted.codex_session_model = kept.codex_session_model.clone();
+        inserted.codex_session_effort = kept.codex_session_effort.clone();
+        inserted.grok_session_model = kept.grok_session_model.clone();
+        inserted.grok_session_effort = kept.grok_session_effort.clone();
+        store.insert_project(&inserted).expect("insert");
+        let listed = store
+            .list_projects()
+            .unwrap()
+            .into_iter()
+            .find(|project| project.id == "project-2")
+            .expect("listed");
+        assert_eq!(fields(&listed), expected);
+        assert!(!listed.trust_consent);
+    }
+
+    /// A console stored when the console session's agent was its own setting may name an agent
+    /// other than the default; opening the database brings it in line.
+    #[test]
+    fn a_divergent_console_session_agent_is_reconciled_on_open() {
+        let path = temp_db("console-session-agent");
+        {
+            let store = Store::open(&path).expect("store");
+            store
+                .insert_console(&console(None, None, None))
+                .expect("console");
+        }
+        {
+            let conn = Connection::open(&path).expect("database");
+            conn.execute("UPDATE consoles SET console_session_agent = 'grok'", [])
+                .expect("the older data");
+        }
+
+        let store = Store::open(&path).expect("reopened");
+        let reconciled = store.get_console("console-1").unwrap().expect("kept");
+        assert_eq!(reconciled.console_session_agent, Agent::Claude);
+    }
+
     /// A reporter whose conclusion only holds while the session has not moved on writes through
     /// this, so the check and the write must be one step: it moves the session only from the status
     /// it expected, and says which happened.
@@ -1371,6 +1852,10 @@ mod tests {
             .is_none());
     }
 
+    fn named(id: &str) -> ProjectAccount {
+        ProjectAccount::Account { id: id.to_string() }
+    }
+
     fn project(consent: bool) -> Project {
         Project {
             id: "project-1".to_string(),
@@ -1381,6 +1866,15 @@ mod tests {
             default_agent: None,
             source: ProjectSource::Local,
             remote_url: None,
+            claude_account_id: ProjectAccount::Inherit,
+            codex_account_id: ProjectAccount::Inherit,
+            grok_account_id: ProjectAccount::Inherit,
+            claude_session_model: None,
+            claude_session_effort: None,
+            codex_session_model: None,
+            codex_session_effort: None,
+            grok_session_model: None,
+            grok_session_effort: None,
             trust_consent: consent,
             pinned: false,
             tags: Vec::new(),
@@ -1603,10 +2097,10 @@ mod tests {
         }
     }
 
-    /// Removing an account clears every console's reference to it, in the same step, so no reader
-    /// is ever left pointing at an id the `accounts` table no longer has.
+    /// Removing an account clears every console's and project's reference to it, in the same step,
+    /// so no reader is ever left pointing at an id the `accounts` table no longer has.
     #[test]
-    fn deleting_an_account_clears_every_consoles_reference_to_it() {
+    fn deleting_an_account_clears_every_consoles_and_projects_reference_to_it() {
         let path = temp_db("delete-account");
         let store = Store::open(&path).expect("store");
         store
@@ -1622,8 +2116,20 @@ mod tests {
         let mut other = console(Some("claude-acct"), None, None);
         other.id = "console-2".to_string();
         store.insert_console(&other).expect("insert");
+        let mut referring = project(false);
+        referring.claude_account_id = named("claude-acct");
+        store.insert_project(&referring).expect("insert");
+        // A project that pins the default account refers to no id, so it keeps saying so.
+        let mut defaulting = project(false);
+        defaulting.id = "project-2".to_string();
+        defaulting.path = "/tmp/project-2".to_string();
+        defaulting.claude_account_id = ProjectAccount::Default;
+        store.insert_project(&defaulting).expect("insert");
 
         store.delete_account("claude-acct").expect("deleted");
+        let claude_account = |id: &str| store.get_project(id).unwrap().unwrap().claude_account_id;
+        assert_eq!(claude_account("project-1"), ProjectAccount::Inherit);
+        assert_eq!(claude_account("project-2"), ProjectAccount::Default);
         assert!(store.get_account("claude-acct").unwrap().is_none());
         for id in ["console-1", "console-2"] {
             let console = store.get_console(id).unwrap().unwrap();

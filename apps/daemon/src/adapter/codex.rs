@@ -157,6 +157,19 @@ impl AgentAdapter for CodexAdapter {
             ))
         ));
 
+        // Codex has no effort flag; the effort is reachable only as a config override, so the
+        // model goes the same way to keep the two consistent. Both come before the positional
+        // task, which Codex takes last. A model that does not advertise the effort is refused by
+        // Codex itself, at launch.
+        if let Some(model) = spec.model {
+            args.push("-c".to_string());
+            args.push(format!("model={}", toml_string(model)));
+        }
+        if let Some(effort) = spec.effort {
+            args.push("-c".to_string());
+            args.push(format!("model_reasoning_effort={}", toml_string(effort)));
+        }
+
         if spec.resume_agent_session_id.is_none() {
             if let Some(task) = spec.task {
                 args.push(task.to_string());
@@ -236,6 +249,30 @@ mod tests {
             .filter(|pair| pair[0] == "-c")
             .map(|pair| pair[1].clone())
             .collect()
+    }
+
+    /// With no model or effort set, neither override is passed, so Codex keeps its own choice.
+    #[test]
+    fn no_model_or_effort_adds_no_overrides() {
+        let fixture = spec_fixture();
+        let plan = CodexAdapter.plan(&fixture.spec()).expect("plan");
+        assert!(!overrides(&plan.args)
+            .iter()
+            .any(|override_| override_.starts_with("model")));
+    }
+
+    #[test]
+    fn a_model_and_effort_are_config_overrides_ahead_of_the_task() {
+        let mut fixture = spec_fixture();
+        fixture.model = Some("gpt-5".to_string());
+        fixture.effort = Some("high".to_string());
+        let mut spec = fixture.spec();
+        spec.task = Some("do it");
+        let plan = CodexAdapter.plan(&spec).expect("plan");
+        let overrides = overrides(&plan.args);
+        assert!(overrides.contains(&"model=\"gpt-5\"".to_string()));
+        assert!(overrides.contains(&"model_reasoning_effort=\"high\"".to_string()));
+        assert_eq!(plan.args.last().map(String::as_str), Some("do it"));
     }
 
     /// Project trust is Codex's own to record when its confirmation is pressed, so it is never

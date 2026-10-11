@@ -137,6 +137,18 @@ impl AgentAdapter for GrokAdapter {
             Agent::Grok,
         ));
 
+        // Grok persists some session settings back into `config.toml`, but the per-session farm
+        // keeps `config.toml` as a copy (see the module comment), so these flags cannot leak into
+        // the user's own configuration.
+        if let Some(model) = spec.model {
+            args.push("--model".to_string());
+            args.push(model.to_string());
+        }
+        if let Some(effort) = spec.effort {
+            args.push("--reasoning-effort".to_string());
+            args.push(effort.to_string());
+        }
+
         if spec.resume_agent_session_id.is_none() {
             if let Some(task) = spec.task {
                 args.push(task.to_string());
@@ -312,6 +324,33 @@ mod tests {
             .shell_env
             .insert("GROK_HOME".to_string(), home.to_string_lossy().into_owned());
         home
+    }
+
+    /// With no model or effort set, neither flag is passed, so Grok keeps its own choice.
+    #[test]
+    fn no_model_or_effort_adds_no_flags() {
+        let mut fixture = spec_fixture();
+        with_default_home(&mut fixture);
+        let plan = GrokAdapter.plan(&fixture.spec()).expect("plan");
+        for flag in ["--model", "--reasoning-effort"] {
+            assert!(!plan.args.iter().any(|arg| arg == flag), "{flag}");
+        }
+    }
+
+    #[test]
+    fn a_model_and_effort_come_after_the_rules_and_before_the_task() {
+        let mut fixture = spec_fixture();
+        with_default_home(&mut fixture);
+        fixture.model = Some("grok-4".to_string());
+        fixture.effort = Some("low".to_string());
+        let mut spec = fixture.spec();
+        spec.task = Some("do it");
+        let plan = GrokAdapter.plan(&spec).expect("plan");
+        let rules = plan.args.iter().position(|arg| arg == "--rules").unwrap();
+        assert_eq!(
+            plan.args[rules + 2..],
+            ["--model", "grok-4", "--reasoning-effort", "low", "do it"]
+        );
     }
 
     #[test]

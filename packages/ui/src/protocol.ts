@@ -42,7 +42,6 @@ export interface Console {
   id: string;
   name: string;
   workdir: string;
-  console_session_agent: Agent;
   default_agent: Agent;
   /** The account each agent's sessions opened in this console read, by id; absent means that
    * agent's default account — the state of pinning nothing. A session resolves its own: the one
@@ -50,13 +49,48 @@ export interface Console {
   claude_account_id?: string | null;
   codex_account_id?: string | null;
   grok_account_id?: string | null;
+  /** The model and reasoning effort a console session of this console is launched with, in the
+   * agent's own spelling; one pair per agent, and a session reads only its own agent's (always the
+   * default agent's). Absent means the agent's own default. Read when a console session is opened
+   * or resumed, so one already running keeps what it started with; project sessions never read
+   * them. */
+  claude_console_session_model?: string | null;
+  claude_console_session_effort?: string | null;
+  codex_console_session_model?: string | null;
+  codex_console_session_effort?: string | null;
+  grok_console_session_model?: string | null;
+  grok_console_session_effort?: string | null;
   /** A custom avatar as an `image/*` `data:` URL of at most 256 KiB; unset shows the default glyph. */
   icon?: string | null;
   created_at: number;
 }
 
+/** What a project says about one agent's account: one state more than a console's reference, which
+ * is an account or the agent's default account. */
+export type ProjectAccount =
+  /** Take the console's reference for the agent. What a project that never set one says, and what
+   * a deleted account leaves behind. */
+  | { kind: "inherit" }
+  /** The agent's default account, the state of pinning nothing, even where the console references
+   * a named account. */
+  | { kind: "default" }
+  /** The account with this id, which belongs to the agent the setting is for. */
+  | { kind: "account"; id: string };
+
 /** The three per-agent account reference fields of a console, as named on the wire. */
 export type AccountField = "claude_account_id" | "codex_account_id" | "grok_account_id";
+
+/** The per-agent model and reasoning effort fields of a console (its console sessions' launch
+ * settings), as named on the wire. */
+export type ConsoleModelField = "claude_console_session_model" | "codex_console_session_model" | "grok_console_session_model";
+export type ConsoleEffortField =
+  | "claude_console_session_effort"
+  | "codex_console_session_effort"
+  | "grok_console_session_effort";
+
+/** The same pair of fields on a project (its sessions' launch settings). */
+export type ProjectModelField = "claude_session_model" | "codex_session_model" | "grok_session_model";
+export type ProjectEffortField = "claude_session_effort" | "codex_session_effort" | "grok_session_effort";
 
 /** A named config directory of one agent, kept once for the whole application. The default
  * account of each agent is not one of these — it is the state of pinning nothing, and what it is
@@ -80,6 +114,23 @@ export interface Project {
   default_agent?: Agent | null;
   source: ProjectSource;
   remote_url?: string | null;
+  /** The account each agent's sessions opened in this project read; always present, with
+   * `{ kind: "inherit" }` taking the console's reference. A session resolves its own: the one
+   * chosen for it, else this (unless it inherits), else the console's, else the agent's default
+   * account. */
+  claude_account_id: ProjectAccount;
+  codex_account_id: ProjectAccount;
+  grok_account_id: ProjectAccount;
+  /** The model and reasoning effort a session of this project is launched with, in the agent's own
+   * spelling; one pair per agent, and a session reads only its own agent's. Absent means the
+   * agent's own default: there is no console-level fallback. Read when a session is opened or
+   * resumed, so one already running keeps what it started with. */
+  claude_session_model?: string | null;
+  claude_session_effort?: string | null;
+  codex_session_model?: string | null;
+  codex_session_effort?: string | null;
+  grok_session_model?: string | null;
+  grok_session_effort?: string | null;
   /** The user has agreed that Octoboard may press any agent's own trust confirmation for this
    * project's directory without asking: the project form of the one permission every agent shares.
    * Only ever set by `confirm_trust` with `remember`, once a confirmation has been pressed. */
@@ -190,6 +241,31 @@ export interface AgentAvailability {
    * this is the *source* home a session's per-session home would be built from, never the
    * per-session home itself. Absent exactly while `availability` is `not_determined`. */
   default_account_dir?: string | null;
+}
+
+/** One model an agent offers, as `list_agent_models` reports it. */
+export interface AgentModel {
+  /** What is passed to the agent as its model: Claude Code's alias (`best`, `opus`, `sonnet`,
+   * `haiku`), or the identifier the Codex or Grok Build catalogue lists. */
+  id: string;
+  /** The name to show. */
+  name: string;
+  /** The reasoning-effort levels to offer for the model, in the agent's own spelling: the
+   * catalogue's own where the model's entry gives them, else the agent's whole measured set;
+   * `[]` only for a model that takes none, and never unknown. A level the model does not
+   * advertise can still be refused by the agent, or quietly lowered (Claude Code does so for a
+   * level its resolved model does not support), so a listed level is one to offer, not a promise
+   * that it is honoured. */
+  efforts: string[];
+}
+
+/** Why `list_agent_models` has no list, as a coded message worded like an `error`. Codes:
+ * `models_binary_not_found`, `models_shell_environment_failed`, `models_timed_out`,
+ * `models_command_failed`, `models_unreadable_output`. */
+export interface ModelsUnavailable {
+  code: string;
+  params: Record<string, string>;
+  message: string;
 }
 
 /** The app-wide settings the daemon stores; it is a record so it can grow. */
@@ -352,25 +428,39 @@ export type RequestBody =
   | {
       type: "create_console";
       name: string;
-      console_session_agent: Agent;
       default_agent: Agent;
       /** Each agent's account, by id; absent means that agent's default account. */
       claude_account_id?: string;
       codex_account_id?: string;
       grok_account_id?: string;
+      /** Each agent's model and reasoning effort for the console's console sessions; absent or
+       * blank means the agent's own default. */
+      claude_console_session_model?: string;
+      claude_console_session_effort?: string;
+      codex_console_session_model?: string;
+      codex_console_session_effort?: string;
+      grok_console_session_model?: string;
+      grok_console_session_effort?: string;
       icon?: string;
     }
   | {
       type: "update_console";
       console: string;
       name?: string;
-      console_session_agent?: Agent;
       default_agent?: Agent;
       /** Each agent's account: absent leaves it alone; an explicit `null` clears it back to that
        * agent's default account. */
       claude_account_id?: string | null;
       codex_account_id?: string | null;
       grok_account_id?: string | null;
+      /** Each agent's console session model and effort: absent leaves it alone; an explicit `null`
+       * (or a blank string) clears it back to the agent's own default. */
+      claude_console_session_model?: string | null;
+      claude_console_session_effort?: string | null;
+      codex_console_session_model?: string | null;
+      codex_console_session_effort?: string | null;
+      grok_console_session_model?: string | null;
+      grok_console_session_effort?: string | null;
       /** Absent leaves the avatar alone; an explicit `null` clears it back to the default glyph. */
       icon?: string | null;
     }
@@ -384,6 +474,18 @@ export type RequestBody =
       remote_url?: string;
       name?: string;
       default_agent?: Agent;
+      /** Each agent's account; absent or `null` means inheriting the console's reference. */
+      claude_account_id?: ProjectAccount | null;
+      codex_account_id?: ProjectAccount | null;
+      grok_account_id?: ProjectAccount | null;
+      /** Each agent's model and reasoning effort for the project's sessions; absent or blank means
+       * the agent's own default. */
+      claude_session_model?: string;
+      claude_session_effort?: string;
+      codex_session_model?: string;
+      codex_session_effort?: string;
+      grok_session_model?: string;
+      grok_session_effort?: string;
       /** Whether an absent `default_agent` is detected from each directory's marker files; absent
        * means true. Sent false by a client that has already shown the detection to the user. */
       detect_default_agent?: boolean;
@@ -398,6 +500,19 @@ export type RequestBody =
        * how the project goes back to inheriting the console's default — the two must stay
        * distinguishable, so this field is never sent as `undefined` when the user means "clear". */
       default_agent?: Agent | null;
+      /** Each agent's account: absent leaves it alone; an explicit `null` puts it back to
+       * inheriting the console's reference. */
+      claude_account_id?: ProjectAccount | null;
+      codex_account_id?: ProjectAccount | null;
+      grok_account_id?: ProjectAccount | null;
+      /** Each agent's model and effort for the project's sessions: absent leaves it alone; an
+       * explicit `null` (or a blank string) clears it back to the agent's own default. */
+      claude_session_model?: string | null;
+      claude_session_effort?: string | null;
+      codex_session_model?: string | null;
+      codex_session_effort?: string | null;
+      grok_session_model?: string | null;
+      grok_session_effort?: string | null;
       /** Absent leaves the project's pin alone. */
       pinned?: boolean;
       /** Absent leaves the project's tags alone; a present array replaces them wholesale. */
@@ -411,6 +526,10 @@ export type RequestBody =
   | { type: "detect_directory_agent"; path: string }
   /** Answered with `agent_detected`, or `git_remote_unreachable` when the remote cannot be read. */
   | { type: "probe_git_remote"; remote_url: string }
+  /** Answered with `agent_models`. `account` is an account id of `agent`, absent for the default
+   * account; one that does not exist or belongs to another agent is refused with
+   * `unknown_account`. Anything else that goes wrong is an empty list with a reason, not an error. */
+  | { type: "list_agent_models"; agent: Agent; account?: string }
   | {
       type: "open_session";
       console_id: string;
@@ -642,6 +761,17 @@ export type Event =
   /** The reply to `detect_directory_agent` and `probe_git_remote`: the one agent the project is set
    * up for, or null for none, several, or one known not to be installed. */
   | { type: "agent_detected"; id?: string; agent: Agent | null }
+  /** The reply to `list_agent_models`; `agent` and `account` echo the request. `models` is empty
+   * exactly when `unavailable` says why, and a form then falls back to the agent's own default
+   * rather than failing. */
+  | {
+      type: "agent_models";
+      id?: string;
+      agent: Agent;
+      account: string | null;
+      models: AgentModel[];
+      unavailable: ModelsUnavailable | null;
+    }
   /** The reply to `list_pages`, oldest first. Pages are not in `snapshot` — a page carries a whole
    * HTML document — so the panel asks for them, and asks again after every `snapshot`: a client
    * that falls too far behind the daemon's broadcasts is sent a fresh snapshot in place of the

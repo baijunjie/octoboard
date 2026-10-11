@@ -319,6 +319,12 @@ mod tests {
                 claude_account_id: None,
                 codex_account_id: None,
                 grok_account_id: None,
+                claude_console_session_model: None,
+                claude_console_session_effort: None,
+                codex_console_session_model: None,
+                codex_console_session_effort: None,
+                grok_console_session_model: None,
+                grok_console_session_effort: None,
                 icon: None,
                 created_at: 0,
             })

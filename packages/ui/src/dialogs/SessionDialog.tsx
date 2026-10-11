@@ -20,8 +20,9 @@ const NO_OWNER = "none";
  * Opens a session manually under a project. One grouped control settles the agent and its account
  * together. It opens on the agent per the "Which agent a session uses" section of
  * docs/product/sessions.md (project default, then console default) with the account that agent
- * resolves to for the console, and the user can pick any other entry for this one session; the
- * entry goes out as `open_session`'s `agent` and `account` fields.
+ * resolves to when none is chosen (the project's reference, else the console's), and the user can
+ * pick any other entry for this one session; the entry goes out as `open_session`'s `agent` and
+ * `account` fields.
  *
  * `open_session` answers with `session_opened`, which names the session it started — the broadcast
  * that puts it in the tree carries no request id, so this reply is the only way to tell which of

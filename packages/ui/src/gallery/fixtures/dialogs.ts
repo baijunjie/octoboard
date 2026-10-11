@@ -1,6 +1,7 @@
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
 import { SAMPLE, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
+import { IMAGES } from "./viewerImages";
 
 const GROUP = "Dialogs";
 
@@ -35,6 +36,64 @@ const cascadeState = snapshotState({
     sessionOf("s-web-3", console_.id, web.id, "Tidy the changelog", "interrupted", { bound_to: cascadeHub.id }),
     sessionOf("s-api-3", console_.id, api.id, "Rename the index", "interrupted", { bound_to: cascadeHub.id }),
   ],
+});
+
+// Two accounts of one agent, so the console dialog has something for its account picker to offer.
+const accountsState = snapshotState({
+  consoles: [console_],
+  projects: [web, api],
+  sessions,
+  settings: {
+    auto_sync_repositories: false,
+    default_clone_dir: "/Users/dev/Projects",
+    accounts: [
+      { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
+      { id: "a-personal", agent: "claude", name: "Personal", config_dir: "/Users/dev/.claude-personal" },
+    ],
+  },
+});
+
+// A console that carries a stored model and effort for its default agent: the model is one the
+// dialog's list no longer names, so it is offered on the end, marked.
+const launchSettingsState = snapshotState({
+  consoles: [{ ...console_, claude_console_session_model: "retired-model", claude_console_session_effort: "high" }],
+  projects: [web, api],
+  sessions,
+});
+
+// A console with a custom avatar, so the dialog shows the image and its delete button.
+const avatarState = snapshotState({
+  consoles: [{ ...console_, icon: `data:${IMAGES.photo_jpg.mediaType};base64,${IMAGES.photo_jpg.data}` }],
+  projects: [web, api],
+  sessions,
+});
+
+// A project that carries a stored account and launch settings for its agent, beside a console that
+// refers to another account, so the project's account picker names what "Inherit" resolves to.
+const configured = projectOf("p-configured", console_.id, "Configured Site", {
+  default_agent: "claude",
+  claude_account_id: { kind: "account", id: "a-work" },
+  claude_session_model: "retired-model",
+  claude_session_effort: "high",
+});
+const configuredState = snapshotState({
+  consoles: [{ ...console_, claude_account_id: "a-personal" }],
+  projects: [configured],
+  sessions: [],
+  settings: accountsState.settings,
+});
+
+// The console pins a named account while the project is on the agent's default account, the state
+// the account picker's second entry exists for.
+const onDefault = projectOf("p-default-account", console_.id, "Default Account Site", {
+  default_agent: "claude",
+  claude_account_id: { kind: "default" },
+});
+const onDefaultState = snapshotState({
+  consoles: [{ ...console_, claude_account_id: "a-personal" }],
+  projects: [onDefault],
+  sessions: [],
+  settings: accountsState.settings,
 });
 
 const consoleActions = (ui: Ui) =>
@@ -72,6 +131,79 @@ export const dialogScenarios: Scenario[] = [
     group: GROUP,
     title: "Edit console",
     state,
+    steps: [consoleActions, (ui) => ui.press(ui.t("sidebar.console.edit"))],
+  },
+  {
+    id: "dialog-new-console-accounts",
+    group: GROUP,
+    title: "New console where the agent has accounts",
+    description: "The agent and its account are one input group; agents with no account of their own show the agent alone.",
+    state: accountsState,
+    steps: [(ui) => ui.press(ui.t("rail.newConsole"))],
+  },
+  {
+    id: "dialog-new-console-advanced",
+    group: GROUP,
+    title: "New console with Advanced open",
+    description: "The model and reasoning effort pickers empty, each showing that the agent's own setting is used, with the model list the daemon answered.",
+    state,
+    steps: [(ui) => ui.press(ui.t("rail.newConsole")), (ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
+  },
+  {
+    id: "dialog-new-console-models-loading",
+    group: GROUP,
+    title: "New console while the model list is out",
+    description: "The model and effort pickers are locked and the model field says the list is loading.",
+    state,
+    agentModels: { claude: "pending" },
+    steps: [(ui) => ui.press(ui.t("rail.newConsole")), (ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
+  },
+  {
+    id: "dialog-edit-console-models-unavailable",
+    group: GROUP,
+    title: "Edit a console whose agent cannot list its models",
+    description: "The daemon found no binary for the agent, so the model picker offers the stored model alone and says why; the effort picker still works over what is stored.",
+    state: launchSettingsState,
+    agentModels: {
+      claude: {
+        models: [],
+        unavailable: {
+          code: "models_binary_not_found",
+          params: { binary: "claude" },
+          message: "claude was not found on the login shell's PATH",
+        },
+      },
+    },
+    steps: [consoleActions, (ui) => ui.press(ui.t("sidebar.console.edit")), (ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
+  },
+  {
+    id: "dialog-new-console-models-no-effort",
+    group: GROUP,
+    title: "New console with a model that takes no reasoning effort",
+    description: "Haiku is chosen: the effort picker stays operable over an empty list, and its note says the model takes none.",
+    state,
+    steps: [
+      (ui) => ui.press(ui.t("rail.newConsole")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+      // The pickers are named by their placeholder, the Model one being the first.
+      (ui) => ui.press(ui.t("dialog.agentSettings.placeholder")),
+      (ui) => ui.press("Haiku"),
+    ],
+  },
+  {
+    id: "dialog-edit-console-launch-settings",
+    group: GROUP,
+    title: "Edit a console with a stored model and effort",
+    description: "The stored model is not in the list the daemon answered, so it is kept and marked; the effort is a listed one.",
+    state: launchSettingsState,
+    steps: [consoleActions, (ui) => ui.press(ui.t("sidebar.console.edit")), (ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
+  },
+  {
+    id: "dialog-edit-console-avatar",
+    group: GROUP,
+    title: "Edit a console with an avatar",
+    description: "The image fills the round control, with its delete button over the corner.",
+    state: avatarState,
     steps: [consoleActions, (ui) => ui.press(ui.t("sidebar.console.edit"))],
   },
   {
@@ -156,8 +288,8 @@ export const dialogScenarios: Scenario[] = [
     id: "dialog-add-project-parent",
     group: GROUP,
     title: "Add the repositories under a parent directory",
-    description: "\"Detect from files\" is preselected, with the helper text saying what it reads.",
-    state,
+    description: "\"Detect from files\" is preselected, with the helper text saying what it reads; the agent has accounts, yet neither the account picker nor Advanced is offered.",
+    state: accountsState,
     steps: [
       ...addProject,
       (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.local"))),
@@ -231,5 +363,48 @@ export const dialogScenarios: Scenario[] = [
     description: "The field's list offers the tags the other projects carry, and none this project already has.",
     state: taggedState,
     steps: [...editTaggedProject, (ui) => ui.press(ui.t("dialog.project.tagsSuggestions"))],
+  },
+  {
+    id: "dialog-add-project-accounts",
+    group: GROUP,
+    title: "Add project where the agent has accounts",
+    description: "The default agent and its account are one input group, the account starting on inheriting the console's.",
+    state: accountsState,
+    steps: addProject,
+  },
+  {
+    id: "dialog-edit-project-launch-settings",
+    group: GROUP,
+    title: "Edit a project with a stored account, model and effort",
+    description: "The stored model is not in the list the daemon answered, so it is kept and marked; the effort is a listed one.",
+    state: configuredState,
+    steps: [
+      (ui) => projectActions(ui, configured.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+    ],
+  },
+  {
+    id: "dialog-edit-project-default-account",
+    group: GROUP,
+    title: "Edit a project on the agent's default account",
+    description: "The console pins a named account; the project is on the agent's default account, so its sessions do not take the console's.",
+    state: onDefaultState,
+    steps: [
+      (ui) => projectActions(ui, onDefault.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
+    ],
+  },
+  {
+    id: "dialog-edit-project-account-choices",
+    group: GROUP,
+    title: "Edit a project with its account choices open",
+    description: "Inheriting the console's, the agent's default account, then its named accounts.",
+    state: onDefaultState,
+    steps: [
+      (ui) => projectActions(ui, onDefault.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.account", { agent: "Claude Code" })),
+    ],
   },
 ];

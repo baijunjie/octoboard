@@ -123,11 +123,16 @@ pub struct Host {
     pub ssh_config: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Console {
     pub id: String,
     pub name: String,
     pub workdir: String,
+    /// The agent this console's console sessions run, which is always `default_agent`: kept
+    /// equal on every save, and reconciled once on open for databases that predate that. Nothing
+    /// reads it; the column is kept so that no existing database has to be rewritten.
+    /// Daemon-only: not part of the record clients are sent.
+    #[serde(skip)]
     pub console_session_agent: Agent,
     pub default_agent: Agent,
     /// The account each agent's sessions opened in this console read, by id; one setting per
@@ -139,6 +144,22 @@ pub struct Console {
     pub codex_account_id: Option<String>,
     /// Grok's own reference; see `claude_account_id`.
     pub grok_account_id: Option<String>,
+    /// The model a console session of this console is launched with, in Claude Code's own
+    /// spelling; one setting per agent, and a session reads only its own agent's. `None` leaves
+    /// the choice to the agent. Read when a console session is opened or resumed, so one already
+    /// running keeps what it started with; a project session never reads it.
+    pub claude_console_session_model: Option<String>,
+    /// The reasoning effort a console session is launched with; see
+    /// `claude_console_session_model`.
+    pub claude_console_session_effort: Option<String>,
+    /// Codex's own model; see `claude_console_session_model`.
+    pub codex_console_session_model: Option<String>,
+    /// Codex's own effort; see `claude_console_session_effort`.
+    pub codex_console_session_effort: Option<String>,
+    /// Grok's own model; see `claude_console_session_model`.
+    pub grok_console_session_model: Option<String>,
+    /// Grok's own effort; see `claude_console_session_effort`.
+    pub grok_console_session_effort: Option<String>,
     /// A custom avatar as an `image/*` `data:` URL of at most 256 KiB; unset shows the default
     /// glyph.
     pub icon: Option<String>,
@@ -207,6 +228,34 @@ pub struct AgentAvailability {
 /// only so `claude_account_id: None` has something to compare a new name against.
 pub const DEFAULT_ACCOUNT_NAME: &str = "Default";
 
+/// What a project says about one agent's account, which is one more state than a console's
+/// reference has: a console's is an account or the agent's default account, while a project can
+/// also decline to say and leave the choice to its console.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ProjectAccount {
+    /// Take the console's reference for the agent. What a project that was never given one, and
+    /// one whose account was deleted, says.
+    #[default]
+    Inherit,
+    /// The agent's default account, even where the console references a named account: pin
+    /// nothing, so the agent uses whatever the login shell exports, else its own config
+    /// directory.
+    Default,
+    /// The account with this id, which belongs to the agent the setting is for.
+    Account { id: String },
+}
+
+impl ProjectAccount {
+    /// The id of the account this names, `None` for the other two states.
+    pub fn account_id(&self) -> Option<&str> {
+        match self {
+            Self::Account { id } => Some(id),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
     pub id: String,
@@ -217,6 +266,33 @@ pub struct Project {
     pub default_agent: Option<Agent>,
     pub source: ProjectSource,
     pub remote_url: Option<String>,
+    /// The account each agent's sessions opened in this project read; one setting per agent, and
+    /// a session reads only its own agent's. See [`ProjectAccount`] for the three states.
+    #[serde(default)]
+    pub claude_account_id: ProjectAccount,
+    /// Codex's own reference; see `claude_account_id`.
+    #[serde(default)]
+    pub codex_account_id: ProjectAccount,
+    /// Grok's own reference; see `claude_account_id`.
+    #[serde(default)]
+    pub grok_account_id: ProjectAccount,
+    /// The model a session of this project is launched with, in Claude Code's own spelling; one
+    /// setting per agent, and a session reads only its own agent's. `None` leaves the choice to
+    /// the agent: there is no console-level fallback, the console's own pair being for its console
+    /// sessions alone. Read when a session is opened or resumed, so one already running keeps what
+    /// it started with.
+    pub claude_session_model: Option<String>,
+    /// The reasoning effort a session of this project is launched with; see
+    /// `claude_session_model`.
+    pub claude_session_effort: Option<String>,
+    /// Codex's own model; see `claude_session_model`.
+    pub codex_session_model: Option<String>,
+    /// Codex's own effort; see `claude_session_effort`.
+    pub codex_session_effort: Option<String>,
+    /// Grok's own model; see `claude_session_model`.
+    pub grok_session_model: Option<String>,
+    /// Grok's own effort; see `claude_session_effort`.
+    pub grok_session_effort: Option<String>,
     /// The user has agreed that Octoboard may press an agent's own trust confirmation for this
     /// project's directory without asking, by sending the keystrokes that accept it (see
     /// `crate::trust`). The project form of the one auto-trust permission every agent shares, a
@@ -278,9 +354,10 @@ pub struct Session {
     /// what gives it its default title ("Hub" for the first, "Hub `<ordinal>`" after). `None` for a
     /// project session.
     pub ordinal: Option<i64>,
-    /// The account this session's own agent reads, by id: the console's reference for that agent
-    /// at the time the session was opened. `None` means the default account. Written when the
-    /// session is opened and by a successful switch of its account, and by nothing else.
+    /// The account this session's own agent reads, by id: the one chosen for the session, else the
+    /// project's reference for that agent, else the console's, as they stood when the session was
+    /// opened. `None` means the default account. Written when the session is opened and by a
+    /// successful switch of its account, and by nothing else.
     pub account_id: Option<String>,
     /// The configuration directory of this session's own agent that it launches with:
     /// `account_id`'s directory at the time it was recorded, or unset when it names the default
@@ -778,7 +855,6 @@ pub struct Request {
 pub enum RequestBody {
     CreateConsole {
         name: String,
-        console_session_agent: Agent,
         default_agent: Agent,
         /// Each agent's account, by id; absent means that agent's default account. A reference
         /// that names no account of that agent is refused with `unknown_account`.
@@ -788,13 +864,26 @@ pub enum RequestBody {
         codex_account_id: Option<String>,
         #[serde(default)]
         grok_account_id: Option<String>,
+        /// Each agent's model and reasoning effort for the console's console sessions; absent or
+        /// blank means the agent's own default.
+        #[serde(default)]
+        claude_console_session_model: Option<String>,
+        #[serde(default)]
+        claude_console_session_effort: Option<String>,
+        #[serde(default)]
+        codex_console_session_model: Option<String>,
+        #[serde(default)]
+        codex_console_session_effort: Option<String>,
+        #[serde(default)]
+        grok_console_session_model: Option<String>,
+        #[serde(default)]
+        grok_console_session_effort: Option<String>,
         #[serde(default)]
         icon: Option<String>,
     },
     UpdateConsole {
         console: String,
         name: Option<String>,
-        console_session_agent: Option<Agent>,
         default_agent: Option<Agent>,
         /// Each agent's account: absent leaves the setting alone; an explicit `null` clears it
         /// back to that agent's default account. A reference that names no account of that agent
@@ -805,6 +894,20 @@ pub enum RequestBody {
         codex_account_id: Option<Option<String>>,
         #[serde(default, deserialize_with = "present_option")]
         grok_account_id: Option<Option<String>>,
+        /// Each agent's console session model and effort: absent leaves the setting alone; an
+        /// explicit `null` (or a blank string) clears it back to the agent's own default.
+        #[serde(default, deserialize_with = "present_option")]
+        claude_console_session_model: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        claude_console_session_effort: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        codex_console_session_model: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        codex_console_session_effort: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        grok_console_session_model: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        grok_console_session_effort: Option<Option<String>>,
         /// Absent leaves the avatar alone; an explicit `null` (or a blank string) clears it back
         /// to the default glyph.
         #[serde(default, deserialize_with = "present_option")]
@@ -820,6 +923,29 @@ pub enum RequestBody {
         remote_url: Option<String>,
         name: Option<String>,
         default_agent: Option<Agent>,
+        /// Each agent's account as a [`ProjectAccount`]; absent or `null` means inheriting the
+        /// console's reference for that agent. An account that names none of that agent's is
+        /// refused with `unknown_account`.
+        #[serde(default)]
+        claude_account_id: Option<ProjectAccount>,
+        #[serde(default)]
+        codex_account_id: Option<ProjectAccount>,
+        #[serde(default)]
+        grok_account_id: Option<ProjectAccount>,
+        /// Each agent's model and reasoning effort for the project's sessions; absent or blank
+        /// means the agent's own default.
+        #[serde(default)]
+        claude_session_model: Option<String>,
+        #[serde(default)]
+        claude_session_effort: Option<String>,
+        #[serde(default)]
+        codex_session_model: Option<String>,
+        #[serde(default)]
+        codex_session_effort: Option<String>,
+        #[serde(default)]
+        grok_session_model: Option<String>,
+        #[serde(default)]
+        grok_session_effort: Option<String>,
         /// Whether an absent `default_agent` is filled in from the directory's marker files (see
         /// `hostfs::detect_agent`). Absent is true; a client that has already shown the user the
         /// detection, and so sends what it showed, sends false to have "inherit from console"
@@ -838,6 +964,29 @@ pub enum RequestBody {
         /// `None`, exactly as if the field had not been sent.
         #[serde(default, deserialize_with = "present_option")]
         default_agent: Option<Option<Agent>>,
+        /// Each agent's account as a [`ProjectAccount`]: absent leaves the setting alone; an
+        /// explicit `null` puts it back to inheriting the console's reference. An account that
+        /// names none of that agent's is refused with `unknown_account`.
+        #[serde(default, deserialize_with = "present_option")]
+        claude_account_id: Option<Option<ProjectAccount>>,
+        #[serde(default, deserialize_with = "present_option")]
+        codex_account_id: Option<Option<ProjectAccount>>,
+        #[serde(default, deserialize_with = "present_option")]
+        grok_account_id: Option<Option<ProjectAccount>>,
+        /// Each agent's model and effort for the project's sessions: absent leaves the setting
+        /// alone; an explicit `null` (or a blank string) clears it back to the agent's own default.
+        #[serde(default, deserialize_with = "present_option")]
+        claude_session_model: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        claude_session_effort: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        codex_session_model: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        codex_session_effort: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        grok_session_model: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        grok_session_effort: Option<Option<String>>,
         /// Absent leaves the project's pin alone.
         pinned: Option<bool>,
         /// Absent leaves the project's tags alone; a present array replaces them wholesale.
@@ -864,14 +1013,25 @@ pub enum RequestBody {
     ProbeGitRemote {
         remote_url: String,
     },
+    /// The models `agent` offers right now, answered with `agent_models`. `account` names the
+    /// account whose catalogue to read, by id; absent is the default account. An account that
+    /// does not exist or belongs to another agent is refused with `unknown_account`; anything
+    /// that goes wrong while asking the agent is not a refusal but an empty answer with a reason.
+    ListAgentModels {
+        agent: Agent,
+        #[serde(default)]
+        account: Option<String>,
+    },
     OpenSession {
         console_id: String,
         project_id: Option<String>,
+        /// Ignored for a console session, which always runs the console's default agent.
         agent: Option<Agent>,
         /// The account this session's agent reads, by id. Absent leaves the choice to the
-        /// console's reference for that agent, else the default account; an explicit `null`
-        /// chooses the default account outright, whatever the console refers to. A reference
-        /// that names no account of the session's agent is refused with `unknown_account`.
+        /// project's reference for that agent, else the console's, else the default account; an
+        /// explicit `null` chooses the default account outright, whatever the project or console
+        /// refers to. A reference that names no account of the session's agent is refused with
+        /// `unknown_account`.
         #[serde(default, deserialize_with = "present_option")]
         account: Option<Option<String>>,
         task: Option<String>,
@@ -1138,6 +1298,16 @@ pub enum Event {
         id: Option<String>,
         agent: Option<Agent>,
     },
+    /// The reply to `list_agent_models`: `agent` and `account` echo the request. `models` is
+    /// empty exactly when `unavailable` says why; a client then offers a free-text field or the
+    /// agent's own default rather than an error.
+    AgentModels {
+        id: Option<String>,
+        agent: Agent,
+        account: Option<String>,
+        models: Vec<AgentModel>,
+        unavailable: Option<ModelsUnavailable>,
+    },
     /// The reply to `list_pages`, oldest first. Pages are not in `snapshot`: a page carries a whole
     /// HTML document, and only the console session the user is looking at needs its pages, so the
     /// panel asks for them instead — and asks again after every `snapshot`, which is what keeps it
@@ -1285,6 +1455,42 @@ impl Event {
             code: error_code::INTERNAL_ERROR.to_string(),
             params: params(&[("detail", &message)]),
             message,
+        }
+    }
+}
+
+/// One model an agent offers, as `list_agent_models` reports it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AgentModel {
+    /// What Octoboard passes to the agent as its model: an alias Claude Code resolves itself, or
+    /// the identifier the Codex or Grok Build catalogue lists.
+    pub id: String,
+    /// The name to show; the catalogue's own where it has one, else `id`.
+    pub name: String,
+    /// The reasoning-effort levels to offer for the model, in the agent's own spelling: the
+    /// catalogue's own, in its order, where the model's entry gives them, else the agent's whole
+    /// measured set; empty only for a model that takes none. Never unknown. A level the model
+    /// does not advertise (the fallback is per agent, not per model) can still be refused by the
+    /// agent, or quietly lowered, as Claude Code does with a level its model does not support, so
+    /// a listed level is one to offer, not a promise that it is honoured.
+    pub efforts: Vec<String>,
+}
+
+/// Why `list_agent_models` has no list, as a coded message of the same shape as an `error`. It
+/// travels inside a reply because failing to ask the agent must never fail the form that asked.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ModelsUnavailable {
+    pub code: String,
+    pub params: Params,
+    pub message: String,
+}
+
+impl ModelsUnavailable {
+    pub fn new(code: &'static str, message: impl Into<String>, pairs: &[(&str, &str)]) -> Self {
+        Self {
+            code: code.to_string(),
+            params: params(pairs),
+            message: message.into(),
         }
     }
 }
@@ -1592,6 +1798,22 @@ pub mod error_code {
     pub const REQUEST_SUPERSEDED: &str = "request_superseded";
 }
 
+/// Codes carried by `ModelsUnavailable`; `PROTOCOL.md` lists each with its params. Like an error
+/// code, each needs a `daemon.<code>` message in the UI's catalogs.
+pub mod models_unavailable_code {
+    /// The agent's binary does not resolve on the login shell's `PATH`. `params` names `binary`.
+    pub const BINARY_NOT_FOUND: &str = "models_binary_not_found";
+    /// The login-shell snapshot the command runs in could not be taken. `params` names `detail`.
+    pub const SHELL_ENVIRONMENT_FAILED: &str = "models_shell_environment_failed";
+    /// The command did not finish in time. `params` names `agent`.
+    pub const TIMED_OUT: &str = "models_timed_out";
+    /// The command could not be run, or exited non-zero. `params` names `agent` and `detail`.
+    pub const COMMAND_FAILED: &str = "models_command_failed";
+    /// The command succeeded but what it printed holds no model that could be read. `params`
+    /// names `agent`.
+    pub const UNREADABLE_OUTPUT: &str = "models_unreadable_output";
+}
+
 /// The `reason_code` param of a failed press of a trust confirmation, in the `error` and in the
 /// `session_notice` alike; `PROTOCOL.md` lists each. A client that does not know one shows the
 /// English `reason` instead. A new reason also needs a `daemon.trust_reason.<code>` message in the
@@ -1631,7 +1853,7 @@ pub fn now_millis() -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{ProjectSource, Request, RequestBody};
+    use super::{ProjectAccount, ProjectSource, Request, RequestBody};
 
     #[test]
     fn an_absent_detect_default_agent_means_true() {
@@ -1834,6 +2056,109 @@ mod tests {
         );
     }
 
+    /// A project's accounts, models and efforts are cleared the same way as a console's: absent
+    /// leaves one alone, `null` clears it (an account back to inheriting), and each agent's is
+    /// independent; a create request carries a model as a plain optional string and an account as
+    /// a [`ProjectAccount`], absent or `null` being inheriting there too.
+    #[test]
+    fn clearing_a_projects_settings_is_distinguishable_from_leaving_them() {
+        let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::UpdateProject {
+                claude_account_id,
+                grok_account_id,
+                claude_session_model,
+                codex_session_effort,
+                ..
+            } => (
+                claude_account_id,
+                grok_account_id,
+                claude_session_model,
+                codex_session_effort,
+            ),
+            _ => panic!("parses as update_project"),
+        };
+        assert_eq!(
+            parse(r#"{"type":"update_project","project":"p"}"#),
+            (None, None, None, None)
+        );
+        assert_eq!(
+            parse(
+                r#"{"type":"update_project","project":"p","claude_account_id":null,
+                    "grok_account_id":{"kind":"account","id":"acct-1"},
+                    "claude_session_model":"opus","codex_session_effort":null}"#
+            ),
+            (
+                Some(None),
+                Some(Some(ProjectAccount::Account {
+                    id: "acct-1".to_string()
+                })),
+                Some(Some("opus".to_string())),
+                Some(None)
+            )
+        );
+
+        let RequestBody::AddProject {
+            claude_account_id,
+            codex_account_id,
+            grok_account_id,
+            grok_session_model,
+            claude_session_effort,
+            ..
+        } = serde_json::from_str::<Request>(
+            r#"{"type":"add_project","console_id":"c","source":"local","path":"/p",
+                "codex_account_id":{"kind":"account","id":"acct-2"},
+                "grok_account_id":{"kind":"default"},"grok_session_model":"grok-4"}"#,
+        )
+        .unwrap()
+        .body
+        else {
+            panic!("parses as add_project");
+        };
+        assert_eq!(claude_account_id, None);
+        assert_eq!(
+            codex_account_id,
+            Some(ProjectAccount::Account {
+                id: "acct-2".to_string()
+            })
+        );
+        assert_eq!(grok_account_id, Some(ProjectAccount::Default));
+        assert_eq!(grok_session_model.as_deref(), Some("grok-4"));
+        assert_eq!(claude_session_effort, None);
+    }
+
+    /// A project's account takes all three states on an update: `null` is inheriting, and an
+    /// object says the agent's default account or a named one; absent leaves it alone.
+    #[test]
+    fn a_projects_account_is_inherit_default_or_named_on_an_update() {
+        let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::UpdateProject {
+                claude_account_id, ..
+            } => claude_account_id,
+            _ => panic!("parses as update_project"),
+        };
+        let update = |field: &str| format!(r#"{{"type":"update_project","project":"p"{field}}}"#);
+        assert_eq!(parse(&update("")), None);
+        assert_eq!(parse(&update(r#","claude_account_id":null"#)), Some(None));
+        assert_eq!(
+            parse(&update(r#","claude_account_id":{"kind":"inherit"}"#)),
+            Some(Some(ProjectAccount::Inherit))
+        );
+        assert_eq!(
+            parse(&update(r#","claude_account_id":{"kind":"default"}"#)),
+            Some(Some(ProjectAccount::Default))
+        );
+        assert_eq!(
+            parse(&update(
+                r#","claude_account_id":{"kind":"account","id":"a"}"#
+            )),
+            Some(Some(ProjectAccount::Account {
+                id: "a".to_string()
+            }))
+        );
+        // A bare string is not an account any more: nothing reads an id without saying what it is.
+        assert!(serde_json::from_str::<Request>(&update(r#","claude_account_id":"a""#)).is_err());
+    }
+
     /// Absent versus null is the only way a console's account can be cleared as well as set, and
     /// each agent's is independent of the others.
     #[test]
@@ -1901,12 +2226,38 @@ mod tests {
         );
     }
 
+    /// A console session's model is cleared the same way, and each agent's is independent.
+    #[test]
+    fn clearing_a_console_session_model_is_distinguishable_from_leaving_it() {
+        let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::UpdateConsole {
+                claude_console_session_model,
+                codex_console_session_model,
+                ..
+            } => (claude_console_session_model, codex_console_session_model),
+            _ => panic!("parses as update_console"),
+        };
+        assert_eq!(
+            parse(r#"{"type":"update_console","console":"c"}"#),
+            (None, None)
+        );
+        assert_eq!(
+            parse(r#"{"type":"update_console","console":"c","claude_console_session_model":null}"#),
+            (Some(None), None)
+        );
+        assert_eq!(
+            parse(
+                r#"{"type":"update_console","console":"c","codex_console_session_model":"gpt-5"}"#
+            ),
+            (None, Some(Some("gpt-5".to_string())))
+        );
+    }
+
     #[test]
     fn creating_a_console_needs_no_account() {
-        let request: Request = serde_json::from_str(
-            r#"{"type":"create_console","name":"n","console_session_agent":"claude","default_agent":"codex"}"#,
-        )
-        .unwrap();
+        let request: Request =
+            serde_json::from_str(r#"{"type":"create_console","name":"n","default_agent":"codex"}"#)
+                .unwrap();
         match request.body {
             RequestBody::CreateConsole {
                 claude_account_id,

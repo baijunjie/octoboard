@@ -7,6 +7,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Consoles and projects](product/consoles-and-projects.md) — consoles, their working directory, agent defaults and
   per-agent config directories; the three ways a project is associated, what is editable afterwards, and what deleting
   either one does.
+- [Model and reasoning effort](product/model-and-reasoning-effort.md) — the model and reasoning effort a console's
+  console sessions and a project's sessions launch with: where they are set, what unset means, how the model list is
+  asked of the agent itself for the account in question, how the effort levels follow the chosen model, and what the
+  pickers do while that list is out or cannot be had.
 - [Sessions](product/sessions.md) — console and project sessions, agent selection, the five session statuses, their
   glyphs and their transitions, the raised hand and its notification, how a declined Claude Code prompt lowers the
   hand from the agent's own transcript and what that costs to keep working, archiving, interruption and resuming,

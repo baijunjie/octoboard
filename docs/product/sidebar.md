@@ -86,7 +86,7 @@ what selecting one does, and what its row's menu offers are in "Console sessions
 `docs/product/sessions.md`.
 
 The section's own heading carries a **+** button, **New console session**, which opens one with the console's current
-console session agent and its account for that agent, and, while the console has an archived console session, the
+default agent and its account for that agent, and, while the console has an archived console session, the
 section's action menu, whose only entry is **Archived console sessions** — a submenu of the console's newest archived
 console sessions, each of which can be selected, and the way to the archive view of all of them (see "The archive
 view" below). This is the one entry a console session's own row never carries: archived console sessions are reached

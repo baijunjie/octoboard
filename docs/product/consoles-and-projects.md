@@ -12,18 +12,22 @@ A console carries:
 | Field | Set by | Notes |
 |---|---|---|
 | Name | the user, required | Free text. |
-| Console session agent | the user | The agent the console's console sessions run. |
-| Default agent | the user | The fallback agent for sessions opened under this console's projects. |
+| Default agent | the user | The agent the console's console sessions run, and the fallback agent for sessions opened under this console's projects. |
 | Agent accounts | the user, optional | One per agent: the account that agent's sessions in this console run under, the agent's default account when none is picked; see "Agent config directories" below. |
+| Console session model and reasoning effort | the user, optional | One pair per agent: what the console's console sessions are launched with, the agent's own default when unset; see `docs/product/model-and-reasoning-effort.md`. |
 | Avatar | the user, optional | A custom image shown in place of the default avatar, in a circle; see "Avatar" below. |
 | Working directory | Octoboard | `~/.octoboard/consoles/<console id>/`, created when the console is created. Not settable and not changeable. |
 
-Both agent fields take one of the three supported agents (Claude Code, Codex, Grok Build) and default to Claude Code in
-the creation form — or, once Claude Code is determined unavailable, to the first of the others that is not, so neither
-starts on an agent that cannot be chosen. Both rows list all three every time, whether or not the machine has each one
+A console has a single agent field. Its console sessions run its default agent, and so does every session opened under
+its projects unless the project or the session itself names another (see "Which agent a session uses" in
+`docs/product/sessions.md`).
+
+The field takes one of the three supported agents (Claude Code, Codex, Grok Build) and defaults to Claude Code in the
+creation form — or, once Claude Code is determined unavailable, to the first of the others that is not, so it never
+starts on an agent that cannot be chosen. It lists all three every time, whether or not the machine has each one
 installed: once Octoboard has determined an agent unavailable (its binary does not resolve on the user's login shell
-`PATH`), that row names it rather than leaving it out, labels it as not installed, and will not let it be chosen — it is
-shown rather than hidden so the reason it cannot be picked is on screen, and it is still reached with the arrow keys
+`PATH`), the field names it rather than leaving it out, labels it as not installed, and will not let it be chosen — it
+is shown rather than hidden so the reason it cannot be picked is on screen, and it is still reached with the arrow keys
 and announced as disabled. Before that determination has landed every
 agent is offered normally; an agent already chosen before it was found unavailable is left exactly as it is.
 
@@ -36,11 +40,20 @@ custom image it is a network glyph on a coloured fill, one of seven, picked from
 always gets the same fill, two different names can still share one, and renaming a console can change its fill.
 Spaces and invisible characters around the name, and whether accented letters were typed precomposed or combined, do
 not change it. Each fill has its own light and dark value (see "What follows the choice" in
-`docs/product/appearance.md`). The console dialog's **Avatar** field shows the current avatar, following the name as it
-is typed, with **Choose image** to pick an image file from disk and **Remove image** to go back to the default. A chosen
-image is cropped to its centred square and scaled to 128 x 128 pixels in the window before it is saved, so any
-size or shape of picture is accepted; a file that is not a readable image is refused in the dialog. As with the other
-fields, an avatar that was not touched is left as it is when the console is saved.
+`docs/product/appearance.md`).
+
+The console dialog's **Avatar** field is the dialog's first field, and is one round control the size of an avatar.
+While no image is picked it shows an upload glyph, so an optional field shows nothing that looks already filled in;
+pressing it opens the file picker. Once an image is picked the control shows the image, and a delete button sits over
+its corner: hidden at rest, shown while the mouse pointer is over the control or anything in it has keyboard focus,
+and shown outright where the pointer is coarse, since a touch has no hover to reveal it with and tapping the image
+opens the file picker instead. Pressing the delete button puts the control back to the upload glyph, from where another
+image can be picked. The field does not show what the default avatar would look like: a console with no image is drawn
+as described above wherever the console appears, and the dialog does not preview it.
+
+A chosen image is cropped to its centred square and scaled to 128 x 128 pixels in the window before it is saved, so
+any size or shape of picture is accepted; a file that is not a readable image is refused in the dialog. As with the
+other fields, an avatar that was not touched is left as it is when the console is saved.
 
 ### Agent config directories
 
@@ -58,14 +71,16 @@ Each agent's config directory is where that agent keeps its own configuration, l
 How each agent is pointed at its directory is in "The launch environment" and "Per-agent specifics a user will notice"
 in `docs/product/launching-agents.md`.
 
-The console dialog shows one picker for each agent currently selected as the console's console session agent or
-default agent — one row or two, in the order Claude Code, Codex, Grok Build — labelled with that agent's name and
-listing that agent's accounts, its default account first. An account can therefore be picked only for an agent selected
-in one of those two fields. A reference already stored for an agent that is not currently selected is kept as it is: it
-is neither shown nor saved by the dialog, and it still applies to that agent's sessions, such as those of a project
-whose own default agent it is. To see or change it, select that agent as the console session or default agent again.
-A picker lists accounts whether or not the agent is installed, and no account is unpickable for its directory being
-missing.
+The console dialog shows one account picker, for the console's default agent, joined to the agent field as a single
+field: the agent on the left settles which accounts the right-hand part offers, and the two read as one setting. It
+lists that agent's accounts, its default account first, and is there only when that agent has an account of its own —
+an agent with nothing to choose between leaves the agent field alone, on its own. An account can therefore be picked
+only for the agent currently selected as the default agent. A reference already stored for another agent is kept as it
+is: it is neither shown nor sent by the dialog, and it still applies to that agent's sessions, such as those of a
+project whose own default agent it is. To see or change it, select that agent as the default agent again. An account
+picked while an agent was selected is still saved after switching the field to another agent, so switching never
+discards an edit. A picker lists accounts whether or not the agent is installed, and no account is unpickable for its
+directory being missing.
 
 - **The default account**, which a new console starts on, is the state of pinning nothing: that agent's sessions use
   whatever the user's login shell exports for the agent's variable, and the agent's own default when it exports none.
@@ -73,8 +88,10 @@ missing.
   console session and project sessions alike, including a session whose agent was chosen for that session alone — and
   takes precedence over the value in the user's shell environment (see "The launch environment" in
   `docs/product/launching-agents.md`). A session reads only its own agent's account; sessions of the other agents are
-  unaffected. A session can also be opened under a different account of its agent than the console's (see "Opening a
-  session" in `docs/product/sessions.md`).
+  unaffected. A project can set its own account for an agent — another account, or the agent's default account against
+  a console that names one — which its sessions take instead of the console's (see "The project's account, model and
+  reasoning effort" below), and a session can also be opened under a different account of its agent than either (see
+  "Opening a session" in `docs/product/sessions.md`).
 
 For Claude Code, an account pointing at `~/.claude` is not the same as the default account: whenever a directory is
 set, Claude Code reads its global config file from `.claude.json` inside that directory instead of from
@@ -99,8 +116,8 @@ Claude Code itself, and by Octoboard for Codex, which refuses a missing one (Gro
 stored, and shown for the account, is its expanded absolute path.
 
 **A session keeps the account and the directory it last recorded until the user switches it.** A session takes its
-account when it is opened — the one picked for it, else the console's reference for its own agent, else the default
-account — and nothing but the user changes it afterwards: not an edit to the console's reference, not an edit to the
+account when it is opened, in the order given in "Which account a session uses" in `docs/product/sessions.md`, and
+nothing but the user changes it afterwards: not an edit to the project's or the console's reference, not an edit to the
 account's directory. Resuming or reopening it relaunches with that same directory, because the agent keeps the
 conversation inside it. The user can move the session to another account of its agent from its action menu; that
 copies the conversation into the target's directory and carries the session into that account's whole setup, not only
@@ -119,16 +136,18 @@ directory would keep neither its login nor its conversation; see "Per-agent spec
 
 ### Editing a console
 
-The name, the console session agent, the default agent and the accounts the dialog shows can be changed, and an account
-can be put back on the agent's default account. Changing an agent or an account affects sessions opened afterwards; a
-session that already exists keeps the agent and the account and directory it was started with. A change to the console
-session agent therefore shows in the next console session started from the console sessions section, while the console
+The name, the default agent, the account the dialog shows, that agent's console session model and reasoning effort, and
+the avatar can be changed. The account can be put back on the agent's default account, and the model and the effort
+back to unset, the agent's own default. Changing the agent or an account affects sessions opened afterwards; a
+session that already exists keeps the agent and the account and directory it was started with. A change to the default
+agent therefore shows in the next console session started from the console sessions section, while the console
 sessions already running keep the agent they were started with (see "Console sessions and project sessions" in
-`docs/product/sessions.md`).
+`docs/product/sessions.md`); a changed model or effort is taken by the next console session opened or resumed.
 
-An account is saved only when it is changed: saving a console with a picker untouched succeeds regardless of what has
-happened to the account it refers to since. Removing an account in Settings puts every console that referred to it back
-on the agent's default account.
+An account, a model and an effort are saved only when they are changed: saving a console with a picker untouched
+succeeds regardless of what has happened to the account it refers to since. Removing an account in Settings puts every
+console that referred to it back on the agent's default account, and every project that named it back to inheriting
+its console's reference.
 
 ### Deleting a console
 
@@ -153,7 +172,9 @@ Deleting the **last** console leaves the window with none, which it shows as the
 
 A project carries a name, the directory it points at, an optional default agent, how it was associated, the remote
 URL it was cloned from (for a git association), whether the user has pinned it (see "Order of projects and
-sessions" in `docs/product/sidebar.md`), and any number of tags. Every project is bound to a host (see "Hosts" below).
+sessions" in `docs/product/sidebar.md`), any number of tags, and — one set per agent — what it says about the account
+its sessions run under and an optional model and reasoning effort for them (see "The project's account, model and
+reasoning effort" below). Every project is bound to a host (see "Hosts" below).
 
 A project also carries whether the user has given Octoboard permission to press any agent's trust confirmation for
 its directory without asking. A project starts without that permission, including one the console session associates;
@@ -283,12 +304,53 @@ either when the detected agent is known not to be on the login shell's `PATH`. A
 replaced by detection, and this holds for every association source and for projects the console session associates,
 which always detect when they give none.
 
+### The project's account, model and reasoning effort
+
+Besides its default agent, a project may carry **per agent** its own account and its own model and reasoning effort for
+the sessions opened under it. All three are kept one set per agent, because an account belongs to one agent and model
+names and effort levels are each agent's own, and a session reads only the set of its own agent.
+
+- **The account** has three states: **inheriting the console's reference** for that agent, which is the state a new
+  project is in; **the agent's default account** — pinning nothing, the state described in "Agent config directories"
+  above — which is a choice of its own here, available even where the console names an account; or a **named account**
+  of that agent. The last two take the place of the console's for sessions of that agent opened under the project
+  afterwards. The order a session resolves its account in, and which sessions reach the project's setting at all, are
+  in "Which account a session uses" in `docs/product/sessions.md`, and what an account is in "Agent config
+  directories" above.
+  Removing an account in Settings puts every project that named it back to inheriting its console's reference, and
+  leaves a project on the agent's default account as it is.
+- **The model and the reasoning effort** have no console-level fallback: unset means the agent's own default, whatever
+  the console sets for its own console sessions. See `docs/product/model-and-reasoning-effort.md`.
+
+The project dialog, both when associating and when editing a project, joins the account picker to the **Default agent**
+field as a single field, the way the console dialog does, and holds the same collapsed **Advanced** section. All of it
+belongs to the agent the Default agent field currently settles on — the agent picked, or the console's default agent
+while the field is on "Inherit from console" — so switching that field shows another agent's set, and what was set for
+an agent no longer shown is kept and still saved. The account picker lists, in this order, the inherited entry, named
+after the account the console resolves to for that agent (the agent's default account when the console pins none) and
+marked as coming from the console; the agent's default account, named as it is everywhere else; and then that agent's
+own accounts. As in the console dialog it is offered only when that agent has an account of its own. A project whose
+named account is no longer stored shows the inherited entry, and keeps what it has stored until another entry is
+picked.
+
+While a new project on a **parent directory** is set to "Detect from files" neither the account picker nor the Advanced
+section is shown, since no agent is settled — each repository found is detected on its own — and anything set in
+them before the source changed is not stored.
+
+A project the console session associates sets none of the three: it inherits its console's account for every agent and
+leaves every model and effort unset. A parent-directory association gives every project it creates the same values the
+form was filled in with.
+
+A changed account applies to sessions opened afterwards; a changed model or effort is taken by the next session of the
+project opened or resumed. Sessions already running are unaffected by any of the three.
+
 ### Editing a project
 
-Only the name, the default agent and the tags can be changed, besides pinning and unpinning the project. The name is
-changed from the project's Rename or Project settings, the default agent and the tags from Project settings (see
-"Project rows" in `docs/product/sidebar.md`). The tags field sits between the name and the default agent: typing in it
-offers the tags already in use that the project lacks, in a list that opens below the field and stays open after a pick
+Only the name, the default agent, the account, the model and the reasoning effort, and the tags can be changed,
+besides pinning and unpinning the project. The name is changed from the project's Rename or Project settings,
+everything else from Project settings (see "Project rows" in `docs/product/sidebar.md`). The tags field sits between
+the name and the default agent: typing in it offers the tags already in use that the project lacks, in a list that
+opens below the field and stays open after a pick
 so several can be added in a row, and Enter adds what was typed as a tag, or the highlighted suggestion if there is one;
 leaving the field adds it too. The tags the project carries show inside the field, ahead of the text input, and wrap
 onto more lines as they grow, the field growing with them. Each is a picked tag (see "Picked tags" above), and
@@ -300,7 +362,8 @@ the directory, the remote URL — is fixed once the project exists; a project th
 removed and associated again.
 
 The name cannot be cleared: saving an empty name is rejected. The default agent can be cleared, which puts the project
-back to inheriting the console's default.
+back to inheriting the console's default; the account can be put on any of its three states, inheriting the console's
+reference among them, and the model and the effort back to unset.
 
 ### Removing a project
 

@@ -13,7 +13,8 @@ use super::git::tests::test_env;
 use super::git::GitEnv;
 use super::*;
 use crate::protocol::{
-    Agent, BrowseEntry, Console, ContentKind, EntryKind, LinkTarget, Project, ProjectSource,
+    Agent, BrowseEntry, Console, ContentKind, EntryKind, LinkTarget, Project, ProjectAccount,
+    ProjectSource,
 };
 use crate::state::AppState;
 use crate::test_support::{app_state, git, git_bytes, repo_with, ScratchDir};
@@ -39,6 +40,12 @@ impl Fixture {
                 claude_account_id: None,
                 codex_account_id: None,
                 grok_account_id: None,
+                claude_console_session_model: None,
+                claude_console_session_effort: None,
+                codex_console_session_model: None,
+                codex_console_session_effort: None,
+                grok_console_session_model: None,
+                grok_console_session_effort: None,
                 icon: None,
                 created_at: 0,
             })
@@ -59,6 +66,15 @@ impl Fixture {
                 default_agent: None,
                 source: ProjectSource::Local,
                 remote_url: None,
+                claude_account_id: ProjectAccount::Inherit,
+                codex_account_id: ProjectAccount::Inherit,
+                grok_account_id: ProjectAccount::Inherit,
+                claude_session_model: None,
+                claude_session_effort: None,
+                codex_session_model: None,
+                codex_session_effort: None,
+                grok_session_model: None,
+                grok_session_effort: None,
                 trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),

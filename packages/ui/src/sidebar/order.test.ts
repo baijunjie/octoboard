@@ -29,6 +29,9 @@ const project = (id: string, name: string, pinned = false): Project => ({
   trust_consent: false,
   pinned,
   tags: [],
+  claude_account_id: { kind: "inherit" },
+  codex_account_id: { kind: "inherit" },
+  grok_account_id: { kind: "inherit" },
 });
 
 describe("liveSessions", () => {

@@ -33,9 +33,9 @@ pub fn db_path() -> PathBuf {
     data_dir().join("octoboard.db")
 }
 
-/// Working directory of a console session.
-pub fn console_workdir(console_id: &str) -> PathBuf {
-    data_dir().join("consoles").join(console_id)
+/// Parent of the consoles' working directories, one per console.
+pub fn consoles_dir() -> PathBuf {
+    data_dir().join("consoles")
 }
 
 /// Parent of the per-session scratch directories. Cleared at startup: every directory under it

@@ -13,6 +13,9 @@ const project = (name: string, tags: string[]): Project => ({
   trust_consent: false,
   pinned: false,
   tags,
+  claude_account_id: { kind: "inherit" },
+  codex_account_id: { kind: "inherit" },
+  grok_account_id: { kind: "inherit" },
 });
 
 describe("tagVocabulary", () => {

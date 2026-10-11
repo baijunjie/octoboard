@@ -41,6 +41,7 @@ function renderDialog(
   initial: Partial<State> = {},
   consoleOverride: Partial<typeof parentConsole> = {},
   binding: NewSessionBinding = { kind: "choose" },
+  projectOverride: Partial<typeof project> = {},
 ): { container: HTMLElement; root: ReturnType<typeof createRoot>; daemon: Daemon } {
   const daemon = fakeDaemon(initial);
   const container = document.body.appendChild(document.createElement("div"));
@@ -50,7 +51,7 @@ function renderDialog(
       <DaemonProvider value={daemon}>
         <SessionDialog
           console={{ ...parentConsole, ...consoleOverride }}
-          project={project}
+          project={{ ...project, ...projectOverride }}
           binding={binding}
           sessions={sessions}
           onClose={() => {}}
@@ -183,4 +184,39 @@ it("opens on a selectable agent, with the console's account for it, and sends bo
   expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type: "open_session", agent: "codex", account: "a-1" }));
   act(() => root.unmount());
   container.remove();
+});
+
+/** Opens the dialog with two stored Claude Code accounts, the console pinning one and the project
+ * `projectPin`, presses Open and returns the `account` sent. */
+async function openedAccount(projectPin: Partial<typeof project>): Promise<unknown> {
+  const { container, root, daemon } = renderDialog(
+    [],
+    {
+      settings: {
+        auto_sync_repositories: false, default_clone_dir: "/p",
+        accounts: [
+          { id: "a-console", agent: "claude", name: "Console pick", config_dir: "/home/me/.claude-console" },
+          { id: "a-project", agent: "claude", name: "Project pick", config_dir: "/home/me/.claude-project" },
+        ],
+      },
+    },
+    { claude_account_id: "a-console" },
+    { kind: "choose" },
+    projectPin,
+  );
+  vi.mocked(daemon.request).mockResolvedValue({ type: "ack" } as never);
+  const open = Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Open");
+  await act(async () => open?.click());
+  const sent = vi.mocked(daemon.request).mock.calls[0][0] as { account?: unknown };
+  act(() => root.unmount());
+  container.remove();
+  return sent.account;
+}
+
+it("opens on the project's account for the agent, over the console's, and sends it", async () => {
+  expect(await openedAccount({ claude_account_id: { kind: "account", id: "a-project" } })).toBe("a-project");
+});
+
+it("opens on the console's account when the project pins none", async () => {
+  expect(await openedAccount({})).toBe("a-console");
 });

@@ -1,6 +1,6 @@
 import { accountsByAgent, AGENT_ACCOUNT_FIELD, isAgentUnavailable, selectableAgent } from "./agents";
 import type { Translate } from "./i18n/catalog";
-import type { Account, Agent, AgentAvailability, Console, Project, Session } from "./protocol";
+import type { Account, Agent, AgentAvailability, Console, Project, ProjectAccount, Session } from "./protocol";
 import { sessionAccountName } from "./sessionLabel";
 
 /** An account of one agent as a picker settles it; `null` is the agent's default account, the
@@ -56,17 +56,48 @@ export function findEntry(groups: ChoiceGroup[], key: string): (ChoiceEntry & { 
   return undefined;
 }
 
-/** The account `owner` refers to for `agent` — `null`, the default account, when it refers to
- * none or to one that is no longer stored. */
-export function consoleAccount(owner: Console, agent: Agent, accounts: Account[]): string | null {
-  const id = owner[AGENT_ACCOUNT_FIELD[agent]];
+/** The account `id` names for `agent` — `null`, the default account, when it names none or one
+ * that is no longer stored. */
+function storedAccount(id: string | null | undefined, agent: Agent, accounts: Account[]): string | null {
   return id && accounts.some((account) => account.id === id && account.agent === agent) ? id : null;
+}
+
+/** The account the console refers to for `agent`, `null` (the default account) when none. */
+export function consoleAccount(owner: Console, agent: Agent, accounts: Account[]): string | null {
+  return storedAccount(owner[AGENT_ACCOUNT_FIELD[agent]], agent, accounts);
+}
+
+/** `reference`, a project's setting for `agent`'s account, as the daemon reads it: one to an account
+ * that is no longer stored counts as inheriting. */
+export function settledProjectAccount(reference: ProjectAccount, agent: Agent, accounts: Account[]): ProjectAccount {
+  return reference.kind === "account" && !storedAccount(reference.id, agent, accounts) ? { kind: "inherit" } : reference;
+}
+
+/** What the project says about `agent`'s account. */
+export function projectAccount(project: Project, agent: Agent, accounts: Account[]): ProjectAccount {
+  return settledProjectAccount(project[AGENT_ACCOUNT_FIELD[agent]], agent, accounts);
+}
+
+/** The account a project session of `agent` runs under when none is chosen for it, as the daemon
+ * resolves it: the project's `own` setting, which may be the default account and then stops the
+ * chain, else the console's (`consoleAccountId`, `null` for none), else `null`, the default
+ * account. */
+export function resolveProjectAccount(own: ProjectAccount, consoleAccountId: string | null): string | null {
+  if (own.kind === "default") return null;
+  return own.kind === "account" ? own.id : consoleAccountId;
+}
+
+/** The account a project session of `agent` runs under when none is chosen for it, for the project
+ * as stored. */
+export function inheritedAccount(owner: Console, project: Project, agent: Agent, accounts: Account[]): string | null {
+  return resolveProjectAccount(projectAccount(project, agent, accounts), consoleAccount(owner, agent, accounts));
 }
 
 /** Where the session dialog's control opens: the agent the dialog already resolves — the
  * project's default, else the console's — moved to one that may be picked when that one is known
- * to be missing, with the account that agent resolves to for the console `owner`. The choice made in the
- * dialog sits above this, as the daemon's own chain puts a session's choice above the console's. */
+ * to be missing, with the account that agent resolves to when none is chosen: the project's
+ * setting for it, else the console `owner`'s. The choice made in the dialog sits above this, as
+ * the daemon's own chain puts a session's choice above both. */
 export function initialChoice(
   owner: Console,
   project: Project,
@@ -74,7 +105,7 @@ export function initialChoice(
   agentAvailability: Map<Agent, AgentAvailability>,
 ): AccountChoice {
   const agent = selectableAgent(agentAvailability, project.default_agent ?? owner.default_agent);
-  return { agent, account: consoleAccount(owner, agent, accounts) };
+  return { agent, account: inheritedAccount(owner, project, agent, accounts) };
 }
 
 /** What the control currently shows: the user's pick while it is still an entry that may be

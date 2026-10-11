@@ -3,7 +3,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import type { Agent, Event, RequestBody } from "../protocol";
+import { consoleOf, projectOf } from "../gallery/fixtures/builders";
+import type { Account, Agent, Event, ModelsUnavailable, Project, ProjectAccount, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ProjectDialog } from "./ProjectDialog";
 
@@ -20,10 +21,16 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function render() {
+const work: Account = { id: "a-work", agent: "claude", name: "Work", config_dir: "/home/dev/.claude-work" };
+const personal: Account = { id: "a-personal", agent: "claude", name: "Personal", config_dir: "/home/dev/.claude-personal" };
+
+function render(editing?: Project, accounts: Account[] = []) {
   const pending: Pending[] = [];
   const daemon: Daemon = {
-    store: createStateStore({}),
+    store: createStateStore({
+      consoles: new Map([["c-1", consoleOf("c-1", "Main", { claude_account_id: accounts[0]?.id })]]),
+      settings: { auto_sync_repositories: false, default_clone_dir: "", accounts },
+    }),
     request: (body) => new Promise((resolve) => pending.push({ body, resolve })),
     toastError: vi.fn(),
     toastNotice: vi.fn(),
@@ -38,7 +45,7 @@ function render() {
   act(() =>
     root.render(
       <DaemonProvider value={daemon}>
-        <ProjectDialog consoleId="c-1" onClose={() => {}} />
+        <ProjectDialog consoleId="c-1" project={editing} onClose={() => {}} />
       </DaemonProvider>,
     ),
   );
@@ -124,4 +131,310 @@ it.each([
   const added = pending.find((p) => p.body.type === "add_project")?.body;
   expect(added).toMatchObject({ type: "add_project", source: source === "A single directory" ? "local" : "parent", ...sent });
   if (!("default_agent" in sent)) expect(added).not.toHaveProperty("default_agent", expect.anything());
+});
+
+const PLACEHOLDER = "The agent's own setting";
+const buttons = () => Array.from(document.body.querySelectorAll("button"));
+const buttonText = (text: string) => buttons().find((b) => b.textContent === text);
+const choose = (option: string) =>
+  click(Array.from(document.body.querySelectorAll('[role="option"]')).find((o) => o.textContent === option) as HTMLElement);
+/** The account picker, which is the one named for the agent's account. */
+const accountPicker = () => buttons().find((b) => b.getAttribute("aria-label") === "Claude Code account" || b.getAttribute("aria-labelledby")?.split(" ").some((id) => document.getElementById(id)?.getAttribute("aria-label") === "Claude Code account"));
+const pickerNamed = (name: string) =>
+  buttons().find((b) => b.getAttribute("aria-labelledby")?.split(" ").some((id) => document.getElementById(id)?.textContent === name))!;
+const clearButton = (name: string) => pickerNamed(name).querySelector<HTMLElement>('[data-slot="select-clear-button"]');
+const sentOf = (pending: Pending[], type: string) => pending.find((p) => p.body.type === type)?.body;
+
+const optionTexts = () => Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent);
+const modelRequests = (pending: Pending[]) => pending.filter((p) => p.body.type === "list_agent_models");
+
+/** Answers the latest question about models with a list, or with a reason there is none. */
+const answerModels = (pending: Pending[], unavailable: ModelsUnavailable | null = null) =>
+  act(async () => {
+    const asked = modelRequests(pending).at(-1)!;
+    const body = asked.body as { agent: Agent; account?: string };
+    asked.resolve({
+      type: "agent_models",
+      agent: body.agent,
+      account: body.account ?? null,
+      models: unavailable ? [] : [{ id: "alpha", name: "Alpha", efforts: ["low", "high"] }, { id: "beta", name: "Beta", efforts: [] }],
+      unavailable,
+    });
+  });
+
+/** Fills in a directory whose agent is not detected, so the form is open and adds as inheriting. */
+async function fillDirectory(pending: Pending[]) {
+  type(input("Directory"), "~/code/x");
+  await settle(500);
+  await answer(pending[0], null);
+}
+
+it("adds without an account or launch settings when none is set", async () => {
+  const pending = render(undefined, [work, personal]);
+  await fillDirectory(pending);
+  await click(buttonText("Add"));
+  const added = sentOf(pending, "add_project");
+  expect(added).toMatchObject({ type: "add_project", source: "local" });
+  for (const field of ["claude_account_id", "claude_session_model", "claude_session_effort"]) expect(added).not.toHaveProperty(field);
+});
+
+it("adds with the account, model and effort that were set", async () => {
+  const pending = render(undefined, [work, personal]);
+  await fillDirectory(pending);
+  await click(accountPicker());
+  await choose("Personal");
+  await click(buttonText("Advanced"));
+  await answerModels(pending);
+  await click(pickerNamed("Model"));
+  await choose("Alpha");
+  await click(pickerNamed("Reasoning effort"));
+  await choose("high");
+  await click(buttonText("Add"));
+  expect(sentOf(pending, "add_project")).toMatchObject({
+    claude_account_id: { kind: "account", id: "a-personal" },
+    claude_session_model: "alpha",
+    claude_session_effort: "high",
+  });
+});
+
+it("shows an unset launch setting as its placeholder, and names what the account inherits", async () => {
+  const pending = render(undefined, [work, personal]);
+  await fillDirectory(pending);
+  // The console refers to the first account.
+  expect(accountPicker()?.textContent).toContain("Work (from the console)");
+  await click(buttonText("Advanced"));
+  expect(pickerNamed("Model").textContent).toContain(PLACEHOLDER);
+  expect(pickerNamed("Reasoning effort").textContent).toContain(PLACEHOLDER);
+  // The note renders outside a HeroUI field, which its `Description` has to cope with.
+  expect(document.body.textContent).toContain("Used by sessions");
+});
+
+it("offers no account picker for an agent with no account of its own", async () => {
+  const pending = render();
+  await fillDirectory(pending);
+  expect(accountPicker()).toBeUndefined();
+});
+
+const stored = projectOf("p-1", "c-1", "Site", {
+  default_agent: "claude",
+  claude_account_id: { kind: "account", id: "a-work" },
+  claude_session_model: "alpha",
+  claude_session_effort: "high",
+  codex_session_model: "retired",
+});
+
+it("sends only what changed when editing", async () => {
+  const pending = render(stored, [work, personal]);
+  await click(buttonText("Advanced"));
+  await answerModels(pending);
+  await click(pickerNamed("Reasoning effort"));
+  await choose("low");
+  await click(buttonText("Save"));
+  expect(sentOf(pending, "update_project")).toEqual({
+    type: "update_project",
+    project: "p-1",
+    name: "Site",
+    default_agent: "claude",
+    claude_session_effort: "low",
+    tags: [],
+  });
+});
+
+it("sends an explicit null when a picker is returned to inherit or unset", async () => {
+  const pending = render(stored, [work, personal]);
+  await click(accountPicker());
+  await choose("Work (from the console)");
+  await click(buttonText("Advanced"));
+  await answerModels(pending);
+  await click(clearButton("Model") ?? undefined);
+  expect(pickerNamed("Model").textContent).toContain(PLACEHOLDER);
+  await click(buttonText("Save"));
+  expect(sentOf(pending, "update_project")).toMatchObject({ claude_account_id: null, claude_session_model: null });
+  expect(sentOf(pending, "update_project")).not.toHaveProperty("claude_session_effort");
+});
+
+// The console refers to the first account, "Work".
+const stateOf = (claude_account_id?: ProjectAccount) => projectOf("p-3", "c-1", "Site", { default_agent: "claude", claude_account_id });
+
+it("lists inheriting the console's, the default account, then the named accounts", async () => {
+  render(undefined, [work, personal]);
+  await click(accountPicker());
+  expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent)).toEqual([
+    "Work (from the console)",
+    "Default",
+    "Work",
+    "Personal",
+  ]);
+});
+
+it.each([
+  ["inheriting", undefined, "Work (from the console)"],
+  ["inheriting, written out", { kind: "inherit" } as const, "Work (from the console)"],
+  ["the default account", { kind: "default" } as const, "Default"],
+  ["a named account", { kind: "account", id: "a-personal" } as const, "Personal"],
+])("opens a project on %s showing it", async (_, stored, shown) => {
+  render(stateOf(stored), [work, personal]);
+  expect(accountPicker()?.textContent).toContain(shown);
+});
+
+it("sends the default account on create, over a console that pins a named one", async () => {
+  const pending = render(undefined, [work, personal]);
+  await fillDirectory(pending);
+  await click(accountPicker());
+  await choose("Default");
+  await click(buttonText("Add"));
+  expect(sentOf(pending, "add_project")).toMatchObject({ claude_account_id: { kind: "default" } });
+});
+
+it("sends a named account on create as the account kind", async () => {
+  const pending = render(undefined, [work, personal]);
+  await fillDirectory(pending);
+  await click(accountPicker());
+  await choose("Personal");
+  await click(buttonText("Add"));
+  expect(sentOf(pending, "add_project")).toMatchObject({ claude_account_id: { kind: "account", id: "a-personal" } });
+});
+
+it("omits the account on create when it is left inheriting, even after being picked and put back", async () => {
+  const pending = render(undefined, [work, personal]);
+  await fillDirectory(pending);
+  await click(accountPicker());
+  await choose("Default");
+  await click(accountPicker());
+  await choose("Work (from the console)");
+  await click(buttonText("Add"));
+  expect(sentOf(pending, "add_project")).not.toHaveProperty("claude_account_id");
+});
+
+it.each([
+  ["inheriting to the default account", undefined, "Default", { kind: "default" }],
+  ["a named account to the default account", { kind: "account", id: "a-work" } as const, "Default", { kind: "default" }],
+  ["the default account to a named account", { kind: "default" } as const, "Personal", { kind: "account", id: "a-personal" }],
+  ["the default account back to inheriting", { kind: "default" } as const, "Work (from the console)", null],
+])("sends %s on update", async (_, from, pick, sent) => {
+  const pending = render(stateOf(from), [work, personal]);
+  await click(accountPicker());
+  await choose(pick);
+  await click(buttonText("Save"));
+  expect(sentOf(pending, "update_project")).toMatchObject({ claude_account_id: sent });
+});
+
+it("leaves the account out of an update that does not touch it, whatever state it is in", async () => {
+  const pending = render(stateOf({ kind: "default" }), [work, personal]);
+  await click(buttonText("Save"));
+  expect(sentOf(pending, "update_project")).not.toHaveProperty("claude_account_id");
+});
+
+it("keeps an edit to an agent that is no longer the selected one", async () => {
+  const pending = render(stored, [work, personal]);
+  await click(accountPicker());
+  await choose("Personal");
+  await click(buttons().find((b) => b.textContent?.includes("Claude Code")));
+  await choose("Codex");
+  await click(buttonText("Save"));
+  expect(sentOf(pending, "update_project")).toEqual({
+    type: "update_project",
+    project: "p-1",
+    name: "Site",
+    default_agent: "codex",
+    claude_account_id: { kind: "account", id: "a-personal" },
+    tags: [],
+  });
+});
+
+it("follows the console's agent for Inherit from console", async () => {
+  const pending = render(projectOf("p-2", "c-1", "Site"), [work, personal]);
+  expect(accountPicker()).toBeDefined();
+  await click(buttons().find((b) => b.textContent?.includes("Inherit from console (Claude Code)")));
+  await choose("Codex");
+  expect(accountPicker()).toBeUndefined();
+  expect(pending).toEqual([]);
+});
+
+it("offers neither the account nor Advanced while the source is a parent directory with Detect from files", async () => {
+  const pending = render(undefined, [work, personal]);
+  await fillDirectory(pending);
+  await click(accountPicker());
+  await choose("Personal");
+  await chooseSource("A parent directory");
+  expect(accountPicker()).toBeUndefined();
+  expect(buttonText("Advanced")).toBeUndefined();
+  await click(buttonText("Add"));
+  // What was set before is out of sight and not sent.
+  expect(sentOf(pending, "add_project")).not.toHaveProperty("claude_account_id");
+});
+
+const group = (label: string) =>
+  Array.from(document.body.querySelectorAll('[role="group"]')).find(
+    (el) => document.getElementById(el.getAttribute("aria-labelledby") ?? "")?.textContent === label,
+  )!;
+
+it("locks the launch settings and dims the group's label with the rest of the form while the path is checked", async () => {
+  const pending = render(undefined, [work, personal]);
+  type(input("Directory"), "~/code/a");
+  // Folding the section stays possible; what is inside is locked.
+  await click(buttonText("Advanced"));
+  expect(pickerNamed("Model").hasAttribute("disabled")).toBe(true);
+  expect(pickerNamed("Reasoning effort").hasAttribute("disabled")).toBe(true);
+  expect(group("Default agent").getAttribute("data-disabled")).toBe("true");
+  await settle(500);
+  // The model list was asked for as soon as the section opened, ahead of the detection.
+  await answer(pending.find((p) => p.body.type === "detect_directory_agent"), null);
+  await answerModels(pending);
+  expect(pickerNamed("Model").hasAttribute("disabled")).toBe(false);
+  expect(group("Default agent").hasAttribute("data-disabled")).toBe(false);
+});
+
+it("describes the joined agent and account group by the parent-directory hint", async () => {
+  render(undefined, [work, personal]);
+  await chooseSource("A parent directory");
+  await click(buttons().find((b) => b.textContent?.includes("Detect from files")));
+  await choose("Claude Code");
+  const described = group("Default agent").getAttribute("aria-describedby");
+  expect(document.getElementById(described ?? "")?.textContent).toContain("applies to every repository");
+});
+
+it("asks for the models only once Advanced is opened, under the account the project resolves to", async () => {
+  const pending = render(undefined, [work, personal]);
+  await fillDirectory(pending);
+  expect(modelRequests(pending)).toEqual([]);
+  await click(buttonText("Advanced"));
+  // Inheriting: the console's account.
+  expect(modelRequests(pending).map((p) => p.body)).toEqual([{ type: "list_agent_models", agent: "claude", account: "a-work" }]);
+  await answerModels(pending);
+  await click(pickerNamed("Model"));
+  expect(optionTexts()).toEqual(["Alpha", "Beta"]);
+});
+
+it("asks again when the project's own account is chosen, and for the default account without one", async () => {
+  const pending = render(undefined, [work, personal]);
+  await fillDirectory(pending);
+  await click(buttonText("Advanced"));
+  await click(accountPicker());
+  await choose("Personal");
+  await click(accountPicker());
+  await choose("Default");
+  expect(modelRequests(pending).map((p) => p.body)).toEqual([
+    { type: "list_agent_models", agent: "claude", account: "a-work" },
+    { type: "list_agent_models", agent: "claude", account: "a-personal" },
+    { type: "list_agent_models", agent: "claude" },
+  ]);
+});
+
+it("keeps a stored model the list lacks, and says why when there is no list", async () => {
+  const pending = render(projectOf("p-2", "c-1", "Site", { default_agent: "claude", claude_session_model: "retired" }));
+  await click(buttonText("Advanced"));
+  await answerModels(pending);
+  await click(pickerNamed("Model"));
+  expect(optionTexts()).toEqual(["Alpha", "Beta", "retired (not in the list)"]);
+});
+
+it("offers the stored model alone and the reason when the agent cannot list its models", async () => {
+  const pending = render(projectOf("p-2", "c-1", "Site", { default_agent: "claude", claude_session_model: "retired" }));
+  await click(buttonText("Advanced"));
+  expect(document.body.textContent).toContain("Loading the models this agent offers");
+  await answerModels(pending, { code: "models_timed_out", params: { agent: "claude" }, message: "" });
+  expect(document.body.textContent).toContain("claude took too long to list its models.");
+  await click(pickerNamed("Model"));
+  expect(optionTexts()).toEqual(["retired (not in the list)"]);
 });

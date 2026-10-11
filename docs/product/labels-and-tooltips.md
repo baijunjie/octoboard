@@ -33,6 +33,9 @@ consoles' avatars, the ⋮ buttons and the pin buttons below. These are:
   "Collapse"), the file viewer's Previous file and Next file buttons (see `docs/product/project-pane.md`), and the Git
   mode's Swap branches and Group by folder (see "The branch selectors" and "Flat or grouped by folder" in
   `docs/product/project-pane-git-mode.md`);
+- the two controls of the console dialog's Avatar field (see "Avatar" in
+  `docs/product/consoles-and-projects.md`) — the round control itself, named for choosing an image while it is empty
+  and for replacing it once one is picked, and the delete button over its corner, named for removing the image;
 - the close button of every dialog, of Settings and of each toast ("Close").
 
 While the docked sidebar is hidden at 1148 px and wider, a console's avatar opens its tooltip on keyboard focus only:

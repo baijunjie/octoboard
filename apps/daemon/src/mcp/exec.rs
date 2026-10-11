@@ -116,6 +116,7 @@ async fn add_project(
             remote_url: optional_string(arguments, "remote_url"),
             name: optional_string(arguments, "name"),
             default_agent: optional_agent(arguments, "default_agent")?,
+            settings: coordinator::NewProjectSettings::default(),
             detect_default_agent: true,
             tags: None,
         },
@@ -169,7 +170,8 @@ async fn start_session(
             console_id: caller.console_id.clone(),
             project_id: Some(project.id),
             agent: optional_agent(arguments, "agent")?,
-            // A session a session starts takes the console's account for its agent.
+            // A session a session starts takes the project's account for its agent, else the
+            // console's.
             account: None,
             task: Some(task),
             // Named for the task, not the project: several sessions dispatched into one project
@@ -713,7 +715,9 @@ fn readable_output(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{AgentAvailability, Availability, Console, ProjectSource};
+    use crate::protocol::{
+        AgentAvailability, Availability, Console, ProjectAccount, ProjectSource,
+    };
     use crate::store::LOCAL_HOST_ID;
     use crate::test_support::ScratchDir;
 
@@ -727,6 +731,12 @@ mod tests {
             claude_account_id: None,
             codex_account_id: None,
             grok_account_id: None,
+            claude_console_session_model: None,
+            claude_console_session_effort: None,
+            codex_console_session_model: None,
+            codex_console_session_effort: None,
+            grok_console_session_model: None,
+            grok_console_session_effort: None,
             icon: None,
             created_at: 0,
         }
@@ -777,6 +787,15 @@ mod tests {
                 default_agent: None,
                 source: ProjectSource::Local,
                 remote_url: None,
+                claude_account_id: ProjectAccount::Inherit,
+                codex_account_id: ProjectAccount::Inherit,
+                grok_account_id: ProjectAccount::Inherit,
+                claude_session_model: None,
+                claude_session_effort: None,
+                codex_session_model: None,
+                codex_session_effort: None,
+                grok_session_model: None,
+                grok_session_effort: None,
                 trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),
@@ -839,6 +858,15 @@ mod tests {
                     default_agent: None,
                     source: ProjectSource::Local,
                     remote_url: None,
+                    claude_account_id: ProjectAccount::Inherit,
+                    codex_account_id: ProjectAccount::Inherit,
+                    grok_account_id: ProjectAccount::Inherit,
+                    claude_session_model: None,
+                    claude_session_effort: None,
+                    codex_session_model: None,
+                    codex_session_effort: None,
+                    grok_session_model: None,
+                    grok_session_effort: None,
                     trust_consent: false,
                     pinned: false,
                     tags: Vec::new(),
@@ -1024,6 +1052,15 @@ mod tests {
                 default_agent: None,
                 source: ProjectSource::Local,
                 remote_url: None,
+                claude_account_id: ProjectAccount::Inherit,
+                codex_account_id: ProjectAccount::Inherit,
+                grok_account_id: ProjectAccount::Inherit,
+                claude_session_model: None,
+                claude_session_effort: None,
+                codex_session_model: None,
+                codex_session_effort: None,
+                grok_session_model: None,
+                grok_session_effort: None,
                 trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),

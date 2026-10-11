@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { choiceGroups, choiceKey, consoleAccount, currentChoice, initialChoice, switchEntries } from "./accountChoices";
+import { choiceGroups, choiceKey, consoleAccount, currentChoice, inheritedAccount, initialChoice, projectAccount, switchEntries } from "./accountChoices";
 import { consoleOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
 import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
@@ -54,6 +54,59 @@ describe("initialChoice", () => {
     ["the resolved agent when none may be picked", "claude", { claude: "unavailable", codex: "unavailable", grok: "unavailable" }, { agent: "claude", account: null }],
   ] as const)("opens on %s", (_, projectAgent, states, expected) => {
     expect(initialChoice(owner, project(projectAgent), accounts, availability(states))).toEqual(expected);
+  });
+
+  it("opens on the project's account for the agent it moved to when the first is missing", () => {
+    const moved = projectOf("p-1", "c-1", "App", { codex_account_id: { kind: "account", id: "c2" } });
+    const stored = [...accounts, account("c2", "codex", "Codex 2")];
+    expect(initialChoice(owner, moved, stored, availability({ claude: "unavailable" }))).toEqual({ agent: "codex", account: "c2" });
+  });
+});
+
+describe("inheritedAccount", () => {
+  const owner = consoleOf("c-1", "Main", { claude_account_id: "w" });
+  const stored = [...accounts, account("w2", "claude", "Work 2")];
+
+  it("is the default account when neither the project nor the console pins one", () => {
+    expect(inheritedAccount(consoleOf("c-1", "Main"), projectOf("p-1", "c-1", "App"), "grok", accounts)).toBeNull();
+  });
+
+  it("is the project's account over the console's", () => {
+    const project = projectOf("p-1", "c-1", "App", { claude_account_id: { kind: "account", id: "w2" } });
+    expect(inheritedAccount(owner, project, "claude", stored)).toBe("w2");
+  });
+
+  it("is the console's account when the project's reference is no longer stored", () => {
+    const project = projectOf("p-1", "c-1", "App", { claude_account_id: { kind: "account", id: "gone" } });
+    expect(inheritedAccount(owner, project, "claude", stored)).toBe("w");
+  });
+});
+
+describe("a project on the agent's default account", () => {
+  const owner = consoleOf("c-1", "Main", { claude_account_id: "w", codex_account_id: "c" });
+  const onDefault = projectOf("p-1", "c-1", "App", { claude_account_id: { kind: "default" } });
+
+  it("resolves to the default account without falling through to the console's", () => {
+    expect(inheritedAccount(owner, onDefault, "claude", accounts)).toBeNull();
+  });
+
+  it("is said for its own agent only", () => {
+    expect(inheritedAccount(owner, onDefault, "codex", accounts)).toBe("c");
+  });
+
+  it("opens the session dialog on the default account while the console pins one", () => {
+    const project = projectOf("p-1", "c-1", "App", { default_agent: "claude", claude_account_id: { kind: "default" } });
+    expect(initialChoice(owner, project, accounts, availability({}))).toEqual({ agent: "claude", account: null });
+  });
+
+  it("is told from inheriting by projectAccount", () => {
+    expect(projectAccount(onDefault, "claude", accounts)).toEqual({ kind: "default" });
+    expect(projectAccount(projectOf("p-1", "c-1", "App", { claude_account_id: { kind: "inherit" } }), "claude", accounts)).toEqual({ kind: "inherit" });
+  });
+
+  it("reads a pinned account that is not stored as inheriting", () => {
+    const gone = projectOf("p-1", "c-1", "App", { claude_account_id: { kind: "account", id: "gone" } });
+    expect(projectAccount(gone, "claude", accounts)).toEqual({ kind: "inherit" });
   });
 });
 

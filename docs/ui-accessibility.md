@@ -238,6 +238,21 @@ that chrome is measured against the material's measured colours, given in the co
 `packages/ui/src/style.css`, not only against `--chrome`, which is just the browser's stand-in for the material. The
 dark material is a grey far lighter than dark `--chrome`.
 
+## Pointer target size
+
+A control's pointer target is at least 24 by 24 CSS pixels (WCAG 2.2 AA 2.5.8). HeroUI's own sizes already clear it —
+its smallest icon-only button is 32 — so this only bites where a control is drawn smaller than HeroUI would draw it.
+
+Neither exception in the criterion is easy to rely on here. *Spacing* needs a 24-pixel circle centred on the target to
+touch no other target, which a small control placed over a larger one (a delete badge on a corner) fails by
+construction. *Equivalent* needs the same action to be available from another control on the same view, which a lone
+affordance does not have.
+
+Where the drawn size has to stay under 24, extend the target rather than the drawing, as HeroUI does for its own
+select clear button (`.select__clear-button:after{inset:-2px}`): an absolutely positioned `::after` with a negative
+inset enlarges what the pointer hits and changes nothing visible. The avatar field's delete button
+(`packages/ui/src/dialogs/AvatarField.tsx`) is drawn at 20 and hit at 24 that way.
+
 ## Not by colour alone
 
 A status or state that differs in colour also differs in glyph, shape or text.
