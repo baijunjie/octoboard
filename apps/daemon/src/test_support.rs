@@ -3,7 +3,8 @@
 //! test that fails part-way cleans up as surely as one that passes — the waits on a fixture
 //! process a test spawned (the pid it recorded, running a scenario again when it was killed
 //! before recording one, and its being gone), and the environment a test's `git` runs in together
-//! with the repositories it builds with it. Compiled only for tests, and one module rather than a
+//! with the repositories it builds with it, the state a read must leave untouched and the stale
+//! stat that makes a read want to write. Compiled only for tests, and one module rather than a
 //! `tests/` directory because some of the fixtures reach private items (`LiveSession::new`,
 //! `AppState::new`).
 
@@ -359,4 +360,48 @@ pub(crate) fn repo_with(label: &str, files: &[(&[u8], &[u8])]) -> ScratchDir {
     git(&dir, &["add", "-A"]);
     git(&dir, &["commit", "-q", "-m", "fixture"]);
     dir
+}
+
+/// Every file under `.git`, by path, with its length, a digest of its bytes and its modification
+/// time: what a read that must leave the repository alone is checked against. The modification
+/// time is part of it because an index rewritten with the same stat information it already held
+/// would compare equal by content alone; the digest stands in for the bytes so that a failure
+/// prints an entry per file rather than tens of kilobytes of byte literals.
+pub(crate) fn git_dir_state(repo: &Path) -> Vec<(PathBuf, u64, u64, std::time::SystemTime)> {
+    use std::hash::{Hash, Hasher};
+
+    let mut state = Vec::new();
+    let mut stack = vec![repo.join(".git")];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).expect("the .git directory is readable") {
+            let path = entry.expect("its entries are readable").path();
+            let meta = std::fs::symlink_metadata(&path).expect("an entry has metadata");
+            if meta.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            let body = std::fs::read(&path).expect("an entry is readable");
+            let mut digest = std::hash::DefaultHasher::new();
+            body.hash(&mut digest);
+            let modified = meta.modified().expect("an entry has a modification time");
+            state.push((path, body.len() as u64, digest.finish(), modified));
+        }
+    }
+    state.sort_by(|a, b| a.0.cmp(&b.0));
+    state
+}
+
+/// Moves `path`'s modification time a minute back, leaving its content alone: a tracked file
+/// whose stat information is stale, which is what makes a `git` read want to refresh the index.
+///
+/// Call it after every `git` the fixture runs. `commit` and `checkout` refresh the whole index,
+/// so a file backdated before them has the moved time recorded as the index entry's own stat
+/// data and the fixture is not stale at all.
+pub(crate) fn move_modification_time_back(path: &Path) {
+    let file = std::fs::File::options()
+        .write(true)
+        .open(path)
+        .expect("the tracked file is writable");
+    file.set_modified(std::time::SystemTime::now() - Duration::from_secs(60))
+        .expect("its modification time is settable");
 }

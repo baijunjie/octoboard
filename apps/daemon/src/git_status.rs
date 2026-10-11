@@ -574,7 +574,10 @@ fn parse_ab(text: &str) -> (u32, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{git, isolated_git_env, repo_with, ScratchDir, SYSTEM_GIT};
+    use crate::test_support::{
+        git, git_dir_state, isolated_git_env, move_modification_time_back, repo_with, ScratchDir,
+        SYSTEM_GIT,
+    };
 
     #[test]
     fn a_normal_branch_with_an_upstream_and_no_movement() {
@@ -732,35 +735,6 @@ mod tests {
         ));
     }
 
-    /// Every file under `.git`, by path, with its length, a digest of its bytes and its
-    /// modification time — what a read must leave untouched. The modification time is part of it
-    /// because an index rewritten with the same stat information it already held would compare
-    /// equal by content alone; the digest stands in for the bytes so that a failure prints an
-    /// entry per file rather than tens of kilobytes of byte literals.
-    fn git_dir_state(repo: &Path) -> Vec<(PathBuf, u64, u64, std::time::SystemTime)> {
-        use std::hash::{Hash, Hasher};
-
-        let mut state = Vec::new();
-        let mut stack = vec![repo.join(".git")];
-        while let Some(dir) = stack.pop() {
-            for entry in std::fs::read_dir(&dir).expect("the .git directory is readable") {
-                let path = entry.expect("its entries are readable").path();
-                let meta = std::fs::symlink_metadata(&path).expect("an entry has metadata");
-                if meta.is_dir() {
-                    stack.push(path);
-                    continue;
-                }
-                let body = std::fs::read(&path).expect("an entry is readable");
-                let mut digest = std::hash::DefaultHasher::new();
-                body.hash(&mut digest);
-                let modified = meta.modified().expect("an entry has a modification time");
-                state.push((path, body.len() as u64, digest.finish(), modified));
-            }
-        }
-        state.sort_by(|a, b| a.0.cmp(&b.0));
-        state
-    }
-
     /// What the branch header of [`repo_with_a_stale_stat`] reads as: a branch with an upstream it
     /// is one commit ahead of, so that all four of the fields the check reports carry a value.
     fn stale_stat_header() -> BranchHeader {
@@ -789,16 +763,6 @@ mod tests {
         git(&repo, &["commit", "-q", "-am", "second"]);
         move_modification_time_back(&repo.join("f.txt"));
         repo
-    }
-
-    /// Moves `path`'s modification time a minute back, leaving its content alone.
-    fn move_modification_time_back(path: &Path) {
-        let file = std::fs::File::options()
-            .write(true)
-            .open(path)
-            .expect("the tracked file is writable");
-        file.set_modified(std::time::SystemTime::now() - Duration::from_secs(60))
-            .expect("its modification time is settable");
     }
 
     /// Runs the branch-header read in `repo` with the given access, as [`run_git_read`] would

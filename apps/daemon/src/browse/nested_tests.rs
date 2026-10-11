@@ -11,7 +11,9 @@ use super::compare_tests::commit_on;
 use super::tests::{code, Fixture};
 use super::*;
 use crate::protocol::{ChangeGroup, SideKind, SideRead};
-use crate::test_support::{fixture_git, git, git_stdin, repo_with};
+use crate::test_support::{
+    fixture_git, git, git_dir_state, git_stdin, move_modification_time_back, repo_with,
+};
 
 /// Twelve lines headed `tag`, those of `changed` marked.
 fn lines(tag: &str, changed: &[usize]) -> Vec<u8> {
@@ -360,26 +362,6 @@ fn a_comparisons_pinned_commits_are_read_even_after_its_branch_moves() {
     assert!(!patch.contains("changed 9"), "{patch}");
 }
 
-/// Every file under `.git` with its bytes and modification time.
-fn git_dir_state(repo: &Path) -> Vec<(std::path::PathBuf, Vec<u8>, std::time::SystemTime)> {
-    let mut state = Vec::new();
-    let mut stack = vec![repo.join(".git")];
-    while let Some(dir) = stack.pop() {
-        for entry in std::fs::read_dir(&dir).unwrap() {
-            let path = entry.unwrap().path();
-            let meta = std::fs::symlink_metadata(&path).unwrap();
-            if meta.is_dir() {
-                stack.push(path);
-            } else {
-                let body = std::fs::read(&path).unwrap();
-                state.push((path, body, meta.modified().unwrap()));
-            }
-        }
-    }
-    state.sort_by(|a, b| a.0.cmp(&b.0));
-    state
-}
-
 #[test]
 fn reading_a_nesting_pair_writes_nothing_to_the_repository() {
     let fixture = Fixture::new();
@@ -394,17 +376,8 @@ fn reading_a_nesting_pair_writes_nothing_to_the_repository() {
     git(&repo, &["checkout", "-q", "main"]);
     stage_down(&repo, "foo/bar", "foo", &lines("foo", &[5]));
     let project = fixture.project("p", &repo);
-    // A tracked file whose modification time moved and whose content did not: what makes a `git`
-    // read want to refresh the index. It comes after every `git` the setup runs, because
-    // `commit` and `checkout` refresh the whole index and so record the moved time as the
-    // entry's own — a stale stat set before them leaves the fixture not stale at all.
-    let file = std::fs::File::options()
-        .write(true)
-        .open(repo.join("stale.txt"))
-        .unwrap();
-    file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(60))
-        .unwrap();
-    drop(file);
+    // Last, after every `git` the setup runs: see `move_modification_time_back`.
+    move_modification_time_back(&repo.join("stale.txt"));
 
     let before = git_dir_state(&repo);
     let staged_read = staged(&fixture, &project, "foo/bar", "foo").unwrap();

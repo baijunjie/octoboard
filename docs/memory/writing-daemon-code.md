@@ -73,11 +73,12 @@ disk, which no fixture without such a file reproduces.
 ## A test that a `git` read leaves the repository alone needs a fixture whose stat information is stale
 
 A tracked file whose modification time moved while its content did not is the only thing that makes a read want to
-refresh the index. Against a freshly built repository the read writes nothing whatever its environment says, so a
-test over that fixture passes with the guard removed as well, and proves nothing about the guard. The fixture has
-to produce the stale state, and the test needs a positive control beside it — the same read with the guard off,
-asserted to write. `apps/daemon/src/git_status.rs`'s
-`reading_the_branch_header_leaves_the_repository_untouched`, with the control that follows it, is the worked pair.
+refresh the index. Against a freshly built repository the read writes nothing whatever its environment says, so a test
+over that fixture passes with the guard removed as well, and proves nothing about the guard. The fixture has to produce
+the stale state, and the test needs a positive control beside it — the same read with the guard off, asserted to write.
+`apps/daemon/src/git_status.rs`'s `reading_the_branch_header_leaves_the_repository_untouched`, with the control that
+follows it, is the worked pair. Build both halves from `apps/daemon/src/test_support.rs` — `move_modification_time_back`
+for the stale stat and `git_dir_state` for the before-and-after comparison — rather than a copy of your own.
 
 The backdating goes after every `git` the fixture runs: `commit` and `checkout` refresh the whole index, so a step
 placed before them is recorded as the index entry's own stat data and leaves the fixture not stale at all. A fixture
