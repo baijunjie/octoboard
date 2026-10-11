@@ -360,7 +360,7 @@ fn a_comparisons_pinned_commits_are_read_even_after_its_branch_moves() {
     assert!(!patch.contains("changed 9"), "{patch}");
 }
 
-/// Every file under `.git` with its length, bytes and modification time.
+/// Every file under `.git` with its bytes and modification time.
 fn git_dir_state(repo: &Path) -> Vec<(std::path::PathBuf, Vec<u8>, std::time::SystemTime)> {
     let mut state = Vec::new();
     let mut stack = vec![repo.join(".git")];
@@ -387,15 +387,6 @@ fn reading_a_nesting_pair_writes_nothing_to_the_repository() {
         "nested-readonly",
         &[(b"foo", &lines("foo", &[])), (b"stale.txt", b"one\n")],
     );
-    // A tracked file whose modification time moved and whose content did not: what makes a `git`
-    // read want to refresh the index.
-    let file = std::fs::File::options()
-        .write(true)
-        .open(repo.join("stale.txt"))
-        .unwrap();
-    file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(60))
-        .unwrap();
-    drop(file);
     stage_down(&repo, "foo", "foo/bar", &lines("foo", &[2]));
     git(&repo, &["commit", "-q", "-m", "moved"]);
     git(&repo, &["branch", "moved"]);
@@ -403,6 +394,17 @@ fn reading_a_nesting_pair_writes_nothing_to_the_repository() {
     git(&repo, &["checkout", "-q", "main"]);
     stage_down(&repo, "foo/bar", "foo", &lines("foo", &[5]));
     let project = fixture.project("p", &repo);
+    // A tracked file whose modification time moved and whose content did not: what makes a `git`
+    // read want to refresh the index. It comes after every `git` the setup runs, because
+    // `commit` and `checkout` refresh the whole index and so record the moved time as the
+    // entry's own — a stale stat set before them leaves the fixture not stale at all.
+    let file = std::fs::File::options()
+        .write(true)
+        .open(repo.join("stale.txt"))
+        .unwrap();
+    file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(60))
+        .unwrap();
+    drop(file);
 
     let before = git_dir_state(&repo);
     let staged_read = staged(&fixture, &project, "foo/bar", "foo").unwrap();

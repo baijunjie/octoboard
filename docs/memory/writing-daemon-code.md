@@ -79,6 +79,14 @@ to produce the stale state, and the test needs a positive control beside it — 
 asserted to write. `apps/daemon/src/git_status.rs`'s
 `reading_the_branch_header_leaves_the_repository_untouched`, with the control that follows it, is the worked pair.
 
+The backdating goes after every `git` the fixture runs: `commit` and `checkout` refresh the whole index, so a step
+placed before them is recorded as the index entry's own stat data and leaves the fixture not stale at all. A fixture
+ordered that way still passes, because its last write leaves the index's entries racily clean and git re-verifies and
+rewrites the index on the next read regardless — which satisfies the control while the read under test never meets a
+stale stat, and stops happening once a parallel suite's load widens the gap between the worktree write and git's own
+index write, so the test turns intermittent. Check the fixture by deleting the backdating step: the control has to fail
+without it.
+
 ## Lint the Rust crates with `cargo clippy --all-targets`
 
 Plain `cargo clippy` checks only the lib and bin targets, and every test in these crates sits in a `#[cfg(test)]`
