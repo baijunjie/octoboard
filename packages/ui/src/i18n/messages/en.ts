@@ -156,6 +156,8 @@ export const en = {
   "daemon.invalid_commit": "“{commit}” is not a full commit ID.",
   "daemon.unknown_commit": "This repository has no commit “{commit}”.",
   "daemon.invalid_change": "This change names nothing that can be read.",
+  "daemon.clean_filtered":
+    "“{path}” passes through the {filter} clean filter, so the content this change was made from cannot be read.",
   "daemon.git_failed": "Git could not read this: {detail}",
   "daemon.request_superseded": "A newer request took the place of this one.",
   "daemon.trust_directory_too_broad":

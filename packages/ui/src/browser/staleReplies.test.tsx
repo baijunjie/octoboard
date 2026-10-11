@@ -405,6 +405,7 @@ it("reads a change's whole bodies only when asked, from the versions its patch r
 it.each([
   [{ code: "limit_exceeded", params: { limit: "file_bytes", size: "5242880", max: "4194304" } }, "unavailable"],
   [{ code: "unsupported_file_type", params: { file_type: "symlink" } }, "unavailable"],
+  [{ code: "clean_filtered", params: { path: "asset.bin", filter: "lfs" } }, "unavailable"],
   [{ code: "source_changed", params: {} }, "changed"],
   [{ code: "request_superseded", params: {} }, "superseded"],
   [{ code: "git_failed", params: { detail: "no object" } }, "failed"],

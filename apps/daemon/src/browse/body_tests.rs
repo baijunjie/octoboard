@@ -1,12 +1,16 @@
 //! The whole bodies of a change's two sides, read end to end against real repositories: each kind
-//! of diff side, a version that no longer matches the patch's, and a body past the file budget.
+//! of diff side, a version that no longer matches the patch's, a body past the file budget, and a
+//! path with a clean filter in effect, whose disk side is refused rather than read — including the
+//! check that deciding so reads the repository without writing to it.
 
 use super::change_tests::{present, read_body, read_lines, write};
 use super::compare_tests::{commit_on, Compared};
 use super::tests::{code, Fixture};
 use super::*;
 use crate::protocol::{ChangeGroup, ChangeRef, ComparedChangeRef, SideRead, SideRef, SideVersion};
-use crate::test_support::{git, repo_with};
+use crate::test_support::{
+    fixture_git, git, git_dir_state, move_modification_time_back, repo_with,
+};
 
 /// The version a diff reply reported for `side`, as a client names it back.
 pub(super) fn version(side: &SideRead) -> SideVersion {
@@ -382,4 +386,144 @@ fn a_body_over_the_file_budget_is_refused_whole_and_other_sides_have_no_bodies()
         (SideVersion::Absent, SideVersion::Absent),
     );
     assert_eq!(code(untracked), error_code::INVALID_CHANGE);
+}
+
+/// A clean filter (Git LFS's being the common case) makes the content `git` numbers the patch from
+/// something other than the file on disk, so the disk side's body is refused rather than read.
+#[test]
+fn a_clean_filtered_path_refuses_the_body_of_its_disk_side() {
+    let fixture = Fixture::new();
+    let repo = repo_with("bodies-clean-filter", &[(b"plain.txt", b"one\ntwo\n")]);
+    // A minimal stand-in for Git LFS: the content that goes into the repository is the file's
+    // first two lines, so `git` numbers that side two lines whatever the file holds.
+    git(&repo, &["config", "filter.collapse.clean", "sed -n '1,2p'"]);
+    // A driver with no `clean` and no `process`, and one whose `clean` is configured as the empty
+    // string, clean nothing: both of their paths keep their expansion.
+    git(&repo, &["config", "filter.passthrough.smudge", "cat"]);
+    git(&repo, &["config", "filter.hollow.clean", ""]);
+    write(
+        repo.join(".gitattributes"),
+        b"collapsed.txt filter=collapse\nsmudged.txt filter=passthrough\n\
+          hollow.txt filter=hollow\n",
+    );
+    let eight = b"one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\n";
+    write(repo.join("collapsed.txt"), eight);
+    write(repo.join("smudged.txt"), eight);
+    write(repo.join("hollow.txt"), eight);
+    git(&repo, &["add", "-A"]);
+    git(&repo, &["commit", "-q", "-m", "filtered paths"]);
+    let changed = b"ONE\ntwo\nthree\nfour\nfive\nsix\nseven\neight\n";
+    write(repo.join("collapsed.txt"), changed);
+    write(repo.join("smudged.txt"), changed);
+    write(repo.join("hollow.txt"), changed);
+    write(repo.join("untracked.txt"), eight);
+    write(
+        repo.join(".gitattributes"),
+        b"collapsed.txt filter=collapse\nsmudged.txt filter=passthrough\n\
+          hollow.txt filter=hollow\nuntracked.txt filter=collapse\n",
+    );
+    let project = fixture.project("p", &repo);
+    let sides = || (present("collapsed.txt"), present("collapsed.txt"));
+
+    // The patch numbers the side from the cleaned content: two lines, not the file's eight.
+    let diff = fixture
+        .change(
+            &project,
+            None,
+            ChangeGroup::Unstaged,
+            present("collapsed.txt"),
+            present("collapsed.txt"),
+        )
+        .unwrap();
+    let patch = diff.patch.clone().unwrap();
+    assert!(patch.contains("@@ -1,2 +1,2 @@"), "{patch}");
+    let versions = (version(&diff.old), version(&diff.new));
+    let refused = fixture.bodies(&project, ChangeGroup::Unstaged, sides(), versions);
+    assert_eq!(code(refused), error_code::CLEAN_FILTERED);
+
+    // Staged, both sides are blobs, which hold the cleaned content already.
+    git(&repo, &["add", "collapsed.txt"]);
+    let (old, new) = fixture.bodies_of_diff(&project, ChangeGroup::Staged, "collapsed.txt");
+    assert_eq!(text(&old).as_deref(), Some("one\ntwo\n"));
+    assert_eq!(text(&new).as_deref(), Some("ONE\ntwo\n"));
+    assert_eq!((read_lines(&old), read_lines(&new)), (Some(2), Some(2)));
+
+    // A `filter` attribute whose driver cleans nothing leaves the disk side readable.
+    for path in ["smudged.txt", "hollow.txt"] {
+        let (_, new) = fixture.bodies_of_diff(&project, ChangeGroup::Unstaged, path);
+        assert_eq!(
+            text(&new).map(|body| body.lines().count()),
+            Some(8),
+            "{path}"
+        );
+        assert_eq!(read_lines(&new), Some(8), "{path}");
+    }
+
+    // An untracked file is shown as itself and has no patch to expand, filter or no filter.
+    let untracked = fixture
+        .change(
+            &project,
+            None,
+            ChangeGroup::Untracked,
+            SideRef::Absent,
+            present("untracked.txt"),
+        )
+        .unwrap();
+    assert_eq!(untracked.patch, None);
+    assert_eq!(read_body(&untracked.new).as_deref(), Some(&eight[..]));
+    let no_patch = fixture.bodies(
+        &project,
+        ChangeGroup::Untracked,
+        (SideRef::Absent, present("untracked.txt")),
+        (SideVersion::Absent, version(&untracked.new)),
+    );
+    assert_eq!(code(no_patch), error_code::INVALID_CHANGE);
+}
+
+/// The refusal is decided from the attributes and the configuration alone: nothing of it writes.
+#[test]
+fn deciding_a_path_is_clean_filtered_writes_nothing_to_the_repository() {
+    let fixture = Fixture::new();
+    let repo = repo_with(
+        "bodies-filter-readonly",
+        &[
+            (b".gitattributes", b"collapsed.txt filter=collapse\n"),
+            (b"stale.txt", b"one\n"),
+        ],
+    );
+    git(&repo, &["config", "filter.collapse.clean", "sed -n '1,2p'"]);
+    write(repo.join("collapsed.txt"), b"one\ntwo\nthree\n");
+    git(&repo, &["add", "collapsed.txt"]);
+    git(&repo, &["commit", "-q", "-m", "collapsed"]);
+    write(repo.join("collapsed.txt"), b"ONE\ntwo\nthree\n");
+    let project = fixture.project("p", &repo);
+    let sides = || (present("collapsed.txt"), present("collapsed.txt"));
+    let diff = fixture
+        .change(
+            &project,
+            None,
+            ChangeGroup::Unstaged,
+            present("collapsed.txt"),
+            present("collapsed.txt"),
+        )
+        .unwrap();
+    let versions = (version(&diff.old), version(&diff.new));
+    // Last, after every `git` the setup runs, and on a file the read does not look at, whose
+    // version it would otherwise find changed: see `move_modification_time_back`.
+    move_modification_time_back(&repo.join("stale.txt"));
+
+    let before = git_dir_state(&repo);
+    let refused = fixture.bodies(&project, ChangeGroup::Unstaged, sides(), versions);
+    assert_eq!(code(refused), error_code::CLEAN_FILTERED);
+    assert_eq!(git_dir_state(&repo), before, "the read wrote under .git");
+    assert!(!repo.join(".git/index.lock").exists());
+
+    // The control: a plain `git status` over the same fixture rewrites the index.
+    let status = fixture_git(&repo).arg("status").output().unwrap();
+    assert!(status.status.success());
+    assert_ne!(
+        git_dir_state(&repo),
+        before,
+        "the fixture does not provoke an index refresh"
+    );
 }

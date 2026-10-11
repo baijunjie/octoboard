@@ -219,6 +219,7 @@ A client also branches on some codes, instead of only showing them:
 | `invalid_commit` | `commit` | Not a full, lower-case hexadecimal object id |
 | `unknown_commit` | `commit` | No commit has that id in the repository |
 | `invalid_change` | — | A `read_project_change` whose `change` names no side its group can read: both sides absent, an `out_of_scope` side outside the staged group, or an untracked change with an old side; a `read_project_change_bodies` or `read_project_comparison_change_bodies` whose change has no patch to expand: an untracked one, or one with a side outside the project |
+| `clean_filtered` | `path`, `filter` | A body asked of a side read from the worktree whose path has a clean filter in effect — a `filter` attribute naming a driver that configures a `clean` or a `process` command, as Git LFS does for every path it tracks. `git` made the patch from what that filter produces, so the file's own bytes are not the lines the patch left out, and `filter` is the driver's name. Only a worktree side can be filtered this way: a blob holds the filtered content already |
 | `git_failed` | `detail` | `git` failed on a browse read, or did not finish within its deadline; `detail` is its message |
 | `request_superseded` | — | A browse request was given up because a newer one took its slot |
 
@@ -779,15 +780,20 @@ or file version that matched, so the two bodies and the patch come from one stat
 
 The reply carries `old` and `new` as `SideRead` records with the body in `file`, a `FileContent` as in `project_file`,
 or `absent` for the side an added or deleted file does not have. The records also carry `lines`, counted from the very
-bytes the body carries. A body is read with the file budget: one over 4 MiB is
-refused with `limit_exceeded` (`file_bytes`, carrying its `size` when known), never cut, and so is the whole request,
-since half the bodies cannot expand anything; the reply as a whole is held to the reservation of a change's diff (see
-"Browse budgets"). Because the change is resolved by making its patch first, a change whose patch is itself over the
-patch budget is refused with `limit_exceeded` (`patch_bytes`) before any body is read, exactly as its patch request is.
-A side that is a link or a submodule has no body and is refused with `unsupported_file_type`. A change with no patch to
-expand — an untracked file, or one with a side outside the project — is `invalid_change`, refused from the request alone
-before any side is read. Reading changes nothing in the repository, takes no lock and refreshes no index, as no browse
-request does.
+bytes the body carries. A body is read with the file budget: one over 4 MiB is refused with `limit_exceeded`
+(`file_bytes`, carrying its `size` when known), never cut, and so is the whole request, since half the bodies cannot
+expand anything; the reply as a whole is held to the reservation of a change's diff (see "Browse budgets"). Because the
+change is resolved by making its patch first, a change whose patch is itself over the patch budget is refused with
+`limit_exceeded` (`patch_bytes`) before any body is read, exactly as its patch request is. A side that is a link or a
+submodule has no body and is refused with `unsupported_file_type`. A side read from the worktree whose path has a clean
+filter in effect is refused with `clean_filtered`, and so is the request: `git` numbered the patch from the content that
+filter produces, the file's own bytes would be lines the patch does not describe, and no `git` command writes a path's
+cleaned bytes out for a body to be read from. Both sides are put through that check once the versions the request names
+have been compared — so a change already known to have moved on is still `source_changed` — and before either body is
+read, so a refusal reads no body at all; a file that moves after the comparison answers `clean_filtered` rather than
+`source_changed`, its expansion being one that can never be delivered. A change with no patch to expand — an untracked
+file, or one with a side outside the project — is `invalid_change`, refused from the request alone before any side is
+read. Reading changes nothing in the repository, takes no lock and refreshes no index, as no browse request does.
 
 #### Comparing two branches
 

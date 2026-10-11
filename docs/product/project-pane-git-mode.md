@@ -501,10 +501,20 @@ symbolic link or a submodule, hence a type change, and a version outside the pro
 at all, its diff holding both of its sides whole so that nothing in it is collapsed (see "What it shows" above). The
 rest is found only on the first expansion, and the diff is then drawn again in that form, so the separator for the run
 beyond its last hunk goes on that press: a side the daemon will not deliver whole — one larger than the 4 MiB a read
-opens, a file type it does not read, a change it cannot make sense of — a side past the viewer's own budget of 10,000
-lines or 1,000,000 characters, and the change having moved on. Each of the three puts a note above the diff, and each
-note is announced: that the whole file is not delivered for this change, that the file is too large to be shown in
-full here, or, as the bullet above says, that the change has moved on since it was read.
+opens, a file type it does not read, a side read from the worktree at a path with a clean filter in effect (see
+below), a change it cannot make sense of — a side past the viewer's own budget of 10,000 lines or 1,000,000
+characters, and the change having moved on. Each of the three puts a note above the diff, and each note is announced:
+that the whole file is not delivered for this change, that the file is too large to be shown in full here, or, as the
+bullet above says, that the change has moved on since it was read.
+
+**A path with a clean filter** is one Git filters on its way into the repository — a `filter` attribute naming a
+driver configured with a `clean` or a `process` command, as Git LFS sets up for every path it tracks. The patch's
+hunks are numbered from what that filter produces rather than from the bytes the file on disk holds, so the daemon
+delivers no side read from the worktree at such a path. Only an unstaged change has such a side: a staged change and
+both sides of a Compare view comparison are read from the repository, which holds the filtered content already, and
+expand as any other change does, and an untracked file is shown as itself with no diff to expand (see "What it shows"
+above). A `filter` attribute whose driver has neither command configured filters nothing, so that path expands
+normally too. Where such a change has also moved on since it was read, the note is the one for having moved on.
 
 From the keyboard, **Tab** from the code region moves into the separators' controls and then along them, run by run
 from the top of the diff and, within a run, in the order they are read — the control or pair that reveals part of the

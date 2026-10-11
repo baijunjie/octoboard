@@ -126,6 +126,9 @@ function fileSideVersion(side: SideRead): SideVersion | undefined {
 /** The budgets whose overrun means the bodies can never be had, as opposed to a read that failed. */
 const BODY_LIMITS = new Set(["file_bytes", "patch_bytes", "reply_bytes"]);
 
+/** The refusals that mean the same: this change has no whole sides to expand, however often it is asked for. */
+const BODIES_NEVER_DELIVERED = new Set(["unsupported_file_type", "invalid_change", "clean_filtered"]);
+
 type Shown = { key: string; content: ViewerContent; failed?: { changing: boolean } };
 type Opened = { item: ChangeItem; origin: ChangeOrigin };
 
@@ -234,7 +237,7 @@ export function useChangeReader(project: string): ChangeReader {
         return { old: oldText, new: newText };
       } catch (err) {
         if (err instanceof ChangeBodiesError) throw err;
-        if (err instanceof DaemonRequestError && ["unsupported_file_type", "invalid_change"].includes(err.code)) throw new ChangeBodiesError("unavailable");
+        if (err instanceof DaemonRequestError && BODIES_NEVER_DELIVERED.has(err.code)) throw new ChangeBodiesError("unavailable");
         if (err instanceof DaemonRequestError && err.code === "limit_exceeded" && BODY_LIMITS.has(err.params.limit ?? "")) {
           throw new ChangeBodiesError("unavailable");
         }

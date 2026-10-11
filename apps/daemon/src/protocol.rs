@@ -1799,6 +1799,10 @@ pub mod error_code {
     pub const GIT_FAILED: &str = "git_failed";
     /// A `read_project_change` whose change names no side its group can read.
     pub const INVALID_CHANGE: &str = "invalid_change";
+    /// A body asked of a side on the disk whose path has a clean filter in effect: the patch was
+    /// made from that filter's output, which cannot be read without writing an object. `params`
+    /// names the `path` and the `filter` driver.
+    pub const CLEAN_FILTERED: &str = "clean_filtered";
     /// A browse request was given up because a newer one took its slot. A client shows nothing.
     pub const REQUEST_SUPERSEDED: &str = "request_superseded";
 }

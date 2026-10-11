@@ -135,6 +135,7 @@ export const zhHans: Translation<"other"> = {
   "daemon.invalid_commit": "“{commit}”不是完整的提交 ID。",
   "daemon.unknown_commit": "此仓库中没有提交“{commit}”。",
   "daemon.invalid_change": "此更改没有可读取的内容。",
+  "daemon.clean_filtered": "“{path}”经过 {filter} clean 过滤器处理，因此无法读取此更改所依据的内容。",
   "daemon.git_failed": "Git 无法读取：{detail}",
   "daemon.request_superseded": "此请求已被更新的请求取代。",
   "daemon.trust_directory_too_broad":

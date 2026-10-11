@@ -23,7 +23,9 @@
 //! client expanding the lines its patch collapsed. The change is resolved exactly as for its patch,
 //! the sides found are compared with the versions the client names, and only a match is read; a
 //! body is then read from the very object or file version that matched, so nothing mixes
-//! revisions.
+//! revisions. A side read from the disk at a path with a clean filter in effect is refused instead
+//! of read: `git` made the patch from what that filter produces, which the file's own bytes are
+//! not.
 //!
 //! A reply whose patch shows a change's content also carries the line count of each side that is a
 //! file object, so a client can tell whether a last hunk reaches the end of a file; see
@@ -568,6 +570,22 @@ fn no_bodies() -> anyhow::Error {
     )
 }
 
+/// A side on the disk whose path has a clean filter in effect, named by the filter driver: `git`
+/// made the patch from the content that filter produces, so the file's own bytes are not the lines
+/// the patch left out, and no `git` command writes a path's cleaned bytes out to be read instead
+/// (`hash-object -w` would store them as an object, which no browse read may do).
+fn clean_filtered(path: &RelPath, filter: &str) -> anyhow::Error {
+    let shown = path.to_wire();
+    CodedError::raised(
+        error_code::CLEAN_FILTERED,
+        format!(
+            "{shown} passes through the {filter} clean filter, so the content its patch was made \
+             from cannot be read"
+        ),
+        &[("path", &shown), ("filter", filter)],
+    )
+}
+
 /// The bodies of the sides `read` found, once their versions are those `expected` names; a side
 /// that is not has changed under the client, at `path`. The patch the read made is dropped first,
 /// so it is not held beside the bodies.
@@ -600,6 +618,9 @@ fn bodies_of(
         inline_bodies: false,
     };
     let scope = reader.scope_dir();
+    for side in [&old, &new] {
+        reader.refuse_clean_filtered(side)?;
+    }
     Ok(BodiesRead {
         old: reader.whole(scope.as_ref(), old)?,
         new: reader.whole(scope.as_ref(), new)?,
@@ -1215,10 +1236,13 @@ impl Reader<'_> {
 
     /// `side`, a present file's whole body read from the version it names, which is checked once
     /// more as it is read: a link or a submodule has no body. Anything else comes back as it is.
+    /// A side on the disk is read only once [`Reader::refuse_clean_filtered`] has passed it.
     ///
     /// The side's `lines` are counted from the body read, which makes this the one place a side
-    /// read from the disk gets a count: it is the bytes the reply carries that are counted, not
-    /// what `git` would number of the file once its clean filter had run.
+    /// read from the disk gets a count: with a clean filter's paths refused, the count is the one
+    /// `git` numbered the patch from. The conversions left all keep a file's line boundaries, and
+    /// so its count: `ident`'s `$Id$` and a `working-tree-encoding` rewrite bytes within a line,
+    /// and a worktree's CRLF endings only lose their `\r`.
     fn whole(&self, scope: Option<&ProjectRoot>, side: SideRead) -> Result<SideRead> {
         let SideRead::Present {
             path, kind, source, ..
@@ -1255,6 +1279,94 @@ impl Reader<'_> {
             file: body.map(file_content),
             lines,
         })
+    }
+
+    /// Refuses a side read from the disk at a path with a clean filter in effect
+    /// (`clean_filtered`): `git` numbered the patch from what that filter produces, so the file's
+    /// own bytes are not the lines the patch left out, and nothing reads a path's cleaned bytes
+    /// back out — `hash-object -w` would store them, which no browse read may do. The cleaned
+    /// content does stand in a wide-context `git diff`'s own context lines, so a body could be
+    /// assembled from a second patch; these replies deliver a body read whole from one object or
+    /// file version instead, and the client keeps the collapsed lines as they are.
+    ///
+    /// Both sides are put through this before either body is read, so a refused expansion never
+    /// reads a whole blob it then throws away.
+    fn refuse_clean_filtered(&self, side: &SideRead) -> Result<()> {
+        let SideRead::Present {
+            path,
+            kind: SideKind::File,
+            source: ContentSource::Live { .. },
+            ..
+        } = side
+        else {
+            return Ok(());
+        };
+        let rel = RelPath::parse(path).ok_or_else(|| git_failed("the side's path is invalid"))?;
+        match self.clean_filter(&rel)? {
+            Some(filter) => Err(clean_filtered(&rel, &filter)),
+            None => Ok(()),
+        }
+    }
+
+    /// The name of the filter driver that cleans `rel` on its way into the repository, when the
+    /// path has one in effect: a `filter` attribute naming a driver, and that driver configured
+    /// with a `clean` command or with the long-running `process` one Git LFS uses. A `filter`
+    /// attribute whose driver configures neither cleans nothing, so `git` passes the file's own
+    /// bytes through and there is nothing to refuse.
+    ///
+    /// Both reads leave the repository alone: `check-attr` reads the attribute files and the index,
+    /// `config` the configuration files.
+    fn clean_filter(&self, rel: &RelPath) -> Result<Option<String>> {
+        let full = self.full(rel);
+        let args: &[&[u8]] = &[b"-z", b"filter", b"--", full.as_bytes()];
+        let stdout = self
+            .env
+            .run(
+                &self.at.root,
+                "check-attr",
+                args,
+                budget::GIT_METADATA_STDOUT,
+                self.cancel,
+            )
+            .map_err(git_error)?;
+        // `<path>\0<attribute>\0<value>\0`, the value being a driver name or one of `git`'s own
+        // markers for an attribute that is unset, set without a value, or not mentioned at all.
+        let mut fields = stdout.split(|&byte| byte == 0);
+        let (Some(_path), Some(_attribute), Some(value)) =
+            (fields.next(), fields.next(), fields.next())
+        else {
+            return Ok(None);
+        };
+        let Ok(driver) = std::str::from_utf8(value) else {
+            return Ok(None);
+        };
+        if matches!(driver, "unspecified" | "unset" | "set" | "") {
+            return Ok(None);
+        }
+        let args: &[&[u8]] = &[b"--list", b"-z"];
+        let stdout = self
+            .env
+            .run(
+                &self.at.root,
+                "config",
+                args,
+                budget::GIT_METADATA_STDOUT,
+                self.cancel,
+            )
+            .map_err(git_error)?;
+        let cleans = [
+            format!("filter.{driver}.clean"),
+            format!("filter.{driver}.process"),
+        ];
+        // `<key>\n<value>\0` per entry, or `<key>\0` for a key set without one. The value has to be
+        // read rather than the key alone: a command configured as the empty string is listed like
+        // any other and filters nothing.
+        let configured = stdout
+            .split(|&byte| byte == 0)
+            .filter_map(|entry| std::str::from_utf8(entry).ok())
+            .filter_map(|entry| entry.split_once('\n'))
+            .any(|(key, value)| !value.is_empty() && cleans.iter().any(|clean| clean == key));
+        Ok(configured.then(|| driver.to_string()))
     }
 
     /// One side of the reply: out of scope when nothing was looked up for it (`found` is `None`),
