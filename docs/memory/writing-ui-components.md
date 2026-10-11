@@ -207,6 +207,21 @@ Nothing on the way past catches it: `packages/ui` has no linter, and its tests (
 evaluate the CSS, so a class whose utility was never emitted is valid TypeScript, passes the tests, builds clean and
 reads fine in a diff. After adding or changing a utility class, grep the built `packages/ui/dist/assets/*.css` for it.
 
+## A `docked:` utility loses to an `sm:` or an `rtl:` twin on the same property
+
+`docked` is this project's one custom breakpoint and its token is in `px`, while Tailwind's built-in breakpoints are
+in `rem`. Tailwind orders breakpoints by value only where it can compare them, so a px-valued one cannot be placed
+against the rem-valued built-ins and its media block is emitted ahead of all of them; a selector variant such as
+`rtl:` is emitted after every media variant. Either way the `docked:` rule comes first, so at equal specificity the
+twin wins and the `docked:` value never applies — with no build warning and nothing to see in the source.
+
+- Never pair an `sm:` / `md:` / `lg:` utility with a `docked:` one for the same property. Write the narrow side as
+  `max-docked:` and leave the wide side to the inherited or the component's own value: `max-docked:` emits
+  `@media (width < 1148px)`, the exact complement of the `docked:` band, and being a Tailwind utility it also wins
+  inside that band over HeroUI's own prebuilt responsive rules, which sit in HeroUI's components layer.
+- `rtl:` has no `max-` form, so a `docked:` value for a property also set under `rtl:` needs a `docked:rtl:` twin
+  instead.
+
 ## Dim a region with a veil, not `opacity` on it
 
 In the app's WKWebView, `opacity` below 1 on an ancestor of anything that fades (an opacity transition, such as a
@@ -283,8 +298,6 @@ build it in from the start:
   quarter points up.
 - Content whose direction is not the UI's sets its own: a path `dir="ltr"`, a name the user typed `dir="auto"`
   (`FadeOverflow` takes the same `dir` and fades along it).
-- An `rtl:` utility wins over a `docked:` one on the same property, so a `docked:` value for a property also set under
-  `rtl:` needs a `docked:rtl:` twin, or it silently does not apply under right-to-left.
 
 ## Only icon-only chrome sits on the window material; text goes on the opaque panel
 

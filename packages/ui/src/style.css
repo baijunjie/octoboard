@@ -8,7 +8,15 @@
      `layout/paneWidth.ts` and `ReportPanel.tsx`). Below it `usePaneToggles` turns the sidebar and
      the report panel into overlays instead of row siblings. The macOS window's own minimum
      (`apps/desktop/src-tauri/src/lib.rs`) keeps the desktop app from ever going under it, so the
-     `docked:` variant is also what "the layout as it always was" means there. */
+     `docked:` variant is also what "the layout as it always was" means there.
+
+     The `px` unit is load-bearing and must stay. `dockedBreakpointPx()` in
+     `layout/breakpoint.ts` reads this token back with `parseFloat` and `dockedQuery()`
+     interpolates the number as `(min-width: …px)`, so `71.75rem` would silently become
+     `(min-width: 71.75px)` — permanently non-narrow, with nothing reporting it. It also decides
+     where Tailwind emits the `docked` media block: a px breakpoint cannot be sorted against the
+     rem-valued built-in ones, so it is emitted ahead of all of them, and changing the unit here
+     reorders every `docked:` utility in the package against its `sm:` / `md:` / `lg:` siblings. */
   --breakpoint-docked: 1148px;
 }
 

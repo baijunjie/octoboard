@@ -198,11 +198,16 @@ export function Dialog({
     <Frame.Backdrop isOpen isDismissable isKeyboardDismissDisabled={false} onOpenChange={(open) => !open && onClose()}>
       {/* HeroUI pads the container 40px from `sm` up, which below the `docked` breakpoint leaves too
           little of a narrow window for code; the viewer asks for a 16px margin there and the 40px
-          one above it. The height is the window's own less those margins, and less the connection
-          banner's strip, which the container also ends above (`style.css`): without that the strip,
-          stacked above the dialog as well as above the backdrop, would cross the dialog's own
-          bottom edge and swallow the presses landing there. */}
-      <Frame.Container size={size === "viewer" ? "lg" : size} className={size === "viewer" ? "sm:p-4 docked:p-10" : undefined}>
+          one above it. The narrow margin is a `max-docked:` utility, not an `sm:` one paired with a
+          `docked:` twin: a `docked:` utility loses to an `sm:` twin on the same property, and the
+          band `max-docked:` covers instead is one where HeroUI's own 40px rule is beaten anyway,
+          since it sits in HeroUI's components layer and this is a Tailwind utility. The 40px above
+          the breakpoint is then HeroUI's. The height is the window's own less those
+          margins, and less the connection banner's strip, which the container also ends above
+          (`style.css`): without that the strip, stacked above the dialog as well as above the
+          backdrop, would cross the dialog's own bottom edge and swallow the presses landing
+          there. */}
+      <Frame.Container size={size === "viewer" ? "lg" : size} className={size === "viewer" ? "max-docked:p-4" : undefined}>
         <Frame.Dialog
           aria-describedby={alert ? bodyId : undefined}
           className={
