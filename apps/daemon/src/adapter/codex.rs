@@ -57,7 +57,13 @@ use crate::protocol::{error_code, Agent, CodedError};
 /// The events Octoboard's session states are derived from. `Interrupt` is included because it is
 /// mutually exclusive with `Stop` and is the only signal of a cancelled turn any of the three
 /// agents gives. `SubagentStart` / `SubagentStop` are deliberately not injected: they are noise
-/// here, and their payloads' ids cannot be joined back to the parent turn.
+/// here, and their payloads' ids cannot be joined back to the parent turn. `PreToolUse` is kept
+/// although Codex's mapping reads no status from it, so that the deliberate `None` arm in
+/// `crate::hooks` has an event to be about: drop the event and the arm goes with it, and with it
+/// the only written record that the event races the same call's `PermissionRequest`. The other
+/// adapters map it, so injecting it for Codex is the natural thing to do next, and the race would
+/// come back silently. The cost is one hook process per tool call, and the event still reaches
+/// `trust::on_hook` and `set_agent_session_id` as every event does.
 const HOOK_EVENTS: &[&str] = &[
     "SessionStart",
     "UserPromptSubmit",

@@ -308,7 +308,8 @@ of them can be model-authored and none is reviewed first.
 An instruction, a report or information shared by another session, for a session that **cannot** take one right now — it
 is waiting for the user at a permission prompt or a question — is queued rather than dropped, and delivered as soon as
 the session can take one, oldest first. A session that sent an instruction or shared information is told it was queued
-and that it must not send it again.
+and that it must not send it again. The wait can outlast the user's answer: a permission prompt the user grants keeps
+the session's hand up until the call it let through has finished (see "The raised hand" in `docs/product/sessions.md`).
 
 A message for a session with no process running is refused outright: a resume starts the agent at
 its prompt and replays nothing. Anything still queued when a session's process ends goes with it.

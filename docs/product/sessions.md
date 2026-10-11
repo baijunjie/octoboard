@@ -290,6 +290,15 @@ Claude Code prompt or question" below). Nobody can answer for them: a session dr
 project session that started sessions — is told to leave such a session alone, and a message addressed to it is held
 until the user is done — see "Messages held until a session can take them" in `docs/product/hub-orchestration.md`.
 
+**A granted permission prompt lowers the hand only once the call it let through has finished.** The user answering *yes*
+is itself reported by no event, so the next event the session produces is normally the end of that tool call — the hand
+stays up from the moment the prompt appeared until the call is done, which is a moment for a file write and minutes for
+a build or a test run. For that whole time the session reads as *waiting for the user* everywhere the hand is shown, it
+counts in the rail's waiting count and the Dock badge, and a message addressed to it goes on being held. There is no
+earlier signal to read: the delay is in what the agents report, not in how often Octoboard looks. Measured on Codex
+0.160.0 and on Claude Code 2.1.274; Grok Build was not measured. A prompt the user *declines* is not delayed this way:
+the decline ends the turn, and the hand comes down right after the answer.
+
 A hand Octoboard raised for a waiting request for a console session is answered in that request's dialog instead, so a
 message addressed to such a session is not held (see "The call" in `docs/product/requesting-a-console-session.md`).
 

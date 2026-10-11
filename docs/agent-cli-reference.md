@@ -196,7 +196,18 @@ Turn-scoped events add `turn_id`, the per-turn key. The compaction events are th
   is idle fires nothing at all, and `Interrupt` never fires in `codex exec`, so this branch cannot be exercised
   headlessly. A *declined* approval aborts the turn and fires `Interrupt` too, so cancel and decline are told apart by
   whether a `PermissionRequest` went unresolved just before it.
-- `PermissionRequest` — observed firing *before* the dialog reached the user.
+- `PermissionRequest` — fires *before* the dialog reaches the user, and **in the same instant as that call's
+  `PreToolUse`**: both hook processes were spawned on the same microsecond timestamp, measured twice (an MCP tool and a
+  shell command), so with `async = true` which of the two posts first is a coin flip — both orders were seen across
+  runs, the two posts arriving 0.3 ms to 1.9 ms apart. Nothing in the payloads orders them either: neither carries a
+  sequence number or a timestamp of its own, and both carry the same `turn_id`, `tool_name` and `tool_input` (only
+  `PreToolUse` adds `tool_use_id`). **Granting the approval fires nothing of its own**: the next event is that call's
+  `PostToolUse`, measured 0.1 s after the answer, so a session's hand stays up for as long as the approved call runs. A
+  decline fires `Interrupt` instead.
+- `PostToolUse` — a call that **fails** still fires it. There is no Codex counterpart to Claude Code's
+  `PostToolUseFailure`, and none is needed: a command exiting 3 and a write the sandbox refused each fired it, with the
+  output as `tool_response`. Measured under `codex exec`, where no modal is raised, so a failing call that was *granted
+  at a modal* is unmeasured; nothing suggests the path differs.
 - `SessionEnd` — `reason` is schema-pinned to the constant `"other"` and therefore carries no information. `async` is
   ignored for this event: Codex forces it synchronous, so its 3 s clamp is wall-clock cost on every teardown.
 - `PreCompact` / `PostCompact` — fire on both a manual and an automatic compaction. A manual one gets a fresh

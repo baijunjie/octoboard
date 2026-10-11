@@ -15,9 +15,11 @@
 //!   at teardown with `reason: "shutdown"` — so an unfiltered mapping ends every session with a
 //!   phantom finished turn. Payload keys exist in both camelCase and snake_case.
 //! - **Codex**: `Interrupt` replaces `Stop` for a cancelled turn, and `PermissionRequest` fires
-//!   before the modal reaches the user. A turn that ends in an error fires neither: only its
-//!   `UserPromptSubmit`, with nothing after it, so that ending is read from Codex's rollout file
-//!   instead (see `crate::rollout`).
+//!   before the modal reaches the user — in the same instant as the same call's `PreToolUse`, and
+//!   the two are injected as asynchronous hooks, so they arrive in either order; that is why no
+//!   status is read from the pre-event. A turn that ends in an error fires neither `Stop` nor
+//!   `Interrupt`: only its `UserPromptSubmit`, with nothing after it, so that ending is read from
+//!   Codex's rollout file instead (see `crate::rollout`).
 //!
 //! Three gaps are accepted rather than worked around, all of them settled during validation: a turn
 //! that ends with a plain-text question to the user is indistinguishable from a finished turn on
@@ -107,7 +109,14 @@ fn codex_status(event: &str) -> Option<SessionStatus> {
         // `fork`) are unmeasured. This gives up what a `clear` or `fork` one mid-session may have
         // done, correcting a session stuck at working; a `compact` one reporting `Idle` would have
         // been wrong anyway.
-        "UserPromptSubmit" | "PreToolUse" | "PostToolUse" => Some(SessionStatus::Working),
+        //
+        // No `PreToolUse` arm either, and for a different reason: the module header has the
+        // race with the same call's `PermissionRequest`. A `Working` landing after that request's
+        // `WaitingUser` would lower the hand for as long as the modal is up and release whatever
+        // is queued for the session into it, where the paste's trailing Enter answers it. Nothing
+        // is lost: the turn's own `UserPromptSubmit` has already reported work, and an approval
+        // that is granted is followed by the call's `PostToolUse`.
+        "UserPromptSubmit" | "PostToolUse" => Some(SessionStatus::Working),
         "PermissionRequest" => Some(SessionStatus::WaitingUser),
         // Mutually exclusive with `Stop`, and the only cancellation signal any of the three agents
         // gives. A declined approval fires it too.
@@ -468,6 +477,20 @@ mod tests {
         )
         .expect("a turn end");
         assert!(end.failed);
+    }
+
+    /// Codex fires a tool call's `PreToolUse` and `PermissionRequest` in the same instant and its
+    /// hooks are asynchronous, so a session whose approval is on screen reads as waiting for the
+    /// user whichever of the two is applied last.
+    #[test]
+    fn a_codex_approval_holds_the_hand_up_whichever_of_its_two_events_lands_last() {
+        assert_eq!(codex_status("PreToolUse"), None);
+        assert_eq!(
+            codex_status("PermissionRequest"),
+            Some(SessionStatus::WaitingUser)
+        );
+        // Granting the approval runs the tool, and that is what reports work again.
+        assert_eq!(codex_status("PostToolUse"), Some(SessionStatus::Working));
     }
 
     /// Codex defers `SessionStart` to the first prompt, where it arrives together with that
