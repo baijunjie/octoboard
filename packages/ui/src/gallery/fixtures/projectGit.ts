@@ -83,6 +83,11 @@ const SERVER_STAGED = 'import http from "node:http";\nimport { logRequests } fro
 const SERVER_DISK = `${SERVER_STAGED}\nexport const PORT = 8080;\n`;
 const CONF_OLD = "export function loadConfig(env: NodeJS.ProcessEnv) {\n  return { port: Number(env.PORT) };\n}\n";
 const CONF_NEW = "export function loadConfig(env: NodeJS.ProcessEnv) {\n  return { port: Number(env.PORT ?? 8080) };\n}\n";
+const README_OLD = "# Search API\n";
+const README_NEW = "# Search API (experimental branch)\n";
+const RANKING_OLD = 'import type { Hit } from "./index";\n\nexport const rank = (hits: Hit[]) => hits.sort((a, b) => b.score - a.score);\n';
+const RANKING_NEW =
+  'import type { Hit } from "./index";\n\nexport const rank = (hits: Hit[], boost = 1) =>\n  hits.map((hit) => ({ ...hit, score: hit.score * boost })).sort((a, b) => b.score - a.score);\n';
 
 const RENAME_PATCH = `diff --git a/src/conf.ts b/src/config.ts
 similarity index 82%
@@ -285,7 +290,11 @@ const MAIN_CHANGES: FixtureChange[] = [
 ];
 
 const SIDE_CHANGES: FixtureChange[] = [
-  { entry: { group: "unstaged", old: file("README.md", index("aa11bb2")), new: file("README.md", live("v6")) }, patch: "diff --git a/README.md b/README.md\nindex aa11bb2..cc33dd4 100644\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-# Search API\n+# Search API (experimental branch)\n" },
+  {
+    entry: { group: "unstaged", old: file("README.md", index("aa11bb2")), new: file("README.md", live("v6")) },
+    patch: "diff --git a/README.md b/README.md\nindex aa11bb2..cc33dd4 100644\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-# Search API\n+# Search API (experimental branch)\n",
+    expand: { old: README_OLD, new: README_NEW },
+  },
 ];
 
 const MAIN_TIP = "4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39";
@@ -319,8 +328,16 @@ const RANKING_PATCH = [
 
 /** The changes from `main` to `feature/ranking-experiments`. */
 const FEATURE_COMPARISON: FixtureChange[] = [
-  { entry: { group: "committed", old: file("src/ranking.ts", onMain("3c4d5e6")), new: file("src/ranking.ts", onFeature("7f8a9b0")) }, patch: RANKING_PATCH },
-  { entry: { group: "committed", old: file("src/conf.ts", onMain("0f1e2d3")), new: file("src/config.ts", onFeature("4c5b6a7")) }, patch: RENAME_PATCH },
+  {
+    entry: { group: "committed", old: file("src/ranking.ts", onMain("3c4d5e6")), new: file("src/ranking.ts", onFeature("7f8a9b0")) },
+    patch: RANKING_PATCH,
+    expand: { old: RANKING_OLD, new: RANKING_NEW },
+  },
+  {
+    entry: { group: "committed", old: file("src/conf.ts", onMain("0f1e2d3")), new: file("src/config.ts", onFeature("4c5b6a7")) },
+    patch: RENAME_PATCH,
+    expand: { old: CONF_OLD, new: CONF_NEW },
+  },
   {
     entry: { group: "committed", old: { state: "out_of_scope", repository_path: "shared/search-index.ts" }, new: file("src/index.ts", onFeature("2e3d4c5")) },
     bodies: { new: text("export const buildIndex = (docs: string[]) => new Map(docs.map((d, i) => [i, d]));\n") },

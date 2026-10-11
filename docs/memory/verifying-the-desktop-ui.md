@@ -50,8 +50,11 @@ the new line count to be taken from.
 
 So a reply that gains a field is taught to the fixture together with the condition the daemon fills it under, and every
 scenario's fixture is given what that condition needs — the scenarios whose fixture answers with an error included,
-since they answer the reply as well, and an unfilled field there is a state the real daemon never sends. And before
-reading a scenario as a fix that did not work, check that its fixture can produce the input the fix reads at all.
+since they answer the reply as well, and an unfilled field there is a state the real daemon never sends. Hold that
+condition with a unit test over the fixture daemon's own replies rather than by remembering it: ask the daemon for
+every scenario's reply and fail on one the field is unfilled in, so a scenario or a fixture added later cannot answer
+less fully than the daemon unnoticed. And before reading a scenario as a fix that did not work, check that its fixture
+can produce the input the fix reads at all.
 
 ## Stage a defect's states in the order it was reported, not in whatever order is easy to reach
 
