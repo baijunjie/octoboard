@@ -44,11 +44,13 @@ use crate::reporting::{self, Report, ReportStatus, WhenBlocked};
 use crate::state::AppState;
 
 /// How long a call waits for the user's answer. Octoboard's own value, for every agent alike, and
-/// kept below the ten minutes the per-session stdio server gives each call it forwards to the
-/// daemon (`mcp::stdio`'s `CALL_TIMEOUT`), with room left for an approval given at the last moment
-/// to be carried out — launching the console session included — before that forwarding gives up.
-/// No agent's own limit on a tool call is measured or followed.
+/// kept below `mcp::stdio`'s `CALL_TIMEOUT` with room left for an approval given at the last
+/// moment to be carried out — launching the console session included — before that forwarding
+/// gives up. An agent's own limit is not obeyed; where it is shorter than this, the launch raises
+/// it (apps/daemon/PROTOCOL.md's "`POST /mcp/:token`" section has the ordering).
 pub const ANSWER_TIME_LIMIT: Duration = Duration::from_secs(8 * 60);
+
+const _: () = assert!(ANSWER_TIME_LIMIT.as_secs() < crate::mcp::stdio::CALL_TIMEOUT.as_secs());
 
 /// How many ended requests are remembered, for telling a late answer what became of its request.
 /// Far more than could be on screen at once; the rest are forgotten oldest first.

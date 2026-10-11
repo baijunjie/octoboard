@@ -11,14 +11,21 @@
   console session that receives the request as a report with the caller bound to it; refusal, by the button and by
   Escape, leaves everything unchanged.
 - [x] With Codex: what Codex sends when its own MCP tool-call time limit passes while the call waits. Nothing, after
-  300 s; "the call waits" holds, and an approval after it is carried out through the message fallback.
+  the 300 s its own default allows; "the call waits" holds, and an approval after it is carried out through the message
+  fallback. Octoboard now raises that limit above its own at launch, so the case this item confirmed is Codex's
+  default rather than a session Octoboard starts — the fallback still covers an agent that gives up for its own
+  reasons.
+- [x] With Codex, with that raised limit: a call that outlasts Codex's own default returns its result to the model
+  instead of being abandoned. Measured with a control — a call answered after 330 s completed and the model quoted its
+  result, while the same call without the override failed at 300 s to the second.
 - [ ] With Grok Build: the same five cases — the four in the Codex item above, and what Grok Build sends when its own
   time limit on a tool call passes. If it sends `notifications/cancelled`, Octoboard withdraws the request at that point
   and a later approval starts nothing, which would break "the call waits" for Grok Build; fix it on the spot if so.
+  Whether Grok Build needs the same raise of its own limit is part of the same question.
 
 ## Mid-task handoff
 
-Only the Grok Build item is left; everything else is confirmed. That account was at its usage limit both times this
+Only the Grok Build item is left, and it has never been attempted: that account was at its usage limit both times this
 milestone was worked, so only the daemon side has ever been exercised for it.
 
 How a run is set up, so the next one does not have to work it out again: a packaged build

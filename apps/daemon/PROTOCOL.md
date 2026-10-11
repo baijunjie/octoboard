@@ -941,6 +941,19 @@ follows from its role and whether it was opened bound (a lead session keeps the 
 and is checked here as well as in the child.
 
 A `request_console_session` call waits for the user's answer, up to 8 minutes, below the 10-minute timeout the
-`octoboardd mcp` child gives every call it forwards. When the agent cancels such a call (`notifications/cancelled`), the
+`octoboardd mcp` child gives every call it forwards. A third limit is the agent's own on a tool call, and the three are
+kept in this order, 8 minutes < 10 minutes < the agent's:
+
+- the answer limit is the shortest so that a call ends with an outcome the daemon chose, with room left under the
+  forwarding limit for an approval given at the last moment to be carried out;
+- the forwarding limit is what ends any call the daemon does not answer, and is generous because a `git clone` can take
+  minutes;
+- an agent's own limit that is shorter than the forwarding one is raised above it when the session launches, so that the
+  call is not abandoned by the agent first, which for Codex means silently (see "Codex" in
+  `docs/agent-cli-reference.md`). Codex's is set to the forwarding limit plus a minute. The margin covers a call in
+  normal operation: the forwarding limit bounds each read on the connection rather than the whole call, so a daemon
+  that stalls partway through a response could still carry a call past it.
+
+When the agent cancels such a call (`notifications/cancelled`), the
 child closes that call's connection to the daemon, which withdraws the request, and the agent gets a tool error saying
 the call was cancelled. A cancelled call of any other tool is left to finish in the daemon.

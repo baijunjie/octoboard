@@ -28,10 +28,11 @@ use serde_json::{json, Value};
 
 use crate::protocol::Role;
 
-/// How long a tool call may take. Generous on purpose: `add_project` with a `git` source runs a
-/// `git clone`, which is minutes on a large repository. The agent's own tool timeout is the one
-/// that should decide when to give up, not this.
-const CALL_TIMEOUT: Duration = Duration::from_secs(600);
+/// The limit that ends a call forwarded to the daemon. Generous on purpose: `add_project` with a
+/// `git` source runs a `git clone`, which is minutes on a large repository. A launch may raise an
+/// agent's own shorter limit above this one, so that this one decides; how the limits are ordered
+/// is in apps/daemon/PROTOCOL.md's "`POST /mcp/:token`" section.
+pub(crate) const CALL_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// Runs the server until the agent closes the connection.
 pub fn run(
@@ -162,10 +163,9 @@ impl ServerHandler for OctoboardMcp {
             // Octoboard itself being unreachable is the model's problem to work around, not a
             // protocol error: it should be able to say so to the user rather than have the call
             // fail opaquely.
-            Err(err) => CallToolResult::error(vec![Content::text(format!(
-                "Octoboard could not be reached for session {}: {err}",
-                self.session
-            ))]),
+            Err(err) => {
+                CallToolResult::error(vec![Content::text(failure_message(&self.session, &err))])
+            }
         })
     }
 }
@@ -217,6 +217,20 @@ async fn forward_until(
             let _ = closer.shutdown(std::net::Shutdown::Both);
             Forwarded::Cancelled
         }
+    }
+}
+
+/// What the model is told when a forwarded call failed before the daemon answered. A call that ran
+/// out of time is not one the daemon could not be reached for: a read or write timeout surfaces as
+/// `TimedOut` or, on the platforms where it is the socket's own error, `WouldBlock`.
+fn failure_message(session: &str, err: &std::io::Error) -> String {
+    use std::io::ErrorKind;
+    match err.kind() {
+        ErrorKind::TimedOut | ErrorKind::WouldBlock => format!(
+            "Octoboard did not answer for session {session} within {} seconds.",
+            CALL_TIMEOUT.as_secs()
+        ),
+        _ => format!("Octoboard could not be reached for session {session}: {err}"),
     }
 }
 
@@ -300,6 +314,21 @@ mod tests {
         .await
         .expect("the connection is closed rather than left open")
         .unwrap();
+    }
+
+    /// A timeout must not read as the daemon being unreachable: on macOS it surfaces as
+    /// "Resource temporarily unavailable".
+    #[test]
+    fn a_timed_out_call_is_not_reported_as_unreachable() {
+        use std::io::{Error, ErrorKind};
+
+        for kind in [ErrorKind::TimedOut, ErrorKind::WouldBlock] {
+            let message = failure_message("s-1", &Error::from(kind));
+            assert!(message.contains("did not answer"), "{message}");
+            assert!(!message.contains("could not be reached"), "{message}");
+        }
+        let refused = failure_message("s-1", &Error::from(ErrorKind::ConnectionRefused));
+        assert!(refused.contains("could not be reached for session s-1"));
     }
 
     #[test]

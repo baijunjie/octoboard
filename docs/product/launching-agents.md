@@ -217,6 +217,10 @@ conditions that are visible:
 - Octoboard's own tools are pre-approved for the session, so a console session's orchestration calls
   raise no approval dialog. This covers Octoboard's tools alone; every other tool, the sandbox and
   the approval policy are untouched.
+- Codex's own time limit on a call to Octoboard's tools (300 s by default) is raised above Octoboard's own limit on a
+  forwarded call (the 10 minutes in "The call" of `docs/product/requesting-a-console-session.md`), so that a call that
+  waits for the user, such as a console-session request, can return its result. This is the limit on Octoboard's tools
+  alone; no other tool's limit changes.
 
 Whether Codex resolves approval requests by itself is read from `config.toml` in the Codex home that launch uses: the
 session's Codex config directory, else a `CODEX_HOME` the user's shell exports, else `~/.codex`.

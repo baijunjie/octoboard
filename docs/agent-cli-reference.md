@@ -262,7 +262,20 @@ tells its own model `timed out awaiting tools/call after 300s` — and the serve
 Measured on 0.160.0 against a recording stdio server that answered `initialize` and `tools/list` and never answered
 `tools/call`, and confirmed in the app. Unlike Claude Code's move to the background above, nothing marks the call as
 still running, so a server holding the call sees no signal to withdraw it and an answer sent after the limit reaches a
-caller that is no longer listening.
+caller that is no longer listening. The key takes seconds as a number (an integer or a fraction); 0 is accepted at
+startup, and what it does to a call is unmeasured, so it is not a known way to remove the limit. A negative value or a
+non-number such as a quoted string fails at startup with an error naming the key (checked on 0.160.0), which is the
+evidence that this version reads that key path at all; a misspelled key name was not tested.
+Octoboard passes `mcp_servers.octoboard.tool_timeout_sec` at 660, Octoboard's own 600 s forwarding limit plus a minute,
+so that its limit is the one that ends a call; the key is per server, so no other server's limit moves. Measured
+with a control on 0.160.0: with the override a call answered after 330 s completed and its result reached the model,
+which quoted it; without it the identical call failed at 300 s to the second and the server was sent nothing. A call
+outlasting 660 s was not tried, so that end of the range is assumed.
+
+**The model is not held silent while an MCP call is outstanding.** Codex lets it take a turn roughly every 64 s for as
+long as the call sits in progress, each one saying only that the tool is still running. Those turns do **not** reset
+the time limit — in the control above it fired on schedule with four of them behind it. What this costs a call
+Octoboard deliberately keeps waiting is in "The call" of `docs/product/requesting-a-console-session.md`.
 
 **A Codex older than the *async* hook support Octoboard injects** (0.142.5 was seen, resolved through the login-shell
 `PATH`; inferred from the warning, since the session ended on an API error before status could be observed) prints
@@ -484,7 +497,7 @@ edit of the project's or the user's files, and was exercised against the version
 | Launch with an initial task | `claude "<task>"` | `codex "<task>"` | `grok "<task>"` |
 | Pre-allocate a session id | `--session-id <uuid>` | **Not possible.** Take it from the `SessionStart` payload; the interactive thread is created lazily on the first prompt, so a session opened without a task has no id until the user types | `--session-id <uuid>` (new sessions only) |
 | Inject hooks | `--settings <json-or-path>`, merged with the project settings | `-c 'hooks.<Event>=[{hooks=[{type="command",command=…,timeout=3,async=true}]}]'`, one per event, plus the hook-trust step | A per-session `GROK_HOME` whose `hooks/` directory is Octoboard's and whose other entries symlink to the source home |
-| Inject MCP | `--mcp-config <json>` | `-c 'mcp_servers.octoboard.command=…'`, `.args=[…]` and `.default_tools_approval_mode="approve"` | An `[mcp_servers.octoboard]` block appended to the `config.toml` copy inside that `GROK_HOME` |
+| Inject MCP | `--mcp-config <json>` | `-c 'mcp_servers.octoboard.command=…'`, `.args=[…]`, `.default_tools_approval_mode="approve"` and `.tool_timeout_sec=660` | An `[mcp_servers.octoboard]` block appended to the `config.toml` copy inside that `GROK_HOME` |
 | Inject a role description | `--append-system-prompt` | `-c 'developer_instructions="…"'`, which adds a developer message and leaves the rest of the prompt byte-identical; not `-c instructions=`, which replaces the system prompt | `--rules "…"`, appended to the system prompt and persisted into the session record |
 | Resume | `claude --resume <id>` | `codex resume <id>` | `grok --resume <id>` |
 | Choose the model and reasoning effort | `--model <id>`, `--effort <level>` | `-c model="<id>"`, `-c model_reasoning_effort="<level>"` | `--model <id>`, `--reasoning-effort <level>` |
