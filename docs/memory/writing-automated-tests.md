@@ -84,9 +84,8 @@ positive tests".
 - Register the cleanup inside the mounting helper with `onTestFinished`, bound to the test that mounted the root,
   rather than as a file-level `afterEach` the next file has to remember to write. Unmounting is itself a render, so
   it goes through `act`.
-- A root is not the only thing a test arms. Whatever it set going it also stops or awaits before it ends: a
-  module-level singleton's own queue and timers (HeroUI's toast queue, which a later unmount cannot reach), a
-  `React.lazy` import a `Suspense` boundary has not resolved yet.
+- A root is not the only thing a test arms. Whatever it set going it also stops or awaits before it ends — a
+  module-level singleton's own queue and timers, such as HeroUI's toast queue, which a later unmount cannot reach.
 
 The symptom names the wrong file, so do not start from the one it is reported against: the crash is attributed to
 whichever file was running when the stray work fired, it does not reproduce when that file is run alone, and the
@@ -94,6 +93,24 @@ count varies run to run because it is a race. Look instead for a test anywhere i
 running, and judge the fix over repeated full runs — one such leak showed up about 3 times in 18 — never over a
 single clean one. A "not wrapped in act" warning out of a file that passes is the audible half of the same leak and
 is tracked down the same way, not shrugged at.
+
+## Settle a lazily imported surface before reading it, and never take a clean whole-file run as evidence
+
+Applies to the `packages/ui` component tests (`vitest` under jsdom) that render a component sitting behind a
+`React.lazy` boundary — the viewer's code surface and its Markdown document, the project browser.
+
+- A test that renders such a surface and then asserts synchronously reads the `Suspense` fallback rather than what
+  the renderer draws, so it passes or fails on whether the node it happens to look at sits outside the boundary;
+  React also retries the suspended render on its own afterwards, outside `act`.
+- Settle the import after the first render that needs it, inside `act`, around a **real** `setTimeout(resolve, 0)`:
+  it lands several microtask hops after that render, so a bare `await` does not reach it. A test under
+  `vi.useFakeTimers()` therefore cannot settle this way and has to assert only on what sits outside the boundary,
+  and for the same reason the settle must not be folded into a shared render helper that such tests also call.
+- A `lazy` object caches its resolution for the module's lifetime, so only the **first** test in a file that renders
+  that object ever suspends; every later one is rescued by it and passes on file order alone. A clean whole-file run
+  therefore says nothing — check a test of this kind by running it on its own (`vitest run <file> -t "<name>"`), which
+  leaves the rest skipped and the cache cold. The caching is per `lazy` object, not per module: two exports built with
+  `lazy` give one file two separate first tests, and a test that renders one surface and then the other settles twice.
 
 ## A jsdom test cannot tell where focus ends after a session is selected
 

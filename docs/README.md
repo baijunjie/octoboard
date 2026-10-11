@@ -207,9 +207,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   (exec stalls of seconds on machines with endpoint-security software) and how to tell that stall apart, and how to
   verify behaviour the daemon derives from an agent's own output by replaying a committed capture rather than staging
   a live session, why a jsdom test must leave nothing running when it ends with the cleanup bound to the test that
-  armed it, since stray work crashes a later file and the failure names the wrong one, why a jsdom test cannot tell
-  where keyboard focus ends after a session is selected, and why it cannot tell what a selection over the viewer's code
-  copies either, since the tests mock the renderer away and the real one draws into a shadow root.
+  armed it, since stray work crashes a later file and the failure names the wrong one, why a surface behind a
+  `React.lazy` boundary has to be settled before a test reads it and why a clean whole-file run is no evidence that it
+  was, why a jsdom test cannot tell where keyboard focus ends after a session is selected, and why it cannot tell what a
+  selection over the viewer's code copies either, since the tests mock the renderer away and the real one draws into a
+  shadow root.
 - [Writing daemon code](memory/writing-daemon-code.md) — conventions for the Rust daemon: live state the daemon derives
   held on `AppState` and published by its own event rather than as a field on a stored record, with the cleanups that
   follow from there being no deletion event for it; why a repeating refresh is timed by the client and has to be bounded

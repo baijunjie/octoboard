@@ -102,6 +102,13 @@ function show(subject: ViewerSubject | undefined, navigation?: ViewerNavigation)
   });
 }
 
+// The code surface draws through a lazily imported renderer. The import settles several microtask
+// hops after the first render that needs it (the module load, then two `.then`s), so a bare `await`
+// does not reach it; a timer does. Until it lands the tree shows a fallback, so a test that reads the
+// code surface waits here, inside `act`, leaving React no retry to make on its own. It stays out of
+// `show`, since tests under fake timers would never see a real timer fire.
+const settled = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+
 const dialog = () => document.querySelector<HTMLElement>("[role=dialog]");
 const button = (label: string) => document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
 
@@ -176,7 +183,7 @@ it("shows an SVG through an image, and as text when it cannot be decoded, never 
   expect(image.length).toBe(1);
 
   act(() => image[0].dispatchEvent(new Event("error")));
-  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  await settled();
   expect(dialog()?.textContent).toContain("This image cannot be displayed, so its text is shown instead.");
   expect(document.querySelector("img")).toBeNull();
   expect(document.querySelector("[data-renderer]")?.textContent).toBe(svg);
@@ -215,14 +222,14 @@ it("shows it is loading until the renderer has drawn the code", async () => {
   drawing.held = true;
   try {
     show(code);
-    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+    await settled();
     expect(document.querySelector("[data-renderer]")).not.toBeNull();
     expect(loading()).not.toBeNull();
   } finally {
     drawing.held = false;
   }
   show({ ...code, key: "u", path: "src/u.ts" });
-  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  await settled();
   expect(loading()).toBeNull();
 });
 
@@ -249,19 +256,20 @@ it("sets each frame of code, a diff and plain text in HeroUI's tertiary surface"
 it.each([
   ["an added file, which has one side", "@@ -0,0 +1 @@\n+a\n", false],
   ["a modified file", "@@ -1 +1 @@\n-a\n+b\n", true],
-])("offers the diff layout for %s", (_, patch, offered) => {
+])("offers the diff layout for %s", async (_, patch, offered) => {
   const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
   show({
     key: patch,
     path: "src/c.ts",
     content: { state: "change", change: { old: offered ? side : { state: "absent" }, new: side, patch } },
   });
+  await settled();
   expect(dialog()?.querySelector('[aria-label="Diff layout"]') !== null).toBe(offered);
 });
 
 // The layout the viewer remembers is for diffs with two sides; one without is drawn unified, with
 // no empty column and no choice to make.
-it("draws a one-sided diff unified even when split was chosen for another", () => {
+it("draws a one-sided diff unified even when split was chosen for another", async () => {
   const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
   const change = (patch: string, old: ViewerChangeSide): ViewerSubject => ({
     key: patch,
@@ -270,6 +278,7 @@ it("draws a one-sided diff unified even when split was chosen for another", () =
   });
   const layout = () => dialog()?.querySelector("[data-layout]")?.getAttribute("data-layout");
   show(change("@@ -1 +1 @@\n-a\n+b\n", side));
+  await settled();
   act(() => {
     [...dialog()!.querySelectorAll("button")].find((b) => b.textContent === "Split")!.click();
   });
@@ -280,7 +289,7 @@ it("draws a one-sided diff unified even when split was chosen for another", () =
 
 // The diff is handed a way to expand its collapsed lines only when the change has one, and what
 // goes wrong with an expansion is said beside the code, without taking the patch away.
-it("offers expansion only to a change that can be expanded, and says why one did not happen", () => {
+it("offers expansion only to a change that can be expanded, and says why one did not happen", async () => {
   const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
   const patch = "@@ -1 +1 @@\n-a\n+b\n";
   const loadBodies = async () => ({ old: "a\n", new: "b\n" });
@@ -291,6 +300,7 @@ it("offers expansion only to a change that can be expanded, and says why one did
   });
   const expandable = () => dialog()?.querySelector("[data-expandable]")?.getAttribute("data-expandable");
   show(change("plain", false));
+  await settled();
   expect(expandable()).toBe("false");
   show(change("expandable", true));
   expect(expandable()).toBe("true");
@@ -310,7 +320,7 @@ it("offers expansion only to a change that can be expanded, and says why one did
   expect(dialog()?.textContent).not.toContain("unmodified lines");
 });
 
-it("shows the raw patch when the diff cannot be rendered", () => {
+it("shows the raw patch when the diff cannot be rendered", async () => {
   const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
   try {
@@ -319,6 +329,7 @@ it("shows the raw patch when the diff cannot be rendered", () => {
       path: "src/c.ts",
       content: { state: "change", change: { old: side, new: side, patch: "@@ -1,3 +1,3 @@ unrenderable\n a\n+b\n" } },
     });
+    await settled();
     expect(dialog()?.textContent).toContain("Shown as a plain patch because the diff could not be rendered.");
     expect(dialog()?.querySelector("pre")?.textContent).toContain("unrenderable");
   } finally {
@@ -468,9 +479,10 @@ it("has no status chip for a file, and none for a loading change whose caller gi
 });
 
 // The choice is the user's preference: it holds for the next diff, and is stored for the next run.
-it("opens later diffs in the layout last chosen, and stores it", () => {
+it("opens later diffs in the layout last chosen, and stores it", async () => {
   const layout = () => dialog()?.querySelector("[data-layout]")?.getAttribute("data-layout");
   show(modified("src/a.ts"));
+  await settled();
   expect(layout()).toBe("unified");
   act(() => {
     [...dialog()!.querySelectorAll("button")].find((b) => b.textContent === "Split")!.click();
@@ -523,10 +535,11 @@ it("says nothing for a loading that ends before the first text is written", () =
 
 // One wrap choice serves files and diffs: nothing is wrapped until the user asks, and what they chose
 // holds for the next file of either kind and is stored for the next run.
-it("wraps nothing by default, then wraps files and diffs alike once chosen, and stores it", () => {
+it("wraps nothing by default, then wraps files and diffs alike once chosen, and stores it", async () => {
   const wrapped = () => dialog()?.querySelector("[data-renderer]")?.getAttribute("data-wrap");
   const toggle = () => [...dialog()!.querySelectorAll("button")].find((b) => b.textContent === "Wrap lines")!;
   show({ key: "w", path: "src/w.ts", content: { state: "file", body: { kind: "text", text: "a\n", size: 2 } } });
+  await settled();
   expect(wrapped()).toBe("false");
   expect(toggle().getAttribute("aria-pressed")).toBe("false");
   expect(toggle().closest("[data-viewer-description]")).not.toBeNull();
@@ -535,6 +548,7 @@ it("wraps nothing by default, then wraps files and diffs alike once chosen, and 
   expect(toggle().getAttribute("aria-pressed")).toBe("true");
   expect(localStorage.getItem(PREFERENCE_KEYS.wordWrap)).toBe("true");
   show(modified("src/b.ts"));
+  await settled();
   expect(wrapped()).toBe("true");
   expect(toggle().getAttribute("aria-pressed")).toBe("true");
 });
@@ -578,7 +592,7 @@ it.each([
     if (oldFails) images[0].dispatchEvent(new Event("error"));
     if (newFails) images[1].dispatchEvent(new Event("error"));
   });
-  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  await settled();
   const toggles = [...dialog()!.querySelectorAll("button")].filter((b) => b.textContent === "Wrap lines");
   expect(toggles).toHaveLength(expected);
 });
