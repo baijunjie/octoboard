@@ -36,9 +36,11 @@ export function EmptyPanel({
     // Named by the action rather than the message: what a press does is what the control is. The
     // classes keep the plain row's look and the session rows' hover tint, where HeroUI's button
     // would recolour the text, pull its icon in by 2px (`margin-inline: -2px` on a child `svg`)
-    // and keep the label on one line.
+    // and keep the label on one line. `p-0` drops `EmptyState`'s own padding — the row carries the
+    // padding of the rows it stands among, and a wrapper's on top of it would inset the row from
+    // its list, and its glyph from theirs. The plain row above overrides that padding outright.
     return (
-      <EmptyState className="flex">
+      <EmptyState className="flex p-0">
         <TitledControl title={action.label}>
           <Button
             variant="ghost"

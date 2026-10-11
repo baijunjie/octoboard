@@ -177,7 +177,7 @@ it("lists a project session's own sessions under it, and the binding badge only 
   const badges = rows.map((row) => row.querySelector('[style*="--console-session"]') !== null);
   expect(badges).toEqual([true, false, false, false]);
   // The two sessions of the team are inset under their owner, the other rows are not.
-  expect(rows.map((row) => row.parentElement!.className.includes("ms-4"))).toEqual([false, true, true, false]);
+  expect(rows.map((row) => row.parentElement!.className.includes("ms-[17px]"))).toEqual([false, true, true, false]);
   act(() => root.unmount());
 });
 

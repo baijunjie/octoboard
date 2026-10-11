@@ -28,21 +28,27 @@ function rowKeyHandler(activate: () => void) {
   };
 }
 
-/** What a row listed under the project session that owns it carries: the inset of one level, and
- * the line running down it. Shared by every list that nests them — the sidebar's project list, a
- * focus mode's archived rows, the archive view — so the one visual rule for the one concept is
- * written once, and a row is inset the same wherever it is listed.
+/** What a nested level of a session list looks like, written once for every list that draws one — the
+ * sidebar's project list, a focus mode's archived rows and its cards, the archive view — so a row is
+ * inset the same wherever it is listed.
  *
- * The inset is 16px because that is where the line wants to be: every one of those lists leads its
- * rows with 8px of padding and a 16px glyph, so a line at the nested row's own start runs down the
- * middle of the owner's glyph above it. It is a margin rather than a padding, since a padding here
- * would replace the horizontal padding of a row that carries its own and inset it by less than a
- * row wrapped in a bare element.
+ * Both levels are laid out to one set of numbers: the line 12px in and 1px wide, and whatever hangs
+ * under it 4px past the line, 17px in. `NESTED_RAIL_CLASS` draws a level as a border on the element
+ * wrapping the rows; `NESTED_ROW_CLASS` draws it on a nested row itself, which is all a list keeping
+ * its rows in one flat list has to put it on; `NESTED_INSET_CLASS` is the inset alone, for a list
+ * that wants the nesting without the line. The figures are literal pixels rather than spacing steps,
+ * so that the two levels stay built to the same numbers, and every edge of them lands on a whole
+ * pixel at the root font size the app ships with.
  *
- * The line is a pseudo-element overflowing the row by a list's gap at either end, so it runs on
- * between two sessions of one team rather than breaking at every gap; a list that spaces its rows
- * further apart than that (a focus mode's cards) leaves the line off and insets alone. */
-export const NESTED_ROW_CLASS = "relative ms-4 before:absolute before:-inset-y-px before:start-0 before:w-px before:bg-separator";
+ * `NESTED_ROW_CLASS` insets with a margin rather than a padding, since where a list has no element
+ * to wrap its rows in the class goes on the row itself, and a padding there would land inside the
+ * row's own fill instead of moving it. Its line overflows the row by 1px at either end — half the
+ * 2px every list carrying it leaves between its rows (`gap-0.5`), so the line runs on between two
+ * sessions of one team rather than breaking at every gap. A list that spaces its rows further apart
+ * than that (a focus mode's cards) leaves the line off and insets alone. */
+export const NESTED_RAIL_CLASS = "ms-[12px] border-s border-separator ps-[4px]";
+export const NESTED_INSET_CLASS = "ms-[17px]";
+export const NESTED_ROW_CLASS = `relative ${NESTED_INSET_CLASS} before:absolute before:-inset-y-px before:-start-[5px] before:w-px before:bg-separator`;
 
 /** One row of the sidebar: a `div` announcing itself as a button, since it carries an action menu
  * and a button cannot hold another. That is also why the tree is hand-built: HeroUI 3 has no Tree

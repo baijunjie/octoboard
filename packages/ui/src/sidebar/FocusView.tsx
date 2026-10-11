@@ -20,7 +20,7 @@ import { BindingBadge } from "./BindingBadge";
 import { GitBadge } from "./GitBadge";
 import { projectMenu, sessionMenu } from "./menus";
 import { archivedSessionRows, archivedSessions, boundArchivedSessions, boundElsewhere, focusGroups, liveSessionRows, type NestedSession, notUnderConsoleSession, sortProjects, switchStrip, type SwitchStripEntry } from "./order";
-import { NESTED_ROW_CLASS, PinButton, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
+import { NESTED_INSET_CLASS, NESTED_ROW_CLASS, PinButton, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
 import type { SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
 
@@ -430,8 +430,8 @@ function BoundElsewhere({
  * under its owner. One flat list rather than a list nested inside the owner's card: the reorder
  * animation reads the list's direct children (`useFlip`), so a level of its own would leave a team
  * unanimated while its statuses change. Cards sit apart from one another, so the nesting is the
- * inset alone — the same one as `NESTED_ROW_CLASS`, without the line that would break at every
- * gap between them. */
+ * inset alone (`NESTED_INSET_CLASS`), without the line that would break at every gap between
+ * them. */
 function SessionCards({
   handlers,
   sessions,
@@ -445,7 +445,7 @@ function SessionCards({
   return (
     <div ref={listRef} className="relative flex flex-col gap-2">
       {sessions.map(({ session, under }) => (
-        <div key={session.id} data-flip={session.id} className={under ? "ms-4" : undefined}>
+        <div key={session.id} data-flip={session.id} className={under ? NESTED_INSET_CLASS : undefined}>
           <SessionCard handlers={handlers} session={session} under={under} selected={session.id === selectedSessionId} />
         </div>
       ))}

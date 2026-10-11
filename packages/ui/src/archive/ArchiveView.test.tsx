@@ -92,7 +92,7 @@ it("lists the sessions archived under a lead session after it, inset, and names 
   const rows = Array.from(container.querySelectorAll<HTMLElement>("li[data-marquee-scope]"));
   // Newest first, except that the lead session's own sessions follow it rather than being ranked
   // against the console session's.
-  expect(rows.map((row) => [row.querySelector(".text-sm")?.textContent, row.className.includes("ms-4")])).toEqual([
+  expect(rows.map((row) => [row.querySelector(".text-sm")?.textContent, row.className.includes("ms-[17px]")])).toEqual([
     [boundArchived[0].title, false],
     [archivedLead.title, false],
     [underArchivedLead[0].title, true],

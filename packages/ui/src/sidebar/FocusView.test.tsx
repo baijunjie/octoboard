@@ -162,7 +162,7 @@ it("a project's focus mode nests an unbound session's own sessions under it and 
   const cards = Array.from(container.querySelectorAll<HTMLElement>("[role=button][data-marquee-scope]")).filter((card) =>
     card.className.includes("flex-col"),
   );
-  expect(cards.map((card) => [card.getAttribute("aria-label")?.split(" session,")[0], card.parentElement!.className.includes("ms-4")])).toEqual([
+  expect(cards.map((card) => [card.getAttribute("aria-label")?.split(" session,")[0], card.parentElement!.className.includes("ms-[17px]")])).toEqual([
     ["Tidy the changelog", false],
     ["Measure the first paint", true],
   ]);
@@ -180,7 +180,7 @@ it("a console session's focus mode nests a lead session's own sessions under it"
   const cards = Array.from(container.querySelectorAll<HTMLElement>("[role=button][data-marquee-scope]")).filter((card) =>
     card.className.includes("flex-col"),
   );
-  expect(cards.map((card) => [card.getAttribute("aria-label")?.split(" session,")[0], card.parentElement!.className.includes("ms-4")])).toEqual([
+  expect(cards.map((card) => [card.getAttribute("aria-label")?.split(" session,")[0], card.parentElement!.className.includes("ms-[17px]")])).toEqual([
     ["Fix the layout", false],
     ["Rework the gallery", false],
     ["Chase the flaky test", true],

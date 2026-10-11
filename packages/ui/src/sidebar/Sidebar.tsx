@@ -37,7 +37,7 @@ import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectF
 import { archiveSubmenu, consoleMenu, projectMenu, sessionMenu } from "./menus";
 import { archivedSessions, consoleActivity, isInactiveProject, liveSessionRows, liveSessions, sortProjects } from "./order";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
-import { NESTED_ROW_CLASS, PinButton, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
+import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, PinButton, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
 import { focusTargetId } from "./focus";
 import type { FocusTarget, SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
@@ -675,7 +675,7 @@ function ProjectNode({
       {!isCollapsed && (
         // Marked so collapsing every project at once can tell whether keyboard focus is standing in
         // a part about to go away (see `foldAll`).
-        <div data-sessions className="ms-3 mt-0.5 border-s border-separator ps-1">
+        <div data-sessions className={`${NESTED_RAIL_CLASS} mt-0.5`}>
           {rows.length === 0 ? (
             <EmptyPanel
               compact
