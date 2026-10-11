@@ -374,6 +374,35 @@ observe must emit no JSON at all.
 **Project configuration layering**: hooks are additive across the global, project and managed layers, and
 byte-identical handlers are deduplicated across them.
 
+**A long MCP tool call is cancelled, and the server is told.** `tool_timeout_sec`, a per-server key under
+`mcp_servers.<key>`, sets the limit; Grok's own user guide (`~/.grok/docs/user-guide/07-mcp-servers.md`) documents the
+default as 6000 seconds, and a measurement bounds it from below: a call left unanswered was still outstanding at 310 s,
+so the `default: 60` that another string inside the executable suggests is not what this build does. The exact default
+was not measured. When the limit does pass, Grok sends the server a `notifications/cancelled` carrying
+`{"requestId": <id>, "reason": "request timeout"}` — unlike Codex, which sends nothing at all — and leaves the
+connection open: no stdin EOF followed the cancellation, nor a normal exit of the same session. Its own model is told
+`Tool \`<server>__<tool>\` failed via \`use_tool\`: MCP tool '<tool>' timed out after <n> seconds`, and the turn carries
+on. Measured on 1.0.50 against a recording stdio server that never answered `tools/call`, with the limit at 20 s (the
+cancellation arrived at 20.65 s) and a tool that did answer in the same run as the control; the key is honoured in the
+block Octoboard appends to the `config.toml` copy, which is where the 20 s came from. Octoboard sets it to 660 there,
+its own 600 s forwarding limit plus a minute, so that its limit is the one that ends a call: a cancellation withdraws a
+waiting request for a console session, which would end the user's 8 minutes to answer early (see "The call" in
+`docs/product/requesting-a-console-session.md`).
+
+**The model is held silent while an MCP call is outstanding**, the opposite of Codex. Through a
+`request_console_session` call that Octoboard kept waiting the full 8 minutes, Grok sent its endpoint nothing between
+the turn's own request and the one carrying the tool's error: no turn of its own, no token spent (measured on 1.0.50
+against a stub inference endpoint).
+
+**What the model itself is handed, and what it calls** (1.0.50, read off the requests Grok sent to a stand-in
+endpoint): an MCP tool is **not** among the tools offered to the model. They are reached through Grok's own `use_tool`,
+whose `tool_name` is the qualified `<server key>__<tool>` and whose `tool_input` holds the arguments — the wrapper the
+`PreToolUse` payload shows — and a `search_tool` call first is not required. Every chat request sets `stream: true`, so
+anything standing in for the endpoint has to answer as a stream. A turn is also followed by requests that offer no
+tools at all and belong to the TUI rather than the agent: the dashboard summary line, the session title, and a
+prediction of the user's next line. Inference for one model can be routed on its own through a `[model.<name>]` entry
+carrying its own `base_url` (and `api_key`), without the `endpoints.models_base_url` that moves every model's.
+
 **Model and reasoning effort**: `--model <id>` and `--reasoning-effort <level>`, placed after the `--rules` pair and
 before the positional task. Grok persists some session settings back into `config.toml`; the per-session `GROK_HOME`
 farm keeps `config.toml` as a copy, so a flag cannot leak into the user's own configuration.
@@ -497,7 +526,7 @@ edit of the project's or the user's files, and was exercised against the version
 | Launch with an initial task | `claude "<task>"` | `codex "<task>"` | `grok "<task>"` |
 | Pre-allocate a session id | `--session-id <uuid>` | **Not possible.** Take it from the `SessionStart` payload; the interactive thread is created lazily on the first prompt, so a session opened without a task has no id until the user types | `--session-id <uuid>` (new sessions only) |
 | Inject hooks | `--settings <json-or-path>`, merged with the project settings | `-c 'hooks.<Event>=[{hooks=[{type="command",command=…,timeout=3,async=true}]}]'`, one per event, plus the hook-trust step | A per-session `GROK_HOME` whose `hooks/` directory is Octoboard's and whose other entries symlink to the source home |
-| Inject MCP | `--mcp-config <json>` | `-c 'mcp_servers.octoboard.command=…'`, `.args=[…]`, `.default_tools_approval_mode="approve"` and `.tool_timeout_sec=660` | An `[mcp_servers.octoboard]` block appended to the `config.toml` copy inside that `GROK_HOME` |
+| Inject MCP | `--mcp-config <json>` | `-c 'mcp_servers.octoboard.command=…'`, `.args=[…]`, `.default_tools_approval_mode="approve"` and `.tool_timeout_sec=660` | An `[mcp_servers.octoboard]` block appended to the `config.toml` copy inside that `GROK_HOME`, with `tool_timeout_sec = 660` |
 | Inject a role description | `--append-system-prompt` | `-c 'developer_instructions="…"'`, which adds a developer message and leaves the rest of the prompt byte-identical; not `-c instructions=`, which replaces the system prompt | `--rules "…"`, appended to the system prompt and persisted into the session record |
 | Resume | `claude --resume <id>` | `codex resume <id>` | `grok --resume <id>` |
 | Choose the model and reasoning effort | `--model <id>`, `--effort <level>` | `-c model="<id>"`, `-c model_reasoning_effort="<level>"` | `--model <id>`, `--reasoning-effort <level>` |

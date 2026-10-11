@@ -35,6 +35,7 @@ pub mod grok;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::Result;
 
@@ -92,6 +93,27 @@ pub struct LaunchSpec<'a> {
     /// The token that session's MCP server authenticates to the daemon with.
     pub mcp_token: &'a str,
 }
+
+/// What an agent's own time limit on a call to Octoboard's tools is set to, for every agent that
+/// has such a limit: `mcp::stdio::CALL_TIMEOUT` plus a margin, so Octoboard's forwarding limit is
+/// the one that ends a call rather than the agent's own default, whichever side of it that default
+/// falls on. Derived from `CALL_TIMEOUT` so it stays above it if that is raised. The margin covers
+/// a call in normal operation, not a daemon that stalls partway through a response: `CALL_TIMEOUT`
+/// bounds each read, not the call. Why the ordering matters is in apps/daemon/PROTOCOL.md's
+/// "`POST /mcp/:token`" section; what each agent does when its own limit passes, and so what the
+/// setting prevents, is in that agent's section of `docs/agent-cli-reference.md`. Every agent takes
+/// it per server, so no other MCP server of the user's is touched. Claude Code has none to set: it
+/// moves a long call to the background rather than ending it.
+///
+/// Each adapter's tests pin the resulting number, so a change to `CALL_TIMEOUT` is not finished by
+/// updating those tests: the new value has to hold for every agent, against what that agent's
+/// section records about its own limit.
+pub const MCP_TOOL_TIMEOUT_SECS: u64 =
+    crate::mcp::stdio::CALL_TIMEOUT.as_secs() + MCP_TOOL_TIMEOUT_MARGIN.as_secs();
+
+const MCP_TOOL_TIMEOUT_MARGIN: Duration = Duration::from_secs(60);
+
+const _: () = assert!(MCP_TOOL_TIMEOUT_SECS > crate::mcp::stdio::CALL_TIMEOUT.as_secs());
 
 /// The command and arguments every adapter registers as this session's MCP server. The session's
 /// identity travels in argv: Claude Code and Grok do export a session id to an MCP child, but

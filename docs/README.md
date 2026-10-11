@@ -129,14 +129,16 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 
 - [Architecture](architecture.md) — what Octoboard is and its core concepts, the layers and why the daemon is split from
   the application, the technology choices, the orchestration design decisions (the MCP server as a child process,
-  structured arguments, why reporting is not forced), the known pitfalls of the Tauri / Rust approach, and the reasoning
-  behind the data model.
+  structured arguments, why reporting is not forced, why a project session asks for a console session rather than being
+  given more reach), the known pitfalls of the Tauri / Rust approach, and the reasoning behind the data model.
 - [Agent CLI reference](agent-cli-reference.md) — what the three agent CLIs themselves do, against the versions the
-  facts were established on: each one's hook events, the payload fields and the keys a turn can be correlated on, what
-  a failing hook costs, how a project's own configuration layers around an injected one, how Octoboard is injected into
+  facts were established on: each one's hook events, the payload fields and the keys a turn can be correlated on, what a
+  failing hook costs, how a project's own configuration layers around an injected one, how Octoboard is injected into
   each agent and the conditions that come with it, each agent's own folder-trust confirmation (when it appears, how it
-  reads and is accepted, and where the agent records the trust), the rules for writing into a running session, and
-  where each keeps a session's conversation record and what moving it to another config directory takes.
+  reads and is accepted, and where the agent records the trust), each one's own time limit on a tool call — what it does
+  to the server and to its own model when the limit passes, and whether its model takes turns while a call is
+  outstanding — what the model is handed and how it reaches an MCP tool, the rules for writing into a running session,
+  and where each keeps a session's conversation record and what moving it to another config directory takes.
 - [UI accessibility standard](ui-accessibility.md) — the WCAG 2.2 AA bar `packages/ui` is held to and how to check a
   control or view against it, in both appearances: keyboard access (Tab, the exception for a react-aria collection that
   manages its own focus, F6 as the way out of the terminal), visible focus and why it never uses CSS `:focus-visible` in
@@ -161,17 +163,20 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Line wrapping](memory/line-wrapping.md) — the widths committed text is wrapped at, why nothing in the toolchain
   catches an over-long line (and so why an edit re-wraps the whole paragraph it touched), and why a width is counted
   in characters rather than bytes.
-- [Probing agent CLIs](memory/probing-agent-clis.md) — how to establish what the three agent CLIs actually do, and how to
-  probe a live Octoboard session that launches them: which session markers to strip and why enumerating them beats
+- [Probing agent CLIs](memory/probing-agent-clis.md) — how to establish what the three agent CLIs actually do, and how
+  to probe a live Octoboard session that launches them: which session markers to strip and why enumerating them beats
   matching a prefix, why neither `--help`, the binary's own strings, nor a config file's silent acceptance of a
   capability's name can be trusted, how to settle a question without spending a model turn and where that stops being
-  yours to decide, how to prove a per-launch injection and an MCP tool out of band rather than through the model, why a
-  probe expecting "no" needs a positive control and why a measured silence also has to be bounded by what would have
-  ended it, why a permission probe has to be set up against the user's own settings with the mode in effect confirmed
-  from the session itself, and the residue a probe leaves — in the user's configuration and in their live
+  yours to decide — substituting only the inference endpoint with a local stub where the question is what the agent
+  does, and driving a probe that goes through the daemon from a client of its own on the control WebSocket rather than
+  building the application — how to prove a per-launch injection and an MCP tool out of band rather than through the
+  model, why a probe expecting "no" needs a positive control and why a measured silence also has to be bounded by what
+  would have ended it, why a permission probe has to be set up against the user's own settings with the mode in effect
+  confirmed from the session itself, and the residue a probe leaves — in the user's configuration and in their live
   `~/.octoboard` data — and how a probe that needs no logged-in agent avoids the latter with a throwaway
   `HOME`/`TMPDIR`, using Codex's sign-in screen as session output, and how to put a fake agent CLI on `PATH` for an
-  isolated daemon so the real one does not launch instead.
+  isolated daemon so the real one does not launch instead, and which entries a throwaway config directory built as a
+  symlink farm has to own so the probe does not write through them into the user's own.
 - [Building and launching the app for verification](memory/building-and-launching-the-app-for-verification.md) — how to
   build, launch and isolate the app for a verification: when to launch the real window, building the daemon and
   confirming the running sidecar's binary, `pnpm build:app` (a `tauri build` that cannot sign), `open` rather than
@@ -183,26 +188,26 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   window before judging a defect in it.
 - [Verifying the desktop UI](memory/verifying-the-desktop-ui.md) — how to verify terminal and UI behaviour in the real
   app: why a verification stays as narrow as the change and why a shared component's markup widens that scope to every
-  surface already using it, looking at a UI state in the gallery before staging it through
-  a daemon and what the gallery cannot settle, checking in WebKit with real pointer input and with long and CJK text,
-  ruling out a locked screen before trusting a capture, getting an error out of a blank window, bisecting a symptom
-  against the daemon, what a scripted GUI probe can and cannot prove and why its setup goes through the daemon's
-  protocol (raising a session's hand with a forged hook event, seeding trusted folders), confirming Octoboard is
-  frontmost before a scripted keystroke, freezing the app's WebContent process, where to watch for a report page's
-  blocked navigation, where a network probe's positive control comes from, proving that no key reached the terminal with
-  a stand-in agent that echoes every byte, judging a packaged window's geometry from measured pixels and a real click
-  rather than from a capture alone, macOS's own autocorrect mangling scripted typing, and which checks need a person
-  (input methods, reduced motion).
+  surface already using it, looking at a UI state in the gallery before staging it through a daemon and what the gallery
+  cannot settle, checking in WebKit with real pointer input and with long and CJK text, ruling out a locked screen
+  before trusting a capture, getting an error out of a blank window, bisecting a symptom against the daemon, what a
+  scripted GUI probe can and cannot prove and why its setup goes through the daemon's protocol (raising a session's hand
+  with a forged hook event, seeding trusted folders), serving the shipped frontend bundle to a headless browser as a
+  real client where a check needs no native window, confirming Octoboard is frontmost before a scripted keystroke,
+  freezing the app's WebContent process, where to watch for a report page's blocked navigation, where a network probe's
+  positive control comes from, proving that no key reached the terminal with a stand-in agent that echoes every byte,
+  judging a packaged window's geometry from measured pixels and a real click rather than from a capture alone, macOS's
+  own autocorrect mangling scripted typing, and which checks need a person (input methods, reduced motion).
 - [Writing UI components](memory/writing-ui-components.md) — conventions for `packages/ui` components: why a component
   HeroUI 3 already provides is used rather than hand-built, where to check what it provides, which overrides on one are
   allowed (a colour fix, never a border HeroUI does not draw itself; layout and sizing) and what a justified hand-built
   one is built on and where its reason is written, that a single-line field hands its form the trimmed value and that
   what is wrong with one field shows under that field from the first submit on, why a state of your own on a
   react-aria-components element needs a `data-*` name it does not write itself, where a HeroUI `ListBox` or `Tree`'s
-  padding and fade go, that a `Tabs` panel is mounted only while its own tab is selected, so nothing a section must
-  not lose is held inside it, why a Tailwind class name has to stand in the source as literal text and why a `docked:` utility
-  loses to an `sm:` or `rtl:` twin, dimming a region with a veil rather than `opacity`, why every icon-only control also
-  gets a tooltip and the one shape a tooltip takes (the control directly inside HeroUI's `Tooltip` through
+  padding and fade go, that a `Tabs` panel is mounted only while its own tab is selected, so nothing a section must not
+  lose is held inside it, why a Tailwind class name has to stand in the source as literal text and why a `docked:`
+  utility loses to an `sm:` or `rtl:` twin, dimming a region with a veil rather than `opacity`, why every icon-only
+  control also gets a tooltip and the one shape a tooltip takes (the control directly inside HeroUI's `Tooltip` through
   `TitledControl`, never `Tooltip.Trigger`, with `IndicatorTooltip` for a non-control indicator), how user-facing text
   goes through the message catalog (`useT` over the module-level `t()`, a helper taking the translator,
   `PlainMessageKey` tables, placeholders and plural messages instead of joined fragments), how layout follows the

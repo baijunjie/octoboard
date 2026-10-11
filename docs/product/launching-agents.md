@@ -240,6 +240,13 @@ Two of its files are **copies** taken at launch rather than links, with conseque
   accepted is the exception to its being lost: it is carried into the source home's store (see "Carrying Grok
   Build's trust record" in `docs/product/folder-trust.md`).
 
+Octoboard's own MCP server is declared in that copy of the configuration file, and its entry sets **Grok Build's own
+time limit on a call to Octoboard's tools** above Octoboard's own limit on a forwarded call (the 10 minutes in "The
+call" of `docs/product/requesting-a-console-session.md`), so that a call which waits for the user, such as a
+console-session request, is ended by Octoboard's limit and not by Grok's — Grok cancels a call it gives up on, and a
+cancellation withdraws such a request. The limit is set on Octoboard's own entry alone; no other MCP server of the
+user's is touched, and the user's own configuration is untouched because only the copy is written.
+
 A Grok Build config directory must **already be a Grok home, one Grok has been run against**. Only entries
 that already exist in the source home are linked; for an empty directory, Grok creates its login and session records
 inside the per-session home, which is discarded with the session's process, so neither the login nor the conversation

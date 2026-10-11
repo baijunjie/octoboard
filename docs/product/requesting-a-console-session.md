@@ -29,7 +29,7 @@ the call waits while the user is asked, and only the user's approval acts on it.
 The call **waits for the user's answer for up to 8 minutes**. The limit is Octoboard's own, the same for every agent,
 and lies below the 10 minutes within which Octoboard forwards any tool call from the session to the daemon, leaving
 room for an approval given at the last moment to be carried out. Octoboard does not obey an agent's own time limit on a
-tool call; for Codex it raises that limit above Octoboard's own instead (see below).
+tool call; where the agent has one, Octoboard sets it above Octoboard's own instead (see below).
 
 **While the call waits, the session reads *waiting for the user*.** The hand goes up as the call starts waiting and
 comes down as the request ends — when the user answers, and equally when the request times out or is withdrawn; a
@@ -49,20 +49,31 @@ Claude Code (observed on 2.1.295) moves an MCP tool call that is still running a
 its turn ends with the call still waiting, and the call's result reaches it later as the background task's
 notification. None of that moves the session out of *waiting for the user* while the request is waiting.
 
-Codex would give up on an MCP tool call well before Octoboard's limit, and send nothing at all when it does — no
-cancellation, no end of the connection, no frame of any kind (for its own default see "Codex" in
-`docs/agent-cli-reference.md`). For a Codex session Octoboard starts, that limit is raised above Octoboard's own when
-the session launches, so the call is not what gives up first. An agent that gives up on the call for its own reasons
-anyway — Grok Build, whose own limit is an open question — leaves Octoboard unaware of it, and nothing about the
-request changes: the dialog stays up, the request goes on waiting, and an approval given after that point still starts
-the console session, binds the caller and delivers the request as its first report. All that caller loses is the call's
-result, which the outcome written into its session as a message covers (see "On approval" below).
+**Codex and Grok Build each have a time limit of their own on an MCP tool call, and for a session Octoboard starts
+that limit is set above Octoboard's own when the session launches**, so the call is never what gives up first (see
+"Per-agent specifics a user will notice" in `docs/product/launching-agents.md`; for each agent's own default see
+`docs/agent-cli-reference.md`). It is set because the two agents end an abandoned call differently, and only one of
+the two endings leaves the request alive:
+
+- **Codex sends nothing at all** when it gives up — no cancellation, no end of the connection, no frame of any kind.
+  Octoboard is left unaware, and nothing about the request changes: the dialog stays up, the request goes on waiting,
+  and an approval given after that point still starts the console session, binds the caller and delivers the request as
+  its first report. All that caller loses is the call's result, which the outcome written into its session as a message
+  covers (see "On approval" below).
+- **Grok Build cancels the call over MCP**, which withdraws the request like any other cancellation (see "How a request
+  ends" below): the dialog closes with nothing started, the caller is left unbound, and an approval given after that
+  point starts nothing. The limit Octoboard sets is what keeps Octoboard's 8 minutes, and not Grok Build's own limit,
+  deciding when the wait ends.
 
 **A Codex session is not held silent while its call waits.** For as long as the request is waiting, that session goes
 on taking short turns of its own, one after another at its own interval, each saying only that the tool is still
 running. So a request left on the dialog until the 8 minutes run out costs that session several such turns — tokens on
 its account, and activity in its terminal — and none of them answers the request or shortens the wait (the interval,
-and what was measured, are in "Codex" in `docs/agent-cli-reference.md`). Grok Build was not measured on this.
+and what was measured, are in "Codex" in `docs/agent-cli-reference.md`).
+
+**A Grok Build session is held silent.** Between the turn that makes the call and the turn that carries its outcome it
+takes no turns of its own and spends no tokens, however long the request waits, so a request left on the dialog until
+the 8 minutes run out costs that session nothing.
 
 ## How a request ends
 

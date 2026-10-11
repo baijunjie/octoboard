@@ -119,6 +119,16 @@ IPC, no shared state.** Hooks and the MCP server of a session point at the daemo
   it is delivered under a header naming the sender and saying the text is information to weigh, role descriptions tell
   each session whose work it takes, and the receiver's owner is copied so it is never blind to what reaches its
   sessions. Octoboard makes the distinction plain; whether a model keeps to it is the model's call.
+- **A project session whose work needs other projects asks for a console session rather than being given more reach.**
+  Two alternatives were set aside. Letting it drive sessions in other projects directly breaks the assumption that an
+  owner and its bound sessions share a project — removing a project would leave dangling bindings, and a project's bulk
+  archive delete would reach sessions elsewhere — and hands a session the user opened by hand the console's whole reach
+  without asking. Promoting the session itself into a console session cannot work either, because a session's role
+  description cannot change on resume: Claude Code replays its appended system prompt verbatim and Grok Build stores its
+  `--rules` in the session record, so the session would get a console session's tools while still being told it is a
+  project session. What it does instead is bounded: it may become bound exactly once, by its own call, and because the
+  caller's own tool call is what caused it, the outcome can be told to it in the call's result and its fixed role
+  description is left alone. The behaviour is in `docs/product/requesting-a-console-session.md`.
 - **A project session goes to the user directly for permissions and questions, not through the console session.**
   Relaying through the console session only creates confusion when several projects ask at once. "Needs a console
   session decision" (the agent calls `report(status: needs_decision)`) and "needs a user decision" (a permission

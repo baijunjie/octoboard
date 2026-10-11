@@ -250,9 +250,20 @@ fn append_mcp_server(config: &Path, spec: &LaunchSpec<'_>) -> Result<()> {
     if !content.is_empty() && !content.ends_with('\n') {
         content.push('\n');
     }
+    // Grok abandons a tool call at a limit of its own, and tells the server with a
+    // `notifications/cancelled` — which withdraws a waiting request for a console session, ending
+    // the wait before the user can answer and leaving a later approval nothing to act on. That
+    // makes giving up destructive here, unlike Codex, which loses only the call's result, and
+    // Grok's own default is documented far above a call Octoboard holds for the user
+    // (`console_request::ANSWER_TIME_LIMIT`), but its exact value was never measured, so where it
+    // truly falls is unknown (the "Grok Build" section of `docs/agent-cli-reference.md` has what is
+    // and is not established). The limit is therefore pinned to a known value rather than left to
+    // that default. Hence `super::MCP_TOOL_TIMEOUT_SECS`, where the reasoning for the value is.
     content.push_str(&format!(
-        "\n[mcp_servers.{key}]\ncommand = {command}\nargs = [{args}]\n",
+        "\n[mcp_servers.{key}]\ncommand = {command}\nargs = [{args}]\n\
+         tool_timeout_sec = {tool_timeout}\n",
         key = mcp::SERVER_KEY,
+        tool_timeout = super::MCP_TOOL_TIMEOUT_SECS,
         command = json!(command),
         args = args
             .iter()
@@ -525,6 +536,35 @@ mod tests {
         assert!(config.contains("[mcp_servers.octoboard]"));
         assert!(config.contains(&fixture.self_exe));
         assert!(config.contains(&fixture.mcp_token));
+    }
+
+    /// Grok cancels a tool call it gives up on, and a cancellation withdraws a waiting request for
+    /// a console session, so its limit is set above Octoboard's forwarding limit, for this server
+    /// only. The ordering itself is asserted where the value is defined.
+    #[test]
+    fn the_servers_tool_timeout_sits_above_octoboards_own_call_limit() {
+        let mut fixture = spec_fixture();
+        with_default_home(&mut fixture);
+        let plan = GrokAdapter.plan(&fixture.spec()).expect("plan");
+        let farm = PathBuf::from(&plan.env[0].1);
+        let config = std::fs::read_to_string(farm.join("config.toml")).expect("the copy");
+        // Read out of Octoboard's own table rather than from anywhere in the file: emitted above
+        // its header the key would be a top-level one, setting the limit for every MCP server the
+        // user has.
+        let table = config
+            .split(&format!("[mcp_servers.{}]\n", mcp::SERVER_KEY))
+            .nth(1)
+            .expect("Octoboard's table")
+            .split("\n[")
+            .next()
+            .expect("its end");
+        let emitted: u64 = table
+            .lines()
+            .find_map(|line| line.strip_prefix("tool_timeout_sec = "))
+            .expect("the limit")
+            .parse()
+            .expect("whole seconds");
+        assert_eq!(emitted, 660);
     }
 
     /// Grok reads no project instruction file without a git root, so a console session's role can

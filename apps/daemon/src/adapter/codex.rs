@@ -47,7 +47,6 @@
 //! payload, and thread id and session id are the same value.
 
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use serde_json::json;
 
@@ -74,9 +73,6 @@ const HOOK_EVENTS: &[&str] = &[
     "Interrupt",
     "Stop",
 ];
-
-/// How far Codex's own limit on an Octoboard tool call is set above `mcp::stdio`'s `CALL_TIMEOUT`.
-const TOOL_TIMEOUT_MARGIN: Duration = Duration::from_secs(60);
 
 pub struct CodexAdapter;
 
@@ -155,18 +151,14 @@ impl AgentAdapter for CodexAdapter {
         args.push(format!(
             "mcp_servers.{key}.default_tools_approval_mode=\"approve\""
         ));
-        // Codex abandons an MCP tool call after 300 s by default and sends the server nothing when
-        // it does, so a call that outlasts that never returns its result — and `console_request`'s
-        // `ANSWER_TIME_LIMIT` alone is longer. The limit is raised above `mcp::stdio`'s
-        // `CALL_TIMEOUT` so that one decides, and derived from it so it stays above if that is
-        // raised. The margin covers a call in normal operation, not a daemon that stalls partway
-        // through a response: `CALL_TIMEOUT` bounds each read, not the call. The ordering is in
-        // apps/daemon/PROTOCOL.md's "`POST /mcp/:token`" section; the key is per server, like the
-        // one above.
+        // Codex abandons a tool call at a limit of its own and sends the server nothing when it
+        // does, so a call that outlasts it never returns its result — and a call Octoboard holds
+        // for the user (`console_request::ANSWER_TIME_LIMIT`) alone outlasts Codex's default.
+        // Hence `super::MCP_TOOL_TIMEOUT_SECS`, where the reasoning for the value is.
         args.push("-c".to_string());
         args.push(format!(
             "mcp_servers.{key}.tool_timeout_sec={}",
-            (mcp::stdio::CALL_TIMEOUT + TOOL_TIMEOUT_MARGIN).as_secs()
+            super::MCP_TOOL_TIMEOUT_SECS
         ));
 
         // Codex's own update prompt ("Update now / Skip") would otherwise come up before its trust
@@ -386,21 +378,15 @@ mod tests {
         ));
     }
 
-    /// Codex's own 300 s limit on a tool call would end a long Octoboard call first, silently; the
-    /// override puts it above Octoboard's forwarding limit, for this server only.
+    /// Codex abandons a tool call at a limit of its own, silently, and its default would end a long
+    /// Octoboard call first (the "Codex" section of `docs/agent-cli-reference.md` has the value);
+    /// the override puts it above Octoboard's forwarding limit, for this server only.
     #[test]
     fn the_servers_tool_timeout_sits_above_octoboards_own_call_limit() {
         let fixture = spec_fixture();
         let plan = CodexAdapter.plan(&fixture.spec()).expect("plan");
         let overrides = overrides(&plan.args);
         assert!(overrides.contains(&"mcp_servers.octoboard.tool_timeout_sec=660".to_string()));
-        let emitted: u64 = overrides
-            .iter()
-            .find_map(|o| o.strip_prefix("mcp_servers.octoboard.tool_timeout_sec="))
-            .expect("the override")
-            .parse()
-            .expect("whole seconds");
-        assert!(emitted > mcp::stdio::CALL_TIMEOUT.as_secs());
         assert!(!overrides.iter().any(|o| o.starts_with("tool_timeout_sec")));
     }
 

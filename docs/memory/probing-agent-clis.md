@@ -65,6 +65,19 @@ at a local stand-in for the chat endpoint that answers HTTP 400. Set it in a thr
 config is untouched, and link the user's `auth.json` into it so Grok starts logged in. An HTTP 500 makes Grok retry
 for minutes and never end the turn, so no `StopFailure` fires.
 
+**Where the question is what the agent *does* rather than what it assembled — that it calls an injected MCP tool, what
+it does with the result, what the daemon sees around it — a stub that answers in the model's place carries the whole
+confirmation, with no turn spent and no working account needed.** Substitute only the inference endpoint and keep every
+other part of the run real: a local server speaking the CLI's own chat protocol, selected through the throwaway config
+directory alone (for Grok Build, a per-model entry carrying its own `base_url` and `api_key`, picked by the model name
+Octoboard passes on as `--model`, so the global endpoint key above is not needed), driving the agent through a scripted
+turn that calls the tool. Two things decide whether such a stub works at all. It has to answer the way the CLI actually
+asks, which for a CLI that always streams means a server-sent event stream and not a plain JSON body. And a script of
+canned turns has to survive the extra, tool-less requests the CLI makes around a turn of its own — a title, a summary
+line, a guess at the next user line — by serving them without letting them consume script entries; otherwise the script
+runs ahead and the turn under test is answered with something meant for another request. It redirects an
+authenticated client's traffic like any other stand-in endpoint, so it needs the same authorisation.
+
 ## Prove an injection, and an MCP tool, out of band rather than through the model
 
 Whether a launch's hooks and MCP injection took is settled by looking at processes, not by asking an agent to use them.
@@ -145,6 +158,13 @@ The configuration written is whichever one the probed CLI resolves, not necessar
 a probe launched from a shell that exports one writes into that directory. Look for the residue there, and when the
 probing is done tell the user what it left in their configuration.
 
+A throwaway config directory built as a symlink farm over the user's real one — the arrangement that keeps the login
+without copying a credential — **writes through every entry left symlinked**. So before the run, give the farm a real
+file or directory of its own for each entry the CLI writes: its config file, its trust store, and an empty directory in
+place of the symlinked session store, or the probe's own session records land in the user's home. What stays symlinked
+still collects the run's residue, a live-session index, logs and caches among it, so include it in what you tell the
+user the probe left.
+
 Use a dedicated scratch directory as cwd, never a shared one such as `/tmp`: each CLI records a per-directory trust
 decision in the user's own config (Claude Code in the `.claude.json` of the config directory in effect, under
 `projects[<path>].hasTrustDialogAccepted`), so probing directly in `/tmp` marks `/tmp` itself trusted and every later
@@ -177,6 +197,14 @@ connection — runs the daemon, or a copy of the app, with a throwaway `HOME` an
 and it runs alongside their own Octoboard. For a session that draws real output there without a model turn, open a
 Codex session: with no login under that `HOME` it stops at its sign-in screen.
 
+**Drive it from a client of its own on the control WebSocket, and build no application for it.** The daemon on its
+own, plus a small client on `GET /ws/control` (that section of `apps/daemon/PROTOCOL.md`) to create the consoles,
+projects and sessions, read the events and send the answers, is the whole instrument whenever what differs between
+agents is on the agent's side: the window's rendering of a dialog, and answering it, are agent-independent, so once
+they have been exercised for one agent, confirming the behaviour for the next needs no window, no packaged build and
+none of the screen-recording or accessibility permissions that driving a window needs. Build the application only for
+behaviour the Tauri shell itself carries.
+
 Launch it from an emptied environment, `env -i HOME=<dir> TMPDIR=<dir> … /usr/bin/open -n <app>`, never with
 `open --env` overrides alone: `open` hands the app the calling shell's whole environment besides the variables it
 names, so a `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `GROK_HOME` exported there — an agent session exports
@@ -207,6 +235,10 @@ throwaway `HOME` with nothing on screen saying so; the rc file is sourced after 
 removing from `PATH` in that rc file every directory that holds it (`which -a <cli>`), Homebrew's `bin` included,
 since the same CLI is often installed in more than one. Confirm from the session's process (`ps`) which executable
 actually ran before reading anything off the screen.
+
+Everything else a launched agent has to see belongs in that same rc file, for the same reason: the real `PATH` —
+without it the throwaway `HOME`'s login shell finds no agent executable at all — and a config-directory variable such
+as `CODEX_HOME` or `GROK_HOME` pointing at the run's own throwaway configuration.
 
 A probe that needs a logged-in agent whose login cannot be brought into the throwaway `HOME` has to run on the real
 one. Expect it to create consoles and sessions in the user's real board and to run any pending schema migration
