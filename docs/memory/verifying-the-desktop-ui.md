@@ -14,6 +14,14 @@ against the merge base — a second gallery server run from a branchless tempora
 `git worktree add --detach` case in the "Creating" section of `.claude/skills/git-worktree/SKILL.md`) — rather than
 judging the new rendering on its own.
 
+Where what the change alters is the data a fixture answers with rather than any markup, settle it on the replies instead
+of on renderings: dump every scenario's reply for the affected requests to JSON at the merge base and on the branch and
+diff the two dumps. That names which field of which reply moved, which no screenshot comparison can, and it costs one
+scripted run rather than two servers and a capture pass. Where renderings do have to be compared, an unchanged scenario
+is one whose pixel diff looks like that of a scenario the change cannot touch, not one that is byte-identical: some
+scenarios animate (the session-status glyph), so a few dozen pixels in one small region always differ. So capture such
+an untouched scenario as the control in the same run.
+
 ## Look at a UI state in the gallery before staging it through a daemon
 
 To see how the UI renders in a given state — connection loss, a session status, a dialog, the archive, report pages,
@@ -48,13 +56,23 @@ before, with nothing in the type checker or the unit tests to say which side is 
 past a diff's last hunk went on claiming more might follow because no fixture change carried both sides' whole text for
 the new line count to be taken from.
 
-So a reply that gains a field is taught to the fixture together with the condition the daemon fills it under, and every
-scenario's fixture is given what that condition needs — the scenarios whose fixture answers with an error included,
-since they answer the reply as well, and an unfilled field there is a state the real daemon never sends. Hold that
-condition with a unit test over the fixture daemon's own replies rather than by remembering it: ask the daemon for
-every scenario's reply and fail on one the field is unfilled in, so a scenario or a fixture added later cannot answer
-less fully than the daemon unnoticed. And before reading a scenario as a fix that did not work, check that its fixture
-can produce the input the fix reads at all.
+So a reply that gains such a field is taught to the fixture together with the condition the real daemon fills it under,
+and every scenario's fixture is given what that condition needs — the scenarios whose fixture answers with an error
+included, since they answer the reply as well, and an unfilled field there is a state the real daemon never sends. Take
+that condition from the daemon's own code and tests, not from an enumeration of cases in a doc or a plan: an enumeration
+can lag the rule it enumerates, and the first implementation of the refusal below, built on one, was wrong for the case
+the rule covers and the list did not (a binary change, whose patch has no hunk and whose two sides are nonetheless both
+counted, from the bodies the reply carries).
+
+Do not hold that condition by remembering it. Where the real daemon would fill the field and the fixture carries nothing
+to fill it from, the fixture daemon refuses the request rather than answering with the field unfilled, and the refusal
+is painted over the page as well as rejected to the caller, because the window swallows a failed read into its own
+error line and the scenario would otherwise read as merely broken. Such a refusal is deliberately not a daemon error:
+scenarios answer requests with a daemon error on purpose and those are legitimate UI states under test, so a gap in the
+gallery's own data must never be dressed as one. Extend that refusal to each new field of this kind, and have the guard
+test over the fixture daemon's replies read every scenario's reply — including the ones that carry no such field — so a
+refusal fails the test run too and not only the scenario someone opens by hand. And before reading a scenario as a fix
+that did not work, check that its fixture can produce the input the fix reads at all.
 
 ## Stage a defect's states in the order it was reported, not in whatever order is easy to reach
 
@@ -68,16 +86,18 @@ that way, extend it until it can rather than reporting the pass the other order 
 
 ## Check the page in WebKit with real pointer input, and with long and CJK text
 
-The app renders in WKWebView, so a pass in Chrome says nothing: a HeroUI tag's remove button that ignored the mouse
-in WebKit passed a scripted click in Chrome. Run a browser check of the page in Playwright's `webkit` and drive the
-pointer through `page.mouse` rather than a click dispatched from script. Headless WebKit still is not the app for how
-things paint (it has no GPU compositing), so a rendering defect is judged in the real window. Where a change puts text
-in a constrained layout, include a long text and a CJK one: overflow defects there showed only with long text. Judge
-a colour or a dimming from computed styles or full-resolution pixels, not from a downscaled screenshot. A packaged build
-offers no DOM to measure, so settle a geometry question there from ink extents read off a capture at the display's
-native resolution, allowing for its scale factor (a Retina display gives 2 image pixels per CSS pixel), and settle a
-question of overlap or reachability with a real click at the measured point, since a capture only ever shows what is
-on top.
+The app renders in WKWebView, so a pass in Chrome says nothing: a HeroUI tag's remove button that ignored the mouse in
+WebKit passed a scripted click in Chrome. Run a browser check of the page in Playwright's `webkit` and drive the pointer
+through `page.mouse` rather than a click dispatched from script. Playwright is not a dependency of this repository and
+is not to become one for a check: install it in a scratch directory outside the worktree, and install the version that
+matches the browser binaries already cached on the machine (on macOS under `~/Library/Caches/ms-playwright`) rather than
+the latest, which would want binaries that are not there. Headless WebKit still is not the app for how things paint (it
+has no GPU compositing), so a rendering defect is judged in the real window. Where a change puts text in a constrained
+layout, include a long text and a CJK one: overflow defects there showed only with long text. Judge a colour or a
+dimming from computed styles or full-resolution pixels, not from a downscaled screenshot. A packaged build offers no DOM
+to measure, so settle a geometry question there from ink extents read off a capture at the display's native resolution,
+allowing for its scale factor (a Retina display gives 2 image pixels per CSS pixel), and settle a question of overlap or
+reachability with a real click at the measured point, since a capture only ever shows what is on top.
 
 ## Rule out a locked screen before reading anything off a window capture
 
@@ -163,11 +183,11 @@ That is enough to confirm what a dialog does. It is not the app's WebKit, so it 
 
 So where a check has to run in the real app, keep the GUI out of the setup: create the consoles, projects and sessions a
 verification needs by sending the daemon's own protocol requests, and drive only the behaviour under test through the
-window. A session's status can be
-set up the same way, without an agent prompt or a model turn: POST `{"hook_event_name":"PermissionRequest"}` to the
-daemon's `/hook/<session>` to raise its hand, and a later `UserPromptSubmit` lowers it again. Trusted folders are the
-exception: the protocol adds one only as the answer to a live agent's trust confirmation, so seed them by inserting
-rows into the `trusted_directories` table of `$HOME/.octoboard/octoboard.db` while the app is stopped.
+window. A session's status can be set up the same way, without an agent prompt or a model turn: POST
+`{"hook_event_name":"PermissionRequest"}` to the daemon's `/hook/<session>` to raise its hand, and a later
+`UserPromptSubmit` lowers it again. Trusted folders are the exception: the protocol adds one only as the answer to a
+live agent's trust confirmation, so seed them by inserting rows into the `trusted_directories` table of
+`$HOME/.octoboard/octoboard.db` while the app is stopped.
 
 Keystrokes go to whichever application is frontmost, and a click at screen coordinates to whichever window is on top
 at that point, not to Octoboard. Activate it and confirm it is the frontmost process immediately before every

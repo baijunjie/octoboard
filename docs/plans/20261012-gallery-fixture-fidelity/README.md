@@ -50,5 +50,5 @@ They can land in either order and are verified separately.
 
 ## Milestones
 
-1. [The fixture daemon refuses an unfillable reply](01-refuse-an-unfillable-reply.md)
-2. [A change fixture is written through a factory per kind](02-a-factory-per-kind-of-change.md)
+- 01 refuse-an-unfillable-reply (closed)
+- 02 [A change fixture is written through a factory per kind](02-a-factory-per-kind-of-change.md)

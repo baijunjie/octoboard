@@ -22,6 +22,11 @@ export interface FixtureChange {
    * counts its sides' lines from, so one with an `error` has the text the daemon counted at the
    * patch and the error only the bodies request meets. */
   expand?: ({ old: string; new: string; error?: FixtureError } | FixtureError) & { delay?: number };
+  /** The whole text of a side the diff reply counts the lines of, per side and over what `expand`
+   * states: for a change with no bodies to expand, so that `expand` carries none — one whose other
+   * side is no file, or does not exist. A side the fixture daemon would count and is given no text
+   * for is refused rather than answered with the count unfilled. */
+  whole?: { old?: string; new?: string };
 }
 
 /** A fixture project's repository: its worktrees, the first holding the project, and each one's
@@ -103,9 +108,13 @@ index 0f1e2d3..4c5b6a7 100644
  }
 `;
 
+/** What `current` held while it was a file, which `TYPE_CHANGE_PATCH`'s first section deletes and
+ * the diff reply counts the lines of. */
+const TYPE_CHANGE_TARGET = "releases/2.3\n";
+
 const TYPE_CHANGE_PATCH = `diff --git a/current b/current
 deleted file mode 100644
-index 3b18e51..0000000
+index 0d1c2b3..0000000
 --- a/current
 +++ /dev/null
 @@ -1 +0,0 @@
@@ -119,6 +128,10 @@ index 0000000..8d2f1a0
 +releases/2.4
 \\ No newline at end of file
 `;
+
+/** What `docs/old-notes.md` held, which `DELETED_PATCH` removes whole and the diff reply counts the
+ * lines of. */
+const DELETED_NOTES = "# Old notes\nSuperseded by the architecture document.\n";
 
 const DELETED_PATCH = `diff --git a/docs/old-notes.md b/docs/old-notes.md
 deleted file mode 100644
@@ -246,10 +259,11 @@ const MAIN_CHANGES: FixtureChange[] = [
   {
     entry: {
       group: "staged",
-      old: file("current", commit("3b18e51")),
+      old: file("current", commit("0d1c2b3")),
       new: { state: "present", path: "current", kind: "symlink", source: index("8d2f1a0") },
     },
     patch: TYPE_CHANGE_PATCH,
+    whole: { old: TYPE_CHANGE_TARGET },
   },
   nested("nest", "nest/leaf.ts", PIPELINE, ["3b18e51", "9c8d7e6"]),
   nested("nest2/leaf.ts", "nest2", UNCHANGED, ["3b18e51", "3b18e51"]),
@@ -295,7 +309,7 @@ const MAIN_CHANGES: FixtureChange[] = [
     patch: SERVER_UNSTAGED_PATCH,
     expand: { old: SERVER_STAGED, new: SERVER_DISK },
   },
-  { entry: { group: "unstaged", old: file("docs/old-notes.md", index("7c6b5a4")), new: { state: "absent" } }, patch: DELETED_PATCH },
+  { entry: { group: "unstaged", old: file("docs/old-notes.md", index("7c6b5a4")), new: { state: "absent" } }, patch: DELETED_PATCH, whole: { old: DELETED_NOTES } },
   {
     entry: { group: "unstaged", old: file("docs/logo.png", index("6a5b4c3")), new: file("docs/logo.png", live("v3")) },
     patch: "diff --git a/docs/logo.png b/docs/logo.png\nindex 6a5b4c3..0000000 100644\nBinary files a/docs/logo.png and b/docs/logo.png differ\n",
@@ -368,7 +382,7 @@ const FEATURE_COMPARISON: FixtureChange[] = [
     bodies: { new: text("export const buildIndex = (docs: string[]) => new Map(docs.map((d, i) => [i, d]));\n") },
   },
   expandable("committed", "src/pipeline.ts", onMain("a1b2c3d"), onFeature("b2c3d4e"), PIPELINE),
-  { entry: { group: "committed", old: file("docs/old-notes.md", onMain("7c6b5a4")), new: { state: "absent" } }, patch: DELETED_PATCH },
+  { entry: { group: "committed", old: file("docs/old-notes.md", onMain("7c6b5a4")), new: { state: "absent" } }, patch: DELETED_PATCH, whole: { old: DELETED_NOTES } },
   {
     entry: { group: "committed", old: file("docs/logo.png", onMain("6a5b4c3")), new: file("docs/logo.png", onFeature("8b7c6d5")) },
     patch: "diff --git a/docs/logo.png b/docs/logo.png\nindex 6a5b4c3..8b7c6d5 100644\nBinary files a/docs/logo.png and b/docs/logo.png differ\n",
@@ -377,10 +391,11 @@ const FEATURE_COMPARISON: FixtureChange[] = [
   {
     entry: {
       group: "committed",
-      old: file("current", onMain("3b18e51")),
+      old: file("current", onMain("0d1c2b3")),
       new: { state: "present", path: "current", kind: "symlink", source: onFeature("8d2f1a0") },
     },
     patch: TYPE_CHANGE_PATCH,
+    whole: { old: TYPE_CHANGE_TARGET },
   },
 ];
 

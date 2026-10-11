@@ -188,8 +188,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   window before judging a defect in it.
 - [Verifying the desktop UI](memory/verifying-the-desktop-ui.md) — how to verify terminal and UI behaviour in the real
   app: why a verification stays as narrow as the change and why a shared component's markup widens that scope to every
-  surface already using it, looking at a UI state in the gallery before staging it through a daemon and what the gallery
-  cannot settle, checking in WebKit with real pointer input and with long and CJK text, ruling out a locked screen
+  surface already using it, settling a change to the data a fixture answers with on the replies rather than on
+  renderings, looking at a UI state in the gallery before staging it through a daemon and what the gallery cannot
+  settle, the fixture daemon refusing a reply the real one would fill and the fixture cannot, and where to take that
+  condition from, checking in WebKit with real pointer input and with long and CJK text, ruling out a locked screen
   before trusting a capture, getting an error out of a blank window, bisecting a symptom against the daemon, what a
   scripted GUI probe can and cannot prove and why its setup goes through the daemon's protocol (raising a session's hand
   with a forged hook event, seeding trusted folders), serving the shipped frontend bundle to a headless browser as a

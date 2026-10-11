@@ -10,6 +10,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 
 import { isLanguage, type Language } from "../i18n/languages";
+import { galleryFailure } from "./banner";
 import { SCENARIOS } from "./fixtures";
 import { installFakeTerminal } from "./fakeTerminal";
 import { createUi } from "./interact";
@@ -117,10 +118,6 @@ try {
   await ui.wait(300);
   for (const step of scenario?.steps ?? []) await step(ui);
 } catch (error) {
-  console.error(error);
-  const banner = document.createElement("div");
-  banner.textContent = `Scenario step failed: ${(error as Error).message}`;
-  banner.style.cssText = "position:fixed;inset-inline:0;bottom:0;z-index:9999;padding:8px;background:#b91c1c;color:#fff;font:12px monospace";
-  document.body.append(banner);
+  galleryFailure(`Scenario step failed: ${(error as Error).message}`, error);
 }
 document.documentElement.dataset.galleryReady = "true";

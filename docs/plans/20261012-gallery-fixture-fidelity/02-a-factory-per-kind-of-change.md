@@ -6,6 +6,30 @@
 > change's versions is a type error, demonstrated once by a deliberate omission that the type check rejects; the
 > gallery's scenarios show exactly what they showed before, and the package's type check and tests stay clean.
 
+## Handoff
+
+From milestone 01, which made the fixture daemon refuse a reply it cannot fill as the real daemon would:
+
+- **A reply that carries its sides' bodies is not held to that condition yet.** Where the daemon answers with
+  bodies — an untracked file, a side of a change crossing the project's boundary, both sides of a binary change —
+  it counts each side's lines from the body itself, and it always carries one. The fixture daemon counts a body it
+  is given, but a fixture of that shape carrying no body falls through to a reply with neither body nor count,
+  which the real daemon never sends, and nothing refuses it. Every sample fixture of that shape carries its body
+  today, so nothing is wrong now; a factory per kind closes it at the type instead, by taking the body a kind must
+  have rather than leaving it to the call site.
+- **`FixtureChange` now carries three overlapping sources of a side's content** — `bodies` (the body a reply
+  carries), `expand` (both sides whole, for the bodies request) and `whole` (per side, where a change has no
+  bodies to expand so `expand` carries none). A factory per kind should take one source per kind and derive the
+  rest, absorbing `whole` rather than leaving a fourth field beside it. Nothing stops a fixture setting both
+  `expand` and `whole` today: `whole` wins for the diff reply while `expand` still feeds the bodies reply, so the
+  two could disagree about the same version.
+- **A change's patch and the text its count is taken from are two hand-written literals.** `TYPE_CHANGE_PATCH`
+  and `TYPE_CHANGE_TARGET`, `DELETED_PATCH` and `DELETED_NOTES` are each a pair that has to agree, and nothing
+  checks that they do. A factory deriving both from one source removes the pair.
+- **The bodies request answers a side that is a link or a submodule.** The real daemon refuses that request
+  outright with `unsupported_file_type`. No fixture reaches it (the only non-file side carries no `expand`), so it
+  is a gap in the fixture daemon rather than a wrong reply being sent.
+
 ## Technical design
 
 - [ ] One factory per kind of change the fixtures express, each taking exactly what that kind needs: a text change

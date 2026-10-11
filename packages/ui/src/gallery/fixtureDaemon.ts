@@ -4,6 +4,7 @@ import { currentLanguage } from "../i18n/language";
 import type { BrowseEntry, ChangeSide, DirEntry, Event, FileContent, SideRead, SideRef } from "../protocol";
 import { createStateStore, type Daemon, type ToastRequest } from "../store";
 import type { Scenario } from "./scenario";
+import { galleryFailure } from "./banner";
 import { terminalFixtureUrl } from "./fakeTerminal";
 import { SAMPLE_MODELS } from "./fixtures/agentModels";
 import { text } from "./fixtures/builders";
@@ -33,6 +34,34 @@ function genericListing(path: string): { path: string; entries: DirEntry[] } {
  * count and does not depend on a viewer render-budget helper. */
 function lineCount(content: string): number {
   return content === "" ? 0 : content.split("\n").length - (content.endsWith("\n") ? 1 : 0);
+}
+
+/** A body's bytes with one character each, which `lineCount` then counts as the daemon counts the
+ * bytes it read: a text body's newline characters are its newline bytes, and a binary one is
+ * decoded so that an image counts the newlines in its own bytes, as the daemon's does. */
+function bodyBytes(body: FileContent): string {
+  return body.text ?? atob(body.data ?? "");
+}
+
+/**
+ * Why a fixture cannot be answered as the real daemon would answer. Deliberately not a
+ * `DaemonRequestError`: scenarios answer requests with a daemon error on purpose, and those are
+ * legitimate UI states under test, so a gap in the gallery's own data must not be dressed as one.
+ */
+export class FixtureUnfillableError extends Error {
+  constructor(reason: string) {
+    super(`gallery fixture cannot answer faithfully — ${reason}`);
+    this.name = "FixtureUnfillableError";
+  }
+}
+
+/** Refuses a reply the fixture cannot fill as the real daemon would. It goes on the page as well as
+ * to the rejected request, because the window swallows a failed read into the diff's own error line
+ * and a scenario would otherwise look merely broken rather than under-filled. */
+function refuseUnfillable(reason: string): never {
+  const error = new FixtureUnfillableError(reason);
+  galleryFailure(error.message);
+  throw error;
 }
 
 /** The entries directly under `dir` among `files`, as `list_project_dir` sends them. */
@@ -79,22 +108,45 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
   const fail = ({ code, params, message }: FixtureError): never => {
     throw new DaemonRequestError(daemonMessage(currentLanguage(), code, params, message, store.getState()), code, params);
   };
-  /** A side of a fixture change as `read_project_change` reads it, with its body when it has one and its
-   * line count when `content`, the whole text of the version, is known, as the daemon counts it: not
-   * for a link or a submodule, nor for a side read from the worktree disk unless its body is carried,
-   * nor for either side of a patch with no hunk (`hunks` false). */
-  const readSide = (side: ChangeSide, body: FileContent | undefined, content?: string, hunks = true): SideRead =>
-    side.state === "present"
-      ? {
-          ...side,
-          file: body ?? null,
-          lines: hunks && content !== undefined && side.kind === "file" && (side.source.kind !== "live" || body) ? lineCount(content) : null,
-        }
-      : side.state === "absent"
-        ? side
-        : { state: "out_of_scope" };
-  /** The whole text of a fixture change that a diff reply gives its sides' line counts from, if it has one. */
-  const wholeOf = (found: { expand?: FixtureChange["expand"] }) => (found.expand && "old" in found.expand ? found.expand : undefined);
+  /**
+   * A side of a fixture change as `read_project_change` reads it, with its body when it has one and
+   * its line count where the daemon counts one (`apps/daemon/PROTOCOL.md`, "Changes and
+   * comparisons"). Only a file side ever carries either: the daemon reads no content for a link or
+   * a submodule. A carried body is counted from the body itself, whatever the patch holds;
+   * otherwise only a side the daemon read an object for is counted, from `content`, the whole text
+   * of that version. So `lines` stays null for a link or a submodule, for an absent or out-of-scope
+   * side, for a side read from the worktree disk with no body, and for a side of a patch with no
+   * hunk (`hunks` false) that carries no body, where no separator bar needs a count. Those are what
+   * the real daemon leaves out, not gaps.
+   *
+   * Where the daemon would count and the fixture carries no `content` to count, the reply is
+   * refused rather than sent with the field unfilled: a reply the daemon never sends is worse than
+   * no reply, because it is believed. The gallery is where a UI state is looked at before it is
+   * staged through a daemon, so a combination the app cannot produce reads there as the app's
+   * defect. An unfilled count is a legal value of the reply, so nothing downstream — the type
+   * check, the renderer, a scenario — can tell it from a real one.
+   */
+  const readSide = (at: string, side: ChangeSide, body: FileContent | undefined, content?: string, hunks = true): SideRead => {
+    if (side.state === "absent") return side;
+    if (side.state !== "present") return { state: "out_of_scope" };
+    if (side.kind !== "file") return { ...side, file: null, lines: null };
+    if (body) return { ...side, file: body, lines: lineCount(bodyBytes(body)) };
+    if (!hunks || side.source.kind === "live") return { ...side, file: null, lines: null };
+    if (content === undefined) {
+      refuseUnfillable(`${at} (${side.path}): the daemon counts this side's lines, and the fixture carries no whole text to count`);
+    }
+    return { ...side, file: null, lines: lineCount(content) };
+  };
+  /** The whole text of each side that a diff reply gives its line count from: both sides of what
+   * expanding its diff answers, which is the same text, with what the fixture states per side over
+   * it. */
+  const wholeOf = ({ expand, whole }: Pick<FixtureChange, "expand" | "whole">): { old?: string; new?: string } => ({
+    ...(expand && "old" in expand ? { old: expand.old, new: expand.new } : {}),
+    ...whole,
+  });
+  /** The worktree a request is answered from: the one it names, else the project's own, as the
+   * daemon resolves an omitted one. */
+  const worktreeOf = (named: string | undefined) => named ?? git?.worktrees[0]?.id ?? "";
   /** Whether a fixture change's patch has a hunk, which a count of its sides is for. */
   const hasHunk = (found: { patch?: string }) => /^@@ /m.test(found.patch ?? "");
   const sameSide = (listed: ChangeSide, asked: SideRef) =>
@@ -151,7 +203,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           };
         }
         case "list_project_changes": {
-          const worktree = body.worktree ?? git?.worktrees[0]?.id ?? "";
+          const worktree = worktreeOf(body.worktree);
           const changes = git?.changes[worktree];
           if (!changes) return fail({ code: "worktree_unavailable", params: { worktree }, message: `worktree ${worktree} is gone` });
           if (!Array.isArray(changes)) return fail(changes);
@@ -187,18 +239,19 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           if (!found || found.entry.group === "conflicted") return fail({ code: "file_not_found", params: { path: "" }, message: "no such change" });
           if (found.error) return fail(found.error);
           const whole = wholeOf(found);
+          const at = `${body.left.branch}..${body.right.branch}`;
           return {
             type: "project_comparison_change",
             project: body.project,
             left: body.left,
             right: body.right,
-            old: readSide(found.entry.old, found.bodies?.old, whole?.old, hasHunk(found)),
-            new: readSide(found.entry.new, found.bodies?.new, whole?.new, hasHunk(found)),
+            old: readSide(at, found.entry.old, found.bodies?.old, whole.old, hasHunk(found)),
+            new: readSide(at, found.entry.new, found.bodies?.new, whole.new, hasHunk(found)),
             patch: found.patch === undefined ? null : { size: found.patch.length, kind: "text", media_type: null, text: found.patch, data: null },
           };
         }
         case "read_project_change": {
-          const worktree = body.worktree ?? git?.worktrees[0]?.id ?? "";
+          const worktree = worktreeOf(body.worktree);
           const changes = git?.changes[worktree];
           const found = Array.isArray(changes)
             ? changes.find(
@@ -211,22 +264,24 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           }
           if (found.error) return fail(found.error);
           const whole = wholeOf(found);
+          const at = `${worktree} ${found.entry.group}`;
           return {
             type: "project_change",
             project: body.project,
             worktree: body.worktree ?? null,
             group: found.entry.group,
             head: null,
-            old: readSide(found.entry.old, found.bodies?.old, whole?.old, hasHunk(found)),
-            new: readSide(found.entry.new, found.bodies?.new, whole?.new, hasHunk(found)),
+            old: readSide(at, found.entry.old, found.bodies?.old, whole.old, hasHunk(found)),
+            new: readSide(at, found.entry.new, found.bodies?.new, whole.new, hasHunk(found)),
             patch: found.patch === undefined ? null : { size: found.patch.length, kind: "text", media_type: null, text: found.patch, data: null },
           };
         }
         case "read_project_change_bodies":
         case "read_project_comparison_change_bodies": {
           const asked = body.type === "read_project_change_bodies";
+          const at = asked ? `${worktreeOf(body.worktree)} ${body.change.group} bodies` : `${body.left.branch}..${body.right.branch} bodies`;
           const changes = asked
-            ? git?.changes[body.worktree ?? git?.worktrees[0]?.id ?? ""]
+            ? git?.changes[worktreeOf(body.worktree)]
             : git?.comparisons?.[`${body.left.branch}..${body.right.branch}`];
           const found = Array.isArray(changes)
             ? changes.find(
@@ -243,8 +298,8 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           if ("code" in expand) return fail(expand);
           if (expand.error) return fail(expand.error);
           const sides = {
-            old: readSide(found.entry.old, text(expand.old), expand.old),
-            new: readSide(found.entry.new, text(expand.new), expand.new),
+            old: readSide(at, found.entry.old, text(expand.old), expand.old),
+            new: readSide(at, found.entry.new, text(expand.new), expand.new),
           };
           return asked
             ? { type: "project_change_bodies", project: body.project, worktree: body.worktree ?? null, group: body.change.group, ...sides }
