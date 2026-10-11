@@ -117,6 +117,24 @@ reading anything into a prompt that did not appear. Asking for a mode is not get
 for a mode need match neither the settings value that asked for it nor any ordinary name for it, so it settles nothing
 on its own.
 
+## Measure a pre-approval setting under every approval policy, and from the server's side
+
+A setting meant to make something run unasked — a per-server or per-tool approval value for an injected MCP server,
+for one — is evaluated together with the session's overall approval policy, which is the user's own setting and is not
+the same for an interactive launch as for a headless one. A value that does not in fact pre-approve fails differently
+under each: under a policy that asks, it raises a modal; under one that never asks, the call is refused outright and
+never sent. So a measurement under one policy settles nothing about the other, and "nothing prompted" under the
+second is the symptom of the setting not working rather than of it working. Measure each policy the product can
+launch that agent under.
+
+Put the instrument on the far side of the call: a stub stdio MCP server that logs which JSON-RPC methods reach it is
+what tells "refused before anything was sent" from "sent and approved", which the agent's screen does not — a refused
+call surfaces as a failed tool call, the same shape as a server that erred. Register the stub under a key of its own
+instead of probing through Octoboard's injected server, whose tools act for real, and let its tool declare no
+annotations: an agent left to decide for itself asks for an unannotated tool, so an annotated stub answers an easier
+question than the one being asked. The values measured for Codex are in the `Codex` section of
+`docs/agent-cli-reference.md`.
+
 ## A probe is not read-only: give it its own scratch directory
 
 Running these CLIs writes into the user's real configuration. The product's rule against touching the user's global
