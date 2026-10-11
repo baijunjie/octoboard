@@ -148,7 +148,7 @@ export function ProjectBrowser({
   const root = dirs.listings.get("");
   const rootLoading = root === undefined || root.state === "loading";
   return (
-    <AsidePane layout={layout} label={t("browser.label", { project: project.name })}>
+    <AsidePane layout={layout} label={t("browser.label", { project: project.name })} className="control-fills">
       <Tabs selectedKey={mode} onSelectionChange={(key) => browser.setMode(key as BrowserMode)} className="flex min-h-0 flex-1 flex-col gap-0">
         <div ref={headerRef} className="flex h-10 shrink-0 items-center gap-2 border-b border-separator ps-3 pe-2 text-sm">
           <FolderOpen aria-hidden="true" className="size-4 shrink-0 text-muted" />

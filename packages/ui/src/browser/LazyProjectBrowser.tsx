@@ -75,7 +75,7 @@ function LoadFailed({ layout, onRetry }: { layout: AsideLayout; onRetry: (holdsF
     if (document.activeElement === document.body) retry.current?.focus();
   }, []);
   return (
-    <AsidePane layout={layout} className="items-center justify-center gap-3 px-4 text-center text-sm">
+    <AsidePane layout={layout} className="control-fills items-center justify-center gap-3 px-4 text-center text-sm">
       <TriangleAlert aria-hidden="true" className="size-6 text-danger" />
       <p role="alert">{t("browser.loadFailed")}</p>
       <Button

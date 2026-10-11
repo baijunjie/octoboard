@@ -9,6 +9,7 @@ import { HighlightedFile, RenderedDiff, RendererBoundary } from "./codeRenderer"
 import { hasHunks, withoutNoNewlineMarkers, type ChangeBodies } from "./content";
 import { LayoutToggle, type DiffLayout } from "./diffLayout";
 import type { ExpansionStatus, SeparatorLabels } from "./expansion";
+import { FrameSurface } from "./FrameSurface";
 import { focusFirstSeparatorControl } from "./rendererDom";
 import { isSelectAll, selectCode } from "./selectAll";
 import { LoadingOverlay, Notice, Unreadable } from "./viewerStates";
@@ -22,17 +23,19 @@ export function PlainText({ text, label, theme }: { text: string; label: string;
   const wrap = wordWrap.useValue();
   const colours = CODE_THEMES[theme];
   return (
-    <pre
-      dir="ltr"
-      tabIndex={0}
-      role="region"
-      aria-label={label}
-      {...frame}
-      style={{ backgroundColor: colours.background, color: colours.foreground }}
-      className={`min-h-0 flex-1 overflow-auto rounded-xl p-3 font-mono text-xs leading-5 outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus ${wrap ? "break-words whitespace-pre-wrap" : "whitespace-pre"}`}
-    >
-      {text}
-    </pre>
+    <FrameSurface>
+      <pre
+        dir="ltr"
+        tabIndex={0}
+        role="region"
+        aria-label={label}
+        {...frame}
+        style={{ backgroundColor: colours.background, color: colours.foreground }}
+        className={`min-h-0 flex-1 overflow-auto rounded-xl p-3 font-mono text-xs leading-5 outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus ${wrap ? "break-words whitespace-pre-wrap" : "whitespace-pre"}`}
+      >
+        {text}
+      </pre>
+    </FrameSurface>
   );
 }
 
@@ -81,18 +84,20 @@ function CodeFrame({
   const onDrawn = useCallback(() => setDrawnFor(resetKey), [resetKey]);
   const drawn = drawnFor === resetKey;
   return (
-    <div
-      dir="ltr"
-      tabIndex={0}
-      role="region"
-      aria-label={label}
-      {...frame}
-      style={{ backgroundColor: CODE_THEMES[theme].background }}
-      className="relative min-h-0 flex-1 overflow-auto rounded-xl outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
-    >
-      {!drawn && <LoadingOverlay />}
-      <Suspense fallback={null}>{children(onDrawn)}</Suspense>
-    </div>
+    <FrameSurface>
+      <div
+        dir="ltr"
+        tabIndex={0}
+        role="region"
+        aria-label={label}
+        {...frame}
+        style={{ backgroundColor: CODE_THEMES[theme].background }}
+        className="relative min-h-0 flex-1 overflow-auto rounded-xl outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
+      >
+        {!drawn && <LoadingOverlay />}
+        <Suspense fallback={null}>{children(onDrawn)}</Suspense>
+      </div>
+    </FrameSurface>
   );
 }
 

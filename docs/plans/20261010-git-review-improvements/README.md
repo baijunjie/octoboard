@@ -70,8 +70,18 @@ area and the Git mode panel, and shows a type change as one diff.
 - **Markdown opens as a document.** The document view is the default for a Markdown file and the source/document
   choice is remembered; a Markdown diff keeps only the source view. The renderer is `react-markdown` with
   `remark-gfm`, with fenced code highlighted through the viewer's existing Shiki renderer.
-- **The neutral tag is fixed by overriding HeroUI's whole `--default` family for the dialog**, as the sidebar already
-  does for its own surface.
+- **The neutral tag is fixed by overriding HeroUI's whole `--default` family**, as the sidebar already does for its
+  own surface. The override belongs to every dialog and to the project pane rather than to the viewer's dialog alone,
+  since each of those surfaces is one HeroUI's defaults are not tuned for, and it is one class for both.
+- **The pane's controls are deliberately a gentle step off the panel** — 1.22:1 in light, the same order as the
+  sidebar's own fields — and every control in the pane shares that one fill rather than each field being tuned
+  against the panel on its own.
+- **The pane's containers are not banded**, only its section headings are: a row's own hover and selected tint is
+  1.17–1.25:1 against the panel, already heavier than a heading band's 1.15:1, so banding the containers too would
+  invert the hierarchy the rows depend on.
+- **A selected view choice is told apart by its fill colour and `aria-pressed`**, with no glyph or shape of its own.
+  In a single-selection group the position carries it as well, and the fill difference meets 1.4.11's 3:1 for a
+  state; this is a knowingly kept shortfall against "not by colour alone".
 
 ## Milestones
 
@@ -83,6 +93,6 @@ area and the Git mode panel, and shows a type change as one diff.
 6. 06 row-actions (closed)
 7. 07 markdown-document-view (closed)
 8. 08 viewer-header-layout (closed)
-9. [Surfaces and light-mode contrast in the viewer and Git mode](09-surfaces-and-contrast.md)
+9. 09 surfaces-and-contrast (closed)
 10. [Showing a type change as one diff](10-type-change-diff.md)
 11. [Final confirmation](11-final-confirmation.md)

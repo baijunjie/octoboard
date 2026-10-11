@@ -53,6 +53,14 @@ function withFooter(
   }
 }
 
+// A dialog's surface is `--overlay` whatever its size, which HeroUI's `--default` fills are not tuned
+// for, so every dialog takes the app's own (`.control-fills` in `style.css`).
+it("gives every dialog the fills of the `--default` family made for its surface", () => {
+  withFooter({}, () => {
+    expect(document.querySelector("[role=dialog]")?.classList.contains("control-fills")).toBe(true);
+  });
+});
+
 // Why pending and not disabled: react-aria's `isDisabled` puts the native attribute on the element,
 // which blurs the button the user has just pressed, and a dialog whose focus falls to `<body>` loses
 // its Escape handling and Tab containment with it. So the submit button has to stay focusable for as

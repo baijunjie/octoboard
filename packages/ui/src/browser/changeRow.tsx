@@ -12,8 +12,9 @@ import { ChangeRowActions } from "./ChangeRowActions";
 /** Every section heading is one line of this height, which, with the rows' (`ROW_HEIGHT`), is what
  * lets the list be virtualized, flat or as a tree. */
 export const HEADING_HEIGHT = 30;
-/** A section's heading, in both layouts. `h-[30px]` is `HEADING_HEIGHT`. */
-export const HEADING_CLASS = "flex h-[30px] items-center gap-2 px-3 text-xs font-medium text-muted";
+/** A section's heading, in both layouts, a band of HeroUI's tertiary surface so a section reads as a
+ * step off the panel: 1.15:1 from it in light and 1.10:1 in dark. `h-[30px]` is `HEADING_HEIGHT`. */
+export const HEADING_CLASS = "flex h-[30px] items-center gap-2 bg-surface-tertiary px-3 text-xs font-medium text-muted";
 
 const STATUS_WORDS: Record<StatusKey, PlainMessageKey> = {
   added: "git.status.added",

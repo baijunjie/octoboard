@@ -350,9 +350,9 @@ marked as it is, and do not add a new exception without the user's say. Concrete
   checkbox a `--muted` border removed, because HeroUI's own are borderless, so never add a border, frame or outline
   that HeroUI does not draw itself. A form control on a surface — in a dialog, a popover, a card — takes HeroUI's
   `variant="secondary"` (`TextField`, `Input`, `Select`, `Checkbox` alike), HeroUI's own variant for that case: the
-  default variant leaves it blending into the surface in both appearances. A hand-built row or card that its content already identifies takes HeroUI's
-  separator colour for its outline (`border-separator`, as the focus-mode session cards do), even though that is
-  under 3:1; its selected state still has to reach 3:1 (`border-accent`).
+  default variant leaves it blending into the surface in both appearances. A hand-built row or card that its content
+  already identifies takes HeroUI's separator colour for its outline (`border-separator`, as the focus-mode session
+  cards do), even though that is under 3:1; its selected state still has to reach 3:1 (`border-accent`).
   HeroUI's text colours, on the other hand, do need checking: its stock light `--muted` (`text-muted`, its secondary
   text) reached 4.5:1 only on the white surfaces and fell short on `--background` and `--default`, where its own
   components put it, so `style.css` darkens the light value slightly at the token level. Even so, the `Tabs` list
@@ -360,10 +360,15 @@ marked as it is, and do not add a new exception without the user's say. Concrete
   HeroUI component draws by default against what it actually sits on, in both appearances, rather than assuming it
   passes, and fix a shortfall in that colour alone with a utility class on that part (Tailwind's utilities layer
   overrides HeroUI's components layer without `!`), or at the token in `style.css` when the token itself falls
-  short. HeroUI's `--surface` equals its `--overlay` in both
-  appearances, so a surface-filled component (`Alert`, `Card`) inside a dialog or popover is set apart only by its
-  shadow, which does not show in the dark appearance; give it a fill of its own there (a tint such as
-  `bg-warning/10 shadow-none`).
+  short. A fix at a token reaches only the rules that read that token, and HeroUI draws the same-looking text from
+  more than one rule, so grep its compiled stylesheet (`packages/ui/node_modules/@heroui/styles/dist/heroui.min.css`)
+  for the token and for the CSS property both, and look for the elements no rule of either kind matches: those fall
+  through to Tailwind's preflight, which derives the colour from the element's own `currentcolor` — a placeholder on
+  anything but HeroUI's four input classes is half the foreground over the field's own fill — so such text moves with
+  whatever fill the element sits on and a change at the token never reaches it. HeroUI's `--surface` equals its
+  `--overlay` in both appearances, so a surface-filled component (`Alert`, `Card`) inside a dialog or popover is set
+  apart only by its shadow, which does not show in the dark appearance; give it a fill of its own there (a tint such
+  as `bg-warning/10 shadow-none`).
   A change to a colour token or a surface touches every screen, so its audit covers every gallery scenario in both
   appearances (the user rejected a re-theme whose contrast had been spot-checked), and it measures what a pass over
   text and glyphs misses: every fill — a chip, a tertiary button, a ghost button's hover — against the surface it sits
@@ -373,14 +378,17 @@ marked as it is, and do not add a new exception without the user's say. Concrete
   measure the label against that; measuring against the bare surface or the fill's own colour overstated one chip's
   contrast and missed a 4.5:1 failure on selected rows. A region given a surface colour of its own needs HeroUI's
   `--default`-filled controls checked on it in particular: the dark sidebar landed on `--default`'s own lightness and
-  every such control vanished. Override the whole `--default` family on that subtree, as `.sidebar-fills` in
-  `packages/ui/src/style.css` does, since `--default-hover` and `--default-soft` are computed on `<html>` and
-  `--default` alone does not reach them. Such an override moves the ground under the text HeroUI draws on those fills
-  too, so its audit covers every control the family reaches in that subtree, label and glyph, resting and hovered —
-  and the label's colour is not necessarily the foreground, because an enclosing HeroUI component may have imposed one
-  already: `.modal__body` applies `text-muted`, which everything inside a dialog's body inherits, controls portalled
-  in from elsewhere included. So a label that needs 4.5:1 on the new fill is given `text-foreground` there explicitly
-  rather than assumed to have it.
+  every such control vanished. Override the whole `--default` family on that subtree, as `.sidebar-fills` and
+  `.control-fills` in `packages/ui/src/style.css` do, since `--default-hover` and `--default-soft` are computed on
+  `<html>` and `--default` alone does not reach them. Such an override moves the ground under the text HeroUI draws on
+  those fills too, so its audit covers every control the family reaches in that subtree, label and glyph, resting and
+  hovered — and the label's colour is not necessarily the foreground, because an enclosing HeroUI component may have
+  imposed one already: `.modal__body` applies `text-muted`, which everything inside a dialog's body inherits, controls
+  portalled in from elsewhere included. So a label that needs 4.5:1 on the new fill is given `text-foreground` there
+  explicitly rather than assumed to have it. Those texts also pin how far such a fill may go, so settle its lightness
+  from them first — the darkest label and the most muted one HeroUI puts on the family, in both appearances — rather
+  than picking the fill for how it looks and auditing afterwards, or each nudge for looks frees one label and leaves
+  another under 4.5:1.
 - **Not by colour alone**: a status or state that differs in colour also differs in glyph, shape or text.
 - **Motion**: an animation or transition that is not essential stops under `prefers-reduced-motion: reduce`
   (Tailwind's `motion-safe:` / `motion-reduce:` variants).

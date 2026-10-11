@@ -193,20 +193,29 @@ function BranchSelect({
   const title = name === undefined ? undefined : gone ? t("git.compare.branchGone", { branch: name }) : name;
   return (
     // The subgrid restates the column gap: HeroUI's `.select` sets a gap of its own, which would
-    // otherwise replace the parent grid's for this row's gutter.
+    // otherwise replace the parent grid's for this row's gutter. The secondary variant draws from
+    // the pane's `--default` fills (`.control-fills`), like the worktree selector and the filter field.
     <Select
       fullWidth
+      variant="secondary"
       value={value ?? null}
       onChange={(key) => key !== null && onChange(String(key))}
       className="col-span-2 grid grid-cols-subgrid items-center gap-x-3"
     >
       <Label className="text-sm text-muted">{label}</Label>
-      <Select.Trigger className="min-w-0">
+      <Select.Trigger className="group min-w-0">
         <Select.Value className="flex min-w-0 items-center gap-2">
           {() => (
             <>
               <GitBranch aria-hidden="true" className="size-4 shrink-0 text-muted" />
-              <FadeOverflow as="span" dir="auto" className={`min-w-0 flex-1${name === undefined ? " text-muted" : ""}`} titleWhenClipped={title}>
+              {/* The prompt is muted, which on the hovered fill is under 4.5:1, so hovering takes it to the
+                  foreground colour. */}
+              <FadeOverflow
+                as="span"
+                dir="auto"
+                className={`min-w-0 flex-1${name === undefined ? " text-muted group-hover:text-foreground group-data-[hovered=true]:text-foreground" : ""}`}
+                titleWhenClipped={title}
+              >
                 {shown}
               </FadeOverflow>
             </>

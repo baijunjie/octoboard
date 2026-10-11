@@ -226,6 +226,26 @@ it("shows it is loading until the renderer has drawn the code", async () => {
   expect(loading()).toBeNull();
 });
 
+// The code theme's background is the dialog's own white in light, so the surface around a frame is
+// what bounds it there, and only a variant off the dialog's own (`default` equals it) does; every form of
+// code has one.
+it("sets each frame of code, a diff and plain text in HeroUI's tertiary surface", () => {
+  const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
+  const surfaceOf = () =>
+    [...(dialog()?.querySelectorAll<HTMLElement>("[role=region]") ?? [])].map((frame) => frame.parentElement?.classList.contains("surface--tertiary"));
+  show({ key: "t", path: "src/t.ts", content: { state: "file", body: { kind: "text", text: "const a = 1;\n", size: 13 } } });
+  expect(surfaceOf()).toEqual([true]);
+  show({ key: "d", path: "src/c.ts", content: { state: "change", change: { old: side, new: side, patch: "@@ -1 +1 @@\n-a\n+b\n" } } });
+  expect(surfaceOf()).toEqual([true]);
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    show({ key: "g", path: "src/c.ts", content: { state: "change", change: { old: side, new: side, patch: "@@ -1,3 +1,3 @@ unrenderable\n a\n+b\n" } } });
+    expect(surfaceOf()).toEqual([true]);
+  } finally {
+    error.mockRestore();
+  }
+});
+
 it.each([
   ["an added file, which has one side", "@@ -0,0 +1 @@\n+a\n", false],
   ["a modified file", "@@ -1 +1 @@\n-a\n+b\n", true],

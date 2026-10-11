@@ -8,6 +8,7 @@ import { CODE_THEMES } from "./codeTheme";
 import { RendererBoundary } from "./codeRenderer";
 import { CodeSurface } from "./CodeSurface";
 import { FencedCode } from "./FencedCode";
+import { FrameSurface } from "./FrameSurface";
 import { markdownView, MarkdownViewToggle } from "./markdownView";
 import { copyDocument, isSelectAll, selectDocument } from "./selectAll";
 import { LoadingOverlay, Notice } from "./viewerStates";
@@ -91,25 +92,27 @@ function DocumentSurface({
   );
   return (
     <RendererBoundary resetKey={resetKey} fallback={fallback}>
-      <div
-        key={resetKey}
-        tabIndex={0}
-        role="region"
-        aria-label={t("viewer.contents", { name })}
-        {...focus}
-        onKeyDown={(event) => {
-          if (isSelectAll(event) && selectDocument(event.currentTarget)) event.preventDefault();
-        }}
-        onCopy={(event) => void copyDocument(event, event.currentTarget, text)}
-        style={
-          { backgroundColor: colours.background, color: colours.foreground, "--document-link": LINK_COLOURS[theme] } as React.CSSProperties
-        }
-        className="relative min-h-0 flex-1 overflow-auto rounded-xl p-4 text-sm leading-6 outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
-      >
-        <Suspense fallback={<LoadingOverlay />}>
-          <MarkdownDocument text={text} renderCode={renderCode} onOpenLink={links && onOpenLink} />
-        </Suspense>
-      </div>
+      <FrameSurface>
+        <div
+          key={resetKey}
+          tabIndex={0}
+          role="region"
+          aria-label={t("viewer.contents", { name })}
+          {...focus}
+          onKeyDown={(event) => {
+            if (isSelectAll(event) && selectDocument(event.currentTarget)) event.preventDefault();
+          }}
+          onCopy={(event) => void copyDocument(event, event.currentTarget, text)}
+          style={
+            { backgroundColor: colours.background, color: colours.foreground, "--document-link": LINK_COLOURS[theme] } as React.CSSProperties
+          }
+          className="relative min-h-0 flex-1 overflow-auto rounded-xl p-4 text-sm leading-6 outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
+        >
+          <Suspense fallback={<LoadingOverlay />}>
+            <MarkdownDocument text={text} renderCode={renderCode} onOpenLink={links && onOpenLink} />
+          </Suspense>
+        </div>
+      </FrameSurface>
     </RendererBoundary>
   );
 }

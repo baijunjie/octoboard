@@ -214,7 +214,8 @@ function WorktreeChanges({
 }
 
 /** The worktree whose changes are shown. A worktree that is no longer listed stays the value, named
- * as gone, until the user picks another. */
+ * as gone, until the user picks another. Its field is the secondary variant, which draws from the
+ * pane's `--default` fills like the filter field below it (`.control-fills`). */
 function WorktreeSelect({
   ref,
   worktrees,
@@ -236,7 +237,7 @@ function WorktreeSelect({
   const currentName = current ? worktreeName(t, current) : missing ? t("git.worktree.goneName") : "";
   return (
     <div ref={ref} className="shrink-0 border-b border-separator px-3 py-2">
-      <Select fullWidth value={value} onChange={(key) => key !== null && onChange(String(key))}>
+      <Select fullWidth variant="secondary" value={value} onChange={(key) => key !== null && onChange(String(key))}>
         <Label className="sr-only">{t("git.worktree.label")}</Label>
         <Select.Trigger>
           <Select.Value className="flex min-w-0 items-center gap-2">

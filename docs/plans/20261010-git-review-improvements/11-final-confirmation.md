@@ -85,6 +85,25 @@ merge base). The fills were measured against the dialog's own surface. These are
 - [ ] Every tag, the neutral stage tag included, reading as a tag against the dialog in the packaged app's two
   appearances, and the dialog's close button, whose fill the same override changed from 1.19:1 to 1.50:1 in dark.
 
+## Carried from milestone 09 (surfaces and light-mode contrast in the viewer and Git mode)
+
+Every fill was measured from the rendered paint in headless WebKit over the dev gallery, in both appearances, and
+every ratio is recorded in the `style.css` comments beside the rule it belongs to. What is left is the judgement a
+measurement cannot make, plus the engine the gallery is not: headless WebKit composites without a GPU, so the real
+WKWebView has not drawn any of these surfaces. In the packaged app, in both appearances:
+
+- [ ] The tertiary band around the viewer's frames reads as a boundary from the dialog — 1.20:1 against the light
+  dialog and 1.18:1 against the dark one, the same order of step as the sidebar's own surface. It frames the plain
+  text, code, diff and plain-patch views, the rendered Markdown document and the image checkerboard, so each of the
+  six is worth a look; the image frame is the one whose ground is a checkerboard rather than a flat fill.
+- [ ] The Git mode panel's fields, its section bands (1.15:1 light, 1.10:1 dark against the panel) and the
+  Files/Git header read as distinct from the panel, and the bands do not compete with a row's own hover and selected
+  tint, which at 1.17–1.25:1 is deliberately the heavier of the two.
+- [ ] The solid accent fill a selected view choice now carries is acceptable to look at in both appearances — the
+  viewer's groups, Wrap lines, Settings' appearance choice and Git mode's Group by folder.
+- [ ] Dark mode is unchanged or better throughout, which is the milestone's own criterion and the direction every
+  measured change went in.
+
 ## Notes for the developer
 
 **Development notes**

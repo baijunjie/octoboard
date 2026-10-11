@@ -158,8 +158,9 @@
   --panel-selected: oklch(0 0 0 / 0.07);
   --sidebar-fill: oklch(0 0 0 / 0.08);
   --sidebar-fill-hover: oklch(0 0 0 / 0.12);
-  --dialog-fill: oklch(0.92 0.004 286);
-  --dialog-fill-hover: oklch(0.89 0.004 286);
+  --control-fill: oklch(0.92 0.004 286);
+  --control-fill-hover: oklch(0.89 0.004 286);
+  --control-placeholder: oklch(0.48 0.0138 285.94);
 }
 
 .dark,
@@ -175,8 +176,10 @@
   --panel-selected: oklch(1 0 0 / 0.075);
   --sidebar-fill: oklch(1 0 0 / 0.07);
   --sidebar-fill-hover: oklch(1 0 0 / 0.11);
-  --dialog-fill: oklch(0.34 0.006 286);
-  --dialog-fill-hover: oklch(0.37 0.006 286);
+  --control-fill: oklch(0.33 0.006 286);
+  --control-fill-hover: oklch(0.36 0.006 286);
+  --control-placeholder: oklch(0.76 0.015 286);
+  --accent-label: oklch(0.74 0.14 254);
 }
 
 /* The fills of HeroUI's `--default` family inside the sidebar. A ghost button's hover and pressed
@@ -202,47 +205,70 @@
    is 4.18:1 resting and 3.68:1 hovered; no such button sits there.) */
 .dark .sidebar-fills,
 [data-theme="dark"] .sidebar-fills {
-  --accent-soft-foreground: oklch(0.74 0.14 254);
+  --accent-soft-foreground: var(--accent-label);
 }
 
-/* The fills of HeroUI's `--default` family inside the file viewer's dialog (`dialogs/Dialog.tsx`,
-   `size="viewer"`), whose surface is `--overlay`. HeroUI tunes `--default` for the page background
-   (dark L 0.12), and the dialog is lighter (dark L 0.21): the neutral soft chip, half of
-   `--default` over it, lands almost on the dialog (1.08:1 in dark, 1.09:1 in light) and no longer
-   reads as a tag. `--dialog-fill` and `--dialog-fill-hover` are opaque steps off `--overlay`
-   instead: 1.50:1 in dark and 1.27:1 in light (resting, read off WebKit's pixels), 1.70:1 and
-   1.39:1 hovered, with the chip's label (`--default-soft-foreground`, an alias of
-   `--default-foreground`) at 11.5:1 and 14.0:1 on the resting fill. The family is overridden
+/* The fills of HeroUI's `--default` family on a surface of the app's own: a dialog, whose surface is
+   `--overlay`, and the project pane, whose surface is `--panel` (the pane's tabs, header and Git
+   mode; the report panel, also on `--panel`, does not take them). HeroUI tunes `--default` for the
+   page background (dark L 0.12), and these are lighter (dark L 0.21 and 0.25): a control drawn from
+   `--default` lands almost on its surface (1.19:1 and 1.14:1 in light, 1.19:1 and 1.11:1 in dark,
+   against a dialog and the panel), and a neutral soft chip, half of `--default` over it, no longer
+   reads as a tag (1.10:1 in light, 1.08:1 in dark on a dialog). `--control-fill` and
+   `--control-fill-hover` are opaque steps off the surface instead: 1.27:1 resting and 1.39:1
+   hovered against a light dialog, 1.21:1 and 1.33:1 against the light panel, 1.45:1 and 1.63:1
+   against a dark dialog and 1.35:1 and 1.52:1 against the dark panel. The family is overridden
    whole, as `.sidebar-fills` does, since `--default-hover` and `--default-soft` are computed on
    `<html>`.
 
+   Muted text, which a dialog's body and a tab list put on the fill, is 4.75:1 on it in light and
+   4.65:1 in dark, and the dark fill is held to that: any lighter and the tab labels fall under
+   4.5:1. Hovered it is 4.32:1 and 4.14:1, so only a glyph (held to 3:1) sits on a hovered fill, and
+   a tab, or a select's placeholder, takes the foreground colour when hovered.
+
    Unlike `.sidebar-fills`, whose tints are translucent so that a control on a hovered or selected
-   row stacks its own on top, these are opaque, because the viewer's surface is one flat colour. So
-   a control added later on anything but `--overlay` would get a wrong fill, and `--field-border`
-   and `--field-focus`, which are still computed from the root's `--default`, would give a field
-   added to the viewer edges that do not match its fill.
+   row stacks its own on top, these are opaque, because a dialog's and the pane's surfaces are flat
+   colours. So a control added later on anything but `--overlay` or `--panel` would get a wrong
+   fill, and `--field-border` and `--field-focus`, which are still computed from the root's
+   `--default`, would give a field edges that do not match its fill.
 
-   Everything else in the viewer drawn from `--default` takes them too:
-   - the footer's Previous and Next buttons (their glyph is 4.04:1 resting and 3.59:1 hovered in
-     dark, held to 3:1);
-   - the dialog's close button, whose fill goes from 1.19:1 to 1.50:1 against the dark dialog
-     (its `--muted` glyph is 4.48:1 resting and 3.97:1 hovered in dark, 4.75:1 and 4.32:1 in
-     light, held to 3:1);
-   - the three view choices' unselected buttons: their label is the foreground colour, which the
-     control group sets since the dialog's body text is muted (4.52:1 resting and 4.00:1 hovered
-     in dark would miss 4.5:1); it is 11.55:1 resting and 10.22:1 hovered in dark, 13.96:1 and
-     12.70:1 in light, read off WebKit's pixels;
-   - the image checkerboard (`.viewer-checkerboard`), whose squares step from dark L 0.274 to 0.34
-     and from light 0.94 to 0.92 (1.32:1 and 1.10:1 against the ground between them, still a
-     visible board in both).
+   Everything a dialog or the pane draws from `--default` takes the fills: a neutral tag, a
+   secondary button, a tab list, a ghost button's hover, a toggle button, a search field and a select
+   in their secondary variant, and the file viewer's image checkerboard (`.viewer-checkerboard`),
+   whose squares step 1.10:1 from its ground in light and 1.28:1 in dark (1.04:1 and 1.05:1 on
+   HeroUI's own fill), inside the viewer's frame surface like every other frame. */
+.control-fills {
+  --default: var(--control-fill);
+  --default-hover: var(--control-fill-hover);
+  --default-soft: var(--control-fill);
+  --default-soft-hover: var(--control-fill-hover);
+}
 
-   Only the viewer takes the family, though every dialog sits on the same `--overlay`: the
-   directory picker's neutral chip is drawn from `--default` too and keeps HeroUI's. */
-.dialog-fills {
-  --default: var(--dialog-fill);
-  --default-hover: var(--dialog-fill-hover);
-  --default-soft: var(--dialog-fill);
-  --default-soft-hover: var(--dialog-fill-hover);
+/* A field's placeholder is the muted colour (`--field-placeholder`), which is 4.75:1 in light and
+   4.65:1 in dark on the fill but 4.32:1 and 4.14:1 on the hovered one, where an empty field sits
+   while the pointer is on it. It takes `--control-placeholder` instead: in light a step darker than `--muted`
+   (L 0.48 against 0.5), 5.17:1 resting and 4.71:1 hovered; in dark a lighter one, 5.68:1 resting and
+   5.05:1 hovered. Anything at or below `--muted` fails on the hovered fill, and the fill is held by
+   the tab labels, so in dark the hint comes out a little brighter than the muted labels beside it. */
+.control-fills {
+  --field-placeholder: var(--control-placeholder);
+}
+
+/* In dark a secondary button's label is HeroUI's accent-soft colour, 4.03:1 on the lighter fill; it
+   takes the lighter blue the sidebar's fills use (`--accent-label`), 5.30:1 resting and 4.72:1
+   hovered. A search field's placeholder is not `--field-placeholder` but half of the foreground over
+   the fill, which HeroUI gives its input no rule for: 4.25:1 resting and 3.95:1 hovered on the Git
+   mode's filter. It needs a rule of its own to take `--control-placeholder` (5.68:1 and 5.05:1). In
+   light it is left on HeroUI's own colour at 3.19:1, since a replacement there has to be settled for
+   the sidebar's search field at the same time. */
+.dark .control-fills,
+[data-theme="dark"] .control-fills {
+  --accent-soft-foreground: var(--accent-label);
+}
+
+.dark .control-fills .search-field__input::placeholder,
+[data-theme="dark"] .control-fills .search-field__input::placeholder {
+  color: var(--control-placeholder);
 }
 
 /* HeroUI's `--separator`, the 1px line between the panes and along the content panel's edge, is
@@ -285,6 +311,37 @@
 [data-theme="dark"] {
   --danger: oklch(0.68 0.19 24);
   --danger-foreground: var(--eclipse);
+}
+
+/* A selected toggle button takes a solid accent fill and a label colour of its own, in every toggle
+   of the app: the viewer's view choices and wrap button on a dialog, the appearance setting in the
+   settings dialog and the Git mode's group-by-folder button on the panel. HeroUI's soft accent tint
+   (15% of the accent) is a step from the unselected `--default` fill of 1.03:1 in light and 1.07:1
+   to 1.35:1 in dark, so the selected choice was told apart by its label's colour alone. Solid, it is
+   3.67:1 (light) and 4.58:1 (dark) from an unselected button's fill, 4.66:1 and 6.63:1 from a
+   dialog's surface and 4.47:1 and 6.17:1 from the panel. Light keeps HeroUI's own white label on the
+   app's accent (4.54:1, 6.04:1 on the darker hover); dark takes the glyph blue (`--accent-glyph`),
+   the accent that reads against a dark surface, under the dark foreground label (6.63:1, 7.60:1 on
+   the lighter hover), as `--danger` does. Unlayered, so it wins over `.toggle-button`'s own tokens
+   in `@layer components`.
+
+   Kept shortfall against "not by colour alone": the selected button differs from the others by
+   fill colour only, with no glyph or shape of its own. In a single-selection group which button is
+   selected is also carried by its position in the group and, for assistive technology, by
+   `aria-pressed`, and the fill difference meets WCAG 1.4.11's 3:1 for a state. */
+.toggle-button {
+  --toggle-button-bg-selected: var(--accent);
+  --toggle-button-bg-selected-hover: color-mix(in oklab, var(--accent) 88%, black);
+  --toggle-button-bg-selected-pressed: color-mix(in oklab, var(--accent) 88%, black);
+  --toggle-button-fg-selected: var(--accent-foreground);
+}
+
+.dark .toggle-button,
+[data-theme="dark"] .toggle-button {
+  --toggle-button-bg-selected: var(--accent-glyph);
+  --toggle-button-bg-selected-hover: color-mix(in oklab, var(--accent-glyph) 88%, white);
+  --toggle-button-bg-selected-pressed: color-mix(in oklab, var(--accent-glyph) 88%, white);
+  --toggle-button-fg-selected: var(--eclipse);
 }
 
 /* The colour of an untracked file's chip (`StatusChip.tsx`), after the IDEs' "unversioned files": a

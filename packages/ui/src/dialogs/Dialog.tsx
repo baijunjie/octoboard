@@ -207,8 +207,8 @@ export function Dialog({
           aria-describedby={alert ? bodyId : undefined}
           className={
             size === "viewer"
-              ? "dialog-fills h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none docked:h-[calc(100dvh-80px-var(--bottom-chrome-height))] docked:w-[min(1440px,calc(100vw-80px))]"
-              : undefined
+              ? "control-fills h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none docked:h-[calc(100dvh-80px-var(--bottom-chrome-height))] docked:w-[min(1440px,calc(100vw-80px))]"
+              : "control-fills"
           }
         >
           <span ref={markerRef} hidden />

@@ -29,6 +29,7 @@ import {
 import { ControlsSlot } from "./controlsSlot";
 import { diffLayout, LayoutToggle, type DiffLayout } from "./diffLayout";
 import { formatFileSize, formatSideSize } from "./format";
+import { FrameSurface } from "./FrameSurface";
 import { MarkdownSurface } from "./MarkdownSurface";
 import { StatusChip } from "./StatusChip";
 import type { StatusKey } from "./statusMarks";
@@ -215,9 +216,9 @@ export function FileViewer({
             (a float shortens only the lines that follow it). That puts the three control groups before
             the file's path for a screen reader. That cost was weighed and accepted: the details are
             independent, separately labelled facts and the path is not needed to use the controls. The
-            dialog's body text is muted, which a toggle's unselected label would inherit (4.5:1 only
-            on HeroUI's own fill, short on `.dialog-fills`), so the controls take the foreground
-            colour and each detail item the muted one. */}
+            dialog's body text is muted, which a toggle's unselected label would inherit (under 4.5:1
+            on a hovered `.control-fills` fill), so the controls take the foreground colour and each
+            detail item the muted one. */}
         <div className="float-end flex h-8 items-center gap-2 text-foreground">
           <div ref={setMarkdownViewSlot} className="contents" />
           <div ref={setLayoutSlot} className="contents" />
@@ -477,11 +478,13 @@ function ImageView({
     );
   }
   return (
-    <div className="viewer-checkerboard flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-xl p-2">
-      {/* The `error` event is the signal: an image's size is no test (an SVG with only a `viewBox`
-          has none of its own) and `decode()` has wrongly rejected valid SVGs in older WebKit. */}
-      <img src={body.url} alt={name} onError={() => setFailed(true)} className="max-h-full max-w-full object-contain" />
-    </div>
+    <FrameSurface>
+      <div className="viewer-checkerboard flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-xl p-2">
+        {/* The `error` event is the signal: an image's size is no test (an SVG with only a `viewBox`
+            has none of its own) and `decode()` has wrongly rejected valid SVGs in older WebKit. */}
+        <img src={body.url} alt={name} onError={() => setFailed(true)} className="max-h-full max-w-full object-contain" />
+      </div>
+    </FrameSurface>
   );
 }
 
