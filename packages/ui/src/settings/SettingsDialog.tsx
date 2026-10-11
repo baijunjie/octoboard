@@ -3,6 +3,7 @@ import { Bell, FolderCheck, GitBranch, KeyRound, Settings2, type LucideIcon } fr
 import React, { useCallback, useRef, useState } from "react";
 
 import { TitledControl } from "../components/TitledControl";
+import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
 import { useIsNarrow } from "../layout/breakpoint";
@@ -47,6 +48,8 @@ export function SettingsDialog({
   const [sectionId, setSectionId] = useState<string>(initialSection);
   const selectedRef = useRef<HTMLDivElement | null>(null);
   const focusedOnOpen = useRef(false);
+  const markerRef = useRef<HTMLSpanElement>(null);
+  useEscapeWhileTooltipOpen(markerRef, onClose);
 
   // HeroUI's tabs build their collection in a first pass before the tab elements exist, so the
   // selected tab is not in `selectedRef` yet when an effect on mount runs. Focus it as it attaches.
@@ -76,6 +79,7 @@ export function SettingsDialog({
           aria-label={t("settings.title")}
           className="control-fills flex h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none flex-col overflow-hidden p-0 docked:h-[min(85vh,calc(100vh-96px-var(--bottom-chrome-height)))] docked:w-[min(1000px,calc(100vw-96px))] docked:flex-row"
         >
+          <span ref={markerRef} hidden />
           <TitledControl title={t("common.close")}>
             <Modal.CloseTrigger aria-label={t("common.close")} />
           </TitledControl>

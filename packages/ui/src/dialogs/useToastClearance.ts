@@ -1,6 +1,7 @@
 import { useLayoutEffect, type RefObject } from "react";
 
 import { TOAST_BREAKPOINT, TOAST_MARGIN, TOAST_WIDTH } from "../components/toastGeometry";
+import { dialogAround } from "./dialogElement";
 
 /** The custom property `style.css` lifts the toast region by, from the window's bottom edge. */
 const PROPERTY = "--dialog-footer-clearance";
@@ -33,7 +34,7 @@ function overlapsToastCorner(footer: DOMRect): boolean {
  */
 export function useToastClearance(inside: RefObject<HTMLElement | null>, hasFooter: boolean): void {
   useLayoutEffect(() => {
-    const dialog = inside.current?.closest<HTMLElement>('[role="dialog"], [role="alertdialog"]');
+    const dialog = dialogAround(inside);
     const footer = hasFooter ? dialog?.querySelector<HTMLElement>(FOOTER) : null;
     if (!dialog || !footer) return;
     const root = document.documentElement;

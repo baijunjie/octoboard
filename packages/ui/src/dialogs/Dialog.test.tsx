@@ -197,3 +197,59 @@ it("measures the outer dialog again when a dialog nested in it closes", async ()
     },
   );
 });
+
+/** Mounts a dialog with `props` (`alert` for the `AlertDialog` frame), puts keyboard focus on
+ * `control` the way a keyboard user does — a key press, then the focus — presses Escape there, and
+ * answers how many times the dialog asked to close. Focusing after a key press is what opens a
+ * tooltip, so a control that has one has it open. */
+function escapeFrom(
+  control: (dialog: Element) => HTMLElement | null | undefined,
+  props: { alert?: boolean } = {},
+): { closes: number; tooltip: boolean } {
+  const onClose = vi.fn();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  try {
+    render(
+      root,
+      <Dialog title="Rename" onClose={onClose} submitLabel="Save" onSubmit={() => {}} {...props}>
+        <span>body</span>
+      </Dialog>,
+    );
+    const dialog = document.querySelector("[role=dialog], [role=alertdialog]");
+    const focused = dialog && control(dialog);
+    if (!focused) throw new Error("the dialog did not render the control to focus");
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+      focused.focus();
+    });
+    const tooltip = document.querySelector("[role=tooltip]") !== null;
+    act(() => {
+      focused.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    });
+    return { closes: onClose.mock.calls.length, tooltip };
+  } finally {
+    act(() => root.unmount());
+    container.remove();
+  }
+}
+
+const closeTrigger = (dialog: Element) => dialog.querySelector<HTMLElement>("[data-slot$=close-trigger]");
+
+// The close button carries a tooltip, and a tooltip opens on keyboard focus. react-aria then holds
+// Escape at `document` to dismiss the tooltip, above `<body>`, where React dispatches the modal's
+// own Escape handling from — so the dialog has to close that press itself. Both frames put a close
+// button in the same place, so both lose the key there.
+it.each([
+  ["modal", {}],
+  ["alert dialog", { alert: true }],
+])("closes a %s on Escape with focus on its close button, whose tooltip is open there", (_frame, props) => {
+  expect(escapeFrom(closeTrigger, props)).toEqual({ closes: 1, tooltip: true });
+});
+
+// And closes exactly once from a control with no tooltip, where react-aria's own handling arrives.
+it("closes on Escape once from a control without a tooltip", () => {
+  expect(
+    escapeFrom((dialog) => [...dialog.querySelectorAll<HTMLElement>("button")].find((b) => b.textContent === "Cancel")),
+  ).toEqual({ closes: 1, tooltip: false });
+});

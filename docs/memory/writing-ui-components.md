@@ -92,20 +92,32 @@ the duration of its own action — the obvious way to keep a slow request from b
 press and hover, keeps the control focusable, and announces the pending state. Keep `isDisabled` for a control
 that is unavailable for a reason outside the action itself (a field not filled in yet), where focus is not on it.
 
-## A control inside a pane never sees Escape first: the window's listener has it
+## Escape is taken above the React tree: a pane's listener, and react-aria's while a tooltip is open
 
-While a drawer or a floating pane is open, `packages/ui/src/layout/usePaneToggles.ts` holds a capture-phase `keydown`
-listener on `window` that dismisses the overlay. It runs before React's own dispatch from the root container, so
-nothing inside the React tree can keep Escape from it — not even `onKeyDownCapture` on a wrapper around the control.
-So a control inside a region marked `data-escape-scope` (the sidebar, the aside, the terminal pane, the top bar, the
-rail, the scrim) that needs Escape for itself is accounted for in that listener's own test instead (`holdsText`, which
-leaves the key to a text field that holds text), never guarded locally. A control in a popover or a dialog portalled
-to `<body>` sits outside every scope and is unaffected, which is the only reason the sidebar's project filter and the
-dialogs' fields never needed this.
+Two capture-phase `keydown` listeners run before React's own dispatch, so a React `onKeyDown` can neither be relied on
+to receive Escape nor hold on to it — `onKeyDownCapture` on a wrapper does not help, as React dispatches from its root
+container (`<body>` for anything portalled there), below both.
 
-Check it where it shows: the listener is installed only while an overlay is up, so the symptom appears only below the
-layout breakpoint, with the pane as a drawer, or with a docked pane hidden and floated in on hover. A gallery scenario
-at a normal width, both panes docked, never reaches it.
+The first is this project's own: while a drawer or a floating pane is open, `packages/ui/src/layout/usePaneToggles.ts`
+holds a capture-phase listener on `window` that dismisses the overlay. So a control inside a region marked
+`data-escape-scope` (the sidebar, the aside, the terminal pane, the top bar, the rail, the scrim) that needs Escape
+for itself is accounted for in that listener's own test instead (`holdsText`, which leaves the key to a text field
+that holds text), never guarded locally. A control in a popover or a dialog portalled to `<body>` sits outside every
+scope and is unaffected, which is the only reason the sidebar's project filter and the dialogs' fields never needed
+this. Check it where it shows: the listener is installed only while an overlay is up, so the symptom appears only
+below the layout breakpoint, with the pane as a drawer, or with a docked pane hidden and floated in on hover. A
+gallery scenario at a normal width, both panes docked, never reaches it.
+
+The second is react-aria's, and it is unconditional: while any tooltip is open, `useTooltipTrigger` holds a
+capture-phase listener on `document` that calls `stopPropagation()` on every Escape, whatever else was waiting for the
+key (react-aria 3.52.1, unchanged in 3.53.1). Every icon-only control here carries a tooltip through `TitledControl`,
+and a tooltip opens on keyboard focus as much as on hover, so one Tab inside any dialog or view reaches that state —
+when Escape does nothing somewhere, what predicts it is "a tooltip is open", not which control holds focus. Dialogs
+are already compensated for it (`useEscapeWhileTooltipOpen` in `packages/ui/src/dialogs/`), so add nothing of your own
+there; any other surface that dismisses itself from a React `onKeyDown` still loses the key, and handling Escape from
+a `window` capture-phase listener instead is the only way out. Such a handler can only choose whether to act, never
+route the key onwards: once react-aria has swallowed it nothing can hand it back to the control that wanted it, which
+is why a combo box's suggestion list inside a dialog does not withdraw on Escape while a tooltip is open.
 
 ## A surface that stays usable while a dialog is open is marked a top layer before the dialog opens
 

@@ -4,6 +4,8 @@ import React, { useEffect, useId, useRef, useState } from "react";
 import { takeMenuFocusToRestore } from "../components/ActionMenu";
 import { TitledControl } from "../components/TitledControl";
 import { useT } from "../i18n/react";
+import { dialogAround } from "./dialogElement";
+import { useEscapeWhileTooltipOpen } from "./useEscapeWhileTooltipOpen";
 import { useToastClearance } from "./useToastClearance";
 
 /** The inline error and busy state every dialog that talks to the daemon needs. The error is the
@@ -161,10 +163,10 @@ export function Dialog({
     };
   }, []);
 
-  // HeroUI's `Modal.Dialog` takes no ref, so the dialog element is found from a marker inside it.
   const markerRef = useRef<HTMLSpanElement>(null);
-  useRefocusIfLost(() => markerRef.current?.closest<HTMLElement>("[role=dialog], [role=alertdialog]"), [resetKey]);
+  useRefocusIfLost(() => dialogAround(markerRef), [resetKey]);
   useToastClearance(markerRef, footer !== null);
+  useEscapeWhileTooltipOpen(markerRef, onClose);
 
   const Frame = alert ? AlertDialog : Modal;
   // An alert dialog is described by its whole body, so a screen reader announces what is asked

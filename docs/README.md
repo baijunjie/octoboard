@@ -178,7 +178,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   keyboard focus off the terminal, when `preventFocusOnPress` is needed, and why "⋯" menus are built on `ActionMenu`,
   why a dialog must not lose focus to `<body>` when a focused control unmounts or turns disabled, so its subject is
   switched with a reset key rather than by re-keying it and an action that takes seconds marks its button pending
-  rather than disabled, why a control inside a pane cannot keep Escape for itself from inside the React tree, that a
+  rather than disabled, why nothing in the React tree gets Escape first — a pane's own `window` listener, and
+  react-aria's while any tooltip is open — that a
   single-line field hands its form the trimmed value, why a Tailwind class name has to stand in the source as literal
   text, why a state of your own on a react-aria-components element needs a `data-*` name it does not write itself, why
   every icon-only control also gets a tooltip through `TitledControl`, how user-facing text goes through the message
