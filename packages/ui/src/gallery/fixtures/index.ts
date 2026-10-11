@@ -20,7 +20,9 @@ import { viewerScenarios } from "./viewer";
 
 export { GROUPS } from "./groups";
 
-/** Every scenario; within a group the gallery lists them in this order. */
+/** Every scenario; within a group the gallery lists them in this order, and the first entry is
+ * the one the gallery opens on when the URL names no scenario, which is why this order does not
+ * follow `GROUPS`: an empty state makes a better landing page than a startup failure. */
 export const SCENARIOS: Scenario[] = [
   ...emptyScenarios,
   ...busyScenarios,

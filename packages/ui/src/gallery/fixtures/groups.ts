@@ -19,23 +19,26 @@ import {
 } from "lucide-react";
 
 /** The groups in the order the gallery lists them, each with the icon its heading carries so the
- * groups can be told apart at a glance. */
+ * groups can be told apart at a glance. The order follows the way the app is met: how it comes up,
+ * holds its connection and looks with nothing in it yet, then the sidebar and the views reached from
+ * it, then the terminal and the right pane that fill the content panel and the viewer they open,
+ * then what opens over them, and last the window itself. */
 export const GROUPS = [
+  { title: "Startup and connection", icon: Plug },
   { title: "Empty", icon: Inbox },
   { title: "Sidebar sessions", icon: Rows3 },
-  { title: "Focus mode", icon: Focus },
   { title: "Branch badges", icon: GitBranch },
   { title: "Project filter", icon: ListFilter },
-  { title: "Startup and connection", icon: Plug },
-  { title: "Terminal", icon: SquareTerminal },
-  { title: "Trust prompts and toasts", icon: MessageSquareWarning },
+  { title: "Focus mode", icon: Focus },
   { title: "Archive view", icon: Archive },
+  { title: "Terminal", icon: SquareTerminal },
   { title: "Report panel", icon: Presentation },
   { title: "Project pane: files", icon: FolderTree },
   { title: "Project pane: Git", icon: GitCompare },
-  { title: "Settings", icon: Settings },
-  { title: "Dialogs", icon: AppWindow },
   { title: "File viewer", icon: FileText },
+  { title: "Trust prompts and toasts", icon: MessageSquareWarning },
+  { title: "Dialogs", icon: AppWindow },
+  { title: "Settings", icon: Settings },
   { title: "Window layout", icon: PanelsTopLeft },
 ] as const satisfies readonly { title: string; icon: LucideIcon }[];
 
