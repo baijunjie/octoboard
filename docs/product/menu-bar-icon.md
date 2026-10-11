@@ -2,8 +2,9 @@
 
 The macOS application puts an icon in the system menu bar: a monochrome octopus, which macOS tints to suit a light or
 dark menu bar, with the tooltip "Octoboard". It is there for as long as the application runs — while the window is
-shown, while it is closed into the background (see "Closing the window" in `docs/product/application-lifecycle.md`),
-and on the screen shown when the daemon failed to start. A browser has no such icon.
+shown, while it is closed into the background, and on the screen shown when the daemon failed to start — and whatever
+the user chose about keeping Octoboard running when the window is closed (see "Closing the window" in
+`docs/product/application-lifecycle.md`). A browser has no such icon.
 
 ## Clicking the icon
 
@@ -51,6 +52,9 @@ into the background back to ask it, and with none it quits at once (see "Quittin
 `docs/product/application-lifecycle.md`).
 
 ## What has been tried by hand
+
+A closed window below means one closed into the background, which is what closing it does only while the user has
+turned that on (see "Closing the window" in `docs/product/application-lifecycle.md`).
 
 **Observed** in the packaged application: a left click bringing a closed window back; the menu's groups, headings and
 session lines (seen under Simplified Chinese); the menu updating within about 1.5 seconds of a session changing while

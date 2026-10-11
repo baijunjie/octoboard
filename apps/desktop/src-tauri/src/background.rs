@@ -1,11 +1,16 @@
-//! Running in the background: the window's close button hides the window and takes the app out of
-//! the Dock instead of quitting, leaving it reachable through the menu bar icon (`tray.rs`), the
-//! Dock icon or a reopen from the Finder or Spotlight, all of which bring the window back through
-//! `show_main_window`. The UI's `bringToFront` does too, through `bring_to_front`, for the exit
-//! confirmation of a quit that came while the window was hidden and for the notice that the daemon
-//! exited. Activating the app while the window is hidden by a close, such as by clicking a system
-//! notification, brings it back too. With no daemon left running there is nothing to keep in the
-//! background, so the close button quits instead.
+//! Running in the background: with the user's Settings switch on (`set_run_in_background`), the
+//! window's close button hides the window and takes the app out of the Dock instead of quitting.
+//! Cmd+W and the Window menu's Close Window item are the same gesture: `menu.rs` builds that item
+//! with Tauri's predefined `close_window_with_text`, which carries ⌘W and arrives as the same
+//! `CloseRequested` as the button. The app stays reachable through the menu bar icon (`tray.rs`),
+//! the Dock icon or a reopen from the Finder or Spotlight, all of which bring the window back
+//! through `show_main_window`. The UI's `bringToFront` does too, through `bring_to_front`, for the
+//! exit confirmation of a quit that came while the window was hidden and for the notice that the
+//! daemon exited. Activating the app while the window is hidden by a close, such as by clicking a
+//! system notification, brings it back too. With the switch off, the default, all three are an
+//! ordinary quit (`exit::request_quit_from_window`), confirmation included; and with no daemon left
+//! running there is nothing to keep in the background, so they quit at once whatever the switch
+//! says.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[cfg(target_os = "macos")]
@@ -15,6 +20,7 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, CloseRequestApi, Manager, Window};
 
+use crate::exit::request_quit_from_window;
 use crate::sidecar::daemon_stopped;
 use crate::MAIN_WINDOW_LABEL;
 
@@ -41,6 +47,9 @@ pub struct BackgroundState {
     /// the system (Cmd+H): the state in which the app is out of the Dock and activating it brings
     /// the window back.
     hidden_by_close: AtomicBool,
+    /// Whether the close button hides the window rather than quitting: the UI's Settings choice,
+    /// which it pushes at startup and on every change. Off until it says otherwise.
+    run_in_background: AtomicBool,
     /// When the Dock was last asked to show the app, for `DOCK_HIDE_HOLDOFF`.
     #[cfg(target_os = "macos")]
     last_dock_show: Mutex<Option<Instant>>,
@@ -53,17 +62,36 @@ pub fn hidden_by_close(app: &AppHandle) -> bool {
         .load(Ordering::SeqCst)
 }
 
-/// Answers the main window's close button: hides the window and takes the app out of the Dock,
-/// or quits when the daemon is not running.
+/// Sets whether the main window's close button keeps the app running in the background, which is
+/// the UI's Settings switch; see `handle_close_request`.
+#[tauri::command]
+pub fn set_run_in_background(app: AppHandle, enabled: bool) {
+    app.state::<BackgroundState>()
+        .run_in_background
+        .store(enabled, Ordering::SeqCst);
+}
+
+/// Answers the main window's close request, whether it came from the close button, Cmd+W or the
+/// Window menu's Close Window item: hides the window and takes the app out of the Dock if the user
+/// chose to run in the background and there is a daemon to keep running, and quits otherwise,
+/// through the same confirmation as any quit while a session is live.
 pub fn handle_close_request(window: &Window, api: &CloseRequestApi) {
     if window.label() != MAIN_WINDOW_LABEL {
         return;
     }
+    // Always prevented: the window is only ever closed by the app exiting, and a quit that the
+    // confirmation defers must leave it on screen.
     api.prevent_close();
-    if daemon_stopped(window.app_handle()) {
-        window.app_handle().exit(0);
-    } else {
+    let app = window.app_handle();
+    let run_in_background = app
+        .state::<BackgroundState>()
+        .run_in_background
+        .load(Ordering::SeqCst);
+    if run_in_background && !daemon_stopped(app) {
         hide_main_window(window);
+    } else {
+        // Quits at once when the daemon is stopped; `exit.rs` owns that rule.
+        request_quit_from_window(app);
     }
 }
 

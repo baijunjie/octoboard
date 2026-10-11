@@ -22,6 +22,8 @@ export interface Preferences {
   sidebarFocus?: `project:${string}` | `consoleSession:${string}`;
   /** How the Git mode's change lists show their changes. */
   changeLayout?: "flat" | "tree";
+  /** Closing the window keeps the app running in the background; off by default. */
+  runInBackground?: boolean;
 }
 
 /** What the window shows in place of the app, for the screens that have no daemon behind them. */
@@ -80,6 +82,9 @@ export interface Scenario {
    * answers that the permission was not granted, which is how a scenario reaches the row's System
    * Settings guidance — nothing in a browser can raise a real prompt. */
   macosPermissions?: MacosPermissionsStatus | "unreadable";
+  /** The platform offers the desktop app's run-in-background capability, so the Settings switch for
+   * it is shown; the browser platform has none. */
+  backgroundRun?: boolean;
   steps?: Step[];
   /** Renders the file viewer over the subjects `subjects` builds, in place of the app; built only
    * when the scenario opens. `loadDelay` shows each one's loading state for that many milliseconds

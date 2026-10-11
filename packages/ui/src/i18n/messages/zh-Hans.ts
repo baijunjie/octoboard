@@ -635,6 +635,11 @@ export const zhHans: Translation<"other"> = {
   "settings.cloneDir.label": "默认克隆目录",
   "settings.cloneDir.description": "通过 git 仓库网址添加项目时，仓库默认克隆到的目录，除非另行选择目录。留空则使用 ~/Projects。",
   "settings.cloneDir.placeholder": "~/Projects",
+  "settings.background.label": "关闭窗口后在后台继续运行",
+  "settings.background.description.off":
+    "开启后，关闭窗口时会话及其智能体会继续运行，通知也会照常送达。点按菜单栏图标即可重新打开窗口。",
+  "settings.background.description.on":
+    "关闭窗口后，会话及其智能体仍会继续运行，通知也会照常送达。点按菜单栏图标即可重新打开窗口。",
   "settings.git.autoSync.label": "自动同步仓库",
   "settings.git.autoSync.description":
     "当项目分支落后于其上游且可以快进时，将其快进。从不推送，也不会改动有本地提交的分支。无论此设置如何，都会每隔几分钟检查一次远程，因此分支始终会显示领先或落后的提交数。",

@@ -90,8 +90,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   where it is chosen, what follows it (down to the terminal's palette, its 4.5:1 minimum contrast, and the native
   window's own appearance), where the choice is kept, and why a report page stays on a light surface either way.
 - [Settings](product/settings.md) — the Settings dialog: how it opens (the rail, and the macOS menu's Settings… /
-  ⌘, and when that is ignored), how it closes and where focus goes, its General (Appearance, Language and the default
-  clone directory), Git, Agent accounts, Trusted folders, Permissions and Notifications sections.
+  ⌘, and when that is ignored), how it closes and where focus goes, its General (Appearance, Language, the default
+  clone directory and, in the macOS application alone, keeping Octoboard running in the background), Git, Agent
+  accounts, Trusted folders, Permissions and Notifications sections.
 - [Language](product/language.md) — the 17 offered languages and why they are ordered by tag, English as the fallback,
   the default picked from the system's languages on the first launch and kept from then on, the language chosen in
   Settings, how the system's languages map onto the list, what follows the current language and what does not (report
@@ -107,7 +108,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   the trusted-folders rules.
 - [Application lifecycle](product/application-lifecycle.md) — what Octoboard runs on and how it is distributed, startup
   and the single-instance rule, who can reach the daemon (any local program, but no web page in a browser), losing the
-  daemon connection, closing the window into the background (out of the Dock, everything kept running) and every way
+  daemon connection, what closing the window does — a quit unless the Settings switch for running in the background is
+  on, which is off to begin with, and then a hidden window out of the Dock with everything kept running — and every way
   the window comes back, the quit confirmation and which gestures it covers, how to quit a window that has stopped
   responding, crash behaviour, and the files Octoboard keeps under `~/.octoboard` (and the one it keeps outside it),
   including the database that also holds the settings the daemon stores.
@@ -166,10 +168,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   `~/.octoboard` data — and how a probe that needs no logged-in agent avoids the latter with a throwaway
   `HOME`/`TMPDIR`, using Codex's sign-in screen as session output, and how to put a fake agent CLI on `PATH` for an
   isolated daemon so the real one does not launch instead.
-- [Building and launching the app for verification](memory/building-and-launching-the-app-for-verification.md) —
-  how to build, launch and isolate the app for a verification: when to launch the real window, building the daemon and
+- [Building and launching the app for verification](memory/building-and-launching-the-app-for-verification.md) — how to
+  build, launch and isolate the app for a verification: when to launch the real window, building the daemon and
   confirming the running sidecar's binary, `pnpm build:app` (a `tauri build` that cannot sign), `open` rather than
-  exec'ing the binary, a throwaway `HOME` and `TMPDIR` and the webview profile they still share (and running under
+  exec'ing the binary, a throwaway `HOME` and `TMPDIR` and the webview profile they still share — which a run can strip
+  of a preference it never touched, so the profile is copied whole before one and restored afterwards (and running under
   other system languages for one launch), reading the wire through a wrapped sidecar, why nothing the daemon logs after
   the application is gone can be read and why putting its log on a file removes the condition under investigation,
   sharing the machine with other worktrees' dev apps (fixed port, stopping by PID only), and fully reloading a dev

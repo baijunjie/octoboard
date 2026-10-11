@@ -99,8 +99,13 @@ own installed Octoboard and every worktree's build share `dev.octoboard.app`, so
 profile. Isolating the run means moving it aside before and putting it back afterwards, which needs the user's
 go-ahead up front and is possible only while no app with that identifier is running: check with
 `lsappinfo find bundleid=dev.octoboard.app` (empty output means none) immediately before moving it. Otherwise run on
-the shared profile, note each setting the run will change (the appearance and the language first of all) beforehand,
-and put it back afterwards, because the user's own app reads the same values.
+the shared profile, but copy the whole directory beforehand (the sqlite file's `-wal` and `-shm` alongside it) and
+restore from that copy afterwards. Noting the settings the run will change beforehand — the appearance and the
+language first of all — is not enough, because a run also *deletes* preferences it never put on screen: a preference
+whose empty state has nothing to store is removed rather than rewritten, and the ones keyed to what the daemon knows
+(the per-project browser state, the current console, what is in focus mode) are pruned against the running daemon's
+project list, which on a throwaway `HOME` is empty — so the run empties them and their keys disappear from the user's
+own profile.
 
 Giving the copy an identifier of its own is not a way out of sharing that profile, nor of a scripted click landing on
 the user's window: a built `.app` copied aside and re-identified never shows a window at all — its webview and GPU

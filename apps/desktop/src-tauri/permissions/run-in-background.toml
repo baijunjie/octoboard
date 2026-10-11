@@ -1,0 +1,8 @@
+# A custom permission for the app's own run-in-background command; see `exit-lifecycle.toml` for why
+# an app-defined command needs a file like this.
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-set-run-in-background"
+description = "Allows the frontend to say whether closing the window keeps the app running in the background."
+commands.allow = ["set_run_in_background"]

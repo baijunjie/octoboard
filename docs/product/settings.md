@@ -63,7 +63,8 @@ every path is shown in full.
 
 ## General
 
-Small app-wide settings: an **Appearance** row, a **Language** row, then a **Default clone directory** row.
+Small app-wide settings: an **Appearance** row, a **Language** row, then a **Default clone directory** row, and last,
+in the macOS application only, a **Keep running in the background** row.
 
 ### Appearance
 
@@ -94,6 +95,22 @@ refused with a toast and the field returns to the stored one, and a blank value 
 opens on the nearest existing ancestor when the directory does not exist yet (see "Browsing directories" in
 `docs/product/consoles-and-projects.md`). Where the directory applies is in "Associating a project" in the same
 document.
+
+### Keep running in the background
+
+A switch, the section's last row, labelled for what turning it on does: keep Octoboard running in the background when
+the window is closed. It is **off to begin with**, so closing the window quits.
+
+**Only the macOS application has this row.** A browser has no native window to close into the background, so the row
+is absent there — the section then ends with the Default clone directory row.
+
+The row's description says what the choice means and never mentions quitting, which the label already carries: while
+the switch is off it says what turning it on will do, and while it is on it says what is happening now — closing the
+window leaves the sessions, their agents and their notifications running, and the menu bar icon brings the window
+back.
+
+What closing the window actually does under either state, and where the choice is kept, are in "Closing the window"
+in `docs/product/application-lifecycle.md`.
 
 ## Git
 

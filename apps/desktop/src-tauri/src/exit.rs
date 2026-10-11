@@ -2,16 +2,24 @@
 //!
 //! Three gestures can end the process, and all three need the same answer to the same question —
 //! is there a confirmation flow to defer to, and if so, has this attempt already cleared it or
-//! does it need to wait: Cmd+Q and the app menu's Quit item (`on_menu_event` in `lib.rs`), the Dock
-//! icon's own Quit plus a system-initiated logout/restart/shutdown (`application_should_terminate`
-//! below, installed onto AppKit's own delegate), and `RunEvent::ExitRequested` (also handled in
-//! `lib.rs`) — which in practice only ever serves `confirm_quit`'s own self-raised `app.exit(0)`, or
-//! a window torn down before the frontend got as far as registering with `frontend_exit_heartbeat`.
-//! The menu bar icon's Quit (`tray.rs`) takes the same path as the app menu's. The window's close
-//! button is not a quit at all: it hides the window (`background.rs`), unless the daemon is not
-//! running, when it quits without asking. This module owns the one decision the quit gestures share
-//! (`should_let_quit_through`), so those call sites share it instead of each carrying their own
-//! slowly diverging copy.
+//! does it need to wait:
+//!
+//! - Cmd+Q and the app menu's Quit item (`on_menu_event` in `lib.rs`), along with the menu bar
+//!   icon's Quit (`tray.rs`), which takes the same path.
+//! - The Dock icon's own Quit plus a system-initiated logout/restart/shutdown
+//!   (`application_should_terminate` below, installed onto AppKit's own delegate).
+//! - `RunEvent::ExitRequested` (also handled in `lib.rs`), which in practice only ever serves
+//!   `confirm_quit`'s own self-raised `app.exit(0)`, or a window torn down before the frontend got
+//!   as far as registering with `frontend_exit_heartbeat`.
+//!
+//! The window's close button is a fourth way out, except that it hides the window instead when the
+//! user chose to run in the background (`background.rs`); with no daemon left to keep running it
+//! quits whatever the choice. Cmd+W and the Window menu's Close Window item are the same gesture to
+//! the shell. When the close route quits, it reaches the same confirmation flow through
+//! `request_quit_from_window`, with one difference: it never arms the `FORCE_QUIT_WINDOW`
+//! debounce, because a double press there is ordinary and must not force a quit through. This
+//! module owns the one decision the three quit gestures above share (`should_let_quit_through`), so
+//! those call sites share it instead of each carrying their own slowly diverging copy.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -32,10 +40,13 @@ use crate::sidecar::daemon_stopped;
 /// to clear it; this reuses only an `Instant` compared on the same thread that already handles the
 /// event. Two seconds is long enough that reading and answering the confirmation dialog never comes
 /// close to it, and short enough that it means "the same quit gesture, repeated" rather than a
-/// second, unrelated quit attempt minutes later.
+/// second, unrelated quit attempt minutes later. It is only ever armed by the three quit gestures
+/// the module comment lists, where a repeat is deliberate (a double Cmd+Q): the window's close
+/// route leaves it alone (`request_quit_from_window`), since a double click there is ordinary and
+/// must not quit a live session unasked.
 const FORCE_QUIT_WINDOW: Duration = Duration::from_secs(2);
 
-/// Tracks the facts the exit flow needs across all three gestures described in the module comment
+/// Tracks the facts the exit flow needs across the gestures described in the module comment
 /// above:
 ///
 /// - `confirmed`: set by `confirm_quit` right before it calls `app.exit(0)`, which raises its own
@@ -92,6 +103,18 @@ pub fn request_quit(app: &AppHandle) {
     }
 }
 
+/// What the window's close route does when it quits (run-in-background off, or no daemon left to
+/// keep running): the same as `request_quit`, except that it neither arms nor consumes the
+/// `FORCE_QUIT_WINDOW` debounce. A second press of the close button right behind the first, a
+/// double click, is an ordinary gesture, and must not take the escape hatch and quit a live
+/// session unasked. The cost is that a wedged webview cannot be quit through the close button
+/// alone; two Cmd+Q still do it.
+pub fn request_quit_from_window(app: &AppHandle) {
+    if decide(app, false) {
+        app.exit(0);
+    }
+}
+
 /// The one decision all three quit gestures share. Returns `true` when the caller should let the
 /// quit proceed unconditionally; `false` means a confirmation flow exists and has not yet cleared
 /// this attempt, so the caller should defer to it instead of exiting — which this function has
@@ -101,6 +124,12 @@ pub fn request_quit(app: &AppHandle) {
 /// Also records the deferral: the next call's `FORCE_QUIT_WINDOW` check depends on
 /// `last_prevented_at` having been set here.
 pub fn should_let_quit_through(app: &AppHandle) -> bool {
+    decide(app, true)
+}
+
+/// `should_let_quit_through`, with `debounce` saying whether `FORCE_QUIT_WINDOW` applies: when it
+/// does not, the check is skipped and the deferral is not recorded.
+fn decide(app: &AppHandle, debounce: bool) -> bool {
     if daemon_stopped(app) {
         // No session can be live, so there is nothing to ask about.
         return true;
@@ -116,6 +145,11 @@ pub fn should_let_quit_through(app: &AppHandle) -> bool {
         // never will) — nothing could ever confirm this quit, so let it proceed rather than trap
         // the user in a window they cannot close.
         return true;
+    }
+
+    if !debounce {
+        let _ = app.emit("exit-requested", ());
+        return false;
     }
 
     let now = Instant::now();

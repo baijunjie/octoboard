@@ -690,6 +690,11 @@ export const en = {
   "settings.cloneDir.description":
     "Where a repository is cloned when adding a project from a git URL, unless another directory is chosen. Leave it empty to use ~/Projects.",
   "settings.cloneDir.placeholder": "~/Projects",
+  "settings.background.label": "Keep running in the background when the window is closed",
+  "settings.background.description.off":
+    "Once this is on, closing the window keeps sessions and their agents running and notifications arriving. The menu bar icon brings the window back.",
+  "settings.background.description.on":
+    "Sessions and their agents keep running with the window closed, and notifications keep arriving. The menu bar icon brings the window back.",
   "settings.git.autoSync.label": "Automatically sync repositories",
   "settings.git.autoSync.description":
     "Fast-forwards a project's branch when it is behind its upstream and can be. It never pushes, and it leaves a branch that has commits of its own alone. The remote is checked every few minutes whichever way this is set, so the branch always shows how far ahead or behind it is.",

@@ -6,6 +6,7 @@ import { suppressNativeContextMenu } from "./contextMenuGuard";
 import { resolveDaemonOrigin, resolveStartupError } from "./daemon";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { LanguageProvider } from "./i18n/react";
+import { useBackgroundRunSync } from "./lifecycle/useBackgroundRunSync";
 import { useNativeMenuLabels } from "./lifecycle/useNativeMenuLabels";
 import { useNativeWindowTheme } from "./lifecycle/useNativeWindowTheme";
 import { selectPlatform } from "./platform";
@@ -92,6 +93,12 @@ function NativeMenuLabelsSync(): null {
   return null;
 }
 
+// Outside `ErrorBoundary` too, so the choice reaches the shell whichever screen is up.
+function BackgroundRunSync(): null {
+  useBackgroundRunSync();
+  return null;
+}
+
 // One render for every screen, so none of them is outside the boundary. `ErrorBoundary` wraps
 // `ThemeProvider`, not the other way around: `useTheme`'s state initialiser reads `localStorage`
 // unguarded, and a throw there must still land on the boundary's fallback rather than a blank
@@ -104,6 +111,7 @@ root.render(
     <PlatformProvider value={platform}>
       <LanguageProvider>
         <NativeMenuLabelsSync />
+        <BackgroundRunSync />
         <ErrorBoundary>
           <ThemeProvider>
             <NativeWindowThemeSync />

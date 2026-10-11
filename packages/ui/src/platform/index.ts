@@ -44,12 +44,17 @@ export interface PlatformAdapter {
    * grant on purpose; present only under a desktop shell, which answers `undefined` from `status`
    * when it is not running on macOS. */
   readonly macosPermissions?: MacosPermissionsCapability;
+  /** Whether closing the window keeps the app running in the background: present only where a
+   * shell answers the window's close button and can do either, so the Settings switch for it
+   * exists only there. */
+  readonly backgroundRun?: BackgroundRunCapability;
 }
 
 export interface ExitHandlers {
   /** The user asked to quit by any gesture the shell reports: Cmd+Q, the app menu, the menu bar
    * icon's Quit, the Dock icon's own Quit, a system-initiated logout/restart/shutdown. The window's
-   * close button is not one: the shell keeps running in the background behind its menu bar icon. */
+   * close button is one only while the user has not chosen to run in the background (see
+   * `BackgroundRunCapability`): the shell then takes it as a quit gesture. */
   onQuitRequested: () => void;
   /** The shell's daemon sidecar exited on its own; `detail` says how. */
   onDaemonExited: (detail: string) => void;
@@ -155,6 +160,14 @@ export interface ClipboardCapability {
   /** Puts `text` on the clipboard; rejects when the environment refuses (no permission, no
    * focused document). */
   writeText(text: string): Promise<void>;
+}
+
+export interface BackgroundRunCapability {
+  /** Tells the shell what the window's close button does: with `true` it hides the window and the
+   * app keeps running behind the menu bar icon, with `false` it quits the app (through the same
+   * confirmation as any quit gesture). The shell starts from `false`, so the UI sends its choice at
+   * startup. */
+  set(enabled: boolean): Promise<void>;
 }
 
 export interface LinkCapability {

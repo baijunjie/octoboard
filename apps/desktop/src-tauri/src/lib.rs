@@ -11,13 +11,14 @@
 //! of exposing an `invoke`-able command for it.
 //!
 //! The IPC commands this crate does expose carry no daemon traffic either:
-//! `frontend_exit_heartbeat` and `confirm_quit` (both in `exit.rs`) and `bring_to_front` (in
-//! `background.rs`) are bare signals, `set_menu_labels` (in `menu.rs`) is the UI's menu text, and
-//! `set_tray_menu` (in `tray.rs`) is the text of the menu bar icon's menu, with the opaque ids of
-//! the sessions it lists, which `tray-session-chosen` hands back. That is display text the UI words
-//! from the sessions it already shows, as it does the Dock badge's count; the shell never asks the
-//! daemon anything. The three in `permissions.rs` ask the system instead: a read of this process's
-//! own privacy grants, the one prompt that asks the user for one, and a System Settings deep link.
+//! `frontend_exit_heartbeat` and `confirm_quit` (both in `exit.rs`), `bring_to_front` and
+//! `set_run_in_background` (a single boolean, the Settings switch; both in `background.rs`) are
+//! bare signals, `set_menu_labels` (in `menu.rs`) is the UI's menu text, and `set_tray_menu` (in
+//! `tray.rs`) is the text of the menu bar icon's menu, with the opaque ids of the sessions it
+//! lists, which `tray-session-chosen` hands back. That is display text the UI words from the
+//! sessions it already shows, as it does the Dock badge's count; the shell never asks the daemon
+//! anything. The three in `permissions.rs` ask the system instead: a read of this process's own
+//! privacy grants, the one prompt that asks the user for one, and a System Settings deep link.
 
 mod background;
 mod exit;
@@ -72,6 +73,7 @@ pub fn run() {
             set_menu_labels,
             tray::set_tray_menu,
             background::bring_to_front,
+            background::set_run_in_background,
             permissions::macos_permissions_status,
             permissions::macos_request_permission,
             permissions::macos_open_privacy_settings
@@ -89,10 +91,11 @@ pub fn run() {
             }
         })
         .on_window_event(|window, event| {
-            // Closing the window leaves the app running in the background (it quits instead when
-            // the daemon is not running; see `handle_close_request`); quitting is Cmd+Q, the app
-            // menu's or the menu bar icon's Quit. The UI registers no close listener of its own,
-            // so the close reaches this handler rather than being answered in the webview.
+            // Closing the window leaves the app running in the background when the user chose that
+            // in Settings, and quits it otherwise (see `handle_close_request`); the other ways to
+            // quit are Cmd+Q, the app menu's or the menu bar icon's Quit. The UI registers no
+            // close listener of its own, so the close reaches this handler rather than being
+            // answered in the webview.
             if let WindowEvent::CloseRequested { api, .. } = event {
                 background::handle_close_request(window, api);
             }
@@ -146,7 +149,8 @@ pub fn run() {
             api.prevent_exit();
         }
         // Every quit path ends here: Cmd+Q and the menu's Quit through `app.exit`, the Dock's Quit
-        // and a logout through AppKit's `applicationWillTerminate:`.
+        // and a logout through AppKit's `applicationWillTerminate:`, and the window's close when it
+        // quits instead of hiding.
         RunEvent::Exit => window_state::save(app_handle),
         // Opening the app again while it runs in the background, from the Finder, Spotlight or the
         // Dock, brings the window back. Answered with a window still on screen too: one closed in

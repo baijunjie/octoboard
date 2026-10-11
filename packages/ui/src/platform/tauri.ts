@@ -1,5 +1,6 @@
 import type {
   AppMenuCapability,
+  BackgroundRunCapability,
   BadgeCapability,
   ClipboardCapability,
   ExitCapability,
@@ -30,6 +31,7 @@ export function tauriPlatform(): PlatformAdapter {
     clipboard: tauriClipboard(),
     links: tauriLinks(),
     macosPermissions: tauriMacosPermissions(),
+    backgroundRun: tauriBackgroundRun(),
   };
 }
 
@@ -141,7 +143,8 @@ function tauriExit(): ExitCapability {
         await invoke("frontend_exit_heartbeat");
 
         // No close listener: the shell answers the window's close button itself, by hiding the
-        // window, which a listener here would stop it from doing.
+        // window or taking it as a quit gesture (see `backgroundRun`), which a listener here would
+        // stop it from doing.
         const { listen } = await import("@tauri-apps/api/event");
         track(await listen("exit-requested", () => onQuitRequested()));
         track(await listen<string>("daemon-exited", (event) => onDaemonExited(event.payload)));
@@ -226,6 +229,15 @@ function tauriMacosPermissions(): MacosPermissionsCapability {
     async openSystemSettings(kind) {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("macos_open_privacy_settings", { kind });
+    },
+  };
+}
+
+function tauriBackgroundRun(): BackgroundRunCapability {
+  return {
+    async set(enabled) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("set_run_in_background", { enabled });
     },
   };
 }

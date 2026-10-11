@@ -33,8 +33,8 @@ interface UseAppExitResult {
   /** Call when the user confirms the dialog above. */
   confirmExit: () => Promise<void>;
   /** The same entry point Cmd+Q, the app menu and the menu bar icon's Quit all funnel through —
-   * exposed so a plain "Quit" affordance (the daemon-failed-to-start screen has one) can use it too.
-   * Does nothing where `canQuit` is false. */
+   * exposed so a plain "Quit" affordance (the daemon-failed-to-start screen has one) can use it
+   * too. Does nothing where `canQuit` is false. */
   requestQuit: () => Promise<void>;
   /** Whether the platform has a quit flow at all. A plain browser has none — closing a tab quits
    * nothing, and shutting the daemon down from a page that merely connects to it would be wrong —
@@ -48,11 +48,12 @@ interface UseAppExitResult {
  * Rust side's force-quit debounce from arming against a webview that is actually still alive),
  * listening for an `exit-requested` event (fired for every way to quit — Cmd+Q, the app menu, the
  * menu bar icon's Quit, the Dock icon's own Quit, and a system-initiated logout/restart/shutdown —
- * that the Rust side cannot itself ask the user about; the window's close button is not one, it
- * hides the window), asking for confirmation when a session is still live (bringing the window to
- * the front to do so), and the `shutdown`-then-`confirm_quit` sequence that actually ends the
- * process. With `getSessions` and `requestShutdown` omitted it quits straight away, which is what a
- * screen with no daemon behind it needs.
+ * that the Rust side cannot itself ask the user about; the window's close button is one too unless
+ * the user has chosen to run in the background, in which case it hides the window), asking for
+ * confirmation when a session is still live (bringing the window to the front to do so), and the
+ * `shutdown`-then-`confirm_quit` sequence that actually ends the process. With `getSessions` and
+ * `requestShutdown` omitted it quits straight away, which is what a screen with no daemon behind it
+ * needs.
  */
 export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
   const { exit, nativeWindow } = usePlatform();

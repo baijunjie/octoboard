@@ -1,9 +1,11 @@
 // The page one scenario renders in, loaded in an iframe by the gallery shell (`shell.tsx`). It
 // follows `main.tsx` — the real `App` under the same platform, language, error boundary and theme
-// providers, over a fixture daemon in place of the WebSocket one. It leaves out what `main.tsx` does
-// for a native shell (`NativeMenuLabelsSync`, `NativeWindowThemeSync`, revealing the window): the
-// browser platform has no native menu or window. Its stored preferences are set from the
-// URL before the app loads (`prepareStorage`).
+// providers, over a fixture daemon in place of the WebSocket one. It leaves out what `main.tsx`
+// does for a native shell (`NativeMenuLabelsSync`, `NativeWindowThemeSync`, revealing the window):
+// the browser platform has no native menu or window. It leaves out `BackgroundRunSync` too: a
+// scenario that offers `backgroundRun` gets one whose `set` does nothing (`galleryPlatform`), so
+// there is no shell to push the choice to. Its stored preferences are set from the URL before the
+// app loads (`prepareStorage`).
 import React from "react";
 import ReactDOM from "react-dom/client";
 
@@ -46,24 +48,27 @@ const { createFixtureDaemon } = await import("./fixtureDaemon");
 
 const { DaemonFailedMessage, NoAddressMessage, StartupScreen } = startup;
 
-/** The browser platform, with the desktop window's `windowChrome` added while the URL says `chrome=1`,
- * so what the desktop app alone offers (the window shortcuts among it, ⌃Tab between console
- * sessions) can be driven in the gallery. It also puts the top bar's drag region on. The macOS
- * privacy grants are stubbed from the scenario's `macosPermissions`, there being no other way to
- * look at those rows than to really change a system setting; nothing else native is offered. */
+/** The browser platform, with what the desktop app alone offers added so it can be driven in the
+ * gallery: `windowChrome` while the URL says `chrome=1` (the window shortcuts among it, ⌃Tab
+ * between console sessions; it also puts the top bar's drag region on), the macOS privacy grants
+ * stubbed from the scenario's `macosPermissions`, there being no other way to look at those rows
+ * than to really change a system setting, and `backgroundRun` for a scenario that says so (the
+ * Settings switch). Nothing else native. */
 function galleryPlatform(): ReturnType<typeof selectPlatform> {
   const platform = selectPlatform();
-  const chromed =
-    params.get("chrome") === "1" ? { ...platform, windowChrome: { leftInset: () => 0, subscribe: () => () => {} } } : platform;
   const grants = scenario?.macosPermissions;
-  if (!grants) return chromed;
   return {
-    ...chromed,
-    macosPermissions: {
-      status: () => (grants === "unreadable" ? Promise.reject(new Error("gallery: the shell has no such command")) : Promise.resolve(grants)),
-      request: () => Promise.resolve(false),
-      openSystemSettings: () => Promise.resolve(),
-    },
+    ...platform,
+    ...(params.get("chrome") === "1" && { windowChrome: { leftInset: () => 0, subscribe: () => () => {} } }),
+    ...(grants && {
+      macosPermissions: {
+        status: () =>
+          grants === "unreadable" ? Promise.reject(new Error("gallery: the shell has no such command")) : Promise.resolve(grants),
+        request: () => Promise.resolve(false),
+        openSystemSettings: () => Promise.resolve(),
+      },
+    }),
+    ...(scenario?.backgroundRun && { backgroundRun: { set: async () => {} } }),
   };
 }
 
