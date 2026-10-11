@@ -63,6 +63,28 @@ could settle:
   `react-markdown` parses and builds the whole element tree on the main thread. The claim is plausible and unmeasured;
   if it does not hold, the document needs a smaller budget of its own.
 
+## Carried from milestone 08 (the viewer header's layout and tags)
+
+Verified in the component gallery under WebKit with real input, in both appearances and under `ar`: the details
+sharing the controls' row and dropping to rows of their own as they grow (32, 64 and 96 px measured), the per-item
+fade, tooltip and marquee, a start-clipped path keeping the file's name visible, CJK text at three widths, the tag
+spacing, and the Settings sections left unchanged by the path component's split (compared side by side against the
+merge base). The fills were measured against the dialog's own surface. These are what that could not settle:
+
+- [ ] The header's layout in the packaged app, in both appearances. This milestone's completion criteria name the
+  packaged app, and the layout rests on `float: inline-end` and `flow-root` — the first floats anywhere in
+  `packages/ui/src` — so headless WebKit is the only engine that has seen the mechanism. Look at a long comparison
+  dropping to its own row, a Compare-view rename dropping two, and the mirrored case under a right-to-left language.
+- [ ] A comparison clipped from the real `ar` catalog. The gallery's compare scenario does not clip at its width, so
+  only a fixture's left-to-right comparison was seen clipped; the product's comparison is a catalog message with each
+  branch in its own `bdi`, which is the case that matters for where the fade lands.
+- [ ] The 2 px the view controls spill below the floated group. HeroUI gives a small toggle `h-9` below the `md`
+  breakpoint while the float box is `h-8`, so below that width — exactly where the details start dropping to their
+  own rows — the controls overhang the float by 2 px. It predates this milestone (the old header row was also `h-8`)
+  and very likely never touches a glyph; one glance at a dropped row's top edge settles it.
+- [ ] Every tag, the neutral stage tag included, reading as a tag against the dialog in the packaged app's two
+  appearances, and the dialog's close button, whose fill the same override changed from 1.19:1 to 1.50:1 in dark.
+
 ## Notes for the developer
 
 **Development notes**

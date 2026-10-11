@@ -158,6 +158,8 @@
   --panel-selected: oklch(0 0 0 / 0.07);
   --sidebar-fill: oklch(0 0 0 / 0.08);
   --sidebar-fill-hover: oklch(0 0 0 / 0.12);
+  --dialog-fill: oklch(0.92 0.004 286);
+  --dialog-fill-hover: oklch(0.89 0.004 286);
 }
 
 .dark,
@@ -173,6 +175,8 @@
   --panel-selected: oklch(1 0 0 / 0.075);
   --sidebar-fill: oklch(1 0 0 / 0.07);
   --sidebar-fill-hover: oklch(1 0 0 / 0.11);
+  --dialog-fill: oklch(0.34 0.006 286);
+  --dialog-fill-hover: oklch(0.37 0.006 286);
 }
 
 /* The fills of HeroUI's `--default` family inside the sidebar. A ghost button's hover and pressed
@@ -199,6 +203,46 @@
 .dark .sidebar-fills,
 [data-theme="dark"] .sidebar-fills {
   --accent-soft-foreground: oklch(0.74 0.14 254);
+}
+
+/* The fills of HeroUI's `--default` family inside the file viewer's dialog (`dialogs/Dialog.tsx`,
+   `size="viewer"`), whose surface is `--overlay`. HeroUI tunes `--default` for the page background
+   (dark L 0.12), and the dialog is lighter (dark L 0.21): the neutral soft chip, half of
+   `--default` over it, lands almost on the dialog (1.08:1 in dark, 1.09:1 in light) and no longer
+   reads as a tag. `--dialog-fill` and `--dialog-fill-hover` are opaque steps off `--overlay`
+   instead: 1.50:1 in dark and 1.27:1 in light (resting, read off WebKit's pixels), 1.70:1 and
+   1.39:1 hovered, with the chip's label (`--default-soft-foreground`, an alias of
+   `--default-foreground`) at 11.5:1 and 14.0:1 on the resting fill. The family is overridden
+   whole, as `.sidebar-fills` does, since `--default-hover` and `--default-soft` are computed on
+   `<html>`.
+
+   Unlike `.sidebar-fills`, whose tints are translucent so that a control on a hovered or selected
+   row stacks its own on top, these are opaque, because the viewer's surface is one flat colour. So
+   a control added later on anything but `--overlay` would get a wrong fill, and `--field-border`
+   and `--field-focus`, which are still computed from the root's `--default`, would give a field
+   added to the viewer edges that do not match its fill.
+
+   Everything else in the viewer drawn from `--default` takes them too:
+   - the footer's Previous and Next buttons (their glyph is 4.04:1 resting and 3.59:1 hovered in
+     dark, held to 3:1);
+   - the dialog's close button, whose fill goes from 1.19:1 to 1.50:1 against the dark dialog
+     (its `--muted` glyph is 4.48:1 resting and 3.97:1 hovered in dark, 4.75:1 and 4.32:1 in
+     light, held to 3:1);
+   - the three view choices' unselected buttons: their label is the foreground colour, which the
+     control group sets since the dialog's body text is muted (4.52:1 resting and 4.00:1 hovered
+     in dark would miss 4.5:1); it is 11.55:1 resting and 10.22:1 hovered in dark, 13.96:1 and
+     12.70:1 in light, read off WebKit's pixels;
+   - the image checkerboard (`.viewer-checkerboard`), whose squares step from dark L 0.274 to 0.34
+     and from light 0.94 to 0.92 (1.32:1 and 1.10:1 against the ground between them, still a
+     visible board in both).
+
+   Only the viewer takes the family, though every dialog sits on the same `--overlay`: the
+   directory picker's neutral chip is drawn from `--default` too and keeps HeroUI's. */
+.dialog-fills {
+  --default: var(--dialog-fill);
+  --default-hover: var(--dialog-fill-hover);
+  --default-soft: var(--dialog-fill);
+  --default-soft-hover: var(--dialog-fill-hover);
 }
 
 /* HeroUI's `--separator`, the 1px line between the panes and along the content panel's edge, is

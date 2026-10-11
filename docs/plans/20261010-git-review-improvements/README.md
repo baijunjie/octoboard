@@ -82,7 +82,7 @@ area and the Git mode panel, and shows a type change as one diff.
 5. 05 change-filter (closed)
 6. 06 row-actions (closed)
 7. 07 markdown-document-view (closed)
-8. [The viewer header's layout and tags](08-viewer-header-layout.md)
+8. 08 viewer-header-layout (closed)
 9. [Surfaces and light-mode contrast in the viewer and Git mode](09-surfaces-and-contrast.md)
 10. [Showing a type change as one diff](10-type-change-diff.md)
 11. [Final confirmation](11-final-confirmation.md)

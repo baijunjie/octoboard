@@ -6,6 +6,14 @@ The user has objected to drawn-out testing. Verify in the app only the behaviour
 targeted run — the states, languages or screens the change actually touches, not a tour of the rest or a matrix of
 every combination — and leave what a unit test or the type checker already covers to them.
 
+Changing a shared component's markup or layout widens what the change touches to every surface already using it, so
+those surfaces are inside this narrow scope rather than outside it: making `MarkedPath`'s root a `span` for one new
+caller collapsed the path boxes in the Settings rows, and neither the type checker, the unit tests nor a gallery pass
+over the new caller's own surface showed it. Settle such a change by putting each existing call site side by side
+against the merge base — a second gallery server run from a branchless temporary worktree at that commit (the
+`git worktree add --detach` case in the "Creating" section of `.claude/skills/git-worktree/SKILL.md`) — rather than
+judging the new rendering on its own.
+
 ## Look at a UI state in the gallery before staging it through a daemon
 
 To see how the UI renders in a given state — connection loss, a session status, a dialog, the archive, report pages,

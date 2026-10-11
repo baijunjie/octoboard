@@ -374,6 +374,27 @@ it("puts the status and the stage in the title and the layout choice on the desc
   expect(row.textContent).not.toMatch(/Modified|staged/i);
 });
 
+// The tags are one group, closer to each other than the group is to the name, and each detail of the
+// description line is an item of its own, so one too long for the space beside the view controls can
+// move to a row of its own (layout is checked in WebKit); the paths carry the file icon.
+it("keeps the tags in one group and each detail as an item of its own, the paths with an icon", () => {
+  const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file", body: { kind: "binary", size: 3 } });
+  show({
+    ...modified(),
+    source: "main at 1234567 to feature at fedcba0",
+    content: { state: "change", change: { old: side("src/old.ts"), new: side("src/c.ts") } },
+  });
+  const tags = dialog()!.querySelectorAll(".chip");
+  expect(tags[0].parentElement).toBe(tags[1].parentElement);
+  expect(tags[0].parentElement!.children.length).toBe(2);
+  const row = dialog()!.querySelector<HTMLElement>("[data-viewer-description]")!;
+  // The view controls come first in the source, floated to the row's end; they are what the details flow around.
+  const [controls, ...details] = [...row.children];
+  expect(controls.className).toContain("float-end");
+  expect(details.map((item) => item.textContent)).toEqual(["src/c.ts", "main at 1234567 to feature at fedcba0", "Renamed from src/old.ts"]);
+  expect(details.filter((item) => item.querySelector("svg")).length).toBe(2);
+});
+
 // Before the change is read, a staged or unstaged one has only its stage to show, and the title's
 // accessible name has no tag separator, since there is no status tag to separate it from.
 it("names a title that has only a stage tag without a tag separator", () => {

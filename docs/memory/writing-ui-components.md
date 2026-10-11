@@ -371,11 +371,16 @@ marked as it is, and do not add a new exception without the user's say. Concrete
   without lowering its opacity). A translucent fill (HeroUI's soft chip is 15% of its colour) is measured as drawn:
   composite it over each surface it actually lands on — a selected and a hovered row, a dialog's `--overlay` — and
   measure the label against that; measuring against the bare surface or the fill's own colour overstated one chip's
-  contrast and missed a 4.5:1 failure on selected rows. A region given a surface colour of its own needs HeroUI's `--default`-filled
-  controls checked on it in particular: the dark sidebar landed on `--default`'s own lightness and every such control
-  vanished. Override the whole `--default` family on that subtree, as `.sidebar-fills` in `packages/ui/src/style.css`
-  does, since `--default-hover` and `--default-soft` are computed on `<html>` and `--default` alone does not reach
-  them.
+  contrast and missed a 4.5:1 failure on selected rows. A region given a surface colour of its own needs HeroUI's
+  `--default`-filled controls checked on it in particular: the dark sidebar landed on `--default`'s own lightness and
+  every such control vanished. Override the whole `--default` family on that subtree, as `.sidebar-fills` in
+  `packages/ui/src/style.css` does, since `--default-hover` and `--default-soft` are computed on `<html>` and
+  `--default` alone does not reach them. Such an override moves the ground under the text HeroUI draws on those fills
+  too, so its audit covers every control the family reaches in that subtree, label and glyph, resting and hovered —
+  and the label's colour is not necessarily the foreground, because an enclosing HeroUI component may have imposed one
+  already: `.modal__body` applies `text-muted`, which everything inside a dialog's body inherits, controls portalled
+  in from elsewhere included. So a label that needs 4.5:1 on the new fill is given `text-foreground` there explicitly
+  rather than assumed to have it.
 - **Not by colour alone**: a status or state that differs in colour also differs in glyph, shape or text.
 - **Motion**: an animation or transition that is not essential stops under `prefers-reduced-motion: reduce`
   (Tailwind's `motion-safe:` / `motion-reduce:` variants).

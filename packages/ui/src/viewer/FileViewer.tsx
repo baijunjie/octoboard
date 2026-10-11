@@ -1,13 +1,12 @@
 import { Alert, Button, Chip } from "@heroui/react";
-import { ChevronLeft, ChevronRight, FileQuestion, Unplug } from "lucide-react";
+import { ChevronLeft, ChevronRight, File, FileQuestion, Unplug } from "lucide-react";
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { FadeOverflow } from "../components/FadeOverflow";
-import { PathText } from "../components/PathText";
+import { PlainMarkedPath } from "../components/MarkedPath";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { TitledControl } from "../components/TitledControl";
 import { Dialog, useRefocusIfLost } from "../dialogs/Dialog";
-import { joinPhrases } from "../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { useOctoboardTheme } from "../theme";
@@ -150,28 +149,27 @@ export function FileViewer({
     </>
   ) : null;
 
-  // The header is two rows of fixed height, whatever the subject is: the title, with the tags of what
-  // the change is before the name, and under it one row of path and description with the view
-  // controls (the Markdown view, diff layout and word wrap choices) at its end. Every part that only
-  // some subjects have (the tags, the controls, the size) sits in a row that is as tall without it,
-  // and each row is one line cut by a fade, never wrapped, so moving between files cannot move the
-  // code below.
+  // The header is the title, with the tags of what the change is before the name, and under it the
+  // details (path, source, size, rename origin) beside the view controls (the Markdown view, diff
+  // layout and word wrap choices), which float at the row's end. The details are separate items laid
+  // out like words around that float (`DetailItem`): they share the row with the controls to use the
+  // width beside them, and one too long for the space left moves down to a row of its own, where it
+  // has the whole width, rather than being squeezed against the others. Each item is one line cut by
+  // a fade, so only a detail that does not fit even alone is clipped.
+  // The block is the row beside the controls plus a row for each further line the dropped items
+  // need (short items that all miss the space beside the controls share one): two rows when a long
+  // comparison drops, three when a rename's long origin drops too, each taking 32 px of the code
+  // area from the dialog. That is accepted, because the milestone asks that a long detail take a
+  // row of its own rather than be squeezed, and capping it would squeeze one. It also gives up what
+  // the header held before, each row one line that is never wrapped, so that moving between files
+  // could not move the code below; the code now moves when the rows needed differ from one file to
+  // the next.
   // An untracked file is a change with an absent old side, which `changeStatus` calls added; the
   // list marks it untracked and says so in `subject.status`, which also holds while the content is
   // not read (yet). Without one, a change's sides give it, and a path in conflict has none to compare.
   const status: StatusKey | undefined =
     subject.status ?? (content.state === "change" ? changeStatus(content.change) : content.state === "conflict" ? "conflicted" : undefined);
-  // The description's parts as the one string that is its tooltip when it is cut, in the order drawn.
   const renamedFrom = content.state === "change" ? renamedFromPath(content.change) : undefined;
-  const description = joinPhrases(
-    language,
-    [
-      subject.sourceText ?? (typeof subject.source === "string" ? subject.source : undefined),
-      content.state === "file" ? formatFileSize(language, content.body.size) : undefined,
-      // LRI…PDI is the plain-text form of the `dir="ltr"` the drawn path carries.
-      renamedFrom === undefined ? undefined : t("viewer.change.renamedFrom", { path: `\u2066${displayWirePath(renamedFrom)}\u2069` }),
-    ].filter((part): part is string => typeof part === "string"),
-  );
   const statusLabel = status ? t(STATUS_LABELS[status]) : undefined;
   const tags = [statusLabel, subject.stage].filter((tag): tag is string => tag !== undefined);
   const titleName = tags.length > 0 ? `${tags.join(t("viewer.tagSeparator"))}${t("viewer.titleSeparator")}${name}` : name;
@@ -185,14 +183,19 @@ export function FileViewer({
               the drawn boxes are hidden from it. select-none keeps a copied heading from holding the
               text twice. */}
           <span className="sr-only select-none">{titleName}</span>
-          <span aria-hidden="true" className="flex min-w-0 items-center gap-2">
+          <span aria-hidden="true" className="flex min-w-0 items-center gap-2.5">
             {/* What the change is, coloured, then where it is from, neutral: both tags come before the name,
-                whichever the subject has, and never shrink, so the name is what the fade cuts. */}
-            {status && <StatusChip status={status}>{statusLabel}</StatusChip>}
-            {subject.stage !== undefined && (
-              <Chip size="sm" variant="soft">
-                {subject.stage}
-              </Chip>
+                whichever the subject has, and never shrink, so the name is what the fade cuts. The
+                tags sit closer to each other than the group does to the name. */}
+            {tags.length > 0 && (
+              <span className="flex shrink-0 items-center gap-1">
+                {status && <StatusChip status={status}>{statusLabel}</StatusChip>}
+                {subject.stage !== undefined && (
+                  <Chip size="sm" variant="soft">
+                    {subject.stage}
+                  </Chip>
+                )}
+              </span>
             )}
             <FadeOverflow as="span" dir="ltr" className="min-w-0" titleWhenClipped={name}>
               {name}
@@ -204,23 +207,38 @@ export function FileViewer({
       footer={footer}
       resetKey={subject.key}
     >
-      <div ref={headerRef} data-viewer-description="" className="flex h-8 min-w-0 shrink-0 items-center gap-3 text-xs text-muted">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <PathText path={displayWirePath(subject.path)} className="min-w-0 shrink" />
-          <FadeOverflow as="span" className="flex min-w-0 shrink items-center gap-3" titleWhenClipped={description}>
-            {subject.source && <span>{subject.source}</span>}
-            {content.state === "file" && <span>{formatFileSize(language, content.body.size)}</span>}
-            {renamedFrom !== undefined && <RenamedFrom path={renamedFrom} />}
-          </FadeOverflow>
-        </div>
+      <div ref={headerRef} data-viewer-description="" className="flow-root min-h-8 min-w-0 shrink-0 text-xs leading-8">
         {/* Fixed places, the Markdown view choice, then the layout choice, then the wrap choice, so
             the Tab order is the order on screen whichever of them mounts first. The slots have no
-            box of their own while empty, so they take none of the gap. */}
-        <div className="flex shrink-0 items-center gap-2">
+            box of their own while empty, so they take none of the gap. The group floats to the end of
+            the row, ahead of the details in the source so the line next to it is the one it shortens
+            (a float shortens only the lines that follow it). That puts the three control groups before
+            the file's path for a screen reader. That cost was weighed and accepted: the details are
+            independent, separately labelled facts and the path is not needed to use the controls. The
+            dialog's body text is muted, which a toggle's unselected label would inherit (4.5:1 only
+            on HeroUI's own fill, short on `.dialog-fills`), so the controls take the foreground
+            colour and each detail item the muted one. */}
+        <div className="float-end flex h-8 items-center gap-2 text-foreground">
           <div ref={setMarkdownViewSlot} className="contents" />
           <div ref={setLayoutSlot} className="contents" />
           {wrapClaimed && <WrapToggleHost />}
         </div>
+        <DetailItem>
+          <PlainMarkedPath path={displayWirePath(subject.path)} icon={File} />
+        </DetailItem>
+        {subject.source && (
+          <DetailItem>
+            <FadeOverflow
+              as="span"
+              className="min-w-0"
+              titleWhenClipped={subject.sourceText ?? (typeof subject.source === "string" ? subject.source : undefined)}
+            >
+              {subject.source}
+            </FadeOverflow>
+          </DetailItem>
+        )}
+        {content.state === "file" && <DetailItem>{formatFileSize(language, content.body.size)}</DetailItem>}
+        {renamedFrom !== undefined && <RenamedFrom path={renamedFrom} />}
       </div>
       <ControlsSlot value={controls}>
         <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} />
@@ -268,11 +286,21 @@ function renamedFromPath(change: ViewerChange): string | undefined {
   return change.old.state === "present" && change.new.state === "present" && change.old.path !== change.new.path ? change.old.path : undefined;
 }
 
+/** One detail of the header, an item of its own that flows around the view controls and can take a
+ * row of its own when it does not fit beside them. Its `inline-flex` is not free to change:
+ * `RenamedFrom` puts a path into the middle of a sentence, which works only because the sentence's
+ * text run becomes an anonymous flex item beside the path's own flex item, spaced by `gap-1.5`
+ * rather than by the space in the message. In a non-flex display the path, a block-level flex box,
+ * would break the line. */
+function DetailItem({ children }: { children: React.ReactNode }): React.ReactElement {
+  return <span className="me-4 inline-flex h-8 max-w-full items-center gap-1.5 whitespace-nowrap align-top text-muted">{children}</span>;
+}
+
 function RenamedFrom({ path }: { path: string }): React.ReactElement {
   return (
-    <span>
-      <Message id="viewer.change.renamedFrom" params={{ path: <span dir="ltr">{displayWirePath(path)}</span> }} />
-    </span>
+    <DetailItem>
+      <Message id="viewer.change.renamedFrom" params={{ path: <PlainMarkedPath path={displayWirePath(path)} icon={File} /> }} />
+    </DetailItem>
   );
 }
 

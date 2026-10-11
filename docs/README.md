@@ -161,7 +161,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   sharing the machine with other worktrees' dev apps (fixed port, stopping by PID only), and fully reloading a dev
   window before judging a defect in it.
 - [Verifying the desktop UI](memory/verifying-the-desktop-ui.md) — how to verify terminal and UI behaviour in the real
-  app: why a verification stays as narrow as the change, looking at a UI state in the gallery before staging it through
+  app: why a verification stays as narrow as the change and why a shared component's markup widens that scope to every
+  surface already using it, looking at a UI state in the gallery before staging it through
   a daemon and what the gallery cannot settle, checking in WebKit with real pointer input and with long and CJK text,
   ruling out a locked screen before trusting a capture, getting an error out of a blank window, bisecting a symptom
   against the daemon, what a scripted GUI probe can and cannot prove and why its setup goes through the daemon's
@@ -189,7 +190,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   the row is the tab stop and an arrow key reaches the controls in it — visible focus, names, roles and states
   (`aria-current` only on hand-built rows, a status region kept mounted so what appears in it is announced), contrast —
   auditing every gallery scenario in both themes, fills against their surface and animations at their faintest frame,
-  overriding HeroUI's whole `--default` family on a region with its own surface, which token an outline meant to be seen
+  overriding HeroUI's whole `--default` family on a region with its own surface and then auditing the text HeroUI draws
+  on those fills, which an enclosing component may have muted already, which token an outline meant to be seen
   is built from, and why HeroUI's own text colours are measured rather than trusted — colour, motion).
 - [Reading daemon state in the UI](memory/reading-daemon-state-in-the-ui.md) — why a map read through
   `useDaemonStore` has a new identity after every daemon event of its kind, so an effect or memo meant to fire on one

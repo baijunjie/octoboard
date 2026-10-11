@@ -439,6 +439,21 @@ async function files(): Promise<ViewerSubject[]> {
   ];
 }
 
+const LONG_COMPARISON = "release/2024-11-stabilisation-and-hotfix-candidates at 1234567 to feature/ranking-experiments-with-a-long-name at fedcba0";
+/** A one-hunk patch of a Markdown file, from `oldPath` to `newPath` (the same for a plain edit). */
+const markdownPatch = (oldPath: string, newPath: string) => `diff --git a/${oldPath} b/${newPath}
+index 1111111..2222222 100644
+--- a/${oldPath}
++++ b/${newPath}
+@@ -1,3 +1,3 @@
+ # Viewer guide
+-A paragraph with **bold**.
++A paragraph with **bold** and _italic_.
+ 
+`;
+const CJK_PATH = "docs/设计说明/交互与视觉/项目文件浏览器的交互与视觉设计说明（最终评审版，请勿直接修改）.md";
+// The catalog's Simplified Chinese wording of the comparison, with long CJK branch names.
+const CJK_COMPARISON = "从 发布/二零二四年十一月稳定化与紧急修复候选分支（1234567）到 功能/排序实验与长名称分支用于验证换行行为（fedcba0）";
 const oldSession = text("src/session.ts", OLD_SESSION);
 const newSession = text("src/session.ts", NEW_SESSION);
 const before = binary("assets/logo.png", IMAGES.before_png);
@@ -491,6 +506,73 @@ async function changes(): Promise<ViewerSubject[]> {
       source: "main at 1234567 to feature at fedcba0",
       sourceText: "main at 1234567 to feature at fedcba0",
       content: { state: "change", change: { old: present("src/session.ts", oldSession), new: present("src/session.ts", newSession), patch: MODIFIED_PATCH } },
+    },
+    // Long branches beside the Markdown view choice: a Markdown file shown alone, from the Compare
+    // view, has the source / document choice and the wrap choice in source (a Markdown diff has the
+    // layout and wrap choices and no document, so all three never show together).
+    {
+      key: "Compare:docs/guide.md",
+      path: "docs/guide.md",
+      source: LONG_COMPARISON,
+      sourceText: LONG_COMPARISON,
+      content: { state: "change", change: { old: { state: "absent" }, new: present("docs/guide.md", text("docs/guide.md", GUIDE)) } },
+    },
+    {
+      key: "Compare:docs/short.md",
+      path: "docs/short.md",
+      source: "main at 1234567 to feature at fedcba0",
+      sourceText: "main at 1234567 to feature at fedcba0",
+      content: { state: "change", change: { old: { state: "absent" }, new: present("docs/short.md", text("docs/short.md", GUIDE)) } },
+    },
+    change(
+      "docs/handbook/engineering/onboarding/renamed-guide.md",
+      present("docs/handbook/engineering/onboarding/previous-locations/legacy/old-guide.md", text("old-guide.md", GUIDE)),
+      present("docs/handbook/engineering/onboarding/renamed-guide.md", text("renamed-guide.md", GUIDE)),
+      "diff --git a/docs/handbook/engineering/onboarding/previous-locations/legacy/old-guide.md b/docs/handbook/engineering/onboarding/renamed-guide.md\nsimilarity index 100%\nrename from docs/handbook/engineering/onboarding/previous-locations/legacy/old-guide.md\nrename to docs/handbook/engineering/onboarding/renamed-guide.md\n",
+      "Staged",
+    ),
+    // The tallest header: a Compare-view rename with long branches and a long origin, each taking a
+    // row.
+    {
+      key: "Compare:docs/handbook/renamed-notes.md",
+      path: "docs/handbook/engineering/onboarding/renamed-notes.md",
+      source: LONG_COMPARISON,
+      sourceText: LONG_COMPARISON,
+      content: {
+        state: "change",
+        change: {
+          old: present("docs/handbook/engineering/onboarding/previous-locations/legacy/old-notes.md", text("old-notes.md", GUIDE)),
+          new: present("docs/handbook/engineering/onboarding/renamed-notes.md", text("renamed-notes.md", GUIDE)),
+          patch: markdownPatch(
+            "docs/handbook/engineering/onboarding/previous-locations/legacy/old-notes.md",
+            "docs/handbook/engineering/onboarding/renamed-notes.md",
+          ),
+        },
+      },
+    },
+    // A Markdown file modified between long-named branches: the layout and wrap choices beside a long
+    // comparison.
+    {
+      key: "Compare:docs/modified.md",
+      path: "docs/modified.md",
+      source: LONG_COMPARISON,
+      sourceText: LONG_COMPARISON,
+      content: {
+        state: "change",
+        change: {
+          old: present("docs/modified.md", text("docs/modified.md", GUIDE)),
+          new: present("docs/modified.md", text("docs/modified.md", GUIDE)),
+          patch: markdownPatch("docs/modified.md", "docs/modified.md"),
+        },
+      },
+    },
+    // CJK in the widest places: a long path and long branch names.
+    {
+      key: `Compare:${CJK_PATH}`,
+      path: CJK_PATH,
+      source: CJK_COMPARISON,
+      sourceText: CJK_COMPARISON,
+      content: { state: "change", change: { old: { state: "absent" }, new: present(CJK_PATH, text("设计说明.md", GUIDE)) } },
     },
     change("bin/tool.wasm", present("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAA=" })), present("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAABBAFgAAA=" }))),
     change("data/table.ts", present("data/table.ts"), present("data/table.ts"), largePatch()),

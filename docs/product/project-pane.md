@@ -140,13 +140,23 @@ Opening a file shows it in the **file viewer**, a dialog nearly as large as the 
 is the file's name; under it are the file's path within the project and its size. The Git mode opens a change in the
 same viewer; what it shows of a change is in "Opening a change" in `docs/product/project-pane-git-mode.md`.
 
-The header is two rows, and the same height for every file, a change, or one still loading or failed: the title row, and
-under it a single row for the path, the size or the branches of a comparison and, at its end, the view controls the
-subject has — the Markdown view choice (see "A Markdown file as a document" below), then the diff layout choice, then
-the wrap choice (see "Wrapping long lines" below). A title or a row that is too long for the window fades out at its
-end rather than wrapping (the path from its start, so the name of its folder stays visible, and the full text is the
-tooltip); the view controls keep their place, and the description gives way first. Moving from file to file therefore
-never moves the code below it.
+The header is the title row and, under it, the subject's **details** — the file's path within the project, the
+comparison a change is read from, a file's size, and the path a rename came from — laid out beside the **view
+controls**, which hold the end of the row in a fixed order: the Markdown view choice (see "A Markdown file as a
+document" below), then the diff layout choice, then the wrap choice (see "Wrapping long lines" below). At most two of
+the three are ever offered at once, since the Markdown view choice belongs to a whole Markdown file's body and the
+layout choice to a two-sided diff, and a Markdown diff keeps its source view alone.
+
+The details share that row with the controls to use the width beside them, not to hold the header to one row. Each
+detail is an item of its own, and one too long for the space left beside the controls moves down to a row of its own,
+where it has the header's whole width; several can move down, so the header is one row of details, or two, or three.
+Each item is one line that is never wrapped: where it does not fit even on a row of its own it fades out rather than
+ending in an ellipsis and carries its full text as its tooltip — one fade and one tooltip per detail, not one for the
+row. The title fades the same way. A path — the file's own and a rename's origin — fades at its start instead, so the
+file's own name stays visible, and shows with a file icon in front of it, as paths read elsewhere in the application.
+
+**Moving from file to file can move the code below the header**, when the details of one file need a row that the next
+one's do not.
 
 ### What it shows
 

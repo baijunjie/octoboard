@@ -359,7 +359,7 @@ export function useChangeReader(project: string): ChangeReader {
           },
         })
       : undefined;
-  // The same wording as `source`, as plain text for the description's tooltip, each branch name
+  // The same wording as `source`, as plain text for its tooltip, each branch name
   // isolated by U+2068/U+2069 the way the `<bdi>`s isolate it in `source`.
   const sourceText =
     origin.kind === "comparison"

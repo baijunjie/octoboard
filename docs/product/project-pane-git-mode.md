@@ -365,10 +365,15 @@ things a change says, what kind it is and whether it is staged, are kept apart, 
 Both tags are in front of the name, and read with it as "Modified, Unstaged: server.ts". An untracked file is always
 new, so its only tag is Untracked, in the muted coral the list's U has, which is no kind of change and shares no colour
 with Added or Deleted; a path in conflict has only a Conflicted tag, coloured as its C is. Neither has a stage tag, its
-status tag already saying where it is from. Under the title, in one row, are the path within the project and, for a
-rename, the path it was renamed from. A change from the Compare view has no stage tag either; it names, after the path,
-the two branches and the commit each was at — "main at 4f2a9c1 to feature at 9e8d7c6", say. The tags never shrink; the
-name fades out when there is no room for it.
+status tag already saying where it is from; a change from the Compare view has none either. The tags read as one group,
+spaced closer to each other than the group is to the name, and each of them, the neutral stage tag included, is visibly
+a tag against the viewer's background in either appearance. The tags never shrink; the name fades out when there is no
+room for it.
+
+Under the title are the change's details, laid out as the viewer lays out any subject's (see "The file viewer" in
+`docs/product/project-pane.md`): the path within the project and, for a rename, the path it was renamed from. A change
+from the Compare view names, after the path, the two branches and the commit each was at — "main at 4f2a9c1 to feature
+at 9e8d7c6", say.
 
 A change from the Compare view is read from the two commits of the comparison on screen, its old side from From's
 commit and its new side from To's, and is shown as a staged change is below; it is never untracked or in conflict.
@@ -376,8 +381,8 @@ commit and its new side from To's, and is shown as a staged change is below; it 
 ### What it shows
 
 - **A text change** is a diff, drawn from the patch Git makes for it: unified at first, or split into its two sides
-  side by side, chosen among the view controls at the end of the row under the title. The choice is offered only for a
-  diff with lines on both sides: an added or a deleted file reads the same either way, so it has none. It is
+  side by side, chosen among the view controls in the viewer's header. The choice is offered only for a diff with
+  lines on both sides: an added or a deleted file reads the same either way, so it has none. It is
   remembered: later diffs open in the layout last chosen, across changes and after the app restarts. Only the patch's
   hunks and the lines around them are shown, each run of unchanged lines between them collapsed into a separator that
   can be expanded (see "Expanding the collapsed lines" below). A change whose patch has no lines — an empty file added

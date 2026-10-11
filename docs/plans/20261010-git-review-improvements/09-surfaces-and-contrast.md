@@ -25,6 +25,19 @@ From milestone 07 (a document view for Markdown in the viewer):
   the dialog in light mode. Move it onto whichever HeroUI surface the code area moves to, rather than leaving the two
   frames on different footings.
 
+From milestone 08 (the viewer header's layout and tags):
+
+- [ ] The neutral chip fill was fixed for the viewer's dialog only, by overriding HeroUI's whole `--default` family
+  on it (`.dialog-fills` in `packages/ui/src/style.css`, applied to the `size="viewer"` dialog). Every dialog sits on
+  the same `--overlay`, so a neutral soft chip elsewhere still has the fill that was diagnosed as not reading as a
+  tag — `DirectoryPicker.tsx:145` draws one. Decide here whether the override belongs to dialogs in general, along
+  with the panel's other surfaces, rather than per dialog. The viewer's measured values are in the `.dialog-fills`
+  comment and are the reference.
+- [ ] The viewer's view-control group marks its selected button with a fill difference of 1.03:1 in light and 1.35:1
+  in dark, leaning on the label's colour change and `aria-pressed` to carry the state. Not a regression from that
+  milestone — it was that way before and improved slightly in dark — but "not by colour alone" and 1.4.11's
+  requirement for a state are both thin there, and the fills are this milestone's subject.
+
 ## Technical design
 
 - [ ] The viewer's code, diff and document areas sit on a HeroUI Surface whose variant gives a visible boundary in
