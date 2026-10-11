@@ -35,6 +35,19 @@ ARIA region semantics.
   handling, and put a comment at the component saying why HeroUI's is not used (a design-intent comment under the
   "Comment conventions" section of `.claude/skills/agent-docs/SKILL.md`).
 
+## A HeroUI control's size follows the window's width, one step larger below 48rem
+
+HeroUI 3 sizes a `Button` or a `ToggleButton` by the **viewport's** width, not its container's: every size variant is
+one step taller, and an icon-only one that much wider, below a 48rem (768px) window — `sm` icon-only is 36px square
+there against 32px at and above, the default 40px against 36px (the `@media (min-width: 48rem)` rules in
+`packages/ui/node_modules/@heroui/styles/dist/heroui.min.css`). So a control measured at a comfortable window width
+has a second, larger height nothing in the source, the types or a screenshot shows, and a row sized to the smaller one
+is overflowed by it as soon as the user narrows the window.
+
+Give any fixed-height row that holds such a control the height of its larger form, and look at the row in a window
+narrower than 768px as well as a wide one. The pane the row sits in tells nothing: a narrow pane in a wide window
+still gets the small form.
+
 ## A single-line field hands its form the trimmed value
 
 Leading and trailing whitespace is never meant, so a form never holds it: every single-line text field in

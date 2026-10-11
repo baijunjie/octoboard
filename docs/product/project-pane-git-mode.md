@@ -162,8 +162,10 @@ action so far. A folder's row in the grouped form has no such button, and neithe
 ### Flat or grouped by folder
 
 **Group by folder**, the toggle at the end of the row of view tabs, switches the change list between one row per
-change and the changes grouped under the folders they are in. It is the one choice for both views, kept across
-projects and after the application restarts; until it is turned on, both lists are flat.
+change and the changes grouped under the folders they are in. It is a single icon button whose icon shows which form
+the lists are in and whose name says what pressing it will do, so the name alternates between "Group by folder" and
+"Show as flat list" (see "Two-state icon toggles" in `docs/product/labels-and-tooltips.md`). It is the one choice for
+both views, kept across projects and after the application restarts; both lists are flat until it is turned on.
 
 Grouped by folder, a list keeps its sections and their counts — the Uncommitted view's Staged, Conflicted, Unstaged
 and Untracked, the comparison's one section — and within each section the changes sit under their folders:
@@ -562,5 +564,5 @@ every folder open. Change lists, branch lists, comparisons and their contents ar
 kept only while the project's pane stays in the right pane (see "Filtering by file name" above).
 
 **Across projects and restarts**: whether the change lists are grouped by folder (see "Flat or grouped by folder"
-above), kept as the file viewer's Markdown view, diff layout and wrap choices are. The mode itself is kept with the
-rest of the pane's state (see "What is remembered" in `docs/product/project-pane.md`).
+above), kept as the file viewer's document-or-source, unified-or-split and wrap choices are. The mode itself is kept
+with the rest of the pane's state (see "What is remembered" in `docs/product/project-pane.md`).

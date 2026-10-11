@@ -144,3 +144,20 @@ a browser check that only shows the selection scoped to the right region passes 
 
 So assert in jsdom only what such a handler does to the DOM, and settle what a copy carries by copying for real in a
 browser over the page and reading the clipboard back.
+
+## A jsdom test's fixture must not stand in for what is under test
+
+Applies to the `packages/ui` component tests (`vitest` under jsdom). Where the fixture models the geometry or the
+wiring that the rule under test is about, every case passes whatever the production code does, and the rule can be
+deleted or moved to the wrong place without a single failure.
+
+- **Tokens and geometry**: jsdom loads no stylesheet, so `getComputedStyle(...).getPropertyValue("--x")` is `""` and
+  `parseFloat` of it `NaN`. Set every custom property the code under test reads on `document.documentElement` in the
+  test itself, and keep stubbed element geometry (`offsetLeft`, `getBoundingClientRect`) at what the current CSS lays
+  out — a fixture left at the layout from before a change exercises geometry the app no longer has. Have the code
+  under test throw on a token that does not parse rather than defaulting (`|| 0`), so an unset token fails loudly
+  instead of silently becoming the geometry the rule exists to correct.
+- **Wiring**: render the real component that owns the behaviour, and the real control the behaviour keys on, rather
+  than a test host that calls the hook and attaches the listeners itself. Which component has to call the hook, and
+  what the control has to carry for a selector to find it, are part of the rule; against a hand-wired host they are
+  invisible, and the whole file stays green with the call back on the wrong element.

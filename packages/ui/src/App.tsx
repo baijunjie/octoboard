@@ -503,6 +503,13 @@ export function App(): React.ReactElement {
         sidebarShown={panes.sidebarShown}
         hasSidebar={!noConsoles}
         onToggleSidebar={panes.toggleSidebar}
+        onSidebarToggleEnter={panes.sidebarPeek.reveal}
+        onSidebarToggleLeave={panes.sidebarPeek.leave}
+        aside={asideOwner?.kind}
+        asideShown={panes.asideShown}
+        onToggleAside={panes.toggleAside}
+        onAsideToggleEnter={() => panes.asidePeek.reveal()}
+        onAsideToggleLeave={panes.asidePeek.leave}
         canGoBack={navigation.canGoBack}
         canGoForward={navigation.canGoForward}
         onBack={navigation.back}
@@ -530,11 +537,6 @@ export function App(): React.ReactElement {
           onOpenDialog={openDialog}
           waitingCount={waitingSessions.length}
           onNextWaiting={selectNextWaiting}
-          aside={asideOwner?.kind}
-          asideShown={panes.asideShown}
-          onToggleAside={panes.toggleAside}
-          onAsideToggleEnter={() => panes.asidePeek.reveal()}
-          onAsideToggleLeave={panes.asidePeek.leave}
           onOpenSettings={openSettings}
           focusTerminal={focusTerminal}
         />

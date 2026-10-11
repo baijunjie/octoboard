@@ -52,7 +52,7 @@ export interface PanePeek {
   /** Whether the pane is currently floating. Never true below the breakpoint or while it is docked. */
   active: boolean;
   /** Floats the pane in, as the pointer rests on whatever brings it up (the aside's edge strip or
-   * toggle; the sidebar's is the rail's avatars, through `useConsolePeek`); does nothing where the
+   * toggle; the sidebar's is its toggle and the rail's avatars, through `useConsolePeek`); does nothing where the
    * pane cannot float, and closes the other side's floating pane. It arms no slide-away timer: that
    * starts when the pointer leaves the pane or whatever brought it up (`leave`). */
   reveal: () => void;
@@ -62,8 +62,9 @@ export interface PanePeek {
   leave: () => void;
 }
 
-/** The hidden docked sidebar's hover reveal: it floats in for the console whose avatar on the rail
- * the pointer rests on (`useConsolePeek`), with no `reveal` of its own. */
+/** The hidden docked sidebar's hover reveal: its `reveal` floats it in showing the current console,
+ * and the console whose avatar on the rail the pointer rests on floats it in showing that one
+ * (`useConsolePeek`). */
 export type SidebarPeek = Omit<PanePeek, "reveal"> & ConsolePeek;
 
 interface PeekControl extends PanePeek {
@@ -132,7 +133,7 @@ export interface PaneToggles {
   asideOpen: boolean;
   sidebarDocked: boolean;
   asideDocked: boolean;
-  /** The hidden docked sidebar floating over the terminal because the pointer is on a console's avatar. */
+  /** The hidden docked sidebar floating over the terminal, from its toggle or a console's avatar. */
   sidebarPeek: SidebarPeek;
   /** The aside's floating, from the window's end edge or the aside's toggle. */
   asidePeek: PanePeek;
@@ -151,7 +152,8 @@ export interface PaneToggles {
 }
 
 /**
- * The state behind the two panel toggles (the sidebar's in the top bar, the aside's on the rail).
+ * The state behind the two panel toggles, both in the top bar: the sidebar's at its start, the
+ * aside's at its end.
  * The aside is the pane at the end side, which shows whatever owns it at the moment: a console
  * session's report panel or a project's browser (`asideOwner.ts`). Below the `docked` breakpoint
  * the sidebar and the aside are closed-by-default overlays (their own components' doc comments
@@ -160,8 +162,8 @@ export interface PaneToggles {
  * and widening the window past the breakpoint has to be able to close either overlay.
  *
  * While a docked pane is hidden, the pointer can float it in over the terminal without resizing
- * it (`sidebarPeek`, `asidePeek`): the sidebar is brought up by a console's avatar on the rail,
- * the aside by the window's end edge or its toggle; leaving it (or Escape) hides it again, and
+ * it (`sidebarPeek`, `asidePeek`): the sidebar is brought up by its toggle or a console's avatar
+ * on the rail, the aside by the window's end edge or its toggle; leaving it (or Escape) hides it again, and
  * pressing the toggle docks it for good. The two never float together: revealing one hides the
  * other.
  *

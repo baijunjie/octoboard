@@ -72,17 +72,17 @@ export function sameOwner(a: AsideOwner | undefined, b: AsideOwner | undefined):
   return ownerKey(a) === ownerKey(b);
 }
 
-/** How the aside's controls are named for each kind of owner: the rail's toggle, the scrim that
+/** How the aside's controls are named for each kind of owner: the top bar's toggle, the scrim that
  * closes its drawer and its resize handle. A project's are named for the project pane, not its
  * files, as the same pane also shows the project's Git review. */
 export const ASIDE_LABELS: Record<
   AsideOwner["kind"],
   { show: PlainMessageKey; hide: PlainMessageKey; close: PlainMessageKey; resize: PlainMessageKey }
 > = {
-  report: { show: "rail.report.show", hide: "rail.report.hide", close: "app.closeReport", resize: "pane.resizeReport" },
+  report: { show: "titleBar.report.show", hide: "titleBar.report.hide", close: "app.closeReport", resize: "pane.resizeReport" },
   project: {
-    show: "rail.projectPane.show",
-    hide: "rail.projectPane.hide",
+    show: "titleBar.projectPane.show",
+    hide: "titleBar.projectPane.hide",
     close: "app.closeProjectPane",
     resize: "pane.resizeProjectPane",
   },

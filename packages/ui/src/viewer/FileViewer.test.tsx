@@ -110,6 +110,11 @@ function show(subject: ViewerSubject | undefined, navigation?: ViewerNavigation)
 const settled = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
 
 const dialog = () => document.querySelector<HTMLElement>("[role=dialog]");
+// The view controls are icon buttons named for what pressing does, so a control is found by the name
+// of either of its states.
+const controlNamed = (...names: string[]) => [...dialog()!.querySelectorAll("button")].filter((b) => names.includes(b.getAttribute("aria-label") ?? ""));
+const layoutToggles = () => controlNamed("Show split diff", "Show unified diff");
+const wrapToggles = () => controlNamed("Wrap lines", "Don't wrap lines");
 const button = (label: string) => document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
 
 const failed: ViewerSubject = { key: "a", path: "src/a.ts", content: { state: "error", message: "src/a.ts is gone." } };
@@ -264,7 +269,7 @@ it.each([
     content: { state: "change", change: { old: offered ? side : { state: "absent" }, new: side, patch } },
   });
   await settled();
-  expect(dialog()?.querySelector('[aria-label="Diff layout"]') !== null).toBe(offered);
+  expect(layoutToggles().length > 0).toBe(offered);
 });
 
 // git writes a type change as a removal and an addition; the viewer draws them as one diff, framed
@@ -277,7 +282,7 @@ it("draws a type change as one diff with the layout choice", () => {
   show({ key: "tc", path: "src/c.ts", content: { state: "change", change: { old: file, new: link, patch } } });
   expect(dialog()?.querySelectorAll("[data-layout]")).toHaveLength(1);
   expect(dialog()?.querySelectorAll("[role=region]")).toHaveLength(1);
-  expect(dialog()?.querySelector('[aria-label="Diff layout"]')).not.toBeNull();
+  expect(layoutToggles()).toHaveLength(1);
   expect(dialog()?.querySelector("[data-renderer]")?.textContent).toContain("-a\n+b\n");
   expect(dialog()?.textContent).not.toContain("Before");
 });
@@ -302,7 +307,7 @@ it("offers expansion to a rename below its own path drawn from one section", asy
   show({ key: "nested-one", path: "f/g", content: { state: "change", change: { old: file("f"), new: file("f/g"), patch, loadBodies } } });
   await settled();
   expect(dialog()?.querySelector("[data-expandable]")?.getAttribute("data-expandable")).toBe("true");
-  expect(dialog()?.querySelector('[aria-label="Diff layout"]')).not.toBeNull();
+  expect(layoutToggles()).toHaveLength(1);
 });
 
 // A rename whose two versions are equal is said to be exactly that, with a patch that is empty or
@@ -343,8 +348,10 @@ it("draws a one-sided diff unified even when split was chosen for another", asyn
   show(change("@@ -1 +1 @@\n-a\n+b\n", side));
   await settled();
   act(() => {
-    [...dialog()!.querySelectorAll("button")].find((b) => b.textContent === "Split")!.click();
+    controlNamed("Show split diff")[0].click();
   });
+  expect(controlNamed("Show split diff")).toHaveLength(0);
+  expect(controlNamed("Show unified diff")).toHaveLength(1);
   expect(layout()).toBe("split");
   show(change("@@ -0,0 +1 @@\n+a\n", { state: "absent" }));
   expect(layout()).toBe("unified");
@@ -421,7 +428,8 @@ it("says a change whose patch has no lines has no diff, rather than loading for 
     content: { state: "change", change: { old: { state: "absent" }, new: { state: "present", path: "e", kind: "file" }, patch } },
   });
   expect(dialog()?.textContent).toContain("This change has no diff to show.");
-  expect(dialog()?.querySelector("[data-renderer], [aria-label='Diff layout']")).toBeNull();
+  expect(dialog()?.querySelector("[data-renderer]")).toBeNull();
+  expect(layoutToggles()).toHaveLength(0);
   expect(dialog()?.querySelector("[role=status]:not([aria-hidden])")?.textContent).toBe("");
 });
 
@@ -439,7 +447,7 @@ it("keeps focus in the dialog when the subject's content is replaced", () => {
 // The wrap choice goes when the subject has no code left, a commit after the content changes.
 it("keeps focus in the dialog when the wrap choice it was on goes", () => {
   show(modified());
-  act(() => [...dialog()!.querySelectorAll("button")].find((b) => b.textContent === "Wrap lines")!.focus());
+  act(() => wrapToggles()[0].focus());
   show(binary);
   expect(dialog()?.contains(document.activeElement)).toBe(true);
 });
@@ -463,7 +471,7 @@ it("puts the status and the stage in the title and the layout choice on the desc
   const drawn = heading.querySelector('[aria-hidden="true"]')!;
   expect([...tags].every((tag) => drawn.contains(tag))).toBe(true);
   expect(drawn.textContent).toContain("c.ts");
-  const row = dialog()!.querySelector<HTMLElement>("[aria-label='Diff layout']")!.closest<HTMLElement>("[data-viewer-description]")!;
+  const row = layoutToggles()[0].closest<HTMLElement>("[data-viewer-description]")!;
   expect(row.textContent).toContain("src/c.ts");
   expect(row.textContent).not.toMatch(/Modified|staged/i);
 });
@@ -548,8 +556,10 @@ it("opens later diffs in the layout last chosen, and stores it", async () => {
   await settled();
   expect(layout()).toBe("unified");
   act(() => {
-    [...dialog()!.querySelectorAll("button")].find((b) => b.textContent === "Split")!.click();
+    controlNamed("Show split diff")[0].click();
   });
+  expect(controlNamed("Show split diff")).toHaveLength(0);
+  expect(controlNamed("Show unified diff")).toHaveLength(1);
   expect(localStorage.getItem(PREFERENCE_KEYS.diffLayout)).toBe("split");
   show(modified("src/b.ts"));
   expect(layout()).toBe("split");
@@ -600,7 +610,7 @@ it("says nothing for a loading that ends before the first text is written", () =
 // holds for the next file of either kind and is stored for the next run.
 it("wraps nothing by default, then wraps files and diffs alike once chosen, and stores it", async () => {
   const wrapped = () => dialog()?.querySelector("[data-renderer]")?.getAttribute("data-wrap");
-  const toggle = () => [...dialog()!.querySelectorAll("button")].find((b) => b.textContent === "Wrap lines")!;
+  const toggle = () => wrapToggles()[0];
   show({ key: "w", path: "src/w.ts", content: { state: "file", body: { kind: "text", text: "a\n", size: 2 } } });
   await settled();
   expect(wrapped()).toBe("false");
@@ -609,6 +619,7 @@ it("wraps nothing by default, then wraps files and diffs alike once chosen, and 
   act(() => toggle().click());
   expect(wrapped()).toBe("true");
   expect(toggle().getAttribute("aria-pressed")).toBe("true");
+  expect(toggle().getAttribute("aria-label")).toBe("Don't wrap lines");
   expect(localStorage.getItem(PREFERENCE_KEYS.wordWrap)).toBe("true");
   show(modified("src/b.ts"));
   await settled();
@@ -626,11 +637,11 @@ it("keeps the layout choice before the wrap choice when the layout choice mounts
     path: "src/c.ts",
     content: { state: "change", change: { old, new: side, patch } },
   });
-  const controls = () => [...dialog()!.querySelector("[data-viewer-description]")!.querySelectorAll("button")].map((b) => b.textContent);
+  const controls = () => [...dialog()!.querySelector("[data-viewer-description]")!.querySelectorAll("button")].map((b) => b.getAttribute("aria-label"));
   show(change("one", "@@ -0,0 +1 @@\n+a\n", { state: "absent" }));
   expect(controls()).toEqual(["Wrap lines"]);
   show(change("two", "@@ -1 +1 @@\n-a\n+b\n", side));
-  expect(controls()).toEqual(["Unified", "Split", "Wrap lines"]);
+  expect(controls()).toEqual(["Show split diff", "Wrap lines"]);
 });
 
 // An image that cannot be decoded falls back to its text on whichever side it happens to, and the
@@ -656,16 +667,14 @@ it.each([
     if (newFails) images[1].dispatchEvent(new Event("error"));
   });
   await settled();
-  const toggles = [...dialog()!.querySelectorAll("button")].filter((b) => b.textContent === "Wrap lines");
-  expect(toggles).toHaveLength(expected);
+  expect(wrapToggles()).toHaveLength(expected);
 });
 
 it("offers no wrap choice where there is no code", () => {
-  const toggles = () => [...dialog()!.querySelectorAll("button")].filter((b) => b.textContent === "Wrap lines");
   show(binary);
-  expect(toggles()).toHaveLength(0);
+  expect(wrapToggles()).toHaveLength(0);
   show(failed);
-  expect(toggles()).toHaveLength(0);
+  expect(wrapToggles()).toHaveLength(0);
 });
 
 it("reads the stored wrap choice, and falls back to unwrapped for anything else", async () => {

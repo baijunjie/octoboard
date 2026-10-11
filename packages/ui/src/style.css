@@ -43,14 +43,34 @@
      together; a fixed pixel size, since the lights' position is fixed too. */
   --title-bar-height: 40px;
 
+  /* The header of each pane in the content panel (the sidebar's console and focus headers, the
+     archive view's, the project pane's, the report panel's): one height for all of them, so their
+     bottom borders run on as one line across the panel. A second tier beside the top bar's 40px.
+     A floating pane is a card inset by `--peek-gap`, so its headers take the floating value
+     instead, which puts their bottom border at the same height as the docked ones'
+     (`floatingFrame` in `layout/paneOverlay.tsx`). The gap is all that has to come off: the card's
+     own 1px top border is matched by the content panel's, which the docked panes start below.
+     The floating value is not a cycle although `floatingFrame` overrides `--pane-header-height`
+     with it: a custom property is substituted where it is declared, so this one is already
+     `calc(56px - 8px)` when it is inherited, and the override cannot reach back into it. Declared
+     on the card too it would be a real cycle, and both properties would be invalid at
+     computed-value time, so the headers fall back to their content height and their bottom border no
+     longer lines up. It therefore belongs on an element that does not itself override
+     `--pane-header-height`. */
+  --pane-header-height: 56px;
+  --pane-header-height-floating: calc(var(--pane-header-height) - var(--peek-gap));
+
   /* The left rail under the top bar (`Rail.tsx`): the window chrome's second half, at the reading
      direction's start. The content panel starts where it ends (the panel's own 1px start border
      overlaps the rail's last pixel, so that is also where the sidebar starts), which is what the
      docked arithmetic above counts. Pane drawers start there too. */
   --rail-width: 48px;
 
-  /* The gap a floating sidebar keeps from the rail, the top bar and the window's bottom
-     (`drawerClass` in `layout/paneOverlay.tsx`). */
+  /* The gap a floating pane keeps from the window's edges and the top bar, and the sidebar from
+     the rail (`drawerClass` in `layout/paneOverlay.tsx`). `peekGapPx` there reads it back with
+     `parseFloat` and throws when that does not yield a number, so the `px` unit is load-bearing:
+     `0.5rem` would be read as 0.5px. It reads it once, so declare it here only, never under a media
+     query or a theme. */
   --peek-gap: 8px;
 
   /* Where the content area starts: right below the top bar. Anything that overlays the content
@@ -321,9 +341,9 @@
   --danger-foreground: var(--eclipse);
 }
 
-/* A selected toggle button takes a solid accent fill and a label colour of its own, in every toggle
-   of the app: the viewer's view choices and wrap button on a dialog, the appearance setting in the
-   settings dialog and the Git mode's group-by-folder button on the panel. HeroUI's soft accent tint
+/* A selected button of a toggle group takes a solid accent fill and a label colour of its own. The
+   only group left is the appearance setting in the settings dialog; the two-state view controls are
+   `.icon-toggle`s, which carry their state in the icon instead. HeroUI's soft accent tint
    (15% of the accent) is a step from the unselected `--default` fill of 1.03:1 in light and 1.07:1
    to 1.35:1 in dark, so the selected choice was told apart by its label's colour alone. Solid, it is
    3.67:1 (light) and 4.58:1 (dark) from an unselected button's fill, 4.66:1 and 6.63:1 from a
@@ -334,22 +354,33 @@
    in `@layer components`.
 
    Kept shortfall against "not by colour alone": the selected button differs from the others by
-   fill colour only, with no glyph or shape of its own. In a single-selection group which button is
-   selected is also carried by its position in the group and, for assistive technology, by
-   `aria-pressed`, and the fill difference meets WCAG 1.4.11's 3:1 for a state. */
-.toggle-button {
+   fill colour only, with no glyph or shape of its own. In the group which button is selected is
+   also carried by its position and, for assistive technology, by `aria-pressed`, and the fill
+   difference meets WCAG 1.4.11's 3:1 for a state. */
+.toggle-button-group .toggle-button {
   --toggle-button-bg-selected: var(--accent);
   --toggle-button-bg-selected-hover: color-mix(in oklab, var(--accent) 88%, black);
   --toggle-button-bg-selected-pressed: color-mix(in oklab, var(--accent) 88%, black);
   --toggle-button-fg-selected: var(--accent-foreground);
 }
 
-.dark .toggle-button,
-[data-theme="dark"] .toggle-button {
+.dark .toggle-button-group .toggle-button,
+[data-theme="dark"] .toggle-button-group .toggle-button {
   --toggle-button-bg-selected: var(--accent-glyph);
   --toggle-button-bg-selected-hover: color-mix(in oklab, var(--accent-glyph) 88%, white);
   --toggle-button-bg-selected-pressed: color-mix(in oklab, var(--accent-glyph) 88%, white);
   --toggle-button-fg-selected: var(--eclipse);
+}
+
+/* A two-state view control (`IconToggle`) tells its states apart by the icon alone, so its selected
+   state is drawn exactly as its unselected one: HeroUI's selected tokens, an accent tint, are set
+   back to the resting ones. Unlayered, so it wins over `.toggle-button`'s own tokens in
+   `@layer components`. */
+.icon-toggle {
+  --toggle-button-bg-selected: var(--toggle-button-bg);
+  --toggle-button-bg-selected-hover: var(--toggle-button-bg-hover);
+  --toggle-button-bg-selected-pressed: var(--toggle-button-bg-pressed);
+  --toggle-button-fg-selected: var(--toggle-button-fg);
 }
 
 /* The colour of an untracked file's chip (`StatusChip.tsx`), after the IDEs' "unversioned files": a

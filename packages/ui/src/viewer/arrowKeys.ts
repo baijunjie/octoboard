@@ -1,7 +1,7 @@
 import { isImeKey } from "../imeKey";
 
 /** Elements whose own handling of Left and Right comes first: text the user edits, and composite
- * widgets that move among their items with the arrows (the diff layout's toggle group, a list). */
+ * widgets that move among their own items with the arrows. */
 const OWNS_ARROWS = [
   "input",
   "textarea",

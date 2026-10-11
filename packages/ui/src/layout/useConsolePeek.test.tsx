@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { CONSOLE_PEEK_DWELL_MS, type ConsolePeek, useConsolePeek } from "./useConsolePeek";
 
@@ -9,12 +9,13 @@ import { CONSOLE_PEEK_DWELL_MS, type ConsolePeek, useConsolePeek } from "./useCo
 
 let root: Root | undefined;
 
-beforeEach(() => vi.useFakeTimers());
-afterEach(() => {
-  act(() => root?.unmount());
-  vi.useRealTimers();
-  document.body.replaceChildren();
-  root = undefined;
+beforeEach(() => {
+  vi.useFakeTimers();
+  // Registered first, so it runs after the unmounts that `mount` registers.
+  onTestFinished(() => {
+    vi.useRealTimers();
+    root = undefined;
+  });
 });
 
 /** Mounts the hook over a stand-in for the sidebar's peek state; `reveal` makes it active, as the
@@ -26,8 +27,13 @@ function mount(peekable = true) {
     latest = useConsolePeek(control);
     return null;
   }
-  root = createRoot(document.body.appendChild(document.createElement("div")));
-  const render = () => act(() => root!.render(<Probe />));
+  const container = document.body.appendChild(document.createElement("div"));
+  const mounted = (root = createRoot(container));
+  onTestFinished(() => {
+    act(() => mounted.unmount());
+    container.remove();
+  });
+  const render = () => act(() => mounted.render(<Probe />));
   render();
   return { control, render, peek: () => latest };
 }
@@ -106,4 +112,29 @@ it("does not float the sidebar in when it unmounts during the dwell", () => {
   act(() => root!.unmount());
   wait(CONSOLE_PEEK_DWELL_MS * 2);
   expect(control.reveal).not.toHaveBeenCalled();
+});
+
+it("floats the sidebar in at once from the toggle, showing the current console rather than a previewed one", () => {
+  const { control, peek } = mount();
+  act(() => peek().hoverConsole("c-1"));
+  wait(CONSOLE_PEEK_DWELL_MS);
+  expect(peek().consoleId).toBe("c-1");
+  act(() => peek().reveal());
+  expect(control.reveal).toHaveBeenCalledTimes(2);
+  expect(peek().consoleId).toBeUndefined();
+});
+
+it("does not float the sidebar in from the toggle where it cannot float", () => {
+  const { control, peek } = mount(false);
+  act(() => peek().reveal());
+  expect(control.reveal).not.toHaveBeenCalled();
+});
+
+it("cancels a pending dwell when the toggle floats the sidebar in", () => {
+  const { control, peek } = mount();
+  act(() => peek().hoverConsole("c-1"));
+  act(() => peek().reveal());
+  wait(CONSOLE_PEEK_DWELL_MS * 2);
+  expect(control.reveal).toHaveBeenCalledTimes(1);
+  expect(peek().consoleId).toBeUndefined();
 });

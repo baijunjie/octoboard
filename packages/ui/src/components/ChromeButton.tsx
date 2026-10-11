@@ -34,7 +34,9 @@ export function ChromeButton({
   children: React.ReactNode;
   isDisabled?: boolean;
   /** For a button that shows or hides a region: whether the region is shown, as `aria-expanded`;
-   * `controls` is the region's id. */
+   * `controls` is the region's id, which `data-pane-toggle` carries too: `aria-controls` is for
+   * assistive technology and may not survive the component library, so code that must recognise the
+   * toggle in the DOM (`usePanePeekPointer`) matches `data-pane-toggle`. */
   expanded?: boolean;
   controls?: string;
   /** Called as a mouse pointer enters or leaves the button; touch and pen are ignored. */
@@ -54,6 +56,7 @@ export function ChromeButton({
         aria-label={label}
         aria-expanded={expanded}
         aria-controls={controls}
+        data-pane-toggle={controls}
         preventFocusOnPress
         className={`${CHROME_BUTTON_FILLS} ${className}`}
         onPress={onPress}

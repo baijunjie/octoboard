@@ -212,10 +212,10 @@ export function FileViewer({
             the Tab order is the order on screen whichever of them mounts first. The slots have no
             box of their own while empty, so they take none of the gap. The group floats to the end of
             the row, ahead of the details in the source so the line next to it is the one it shortens
-            (a float shortens only the lines that follow it). That puts the three control groups before
+            (a float shortens only the lines that follow it). That puts the three controls before
             the file's path for a screen reader. That cost was weighed and accepted: the details are
             independent, separately labelled facts and the path is not needed to use the controls. The
-            dialog's body text is muted, which a toggle's unselected label would inherit (under 4.5:1
+            dialog's body text is muted, which the icons' strokes would inherit (under 4.5:1
             on a hovered `.control-fills` fill), so the controls take the foreground colour and each
             detail item the muted one. */}
         <div className="float-end flex h-8 items-center gap-2 text-foreground">

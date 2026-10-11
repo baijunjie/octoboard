@@ -257,6 +257,19 @@ inset enlarges what the pointer hits and changes nothing visible. The avatar fie
 
 A status or state that differs in colour also differs in glyph, shape or text.
 
+**A two-state view control carries its state in its icon.** The shape is one icon button whose icon is the state it is
+in and whose accessible name and tooltip say what pressing will do, so the name alternates with the state (see
+"Two-state icon toggles" in `docs/product/labels-and-tooltips.md`). Nothing distinguishes the pressed button from the
+unpressed one by fill: `.icon-toggle` in `packages/ui/src/style.css` resets HeroUI's selected tokens back to the
+resting ones, and `aria-pressed` carries the state for assistive technology. The window chrome's two pane toggles were
+already built this way; the Git mode's group-by-folder choice and the viewer's three view controls now are too.
+
+**One kept shortfall is left, and it is a single control**: the settings dialog's three-way appearance choice, which
+is a toggle group where the selected button differs by fill colour only. Which button is selected is also carried by
+its position and by `aria-pressed`, and the fill difference meets 1.4.11's 3:1 for a state. The reasoning and the
+measured ratios sit in the comment above `.toggle-button-group .toggle-button` in `packages/ui/src/style.css`; a
+two-state choice does not belong in that group, because the icon form above has no shortfall to accept.
+
 ## Motion
 
 An animation or transition that is not essential stops under `prefers-reduced-motion: reduce` (Tailwind's

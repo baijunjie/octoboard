@@ -28,15 +28,15 @@ start from, so creating a console starts no agent and nothing about it would be 
   1148 px.
 - **No terminal.** The terminal's "select a session" empty state does not appear here; that state is what a console
   with no session selected shows (see "The terminal" in `docs/product/sessions.md`).
-- **No sidebar toggle in the top bar**, there being no sidebar for it to control — the same rule the right pane's
-  toggle follows, which is on the rail only while the right pane has an owner (see "The two pane toggles" in
+- **Neither pane toggle in the top bar**: there is no sidebar for the sidebar toggle to control, and the right pane's
+  toggle, at the bar's end, is there only while the right pane has an owner (see "The two pane toggles" in
   `docs/product/window-layout.md`). The top bar keeps **Back** and **Forward**, and **both are disabled**: every place
   the window remembers either names a console that no longer exists or is this same empty state, so each is passed
   over (see "Moving back and forward" in `docs/product/navigation-history.md`). There is no breadcrumb, no session
   being selected.
-- **On the rail, no waiting count and no right pane toggle** — no session is waiting and nothing owns the right pane.
-  The rail is otherwise unchanged: the console list, empty here, then New console, and at the bottom the notifications
-  bell and Settings (see "The rail" in `docs/product/window-layout.md`).
+- **On the rail, no waiting count** — no session is waiting. The rail is otherwise unchanged: the console list, empty
+  here, then New console, and at the bottom the notifications bell and Settings (see "The rail" in
+  `docs/product/window-layout.md`).
 
 ## The panes' saved preferences are left alone
 

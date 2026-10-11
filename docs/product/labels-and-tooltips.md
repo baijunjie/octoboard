@@ -8,12 +8,13 @@ A control shown only as an icon has a tooltip naming it, shown both when the mou
 keyboard focus. The tooltip's text is the same name assistive technology announces for the control, except on the
 consoles' avatars, the ⋮ buttons and the pin buttons below. These are:
 
-- the top bar's controls — Back, Forward, and the sidebar toggle, whose tooltip follows its "Show …" / "Hide …" label;
+- the top bar's controls — Back, Forward, the sidebar toggle at its start and the right pane's toggle at its end;
+  each pane toggle's tooltip follows its "Show …" / "Hide …" label, and the right pane's also names what the pane
+  shows (see "The two pane toggles" in `docs/product/window-layout.md`);
 - the rail's buttons — each console's avatar, whose tooltip is the console's name while the name announced for it also
   says what is going on in it (see "The console switcher" in `docs/product/sidebar.md`), New console, the waiting
   count, whose tooltip says how many sessions are waiting and that pressing it goes to the next one, Turn on
-  notifications, the right pane's toggle, whose tooltip follows its "Show …" / "Hide …" label and
-  names what the pane shows (see "The two pane toggles" in `docs/product/window-layout.md`), and Settings;
+  notifications, and Settings;
 - the ⋮ button that opens an action menu — a sidebar row's, the console's in the sidebar's header, the project's in
   focus mode, and a change row's in the Git mode's change list (see "A row's actions" in
   `docs/product/project-pane-git-mode.md`). Its tooltip is a short "More actions", while the name announced for it
@@ -31,8 +32,9 @@ consoles' avatars, the ⋮ buttons and the pin buttons below. These are:
 - the report panel's previous-page and next-page buttons;
 - the project pane's Refresh button, a folder's chevron in its file tree and in the Git mode's change tree ("Expand" /
   "Collapse"), the file viewer's Previous file and Next file buttons (see `docs/product/project-pane.md`), and the Git
-  mode's Swap branches and Group by folder (see "The branch selectors" and "Flat or grouped by folder" in
-  `docs/product/project-pane-git-mode.md`);
+  mode's Swap branches (see "The branch selectors" in `docs/product/project-pane-git-mode.md`);
+- the file viewer's three view controls and the Git mode's Group by folder, whose tooltip is the name they announce
+  and alternates with their state (see "Two-state icon toggles" below);
 - the two controls of the console dialog's Avatar field (see "Avatar" in
   `docs/product/consoles-and-projects.md`) — the round control itself, named for choosing an image while it is empty
   and for replacing it once one is picked, and the delete button over its corner, named for removing the image;
@@ -41,6 +43,25 @@ consoles' avatars, the ⋮ buttons and the pin buttons below. These are:
 While the docked sidebar is hidden at 1148 px and wider, a console's avatar opens its tooltip on keyboard focus only:
 resting the mouse on it floats the sidebar in, which names the console at its top (see "Previewing a console from the
 rail" in `docs/product/sidebar.md`).
+
+## Two-state icon toggles
+
+A control that switches a view between two states is **one icon button**, not a set of choices side by side. These are
+the two pane toggles (see "The two pane toggles" in `docs/product/window-layout.md`), the file viewer's three view
+controls (see "The file viewer" in `docs/product/project-pane.md`) and the Git mode's Group by folder (see "Flat or
+grouped by folder" in `docs/product/project-pane-git-mode.md`). For all of them:
+
+- Pressing the button switches the state, and its icon becomes the other state's.
+- **The icon shows the state the view is in; the name says what pressing will do**, so the name alternates with the
+  state. That name is both the tooltip and what assistive technology announces, as "Tooltips on icon-only controls"
+  above says. Assistive technology is also told which state the control is in: whether the button is pressed, or, for
+  a pane toggle, whether its pane is expanded.
+- **Nothing about the state is said in colour**: the button in its pressed state is drawn exactly as in its
+  unpressed one.
+
+Settings' Appearance choice is not one of these: being a choice among three, it stays a three-way segmented control,
+where the chosen option is marked by a fill of its own rather than by its icon (see "Appearance" in
+`docs/product/settings.md`).
 
 ## Tooltips on indicators
 

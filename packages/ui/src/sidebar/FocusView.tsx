@@ -45,7 +45,7 @@ function FocusHeader({
     // A row or card below sits in the scroll area (`px-2`), then inside its own padding (a card's
     // border and padding add up to `px-2`), so the end padding matches that and this header's
     // trailing menus line up with the menu on a row or card. The start stays put.
-    <div ref={ref} className="flex h-14 shrink-0 items-center gap-1 border-b border-separator ps-2 pe-4">
+    <div ref={ref} className="flex h-(--pane-header-height) shrink-0 items-center gap-1 border-b border-separator ps-2 pe-4">
       <TitledControl title={t("sidebar.focus.exit")}>
         <Button
           isIconOnly

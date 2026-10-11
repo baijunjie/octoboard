@@ -44,7 +44,7 @@ export const layoutScenarios: Scenario[] = [
     group: GROUP,
     title: "Rail with five consoles",
     description:
-      "Console avatars on the left rail with their activity marker (a hand, a working dot, a speech bubble, none), the current one on a tile; New console under them. At the bottom: the waiting count, the report toggle for the console session, Settings. Right-click an avatar for its console's actions.",
+      "Console avatars on the left rail with their activity marker (a hand, a working dot, a speech bubble, none), the current one on a tile; New console under them. At the bottom: the waiting count, Settings. Right-click an avatar for its console's actions.",
     width: 1440,
     state: railState,
     steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500)],
@@ -83,7 +83,7 @@ export const layoutScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("titleBar.sidebar.show")),
       (ui) => ui.press(ui.session("Hub")),
-      (ui) => ui.press(ui.t("rail.report.show")),
+      (ui) => ui.press(ui.t("titleBar.report.show")),
       (ui) => ui.wait(500),
     ],
   },
@@ -92,7 +92,7 @@ export const layoutScenarios: Scenario[] = [
     group: GROUP,
     title: "Docked sidebar hidden, five consoles",
     description:
-      "The breadcrumb follows the buttons when the sidebar is not docked. Main is current. Rest the mouse on an avatar to float the sidebar in showing that console, current or not; move along the avatars to switch the preview, and press inside it to make that console current.",
+      "The breadcrumb follows the buttons when the sidebar is not docked. Main is current. Rest the mouse on an avatar to float the sidebar in showing that console, current or not; move along the avatars to switch the preview, and press inside it to make that console current. Resting on the sidebar toggle at the top bar's start floats it in at once, showing the current console.",
     width: 1440,
     preferences: { sidebarVisible: false, sidebarConsole: main.id },
     state: railState,
@@ -111,6 +111,8 @@ export const layoutScenarios: Scenario[] = [
     id: "layout-report-hidden",
     group: GROUP,
     title: "Docked report panel hidden",
+    description:
+      "Rest the pointer on the window's end edge, or on the toggle at the top bar's end, to float the report panel in.",
     width: 1440,
     preferences: { asideVisible: false },
     state,

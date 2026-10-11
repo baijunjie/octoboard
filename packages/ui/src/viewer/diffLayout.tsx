@@ -1,3 +1,4 @@
+import { Columns2, Rows2 } from "lucide-react";
 import React from "react";
 
 import { useT } from "../i18n/react";
@@ -18,7 +19,7 @@ export const diffLayout = createPersistedPreference<DiffLayout>(
 /** The choice between a unified and a split diff. It is rendered by whatever draws the diff, so it
  * exists while a diff with a layout to choose does (a patch shown as plain text has none, and a
  * diff's goes with its renderer when that fails), and is moved into the header's layout slot
- * (`ControlsSlot`). */
+ * (`ControlsSlot`). Split is the pressed state. */
 export function LayoutToggle({
   layout,
   onLayoutChange,
@@ -27,16 +28,15 @@ export function LayoutToggle({
   onLayoutChange: (layout: DiffLayout) => void;
 }): React.ReactElement {
   const t = useT();
+  const split = layout === "split";
   return (
     <SlotToggle
       slot="layout"
-      label={t("viewer.layout")}
-      value={layout}
-      options={[
-        { id: "unified", label: t("viewer.layout.unified") },
-        { id: "split", label: t("viewer.layout.split") },
-      ]}
-      onChange={onLayoutChange}
-    />
+      label={t(split ? "viewer.layout.unified" : "viewer.layout.split")}
+      isSelected={split}
+      onChange={(selected) => onLayoutChange(selected ? "split" : "unified")}
+    >
+      {split ? <Columns2 aria-hidden="true" className="size-4" /> : <Rows2 aria-hidden="true" className="size-4" />}
+    </SlotToggle>
   );
 }

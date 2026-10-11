@@ -9,7 +9,7 @@ afterEach(() => {
 });
 
 function viewer(dir = "ltr"): { dialog: HTMLElement; frame: HTMLElement; group: HTMLElement } {
-  document.body.innerHTML = `<div role="dialog" dir="${dir}" style="direction:${dir}"><div tabindex="0" id="frame">code</div><div role="radiogroup"><button id="b">Split</button></div></div>`;
+  document.body.innerHTML = `<div role="dialog" dir="${dir}" style="direction:${dir}"><div tabindex="0" id="frame">code</div><div role="listbox"><button id="b">Item</button></div></div>`;
   return {
     dialog: document.querySelector<HTMLElement>("[role=dialog]")!,
     frame: document.getElementById("frame")!,

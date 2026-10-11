@@ -93,7 +93,9 @@ async function open(subject: ViewerSubject, links?: PlatformAdapter["links"]): P
 }
 
 const region = () => document.querySelector<HTMLElement>("[role=region]")!;
-const choice = (label: string) => [...document.querySelectorAll("button")].find((b) => b.textContent === label)!;
+const choice = (label: string) => document.querySelector<HTMLElement>(`button[aria-label="${label}"]`)!;
+// The one Markdown view button, whichever view it would switch to.
+const viewToggle = () => document.querySelector<HTMLElement>('button[aria-label="Show source"], button[aria-label="Show document"]');
 
 it("opens a Markdown file as a document, with the choice in the header's controls", async () => {
   const dialog = await open(markdownFile());
@@ -103,10 +105,10 @@ it("opens a Markdown file as a document, with the choice in the header's control
   expect(region().getAttribute("aria-label")).toBe("Contents of README.md");
   expect(region().tabIndex).toBe(0);
   expect(region().parentElement?.classList.contains("surface--tertiary")).toBe(true);
-  expect(choice("Document").closest("[data-viewer-description]")).not.toBeNull();
-  expect(choice("Document").getAttribute("aria-pressed") ?? choice("Document").getAttribute("aria-checked")).toBe("true");
+  expect(choice("Show source").closest("[data-viewer-description]")).not.toBeNull();
+  expect(choice("Show source").getAttribute("aria-pressed")).toBe("false");
   // The document needs no wrap choice: its code is always wrapped.
-  expect([...dialog.querySelectorAll("button")].some((b) => b.textContent === "Wrap lines")).toBe(false);
+  expect([...dialog.querySelectorAll("button")].some((b) => b.getAttribute("aria-label") === "Wrap lines")).toBe(false);
 });
 
 it("highlights a fenced block through the code renderer, by the fence's grammar", async () => {
@@ -118,12 +120,13 @@ it("highlights a fenced block through the code renderer, by the fence's grammar"
 
 it("switches to the source and back, and stores the choice", async () => {
   await open(markdownFile());
-  act(() => choice("Source").click());
+  act(() => choice("Show source").click());
   expect(document.querySelector("h1")).toBeNull();
+  expect(choice("Show document").getAttribute("aria-pressed")).toBe("true");
   expect(region().textContent).toContain("# Title");
   expect(localStorage.getItem(PREFERENCE_KEYS.markdownView)).toBe("source");
   expect(markdownView.get()).toBe("source");
-  act(() => choice("Document").click());
+  act(() => choice("Show document").click());
   expect(region().querySelector("h1")?.textContent).toBe("Title");
   expect(localStorage.getItem(PREFERENCE_KEYS.markdownView)).toBe("document");
 });
@@ -158,7 +161,7 @@ it("draws no link where the platform cannot open one", async () => {
 
 it("offers the choice for Markdown only, and not for a Markdown diff", async () => {
   await open({ key: "a", path: "a.ts", content: { state: "file", body: { kind: "text", text: "a\n", size: 2 } } });
-  expect(choice("Document")).toBeUndefined();
+  expect(viewToggle()).toBeNull();
   await open({
     key: "d",
     path: "docs/README.md",
@@ -172,7 +175,7 @@ it("offers the choice for Markdown only, and not for a Markdown diff", async () 
     },
   });
   expect(document.querySelectorAll("h1")).toHaveLength(0);
-  expect(choice("Document")).toBeUndefined();
+  expect(viewToggle()).toBeNull();
 });
 
 it("offers the document for an untracked or added Markdown file, but not for a conflict body", async () => {
@@ -184,7 +187,7 @@ it("offers the document for an untracked or added Markdown file, but not for a c
     content: { state: "change", change: { old: { state: "absent" }, new: { state: "present", path: "docs/new.md", kind: "file", body } } },
   });
   expect(region().querySelector("h1")?.textContent).toBe("Added");
-  expect(choice("Source")).toBeDefined();
+  expect(viewToggle()).not.toBeNull();
 });
 
 it("shows a Markdown conflict body as source only", async () => {
@@ -198,7 +201,7 @@ it("shows a Markdown conflict body as source only", async () => {
     },
   });
   expect(document.querySelector("h1")).toBeNull();
-  expect(choice("Document")).toBeUndefined();
+  expect(viewToggle()).toBeNull();
   expect(region().textContent).toContain("<<<<<<< ours");
 });
 
@@ -295,7 +298,7 @@ it("shows an empty fenced block once, as plain text", async () => {
 
 it("shows a Markdown file past the highlighting budget as plain source, with no document view", async () => {
   await open(markdownFile("docs/huge.md", "# Heading\n".repeat(RENDER_BUDGETS.highlightLines + 1)));
-  expect(choice("Document")).toBeUndefined();
+  expect(viewToggle()).toBeNull();
   expect(document.querySelector("h1")).toBeNull();
   expect(region().tagName).toBe("PRE");
 });

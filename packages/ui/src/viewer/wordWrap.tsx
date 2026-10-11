@@ -1,6 +1,7 @@
-import { ToggleButton } from "@heroui/react";
+import { TextAlignStart, WrapText } from "lucide-react";
 import React, { useCallback, useContext, useEffect, useState } from "react";
 
+import { IconToggle } from "../components/IconToggle";
 import { useT } from "../i18n/react";
 import { createPersistedPreference } from "../persistedPreference";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
@@ -35,13 +36,18 @@ export function useWrapClaims(): { claimWrap: () => () => void; claimed: boolean
   return { claimWrap, claimed: claims > 0 };
 }
 
-/** The header's wrap choice itself, drawn while some `WrapToggle` is mounted. */
+/** The header's wrap choice itself, drawn while some `WrapToggle` is mounted. Wrapping is the
+ * pressed state. */
 export function WrapToggleHost(): React.ReactElement {
   const t = useT();
   const wrap = wordWrap.useValue();
   return (
-    <ToggleButton size="sm" isSelected={wrap} onChange={(selected) => wordWrap.set(selected)}>
-      {t("viewer.wrap")}
-    </ToggleButton>
+    <IconToggle label={t(wrap ? "viewer.wrap.off" : "viewer.wrap")} isSelected={wrap} onChange={(selected) => wordWrap.set(selected)}>
+      {wrap ? (
+        <WrapText aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+      ) : (
+        <TextAlignStart aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+      )}
+    </IconToggle>
   );
 }

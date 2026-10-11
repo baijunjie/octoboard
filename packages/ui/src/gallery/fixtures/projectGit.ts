@@ -327,7 +327,7 @@ const openChange = (name: RegExp) => [...openGit, (ui: Ui) => ui.press(name), (u
 const openGitInDrawer = [
   (ui: Ui) => ui.press(ui.t("titleBar.sidebar.show")),
   (ui: Ui) => ui.press(ui.session("Fix the summary layout")),
-  (ui: Ui) => ui.press(ui.t("rail.projectPane.show")),
+  (ui: Ui) => ui.press(ui.t("titleBar.projectPane.show")),
   (ui: Ui) => ui.wait(500),
   (ui: Ui) => ui.press(ui.t("browser.mode.git")),
   (ui: Ui) => ui.wait(400),
@@ -387,7 +387,7 @@ export const projectGitScenarios: Scenario[] = [
       "src/wide.ts, unwrapped, has lines far wider than the dialog. Show whole file stays in view at the end of the bar while the diff is at its left edge, as the label and the chevrons do. A last step switches to the split layout, where each side scrolls on its own and the control sits at the inner edge of the left half.",
     width: 760,
     state,
-    steps: [...openGitInDrawer, (ui: Ui) => ui.press(/^wide\.ts, modified/), (ui: Ui) => ui.wait(800), (ui: Ui) => ui.press(/^Split$/), (ui: Ui) => ui.wait(400)],
+    steps: [...openGitInDrawer, (ui: Ui) => ui.press(/^wide\.ts, modified/), (ui: Ui) => ui.wait(800), (ui: Ui) => ui.press(ui.t("viewer.layout.split")), (ui: Ui) => ui.wait(400)],
   },
   {
     id: "git-expand-narrow",

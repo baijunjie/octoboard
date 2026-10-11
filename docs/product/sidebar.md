@@ -54,7 +54,10 @@ below).
 
 While the docked sidebar is hidden, at 1148 px and wider, resting the mouse on a console's avatar floats the sidebar
 in showing **that** console — when it comes up, how it looks and when it goes away are in "A hidden pane floats in on
-hover" in `docs/product/window-layout.md`. For any console other than the current one this is a **preview**:
+hover" in `docs/product/window-layout.md`. The sidebar's toggle in the top bar floats it in as well, but always
+showing the **current** console, so that way in is never a preview: a pointer moving from an avatar onto the toggle
+puts the floating card back on the current console. For any console other than the current one, resting on its avatar
+is a **preview**:
 
 - It shows the console's own view — the header, its console sessions and its projects — never a focus mode, which
   belongs to the current console only. Resting on the current console's avatar shows the sidebar as it is, focus mode

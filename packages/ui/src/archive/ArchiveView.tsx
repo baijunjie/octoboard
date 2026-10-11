@@ -119,9 +119,9 @@ export function ArchiveView({
       }}
     >
       {/* Built like the sidebar's focus-mode header (a small line over a title) and given the same
-          fixed height, so their bottom borders run on as one line. Where it
-          is lives in the top bar's breadcrumb. */}
-      <header className="flex h-14 shrink-0 items-center gap-1 border-b border-separator px-2 ps-4">
+          height (`--pane-header-height`), so their bottom borders run on as one line. Where it is
+          lives in the top bar's breadcrumb. */}
+      <header className="flex h-(--pane-header-height) shrink-0 items-center gap-1 border-b border-separator px-2 ps-4">
         <div className="min-w-0 flex-1">
           <div className="truncate text-xs text-muted">{t("archive.count", { count: archived.length })}</div>
           <h2 className="truncate text-sm font-semibold">

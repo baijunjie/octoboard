@@ -1,11 +1,9 @@
 import { Badge, Button } from "@heroui/react";
-import { Hand, PanelRight, PanelRightDashed, Plus, Settings } from "lucide-react";
+import { Hand, Plus, Settings } from "lucide-react";
 import React, { useMemo, useRef } from "react";
 
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import { useT } from "../i18n/react";
-import { ASIDE_LABELS, type AsideOwner } from "../layout/asideOwner";
-import { PANE_ID } from "../layout/paneOverlay";
 import type { Console, Session } from "../protocol";
 import { activityLabelKey } from "../sessionLabel";
 import { consoleMenu } from "../sidebar/menus";
@@ -87,6 +85,10 @@ function ConsoleTile({
           variant="ghost"
           aria-label={activityKey ? t(activityKey, { name: thisConsole.name }) : thisConsole.name}
           aria-current={current ? "true" : undefined}
+          // Not styling: `usePanePeekPointer` (`Sidebar.tsx`) matches this to keep the floating sidebar
+          // up while the pointer is on an avatar, which lies outside the card and its gap. Without it
+          // the card slides away from under a pointer resting here.
+          data-sidebar-peek-keep=""
           preventFocusOnPress
           onPress={onSelect}
           onHoverStart={(event) => event.pointerType === "mouse" && onHoverChange(true)}
@@ -125,16 +127,6 @@ interface RailProps {
   onOpenDialog: (dialog: DialogRequest) => void;
   waitingCount: number;
   onNextWaiting: () => void;
-  /** What owns the aside, which the toggle names: a console session's report or a project's files.
-   * With no owner there is no aside, and no toggle. */
-  aside?: AsideOwner["kind"];
-  /** Whether the aside is shown, docked or as an open drawer; hidden but floating in on hover does
-   * not count, as with the sidebar. */
-  asideShown: boolean;
-  onToggleAside: () => void;
-  /** The pointer is on the aside's toggle: with the docked aside hidden, that floats it in. */
-  onAsideToggleEnter: () => void;
-  onAsideToggleLeave: () => void;
   onOpenSettings: () => void;
   /** Where focus goes when a control that held it goes away (the notifications bell). */
   focusTerminal: () => void;
@@ -143,9 +135,9 @@ interface RailProps {
 /**
  * The left rail, the window chrome's second half beside the top bar: at the top the console
  * switcher (one avatar per console, in their order, then New console), at the bottom, pushed down,
- * the waiting count, the notifications bell (browser only, while the permission is undecided), the
- * aside's toggle (while something owns the aside) and Settings. It sits at the reading direction's
- * start, like the sidebar, and holds only glyphs and avatars.
+ * the waiting count, the notifications bell (browser only, while the permission is undecided) and
+ * Settings. It sits at the reading direction's start, like the sidebar, and holds only glyphs and
+ * avatars.
  */
 export function Rail({
   consoles,
@@ -158,11 +150,6 @@ export function Rail({
   onOpenDialog,
   waitingCount,
   onNextWaiting,
-  aside,
-  asideShown,
-  onToggleAside,
-  onAsideToggleEnter,
-  onAsideToggleLeave,
   onOpenSettings,
   focusTerminal,
 }: RailProps): React.ReactElement {
@@ -224,22 +211,6 @@ export function Rail({
           </ChromeButton>
         )}
         <NotificationsBell focusTerminal={focusTerminal} />
-        {aside && (
-          <ChromeButton
-            label={t(asideShown ? ASIDE_LABELS[aside].hide : ASIDE_LABELS[aside].show)}
-            onPress={onToggleAside}
-            expanded={asideShown}
-            controls={PANE_ID.aside}
-            onMouseHoverChange={(hovered) => (hovered ? onAsideToggleEnter() : onAsideToggleLeave())}
-            tooltipPlacement="end"
-          >
-            {asideShown ? (
-              <PanelRight aria-hidden="true" className="size-4 rtl:-scale-x-100" />
-            ) : (
-              <PanelRightDashed aria-hidden="true" className="size-4 rtl:-scale-x-100" />
-            )}
-          </ChromeButton>
-        )}
         <ChromeButton label={t("rail.settings")} onPress={onOpenSettings} tooltipPlacement="end">
           <Settings aria-hidden="true" className="size-4" />
         </ChromeButton>

@@ -167,7 +167,7 @@ export const projectFilesScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("titleBar.sidebar.show")),
       (ui) => ui.press(ui.session("Fix the summary layout")),
-      (ui) => ui.press(ui.t("rail.projectPane.show")),
+      (ui) => ui.press(ui.t("titleBar.projectPane.show")),
       (ui) => ui.wait(500),
     ],
   },

@@ -46,6 +46,14 @@ gap. Inside it the panes are set apart by thin lines too. The terminal's area is
 background, and the sidebar a shade apart from it — a touch greyer in the light appearance, a touch lighter in the
 dark one.
 
+**Every pane's header inside the content panel is 56 px high** — the sidebar's console header and a focus mode's
+header (see `docs/product/sidebar.md` and `docs/product/focus-mode.md`), the archive view's header (see "The archive
+view" in `docs/product/sidebar.md`), the project pane's header and the report panel's bar — so the lines under them
+run on as one line across the panel. The top bar's 40 px is a tier of its own and no part of this. A pane that floats
+in is a card inset from the panel's edges (see "A hidden pane floats in on hover" below), and its headers are shorter
+by that inset, 48 px, so the line under a card's header stays level with the line under the headers docked beside it;
+the text in a card's header therefore sits 4 px lower than theirs.
+
 On the screens shown before there is anything to show — while connecting to the daemon, and the screens for a daemon
 that could not start or a UI that failed — there is no rail: under the top bar, the content panel spans the window.
 
@@ -109,8 +117,12 @@ It runs, left to right:
   no breadcrumb. While the archive view is open (see "The archive view" in `docs/product/sidebar.md`) the breadcrumb
   shows where that is instead, with no status icon: *console › project › Archived sessions*, *console › console
   session › Archived bound sessions*, or *console › Archived console sessions*.
+- At the **end of the bar**, the right pane's toggle, there only while the right pane has an owner (see "What the
+  right pane shows" below). The end is the reading direction's, so under a right-to-left language it is at the
+  window's left (see "Right-to-left layout" below).
 
-Nothing else is in the bar: the window's other controls are on the rail (see "The rail" below).
+Nothing else is in the bar: the rest of its end is the window's drag area, and the window's other controls are on the
+rail (see "The rail" below).
 
 **In the macOS application the top bar is the window's titlebar.** The window has no native titlebar background and
 shows no title text of its own (the window is still called Octoboard in the Dock and in Mission Control). The window's
@@ -120,6 +132,28 @@ language the buttons and their clear space stay at the left end, which then hold
 start. Dragging any part of the bar that is not a control moves the window, and double-clicking it zooms the window,
 as with a native titlebar. Opened in a plain browser, the bar has none of this: it starts at the left edge and does
 not move anything.
+
+### The two pane toggles
+
+**Each toggle is there only while its pane exists**: the sidebar toggle while there is a console for the sidebar to
+show (see `docs/product/welcome-screen.md`), the right pane's toggle while the right pane has an owner (see "What the
+right pane shows" below). A toggle with nothing to control is left out rather than shown disabled.
+
+Both toggles are in the top bar, the sidebar's at its start and the right pane's at its end. What each does depends on
+the window's width: see "Hiding the sidebar and the right pane" and "Below 1148 px: the sidebar and the right pane
+become drawers" below.
+
+Each toggle's label says what pressing it will do — "Show …" while its pane is hidden, "Hide …" while it is shown —
+and its icon shows the pane's current state: a window with that side's pane drawn solid while the pane is shown, and
+drawn dashed while it is hidden. Each toggle also tells assistive technology whether its pane is expanded: expanded
+while the pane is shown, which below 1148 px means its drawer is open. A hidden pane that is only floating in counts
+as hidden for both. For the sidebar, shown and hidden follow the docked state at once, including while its column is
+still easing open or closed (see "Hiding the sidebar and the right pane" below): the toggle already reads "Hide …" as
+the column opens and "Show …" as it closes.
+
+The right pane's controls are named for what it shows. The toggle reads "Show report" / "Hide report" for a report
+panel and "Show project pane" / "Hide project pane" for a project pane; likewise its resize handle is "Resize report
+panel" or "Resize project pane", and the dimmed area beside its open drawer is "Close report" or "Close project pane".
 
 ## The rail
 
@@ -137,30 +171,9 @@ The rail runs from under the top bar to the window's bottom (or the connection b
     raised hand" in `docs/product/sessions.md`);
   - **Turn on notifications**, a bell with a small dot on it, shown only in a browser whose answer to notifications is
     still undecided; pressing it asks the browser (see "Notifications" in `docs/product/settings.md`);
-  - the right pane's toggle, shown only while the right pane has an owner (see "What the right pane shows" below);
   - **Settings**, which opens the settings dialog.
 
 The rail is the same at every width; below 1148 px it stays beside the drawers, which open past it.
-
-### The two pane toggles
-
-**Each toggle is there only while its pane exists**: the sidebar toggle while there is a console for the sidebar to
-show (see `docs/product/welcome-screen.md`), the right pane's toggle while the right pane has an owner (see "What the
-right pane shows" below). A toggle with nothing to control is left out rather than shown disabled.
-
-What the sidebar toggle in the top bar and the right pane's toggle on the rail do depends on the window's width: see
-"Hiding the sidebar and the right pane" and "Below 1148 px: the sidebar and the right pane become drawers" below.
-Each toggle's label says what pressing it will do — "Show …" while its pane is hidden, "Hide …" while it is shown —
-and its icon shows the pane's current state: a window with that side's pane drawn solid while the pane is shown, and
-drawn dashed while it is hidden. Each toggle also tells assistive technology whether its pane is expanded: expanded
-while the pane is shown, which below 1148 px means its drawer is open. A hidden pane that is only floating in counts
-as hidden for both. For the sidebar, shown and hidden follow the docked state at once, including while its column is
-still easing open or closed (see "Hiding the sidebar and the right pane" below): the toggle already reads "Hide …" as
-the column opens and "Show …" as it closes.
-
-The right pane's controls are named for what it shows. The toggle reads "Show report" / "Hide report" for a report
-panel and "Show project pane" / "Hide project pane" for a project pane; likewise its resize handle is "Resize report
-panel" or "Resize project pane", and the dimmed area beside its open drawer is "Close report" or "Close project pane".
 
 ### Pressing the chrome's controls
 
@@ -174,7 +187,7 @@ the terminal cannot take it.
 ## What the right pane shows
 
 The right pane has one **owner** at a time: a console session, whose report panel it shows, or a project, whose
-project pane it shows. With no owner there is no right pane at all, no toggle for it on the rail, and its width goes
+project pane it shows. With no owner there is no right pane at all, no toggle for it in the top bar, and its width goes
 to the terminal. The owner is set only by what the user does, never worked out from whatever else is on screen, so a
 project pane can be shown with no session selected, or beside the terminal of a session of another project.
 
@@ -268,10 +281,10 @@ page is reloaded.
 At 1148 px and wider, the two pane toggles hide and show the docked panes:
 
 - The sidebar toggle, in the top bar, hides or shows the sidebar.
-- The right pane's toggle, on the rail and there only while the right pane has an owner, hides or shows the right
-  pane. A hidden right pane stays hidden whatever owns it afterwards — a report panel or a project pane, selecting a
-  session included — until it is shown again, by its toggle or by Browse files (see "What the right pane shows"
-  above).
+- The right pane's toggle, at the top bar's end and there only while the right pane has an owner, hides or shows
+  that pane. A hidden right pane stays hidden whatever owns it afterwards — a report panel or a project pane,
+  selecting a session included — until it is shown again, by its toggle or by Browse files (see "What the right pane
+  shows" above).
 
 Both panes are shown by default. **Whether each one is hidden is remembered per client**, the same way as the panes'
 widths. Hiding a pane hands its width to the terminal.
@@ -302,33 +315,42 @@ opening column takes its own width from the terminal as it eases open. The termi
 ### A hidden pane floats in on hover
 
 At 1148 px and wider, a hidden pane can be brought up for a moment without showing it for good. This is a **floating
-pane**. On the sidebar, the rounded corners, the gaps, the shadow and the slide from behind the rail are this card.
-They are not how the docked column opens and closes (see "Hiding the sidebar and the right pane" above).
+pane**, and both panes float in as the same kind of card: inset from the window chrome and the window's edges, with
+rounded corners, a border and a shadow. On the sidebar the card, its gaps and its slide from behind the rail belong to this form alone:
+they are not how the docked column opens and closes (see "Hiding the sidebar and the right pane" above).
 
-- **What brings up the sidebar**: the mouse resting for **130 ms** on a console's avatar on the rail, the current
-  console's or another's. The sidebar then shows the console whose avatar the mouse is on, which need not be the
-  current one; what that preview is and how a press inside it makes the console current is in "Previewing a console
-  from the rail" in `docs/product/sidebar.md`. While the sidebar is out, moving onto another avatar shows that console
-  at once, with no wait. A pointer that only crosses the avatars brings nothing up. Neither the sidebar toggle nor the
-  content panel's edge brings the sidebar up.
+- **What brings up the sidebar**: the mouse reaching the sidebar's toggle, at once, or resting for **130 ms** on a
+  console's avatar on the rail, the current console's or another's. The wait is the avatars' alone, so that a pointer
+  crossing the rail on its way elsewhere does not make the card flash; the toggle is aimed at, so it has none.
+  - **From the toggle the sidebar shows the current console**, whatever console a card was previewing just before.
+  - **From an avatar it shows that console**, which need not be the current one; what that preview is and how a press
+    inside it makes the console current is in "Previewing a console from the rail" in `docs/product/sidebar.md`.
+  - While the sidebar is out, moving onto another avatar shows that console at once, with no wait, and moving onto the
+    toggle goes back to the current console. A pointer that only crosses the avatars brings nothing up, and the
+    content panel's edge does not bring the sidebar up at all.
 - **What brings up the right pane**: the mouse staying for **200 ms** on a 4 px strip along the window's right edge,
   from below the top bar to above the connection banner, or, at once, the mouse reaching the right pane's toggle.
 - Touch and pen bring up neither.
 - **How it shows**: it slides in over the terminal in 200 ms (at once where the system asks for reduced motion), at the
   pane's chosen width — the right pane at most 92% of the window's width — with a shadow and no dimming behind it. It
   overlays the terminal, so **the terminal is not resized** and the agent is sent no size change.
-  - The **sidebar** floats as a card: it keeps an 8 px gap from the rail, from the top bar and from the window's
-    bottom (or the connection banner), has rounded corners all round and a border. It slides in from under the rail
-    and out again behind it, never drawn over the rail.
-  - The **right pane** slides in from the window's right edge and runs from the top bar to the window's bottom (or
-    the connection banner).
-- **How it goes away**: it slides away 200 ms after the pointer has left it. For the sidebar that means the pointer is
-  on neither the pane nor a console's avatar; for the right pane, on neither the pane nor its toggle. Once the right
-  pane has come up from its edge strip, the pointer's first move counts as leaving it when it lands outside the place
-  the pane is sliding into. `Escape` sends it away at once and **does not reach the running agent**, except that in a
-  field holding text (the project pane's change filter) it only clears the field, and the next one sends the pane away;
-  so does `Escape` pressed inside a report page (see "Escape and F6 inside a page" in `docs/product/report-panel.md`). A
-  floating pane that holds keyboard focus as it goes away hands focus to the terminal. A floating sidebar previewing a
+  - The **sidebar's card** keeps an 8 px gap from the rail, from the top bar and from the window's bottom (or the
+    connection banner). It slides in from under the rail and out again behind it, never drawn over the rail.
+  - The **right pane's card** keeps the same 8 px gap from the top bar, from the window's right edge and from the
+    window's bottom (or the connection banner), and slides in from that edge.
+  - A card's own headers are 8 px shorter than the docked panes', so the line under a header stays level across the
+    panel (see "The window chrome and the content panel" above).
+- **How it goes away**: it slides away 200 ms after the pointer has left it. What counts as having left is the same on
+  both sides: the pointer is on none of the card, the 8 px gap around it, or the pane's own toggle in the top bar —
+  and, for the sidebar, none of the console avatars on the rail either. **The gap counts as part of the card**: a
+  pointer that moves from the card into it, or rests in it — on the edge strip that brought the right pane up, or in
+  the gap the sidebar's card leaves below the top bar on the way down from the toggle, say — keeps the card up for as
+  long as it stays, and only a pointer that moves past the gap, or out of the window altogether, sends the card away.
+  This holds however the card came up. `Escape` sends it away at once and **does not reach the running agent**, except
+  that in a field holding text (the project pane's change filter) it only clears the field, and the next one sends
+  the pane away; so does `Escape` pressed inside a report page (see "Escape and F6 inside a page" in
+  `docs/product/report-panel.md`). A floating pane that holds keyboard focus as it goes away hands focus to the
+  terminal. A floating sidebar previewing a
   console that is deleted goes away as if the pointer had left that console's avatar.
 - **What keeps it up**, whatever the pointer does: keyboard focus inside it, one of its menus being open, or a dialog
   being open, for as long as it is — such as one opened from the pane, the file viewer a project pane opens among them
@@ -353,7 +375,7 @@ default**:
   top bar to above the connection banner (when it is shown), and the dimmed area beside an open drawer leaves the rail
   out, so the top bar, the rail and the banner's Retry stay usable while a drawer is open.
 - Each is opened and closed with the same toggle that hides and shows it at 1148 px and wider — the sidebar
-  toggle in the top bar, the right pane's toggle on the rail — each there only while its pane exists (see "The two
+  toggle at the top bar's start, the right pane's at its end — each there only while its pane exists (see "The two
   pane toggles" above).
   Browse files opens the right pane's drawer too (see "What the right pane shows" above).
 - A drawer closes on its toggle, on a press anywhere in the dimmed area beside it, or on `Escape`.
@@ -395,9 +417,9 @@ parts of the window:
 
 - The rail is down the window's right edge, the sidebar on the right inside the content panel, beside the rail, and
   the right pane on the left; the content panel's rounded corner is its top right. The top bar's Back, Forward and
-  sidebar toggle are at its right end, in mirrored order, and the breadcrumb runs leftward from them, starting over the
-  terminal's area while the sidebar is shown and following the column's inner edge while that column eases, as in
-  "The top bar" above.
+  sidebar toggle are at its right end, in mirrored order, the right pane's toggle at its left end, and the breadcrumb
+  runs leftward from them, starting over the terminal's area while the sidebar is shown and following the column's
+  inner edge while that column eases, as in "The top bar" above.
 - Drawers and floating panes come in from their own pane's side: the sidebar's from the rail's edge (a floating
   sidebar from under the rail), the right pane's from the window's left edge. The edge strip that brings up a hidden
   right pane is along the window's left edge too, and 8 px wide there rather than 4 px.

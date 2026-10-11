@@ -142,10 +142,17 @@ same viewer; what it shows of a change is in "Opening a change" in `docs/product
 
 The header is the title row and, under it, the subject's **details** — the file's path within the project, the
 comparison a change is read from, a file's size, and the path a rename came from — laid out beside the **view
-controls**, which hold the end of the row in a fixed order: the Markdown view choice (see "A Markdown file as a
-document" below), then the diff layout choice, then the wrap choice (see "Wrapping long lines" below). At most two of
-the three are ever offered at once, since the Markdown view choice belongs to a whole Markdown file's body and the
-layout choice to a two-sided diff, and a Markdown diff keeps its source view alone.
+controls**, which hold the end of the row in a fixed order: the document-or-source choice for a Markdown file (see "A
+Markdown file as a document" below), then the diff's unified-or-split choice, then the wrap choice (see "Wrapping long
+lines" below). At most two of the three are ever offered at once, since the document-or-source choice belongs to a
+whole Markdown file's body and the unified-or-split choice to a two-sided diff, and a Markdown diff keeps its source
+view alone.
+
+**Each of the three is a single icon button**: its icon shows the view on screen, pressing it switches to the other
+view, and its name — the tooltip and what assistive technology announces — says what pressing will do, so it
+alternates between "Show document" and "Show source", between "Show split diff" and "Show unified diff", and between
+"Wrap lines" and "Don't wrap lines". Nothing about the state is said in colour; the whole convention is in "Two-state
+icon toggles" in `docs/product/labels-and-tooltips.md`.
 
 The details share that row with the controls to use the width beside them, not to hold the header to one row. Each
 detail is an item of its own, and one too long for the space left beside the controls moves down to a row of its own,
@@ -179,10 +186,10 @@ one's do not.
 
 ### A Markdown file as a document
 
-A Markdown file — one whose name ends in `.md` or `.markdown`, in any case — opens as a **rendered document**, and
-**Markdown view**, the first of the header's view controls, switches between Document and Source. The source is the
-code view every other text file gets. The choice is remembered, like the diff layout and wrap choices: it holds for
-the next Markdown file, and after the application restarts.
+A Markdown file — one whose name ends in `.md` or `.markdown`, in any case — opens as a **rendered document**, and the
+first of the header's view controls switches between the document and the source. The source is the code view every
+other text file gets. The choice is remembered, like the unified-or-split and wrap choices: it holds for the next
+Markdown file, and after the application restarts.
 
 **What the document shows.** Headings, paragraphs, lists — GFM task lists among them, whose boxes show the state the
 text records and cannot be ticked — quotes, horizontal rules, tables, inline code, links and fenced code. A fenced
@@ -202,23 +209,24 @@ tooltip, and a link with no text of its own reads as that address. **Following a
 address is handed to the user's own browser or mail client — to a new tab, in the UI opened in a browser — and the
 viewer stays on the file it was showing.
 
-**The document always wraps** and offers no Wrap lines control (see "Wrapping long lines" below).
+**The document always wraps** and offers no wrap control (see "Wrapping long lines" below).
 
 **Where the document is offered.** A Markdown file opened for itself, and a whole Markdown file body the Git mode
 shows — an untracked file, or one added with no patch (see "What it shows" in
 `docs/product/project-pane-git-mode.md`). A diff, the file behind a path in conflict and the version inside the
-project of a rename across the project's boundary keep the source view alone and show no Markdown view control. So
-does a Markdown file past the budget for highlighting (see "What it shows" above): it is shown as plain source, with
+project of a rename across the project's boundary keep the source view alone and show no document-or-source control.
+So does a Markdown file past the budget for highlighting (see "What it shows" above): it is shown as plain source, with
 no control either. Where the document cannot be drawn at all, the source is shown under a line saying the document
 view is not available for this file.
 
 ### Wrapping long lines
 
-**Wrap lines**, the last of the header's view controls, chooses whether lines too long for the viewer's width are
-broken onto the next line. **Nothing wraps until it is turned on** in what the viewer shows as source text — prose as
-much as code. It is one choice for all of it, files and changes alike: code, a file shown as plain text, a Markdown
-file's source, a diff, a plain patch, and the file behind a path in conflict. The choice is remembered, like the diff
-layout choice: it holds for the next file and the next change, and after the application restarts.
+The **wrap control**, the last of the header's view controls, chooses whether lines too long for the viewer's width
+are broken onto the next line; its name alternates between "Wrap lines" and "Don't wrap lines". **Nothing wraps until
+it is turned on** in what the viewer shows as source text — prose as much as code. It is one choice for all of it,
+files and changes alike: code, a file shown as plain text, a Markdown file's source, a diff, a plain patch, and the
+file behind a path in conflict. The choice is remembered, like the unified-or-split choice: it holds for the next file
+and the next change, and after the application restarts.
 
 - The control is there only while the viewer shows source text whose lines could wrap. An image change whose sides fell
   back to their text has the one choice between them rather than one for each side. An image shown as an image, a

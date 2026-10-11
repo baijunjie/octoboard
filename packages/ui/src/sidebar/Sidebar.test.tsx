@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
-import { act, type ComponentProps } from "react";
+import React, { act, type ComponentProps } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { ChromeButton } from "../components/ChromeButton";
+import { Rail } from "../components/Rail";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { PANE_ID } from "../layout/paneOverlay";
+import type { PanePeek } from "../layout/usePaneToggles";
+import { PlatformProvider } from "../platform/react";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { Sidebar } from "./Sidebar";
 import type { FocusTarget, SidebarHandlers } from "./types";
@@ -35,14 +40,17 @@ const team = [
 const unbound = sessionOf("web-unbound", main.id, web.id, "Tidy the changelog", "interrupted");
 const sidebarWidth = { width: 280, min: 200, max: 480, setWidth: () => {}, persist: () => {}, reset: () => {} };
 
-beforeEach(() => vi.useFakeTimers());
-afterEach(() => {
-  vi.useRealTimers();
-  document.body.replaceChildren();
+beforeEach(() => {
+  vi.useFakeTimers();
+  // Registered first, so it runs after the unmounts that `mountSidebar` registers.
+  onTestFinished(() => void vi.useRealTimers());
+  // jsdom loads no stylesheet, so the token the floating card's pointer watch reads is declared here.
+  document.documentElement.style.setProperty("--peek-gap", "8px");
 });
 
-/** Mounts the sidebar over a stand-in daemon; `render` mounts it again with other props. */
-function mountSidebar(initial: Partial<ComponentProps<typeof Sidebar>>) {
+/** Mounts the sidebar over a stand-in daemon, `beside` next to it; `render` mounts it again with
+ * other props. */
+function mountSidebar(initial: Partial<ComponentProps<typeof Sidebar>>, beside?: React.ReactNode) {
   const daemon: Daemon = {
     store: createStateStore({}),
     request: vi.fn(),
@@ -56,10 +64,15 @@ function mountSidebar(initial: Partial<ComponentProps<typeof Sidebar>>) {
   const handlers = { onFocus: vi.fn(), onOpenDialog: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn(), onSwitchConsoleSession: vi.fn() } as unknown as SidebarHandlers;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
   const render = (props: Partial<ComponentProps<typeof Sidebar>>) =>
     act(() =>
       root.render(
         <DaemonProvider value={daemon}>
+          {beside}
           <Sidebar {...handlers} projects={[web]} sessions={sessions} shownConsole={main} open sidebarWidth={sidebarWidth} {...props} />
         </DaemonProvider>,
       ),
@@ -166,4 +179,121 @@ it("lists a project session's own sessions under it, and the binding badge only 
   // The two sessions of the team are inset under their owner, the other rows are not.
   expect(rows.map((row) => row.parentElement!.className.includes("ms-4"))).toEqual([false, true, true, false]);
   act(() => root.unmount());
+});
+
+/** The floating sidebar card in a 1440x800 window with a 48px rail and an 8px gap: x 56..336 and
+ * y 48..792, with the real toggle and the real rail beside it. `Sidebar` is what arms the pointer
+ * watch, and the toggle's and the avatars' attributes are what it matches on. */
+function mountPeeking() {
+  let slideAway: ReturnType<typeof setTimeout> | undefined;
+  const hide = vi.fn();
+  const peek = {
+    active: true,
+    keep: vi.fn(() => clearTimeout(slideAway)),
+    leave: vi.fn(() => {
+      clearTimeout(slideAway);
+      slideAway = setTimeout(() => hide(), SLIDE_AWAY_MS);
+    }),
+  } satisfies Pick<PanePeek, "active" | "keep" | "leave">;
+  // `Rail` reads the platform for its notifications bell, which a browser without the capability omits.
+  const beside = (
+    <PlatformProvider value={{ kind: "browser" }}>
+      <ChromeButton label="Toggle" onPress={() => {}} controls={PANE_ID.sidebar}>
+        <svg />
+      </ChromeButton>
+      <Rail
+        consoles={[main]}
+        sessions={sessions}
+        currentConsoleId={main.id}
+        onSelectConsole={vi.fn()}
+        onConsoleEnter={vi.fn()}
+        onConsoleLeave={vi.fn()}
+        hoverOpensSidebar
+        onOpenDialog={vi.fn()}
+        waitingCount={0}
+        onNextWaiting={vi.fn()}
+        onOpenSettings={vi.fn()}
+        focusTerminal={vi.fn()}
+      />
+    </PlatformProvider>
+  );
+  const { container } = mountSidebar({ open: false, peek }, beside);
+  const pane = container.querySelector<HTMLElement>("[data-pane=sidebar]")!;
+  Object.defineProperties(pane, { offsetLeft: { value: 56 }, offsetWidth: { value: 280 } });
+  pane.getBoundingClientRect = () => ({ top: 48, bottom: 792, left: 56, right: 336 }) as DOMRect;
+  const pointer = (type: string, init: MouseEventInit = {}) => {
+    const event = new MouseEvent(type, { bubbles: true, ...init });
+    Object.defineProperty(event, "pointerType", { value: "mouse" });
+    return event;
+  };
+  const on = (element: Element, clientX: number, clientY: number) =>
+    act(() => void element.dispatchEvent(pointer("pointermove", { clientX, clientY })));
+  return {
+    peek,
+    hide,
+    leavePane: () => act(() => void pane.dispatchEvent(pointer("pointerout"))),
+    avatar: () => container.querySelector("[data-region=rail] button[aria-label^=Main]")!,
+    onToggle: (x: number, y: number) => on(container.querySelector("[data-pane-toggle] svg")!, x, y),
+    onAvatar: (x: number, y: number) => on(container.querySelector("[data-region=rail] button[aria-label^=Main] span")!, x, y),
+    onContent: (x: number, y: number) => on(document.body, x, y),
+  };
+}
+const SLIDE_AWAY_MS = 200;
+const wait = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+
+it("marks a console's avatar on the rail as a place that keeps the floating sidebar up", () => {
+  expect(mountPeeking().avatar().hasAttribute("data-sidebar-peek-keep")).toBe(true);
+});
+
+it("watches the pointer while its card floats, and lets the card go once the pointer is off it", () => {
+  const { peek, hide, onContent } = mountPeeking();
+  onContent(400, 300);
+  expect(peek.leave).toHaveBeenCalledTimes(1);
+  wait(SLIDE_AWAY_MS);
+  expect(hide).toHaveBeenCalledTimes(1);
+});
+
+it("keeps the card when the pointer goes from its toggle down through the gap above it", () => {
+  const { peek, hide, onToggle, onContent } = mountPeeking();
+  onToggle(100, 20);
+  onToggle(101, 22);
+  // The toggle sits in the top bar, which is outside the card, yet the pointer on it is not leaving.
+  expect(peek.leave).not.toHaveBeenCalled();
+  // The bar's lower edge is the card's top less the gap: the pointer is still over the bar (outside)
+  // for a move, then in the gap, which cancels the slide-away the bar's move armed.
+  onContent(120, 38);
+  onContent(120, 44);
+  wait(1000);
+  expect(hide).not.toHaveBeenCalled();
+});
+
+it("keeps the card when the pointer moves 3px from it into the gap above it", () => {
+  const { hide, leavePane, onContent } = mountPeeking();
+  onContent(120, 51);
+  leavePane();
+  onContent(120, 48 - 3);
+  wait(1000);
+  expect(hide).not.toHaveBeenCalled();
+});
+
+it("keeps the card while the pointer rests on a console's avatar on the rail, and lets it go off it", () => {
+  const { peek, hide, onAvatar, onContent } = mountPeeking();
+  onAvatar(24, 100);
+  onAvatar(25, 101);
+  wait(1000);
+  expect(peek.leave).not.toHaveBeenCalled();
+  expect(hide).not.toHaveBeenCalled();
+  onContent(24, 300);
+  wait(SLIDE_AWAY_MS);
+  expect(hide).toHaveBeenCalledTimes(1);
+});
+
+it("lets the card go once the pointer is off the card, its gap, its toggle and the avatars", () => {
+  const { peek, hide, onToggle, onContent } = mountPeeking();
+  onToggle(100, 20);
+  expect(peek.leave).not.toHaveBeenCalled();
+  onContent(400, 20);
+  expect(peek.leave).toHaveBeenCalledTimes(1);
+  wait(SLIDE_AWAY_MS);
+  expect(hide).toHaveBeenCalledTimes(1);
 });

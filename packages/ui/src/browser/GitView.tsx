@@ -1,12 +1,12 @@
-import { Label, ListBox, Select, Tabs, ToggleButton } from "@heroui/react";
-import { FileCheck, FolderTree, GitBranch, GitFork, TriangleAlert } from "lucide-react";
+import { Label, ListBox, Select, Tabs } from "@heroui/react";
+import { FileCheck, FolderTree, GitBranch, GitFork, List, TriangleAlert } from "lucide-react";
 import React, { useRef } from "react";
 
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
+import { IconToggle } from "../components/IconToggle";
 import { PathText } from "../components/PathText";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
-import { TitledControl } from "../components/TitledControl";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import type { Translate } from "../i18n/catalog";
 import { useT } from "../i18n/react";
@@ -116,37 +116,45 @@ function GitContent({
       variant="secondary"
       selectedKey={view}
       onSelectionChange={(key) => onViewChange(key as GitViewKind)}
-      className="relative flex min-h-0 flex-1 flex-col gap-0"
+      className="flex min-h-0 flex-1 flex-col gap-0"
     >
-      <Tabs.ListContainer className="shrink-0 ps-3 pe-11">
+      {/* The layout toggle is a member of the tab row: the tabs' container draws only its list, and
+          wrapping it would switch its variant's styles off, so the toggle joins it through the
+          container's `render`. The tabs are `h-10` because HeroUI's small icon-only button is 36px
+          below 48rem and 32px above, and the row's height is the tabs'. */}
+      <Tabs.ListContainer
+        className="flex shrink-0 items-center ps-3 pe-2"
+        render={(props) => (
+          <div {...props}>
+            {props.children}
+            <IconToggle
+              className="ms-auto shrink-0"
+              label={t(changeView.layout === "tree" ? "git.layout.flat" : "git.layout.tree")}
+              isSelected={changeView.layout === "tree"}
+              onChange={(selected) => changeLayout.set(selected ? "tree" : "flat")}
+            >
+              {changeView.layout === "tree" ? (
+                <FolderTree aria-hidden="true" className="size-4" />
+              ) : (
+                <List aria-hidden="true" className="size-4" />
+              )}
+            </IconToggle>
+          </div>
+        )}
+      >
         <Tabs.List aria-label={t("git.views")} className="w-auto">
           {/* HeroUI dims a hovered tab to 70%, which takes its muted label under WCAG AA's 4.5:1;
               the hover darkens it instead. */}
-          <Tabs.Tab id="worktree" className="h-8 px-3 whitespace-nowrap hover:text-foreground hover:opacity-100">
+          <Tabs.Tab id="worktree" className="h-10 px-3 whitespace-nowrap hover:text-foreground hover:opacity-100">
             {t("git.view.worktree")}
             <Tabs.Indicator />
           </Tabs.Tab>
-          <Tabs.Tab id="compare" className="h-8 px-3 whitespace-nowrap hover:text-foreground hover:opacity-100">
+          <Tabs.Tab id="compare" className="h-10 px-3 whitespace-nowrap hover:text-foreground hover:opacity-100">
             {t("git.view.compare")}
             <Tabs.Indicator />
           </Tabs.Tab>
         </Tabs.List>
       </Tabs.ListContainer>
-      {/* Laid over the tab row's end: the tabs' container draws only its list, and wrapping it would switch
-          its variant's styles off. */}
-      <TitledControl title={t("git.layout.tree")}>
-        <ToggleButton
-          isIconOnly
-          size="sm"
-          className="absolute end-2 top-0"
-          aria-label={t("git.layout.tree")}
-          isSelected={changeView.layout === "tree"}
-          onChange={(selected) => changeLayout.set(selected ? "tree" : "flat")}
-          preventFocusOnPress
-        >
-          <FolderTree aria-hidden="true" className="size-4" />
-        </ToggleButton>
-      </TitledControl>
       <Tabs.Panel id="worktree" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
         <WorktreeChanges worktrees={git.worktrees} own={git.worktree} {...worktree} changeView={changeView} onRetry={onRetry} />
       </Tabs.Panel>

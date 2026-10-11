@@ -22,6 +22,10 @@ export interface ConsolePeek {
    * kept after the sidebar has slid away, so the view does not change as it leaves, and is none
    * while the sidebar cannot float (docked, or a narrow window). */
   consoleId?: string;
+  /** Floats the sidebar in at once, showing the current console: the pointer is on the sidebar's
+   * toggle, which is aimed at and so has no dwell. Drops a preview of another console. Nothing
+   * where the sidebar cannot float. */
+  reveal: () => void;
   /** A mouse pointer is on that console's avatar: floats the sidebar in after the dwell, or while
    * it is out shows this console at once. Nothing where the sidebar cannot float. */
   hoverConsole: (consoleId: string) => void;
@@ -30,7 +34,8 @@ export interface ConsolePeek {
 }
 
 /** Which console the hidden docked sidebar floats in for, and when: the pointer resting on a
- * console's avatar on the rail brings it up showing that console, the preview. Hovering never makes
+ * console's avatar on the rail brings it up showing that console, the preview; its toggle brings it
+ * up showing the current one. Hovering never makes
  * the console the current one; that is up to a press inside the panel. */
 export function useConsolePeek(peek: SidebarPeekControl): ConsolePeek {
   const [consoleId, setConsoleId] = useState<string>();
@@ -52,6 +57,12 @@ export function useConsolePeek(peek: SidebarPeekControl): ConsolePeek {
       latest.current.reveal();
     }, CONSOLE_PEEK_DWELL_MS);
   };
+  const reveal = () => {
+    clearTimeout(dwell.current);
+    if (!latest.current.peekable) return;
+    setConsoleId(undefined);
+    latest.current.reveal();
+  };
   const leaveConsole = () => {
     clearTimeout(dwell.current);
     latest.current.leave();
@@ -65,5 +76,5 @@ export function useConsolePeek(peek: SidebarPeekControl): ConsolePeek {
   }, [peek.peekable]);
   useEffect(() => () => clearTimeout(dwell.current), []);
 
-  return { peekable: peek.peekable, consoleId: peek.peekable ? consoleId : undefined, hoverConsole, leaveConsole };
+  return { peekable: peek.peekable, consoleId: peek.peekable ? consoleId : undefined, reveal, hoverConsole, leaveConsole };
 }

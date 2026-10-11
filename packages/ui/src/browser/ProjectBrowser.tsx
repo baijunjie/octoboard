@@ -150,7 +150,7 @@ export function ProjectBrowser({
   return (
     <AsidePane layout={layout} label={t("browser.label", { project: project.name })} className="control-fills">
       <Tabs selectedKey={mode} onSelectionChange={(key) => browser.setMode(key as BrowserMode)} className="flex min-h-0 flex-1 flex-col gap-0">
-        <div ref={headerRef} className="flex h-10 shrink-0 items-center gap-2 border-b border-separator ps-3 pe-2 text-sm">
+        <div ref={headerRef} className="flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator ps-3 pe-2 text-sm">
           <FolderOpen aria-hidden="true" className="size-4 shrink-0 text-muted" />
           <h2 className="flex min-w-0 flex-1 font-medium">
             <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={project.name}>

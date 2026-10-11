@@ -1,6 +1,7 @@
-import { ArrowLeft, ArrowRight, ChevronRight, PanelLeft, PanelLeftDashed } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronRight, PanelLeft, PanelLeftDashed, PanelRight, PanelRightDashed } from "lucide-react";
 import React, { useSyncExternalStore } from "react";
 
+import { ASIDE_LABELS, type AsideOwner } from "../layout/asideOwner";
 import { PANE_ID } from "../layout/paneOverlay";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
@@ -101,12 +102,26 @@ function Trail({ names, children }: { names: string[]; children?: React.ReactNod
 
 interface TitleBarProps {
   /** Whether the sidebar is currently shown, docked or as an open drawer; a hidden sidebar that is
-   * only floating in on hover (from a console's avatar on the rail) does not count, since pressing
+   * only floating in on hover (from its toggle or a console's avatar on the rail) does not count, since pressing
    * the toggle docks it. */
   sidebarShown: boolean;
   /** Whether there is a sidebar at all; with no console there is none, and its toggle would control nothing. */
   hasSidebar: boolean;
   onToggleSidebar: () => void;
+  /** The pointer is on the sidebar's toggle: with the docked sidebar hidden, that floats it in
+   * showing the current console. */
+  onSidebarToggleEnter: () => void;
+  onSidebarToggleLeave: () => void;
+  /** What owns the aside, which its toggle names: a console session's report or a project's files.
+   * With no owner there is no aside, and no toggle. */
+  aside?: AsideOwner["kind"];
+  /** Whether the aside is shown, docked or as an open drawer; hidden but floating in on hover does
+   * not count, as with the sidebar. */
+  asideShown: boolean;
+  onToggleAside: () => void;
+  /** The pointer is on the aside's toggle: with the docked aside hidden, that floats it in. */
+  onAsideToggleEnter: () => void;
+  onAsideToggleLeave: () => void;
   canGoBack: boolean;
   canGoForward: boolean;
   onBack: () => void;
@@ -119,16 +134,25 @@ interface TitleBarProps {
 
 /**
  * The bar across the top of the window, on the window chrome like the rail below it: Back and
- * Forward, the sidebar toggle, and the selected session's breadcrumb with its status icon. Nothing
- * sits at its end but the window's drag area: the other window controls are on the rail
- * (`Rail.tsx`). Above the `docked` breakpoint, the start segment tracks the docked sidebar's clip
- * (`.title-bar-start`), so the breadcrumb stays over the main area while that column eases open or
- * closed.
+ * Forward, the sidebar toggle, the selected session's breadcrumb with its status icon, and at the
+ * end the aside's toggle while something owns the aside. The rest of the end is the window's drag
+ * area: the other window controls are on the rail (`Rail.tsx`). The end is the reading direction's,
+ * so under right-to-left it is at the window's left, where the bar's own padding keeps the macOS
+ * window buttons clear (`BarFrame`). Above the `docked` breakpoint, the start segment tracks the
+ * docked sidebar's clip (`.title-bar-start`), so the breadcrumb stays over the main area while that
+ * column eases open or closed.
  */
 export function TitleBar({
   sidebarShown,
   hasSidebar,
   onToggleSidebar,
+  onSidebarToggleEnter,
+  onSidebarToggleLeave,
+  aside,
+  asideShown,
+  onToggleAside,
+  onAsideToggleEnter,
+  onAsideToggleLeave,
   canGoBack,
   canGoForward,
   onBack,
@@ -157,6 +181,7 @@ export function TitleBar({
               onPress={onToggleSidebar}
               expanded={sidebarShown}
               controls={PANE_ID.sidebar}
+              onMouseHoverChange={(hovered) => (hovered ? onSidebarToggleEnter() : onSidebarToggleLeave())}
             >
               {sidebarShown ? (
                 <PanelLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
@@ -170,6 +195,23 @@ export function TitleBar({
       <div className="flex min-w-0 flex-1 items-center px-3">
         {viewTrail ? <Trail names={viewTrail} /> : selectedSession && <Breadcrumb session={selectedSession} />}
       </div>
+      {aside && (
+        <div className="flex shrink-0 items-center px-2">
+          <ChromeButton
+            label={t(asideShown ? ASIDE_LABELS[aside].hide : ASIDE_LABELS[aside].show)}
+            onPress={onToggleAside}
+            expanded={asideShown}
+            controls={PANE_ID.aside}
+            onMouseHoverChange={(hovered) => (hovered ? onAsideToggleEnter() : onAsideToggleLeave())}
+          >
+            {asideShown ? (
+              <PanelRight aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+            ) : (
+              <PanelRightDashed aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+            )}
+          </ChromeButton>
+        </div>
+      )}
     </BarFrame>
   );
 }

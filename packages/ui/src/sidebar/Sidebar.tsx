@@ -22,7 +22,7 @@ import { RowControls } from "../components/RowControls";
 import { ActivityMarker, StatusIcon } from "../components/StatusIcon";
 import { withGitBadge } from "../gitStatusLabel";
 import { useCurrentLanguage, useT } from "../i18n/react";
-import { drawerClass, PANE_ID, RailClip } from "../layout/paneOverlay";
+import { drawerClass, PANE_ID, RailClip, usePanePeekPointer } from "../layout/paneOverlay";
 import type { PaneWidth } from "../layout/paneWidth";
 import { columnClipClass, type DockPhase, useSidebarDockMotion } from "../layout/sidebarDockMotion";
 import type { PanePeek } from "../layout/usePaneToggles";
@@ -165,6 +165,8 @@ export function Sidebar({
     return () => clearTimeout(timer);
   }, [focusId]);
 
+  // The console avatars on the rail also keep the floating card up, being outside the gap around it.
+  usePanePeekPointer("sidebar", peek, "[data-sidebar-peek-keep]");
   // `peek` being passed means the docked sidebar is targeted hidden. The column eases to and from
   // that; the inset card is a later state, only once the column is out of the row.
   const dock = useSidebarDockMotion(peek === undefined, peek?.active ?? false, sidebarWidth.width, onColumnPhase);
@@ -338,7 +340,7 @@ function ConsoleHeader({ handlers, current }: { handlers: SidebarHandlers; curre
   return (
     // The list under this header is inset twice — the scroll area, then each heading and row — so
     // the end padding matches that and this menu lines up with the rows' menus.
-    <div ref={headerRef} className="flex h-14 shrink-0 items-center gap-2 border-b border-separator ps-4 pe-4">
+    <div ref={headerRef} className="flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator ps-4 pe-4">
       <RowLabel title={current.name}>
         <span className="text-base font-semibold">{current.name}</span>
       </RowLabel>
