@@ -4,6 +4,7 @@
 import type { ReactNode } from "react";
 
 import type { FileContent } from "../protocol";
+import { joinedPatch } from "./patch";
 import type { StatusKey } from "./statusMarks";
 
 /** Whether a file of this name is Markdown, by its extension. */
@@ -165,55 +166,6 @@ export function changeStatus(change: { old: StatusSide; new: StatusSide }): Chan
   return before.state === "out_of_scope" || after.state === "out_of_scope" ? "renamed" : "modified";
 }
 
-/** `patch` without git's "\\ No newline at end of file" lines, and which side they marked: the
- * old one after a removed line, the new one after an added line, both after a context line. Each
- * hunk stays whole without them: the marker is no line of either side. A symbolic link's patch
- * marks nothing: a link's target never ends in a newline, so saying so would say nothing. */
-export function withoutNoNewlineMarkers(patch: string): { patch: string; old: boolean; new: boolean } {
-  const lines = patch.split("\n");
-  const kept: string[] = [];
-  const marked = { old: false, new: false };
-  for (const line of lines) {
-    if (line.startsWith("\\ ")) {
-      const previous = kept[kept.length - 1] ?? "";
-      if (previous.startsWith("-")) marked.old = true;
-      else if (previous.startsWith("+")) marked.new = true;
-      else if (previous.startsWith(" ")) marked.old = marked.new = true;
-      continue;
-    }
-    kept.push(line);
-  }
-  if (!marked.old && !marked.new) return { patch, ...marked };
-  const link = /^((new|deleted) file mode|old mode|new mode) 120000$|^index \S+ 120000$/m.test(patch);
-  return { patch: kept.join("\n"), old: marked.old && !link, new: marked.new && !link };
-}
-
-/** The line counts of each hunk of a patch, old side then new. */
-function hunkCounts(patch: string): [number, number][] {
-  return [...patch.matchAll(/^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/gm)].map(([, old, next]) => [Number(old ?? 1), Number(next ?? 1)]);
-}
-
-/** Whether a patch has any line to draw: one with no hunk — an empty file added or removed, a mode
- * change — has none, and the viewer says so rather than draw an empty diff. */
-export function hasHunks(patch: string): boolean {
-  return hunkCounts(patch).length > 0;
-}
-
-/** Whether a patch has two sides to set side by side: some hunk has lines on both. One where every
- * hunk adds to nothing or removes everything — an added or a deleted file, each section of a type
- * change — reads the same unified and split, so the viewer offers no choice between them. */
-export function hasTwoSides(patch: string): boolean {
-  return hunkCounts(patch).some(([old, next]) => old > 0 && next > 0);
-}
-
-/** A patch split into its sections, one per `diff --git` header, each a patch of its own. No line
- * of a hunk can start that way: each starts with a space, `+`, `-` or `\`. */
-export function patchSections(patch: string): string[] {
-  const starts = [...patch.matchAll(/^diff --git /gm)].map((match) => match.index);
-  if (starts.length < 2) return [patch];
-  return starts.map((start, i) => patch.slice(start, starts[i + 1]));
-}
-
 /**
  * Which presentation a change gets:
  *
@@ -226,10 +178,10 @@ export function patchSections(patch: string): string[] {
  *   compared with anything.
  * - `notFile`: one side alone that is no file — a symbolic link, or a repository of its own — so
  *   there is no content to show, only what it is.
- * - `text`: a line diff, drawn from the patch.
- * - `sections`: a patch of more than one section, each drawn on its own — a type change, which
- *   `git` writes as the old side's removal and the new side's addition, and which one diff would
- *   merge.
+ * - `text`: a line diff, drawn from the patch; a type change's two sections are one diff of the
+ *   old side against the new (see `joinedPatch`). `expandable` says whether its collapsed lines can
+ *   be offered: a joined patch holds both sides whole, so it collapses none and its bodies are not
+ *   for expanding.
  * - `identical`: an empty patch: the two sides hold the same now.
  * - `image`: the two images (or the one that exists) side by side.
  * - `binary`: a side is a non-image binary, or an image faces text; neither has a line diff.
@@ -238,8 +190,7 @@ export type ChangePresentation =
   | { kind: "restricted"; hidden: "old" | "new"; repositoryPath: string; shown: ViewerChangeSide }
   | { kind: "single"; body: ViewerBody }
   | { kind: "notFile"; sideKind: "symlink" | "submodule" }
-  | { kind: "text"; patch: string }
-  | { kind: "sections"; sections: string[] }
+  | { kind: "text"; patch: string; expandable: boolean }
   | { kind: "identical" }
   | { kind: "image" }
   | { kind: "binary" }
@@ -261,6 +212,6 @@ export function changePresentation(change: ViewerChange): ChangePresentation {
     return { kind: "unreadable" };
   }
   if (change.patch === "") return { kind: "identical" };
-  const sections = patchSections(change.patch);
-  return sections.length > 1 ? { kind: "sections", sections } : { kind: "text", patch: change.patch };
+  const patch = joinedPatch(change.patch);
+  return { kind: "text", patch, expandable: patch === change.patch };
 }

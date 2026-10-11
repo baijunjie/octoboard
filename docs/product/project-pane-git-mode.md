@@ -407,10 +407,18 @@ commit and its new side from To's, and is shown as a staged change is below; it 
 - **A rename across the project's boundary** shows only the version inside the project, as a file rather than a diff,
   under a warning that the previous or the new version is outside the project, with its path from the repository's
   root. Nothing of the version outside is read.
-- **A type change** — a file that became a symbolic link, or the reverse — is shown as two diffs, Before and After,
-  one per side. Each has lines on one side only, so no choice of unified or split is offered for them. A
-  rename into or out of a path below itself (`foo` to `foo/bar`, or back) is shown the same way: its old path's
-  removal and its new path's addition, under Renamed.
+- **A type change** — a file that became a symbolic link, or the reverse — is one diff, with the choice of unified or
+  split and the layout remembered, as a modified file's is. Git writes such a change as the old side's removal and the
+  new side's addition, and the diff holds the two together: the whole old side as removed lines, then the whole new
+  side as added ones. **The two sides are never compared line by line** — a file's lines and a link's target have
+  nothing to pair up — so each side is shown whole, with no run of unchanged lines: the diff collapses nothing and has
+  no separator to expand. It offers the layout choice by the rule above, so an empty file that became a link, having
+  added lines alone, offers none. The kind of change stays in the title's tag.
+- **A rename into or out of a path below itself** (`foo` to `foo/bar`, or back) is written by Git the same way, as the
+  old path's removal and the new path's addition, and is shown the same way: one diff of the whole old path against
+  the whole new path — collapsing nothing, with no separator to expand — under Renamed, with the path it came from
+  among the details. Its two sides are not compared either, so a rename whose content never changed still shows every
+  one of its lines as removed and then added.
 - **No differences**, when the two sides now hold the same content: the change was staged, committed or undone since
   it was listed.
 - **A path in conflict** is not a two-sided change: a warning names the kind of conflict — both modified, both added,
@@ -464,13 +472,14 @@ Then:
 - **Moving on to another change** while the lines are being read gives that read up, saying nothing.
 
 **A diff that offers no expansion** keeps its separators with their counts and nothing else: no controls, and no
-trailing separator for the lines beyond the last hunk, which only an expandable diff has. That is so from the
-start for a diff whose two sides are not both files whose content can be read — an added or a deleted file, which has
-one side only, a symbolic link or a submodule, hence a type change, and a version outside the project. The rest is
-found only on the first expansion, and the diff is then drawn again in that form, so its trailing separator goes on
-that press: a side larger than the 4 MiB a read opens, a side past the viewer's own budget of 10,000 lines or
-1,000,000 characters, and the change having moved on. Of the three only the last says anything; the two limits pass
-without a word.
+trailing separator for the lines beyond the last hunk, which only an expandable diff has. That is so from the start for
+a diff whose two sides are not both files whose content can be read — an added or a deleted file, which has one side
+only, a symbolic link or a submodule, hence a type change, and a version outside the project. A type change and a rename
+into or out of a path below itself have no separator at all, their diff holding both of its sides whole so that nothing
+in it is collapsed (see "What it shows" above). The rest is found only on the first expansion, and the diff is then
+drawn again in that form, so its trailing separator goes on that press: a side larger than the 4 MiB a read opens, a
+side past the viewer's own budget of 10,000 lines or 1,000,000 characters, and the change having moved on. Of the three
+only the last says anything; the two limits pass without a word.
 
 From the keyboard, **Tab** from the code region moves into the separators' controls and then along them, run by run
 from the top of the diff, and after the last one leaves the diff; **Shift+Tab** from the first goes back to the code

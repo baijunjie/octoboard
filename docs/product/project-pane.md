@@ -220,11 +220,10 @@ much as code. It is one choice for all of it, files and changes alike: code, a f
 file's source, a diff, a plain patch, and the file behind a path in conflict. The choice is remembered, like the diff
 layout choice: it holds for the next file and the next change, and after the application restarts.
 
-- The control is there only while the viewer shows source text whose lines could wrap. A change shown in sections, and
-  an image change whose sides fell back to their text, have the one choice between them rather than one for each part.
-  An image shown as an image, a binary file, a change with no differences, one with nothing to show, an error and a
-  rendered Markdown document — which wraps whatever the choice says (see "A Markdown file as a document" above) —
-  offer none.
+- The control is there only while the viewer shows source text whose lines could wrap. An image change whose sides fell
+  back to their text has the one choice between them rather than one for each side. An image shown as an image, a
+  binary file, a change with no differences, one with nothing to show, an error and a rendered Markdown document —
+  which wraps whatever the choice says (see "A Markdown file as a document" above) — offer none.
 - **While lines do not wrap, a long one is read by scrolling sideways with the pointer.** Those scrollers take no
   keyboard focus, and Left and Right in the viewer move between subjects (see "Moving between files" below), so from
   the keyboard the way to the end of a long line is to turn wrapping on.
@@ -239,8 +238,8 @@ the region, unless it holds a diff whose collapsed lines can be expanded, whose 
 
 With keyboard focus on the code region, **⌘A** (Ctrl+A off macOS) selects that region's code and nothing else: not
 its line numbers, not a diff's markers, and not the viewer's title, path and size, so copying takes the code alone.
-While the code has not been drawn yet, the key selects nothing. A change shown as two diffs, Before and After, is two
-code regions, and the key selects the one with keyboard focus.
+While the code has not been drawn yet, the key selects nothing. An image change whose sides both fell back to their
+text is two code regions, and the key selects the one with keyboard focus.
 
 A **rendered Markdown document** (see "A Markdown file as a document" above) is a region of the same kind, named for
 the file as the code region is: Tab or a click puts keyboard focus on it so it can be scrolled from the keyboard, and

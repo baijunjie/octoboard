@@ -6,10 +6,11 @@ import { useT } from "../i18n/react";
 import { diffPlan, textPlan } from "./budgets";
 import { CODE_THEMES } from "./codeTheme";
 import { HighlightedFile, RenderedDiff, RendererBoundary } from "./codeRenderer";
-import { hasHunks, withoutNoNewlineMarkers, type ChangeBodies } from "./content";
+import type { ChangeBodies } from "./content";
 import { LayoutToggle, type DiffLayout } from "./diffLayout";
 import type { ExpansionStatus, SeparatorLabels } from "./expansion";
 import { FrameSurface } from "./FrameSurface";
+import { hasHunks, withoutNoNewlineMarkers } from "./patch";
 import { focusFirstSeparatorControl } from "./rendererDom";
 import { isSelectAll, selectCode } from "./selectAll";
 import { LoadingOverlay, Notice, Unreadable } from "./viewerStates";
@@ -150,8 +151,8 @@ export function CodeSurface({
 }
 
 /**
- * A change as a diff, rendered from its patch within the budget, with the choice of layout (left to
- * the caller when `onLayoutChange` is absent, for several diffs sharing one); past the budget, or
+ * A change as a diff, rendered from its patch within the budget, with the choice of layout (none
+ * when `onLayoutChange` is absent, as for a diff with one side only); past the budget, or
  * when rendering fails, the patch as plain text, without the layout choice it no longer has. The
  * word wrap choice is offered in every one of these forms.
  *

@@ -104,6 +104,21 @@ WKWebView has not drawn any of these surfaces. In the packaged app, in both appe
 - [ ] Dark mode is unchanged or better throughout, which is the milestone's own criterion and the direction every
   measured change went in.
 
+## Carried from milestone 10 (showing a type change as one diff)
+
+Verified in the dev gallery in WebKit with real pointer input, in both views, both layouts and both appearances: a
+type change and a rename into and out of a path below itself each draw one diff with the layout toggle, the kind of
+change stays in the title's tag, and neither offers an expansion. The joining itself was checked against patches
+taken from real git — the worktree, the index and commit-to-commit, for a file to symbolic link change, an
+executable file to symbolic link change, and both nesting directions. What the gallery cannot settle is the patch
+text itself:
+
+- [ ] In the packaged app, against a real repository: stage a file-to-symbolic-link change and a `foo` to `foo/bar`
+  rename, and open each in both the Uncommitted and the Compare view, in both layouts. The patches the gallery used
+  are hand-written strings, so what this confirms is that the daemon's own patch carries what the join keys on — the
+  `deleted file mode` and `new file mode` lines, and the symbolic link side's `120000` mode, which decides whose
+  "no newline" marker is dropped.
+
 ## Notes for the developer
 
 **Development notes**

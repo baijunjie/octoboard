@@ -32,6 +32,12 @@ build-only Vite plugin changes are not settled there either: the gallery runs Vi
 `git worktree add --detach` case in the "Creating" section of `.claude/skills/git-worktree/SKILL.md`) whose `main.tsx`
 renders the gallery's scenarios in place of the app.
 
+The gallery's "File viewer" group hands `FileViewer` a fixed subject instead of driving the app, so it carries none of
+what the project browser supplies while running — above all the loader for a change's whole bodies, which is the only
+thing that makes the renderer offer to expand the lines a diff collapsed. A diff's expansion is therefore never
+exercised there, however right the scenario looks: verify it in the "Project pane: Git" group, whose fixture change
+supplies those bodies, and give a new change presentation a scenario in that group as well.
+
 ## Stage a defect's states in the order it was reported, not in whatever order is easy to reach
 
 The order the states are brought up in decides the outcome on its own often enough — whether an element was already

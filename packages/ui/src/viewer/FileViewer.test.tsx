@@ -267,6 +267,32 @@ it.each([
   expect(dialog()?.querySelector('[aria-label="Diff layout"]') !== null).toBe(offered);
 });
 
+// git writes a type change as a removal and an addition; the viewer draws them as one diff, framed
+// once and with the layout choice, like any change.
+it("draws a type change as one diff with the layout choice", () => {
+  const file: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
+  const link: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "symlink" };
+  const patch =
+    "diff --git a/src/c.ts b/src/c.ts\ndeleted file mode 100644\n@@ -1 +0,0 @@\n-a\ndiff --git a/src/c.ts b/src/c.ts\nnew file mode 120000\n@@ -0,0 +1 @@\n+b\n";
+  show({ key: "tc", path: "src/c.ts", content: { state: "change", change: { old: file, new: link, patch } } });
+  expect(dialog()?.querySelectorAll("[data-layout]")).toHaveLength(1);
+  expect(dialog()?.querySelectorAll("[role=region]")).toHaveLength(1);
+  expect(dialog()?.querySelector('[aria-label="Diff layout"]')).not.toBeNull();
+  expect(dialog()?.querySelector("[data-renderer]")?.textContent).toContain("-a\n+b\n");
+  expect(dialog()?.textContent).not.toContain("Before");
+});
+
+// A joined patch holds both sides whole, so nothing in it is collapsed: offering to expand it would
+// draw a separator that opens onto nothing.
+it("offers no expansion to a rename below its own path, whose two sides are files", () => {
+  const file = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
+  const patch =
+    "diff --git a/f b/f\ndeleted file mode 100644\n@@ -1 +0,0 @@\n-a\ndiff --git a/f/g b/f/g\nnew file mode 100644\n@@ -0,0 +1 @@\n+b\n";
+  const loadBodies = async () => ({ old: "a\n", new: "b\n" });
+  show({ key: "nested", path: "f/g", content: { state: "change", change: { old: file("f"), new: file("f/g"), patch, loadBodies } } });
+  expect(dialog()?.querySelector("[data-expandable]")?.getAttribute("data-expandable")).toBe("false");
+});
+
 // The layout the viewer remembers is for diffs with two sides; one without is drawn unified, with
 // no empty column and no choice to make.
 it("draws a one-sided diff unified even when split was chosen for another", async () => {

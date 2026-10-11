@@ -17,9 +17,8 @@ export const diffLayout = createPersistedPreference<DiffLayout>(
 
 /** The choice between a unified and a split diff. It is rendered by whatever draws the diff, so it
  * exists while a diff with a layout to choose does (a patch shown as plain text has none, and a
- * single diff's goes with its renderer when that fails), and is moved into the header's layout
- * slot (`ControlsSlot`). The exception is a change in sections, whose one toggle `ChangeView`
- * draws outside the renderer boundaries, so it stays even if every section's renderer fails. */
+ * diff's goes with its renderer when that fails), and is moved into the header's layout slot
+ * (`ControlsSlot`). */
 export function LayoutToggle({
   layout,
   onLayoutChange,

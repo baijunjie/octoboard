@@ -15,9 +15,9 @@ export const wordWrap = createPersistedPreference<boolean>(
 );
 
 /** Keeps the header's wrap choice for as long as code that can wrap is on screen; it draws nothing
- * itself. Whatever draws code renders one, and however many are mounted (a change in sections, an
- * image change whose sides both fell back to text) the header still shows a single choice, which
- * stays until the last of them goes. */
+ * itself. Whatever draws code renders one, and however many are mounted (an image change whose
+ * sides both fell back to text) the header still shows a single choice, which stays until the last
+ * of them goes. */
 export function WrapToggle(): null {
   const claimWrap = useContext(ControlsSlot)?.claimWrap;
   useEffect(() => claimWrap?.(), [claimWrap]);

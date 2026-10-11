@@ -94,5 +94,5 @@ area and the Git mode panel, and shows a type change as one diff.
 7. 07 markdown-document-view (closed)
 8. 08 viewer-header-layout (closed)
 9. 09 surfaces-and-contrast (closed)
-10. [Showing a type change as one diff](10-type-change-diff.md)
+10. 10 type-change-diff (closed)
 11. [Final confirmation](11-final-confirmation.md)

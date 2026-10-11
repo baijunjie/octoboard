@@ -1,6 +1,6 @@
 import { Alert, Button, Chip } from "@heroui/react";
 import { ChevronLeft, ChevronRight, File, FileQuestion, Unplug } from "lucide-react";
-import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { FadeOverflow } from "../components/FadeOverflow";
 import { PlainMarkedPath } from "../components/MarkedPath";
@@ -12,13 +12,11 @@ import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { useOctoboardTheme } from "../theme";
 import { displayWirePath, wireBaseName } from "../wirePath";
 import { arrowNavigation } from "./arrowKeys";
-import { diffPlan } from "./budgets";
 import { useRendererScope } from "./codeRenderer";
 import { CodeSurface, DiffSurface } from "./CodeSurface";
 import {
   changePresentation,
   changeStatus,
-  hasTwoSides,
   isMarkdownName,
   type ViewerBody,
   type ViewerChange,
@@ -27,10 +25,11 @@ import {
   type ViewerSubject,
 } from "./content";
 import { ControlsSlot } from "./controlsSlot";
-import { diffLayout, LayoutToggle, type DiffLayout } from "./diffLayout";
+import { diffLayout, type DiffLayout } from "./diffLayout";
 import { formatFileSize, formatSideSize } from "./format";
 import { FrameSurface } from "./FrameSurface";
 import { MarkdownSurface } from "./MarkdownSurface";
+import { hasTwoSides } from "./patch";
 import { StatusChip } from "./StatusChip";
 import type { StatusKey } from "./statusMarks";
 import { Loading, Unreadable } from "./viewerStates";
@@ -525,7 +524,6 @@ function ChangeView({
   theme: "light" | "dark";
 }): React.ReactElement {
   const t = useT();
-  const sectionsId = useId();
   const presentation = changePresentation(change);
   switch (presentation.kind) {
     case "restricted": {
@@ -565,44 +563,10 @@ function ChangeView({
           layout={twoSides ? layout : "unified"}
           onLayoutChange={twoSides ? onLayoutChange : undefined}
           theme={theme}
-          loadBodies={change.loadBodies}
+          loadBodies={presentation.expandable ? change.loadBodies : undefined}
         />
       );
     }
-    case "sections":
-      // Each section drawn on its own, so a type change's removal and addition are never merged
-      // into one diff; with two, they are its old and its new side.
-      // One layout choice serves every section.
-      return (
-        <>
-          {/* Only when some section is drawn as a diff with two sides: a plain patch has no layout,
-              and a one-sided diff reads the same in both. */}
-          {presentation.sections.some((section) => diffPlan(section) === "render" && hasTwoSides(section)) && (
-            <LayoutToggle layout={layout} onLayoutChange={onLayoutChange} />
-          )}
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
-            {presentation.sections.map((section, i) => {
-              const heading = presentation.sections.length === 2 ? `${sectionsId}-${i}` : undefined;
-              return (
-                <section key={i} aria-labelledby={heading} className="flex min-h-48 shrink-0 flex-col gap-1">
-                  {heading && (
-                    <h3 id={heading} className="text-xs font-medium text-muted">
-                      {t(i === 0 ? "viewer.change.before" : "viewer.change.after")}
-                    </h3>
-                  )}
-                  <DiffSurface
-                    resetKey={`${resetKey}:${i}`}
-                    name={name}
-                    patch={section}
-                    layout={hasTwoSides(section) ? layout : "unified"}
-                    theme={theme}
-                  />
-                </section>
-              );
-            })}
-          </div>
-        </>
-      );
     case "identical":
       return <p className="text-sm text-muted">{t("viewer.change.identical")}</p>;
     case "notFile":

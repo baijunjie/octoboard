@@ -362,6 +362,46 @@ function generated(lines: number, line: (index: number) => string): string {
 const largeLog = () => generated(40_000, (i) => `2026-10-08T12:${String(i % 60).padStart(2, "0")}:00Z INFO request ${i} served in ${i % 97} ms`);
 const minified = () => `!function(){${generated(1, () => Array.from({ length: 4_000 }, (_, i) => `var a${i}=${i}*2;`).join(""))}}();`;
 const nearBudget = () => generated(9_000, (i) => `export const value${i} = { id: ${i}, label: "Item ${i}", enabled: ${i % 2 === 0} };`);
+// A file renamed into a path below itself (`lib` to `lib/index.ts`), which git writes as a removal and an addition.
+const BELOW_ITSELF_PATCH = `diff --git a/lib b/lib
+deleted file mode 100644
+index 3b18e51..0000000
+--- a/lib
++++ /dev/null
+@@ -1,3 +0,0 @@
+-export const version = "2.3";
+-export const name = "lib";
+-export default version;
+diff --git a/lib/index.ts b/lib/index.ts
+new file mode 100644
+index 0000000..9c8d7e6
+--- /dev/null
++++ b/lib/index.ts
+@@ -0,0 +1,3 @@
++export const version = "2.4";
++export const name = "lib";
++export default version;
+`;
+// The reverse, `lib/index.ts` to `lib`: git writes the addition of the outer path first.
+const OUT_OF_ITSELF_PATCH = `diff --git a/lib b/lib
+new file mode 100644
+index 0000000..9c8d7e6
+--- /dev/null
++++ b/lib
+@@ -0,0 +1,3 @@
++export const version = "2.4";
++export const name = "lib";
++export default version;
+diff --git a/lib/index.ts b/lib/index.ts
+deleted file mode 100644
+index 3b18e51..0000000
+--- a/lib/index.ts
++++ /dev/null
+@@ -1,3 +0,0 @@
+-export const version = "2.3";
+-export const name = "lib";
+-export default version;
+`;
 // Lines longer than the viewer is wide, in code and in prose, for the word wrap choice.
 const LONG_LINE = "const message = `The session ${session.title} has been waiting for ${minutes} minutes for an answer to ${request.question}, which was last asked by ${request.agent} at ${request.askedAt}`;";
 const longLines = () => ["export function describe(session: Session): string {", `  ${LONG_LINE}`, "  return message;", "}", `// ${"A comment that goes on and on without ever finding a place to stop. ".repeat(4)}`, ""].join("\n");
@@ -476,6 +516,8 @@ async function changes(): Promise<ViewerSubject[]> {
     change("src/legacy.ts", present("src/legacy.ts"), { state: "absent" }, DELETED_PATCH),
     change("src/badgeLabel.ts", present("src/badge.ts"), present("src/badgeLabel.ts"), RENAMED_PATCH),
     change("src/current.ts", present("src/current.ts", undefined, "symlink"), present("src/current.ts", newSession), TYPE_CHANGE_PATCH),
+    change("lib/index.ts", present("lib"), present("lib/index.ts"), BELOW_ITSELF_PATCH),
+    change("lib", present("lib/index.ts"), present("lib"), OUT_OF_ITSELF_PATCH),
     change("src/moved-in.ts", { state: "out_of_scope", repositoryPath: "packages/shared/src/moved-in.ts" }, present("src/moved-in.ts", newSession)),
     change("src/moved-out.ts", present("src/moved-out.ts", oldSession), { state: "out_of_scope", repositoryPath: "packages/shared/src/moved-out.ts" }),
     change("assets/logo.png", present("assets/logo.png", before), present("assets/logo.png", after)),
@@ -619,7 +661,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     title: "Changes",
     description:
-      "Modified (one with lines wider than the viewer), added, deleted, renamed and type-changed files from patches, sides outside the project, image changes, a binary change, a patch past the budget, a patch that cannot be read and a change without a patch.",
+      "Modified (one with lines wider than the viewer), added, deleted, renamed, type-changed and renamed-below-itself files, in both directions, from patches, sides outside the project, image changes, a binary change, a patch past the budget, a patch that cannot be read and a change without a patch.",
     viewer: { subjects: changes },
   },
 ];
