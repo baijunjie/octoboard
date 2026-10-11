@@ -169,20 +169,63 @@ one's do not.
 
 - **Text** is shown as code, highlighted for its language as told from the file's name, in colours that follow the
   window's appearance (see "What follows the choice" in `docs/product/appearance.md`). A file of more than 10,000 lines
-  or 1,000,000 characters is shown as plain text, with a line saying it is shown without highlighting because it is
-  large; within highlighted code, a line longer than 1,000 characters is left unhighlighted. Where highlighting is not
-  available for a file, or fails to load, the file is shown as plain text. A **Markdown** file opens as a rendered
-  document instead, with its source a choice away (see "A Markdown file as a document" below).
+  or 1,000,000 characters is shown as plain text, under a notice saying it is shown without highlighting because it is
+  large; within highlighted code, a line longer than 1,000 characters is left unhighlighted. Where the grammar a file
+  needs cannot be loaded, or the code cannot be drawn at all, the file is shown as plain text under a failure notice
+  saying which of the two it was (see "Notices and stand-ins" below). A **Markdown** file opens as a rendered document instead, with its source a choice away (see "A
+  Markdown file as a document" below).
 - **Images** — PNG, JPEG, GIF, WebP, BMP, ICO and SVG; AVIF on macOS 13 and later — are shown scaled down to fit and
   never scaled up, on a checkerboard that shows their transparent areas. An image is only displayed: an SVG's scripts
-  never run and nothing it refers to is fetched. An image that cannot be decoded says so; an SVG that cannot be
-  decoded is shown as its text instead.
+  never run and nothing it refers to is fetched. An image that cannot be decoded says so, with its size; an SVG that
+  cannot be decoded is shown as its text instead, under a failure notice saying so.
 - **Any other binary file** says it cannot be displayed, with its size.
 - **While a file is being read**, and until its code is drawn, the viewer says it is loading. It never shows another
   file's content under this file's name, not even for a moment while moving between files. Assistive technology is
   told it is loading while the file is read — in a viewer just opened, after the viewer itself has been announced —
   but not while its code is drawn.
 - **A file that cannot be shown** says why (see "Errors" below).
+
+### Notices and stand-ins
+
+What the viewer says about the subject on screen — a file or a change — takes one of three shapes, chosen by how
+much of the subject it still has to show.
+
+**A notice** sits above content the viewer is still showing, as one filled block across the body's width; where a
+subject carries more than one, they stack as a single strip above the content. Each notice is in one of three tones,
+and each tone draws its own fill and its own glyph, so a tone never rests on colour alone:
+
+- **neutral**, with a circled `i`, states how the content below is drawn and why, for what this file or change is — a
+  size budget, a change read at an older version, lines that stay collapsed because the whole file is not to be had, a
+  change with no differences whose content is shown whole in place of a diff;
+- **a warning**, amber, with a warning triangle, says something about the content that has to be known before reading
+  it — a file still in conflict, a side of a change that lies outside the project;
+- **a failure**, red, with a circled `!`, reports that something went wrong, so the view on screen is not the one that
+  was asked for — a read that failed, a grammar that could not be loaded, code, a diff or a document that could not be
+  drawn, an image that would not decode.
+
+A notice that can appear only once the content has been drawn, which a reader would otherwise never meet, is announced
+to assistive technology, each one once: the fall back to plain text where the grammar or the drawing fails, to a
+Markdown file's source, to a plain patch where the diff could not be drawn, and to an image's own text, and what
+a diff says about its collapsed lines (see "Expanding the collapsed lines" in
+`docs/product/project-pane-git-mode.md`). A notice that arrives with the content it describes is not announced on its
+own; it is read with the rest of the dialog.
+
+**A stand-in** fills the body when there is nothing to draw at all: one centred glyph and one sentence, the glyph
+saying what kind of nothing it is. It is what the viewer shows for
+
+- nothing it can show at all: a body it cannot display, with its size — or, for a change between two such bodies, the
+  size before and after — and a change with no diff at all, which take the same glyph;
+- a change with no differences to show — its two sides holding the same content, or a rename with no change to its
+  content — but only where that content could not be read; where it was read, the change shows the file whole under a
+  neutral notice instead (see "What it shows" in `docs/product/project-pane-git-mode.md`);
+- a side that is not a file: a symbolic link, or a repository of its own;
+- a subject nothing has been read of yet while the connection to the daemon is lost, which is deliberately this same
+  neutral stand-in rather than an error, the read resuming on its own (see "When the open file changes" below).
+
+**An error** fills the body when the file or change cannot be opened at all: a red block, in the same red and with the
+same glyph as a failure notice so that neither is louder than the other, headed that it could not be opened, with the
+reason under it (see "Errors" below). Assistive technology is told of it however long after the
+viewer opened it arrives.
 
 ### A Markdown file as a document
 
@@ -212,12 +255,11 @@ viewer stays on the file it was showing.
 **The document always wraps** and offers no wrap control (see "Wrapping long lines" below).
 
 **Where the document is offered.** A Markdown file opened for itself, and a whole Markdown file body the Git mode
-shows — an untracked file, or one added with no patch (see "What it shows" in
-`docs/product/project-pane-git-mode.md`). A diff, the file behind a path in conflict and the version inside the
-project of a rename across the project's boundary keep the source view alone and show no document-or-source control.
-So does a Markdown file past the budget for highlighting (see "What it shows" above): it is shown as plain source, with
-no control either. Where the document cannot be drawn at all, the source is shown under a line saying the document
-view is not available for this file.
+shows — an untracked file, one added with no patch, or a change with no lines to draw whose content was read (see
+"What it shows" in `docs/product/project-pane-git-mode.md`). A diff and the file behind a path in conflict keep the
+source view alone and show no document-or-source control; the conflict's markers are what it is looked at for. So does
+a Markdown file past the budget for highlighting (see "What it shows" above): it is shown as plain source, with
+no control either. Where the document cannot be drawn at all, the source is shown under a failure notice saying so.
 
 ### Wrapping long lines
 
@@ -230,8 +272,9 @@ and the next change, and after the application restarts.
 
 - The control is there only while the viewer shows source text whose lines could wrap. An image change whose sides fell
   back to their text has the one choice between them rather than one for each side. An image shown as an image, a
-  binary file, a change with no differences, one with nothing to show, an error and a rendered Markdown document —
-  which wraps whatever the choice says (see "A Markdown file as a document" above) — offer none.
+  binary file, anything the viewer fills with a stand-in rather than content (see "Notices and stand-ins" above), an
+  error and a rendered Markdown document — which wraps whatever the choice says (see "A Markdown file as a document"
+  above) — offer none.
 - **While lines do not wrap, a long one is read by scrolling sideways with the pointer.** Those scrollers take no
   keyboard focus, and Left and Right in the viewer move between subjects (see "Moving between files" below), so from
   the keyboard the way to the end of a long line is to turn wrapping on.
@@ -293,8 +336,8 @@ changes on disk:
 
 A read that finds the file unchanged leaves what is shown as it is. When the connection to the daemon is lost, the
 content shown stays until the connection is back, and then the file is read again; a file that had nothing on screen
-yet says, in plain text rather than as an error, that the connection was lost and that it is read again once the
-connection is back.
+yet says, in the neutral stand-in rather than as an error (see "Notices and stand-ins" above), that the connection was
+lost and that it is read again once the connection is back.
 
 ## Errors
 

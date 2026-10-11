@@ -14,7 +14,7 @@ import { FrameSurface } from "./FrameSurface";
 import { hasHunks, linesAfterLastHunk, withoutNoNewlineMarkers } from "./patch";
 import { focusFirstSeparatorControl } from "./rendererDom";
 import { isSelectAll, selectCode } from "./selectAll";
-import { LoadingOverlay, Notice, Unreadable } from "./viewerStates";
+import { LoadingOverlay, Notice, Unreadable, type NoticeTone } from "./viewerStates";
 import { WrapToggle, wordWrap } from "./wordWrap";
 
 /** What is said beside the diff when its collapsed lines cannot be expanded, by why (`failed` takes
@@ -140,14 +140,14 @@ export function CodeSurface({
   const fallback = (
     <>
       <WrapToggle />
-      <Notice>{t("viewer.plain.failed")}</Notice>
+      <Notice tone="failed" speak={t("viewer.plain.unrenderable")} />
       <PlainText text={text} label={label} theme={theme} />
     </>
   );
   return (
     <>
-      {plainFor === resetKey && <Notice>{t("viewer.plain.failed")}</Notice>}
       <RendererBoundary resetKey={resetKey} fallback={fallback}>
+        {plainFor === resetKey && <Notice tone="failed" speak={t("viewer.plain.failed")} />}
         <WrapToggle />
         <CodeFrame label={label} resetKey={resetKey} theme={theme}>
           {(onDrawn) => (
@@ -215,22 +215,28 @@ export function DiffSurface({
   const onExpansion = useCallback((next: ExpansionStatus) => setReported({ key: resetKey, read: loadBodies, status: next }), [resetKey, loadBodies]);
   const note = status && EXPANSION_NOTES[status.kind];
   const expansionNote = status?.kind === "failed" ? t("viewer.expand.failed", { reason: status.message }) : note ? t(note) : undefined;
-  const asText = (reason: string) => (
+  const asText = (reason: string, tone: NoticeTone, speak?: string) => (
     <>
       <WrapToggle />
-      <Notice>{reason}</Notice>
+      <Notice tone={tone} speak={speak}>
+        {reason}
+      </Notice>
       <PlainText text={patch} label={label} theme={theme} />
     </>
   );
   if (!hasHunks(patch)) return <Unreadable />;
-  if (diffPlan(patch) === "patch") return asText(t("viewer.change.patchLarge"));
+  if (diffPlan(patch) === "patch") return asText(t("viewer.change.patchLarge"), "explained");
   const ending = marked.old && marked.new ? "viewer.change.noNewlineBoth" : marked.old ? "viewer.change.noNewlineOld" : marked.new ? "viewer.change.noNewlineNew" : undefined;
   return (
-    <RendererBoundary resetKey={resetKey} fallback={asText(t("viewer.change.patchFailed"))}>
+    <RendererBoundary resetKey={resetKey} fallback={asText(t("viewer.change.patchFailed"), "failed", t("viewer.change.patchFailed"))}>
       {onLayoutChange && <LayoutToggle layout={layout} onLayoutChange={onLayoutChange} />}
       <WrapToggle />
       {ending && <Notice>{t(ending)}</Notice>}
-      {expansionNote !== undefined && <Notice>{expansionNote}</Notice>}
+      {expansionNote !== undefined && (
+        <Notice tone={status?.kind === "failed" ? "failed" : "explained"} announced>
+          {expansionNote}
+        </Notice>
+      )}
       <StatusAnnouncer text={status?.kind === "loading" ? t("viewer.expand.loading") : expansionNote} />
       <CodeFrame label={label} resetKey={resetKey} theme={theme}>
         {(onDrawn) => (

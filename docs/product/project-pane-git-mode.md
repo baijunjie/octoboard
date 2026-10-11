@@ -388,15 +388,16 @@ commit and its new side from To's, and is shown as a staged change is below; it 
   remembered: later diffs open in the layout last chosen, across changes and after the app restarts. Only the patch's
   hunks and the lines around them are shown, each run of unchanged lines between them collapsed into a separator that
   can be expanded (see "Expanding the collapsed lines" below). A change whose patch has no lines — an empty file added
-  or removed, say — says it has no diff to show; a rename with no lines is worded as the rename bullets below say.
-  Whether its long lines wrap is the viewer's own choice, which a diff shares with every file (see "Wrapping long
-  lines" in `docs/product/project-pane.md`). A patch of more than 1,000,000 characters or 10,000 lines is shown as the
-  plain patch, with a line saying it is shown that way because the change is large; so is a patch the diff could not
-  be drawn from. A patch that is not valid UTF-8 — of a file in another encoding — is shown with replacement
-  characters.
-- **A missing newline at the end** of either version is said in a line above the diff — the old version, the new one,
-  or neither has one — rather than as a line of it. A symbolic link's change never says so, a link's target having
-  no newline at its end anyway. A plain patch keeps Git's own marker lines.
+  or removed, say — says it has no diff to show; one whose two sides hold the same content, under one name or two,
+  shows the file whole instead, as the bullets below say. Whether its long lines wrap is the viewer's own choice, which
+  a diff shares with every file (see "Wrapping long lines" in `docs/product/project-pane.md`). A patch of more than
+  1,000,000 characters or 10,000 lines is shown as the plain patch, under a notice saying it is shown that way because
+  the change is large; a patch the diff could not be drawn from is shown the same way, under a failure notice saying
+  so (see "Notices and stand-ins" in `docs/product/project-pane.md`). A patch that is not valid UTF-8 — of a file in
+  another encoding — is shown with replacement characters.
+- **A missing newline at the end** of either version is said in a notice above the diff — the old version, the new
+  one, or neither has one — rather than as a line of it. A symbolic link's change never says so, a link's target
+  having no newline at its end anyway. A plain patch keeps Git's own marker lines.
 - **An image change** — of a binary image format the file viewer displays (see "What it shows" in
   `docs/product/project-pane.md`); an SVG, being text, is a text change — shows the two images, Before and After, side
   by side where the viewer is wide enough (Before on the left, mirrored under a right-to-left language, see
@@ -428,22 +429,38 @@ commit and its new side from To's, and is shown as a staged change is below; it 
   sides being a file or a symbolic link: with a side that is a repository of its own the change is shown instead as
   the old path's removal followed by the new path's addition in one diff, collapsing nothing and with no separator to
   expand, as a type change is.
-- **A rename with nothing else changed** says it was renamed and its content is unchanged. It is the wording of every
-  rename whose patch shows nothing but the path changed — an empty patch, or one holding the rename's header alone —
-  wherever it was listed and whether or not its two paths nest. A rename whose patch shows that something else did
-  change, its executable bit or a side Git treats as binary, is not worded that way: it says it has no diff to show,
-  as any change with no lines does.
+- **A rename with nothing else changed** says it was renamed and its content is unchanged, and shows that content as
+  below. It is the wording of every rename whose patch shows nothing but the path changed — an empty patch, or one
+  holding the rename's header alone — wherever it was listed and whether or not its two paths nest. A rename whose
+  patch shows that something else did change, its executable bit or a side Git treats as binary, is not worded that
+  way: it says it has no diff to show, as any change with no lines does.
 - **No differences**, when the two sides of a change that is not a rename now hold the same content: the change was
-  staged, committed or undone since it was listed.
+  staged, committed or undone since it was listed. Its content is shown as below as well.
 - **A path in conflict** is not a two-sided change: a warning names the kind of conflict — both modified, both added,
   both deleted, added by us, added by them, deleted by us, deleted by them — above the file as it is on disk, with its
   conflict markers where both sides modified or added it. A path both sides deleted has no file to show and says it
   does not exist.
 
-A whole file body shown here instead of a diff — an untracked file, or one added with no patch — is a Markdown
+**A change with no lines to draw shows the file itself.** For the two cases above — the same content under one name or
+two — there is nothing to compare, so the whole content is read instead, the read a diff's collapsed lines use (see
+"Expanding the collapsed lines" below), once as the change opens; while it is in flight the viewer shows its usual
+loading, announced as a file's read is (see "What it shows" in `docs/product/project-pane.md`). It is then shown whole
+as a file rather than as a diff — so a Markdown file is offered as a document with its source a choice away, exactly
+as an untracked file is — under a neutral notice saying which of the two cases the change is. Where the content cannot
+be had after all, the change falls back to saying the same sentence in the centred stand-in and shows none of the
+file: with a reason to give — the read itself failed, a lost connection to the daemon among the reasons — a failure
+notice above it says the file's content could not be read and gives that reason; where the content simply cannot be
+had — a side the daemon will not deliver whole, by the same rule as a diff's collapsed lines, or the change having
+moved on since it was read, or the two sides turning out to differ from what the change says they are — a neutral
+notice above it says which of those it was. Only a change with nothing to read the content from leaves the stand-in
+alone: one whose two sides are not both files whose content can be read, a rename between two symbolic links among
+them. Every one of these notices and the stand-in are as "Notices and stand-ins" in
+`docs/product/project-pane.md` describes them.
+
+A whole file body shown here instead of a diff — an untracked file, one added with no patch, the version inside the
+project of a rename across the boundary, or a change with no lines to draw whose content was read — is a Markdown
 document when the file is Markdown, as it is for a file read for itself (see "A Markdown file as a document" in
-`docs/product/project-pane.md`). A diff, the file behind a path in conflict and the version inside the project of a
-rename across the boundary are shown as source whatever the file is.
+`docs/product/project-pane.md`). A diff and the file behind a path in conflict are shown as source whatever the file is.
 
 How a diff is coloured in each appearance is in "What follows the choice" in `docs/product/appearance.md`. A diff's
 code is focused, selected and copied as a file's is (see "Selecting and copying" in `docs/product/project-pane.md`).
@@ -481,17 +498,17 @@ the separator reveals them, in both the Uncommitted and the Compare view and in 
   drawn with its lines collapsed again.
 
 While the lines are being read the separator says so, and no other expansion starts until that read is answered: every
-control of the diff reads as unavailable meanwhile. That, and each note below, is announced to assistive technology.
+control of the diff reads as unavailable meanwhile. That, and each notice below, is announced to assistive technology.
 Then:
 
-- **A failed read** leaves the diff as it is: the separator says the lines could not be loaded and to try again, a note
-  above the diff gives the reason — that the connection to the daemon was lost, among them — and the next expansion
-  reads again. A read of the change itself that follows — on a listing with news of it, or once the connection to the
-  daemon is back — clears the failure without another expansion.
+- **A failed read** leaves the diff as it is: the separator says the lines could not be loaded and to try again, a
+  failure notice above the diff gives the reason — that the connection to the daemon was lost, among them — and the
+  next expansion reads again. A read of the change itself that follows — on a listing with news of it, or once the
+  connection to the daemon is back — clears the failure without another expansion.
 - **A change that has moved on** since its patch was read, its file or its index having changed underneath, keeps every
-  line the patch shows, with a note above the diff saying its unmodified lines cannot be shown, and gives the expansion
-  up as below; it is offered again only once the change is read again (see "When the open change changes" below). A
-  change from the Compare view, read from two fixed commits, cannot move on this way.
+  line the patch shows, with a notice above the diff saying its unmodified lines cannot be shown, and gives the
+  expansion up as below; it is offered again only once the change is read again (see "When the open change changes"
+  below). A change from the Compare view, read from two fixed commits, cannot move on this way.
 - **Moving on to another change** while the lines are being read gives that read up, saying nothing.
 
 **A diff that offers no expansion** keeps its separators with their counts and nothing else: no controls, and no
@@ -503,7 +520,7 @@ rest is found only on the first expansion, and the diff is then drawn again in t
 beyond its last hunk goes on that press: a side the daemon will not deliver whole — one larger than the 4 MiB a read
 opens, a file type it does not read, a side read from the worktree at a path with a clean filter in effect (see
 below), a change it cannot make sense of — a side past the viewer's own budget of 10,000 lines or 1,000,000
-characters, and the change having moved on. Each of the three puts a note above the diff, and each note is announced:
+characters, and the change having moved on. Each of the three puts a notice above the diff, and each is announced:
 that the whole file is not delivered for this change, that the file is too large to be shown in full here, or, as the
 bullet above says, that the change has moved on since it was read.
 
@@ -514,7 +531,7 @@ delivers no side read from the worktree at such a path. Only an unstaged change 
 both sides of a Compare view comparison are read from the repository, which holds the filtered content already, and
 expand as any other change does, and an untracked file is shown as itself with no diff to expand (see "What it shows"
 above). A `filter` attribute whose driver has neither command configured filters nothing, so that path expands
-normally too. Where such a change has also moved on since it was read, the note is the one for having moved on.
+normally too. Where such a change has also moved on since it was read, the notice is the one for having moved on.
 
 From the keyboard, **Tab** from the code region moves into the separators' controls and then along them, run by run
 from the top of the diff and, within a run, in the order they are read — the control or pair that reveals part of the
@@ -558,8 +575,9 @@ change is selected, and keyboard focus goes to the first row of the list, or to 
 rows. The viewer never shows a change from other commits than the list's.
 
 When the connection to the daemon is lost, what is shown stays until the connection is back, and then the change is
-read again; a change that had nothing on screen yet says, in plain text rather than as an error, that the connection
-was lost and that it is read again once the connection is back.
+read again; a change that had nothing on screen yet says, in the neutral stand-in rather than as an error (see
+"Notices and stand-ins" in `docs/product/project-pane.md`), that the connection was lost and that it is read again
+once the connection is back.
 
 ### Errors
 

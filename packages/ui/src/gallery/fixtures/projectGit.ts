@@ -201,8 +201,9 @@ function expandable(
  * versions (`source`'s patch with the rename's two paths in its headers), or no patch at all when
  * the versions are equal; both sides are files, so its bodies can be read. */
 function nested(from: string, to: string, source: { old: string; new: string; patch: string }, blobs: [string, string]): FixtureChange {
-  // An empty patch is a change with nothing to expand.
-  const expand = source.patch === "" ? {} : { expand: { old: source.old, new: source.new, delay: EXPAND_DELAY_MS } };
+  // An empty patch has nothing to expand, but its bodies are still read: that is how a rename with
+  // no change to its content is shown at all.
+  const expand = { expand: { old: source.old, new: source.new, delay: EXPAND_DELAY_MS } };
   const patch = source.patch
     .replace("diff --git a/src/pipeline.ts b/src/pipeline.ts", `diff --git a/${from} b/${to}`)
     .replace("--- a/src/pipeline.ts", `--- a/${from}`)
@@ -214,8 +215,18 @@ function nested(from: string, to: string, source: { old: string; new: string; pa
   };
 }
 
-/** The same content on both sides, which git compares as an empty patch. */
-const UNCHANGED = { old: "", new: "", patch: "" };
+/** What `git` writes for a rename whose content did not change: the header alone, with no hunk. */
+const RENAMED_ONLY = [
+  "diff --git a/src/old-name.ts b/src/new-name.ts",
+  "similarity index 100%",
+  "rename from src/old-name.ts",
+  "rename to src/new-name.ts",
+  "",
+].join("\n");
+
+/** The same content on both sides, which git compares as an empty patch. The content is still what
+ * the viewer shows for such a change, so both sides carry it. */
+const UNCHANGED = { old: PIPELINE.new, new: PIPELINE.new, patch: "" };
 
 const MAIN_CHANGES: FixtureChange[] = [
   {
@@ -262,6 +273,20 @@ const MAIN_CHANGES: FixtureChange[] = [
     params: { detail: "fatal: unable to read the object" },
     message: "git failed: fatal: unable to read the object",
   }),
+  {
+    // Not a rename: the file on disk compares equal to its staged version, so git writes no patch
+    // at all. Unstaged, which is where an empty patch is actually met.
+    entry: { group: "unstaged", old: file("src/same.ts", index("0a1b2c3")), new: file("src/same.ts", live("v-same")) },
+    patch: "",
+    expand: { old: PIPELINE.new, new: PIPELINE.new, delay: EXPAND_DELAY_MS },
+  },
+  {
+    // A plain `git mv`: rename detection writes the header and no hunk. Its content cannot be read
+    // after all, so it falls back to the stand-in with the reason above it.
+    entry: { group: "staged", old: file("src/old-name.ts", commit("1b2c3d4")), new: file("src/new-name.ts", index("1b2c3d4")) },
+    patch: RENAMED_ONLY,
+    expand: { code: "git_failed", params: { detail: "fatal: unable to read the object" }, message: "git failed: fatal: unable to read the object" },
+  },
   { entry: { group: "conflicted", path: "package.json", conflict: "both_modified" } },
   {
     // Its new side is the file on disk, which carries no line count; the old side's settles the
@@ -428,6 +453,25 @@ export const projectGitScenarios: Scenario[] = [
   { id: "git-type-change", group: GROUP, title: "A file that became a symbolic link", width: 1440, state, steps: openChange(/^current, type changed/) },
   { id: "git-nested-into", group: GROUP, title: "A file renamed into a path below itself", width: 1440, state, steps: openChange(/^leaf\.ts, renamed/) },
   { id: "git-nested-out", group: GROUP, title: "A file renamed out of a path below itself", width: 1440, state, steps: openChange(/^nest2, renamed/) },
+  {
+    id: "git-unchanged-content",
+    group: GROUP,
+    title: "A change whose two sides hold the same content",
+    description:
+      "src/same.ts has an empty patch, so there is no diff to draw; its content is read as a diff's collapsed lines are and shown whole, under a notice saying nothing changed.",
+    width: 1440,
+    state,
+    steps: openChange(/^same\.ts, modified/),
+  },
+  {
+    id: "git-unchanged-unreadable",
+    group: GROUP,
+    title: "A rename with no change whose content cannot be read",
+    description: "The read of src/new-name.ts fails, so the viewer falls back to saying the rename changed nothing, with the reason above it.",
+    width: 1440,
+    state,
+    steps: openChange(/^new-name\.ts, renamed/),
+  },
   {
     id: "git-expand",
     group: GROUP,

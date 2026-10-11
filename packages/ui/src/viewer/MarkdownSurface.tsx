@@ -86,7 +86,7 @@ function DocumentSurface({
   );
   const fallback = (
     <>
-      <Notice>{t("viewer.markdown.failed")}</Notice>
+      <Notice tone="failed" speak={t("viewer.markdown.failed")} />
       <CodeSurface resetKey={resetKey} name={name} text={text} theme={theme} />
     </>
   );

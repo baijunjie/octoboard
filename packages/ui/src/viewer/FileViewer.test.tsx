@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 import { ThemeProvider } from "../theme";
-import type { ViewerChangeSide, ViewerContent, ViewerSubject } from "./content";
+import { ChangeBodiesError, type ViewerChangeSide, type ViewerContent, type ViewerSubject } from "./content";
 import { diffLayout } from "./diffLayout";
 import { FileViewer, type ViewerNavigation } from "./FileViewer";
 import { wordWrap } from "./wordWrap";
@@ -287,6 +287,38 @@ it("draws a type change as one diff with the layout choice", () => {
   expect(dialog()?.textContent).not.toContain("Before");
 });
 
+// A change with no lines to draw still has content worth showing, which is read as the change
+// opens, so a rename that changed nothing looks like a rename across the project's boundary.
+it("shows the content of a change with no lines to draw", async () => {
+  const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
+  const loadBodies = async () => ({ old: "kept\n", new: "kept\n" });
+  const patch = "diff --git a/f b/g\nsimilarity index 100%\nrename from f\nrename to g\n";
+  show({ key: "r", path: "g", content: { state: "change", change: { old: side("f"), new: side("g"), patch, loadBodies } } });
+  await settled();
+  expect(dialog()?.textContent).toContain("Renamed with no changes to its content.");
+  expect(dialog()?.textContent).toContain("kept");
+});
+
+// Two sides that compare equal through a clean filter can still differ on disk, so the content is
+// shown only where the two bodies agree; otherwise the viewer says nothing it cannot stand behind.
+it("shows no content for a change whose bodies differ from what its patch says", async () => {
+  const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
+  const loadBodies = async () => ({ old: "cleaned\n", new: "raw\n" });
+  show({ key: "c", path: "f", content: { state: "change", change: { old: side("f"), new: side("f"), patch: "", loadBodies } } });
+  await settled();
+  expect(dialog()?.textContent).toContain("No differences");
+  expect(dialog()?.textContent).not.toContain("raw");
+});
+
+it("falls back to saying nothing changed when that content cannot be read", async () => {
+  const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
+  const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", "git failed"));
+  show({ key: "e", path: "f", content: { state: "change", change: { old: side("f"), new: side("f"), patch: "", loadBodies } } });
+  await settled();
+  expect(dialog()?.textContent).toContain("Could not read this file's content. git failed");
+  expect(dialog()?.textContent).toContain("No differences");
+});
+
 // A joined patch holds both sides whole, so nothing in it is collapsed: offering to expand it would
 // draw a separator that opens onto nothing.
 it("offers no expansion to a joined removal and addition", async () => {
@@ -402,6 +434,35 @@ it("shows the raw patch when the diff cannot be rendered", async () => {
     await settled();
     expect(dialog()?.textContent).toContain("Shown as a plain patch because the diff could not be rendered.");
     expect(dialog()?.querySelector("pre")?.textContent).toContain("unrenderable");
+  } finally {
+    error.mockRestore();
+  }
+});
+
+it("speaks a notice that arrives after the viewer drew, and shows it only once", async () => {
+  const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    show({
+      key: "g",
+      path: "src/c.ts",
+      content: { state: "change", change: { old: side, new: side, patch: "@@ -1,3 +1,3 @@ unrenderable\n a\n+b\n" } },
+    });
+    await settled();
+    const sentence = "Shown as a plain patch because the diff could not be rendered.";
+    // The block is hidden so the sentence is not met twice; a region of its own carries it instead,
+    // after the delay that keeps it clear of the dialog's own focus announcement.
+    const block = Array.from(dialog()!.querySelectorAll("[aria-hidden=true]")).find((e) => e.textContent === sentence);
+    expect(block).toBeTruthy();
+    expect(Array.from(dialog()!.querySelectorAll("[role=status]")).map((e) => e.textContent)).not.toContain(sentence);
+    // Real time, because the region's own wait was started as it mounted, before any timer of this
+    // test's; the wait is the viewer's 1.5 s, which keeps the text clear of the dialog's focus move.
+    await vi.waitFor(
+      () => {
+        expect(Array.from(dialog()!.querySelectorAll("[role=status]")).map((e) => e.textContent)).toContain(sentence);
+      },
+      { timeout: 4000, interval: 50 },
+    );
   } finally {
     error.mockRestore();
   }

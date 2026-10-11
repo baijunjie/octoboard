@@ -26,6 +26,14 @@ ARIA region semantics.
   way), so a part wrapped in an element of yours — the project's own `TitledControl` among them — leaves the parent
   rendering its default part beside yours. Where the parent takes a render-function child, as `Tag` does, that form
   skips the scan and is how to wrap a part.
+- A part given no children fills itself in, and for some of them what it fills in follows the parent's variant or
+  state: `Alert.Indicator` and `Toast.Indicator` draw the glyph that goes with the `status`, `ProgressBar.Output`
+  writes the value's own text. Children of your own replace that, putting one fixed thing where the variant's choice
+  was, so a distinction the component was drawing is quietly gone with nothing wrong to see in the source or the
+  result. Before passing children to a part, search its component's file under
+  `packages/ui/node_modules/@heroui/react/dist/components/` for `children ??`: where the default follows the parent,
+  pass none and let the variant pick; where it is a fixed stand-in (`CloseButton`'s cross, a `MenuItem`'s submenu
+  chevron), pass children only to put a different one there.
 - The project's existing wrappers over a HeroUI component (`Dialog` over `Modal`, `ActionMenu` over `Dropdown`) are
   that component; use the wrapper where one exists. The same goes for the shared dialogs built on them: a
   confirmation, including one where the user types a word to confirm a deletion, is `ConfirmDialog`

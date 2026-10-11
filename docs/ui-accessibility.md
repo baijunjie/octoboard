@@ -226,7 +226,8 @@ moves with whatever fill the element sits on, and a change at the token never re
 
 HeroUI's `--surface` equals its `--overlay` in both appearances. A surface-filled component (`Alert`, `Card`) inside a
 dialog or popover is therefore set apart only by its shadow, which does not show in the dark appearance. Give it a fill
-of its own there (a tint such as `bg-warning/10 shadow-none`).
+of its own there: the soft fill of its status, `bg-warning-soft shadow-none` and its siblings, which is what every
+`Alert` in the application now takes.
 
 ### Auditing a change to a colour token or a surface
 
@@ -305,6 +306,18 @@ in and whose accessible name and tooltip say what pressing will do, so the name 
 unpressed one by fill: `.icon-toggle` in `packages/ui/src/style.css` resets HeroUI's selected tokens back to the
 resting ones, and `aria-pressed` carries the state for assistive technology. The window chrome's two pane toggles were
 already built this way; the Git mode's group-by-folder choice and the viewer's three view controls now are too.
+
+**A notice carries its severity in a glyph, never in its fill alone.** The file viewer's notices — what is said above
+content that is still shown — are one block in three tones (`Notice` in `packages/ui/src/viewer/viewerStates.tsx`):
+an explanation of how the content is drawn, a warning about the content itself, and a part of it the viewer could not
+show. Each is a HeroUI `Alert` of its own status, which draws the glyph that goes with it — the circled `i`, the
+warning triangle, the circled `!` — from a childless `Alert.Indicator`; the fill is named by the tone, as the section
+above requires. The glyph is what carries the tone: those fills sit at 1.1–1.5:1 against the dialog body and say
+nothing on their own. Measured on the fill each one actually sits on, in both appearances: the sentence is 11.9:1 or
+better in every tone and the glyph 5.1:1 or better, against 4.5:1 and 3:1. The error block for a subject that cannot be
+opened at all takes the same danger fill and glyph, so an error is never quieter than a notice about one part of it;
+its muted reason line on that fill is the tightest text in the family, at 4.80:1 light and 5.60:1 dark. A viewer with
+nothing to draw takes neither: it fills the body with a centred glyph and sentence (`NothingToShow`).
 
 **One kept shortfall is left, and it is a single control**: the settings dialog's three-way appearance choice, which
 is a toggle group where the selected button differs by fill colour only. Which button is selected is also carried by

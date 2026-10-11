@@ -1,5 +1,5 @@
-import { Alert, Button, Chip } from "@heroui/react";
-import { ChevronLeft, ChevronRight, File, FileQuestion, Unplug } from "lucide-react";
+import { Button, Chip } from "@heroui/react";
+import { ChevronLeft, ChevronRight, File } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { FadeOverflow } from "../components/FadeOverflow";
@@ -15,9 +15,11 @@ import { arrowNavigation } from "./arrowKeys";
 import { useRendererScope } from "./codeRenderer";
 import { CodeSurface, DiffSurface } from "./CodeSurface";
 import {
+  ChangeBodiesError,
   changePresentation,
   changeStatus,
   isMarkdownName,
+  type ChangeBodies,
   type ViewerBody,
   type ViewerChange,
   type ViewerChangeSide,
@@ -26,13 +28,23 @@ import {
 } from "./content";
 import { ControlsSlot } from "./controlsSlot";
 import { diffLayout, type DiffLayout } from "./diffLayout";
-import { formatFileSize, formatSideSize } from "./format";
+import { formatFileSize } from "./format";
 import { FrameSurface } from "./FrameSurface";
 import { MarkdownSurface } from "./MarkdownSurface";
 import { hasTwoSides } from "./patch";
 import { StatusChip } from "./StatusChip";
 import type { StatusKey } from "./statusMarks";
-import { Loading, Unreadable } from "./viewerStates";
+import {
+  Disconnected,
+  Failure,
+  FIRST_ANNOUNCEMENT_DELAY_MS,
+  Loading,
+  NotFile,
+  Notice,
+  Unchanged,
+  Unreadable,
+  Unsupported,
+} from "./viewerStates";
 import { useWrapClaims, WrapToggleHost } from "./wordWrap";
 
 const STATUS_LABELS: Record<StatusKey, PlainMessageKey> = {
@@ -304,12 +316,6 @@ function RenamedFrom({ path }: { path: string }): React.ReactElement {
   );
 }
 
-/** How long the viewer's status region waits before its first text. The dialog takes focus as it
- * opens and VoiceOver announces that, replacing a status written within about 300 ms of it; a
- * write 1.5 s later is spoken after it (verified). Moving to another file in an open viewer has
- * no such focus move and is announced at once. */
-const FIRST_ANNOUNCEMENT_DELAY_MS = 1500;
-
 /** Whether the content is still on its way: the file or change being read, or a conflict waiting
  * for its file. */
 function isWaiting(content: ViewerContent): boolean {
@@ -348,7 +354,7 @@ function ViewerContentBody({
     case "loading":
       return <Loading />;
     case "error":
-      return <Failure message={content.message} />;
+      return <Failure title={t("viewer.error")} message={content.message} />;
     case "disconnected":
       return <Disconnected message={disconnectedMessage(t, content.what)} />;
     case "file":
@@ -356,15 +362,11 @@ function ViewerContentBody({
     case "conflict":
       return (
         <>
-          <Alert status="warning" className="shrink-0 bg-warning/10 shadow-none">
-            <Alert.Content>
-              <Alert.Description>{content.conflict}</Alert.Description>
-            </Alert.Content>
-          </Alert>
+          <Notice tone="warned">{content.conflict}</Notice>
           {content.body ? (
             <BodyView resetKey={key} name={name} body={content.body} theme={theme} />
           ) : content.message !== undefined ? (
-            <Failure message={content.message} />
+            <Failure title={t("viewer.error")} message={content.message} />
           ) : (
             <Loading />
           )}
@@ -386,42 +388,6 @@ function ViewerContentBody({
 
 function disconnectedMessage(t: Translate, what: "file" | "change"): string {
   return t(what === "file" ? "viewer.disconnected.file" : "viewer.disconnected.change");
-}
-
-/**
- * Nothing read yet while the connection to the daemon is lost: a passing state, not a failure of
- * the file or change, so it is said in neutral text, announced as a status (by `ViewerContentView`,
- * whose region stays mounted) rather than as an error, and hidden from screen readers here so it is
- * not read twice. The subject is read again once the connection is back.
- */
-function Disconnected({ message }: { message: string }): React.ReactElement {
-  return (
-    <div aria-hidden="true" className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-center text-sm text-muted">
-      <Unplug aria-hidden="true" className="size-8" />
-      <p>{message}</p>
-    </div>
-  );
-}
-
-/** Why the subject cannot be shown. */
-function Failure({ message }: { message: string }): React.ReactElement {
-  const t = useT();
-  return (
-    <Alert status="danger" className="shrink-0">
-      <Alert.Content>
-        {/* HeroUI's alert carries no role, so a failure that arrives after the user moved on
-            would never be announced. The alert below carries the title too, for screen readers,
-            so the visible title is hidden from them and the title is read once. */}
-        <Alert.Title aria-hidden="true">{t("viewer.error")}</Alert.Title>
-        <Alert.Description>
-          <span role="alert">
-            <span className="sr-only">{t("viewer.error")} </span>
-            {message}
-          </span>
-        </Alert.Description>
-      </Alert.Content>
-    </Alert>
-  );
 }
 
 /** One file body, whichever kind it is. A Markdown file's text is offered as a document when
@@ -469,7 +435,9 @@ function ImageView({
   if (failed) {
     return body.text !== undefined ? (
       <>
-        <p className="shrink-0 text-xs text-muted">{t("viewer.image.asText")}</p>
+        {/* The image fails only once it has been fetched and decoded, long after the dialog was
+            drawn, so the fall back to its text is spoken as well as shown. */}
+        <Notice tone="failed" speak={t("viewer.image.asText")} />
         <CodeSurface resetKey={body.url} name={name} text={body.text} theme={theme} />
       </>
     ) : (
@@ -484,27 +452,6 @@ function ImageView({
         <img src={body.url} alt={name} onError={() => setFailed(true)} className="max-h-full max-w-full object-contain" />
       </div>
     </FrameSurface>
-  );
-}
-
-/** Content shown only as what it is and its size: a body that cannot be displayed, or a change
- * between two of them (`sizes` then holds both sides', `null` for a side with none). */
-function Unsupported({ message, sizes }: { message: string; sizes: (number | null)[] }): React.ReactElement {
-  const language = useCurrentLanguage();
-  return (
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-center text-sm text-muted">
-      <FileQuestion aria-hidden="true" className="size-8" />
-      <p className="text-foreground">{message}</p>
-      {sizes.length === 1 ? (
-        <p>{formatFileSize(language, sizes[0] ?? 0)}</p>
-      ) : (
-        // Old to new runs left to right whatever the language, each size isolated in its own
-        // direction, so a right-to-left language reorders neither the sizes nor the arrow.
-        <p dir="ltr">
-          <bdi>{formatSideSize(language, sizes[0])}</bdi> → <bdi>{formatSideSize(language, sizes[1])}</bdi>
-        </p>
-      )}
-    </div>
   );
 }
 
@@ -530,18 +477,16 @@ function ChangeView({
       const shown = presentation.shown;
       return (
         <>
-          <Alert status="warning" className="shrink-0 bg-warning/10 shadow-none">
-            <Alert.Content>
-              <Alert.Description>
-                <Message
-                  id={presentation.hidden === "old" ? "viewer.change.outsideOld" : "viewer.change.outsideNew"}
-                  params={{ path: <span dir="ltr">{displayWirePath(presentation.repositoryPath)}</span> }}
-                />
-              </Alert.Description>
-            </Alert.Content>
-          </Alert>
+          <Notice tone="warned">
+            <Message
+              id={presentation.hidden === "old" ? "viewer.change.outsideOld" : "viewer.change.outsideNew"}
+              params={{ path: <span dir="ltr">{displayWirePath(presentation.repositoryPath)}</span> }}
+            />
+          </Notice>
           {shown.state === "present" && shown.body ? (
-            <BodyView resetKey={resetKey} name={name} body={shown.body} theme={theme} />
+            // The side is shown alone because the other one cannot be reached, not as a side of a
+            // comparison, so a Markdown one is offered as a document like any whole file.
+            <BodyView resetKey={resetKey} name={name} body={shown.body} theme={theme} asDocument />
           ) : (
             shown.state !== "out_of_scope" && <SideNote side={shown} />
           )}
@@ -569,13 +514,11 @@ function ChangeView({
       );
     }
     case "identical":
-      return <p className="text-sm text-muted">{t("viewer.change.identical")}</p>;
+      return <UnchangedView resetKey={resetKey} name={name} kind="identical" loadBodies={change.loadBodies} theme={theme} />;
     case "renamedUnchanged":
-      return <p className="text-sm text-muted">{t("viewer.change.renamedUnchanged")}</p>;
+      return <UnchangedView resetKey={resetKey} name={name} kind="renamedUnchanged" loadBodies={change.loadBodies} theme={theme} />;
     case "notFile":
-      return (
-        <p className="text-sm text-muted">{t(presentation.sideKind === "symlink" ? "viewer.change.symlink" : "viewer.change.submodule")}</p>
-      );
+      return <NotFile kind={presentation.sideKind} />;
     case "image":
       return (
         <div className="@container flex min-h-0 flex-1">
@@ -592,8 +535,98 @@ function ChangeView({
       return <Unsupported message={t("viewer.change.binary")} sizes={[size(change.old), size(change.new)]} />;
     }
     case "unreadable":
-      return presentation.message !== undefined ? <Failure message={presentation.message} /> : <Unreadable />;
+      return presentation.message !== undefined ? <Failure title={t("viewer.error")} message={presentation.message} /> : <Unreadable />;
   }
+}
+
+/**
+ * A change with no lines to draw but content worth showing: the two sides hold the same text, under
+ * one name or two. A patch with no hunk carries no body of its own (see "Changes and comparisons"
+ * in `apps/daemon/PROTOCOL.md`), so the content is read the way a diff's collapsed lines are, once
+ * as the change opens. Without that read the viewer would say the file is unchanged and show none
+ * of it, while a rename across the project's boundary — which cannot be diffed either — shows the
+ * whole file; the two are the same kind of change and now look it.
+ *
+ * Where the bodies cannot be had after all, it falls back to the stand-in it used to be, with the
+ * reason above it when there is one to give.
+ */
+function UnchangedView({
+  resetKey,
+  name,
+  kind,
+  loadBodies,
+  theme,
+}: {
+  resetKey: string;
+  name: string;
+  kind: "identical" | "renamedUnchanged";
+  loadBodies?: () => Promise<ChangeBodies>;
+  theme: "light" | "dark";
+}): React.ReactElement {
+  const t = useT();
+  // What the read answered for this subject: its text, or why there is none. A read given up for a
+  // newer one is left as `unavailable`, like any other content that is not to be had, rather than
+  // as a spinner nothing would resolve.
+  const [read, setRead] = useState<{ key: string; text?: string; why?: "failed" | "unavailable" | "changed"; message?: string }>();
+  useEffect(() => {
+    if (!loadBodies) return;
+    let current = true;
+    void loadBodies().then(
+      (bodies) => {
+        if (!current) return;
+        // The sentence above the content asserts that the two sides hold the same thing, so the
+        // bodies have to bear that out. The daemon refuses the one case known to break it — a side
+        // read from the worktree at a path with a clean filter, whose patch is numbered from the
+        // filtered content and not from the bytes on disk — but the assertion is this view's to
+        // make, so it is checked here rather than assumed.
+        setRead(bodies.old === bodies.new ? { key: resetKey, text: bodies.new } : { key: resetKey, why: "unavailable" });
+      },
+      (error: unknown) => {
+        if (!current) return;
+        const reason = error instanceof ChangeBodiesError ? error.reason : "failed";
+        const message = error instanceof Error ? error.message : String(error);
+        setRead({ key: resetKey, why: reason === "superseded" ? "unavailable" : reason, message });
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [resetKey, loadBodies]);
+  const said = t(kind === "identical" ? "viewer.change.identical" : "viewer.change.renamedUnchanged");
+  if (!loadBodies) return <Unchanged kind={kind} />;
+  // Keyed on the subject alone, so a re-read of the same one keeps what is on screen until it answers.
+  const done = read?.key === resetKey ? read : undefined;
+  const reason =
+    done === undefined || done.text !== undefined
+      ? undefined
+      : done.why === "failed"
+        ? { tone: "failed" as const, text: t("viewer.change.contentFailed", { reason: done.message ?? "" }) }
+        : { tone: "explained" as const, text: t(done.why === "changed" ? "viewer.change.contentChanged" : "viewer.change.contentUnavailable") };
+  return (
+    <>
+      {/* Mounted for as long as the change is, so the read's own progress and its outcome are both
+          spoken: every one of them arrives after the dialog was drawn. */}
+      <StatusAnnouncer text={done === undefined ? t("viewer.loading") : (reason?.text ?? said)} firstWriteDelayMs={FIRST_ANNOUNCEMENT_DELAY_MS} />
+      {done === undefined ? (
+        <Loading />
+      ) : done.text !== undefined ? (
+        <>
+          <Notice announced>{said}</Notice>
+          {/* Nothing reads a text body's size; the daemon sends none for a change's side either. */}
+          <BodyView resetKey={resetKey} name={name} body={{ kind: "text", text: done.text, size: done.text.length }} theme={theme} asDocument />
+        </>
+      ) : (
+        <>
+          {reason && (
+            <Notice tone={reason.tone} announced>
+              {reason.text}
+            </Notice>
+          )}
+          <Unchanged kind={kind} />
+        </>
+      )}
+    </>
+  );
 }
 
 /** One side of an image change, labelled; an absent side says so instead of showing nothing. */
@@ -626,8 +659,10 @@ function ImageSide({
 function SideNote({ side }: { side: Exclude<ViewerChangeSide, { state: "out_of_scope" }> }): React.ReactElement {
   const t = useT();
   const message = side.state === "absent" ? t("viewer.change.absent") : t("viewer.change.noContent");
+  // The dashed border, not a centred glyph, is what marks an empty column's extent, so this one
+  // stand-in keeps a shape of its own; its sentence reads in the foreground like every other.
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-dashed border-separator p-4 text-center text-sm text-muted">
+    <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-dashed border-separator p-4 text-center text-sm text-foreground">
       {message}
     </div>
   );
