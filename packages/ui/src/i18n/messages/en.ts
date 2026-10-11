@@ -533,6 +533,7 @@ export const en = {
   "viewer.change.noNewlineNew": "The new version has no newline at its end.",
   "viewer.change.noNewlineBoth": "Neither version has a newline at its end.",
   "viewer.change.identical": "No differences: both sides now hold the same content.",
+  "viewer.change.renamedUnchanged": "Renamed with no changes to its content.",
   "viewer.change.symlink": "This is a symbolic link, so it has no content to show here.",
   "viewer.change.submodule": "This is a repository of its own, so its content is not shown here.",
 

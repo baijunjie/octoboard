@@ -569,6 +569,8 @@ function ChangeView({
     }
     case "identical":
       return <p className="text-sm text-muted">{t("viewer.change.identical")}</p>;
+    case "renamedUnchanged":
+      return <p className="text-sm text-muted">{t("viewer.change.renamedUnchanged")}</p>;
     case "notFile":
       return (
         <p className="text-sm text-muted">{t(presentation.sideKind === "symlink" ? "viewer.change.symlink" : "viewer.change.submodule")}</p>

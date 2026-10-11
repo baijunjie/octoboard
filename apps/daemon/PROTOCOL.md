@@ -646,11 +646,33 @@ A text change's content is in its patch alone. The patch is a `FileContent`, `te
 body, so a patch that is not valid UTF-8 — of a file in another encoding, or with a header naming a path that is not
 UTF-8 — is `binary`. A patch over its budget is refused with `limit_exceeded` (`patch_bytes`), never cut: an incomplete
 patch is not presented as a diff. A change whose paths nest — a rename from `foo` to `foo/bar`, or back — cannot keep
-what lies below the outer path out of the `git` it runs: its index lookup is still matched exactly, and its patch keeps
-only the sections between its own two paths, made without rename detection so that neither is paired with a file below
-the other; it shows as its old path's removal and its new path's addition. What lies below the outer path still counts
-against the patch and metadata budgets, so a change with very much below it is refused with `limit_exceeded` rather than
-read. A `change` naming no side its group can read — both sides absent, an `out_of_scope` side outside the staged group,
+what lies below the outer path out of a diff restricted to its paths, so it is read in one of two ways. When both of
+its sides resolved to an object that is a file or a symbolic link, in the staged group or a comparison, its patch is
+the diff `git` computes between the two versions themselves, each named by revision and path:
+`git diff --no-ext-diff --no-textconv --no-color --no-relative --src-prefix=a/ --dst-prefix=b/ <old-rev>:<old-path>
+<new-rev>:<new-path> --`, where the old revision is the pinned `HEAD` commit (or the comparison's left commit) and the
+new one is the index (`:0`, so `:0:<new-path>`) or the comparison's right commit. For a change that keeps its kind it
+is one section with the ordinary `index`, `---`, `+++` and hunk lines, so its collapsed lines can be expanded;
+identical content is an empty patch, an executable-bit-only change an `old mode` / `new mode` pair, a binary side one
+`Binary files … differ` line (so both bodies still come with the reply), a link renamed to another link an
+`index … 120000` section, and a type change (a file that became a link) the two sections `git` always writes for one,
+a removal and an addition, which the client joins. Nothing below the outer path is given to `git`, listed or counted
+against a budget, and the patch is returned as `git` wrote it. Revision and path are named, never bare object ids, so
+the repository's attributes (a path marked as not to be diffed, say) stay in effect; the operands are followed by `--`,
+so a file in the worktree named like one cannot be taken for a path; and the diff takes no pathspec, so
+`GIT_LITERAL_PATHSPECS` stays set. Every other such change keeps the earlier description: a side that is absent, a
+submodule side (two of them, named that way, would be resolved to their commits and have `git` diff the whole trees,
+content the change never named), and a nesting pair in the unstaged group, which cannot have two present sides, since
+the index cannot hold a path as both a file and a directory. Its index lookup is still matched exactly, and its patch
+keeps only the sections between its own two paths, made without rename detection: a diff restricted to the pathspecs
+sees another set of rename candidates than the whole-repository `git status` that listed the change, and could pair one
+of its paths with a third path below the outer one, whose section would be dropped. It shows as its old path's removal
+and its new path's addition. What lies below the outer path still counts against the patch budget there, so such a
+change with very much below it is refused with `limit_exceeded` rather than read. The index entries of a nesting pair
+are looked up once per path, so that nothing below the outer path is listed or counted against the metadata budget in
+either route; the two lookups are two reads of the index, and an entry that moved between them is caught by the
+comparison of the index before and after the patch that answers `source_changed`.
+A `change` naming no side its group can read — both sides absent, an `out_of_scope` side outside the staged group,
 an untracked change with an old side — is `invalid_change`.
 
 #### Reading a change's bodies
@@ -719,7 +741,7 @@ is `unknown_commit`, and an object missing from the repository fails the read wi
 place. Otherwise the change is read as a staged one is, its old side from the left commit and its new side from the
 right one: a side named absent is looked up at the other side's path, a side outside the scope gets no body and the
 change no patch, the patch is made between the two commits over exactly the change's paths (paths that nest
-included), a side's `file` is carried where no patch shows its content, and both sides absent is `invalid_change`.
+read as "Changes and comparisons" describes), a side's `file` is carried where no patch shows its content, and both sides absent is `invalid_change`.
 Since a commit's content never changes, nothing is looked at again once the patch is made, and the reply never mixes
 versions. The daemon does not check that the change a read names is one the comparison listed: like a
 `read_project_file` of a commit, a read is held only to the project's scope and the two commits it names.
@@ -734,7 +756,8 @@ as every other `git` the daemon runs does:
   repository, worktree, index or object store, and configuration passed through the environment.
 - `GIT_LITERAL_PATHSPECS=1`, so a file name is never a pattern — except where a change is read: its index lookups and
   its diff match each path exactly and nothing below it with `:(literal)<path>` and `:(exclude,glob)<path>/**` (the
-  path's glob characters escaped) (see "Changes and comparisons" for a change whose paths nest), and so run without it;
+  path's glob characters escaped) (see "Changes and comparisons" for a change whose paths nest), and so run without it.
+  The diff between two versions of a nesting pair takes no pathspec at all and keeps the setting;
   `GIT_NO_REPLACE_OBJECTS=1`, so an object id names the object stored under it; `GIT_NO_LAZY_FETCH=1`, so a partial
   clone's missing object fails the read instead of going to the network; `GIT_OPTIONAL_LOCKS=0`, so `git status` never
   takes the index lock to write back what it refreshed; the non-interactive settings every daemon `git` has; and

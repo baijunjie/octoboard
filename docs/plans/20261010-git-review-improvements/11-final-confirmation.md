@@ -119,6 +119,27 @@ text itself:
   `deleted file mode` and `new file mode` lines, and the symbolic link side's `120000` mode, which decides whose
   "no newline" marker is dropped.
 
+## Carried from milestone 10a (diffing a rename into or out of a path below itself)
+
+The daemon half was settled against real git in the unit tests — both nesting directions in the Staged section and
+in the Compare view, identical and edited content, an executable-bit-only change, a binary side, a symbolic link
+renamed to another, a submodule side and an absent side falling back, a worktree file named like an operand, the
+repository's own attributes staying in effect, 15,000 entries below the outer path no longer counted, and the read
+leaving the index byte-identical. The viewer half was driven in the dev gallery in WebKit with real pointer input:
+one diff with the layout choice, separators reading their counts, three presses revealing 20, 20 and then the rest,
+Show whole file, no hidden separators in the split layout's additions column, and the unchanged case saying it was
+renamed with nothing else changed. What is left needs the real window or a real repository:
+
+- [ ] The separators and their chevrons in the packaged app, in both appearances: their paint and their contrast
+  against the frame they sit in, pointer behaviour in a real window, and where keyboard focus lands after an
+  expansion.
+- [ ] A real staged nesting rename and a real comparison of one, read through the daemon rather than through a
+  fixture: that the diff is the line-level one, that expanding it requests bodies of the same two versions the patch
+  was made from, and that moving the repository mid-expansion reports the source as changed.
+- [ ] A nesting pair with a submodule side, which falls back to the joined, non-expandable rendering. The unit test
+  stands on fabricated gitlink ids, so what is unconfirmed is that a real repository inside a repository is listed
+  and read the same way.
+
 ## Notes for the developer
 
 **Development notes**

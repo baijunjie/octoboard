@@ -284,13 +284,50 @@ it("draws a type change as one diff with the layout choice", () => {
 
 // A joined patch holds both sides whole, so nothing in it is collapsed: offering to expand it would
 // draw a separator that opens onto nothing.
-it("offers no expansion to a rename below its own path, whose two sides are files", () => {
+it("offers no expansion to a joined removal and addition", async () => {
   const file = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
   const patch =
     "diff --git a/f b/f\ndeleted file mode 100644\n@@ -1 +0,0 @@\n-a\ndiff --git a/f/g b/f/g\nnew file mode 100644\n@@ -0,0 +1 @@\n+b\n";
   const loadBodies = async () => ({ old: "a\n", new: "b\n" });
   show({ key: "nested", path: "f/g", content: { state: "change", change: { old: file("f"), new: file("f/g"), patch, loadBodies } } });
+  await settled();
   expect(dialog()?.querySelector("[data-expandable]")?.getAttribute("data-expandable")).toBe("false");
+});
+
+// A rename below its own path is one section, the diff between its two versions, like any edit.
+it("offers expansion to a rename below its own path drawn from one section", async () => {
+  const file = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
+  const patch = "diff --git a/f b/f/g\nindex 1111111..2222222 100644\n--- a/f\n+++ b/f/g\n@@ -1 +1 @@\n-a\n+b\n";
+  const loadBodies = async () => ({ old: "a\n", new: "b\n" });
+  show({ key: "nested-one", path: "f/g", content: { state: "change", change: { old: file("f"), new: file("f/g"), patch, loadBodies } } });
+  await settled();
+  expect(dialog()?.querySelector("[data-expandable]")?.getAttribute("data-expandable")).toBe("true");
+  expect(dialog()?.querySelector('[aria-label="Diff layout"]')).not.toBeNull();
+});
+
+// A rename whose two versions are equal is said to be exactly that, with a patch that is empty or
+// has only the rename's header.
+it.each([
+  ["empty", ""],
+  ["a rename header alone", "diff --git a/f b/g\nsimilarity index 100%\nrename from f\nrename to g\n"],
+])("says a renamed change with unchanged content is just that (%s)", (_, patch) => {
+  const file = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
+  show({ key: `renamed-${patch.length}`, path: "g", content: { state: "change", change: { old: file("f"), new: file("g"), patch } } });
+  expect(dialog()?.textContent).toContain("Renamed with no changes to its content.");
+  expect(dialog()?.textContent).not.toContain("no diff to show");
+  expect(dialog()?.querySelector("[data-renderer]")).toBeNull();
+});
+
+// What a rename's patch says besides its header is not "unchanged": a binary line says the content
+// differs, a mode change says the mode does, and neither is lost to the rename wording.
+it.each([
+  ["a binary line", "diff --git a/f b/g\nBinary files a/f and b/g differ\n"],
+  ["a mode change", "diff --git a/f b/g\nold mode 100644\nnew mode 100755\n"],
+])("does not call a rename with %s unchanged", (_, patch) => {
+  const file = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
+  show({ key: `renamed-other-${patch.length}`, path: "g", content: { state: "change", change: { old: file("f"), new: file("g"), patch } } });
+  expect(dialog()?.textContent).not.toContain("Renamed with no changes");
+  expect(dialog()?.textContent).toContain("This change has no diff to show.");
 });
 
 // The layout the viewer remembers is for diffs with two sides; one without is drawn unified, with

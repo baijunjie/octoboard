@@ -26,6 +26,8 @@ mod change_tests;
 #[cfg(test)]
 mod compare_tests;
 #[cfg(test)]
+mod nested_tests;
+#[cfg(test)]
 mod tests;
 
 use std::cell::OnceCell;

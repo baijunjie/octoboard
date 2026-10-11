@@ -12,12 +12,12 @@ const same = (patch: string): [string, string, string] => [patch, patch, patch];
 it.each<[string, string, string]>([
   ["a type change", REMOVED_FILE + ADDED_LINK, "diff --git a/t b/t\n@@ -1,1 +1,1 @@\n-x\n+y\n"],
   [
-    "a rename into a path below itself, the removal first",
+    "a removal at a path with an addition below it, the removal first",
     "diff --git a/f b/f\ndeleted file mode 100644\n@@ -1 +0,0 @@\n-a\ndiff --git a/f/g b/f/g\nnew file mode 100644\n@@ -0,0 +1 @@\n+a\n",
     "diff --git a/f/g b/f/g\n@@ -1,1 +1,1 @@\n-a\n+a\n",
   ],
   [
-    "a rename out of a path below itself, the addition first",
+    "a removal below a path with an addition at it, the addition first",
     "diff --git a/f b/f\nnew file mode 100644\n@@ -0,0 +1,2 @@\n+a\n+b\ndiff --git a/f/g b/f/g\ndeleted file mode 100644\n@@ -1,2 +0,0 @@\n-a\n-b\n",
     "diff --git a/f b/f\n@@ -1,2 +1,2 @@\n-a\n-b\n+a\n+b\n",
   ],

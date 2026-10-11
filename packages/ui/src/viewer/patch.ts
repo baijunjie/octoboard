@@ -38,6 +38,13 @@ export function hasHunks(patch: string): boolean {
   return hunkCounts(patch).length > 0;
 }
 
+/** Whether a patch says nothing changed at all: it has no hunk, no binary line (`git` writes a
+ * file it treats as binary, whatever its content, as one `Binary files … differ` line, which says
+ * the content differs) and no mode change. What is left is empty or a rename's header. */
+export function saysNothingChanged(patch: string): boolean {
+  return !hasHunks(patch) && !/^(Binary files .* differ|GIT binary patch|old mode |new mode )/m.test(patch);
+}
+
 /** Whether a patch has two sides to set side by side: some hunk has lines on both. One where every
  * hunk adds to nothing or removes everything — an added or a deleted file — reads the same unified
  * and split, so the viewer offers no choice between them. */
@@ -55,8 +62,9 @@ function patchSections(patch: string): string[] {
 
 /**
  * A change's patch as one patch. `git` writes a type change (a file become a symbolic link, or the
- * reverse), and a rename into or out of a path below itself, as two sections: one removing the old
- * side and one adding the new, in the order of their paths rather than of their roles. Drawn apart
+ * reverse), including one whose two paths nest, as two sections: one removing the old side and one
+ * adding the new, in the order of their paths rather than of their roles. (A rename into or out of
+ * a path below itself that keeps its kind is one section, and passes through untouched.) Drawn apart
  * they would lack the layout choice every other change has, so they are joined into one hunk of
  * the old side's lines against the new side's. The hunk holds both sides whole, so nothing in it
  * is collapsed, and no line diff is computed here: the removed lines are followed by the added

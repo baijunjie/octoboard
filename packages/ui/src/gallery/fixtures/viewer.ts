@@ -362,45 +362,27 @@ function generated(lines: number, line: (index: number) => string): string {
 const largeLog = () => generated(40_000, (i) => `2026-10-08T12:${String(i % 60).padStart(2, "0")}:00Z INFO request ${i} served in ${i % 97} ms`);
 const minified = () => `!function(){${generated(1, () => Array.from({ length: 4_000 }, (_, i) => `var a${i}=${i}*2;`).join(""))}}();`;
 const nearBudget = () => generated(9_000, (i) => `export const value${i} = { id: ${i}, label: "Item ${i}", enabled: ${i % 2 === 0} };`);
-// A file renamed into a path below itself (`lib` to `lib/index.ts`), which git writes as a removal and an addition.
-const BELOW_ITSELF_PATCH = `diff --git a/lib b/lib
-deleted file mode 100644
-index 3b18e51..0000000
+// A file renamed into a path below itself (`lib` to `lib/index.ts`): one section, the diff between its two versions.
+const BELOW_ITSELF_PATCH = `diff --git a/lib b/lib/index.ts
+index 3b18e51..9c8d7e6 100644
 --- a/lib
-+++ /dev/null
-@@ -1,3 +0,0 @@
--export const version = "2.3";
--export const name = "lib";
--export default version;
-diff --git a/lib/index.ts b/lib/index.ts
-new file mode 100644
-index 0000000..9c8d7e6
---- /dev/null
 +++ b/lib/index.ts
-@@ -0,0 +1,3 @@
-+export const version = "2.4";
-+export const name = "lib";
-+export default version;
-`;
-// The reverse, `lib/index.ts` to `lib`: git writes the addition of the outer path first.
-const OUT_OF_ITSELF_PATCH = `diff --git a/lib b/lib
-new file mode 100644
-index 0000000..9c8d7e6
---- /dev/null
-+++ b/lib
-@@ -0,0 +1,3 @@
-+export const version = "2.4";
-+export const name = "lib";
-+export default version;
-diff --git a/lib/index.ts b/lib/index.ts
-deleted file mode 100644
-index 3b18e51..0000000
---- a/lib/index.ts
-+++ /dev/null
-@@ -1,3 +0,0 @@
+@@ -1,3 +1,3 @@
 -export const version = "2.3";
--export const name = "lib";
--export default version;
++export const version = "2.4";
+ export const name = "lib";
+ export default version;
+`;
+// The reverse, `lib/index.ts` to `lib`.
+const OUT_OF_ITSELF_PATCH = `diff --git a/lib/index.ts b/lib
+index 3b18e51..9c8d7e6 100644
+--- a/lib/index.ts
++++ b/lib
+@@ -1,3 +1,3 @@
+-export const version = "2.3";
++export const version = "2.4";
+ export const name = "lib";
+ export default version;
 `;
 // Lines longer than the viewer is wide, in code and in prose, for the word wrap choice.
 const LONG_LINE = "const message = `The session ${session.title} has been waiting for ${minutes} minutes for an answer to ${request.question}, which was last asked by ${request.agent} at ${request.askedAt}`;";
@@ -635,6 +617,8 @@ async function changes(): Promise<ViewerSubject[]> {
       "Staged",
     ),
     { key: "Unstaged:src/offline.ts", path: "src/offline.ts", stage: "Unstaged", status: "modified", content: { state: "disconnected", what: "change" } },
+    // A rename whose two versions are equal: git's diff of them is empty.
+    change("src/kept.ts", present("src/previous.ts", oldSession), present("src/kept.ts", oldSession), "", "Staged"),
     // A change that arrived without a patch, which has no diff to draw.
     change("src/session.ts", present("src/session.ts", oldSession), present("src/session.ts", newSession), undefined, "Staged"),
   ];

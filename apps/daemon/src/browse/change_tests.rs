@@ -1343,7 +1343,7 @@ fn an_unstaged_type_change_and_a_submodule_replaced_by_a_directory_keep_their_si
 }
 
 #[test]
-fn a_rename_into_or_out_of_a_path_below_itself_reads_its_own_two_paths_alone() {
+fn a_staged_rename_into_or_out_of_a_path_below_itself_is_the_diff_between_its_two_versions() {
     let fixture = Fixture::new();
     let lines = |tag: &str, changed: &[usize]| -> String {
         (0..12)
@@ -1358,9 +1358,6 @@ fn a_rename_into_or_out_of_a_path_below_itself_reads_its_own_two_paths_alone() {
     let mut files: Vec<(String, String)> = Vec::new();
     for name in names {
         files.push((name.to_string(), lines(name, &[])));
-        // Nearer to `name` than `name/bar` will be, and moved below it whole: `git` would pair
-        // `name` with it if it detected renames inside the change's paths.
-        files.push((format!("elsewhere-{name}"), lines(name, &[0])));
         files.push((format!("up-{name}/bar"), lines(&format!("up {name}"), &[])));
         // A neighbour below the path that moves up, deleted with it.
         files.push((format!("up-{name}/other"), lines("OTHER", &[])));
@@ -1372,17 +1369,13 @@ fn a_rename_into_or_out_of_a_path_below_itself_reads_its_own_two_paths_alone() {
     let repo = repo_with("changes-nested", &files);
     for name in names {
         // `name` moves down into a directory of its own name, changed a little, beside a
-        // neighbour and the file moved in from elsewhere.
+        // neighbour.
         git(&repo, &["mv", name, "tmp"]);
         std::fs::create_dir(repo.join(name)).unwrap();
         git(&repo, &["mv", "tmp", &format!("{name}/bar")]);
         write(
             repo.join(format!("{name}/bar")),
             lines(name, &[3, 7, 11]).as_bytes(),
-        );
-        git(
-            &repo,
-            &["mv", &format!("elsewhere-{name}"), &format!("{name}/moved")],
         );
         write(repo.join(format!("{name}/neighbour.txt")), b"NEIGHBOUR\n");
         git(&repo, &["add", "-A"]);
@@ -1412,7 +1405,7 @@ fn a_rename_into_or_out_of_a_path_below_itself_reads_its_own_two_paths_alone() {
         let wire = |path: String| wire_path::encode(path.as_bytes());
         let (down_from, down_to) = (wire(name.to_string()), wire(format!("{name}/bar")));
         let (up_from, up_to) = (wire(format!("up-{name}/bar")), wire(format!("up-{name}")));
-        for (from, to) in [(&down_from, &down_to), (&up_from, &up_to)] {
+        for (from, to, edited) in [(&down_from, &down_to, true), (&up_from, &up_to, false)] {
             // Listed as the rename it is, and read with both of its sides.
             let (old, _) = entry(&changes, ChangeGroup::Staged, to);
             assert_eq!(side_path(old), Some(from.as_str()), "{changes:#?}");
@@ -1433,13 +1426,19 @@ fn a_rename_into_or_out_of_a_path_below_itself_reads_its_own_two_paths_alone() {
                 "{from} -> {to}: {diff:?}"
             );
             let patch = diff.patch.unwrap();
-            // Its old path's removal and its new path's addition, nothing paired, nothing else.
-            assert_eq!(patch.matches("diff --git").count(), 2, "{patch}");
-            assert!(
-                patch.contains("deleted file mode") && patch.contains("new file mode"),
-                "{patch}"
-            );
-            for stranger in ["NEIGHBOUR", "OTHER", "Unmerged", "moved", "rename from"] {
+            if edited {
+                // One section between the two versions, as an ordinary line diff.
+                assert_eq!(patch.matches("diff --git").count(), 1, "{patch}");
+                assert!(
+                    patch.contains("-foo line 3") || patch.contains("-q\t\"x line 3"),
+                    "{patch}"
+                );
+                assert!(!patch.contains("deleted file mode"), "{patch}");
+            } else {
+                assert_eq!(patch, "", "identical content is an empty diff");
+            }
+            // Nothing but the change's own two paths is in it.
+            for stranger in ["NEIGHBOUR", "OTHER", "Unmerged", "rename from"] {
                 assert!(!patch.contains(stranger), "{stranger} in {patch}");
             }
         }

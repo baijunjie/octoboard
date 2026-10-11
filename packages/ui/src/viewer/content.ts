@@ -4,7 +4,7 @@
 import type { ReactNode } from "react";
 
 import type { FileContent } from "../protocol";
-import { joinedPatch } from "./patch";
+import { joinedPatch, saysNothingChanged } from "./patch";
 import type { StatusKey } from "./statusMarks";
 
 /** Whether a file of this name is Markdown, by its extension. */
@@ -183,6 +183,10 @@ export function changeStatus(change: { old: StatusSide; new: StatusSide }): Chan
  *   be offered: a joined patch holds both sides whole, so it collapses none and its bodies are not
  *   for expanding.
  * - `identical`: an empty patch: the two sides hold the same now.
+ * - `renamedUnchanged`: a rename that changed nothing else — a patch that is empty or only a
+ *   rename's header, with no line, no binary line and no mode change: the two sides are the same
+ *   under their two names. A rename that also changed the mode, or that `git` treats as binary
+ *   without the daemon having read its bodies, keeps the wording of any change with no line to draw.
  * - `image`: the two images (or the one that exists) side by side.
  * - `binary`: a side is a non-image binary, or an image faces text; neither has a line diff.
  */
@@ -192,6 +196,7 @@ export type ChangePresentation =
   | { kind: "notFile"; sideKind: "symlink" | "submodule" }
   | { kind: "text"; patch: string; expandable: boolean }
   | { kind: "identical" }
+  | { kind: "renamedUnchanged" }
   | { kind: "image" }
   | { kind: "binary" }
   | { kind: "unreadable"; message?: string };
@@ -211,6 +216,9 @@ export function changePresentation(change: ViewerChange): ChangePresentation {
     if (alone?.state === "present" && alone.kind !== "file") return { kind: "notFile", sideKind: alone.kind };
     return { kind: "unreadable" };
   }
+  // A rename says what it is whether the patch is empty (git compared its two versions and found
+  // them equal) or holds a rename header and nothing else.
+  if (changeStatus(change) === "renamed" && saysNothingChanged(change.patch)) return { kind: "renamedUnchanged" };
   if (change.patch === "") return { kind: "identical" };
   const patch = joinedPatch(change.patch);
   return { kind: "text", patch, expandable: patch === change.patch };

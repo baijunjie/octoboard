@@ -386,11 +386,12 @@ commit and its new side from To's, and is shown as a staged change is below; it 
   remembered: later diffs open in the layout last chosen, across changes and after the app restarts. Only the patch's
   hunks and the lines around them are shown, each run of unchanged lines between them collapsed into a separator that
   can be expanded (see "Expanding the collapsed lines" below). A change whose patch has no lines — an empty file added
-  or removed, say — says it has no diff to show. Whether its long lines wrap is the viewer's own choice, which a diff
-  shares with every file (see "Wrapping long lines" in `docs/product/project-pane.md`). A patch of more than 1,000,000
-  characters or 10,000 lines is shown as the plain patch, with a line saying it is shown that way because the change is
-  large; so is a patch the diff could not be drawn from. A patch that is not valid UTF-8 — of a file in another
-  encoding — is shown with replacement characters.
+  or removed, say — says it has no diff to show; a rename with no lines is worded as the rename bullets below say.
+  Whether its long lines wrap is the viewer's own choice, which a diff shares with every file (see "Wrapping long
+  lines" in `docs/product/project-pane.md`). A patch of more than 1,000,000 characters or 10,000 lines is shown as the
+  plain patch, with a line saying it is shown that way because the change is large; so is a patch the diff could not
+  be drawn from. A patch that is not valid UTF-8 — of a file in another encoding — is shown with replacement
+  characters.
 - **A missing newline at the end** of either version is said in a line above the diff — the old version, the new one,
   or neither has one — rather than as a line of it. A symbolic link's change never says so, a link's target having
   no newline at its end anyway. A plain patch keeps Git's own marker lines.
@@ -413,14 +414,25 @@ commit and its new side from To's, and is shown as a staged change is below; it 
   side as added ones. **The two sides are never compared line by line** — a file's lines and a link's target have
   nothing to pair up — so each side is shown whole, with no run of unchanged lines: the diff collapses nothing and has
   no separator to expand. It offers the layout choice by the rule above, so an empty file that became a link, having
-  added lines alone, offers none. The kind of change stays in the title's tag.
-- **A rename into or out of a path below itself** (`foo` to `foo/bar`, or back) is written by Git the same way, as the
-  old path's removal and the new path's addition, and is shown the same way: one diff of the whole old path against
-  the whole new path — collapsing nothing, with no separator to expand — under Renamed, with the path it came from
-  among the details. Its two sides are not compared either, so a rename whose content never changed still shows every
-  one of its lines as removed and then added.
-- **No differences**, when the two sides now hold the same content: the change was staged, committed or undone since
-  it was listed.
+  added lines alone, offers none. The kind of change stays in the title's tag. A type change into or out of a path
+  below itself (`lib` to `lib/index.ts`) is shown this way as well, not as the rename below it is.
+- **A rename into or out of a path below itself** (`lib` to `lib/index.ts`, or back) is compared line by line like any
+  other change: its diff is the one between exactly its two versions. Identical content therefore says the change was
+  renamed and nothing more, as the bullet below it says, and edited content gives an ordinary diff — hunks with
+  context, the runs between them collapsed into separators that can be expanded, the layout choice, Show whole file
+  and the trailing separator, all as above. It shows under Renamed, with the path it came from among the details, and
+  nothing below the outer path is read, named in its diff or counted against the limits the read is held to. This
+  holds in the Staged section and in the Compare view, in both directions of the nesting, and it takes both sides
+  being a file or a symbolic link: with a side that is a repository of its own the change is shown instead as the old
+  path's removal followed by the new path's addition in one diff, collapsing nothing and with no separator to expand,
+  as a type change is.
+- **A rename with nothing else changed** says it was renamed and its content is unchanged. It is the wording of every
+  rename whose patch shows nothing but the path changed — an empty patch, or one holding the rename's header alone —
+  wherever it was listed and whether or not its two paths nest. A rename whose patch shows that something else did
+  change, its executable bit or a side Git treats as binary, is not worded that way: it says it has no diff to show,
+  as any change with no lines does.
+- **No differences**, when the two sides of a change that is not a rename now hold the same content: the change was
+  staged, committed or undone since it was listed.
 - **A path in conflict** is not a two-sided change: a warning names the kind of conflict — both modified, both added,
   both deleted, added by us, added by them, deleted by us, deleted by them — above the file as it is on disk, with its
   conflict markers where both sides modified or added it. A path both sides deleted has no file to show and says it
@@ -474,12 +486,12 @@ Then:
 **A diff that offers no expansion** keeps its separators with their counts and nothing else: no controls, and no
 trailing separator for the lines beyond the last hunk, which only an expandable diff has. That is so from the start for
 a diff whose two sides are not both files whose content can be read — an added or a deleted file, which has one side
-only, a symbolic link or a submodule, hence a type change, and a version outside the project. A type change and a rename
-into or out of a path below itself have no separator at all, their diff holding both of its sides whole so that nothing
-in it is collapsed (see "What it shows" above). The rest is found only on the first expansion, and the diff is then
-drawn again in that form, so its trailing separator goes on that press: a side larger than the 4 MiB a read opens, a
-side past the viewer's own budget of 10,000 lines or 1,000,000 characters, and the change having moved on. Of the three
-only the last says anything; the two limits pass without a word.
+only, a symbolic link or a submodule, hence a type change, and a version outside the project. A type change has no
+separator at all, its diff holding both of its sides whole so that nothing in it is collapsed (see "What it shows"
+above). The rest is found only on the first expansion, and the diff is then drawn again in that form, so its trailing
+separator goes on that press: a side larger than the 4 MiB a read opens, a side past the viewer's own budget of 10,000
+lines or 1,000,000 characters, and the change having moved on. Of the three only the last says anything; the two limits
+pass without a word.
 
 From the keyboard, **Tab** from the code region moves into the separators' controls and then along them, run by run
 from the top of the diff, and after the last one leaves the diff; **Shift+Tab** from the first goes back to the code

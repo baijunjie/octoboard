@@ -13,6 +13,12 @@
 //! looked at before and after the patch is made, and a reply whose patch may have been made from
 //! another version than the sides it reports is refused as `source_changed` rather than returned.
 //!
+//! A change whose two paths nest (a rename from `foo` to `foo/bar`) cannot be asked of `git` over
+//! pathspecs without everything below the outer path coming along. When both of its sides are
+//! files or links, `git` is asked for the diff between the two versions themselves, named by
+//! revision and path, and nothing else in the repository is read; any other such change is read
+//! without rename detection and cut down to its own sections.
+//!
 //! The whole bodies of a change's two sides (`read_bodies`, `read_bodies_between`) are read for a
 //! client expanding the lines its patch collapsed. The change is resolved exactly as for its patch,
 //! the sides found are compared with the versions the client names, and only a match is read; a
@@ -668,10 +674,27 @@ impl Reader<'_> {
 
     /// The index entries at `paths` (project-relative), refusing a path in conflict: its stages are
     /// not one side of anything.
+    ///
+    /// Paths that nest are looked up one at a time: asked for together, `git` lists everything
+    /// below the outer path as well, and all of it would count against the metadata budget. The
+    /// entries then come from separate reads of the index, which the callers' comparison of the
+    /// entries before and after their patch covers.
     fn index(&self, paths: &[&RelPath]) -> Result<Vec<IndexEntry>> {
         let full: Vec<RelPath> = paths.iter().map(|rel| self.full(rel)).collect();
         let args: Vec<&[u8]> = full.iter().map(RelPath::as_bytes).collect();
-        let entries = blob::index_entries(self.env, &self.at.root, &args, self.cancel)?;
+        let lookups: Vec<&[&[u8]]> = match paths_nest(&args) {
+            true => args.chunks(1).collect(),
+            false => vec![&args],
+        };
+        let mut entries = Vec::new();
+        for lookup in lookups {
+            entries.extend(blob::index_entries(
+                self.env,
+                &self.at.root,
+                lookup,
+                self.cancel,
+            )?);
+        }
         if let Some(entry) = entries.iter().find(|entry| entry.stage != b"0") {
             let rel = paths[full
                 .iter()
@@ -805,10 +828,12 @@ impl Reader<'_> {
     /// Each path is matched exactly and nothing below it (`GitEnv::run_exact`), except where the
     /// paths nest (a rename from `foo` to `foo/bar`): there `git` sees everything below the outer
     /// path as well, the patch keeps only the sections between the change's own paths
-    /// (`own_sections`), and renames are not detected, so that neither path is paired with a file
-    /// below it whose section would be dropped. The change then shows as its old path's removal and
-    /// its new path's addition. Everything below the outer path still counts against the patch
-    /// budget, which refuses rather than cuts.
+    /// (`own_sections`), and renames are not detected. A pathspec-restricted diff sees another set
+    /// of rename candidates than the whole-repository `git status` that listed the change, and
+    /// could pair one of its paths with a third path below the outer one, whose section would then
+    /// be dropped, leaving a side with no counterpart. The change then shows as its old path's
+    /// removal and its new path's addition. Everything below the outer path still counts against
+    /// the patch budget, which refuses rather than cuts.
     fn patch(&self, args: &[&[u8]], paths: &[&RelPath]) -> Result<Vec<u8>> {
         let full: Vec<RelPath> = paths.iter().map(|rel| self.full(rel)).collect();
         let full: Vec<&[u8]> = full.iter().map(RelPath::as_bytes).collect();
@@ -817,31 +842,71 @@ impl Reader<'_> {
         } else {
             b"-M"
         };
-        let mut all: Vec<&[u8]> = vec![
-            renames,
-            b"--submodule=short",
-            b"--ignore-submodules=dirty",
-            b"--no-relative",
-            b"--src-prefix=a/",
-            b"--dst-prefix=b/",
-        ];
+        let mut all: Vec<&[u8]> = vec![renames, b"--submodule=short", b"--ignore-submodules=dirty"];
+        all.extend_from_slice(PATCH_PRESENTATION);
         all.extend_from_slice(args);
         let limit = budget::MAX_PATCH_BYTES;
-        match self
+        let run = self
             .env
-            .run_exact(&self.at.root, "diff", &all, &full, limit, self.cancel)
+            .run_exact(&self.at.root, "diff", &all, &full, limit, self.cancel);
+        Ok(own_sections(within_budget(run)?, &full))
+    }
+
+    /// The diff `git` computes between the two versions a nesting change names, each as
+    /// `<revision>:<path>`, or `None` when the change does not meet the guard and has to be read by
+    /// [`Reader::patch`].
+    ///
+    /// The guard: the two paths nest, and both sides resolved to an object that is a file or a
+    /// link. The kinds may differ: `git` writes a type change as two sections here as well, which
+    /// the client joins just as it joins the other route's, so one route serves both. A submodule
+    /// named that way resolves to its commit, and two of them make `git` diff the commits' whole
+    /// trees, content the change never named; a side that is absent takes the other route.
+    /// A nesting pair in the Unstaged group never meets it: the index cannot hold a path as both a
+    /// file and a directory, so one side is always absent there, and that group does not ask.
+    /// `revisions` are the old side's and the new side's, as `git` spells them (a commit, or `:0`
+    /// for the index); without an old one there is no old side to name.
+    fn pair_operands(
+        &self,
+        revisions: (Option<&str>, &str),
+        paths: (&Option<RelPath>, &Option<RelPath>),
+        found: (&Option<Found>, &Option<Found>),
+    ) -> Option<(Vec<u8>, Vec<u8>)> {
+        let is_blob_or_link = |found: &Option<Found>| {
+            matches!(
+                found,
+                Some(Found::Object {
+                    kind: SideKind::File | SideKind::Symlink,
+                    ..
+                })
+            )
+        };
+        let (old, new) = (self.full(paths.0.as_ref()?), self.full(paths.1.as_ref()?));
+        if !paths_nest(&[old.as_bytes(), new.as_bytes()])
+            || !is_blob_or_link(found.0)
+            || !is_blob_or_link(found.1)
         {
-            Ok(patch) => Ok(own_sections(patch, &full)),
-            Err(GitError::Stopped(BoundedFailure::StdoutExceeded(limit))) => {
-                let max = limit.to_string();
-                Err(CodedError::raised(
-                    error_code::LIMIT_EXCEEDED,
-                    format!("the change's patch is larger than the {limit}-byte limit"),
-                    &[("limit", "patch_bytes"), ("max", &max)],
-                ))
-            }
-            Err(err) => Err(git_error(err)),
+            return None;
         }
+        let operand =
+            |revision: &str, path: &RelPath| [revision.as_bytes(), b":", path.as_bytes()].concat();
+        Some((operand(revisions.0?, &old), operand(revisions.1, &new)))
+    }
+
+    /// `git diff` between the versions `operands` name (see [`Reader::pair_operands`]), refused
+    /// past the patch budget. It is run as `git` writes it for two operands and nothing else: no
+    /// pathspec is given, so the literal-pathspec setting stays in force, and the list ends with a
+    /// `--` so that a file in the worktree named like an operand cannot be taken for a path. Naming
+    /// revision and path rather than object ids keeps the repository's attributes in effect.
+    fn patch_pair(&self, operands: &(Vec<u8>, Vec<u8>)) -> Result<Vec<u8>> {
+        let mut args: Vec<&[u8]> = PATCH_PRESENTATION.to_vec();
+        args.extend_from_slice(&[&operands.0, &operands.1, b"--"]);
+        within_budget(self.env.run(
+            &self.at.root,
+            "diff",
+            &args,
+            budget::MAX_PATCH_BYTES,
+            self.cancel,
+        ))
     }
 
     /// The body of a side, for a reply that carries it: a file's, read from its object, or from
@@ -932,9 +997,16 @@ impl Reader<'_> {
             None => self.empty_tree()?,
         };
         let paths: Vec<&RelPath> = old_path.iter().chain(new_path.iter()).collect();
+        let pair = self.pair_operands(
+            (commit.as_deref(), ":0"),
+            (&old_path, &new_path),
+            (&old_found, &new_found),
+        );
         let patch = if old_found == Some(Found::Absent) && new_found == Some(Found::Absent) {
             // Nothing at either path: the change is gone, and there is nothing to compare.
             Vec::new()
+        } else if let Some(operands) = &pair {
+            self.patch_pair(operands)?
         } else {
             self.patch(&[b"--cached", base.as_bytes()], &paths)?
         };
@@ -993,9 +1065,19 @@ impl Reader<'_> {
         } else if old_found == Some(Found::Absent) && new_found == Some(Found::Absent) {
             Some(Vec::new())
         } else {
-            let paths: Vec<&RelPath> = old_path.iter().chain(new_path.iter()).collect();
-            let commits: &[&[u8]] = &[old_commit.as_bytes(), new_commit.as_bytes()];
-            Some(self.patch(commits, &paths)?)
+            let pair = self.pair_operands(
+                (Some(old_commit), new_commit),
+                (&old_path, &new_path),
+                (&old_found, &new_found),
+            );
+            Some(match &pair {
+                Some(operands) => self.patch_pair(operands)?,
+                None => {
+                    let paths: Vec<&RelPath> = old_path.iter().chain(new_path.iter()).collect();
+                    let commits: &[&[u8]] = &[old_commit.as_bytes(), new_commit.as_bytes()];
+                    self.patch(commits, &paths)?
+                }
+            })
         };
         let bodies = self.inline_bodies && patch.as_deref().is_none_or(carries_bodies);
         Ok(ChangeRead {
@@ -1173,6 +1255,27 @@ impl Reader<'_> {
             source: source(identity),
             file,
         })
+    }
+}
+
+/// What every patch is presented with whichever route makes it: paths as written from the
+/// repository's root, and the same two prefixes for the sides.
+const PATCH_PRESENTATION: &[&[u8]] = &[b"--no-relative", b"--src-prefix=a/", b"--dst-prefix=b/"];
+
+/// A `git diff`'s output, or the refusal a patch past the budget gets: it is never cut, since part
+/// of a patch is not the change.
+fn within_budget(run: Result<Vec<u8>, GitError>) -> Result<Vec<u8>> {
+    match run {
+        Ok(patch) => Ok(patch),
+        Err(GitError::Stopped(BoundedFailure::StdoutExceeded(limit))) => {
+            let max = limit.to_string();
+            Err(CodedError::raised(
+                error_code::LIMIT_EXCEEDED,
+                format!("the change's patch is larger than the {limit}-byte limit"),
+                &[("limit", "patch_bytes"), ("max", &max)],
+            ))
+        }
+        Err(err) => Err(git_error(err)),
     }
 }
 

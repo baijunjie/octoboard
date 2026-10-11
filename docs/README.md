@@ -224,6 +224,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   rather than at the call site and bounded in time there, with the two consequences that make a call site reach for
   it — a `git` that can prompt hangs the daemon with nothing naming the stuck call, and a read that rewrites the index
   fails an agent's `git add` on `index.lock`; what a test proving a read leaves the repository alone has to set up
-  first; how to type-check Linux-only code from macOS (a scratch crate, since bundled SQLite blocks a cross-check
+  first; why a diff between two specific versions names each one `<revision>:<path>` rather than by object id and ends
+  its arguments with `--`, since bare ids leave git no path to look the repository's own attributes up by and a
+  worktree file named like an operand otherwise makes git refuse the command; why the Rust crates are linted with
+  `cargo clippy --all-targets`, since the plain command lints no `#[cfg(test)]` code and so none of this repository's
+  tests; how to type-check Linux-only code from macOS (a scratch crate, since bundled SQLite blocks a cross-check
   of the daemon); and why a test fixture is built only from Git 2.36's commands, since the Mac's newer git lets a
   fixture needing more pass every local run.

@@ -57,6 +57,19 @@ The deadline stays the call site's own: run the command through `subprocess::run
 `Command::output`. It kills the whole process group rather than the direct child, which is what also reaps the
 `ssh` that `git` forked.
 
+## Name a diff's two versions `<revision>:<path>`, and end the arguments with `--`
+
+Applies wherever daemon code wants the diff `git` computes between two specific versions of a path, rather than a diff
+over pathspecs. Write each operand as `<revision>:<path>` — a commit, or `:0` for the index — even when the two object
+ids are already in hand, and close the argument list with a `--`.
+
+`git` looks a path's attributes up by its path, so two bare object ids leave it none: a path the repository marks
+`-diff` is diffed as text instead of reported as `Binary files … differ`, and the section's `a/` and `b/` names come
+out as the object ids. Those attributes are the user's, and losing them silently changes what the client is shown.
+The `--` matters because an operand of that form is also a valid path, so a worktree file happening to be named like
+one makes `git` refuse the whole command as an ambiguous argument — a condition that depends on what the user has on
+disk, which no fixture without such a file reproduces.
+
 ## A test that a `git` read leaves the repository alone needs a fixture whose stat information is stale
 
 A tracked file whose modification time moved while its content did not is the only thing that makes a read want to
@@ -65,6 +78,15 @@ test over that fixture passes with the guard removed as well, and proves nothing
 to produce the stale state, and the test needs a positive control beside it — the same read with the guard off,
 asserted to write. `apps/daemon/src/git_status.rs`'s
 `reading_the_branch_header_leaves_the_repository_untouched`, with the control that follows it, is the worked pair.
+
+## Lint the Rust crates with `cargo clippy --all-targets`
+
+Plain `cargo clippy` checks only the lib and bin targets, and every test in these crates sits in a `#[cfg(test)]`
+module (there is no `tests/` directory), so it lints none of the test code — and most changes here add more test code
+than production code. A clean run without `--all-targets` is therefore no evidence about the tests just written, and a
+warning in them surfaces much later, whenever something else makes that target rebuild. Do not read that delay as
+cargo withholding cached warnings: warnings are replayed for an unchanged target, so a second run does repeat them,
+and neither `cargo clean` nor touching a file is the fix.
 
 ## Run Linux-only code's tests in a Linux container, since no check on macOS compiles it
 

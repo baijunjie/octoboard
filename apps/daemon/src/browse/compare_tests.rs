@@ -26,7 +26,7 @@ pub(super) struct Compared {
 pub(super) struct ComparedRead {
     pub(super) old: SideRead,
     pub(super) new: SideRead,
-    patch: Option<String>,
+    pub(super) patch: Option<String>,
     /// The whole reply as it goes on the wire.
     json: String,
 }

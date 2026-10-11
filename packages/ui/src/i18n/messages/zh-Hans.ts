@@ -492,6 +492,7 @@ export const zhHans: Translation<"other"> = {
   "viewer.change.noNewlineNew": "新版本末尾没有换行符。",
   "viewer.change.noNewlineBoth": "两个版本末尾都没有换行符。",
   "viewer.change.identical": "没有差异：两侧现在的内容相同。",
+  "viewer.change.renamedUnchanged": "已重命名，内容没有更改。",
   "viewer.change.symlink": "这是一个符号链接，此处没有可显示的内容。",
   "viewer.change.submodule": "这是一个独立的仓库，此处不显示其内容。",
 

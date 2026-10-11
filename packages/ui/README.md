@@ -105,13 +105,15 @@ without touching the daemon contract or the callers.
   expanding the lines the patch collapses; its `ChangeBodiesError` says why a read gave nothing) or `conflict` (a path in conflict: the caller's wording of how, above its file on disk).
 - `bodyFromFileContent` turns the daemon's file reply into a `ViewerBody`; `changeStatus` and `changePresentation`
   are the pure rules that word a change and choose how it is shown (a diff, a side alone, one side restricted, images,
-  binary, no differences); every text change is one diff, a type change and a rename into or out of a path below itself
-  included, which git writes as a removal section plus an addition section and `joinedPatch` (`patch.ts`) joins into
-  one patch; a diff `joinedPatch` rewrote holds both sides whole, so it is not expandable (the text presentation's
-  `expandable`) and is given no `loadBodies`.
+  binary, no differences, a rename with nothing else changed); every text change is one diff, a type change included,
+  including one into or out of a path below itself, which git writes as a removal section plus an addition section and
+  `joinedPatch` (`patch.ts`) joins into one patch; a diff `joinedPatch` rewrote holds both sides whole, so it is not
+  expandable (the text presentation's `expandable`) and is given no `loadBodies`. A rename into or out of a path below
+  itself that keeps its kind arrives as one ordinary section and is expandable like any other diff. A renamed change
+  whose patch shows nothing changed (`saysNothingChanged`) is the `renamedUnchanged` presentation, not a diff.
 - `src/viewer/patch.ts` is the viewer's patch-text work, importing nothing: `joinedPatch` (the two-section shape
   joined into one hunk, any other shape left as it is), `withoutNoNewlineMarkers` (git's "no newline" lines taken out
-  of a drawn patch, to be said in a notice), `hasHunks`, `hasTwoSides`, `hunkCounts` and `LINK_MODE` (a symbolic link's
+  of a drawn patch, to be said in a notice), `hasHunks`, `saysNothingChanged`, `hasTwoSides`, `hunkCounts` and `LINK_MODE` (a symbolic link's
   patch).
 - `FileViewer({ subject, onClose, navigation? })` (`FileViewer.tsx`): stays mounted while its subject changes, with
   `subject.key` as the dialog's reset key; `navigation` gives Previous / Next callbacks, a missing one disabling its

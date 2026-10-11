@@ -56,6 +56,11 @@ area and the Git mode panel, and shows a type change as one diff.
   component rather than by hand.
 - **Every diff looks the same.** A type change is one diff with the layout choice, like any other change; the
   Before/After split was a presentation choice, not a renderer limit.
+- **A rename is shown the way git and GitHub show one, and a type change is not a rename.** A rename into or out of a
+  path below itself is diffed by git between its two versions, so unchanged content gives no diff and edited content
+  an ordinary line-level one; nothing of the sort is invented in the client. A type change keeps the old content
+  removed and the new content added, because a file's lines and a symbolic link's target have nothing to pair up and
+  that is what GitHub shows too.
 - **One expansion reveals 20 lines, and the third opens the rest.** The separator also offers expanding the whole
   file at once.
 - **One wrap choice covers the source view of files and diffs**, and nothing is wrapped by default there — Markdown
@@ -95,4 +100,5 @@ area and the Git mode panel, and shows a type change as one diff.
 8. 08 viewer-header-layout (closed)
 9. 09 surfaces-and-contrast (closed)
 10. 10 type-change-diff (closed)
-11. [Final confirmation](11-final-confirmation.md)
+11. 10a nested-rename-diff (closed)
+12. [Final confirmation](11-final-confirmation.md)

@@ -167,18 +167,25 @@ function expandable(
   };
 }
 
-/** A file renamed into or out of a path below itself, which git writes as a removal and an addition
- * (the one whose path sorts first coming first); both sides are files, so its bodies can be read. */
-function nested(from: string, to: string, before: string[], after: string[]): FixtureChange {
-  const removal = [`diff --git a/${from} b/${from}`, "deleted file mode 100644", "index 3b18e51..0000000", `--- a/${from}`, "+++ /dev/null", `@@ -1,${before.length} +0,0 @@`, ...before.map((l) => `-${l}`)];
-  const addition = [`diff --git a/${to} b/${to}`, "new file mode 100644", "index 0000000..9c8d7e6", "--- /dev/null", `+++ b/${to}`, `@@ -0,0 +1,${after.length} @@`, ...after.map((l) => `+${l}`)];
-  const sections = from < to ? [removal, addition] : [addition, removal];
+/** A file renamed into or out of a path below itself: one section, the diff between its two
+ * versions (`source`'s patch with the rename's two paths in its headers), or no patch at all when
+ * the versions are equal; both sides are files, so its bodies can be read. */
+function nested(from: string, to: string, source: { old: string; new: string; patch: string }, blobs: [string, string]): FixtureChange {
+  // An empty patch is a change with nothing to expand.
+  const expand = source.patch === "" ? {} : { expand: { old: source.old, new: source.new, delay: EXPAND_DELAY_MS } };
+  const patch = source.patch
+    .replace("diff --git a/src/pipeline.ts b/src/pipeline.ts", `diff --git a/${from} b/${to}`)
+    .replace("--- a/src/pipeline.ts", `--- a/${from}`)
+    .replace("+++ b/src/pipeline.ts", `+++ b/${to}`);
   return {
-    entry: { group: "staged", old: file(from, commit("3b18e51")), new: file(to, index("9c8d7e6")) },
-    patch: sections.flat().join("\n") + "\n",
-    expand: { old: before.join("\n") + "\n", new: after.join("\n") + "\n", delay: EXPAND_DELAY_MS },
+    entry: { group: "staged", old: file(from, commit(blobs[0])), new: file(to, index(blobs[1])) },
+    patch,
+    ...expand,
   };
 }
+
+/** The same content on both sides, which git compares as an empty patch. */
+const UNCHANGED = { old: "", new: "", patch: "" };
 
 const MAIN_CHANGES: FixtureChange[] = [
   { entry: { group: "staged", old: file("src/server.ts", commit("1a2b3c4")), new: file("src/server.ts", index("5d6e7f8")) }, patch: SERVER_PATCH },
@@ -195,8 +202,8 @@ const MAIN_CHANGES: FixtureChange[] = [
     },
     patch: TYPE_CHANGE_PATCH,
   },
-  nested("nest", "nest/leaf.ts", ["const a = 1;", "const b = 2;", "const c = 3;"], ["const a = 1;", "const b = 20;", "const c = 3;"]),
-  nested("nest2/leaf.ts", "nest2", ["const a = 1;", "const b = 2;", "const c = 3;"], ["const a = 1;", "const b = 2;", "const c = 3;"]),
+  nested("nest", "nest/leaf.ts", PIPELINE, ["3b18e51", "9c8d7e6"]),
+  nested("nest2/leaf.ts", "nest2", UNCHANGED, ["3b18e51", "3b18e51"]),
   expandable("staged", "src/pipeline.ts", commit("a1b2c3d"), index("b2c3d4e"), PIPELINE),
   expandable("staged", "src/wide.ts", commit("9a8b7c6"), index("6c7d8e9"), WIDE),
   expandable("staged", "src/limits.ts", commit("c3d4e5f"), index("d4e5f6a"), PIPELINE, {
