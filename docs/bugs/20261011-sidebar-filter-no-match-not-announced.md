@@ -16,7 +16,7 @@ The list is replaced by the "No matching projects" empty state, and the screen r
 
 ## Expected vs. actual
 
-- **Expected**: the change from a list to "No matching projects" is announced as a status message, without moving focus. `docs/memory/writing-ui-components.md` sets WCAG 4.1.3 (Status Messages, AA) as the bar, and records the idiom for it: a `role="status"` region kept mounted so that what appears in it is announced.
+- **Expected**: the change from a list to "No matching projects" is announced as a status message, without moving focus. The bar is WCAG 2.2 SC 4.1.3 (Status Messages, AA), which `docs/ui-accessibility.md` holds `packages/ui` to; its "Announcing a change" section records the idiom for it: a `role="status"` region kept mounted so that what appears in it is announced.
 - **Actual**: the empty state is rendered inside a plain element and nothing is announced.
 
 ## Environment
@@ -34,7 +34,7 @@ Screen-reader users filtering the sidebar's projects: they cannot tell an empty 
 - **Verified in the code**: neither `packages/ui/src/components/EmptyPanel.tsx`, `packages/ui/src/sidebar/Sidebar.tsx` nor `packages/ui/src/sidebar/ProjectFilter.tsx` has a `role="status"` element, an `aria-live`, or a `StatusAnnouncer`.
 - **Verified in the code**: the project's idiom is already in place elsewhere: `packages/ui/src/browser/BranchComparison.tsx` keeps a `role="status"` div mounted for as long as the comparison is, and `packages/ui/src/components/StatusAnnouncer.tsx` is the shared piece for a state whose visible form comes and goes.
 - **Related, being fixed separately**: the Git mode's new change-list filter (milestone 05 of `docs/plans/20261010-git-review-improvements/`, branch `feat/change-filter`) had the identical gap, found in a change review, and is being given a mounted `role="status"` region for it. That is a worked example in the codebase to follow. The sidebar's filter is outside that topic, so it has this ticket of its own.
-- **Inferred**: a region inserted together with its text is not reliably announced (VoiceOver in WebKit), per `docs/memory/writing-ui-components.md`, so a region that appears with the empty state would not fix this on its own.
+- **Inferred**: a region inserted together with its text is not reliably announced (VoiceOver in WebKit), per the "Announcing a change" section of `docs/ui-accessibility.md`, so a region that appears with the empty state would not fix this on its own.
 
 ## Acceptance criteria
 

@@ -61,8 +61,8 @@ dialog and Tab only cycles inside it — so a keyboard user has no way back with
   react-aria overlay with its own focus scope, registered in react-aria's overlay stack, which the banner is not.
 - Verified: `useFocusHandoff`'s targets are both unreachable while a dialog is open — the terminal's element and the
   top bar's first button are inside an `inert` subtree, and `.focus()` on either is a no-op — so the banner going
-  away from under focus in that state would drop focus to `<body>`, which by this project's own rule
-  (`docs/memory/writing-ui-components.md`) costs the dialog its Escape and its Tab containment.
+  away from under focus in that state would drop focus to `<body>`, and a dialog's Escape handling and Tab
+  containment both hang off focus being inside it, so both stop working.
 - Inferred: giving the banner its own react-aria overlay (an `Overlay` / `FocusScope`, as HeroUI's toast region has)
   is what would let focus enter and leave it without damaging the dialog. Not built.
 

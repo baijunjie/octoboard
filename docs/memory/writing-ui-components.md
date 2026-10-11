@@ -15,9 +15,10 @@ ARIA region semantics.
 
 - Style it through its own variants, slots and the theme tokens, not by overriding it into something else. An
   override on a HeroUI component stays only for a colour fix accessibility needs or for layout and sizing (filling a
-  column, truncating); one that only changes its look to taste goes. So when asked to strip custom styling, sort each
-  override by that reason rather than removing them wholesale: dropping a sizing override with the look ones broke
-  the layout.
+  column, truncating); one that only changes its look to taste goes. Even a colour fix never takes the form of a
+  border, frame or outline HeroUI does not draw itself (the "Do not change how a HeroUI component looks" section of
+  `docs/ui-accessibility.md`). So when asked to strip custom styling, sort each override by that reason rather than
+  removing them wholesale: dropping a sizing override with the look ones broke the layout.
 - Give a compound component's layout classes to its parts themselves and never put an element of your own between
   two parts: some of HeroUI's variant styles use direct-child selectors (`.tabs--secondary > .tabs__list-container`,
   the `switch--sm` / `switch--lg` sizes), so a wrapper `div` silently switches the variant off. A parent may also pick
@@ -33,129 +34,6 @@ ARIA region semantics.
   requirement. Then build it on react-aria / react-aria-components hooks, as HeroUI itself is, not on bare DOM event
   handling, and put a comment at the component saying why HeroUI's is not used (a design-intent comment under the
   "Comment conventions" section of `.claude/skills/agent-docs/SKILL.md`).
-
-## Focus dropped to `<body>`: a HeroUI control's press, a hidden pane, a reordered list
-
-Clicking around the terminal must not move keyboard focus off it (see the "Rows, names and keyboard focus" section of
-`docs/product/sidebar.md`). In `packages/ui` every pressable HeroUI 3 control (`Button`,
-`Dropdown.Trigger` and the rest, all built on react-aria's press handling) focuses itself when pressed with the
-mouse. For a control that unmounts right after the press, such as a list item's × or a toast's Dismiss, focus then
-falls to `<body>` and the terminal silently stops receiving keystrokes.
-
-So give `preventFocusOnPress` to every pressable control in the sidebar, the toasts, the banners and the terminal's
-surroundings, unless its handler puts focus back on the terminal itself. A menu also needs it on its trigger, and on
-top of that react-aria moves focus back to the trigger when the menu closes. Build every "⋯"-style menu on
-`packages/ui/src/components/ActionMenu.tsx`, which handles both, rather than on a bare `Dropdown`.
-
-Nothing in the markup gives this away — a plain `<button>` never takes focus on click in WKWebView — so the defect
-only appears in the running page.
-
-Hiding a region with CSS (`hidden`, a `docked:hidden` variant) while focus is inside it drops focus to `<body>` the
-same way, with no event, and `preventFocusOnPress` does not help there: focus reaches a pane by Tab or by a click into
-an iframe. So every code path that hides a region able to hold focus — a toggle, a scrim, Escape, a breakpoint change
-— first hands focus to the terminal if the region contains `document.activeElement`. The docked panes already do this
-through `releaseFocus` in `packages/ui/src/layout/usePaneToggles.ts`; hide a new pane through that hook rather than
-beside it.
-
-Reordering does it too: React reorders keyed children by moving their DOM nodes, and moving the node that holds focus
-blurs it to `<body>`, so a keyboard user on a row loses their place whenever a live status update re-sorts the list.
-Render any list whose order can change while one of its rows may hold focus through `useFlip`
-(`packages/ui/src/sidebar/useFlip.ts`), which puts focus back after the move, rather than beside it.
-
-A wrapper that renders nothing once its last child is gone takes focus down with it, and a library's own rescue does
-not reach that case: react-aria's `useTagGroup` focuses its list element when the last tag is removed, but a list
-that unmounts in the same commit is gone before the effect runs, and one laid out with `display: contents` (as both
-tag groups in `packages/ui` are, to flow their tags into a row of the parent's) cannot be counted on to take focus. So
-move focus to a named element yourself, in the removal handler, rather than leave it to the library: `ProjectFilterTags`
-in `packages/ui/src/sidebar/ProjectFilter.tsx` hands it to `returnFocusTo` through `handFocusOff`
-(`packages/ui/src/components/handFocusOff.ts`) on the removal that empties the group, and `TagsInput` in
-`packages/ui/src/dialogs/TagsInput.tsx` hands it to its text input on every removal, a dialog being where focus on
-`<body>` costs Escape and Tab as well.
-
-## Inside a dialog, a focused control that unmounts or turns disabled takes Escape and Tab with it
-
-When the focused element is removed, WebKit and Chrome fire no `focusout` and focus falls to `<body>`. A dialog's
-Escape handling and Tab containment hang off focus being inside it, so both stop working. Whenever a dialog replaces
-content that can hold focus — a listing swapped for the next one, a queue moving on to its next item — put focus back
-with `useRefocusIfLost` from `packages/ui/src/dialogs/Dialog.tsx`, or pass the shared `Dialog` a `resetKey` naming the
-current item, which does it for you.
-
-No `blur` fires on that removal either, and closing a dialog unmounts the control holding focus, so a field that sends
-what was typed on blur sends nothing when its dialog closes from under it. Decide for such a field whether the edit is
-meant to be discarded there, or has to be sent on the way out.
-
-Do not switch a dialog to its next subject by re-keying it (`key={item.id}`): the remounted modal records the
-outgoing one's soon-detached element as its focus-restore target, so focus is lost again when it closes. Keep it
-mounted and reset the per-item state from `resetKey` instead (`useDialogAction(resetKey)` does that for the error and
-busy state).
-
-A control that stays mounted costs the same when it turns disabled: react-aria's `isDisabled` puts the native
-`disabled` attribute on the element, which blurs the control the user has just pressed. So a button disabled for
-the duration of its own action — the obvious way to keep a slow request from being sent twice — drops focus to
-`<body>` and takes the dialog's Escape and Tab with it until the action ends. Mark it `isPending` instead: that blocks
-press and hover, keeps the control focusable, and announces the pending state. Keep `isDisabled` for a control
-that is unavailable for a reason outside the action itself (a field not filled in yet), where focus is not on it.
-
-## Escape is taken above the React tree: a pane's listener, and react-aria's while a tooltip is open
-
-Two capture-phase `keydown` listeners run before React's own dispatch, so a React `onKeyDown` can neither be relied on
-to receive Escape nor hold on to it — `onKeyDownCapture` on a wrapper does not help, as React dispatches from its root
-container (`<body>` for anything portalled there), below both.
-
-The first is this project's own: while a drawer or a floating pane is open, `packages/ui/src/layout/usePaneToggles.ts`
-holds a capture-phase listener on `window` that dismisses the overlay. So a control inside a region marked
-`data-escape-scope` (the sidebar, the aside, the terminal pane, the top bar, the rail, the scrim) that needs Escape
-for itself is accounted for in that listener's own test instead (`holdsText`, which leaves the key to a text field
-that holds text), never guarded locally. A control in a popover or a dialog portalled to `<body>` sits outside every
-scope and is unaffected, which is the only reason the sidebar's project filter and the dialogs' fields never needed
-this. Check it where it shows: the listener is installed only while an overlay is up, so the symptom appears only
-below the layout breakpoint, with the pane as a drawer, or with a docked pane hidden and floated in on hover. A
-gallery scenario at a normal width, both panes docked, never reaches it.
-
-The second is react-aria's, and it is unconditional: while any tooltip is open, `useTooltipTrigger` holds a
-capture-phase listener on `document` that calls `stopPropagation()` on every Escape, whatever else was waiting for the
-key (react-aria 3.52.1, unchanged in 3.53.1). Every icon-only control here carries a tooltip through `TitledControl`,
-and a tooltip opens on keyboard focus as much as on hover, so one Tab inside any dialog or view reaches that state —
-when Escape does nothing somewhere, what predicts it is "a tooltip is open", not which control holds focus. A surface
-that dismisses itself from a React `onKeyDown` loses the key, and a `window` capture-phase listener is the only way
-out — which is what `useEscapeWhileTooltipOpen` (`packages/ui/src/dialogs/`) is: it closes whatever surface it is
-handed, dialog or not, and only while a tooltip is open. Call it rather than writing your own, and add nothing of your
-own to a surface that already calls it, every dialog included. Such a handler can only choose whether to act, never
-route the key onwards: once react-aria has swallowed it nothing can hand it back to the control that wanted it, which
-is why a combo box's suggestion list inside a dialog does not withdraw on Escape while a tooltip is open.
-
-## A key handler goes on a plain DOM element, not on a HeroUI or react-aria component
-
-react-aria routes a component's `onKeyDown` / `onKeyUp` through `useKeyboard`, which wraps the handler in
-`createEventHandler` and calls `stopPropagation()` for you once it returns, unless the handler calls
-`continuePropagation()` — stopping is deliberate there, not a bug. So a handler written for one key takes every
-keydown away from everything above it in the React tree: an Enter-to-save handed to a HeroUI `TextField` is enough to
-stop the Escape that closes the dialog around the field, and nothing warns — not the types, not a console message, not
-the suite. Put the handler on the plain DOM element the component renders instead: a HeroUI field's inner
-`InputGroup.Input` is a react-aria-components `Input`, which passes `onKeyDown` straight to the DOM, and `useKeyboard`
-installs no handler at all when it is given none, so moving it off the component costs nothing. When a handler
-genuinely has to sit on the component, call `continuePropagation()` on every path through it, the one that handled the
-key included.
-
-## A surface that stays usable while a dialog is open is marked a top layer before the dialog opens
-
-While a modal is open React Aria sets `inert` on everything outside it (`ariaHideOutside`) and dismisses it on a press
-outside it (`useInteractOutside`); both make an exception for an element carrying `data-react-aria-top-layer="true"` —
-and for the ancestors containing it — which is how HeroUI's own toast region stays usable over a dialog. So that
-marking is how a surface of this project's own is kept reachable there, but it counts only on an element that was
-already in the DOM when the dialog opened: the `MutationObserver` that `ariaHideOutside` watches later additions with
-skips anything added inside a subtree it has already hidden, and never looks at the marking on it. Keep the marked
-element mounted whatever the state therefore — empty, and a flex item of no height, when there is nothing to show — or
-portal it to `document.body` as the toast region does, and never mark it only while its content is on screen.
-
-The marking does not lift the surface over the modal's backdrop, which covers the whole viewport, so the two have to
-be ordered as well or the press lands on the backdrop. Lower the backdrop rather than raise the surface: React Aria
-puts its popover-level overlays (a menu, a select's list, a tooltip) at the same level as the backdrop and anchors
-them to the viewport's own bottom edge, knowing nothing about the window's chrome, so a surface raised above that
-level ends up over the lowest rows of a list where every press is swallowed — the marking makes React Aria ignore a
-press inside the surface, so such a press does not even dismiss what it covers. Having the marking without the
-ordering reads as a contradiction that sends a diagnosis the wrong way: the surface paints undimmed on top of the
-backdrop and still takes no pointer event at all.
 
 ## A single-line field hands its form the trimmed value
 
@@ -263,17 +141,12 @@ projects in `packages/ui/src/sidebar/Sidebar.tsx` do.
 
 ## An icon-only control also gets a tooltip, through `TitledControl`
 
-Every control that shows only an icon — a HeroUI `Button` with `isIconOnly`, a `CloseButton` or `Modal.CloseTrigger`,
-a menu trigger — has a HeroUI tooltip in addition to its `aria-label`. The user wants tooltips short: the tooltip says
-what the control does ("More actions"), while the `aria-label` carries whatever tells it apart from its neighbours for
-assistive technology ("Actions for session <title>" on each row's menu), so the two differ wherever the accessible
-name needs that context; `ActionMenu` already does this by default. The exception is a control inside a react-aria
-collection row, such as a tag's remove button, whose accessible name react-aria already composes from the button and
-the row through `aria-labelledby`: there the `aria-label` is the bare verb with no placeholder, or the row's own text
-is announced twice. Give it one by wrapping the control in `TitledControl` from
-`packages/ui/src/components/TitledControl.tsx`, as the window chrome's `ChromeButton` in
-`packages/ui/src/components/ChromeButton.tsx` does. Passing `title` to the HeroUI control itself does nothing: its
-react-aria base filters `title` out of the DOM props without a warning.
+Every control in `packages/ui` that shows only an icon — a `CloseButton` or a menu trigger as much as a HeroUI
+`Button` with `isIconOnly` — carries a HeroUI tooltip on top of its `aria-label`, and the two are not always the same
+text (the "An icon-only control: tooltip and `aria-label`" section of `docs/ui-accessibility.md`). Add the tooltip by
+wrapping the control in `TitledControl` from `packages/ui/src/components/TitledControl.tsx`, as the window chrome's
+`ChromeButton` in `packages/ui/src/components/ChromeButton.tsx` does. Passing `title` to the HeroUI control itself
+does nothing: its react-aria base filters `title` out of the DOM props without a warning.
 
 Any tooltip on a control takes this shape — the control directly inside HeroUI's `Tooltip`, as `TitledControl` does —
 never `Tooltip.Trigger`, which renders a focusable `role="button"` `div` around the control: an extra tab stop that
@@ -335,103 +208,25 @@ In the macOS app the top bar and the rail show the translucent window material (
 content panel" in `docs/product/window-layout.md`), whose colour shifts with whatever is behind the window. The user
 rejected a layout that put the text-heavy sidebar on it, and one that floated the content as a card with gutters of
 material around it. So nothing beyond an icon, an avatar or the breadcrumb's one line goes on the chrome; anything
-else belongs in the opaque content panel. A glyph or tint added to the chrome is measured against the material's
-measured colours (in the comment on the window's surfaces in `packages/ui/src/style.css`), not only against
-`--chrome`, which is just the browser's stand-in for it: the dark material is a grey far lighter than dark `--chrome`.
+else belongs in the opaque content panel. A glyph or tint that does go there is measured against the material itself,
+not only against `--chrome` (the "A glyph or tint on the window material" section of `docs/ui-accessibility.md`).
 
-## The UI meets WCAG 2.2 AA
+## Every control meets WCAG 2.2 AA, in both appearances
 
-Every control and view in `packages/ui` meets WCAG 2.2 level AA, checked in both the light and the dark appearance.
-The user has kept a few shortfalls on purpose, each marked by a comment at its code saying so; leave one that is
-marked as it is, and do not add a new exception without the user's say. Concretely:
+Every control and view in `packages/ui` is held to WCAG 2.2 level AA and checked in both the light and the dark
+appearance; passing in one of them is not passing. The rules to check one against, and the measured facts behind them,
+are `docs/ui-accessibility.md`. A few shortfalls are kept on purpose, each marked by a comment at its code saying so:
+leave a marked one as it is, and do not add a new exception without the user's say.
 
-- **Keyboard**: every interactive control is reachable from the keyboard and operable with Enter / Space. Tab is how it
-  is reached, except for a control inside the row of a react-aria collection that manages focus itself (a `GridList`, a
-  `Tree`): there the row is the tab stop and Tab moves past the whole list, while the arrow key that runs along the row
-  (`keyboardNavigationBehavior` defaults to `"arrow"`) moves between the row and its controls. That is the grid and tree
-  pattern, it meets this rule, and both the change list's row actions and the Files tree's chevron rely on it, so do not
-  give such a control a tab stop of its own. `preventFocusOnPress` only keeps a *mouse* press from taking focus; the
-  control still has to be reachable. Every button is HeroUI's `Button`; a native `<button>` is allowed only where a
-  custom button is needed that HeroUI's cannot be, with the reason in a comment there. A hand-built `role="button"`
-  element needs `tabIndex={0}` and its own Enter / Space handling. The terminal keeps Tab and Shift+Tab for the agent,
-  so F6 / Shift+F6 region cycling (`packages/ui/src/layout/useRegionCycle.ts`) is the only keyboard way out of it: every
-  new region of the window that holds controls — a pane, a panel, an overlay — is marked `data-region` and added to that
-  hook's `REGIONS` and `shown`, or F6 skips it and a keyboard user in the terminal has no way to reach it.
-- **Visible focus**: HeroUI controls draw their own focus ring. A hand-built focusable element that removes the
-  outline puts a ring back, never `outline-none` alone, and takes it from `useFocusVisibleProps`
-  (`packages/ui/src/components/useFocusVisibleProps.ts`): spread its props on the element and style with
-  `data-focus-visible:ring-2 data-focus-visible:ring-focus` (`group-data-focus-visible:` from a child). Never style
-  focus with CSS `:focus-visible` — no `focus-visible:` or `group-focus-visible:` variant, no
-  `:has(:focus-visible)` selector. Once the last focus came from a click, the app's WKWebView does not match it on an
-  element focused by script, even right after a key press, so every keyboard move made by script — F6 region
-  cycling, Tab inside a react-aria focus-trapped dialog — lands without a ring. Playwright's `webkit` matches it in
-  those cases, so only the packaged app shows the miss. A keyboard handler that moves focus itself calls react-aria's
-  `setInteractionModality("keyboard")` first when the handler sits on the window's capture phase and stops
-  propagation (react-aria tracks modality from a capture-phase listener on the document, which the key then never
-  reaches), or what it focuses draws no ring when the previous input was a pointer.
-- **Name**: every control has an accessible name — its visible text, or an `aria-label` when it has none. An icon
-  beside a name is `aria-hidden="true"`; an icon that is the only carrier of a meaning gets `role="img"` and an
-  `aria-label`. An element that takes an `aria-label` without being a control — a scrolling `div` or `pre` made
-  focusable with `tabIndex={0}` — also gets a role that can be named (`role="region"`): ARIA prohibits naming a
-  generic element, so the name may never be spoken.
-- **Roles and states**: a control that shows or hides a region carries `aria-expanded`; the selected row of a
-  hand-built list or tree carries `aria-current` (as the sidebar rows do), while HeroUI's `Tabs` and `ListBox` mark
-  their selection themselves with `aria-selected` and get no `aria-current` on top; state that changes without the
-  user acting (connection, a terminal problem) is announced from a `role="status"` element, an error from
-  `role="alert"`. A `role="status"` region meant to announce text that comes and goes stays mounted, empty when there
-  is nothing to say, and only its contents change: one rendered conditionally, already holding its text when it is
-  inserted, is not reliably announced (VoiceOver in WebKit among others). Even a region that stays mounted afterwards
-  is not announced for the text it was first rendered with; `StatusAnnouncer` defers its first write for that, so
-  announce a state with it. VoiceOver also drops a status written within about 300 ms of a focus move (a dialog
-  opening, say), so a surface that takes focus as it opens delays its first status write
-  (`StatusAnnouncer`'s `firstWriteDelayMs`). HeroUI's `Alert` renders no role at all, its name notwithstanding, so
-  an error that can appear in one after the user has moved on puts `role="alert"` on an element of your own inside
-  it.
-- **Contrast**: text at least 4.5:1 against its background (3:1 for large text); an icon or a state indicator at
-  least 3:1 against what it sits on, and a boundary too when it alone shows where a control is. Contrast is not a
-  reason to change how a HeroUI component looks: the user had the `style.css` overrides that gave every field and
-  checkbox a `--muted` border removed, because HeroUI's own are borderless, so never add a border, frame or outline
-  that HeroUI does not draw itself. A form control on a surface — in a dialog, a popover, a card — takes HeroUI's
-  `variant="secondary"` (`TextField`, `Input`, `Select`, `Checkbox` alike), HeroUI's own variant for that case: the
-  default variant leaves it blending into the surface in both appearances. A hand-built row or card that its content
-  already identifies takes HeroUI's separator colour for its outline (`border-separator`, as the focus-mode session
-  cards do), even though that is under 3:1; its selected state still has to reach 3:1 (`border-accent`).
-  HeroUI's text colours, on the other hand, do need checking: its stock light `--muted` (`text-muted`, its secondary
-  text) reached 4.5:1 only on the white surfaces and fell short on `--background` and `--default`, where its own
-  components put it, so `style.css` darkens the light value slightly at the token level. Even so, the `Tabs` list
-  dims a hovered tab to 70% opacity, which brings it down to about 3:1. So measure each text and indicator colour a
-  HeroUI component draws by default against what it actually sits on, in both appearances, rather than assuming it
-  passes, and fix a shortfall in that colour alone with a utility class on that part (Tailwind's utilities layer
-  overrides HeroUI's components layer without `!`), or at the token in `style.css` when the token itself falls
-  short. A fix at a token reaches only the rules that read that token, and HeroUI draws the same-looking text from
-  more than one rule, so grep its compiled stylesheet (`packages/ui/node_modules/@heroui/styles/dist/heroui.min.css`)
-  for the token and for the CSS property both, and look for the elements no rule of either kind matches: those fall
-  through to Tailwind's preflight, which derives the colour from the element's own `currentcolor` — a placeholder on
-  anything but HeroUI's four input classes is half the foreground over the field's own fill — so such text moves with
-  whatever fill the element sits on and a change at the token never reaches it. HeroUI's `--surface` equals its
-  `--overlay` in both appearances, so a surface-filled component (`Alert`, `Card`) inside a dialog or popover is set
-  apart only by its shadow, which does not show in the dark appearance; give it a fill of its own there (a tint such
-  as `bg-warning/10 shadow-none`).
-  A change to a colour token or a surface touches every screen, so its audit covers every gallery scenario in both
-  appearances (the user rejected a re-theme whose contrast had been spot-checked), and it measures what a pass over
-  text and glyphs misses: every fill — a chip, a tertiary button, a ghost button's hover — against the surface it sits
-  on, and an animated state at its faintest frame (an `animate-pulse` glyph sank to about 2:1; animate such a glyph
-  without lowering its opacity). A translucent fill (HeroUI's soft chip is 15% of its colour) is measured as drawn:
-  composite it over each surface it actually lands on — a selected and a hovered row, a dialog's `--overlay` — and
-  measure the label against that; measuring against the bare surface or the fill's own colour overstated one chip's
-  contrast and missed a 4.5:1 failure on selected rows. A region given a surface colour of its own needs HeroUI's
-  `--default`-filled controls checked on it in particular: the dark sidebar landed on `--default`'s own lightness and
-  every such control vanished. Override the whole `--default` family on that subtree, as `.sidebar-fills` and
-  `.control-fills` in `packages/ui/src/style.css` do, since `--default-hover` and `--default-soft` are computed on
-  `<html>` and `--default` alone does not reach them. Such an override moves the ground under the text HeroUI draws on
-  those fills too, so its audit covers every control the family reaches in that subtree, label and glyph, resting and
-  hovered — and the label's colour is not necessarily the foreground, because an enclosing HeroUI component may have
-  imposed one already: `.modal__body` applies `text-muted`, which everything inside a dialog's body inherits, controls
-  portalled in from elsewhere included. So a label that needs 4.5:1 on the new fill is given `text-foreground` there
-  explicitly rather than assumed to have it. Those texts also pin how far such a fill may go, so settle its lightness
-  from them first — the darkest label and the most muted one HeroUI puts on the family, in both appearances — rather
-  than picking the fill for how it looks and auditing afterwards, or each nudge for looks frees one label and leaves
-  another under 4.5:1.
-- **Not by colour alone**: a status or state that differs in colour also differs in glyph, shape or text.
-- **Motion**: an animation or transition that is not essential stops under `prefers-reduced-motion: reduce`
-  (Tailwind's `motion-safe:` / `motion-reduce:` variants).
+Three of those rules settle how the code is written rather than what a later check finds, and the general practice each
+one displaces leaves no cue to go looking:
+
+- Never style focus with CSS `:focus-visible` — not the `focus-visible:` or `group-focus-visible:` variant, not a
+  `:has(:focus-visible)` selector. A hand-built focusable element that removes the outline takes its ring from
+  `useFocusVisibleProps` instead (the "Never style focus with CSS `:focus-visible`" section of
+  `docs/ui-accessibility.md`).
+- A state that changes without the user acting is announced through `StatusAnnouncer`, never from a `role="status"`
+  element rendered together with its text (the "Announcing a change" section of `docs/ui-accessibility.md`).
+- A change to a colour token or a surface is a change to every screen: it is audited over every gallery scenario in
+  both appearances, and no colour a HeroUI component draws by default is assumed to pass (the "Auditing a change to a
+  colour token or a surface" and "HeroUI's own text colours" sections of `docs/ui-accessibility.md`).

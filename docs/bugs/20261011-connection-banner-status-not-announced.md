@@ -21,12 +21,12 @@ user is told nothing when the connection drops.
 
 ## Expected vs. actual
 
-- Expected: the connection dropping is announced. `docs/memory/writing-ui-components.md` states the rule and the
-  reason: "a state that arises without the user acting (connection, a terminal problem) is announced from a
-  `role="status"` element", and "a `role="status"` region meant to announce text that comes and goes stays mounted,
-  empty when there is nothing to say, and only its contents change: one rendered conditionally, already holding its
-  text when it is inserted, is not reliably announced (VoiceOver in WebKit among others)". The user confirmed on
-  the spot (2026-10-11) that this is worth filing.
+- Expected: the connection dropping is announced. The "Announcing a change" section of
+  `docs/ui-accessibility.md` states the rule and the reason: "state that changes without the user acting
+  (connection, a terminal problem) is announced from a `role="status"` element", and "a `role="status"` region meant
+  to announce text that comes and goes stays mounted, empty when there is nothing to say, and only its contents
+  change. One rendered conditionally, already holding its text when it is inserted, is not reliably announced
+  (VoiceOver in WebKit among others)". The user confirmed on the spot (2026-10-11) that this is worth filing.
 - Actual: the region is rendered conditionally with its text already in it, and no `StatusAnnouncer` defers the
   first write — the shape the rule rules out. What VoiceOver actually says is Unknown: step 3 was not run, as it
   needs a person listening.

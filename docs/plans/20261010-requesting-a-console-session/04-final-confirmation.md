@@ -30,7 +30,7 @@ was made to fail by renaming the project's directory away, which `term::launch` 
 the console session's own working directory stays reachable, so only the project sessions below it fail. With the
 user's own Octoboard running, keep the verification copy on the real bundle identifier — a re-identified copy never
 shows a window at all — and keep a scripted click off their window by confirming our own is frontmost before each
-one (see `docs/memory/building-and-launching-the-app-for-verification.md`).
+one.
 
 A defect found while confirming them, filed separately as it predates this topic and fires for any session: a
 relaunch that failed to launch re-stamped the session's archived time. Since fixed.

@@ -18,8 +18,9 @@ The darkest glyph pixel against the fill measures 3.26:1 in light and 4.79:1 in 
 
 ## Expected vs. actual
 
-- **Expected**: placeholder text meets 4.5:1 against the field's fill in both appearances. `docs/memory/writing-ui-components.md`
-  ("The UI meets WCAG 2.2 AA") holds every control and view in `packages/ui` to AA in both appearances, with text at least 4.5:1.
+- **Expected**: placeholder text meets 4.5:1 against the field's fill in both appearances. `docs/ui-accessibility.md`
+  ("Conformance level and exceptions") holds every control and view in `packages/ui` to WCAG 2.2 AA in both
+  appearances, and its "Thresholds" section puts text at least 4.5:1 against its background.
 - **Actual**: 3.26:1 in light; 4.79:1 in dark, which passes.
 
 ## Environment

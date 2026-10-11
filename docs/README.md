@@ -126,6 +126,13 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   each agent and the conditions that come with it, each agent's own folder-trust confirmation (when it appears, how it
   reads and is accepted, and where the agent records the trust), the rules for writing into a running session, and
   where each keeps a session's conversation record and what moving it to another config directory takes.
+- [UI accessibility standard](ui-accessibility.md) — the WCAG 2.2 AA bar `packages/ui` is held to and how to check a
+  control or view against it, in both appearances: keyboard access (Tab, the exception for a react-aria collection that
+  manages its own focus, F6 as the way out of the terminal), visible focus and why it never uses CSS `:focus-visible` in
+  the app's WKWebView, accessible names, including the one an icon-only control needs beside its tooltip, roles and
+  states and the status region that has to stay mounted, contrast (thresholds, measuring HeroUI's own colours, where a
+  fix belongs, auditing a token or surface change, a region with a surface of its own and a glyph on the window
+  material), colour never the only carrier, motion, and the shortfalls the user has kept on purpose.
 
 ## Code
 
@@ -173,29 +180,34 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   rather than from a capture alone, macOS's own autocorrect mangling scripted typing, and which checks need a person
   (input methods, reduced motion).
 - [Writing UI components](memory/writing-ui-components.md) — conventions for `packages/ui` components: why a component
-  HeroUI 3 already provides is used rather than hand-built, where to check what it provides, and what a justified
-  hand-built one is built on and where its reason is written, why a HeroUI control pressed with the mouse takes
-  keyboard focus off the terminal, when `preventFocusOnPress` is needed, and why "⋯" menus are built on `ActionMenu`,
-  why a dialog must not lose focus to `<body>` when a focused control unmounts or turns disabled, so its subject is
-  switched with a reset key rather than by re-keying it and an action that takes seconds marks its button pending
-  rather than disabled, and why no `blur` fires on that removal either, so a field that saves on losing focus has to
-  decide what closing the dialog means, why nothing in the React tree gets Escape first — a pane's own `window`
-  listener, and react-aria's while any tooltip is open — why a key handler goes on a plain DOM element rather than on
-  a HeroUI or react-aria component, which swallows every key it is handed a handler for, that a single-line field
-  hands its form the trimmed value, why a Tailwind class name has to stand in the source as literal text, why a state
-  of your own on a react-aria-components element needs a `data-*` name it does not write itself, why every icon-only
-  control also gets a tooltip through `TitledControl`, how user-facing text goes through the message catalog (`useT`
-  over the module-level `t()`, a helper taking the translator, `PlainMessageKey` tables, placeholders and plural
-  messages instead of joined fragments), how layout follows the reading direction (logical utilities, mirrored
-  directional icons, two-glyph chevrons, `dir` on paths and typed names, `docked:rtl:` twins), why only icon-only
-  chrome sits on the translucent window material and text goes on the opaque panel, and the WCAG 2.2 AA bar the UI is
-  held to (keyboard — Tab, except inside the row of a react-aria collection that manages its own focus, where the row
-  is the tab stop and an arrow key reaches the controls in it — visible focus, names, roles and states (`aria-current`
-  only on hand-built rows, a status region kept mounted so what appears in it is announced), contrast — auditing every
-  gallery scenario in both themes, fills against their surface and animations at their faintest frame, overriding
-  HeroUI's whole `--default` family on a region with its own surface and then auditing the text HeroUI draws on those
-  fills, which an enclosing component may have muted already, which token an outline meant to be seen is built from,
-  and why HeroUI's own text colours are measured rather than trusted — colour, motion).
+  HeroUI 3 already provides is used rather than hand-built, where to check what it provides, which overrides on one are
+  allowed (a colour fix, never a border HeroUI does not draw itself; layout and sizing) and what a justified hand-built
+  one is built on and where its reason is written, that a single-line field hands its form the trimmed value and that
+  what is wrong with one field shows under that field from the first submit on, why a state of your own on a
+  react-aria-components element needs a `data-*` name it does not write itself, where a HeroUI `ListBox` or `Tree`'s
+  padding and fade go, why a Tailwind class name has to stand in the source as literal text and why a `docked:` utility
+  loses to an `sm:` or `rtl:` twin, dimming a region with a veil rather than `opacity`, why every icon-only control also
+  gets a tooltip and the one shape a tooltip takes (the control directly inside HeroUI's `Tooltip` through
+  `TitledControl`, never `Tooltip.Trigger`, with `IndicatorTooltip` for a non-control indicator), how user-facing text
+  goes through the message catalog (`useT` over the module-level `t()`, a helper taking the translator,
+  `PlainMessageKey` tables, placeholders and plural messages instead of joined fragments), how layout follows the
+  reading direction (logical utilities, mirrored directional icons, two-glyph chevrons, `dir` on paths and typed names,
+  `docked:rtl:` twins), why only icon-only chrome sits on the translucent window material and text goes on the opaque
+  panel, and the WCAG 2.2 AA bar in both appearances, the shortfalls kept on purpose being left alone, with the three
+  rules that decide how the code is written stated there — the focus ring taken from `useFocusVisibleProps` rather than
+  CSS `:focus-visible`, a status announced through `StatusAnnouncer`, and a colour-token or surface change audited
+  across every gallery scenario — and the accessibility standard itself cited for the rest.
+- [Focus and key handling in the UI](memory/focus-and-key-handling-in-the-ui.md) — where keyboard focus goes and who
+  receives a key in `packages/ui`: why a HeroUI control pressed with the mouse takes focus off the terminal, when
+  `preventFocusOnPress` is needed and why "⋯" menus are built on `ActionMenu`, the other ways focus falls to `<body>` (a
+  region hidden with CSS, a reordered list, a wrapper that renders nothing once its last child is gone) and the hooks
+  that put it back, why a dialog loses its Escape and its Tab containment when a focused control unmounts or turns
+  disabled — so its subject is switched with a reset key rather than by re-keying it, and an action that takes seconds
+  marks its button pending rather than disabled — and why no `blur` fires on that removal either, why nothing in the
+  React tree gets Escape first (a pane's own `window` listener, and react-aria's while any tooltip is open), why a key
+  handler goes on a plain DOM element rather than on a HeroUI or react-aria component, which swallows every key it is
+  handed a handler for, and how a surface that has to stay usable while a dialog is open is marked a top layer and
+  ordered against the backdrop.
 - [Reading daemon state in the UI](memory/reading-daemon-state-in-the-ui.md) — why a map read through
   `useDaemonStore` has a new identity after every daemon event of its kind, so an effect or memo meant to fire on one
   change depends on the resolved values it reads and never on the map, and the derivations that do take the map.

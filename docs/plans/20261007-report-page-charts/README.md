@@ -63,8 +63,7 @@ interaction.
 - **Development notes**: everything that comes into the frame from a page is untrusted data. The page contract and its
   isolation are described in the report panel's product doc and must stay true. Keep the verification to the chart
   path; the isolation probes were done once already and only the chart path is new.
-- **Reference docs**: `docs/product/report-panel.md`, `docs/memory/building-and-launching-the-app-for-verification.md`,
-  `docs/memory/verifying-the-desktop-ui.md`.
+- **Reference docs**: `docs/product/report-panel.md`.
 
 ## Open
 

@@ -88,6 +88,8 @@ At delivery:
 
 ### This project
 
-(None yet. Project-specific steps are written here one per entry, anchored on the step names above, e.g. "After 'Static checks': ..." or "Skip condition for 'Static checks': ...".)
+- Within "Documentation update": `docs/ui-accessibility.md`, the UI's accessibility standard, has no writer subagent
+  of its own — you maintain it yourself, from what the change turned up and from what a writer subagent hands back as
+  belonging to it. Skip it when this round's changes touch nothing it states.
 
 <!-- setup-agent:workflow:end -->

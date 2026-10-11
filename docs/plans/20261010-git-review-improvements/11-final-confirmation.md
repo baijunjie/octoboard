@@ -149,6 +149,3 @@ renamed with nothing else changed. What is left needs the real window or a real 
 - The filter field's composition guard stops a `keydown` in the capture phase while a composition is in flight, so
   what the real-input check exercises is that guard, in the packaged app's WKWebView.
 
-**Reference docs**
-
-- `docs/memory/building-and-launching-the-app-for-verification.md`, `docs/memory/verifying-the-desktop-ui.md`
