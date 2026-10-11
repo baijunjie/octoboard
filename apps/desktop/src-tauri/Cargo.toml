@@ -76,15 +76,17 @@ notify-rust = "=4.11.7"
 # far more than the version.
 image = { version = "=0.25.8", default-features = false }
 # For the `applicationShouldTerminate:` override in `exit.rs` that catches the Dock icon's own Quit
-# (see the comment there), and in `background.rs` for hiding and unhiding the app, the Dock badge,
-# the window's Cmd+H and the notification that the app became active. Pinned to the exact versions
+# (see the comment there), in `background.rs` for hiding and unhiding the app, the Dock badge, the
+# window's Cmd+H and the notification that the app became active, and in `permissions.rs` for the
+# System Settings deep link `NSWorkspace` opens. Pinned to the exact versions
 # already resolved transitively through `tauri-runtime-wry`, so promoting them to direct
 # dependencies does not shift anything else this crate depends on.
 objc2 = "=0.6.4"
-objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSApplication", "NSDockTile", "NSResponder", "NSWindow"] }
-# For the system's preferred languages in `lib.rs`, the notification observer in `background.rs`
-# and the content rule list in `page_isolation.rs`, pinned like `objc2-app-kit` above.
-objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "block2", "NSArray", "NSLocale", "NSNotification", "NSOperation", "NSString"] }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSApplication", "NSDockTile", "NSResponder", "NSWindow", "NSWorkspace"] }
+# For the system's preferred languages in `lib.rs`, the notification observer in `background.rs`,
+# the content rule list in `page_isolation.rs`, and in `permissions.rs` the Accessibility prompt's
+# options dictionary and the System Settings URL, pinned like `objc2-app-kit` above.
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "block2", "NSArray", "NSDictionary", "NSLocale", "NSNotification", "NSOperation", "NSString", "NSURL", "NSValue"] }
 # For the content rule list `page_isolation.rs` puts on the window's webview, and the block its
 # compile reports back through; `WebviewWindowBuilder::with_webview_configuration` takes this
 # crate's type. Pinned like `objc2-app-kit` above, `block2` to the version already resolved

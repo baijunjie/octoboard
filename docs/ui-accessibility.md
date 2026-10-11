@@ -125,6 +125,14 @@ element, an error from `role="alert"`.
   `StatusAnnouncer` defers its first write for that, so announce a state with it.
 - VoiceOver also drops a status written within about 300 ms of a focus move (a dialog opening, say), so a surface that
   takes focus as it opens delays its first status write (`StatusAnnouncer`'s `firstWriteDelayMs`).
+- A state whose visible form is durable copy rather than a placeholder — the sentence saying where a macOS permission
+  stands, in `packages/ui/src/settings/PermissionsSection.tsx` — announces from a `role="status"` on that copy itself
+  instead. `StatusAnnouncer` is `sr-only` and expects the visible form to be `aria-hidden`, which this cannot be: it
+  is the row's own description, and a reader going through the row statically has to reach it. Only the first text is
+  lost that way, and that is the state as the surface opened, which the user is reading anyway; every later change —
+  the one that matters here, made in System Settings and picked up on the way back — lands in a region that has been
+  mounted all along. Put the subject inside the region when several of them can change independently: `role="status"`
+  is atomic, so a bare "Granted." names nothing.
 - HeroUI's `Alert` renders no role at all, its name notwithstanding. An error that can appear in one after the user has
   moved on puts `role="alert"` on an element of your own inside it.
 

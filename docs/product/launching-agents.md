@@ -142,6 +142,11 @@ hook" warning; the session ended on an API error before status could be observed
 Which directory a session holds, and the refusal of a launch whose directory no longer exists, are described in "Agent
 config directories" in `docs/product/consoles-and-projects.md`.
 
+**What a session may do under macOS's privacy rules is Octoboard's, not the agent's.** macOS attributes a privacy
+request made by a session's process — taking a screenshot, driving another application's interface — to Octoboard, so
+the session acts under Octoboard's own grants and a grant the user gave some other application does not count. The two
+permissions this concerns are granted ahead of time in Settings; see "Permissions" in `docs/product/settings.md`.
+
 **Whether an agent is installed at all is worked out once, not per launch.** Right after the daemon starts it takes
 one login-shell snapshot of its own — the same kind described above — resolves each agent's binary against that
 snapshot's `PATH`, and reads what each agent's default account resolves to from it (see "Agent config directories" in

@@ -40,6 +40,10 @@ export interface PlatformAdapter {
   /** Opening an address in the user's own browser (or mail client), for a link the UI shows but
    * must not navigate its own window to. */
   readonly links?: LinkCapability;
+  /** The macOS privacy permissions an agent's child process can need, which the UI lets the user
+   * grant on purpose; present only under a desktop shell, which answers `undefined` from `status`
+   * when it is not running on macOS. */
+  readonly macosPermissions?: MacosPermissionsCapability;
 }
 
 export interface ExitHandlers {
@@ -158,6 +162,28 @@ export interface LinkCapability {
    * platform reports a refusal, by rejecting: a browser cannot tell a blocked popup from an opened
    * one, and resolves either way. */
   open(url: string): Promise<void>;
+}
+
+export type MacosPermissionKind = "screenRecording" | "accessibility";
+
+export type MacosPermissionsStatus = Record<MacosPermissionKind, boolean> & {
+  /** Whether Screen Recording was already granted when this process started, which is the only
+   * grant it can act on: macOS hands the capability out at launch, so `screenRecording` without
+   * this one means the user has granted it and has yet to restart the app. */
+  screenRecordingAtLaunch: boolean;
+};
+
+export interface MacosPermissionsCapability {
+  /** The current grants, or `undefined` where the shell is not running on macOS. Only reads, and
+   * never shows a system prompt, so it is safe to poll. */
+  status(): Promise<MacosPermissionsStatus | undefined>;
+  /** The one call that shows the system prompt, with whether the permission is granted once it is
+   * out of the way. Screen Recording resolves only after the user has answered; Accessibility's
+   * dialog is raised asynchronously and is not granted in place, so it resolves `false` at once,
+   * while that dialog is still coming up. */
+  request(kind: MacosPermissionKind): Promise<boolean>;
+  /** Opens the System Settings pane for `kind`. */
+  openSystemSettings(kind: MacosPermissionKind): Promise<void>;
 }
 
 /** Picks the implementation once, at startup, from the environment the page is running in. */

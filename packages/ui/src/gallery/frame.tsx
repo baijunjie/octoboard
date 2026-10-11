@@ -48,12 +48,23 @@ const { DaemonFailedMessage, NoAddressMessage, StartupScreen } = startup;
 
 /** The browser platform, with the desktop window's `windowChrome` added while the URL says `chrome=1`,
  * so what the desktop app alone offers (the window shortcuts among it, ⌃Tab between console
- * sessions) can be driven in the gallery. It also puts the top bar's drag region on, and nothing
- * else native. */
+ * sessions) can be driven in the gallery. It also puts the top bar's drag region on. The macOS
+ * privacy grants are stubbed from the scenario's `macosPermissions`, there being no other way to
+ * look at those rows than to really change a system setting; nothing else native is offered. */
 function galleryPlatform(): ReturnType<typeof selectPlatform> {
   const platform = selectPlatform();
-  if (params.get("chrome") !== "1") return platform;
-  return { ...platform, windowChrome: { leftInset: () => 0, subscribe: () => () => {} } };
+  const chromed =
+    params.get("chrome") === "1" ? { ...platform, windowChrome: { leftInset: () => 0, subscribe: () => () => {} } } : platform;
+  const grants = scenario?.macosPermissions;
+  if (!grants) return chromed;
+  return {
+    ...chromed,
+    macosPermissions: {
+      status: () => (grants === "unreadable" ? Promise.reject(new Error("gallery: the shell has no such command")) : Promise.resolve(grants)),
+      request: () => Promise.resolve(false),
+      openSystemSettings: () => Promise.resolve(),
+    },
+  };
 }
 
 function Crash(): never {

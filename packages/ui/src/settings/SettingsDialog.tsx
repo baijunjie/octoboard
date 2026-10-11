@@ -1,5 +1,5 @@
 import { Modal, Tabs } from "@heroui/react";
-import { Bell, FolderCheck, GitBranch, KeyRound, Settings2, type LucideIcon } from "lucide-react";
+import { Bell, FolderCheck, GitBranch, KeyRound, Settings2, ShieldCheck, type LucideIcon } from "lucide-react";
 import React, { useCallback, useRef, useState } from "react";
 
 import { TitledControl } from "../components/TitledControl";
@@ -12,6 +12,7 @@ import { AgentAccountsSection } from "./AgentAccountsSection";
 import { GeneralSection } from "./GeneralSection";
 import { GitSection } from "./GitSection";
 import { NotificationsSection } from "./NotificationsSection";
+import { PermissionsSection } from "./PermissionsSection";
 import { SettingsFocusContext } from "./useSectionRefocus";
 import { TrustedFoldersSection } from "./TrustedFoldersSection";
 
@@ -20,6 +21,7 @@ const SECTIONS = [
   { id: "git", label: "settings.section.git", Icon: GitBranch, Content: GitSection },
   { id: "accounts", label: "settings.section.accounts", Icon: KeyRound, Content: AgentAccountsSection },
   { id: "trusted-folders", label: "settings.section.trustedFolders", Icon: FolderCheck, Content: TrustedFoldersSection },
+  { id: "permissions", label: "settings.section.permissions", Icon: ShieldCheck, Content: PermissionsSection },
   { id: "notifications", label: "settings.section.notifications", Icon: Bell, Content: NotificationsSection },
 ] as const satisfies readonly { id: string; label: PlainMessageKey; Icon: LucideIcon; Content: () => React.ReactElement }[];
 

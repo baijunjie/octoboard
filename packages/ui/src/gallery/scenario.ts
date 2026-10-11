@@ -1,3 +1,4 @@
+import type { MacosPermissionsStatus } from "../platform";
 import type { Agent, DirEntry, MessageParams } from "../protocol";
 import type { FixtureError, FixtureFiles } from "./fixtures/projectFiles";
 import type { GroupTitle } from "./fixtures/groups";
@@ -73,6 +74,12 @@ export interface Scenario {
   /** The repository every project's Git mode shows (`get_project_source`, `list_project_changes`,
    * `read_project_change`); without it, `SAMPLE_GIT`; `null` for a project in no repository. */
   git?: FixtureGit | null;
+  /** What the shell answers about the macOS privacy grants, for the Permissions section.
+   * `"unreadable"` is a shell that refuses the read; without this the browser platform's own
+   * answer stands, which is the section's "only in the macOS app" line. A stub `request` always
+   * answers that the permission was not granted, which is how a scenario reaches the row's System
+   * Settings guidance — nothing in a browser can raise a real prompt. */
+  macosPermissions?: MacosPermissionsStatus | "unreadable";
   steps?: Step[];
   /** Renders the file viewer over the subjects `subjects` builds, in place of the app; built only
    * when the scenario opens. `loadDelay` shows each one's loading state for that many milliseconds

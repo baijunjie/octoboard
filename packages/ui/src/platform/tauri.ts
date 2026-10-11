@@ -4,6 +4,8 @@ import type {
   ClipboardCapability,
   ExitCapability,
   LinkCapability,
+  MacosPermissionsCapability,
+  MacosPermissionsStatus,
   NativeWindowCapability,
   NotificationCapability,
   PlatformAdapter,
@@ -27,6 +29,7 @@ export function tauriPlatform(): PlatformAdapter {
     statusItem: tauriStatusItem(),
     clipboard: tauriClipboard(),
     links: tauriLinks(),
+    macosPermissions: tauriMacosPermissions(),
   };
 }
 
@@ -204,6 +207,25 @@ function tauriLinks(): LinkCapability {
     async open(url) {
       const { open } = await import("@tauri-apps/plugin-shell");
       await open(url);
+    },
+  };
+}
+
+/** Present whatever the OS: the shell's `status` answers `undefined` off macOS, which is how that
+ * is reported. */
+function tauriMacosPermissions(): MacosPermissionsCapability {
+  return {
+    async status() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return (await invoke<MacosPermissionsStatus | null>("macos_permissions_status")) ?? undefined;
+    },
+    async request(kind) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<boolean>("macos_request_permission", { kind });
+    },
+    async openSystemSettings(kind) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("macos_open_privacy_settings", { kind });
     },
   };
 }

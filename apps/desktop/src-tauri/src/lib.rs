@@ -1,9 +1,10 @@
 //! The desktop application's Rust-side shell: launch `octoboardd` as a sidecar and hand the window
 //! the port it printed (`sidecar.rs`), the native menu bar (`menu.rs`), the window's remembered
 //! size and position (`window_state.rs`), the exit-confirmation flow (`exit.rs`), running in the
-//! background once the window is closed (`background.rs`) behind a menu bar icon (`tray.rs`), and
-//! the webview's content rule list that keeps report pages off the web (`page_isolation.rs`,
-//! macOS). Everything after the window loads talks to the daemon over WebSocket only, per the
+//! background once the window is closed (`background.rs`) behind a menu bar icon (`tray.rs`), the
+//! macOS privacy permissions the agents in its terminals can need (`permissions.rs`), and the
+//! webview's content rule list that keeps report pages off the web (`page_isolation.rs`, macOS).
+//! Everything after the window loads talks to the daemon over WebSocket only, per the
 //! architectural rule in "Why the daemon is split out" in `docs/architecture.md` — no Tauri IPC
 //! command carries daemon traffic, so this process reads the sidecar's stdout itself and bakes the
 //! port into the window's URL as a `?port=` query parameter *before* creating the window, instead
@@ -15,13 +16,15 @@
 //! `set_tray_menu` (in `tray.rs`) is the text of the menu bar icon's menu, with the opaque ids of
 //! the sessions it lists, which `tray-session-chosen` hands back. That is display text the UI words
 //! from the sessions it already shows, as it does the Dock badge's count; the shell never asks the
-//! daemon anything.
+//! daemon anything. The three in `permissions.rs` ask the system instead: a read of this process's
+//! own privacy grants, the one prompt that asks the user for one, and a System Settings deep link.
 
 mod background;
 mod exit;
 mod menu;
 #[cfg(target_os = "macos")]
 mod page_isolation;
+mod permissions;
 mod sidecar;
 mod tray;
 mod window_state;
@@ -49,6 +52,9 @@ pub(crate) const MAIN_WINDOW_LABEL: &str = "main";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Before anything the user can act through: see the function's own doc comment.
+    permissions::capture_launch_state();
+
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         // Carries no daemon traffic either: the frontend asks for a notification, the plugin
@@ -65,7 +71,10 @@ pub fn run() {
             confirm_quit,
             set_menu_labels,
             tray::set_tray_menu,
-            background::bring_to_front
+            background::bring_to_front,
+            permissions::macos_permissions_status,
+            permissions::macos_request_permission,
+            permissions::macos_open_privacy_settings
         ])
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();

@@ -105,6 +105,21 @@ Virtualized or not, a `Select` whose items show `ListBox.ItemIndicator` needs `p
 popover's styles give its items `px-2.5`, which overrides the `pe-7` `ListBox.Item` reserves for the check mark, so a
 long label otherwise runs under the mark.
 
+## A `Tabs` panel is mounted only while its own tab is selected
+
+A tab panel in `packages/ui` exists only while its tab is the selected one: react-aria-components' `TabPanel`
+returns `null` otherwise, and HeroUI's `Tabs.Panel` passes its props straight through to it, so `shouldForceMount`
+is reachable but no `Tabs` here passes it (`SettingsDialog`, `ProjectBrowser`, `GitView`), and none should. A
+panel's state, its refs and the effects hanging off them are thrown away on every tab switch, and a dialog's
+panels again on every close.
+
+So state held inside a panel is worth only "for as long as this section is on screen" — a scroll position, a
+half-typed field, an expanded row. Anything the section must not lose is derived afresh instead, from the shell or
+the daemon, or from state hoisted above the `Tabs`, and never remembered in the panel. Nothing catches the miss: a
+unit test mounts the panel on its own and never switches tabs, and neither does the obvious click-through. The
+Permissions section's "restart for this to take effect" line was first built from React state remembering the
+grant it had watched arrive, and died on the first click to another section.
+
 ## A Tailwind class name has to stand in the source as literal text
 
 Tailwind 4 reads the source as plain text and emits a utility only for a class name it can find spelled out there, so

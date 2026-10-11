@@ -51,7 +51,7 @@ Per-package commands are in that package's doc.
   [`apps/daemon/PROTOCOL.md`](../apps/daemon/PROTOCOL.md).
 - [`apps/desktop/`](../apps/desktop/README.md) — `@octoboard/desktop`, the Tauri 2 shell of the macOS desktop
   application: window (with its overlay titlebar, translucent native material and remembered frame), native menu
-  (labelled in the UI's language), `octoboardd` sidecar, exit flow, background running behind a menu bar icon and
+  (labelled in the UI's language), `octoboardd` sidecar, exit flow, background running behind a menu bar icon, the macOS privacy-permission grants the Settings dialog offers, and
   release scripts. It loads the UI from `packages/ui/` and has no UI of its own; a client of `apps/daemon/` over
   WebSocket only.
 - [`apps/ios/`](../apps/ios/README.md) — placeholder for the native iOS client; no content, not a workspace package.

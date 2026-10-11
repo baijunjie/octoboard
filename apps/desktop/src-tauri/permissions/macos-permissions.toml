@@ -1,0 +1,8 @@
+# A custom permission for the app's own macOS privacy-permission commands; see
+# `exit-lifecycle.toml` for why an app-defined command needs a file like this.
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-macos-permissions"
+description = "Allows the frontend to read the state of the macOS Screen Recording and Accessibility permissions, to raise the system prompt for one, and to open its System Settings pane."
+commands.allow = ["macos_permissions_status", "macos_request_permission", "macos_open_privacy_settings"]

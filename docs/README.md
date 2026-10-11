@@ -90,8 +90,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   where it is chosen, what follows it (down to the terminal's palette, its 4.5:1 minimum contrast, and the native
   window's own appearance), where the choice is kept, and why a report page stays on a light surface either way.
 - [Settings](product/settings.md) — the Settings dialog: how it opens (the rail, and the macOS menu's Settings… /
-  ⌘, and when that is ignored), how it closes and where focus goes, its General (Appearance and Language), Git, Agent
-  accounts, Trusted folders and Notifications sections.
+  ⌘, and when that is ignored), how it closes and where focus goes, its General (Appearance, Language and the default
+  clone directory), Git, Agent accounts, Trusted folders, Permissions and Notifications sections.
 - [Language](product/language.md) — the 17 offered languages and why they are ordered by tag, English as the fallback,
   the default picked from the system's languages on the first launch and kept from then on, the language chosen in
   Settings, how the system's languages map onto the list, what follows the current language and what does not (report
@@ -136,7 +136,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   manages its own focus, F6 as the way out of the terminal), visible focus and why it never uses CSS `:focus-visible` in
   the app's WKWebView and which moves made by script have to set the modality themselves, accessible names, including
   the one an icon-only control needs beside its tooltip, roles and states — the status region that has to stay mounted,
-  a visual heading being a heading element, and the one `main` the content panel always holds — contrast (thresholds, measuring HeroUI's own colours, where a
+  and the durable visible copy that carries its own instead, a visual heading being a heading element, and the one
+  `main` the content panel always holds — contrast (thresholds, measuring HeroUI's own colours, where a
   fix belongs, auditing a token or surface change, a region with a surface of its own and a glyph on the window
   material), colour never the only carrier, motion, and the shortfalls the user has kept on purpose.
 
@@ -191,7 +192,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   one is built on and where its reason is written, that a single-line field hands its form the trimmed value and that
   what is wrong with one field shows under that field from the first submit on, why a state of your own on a
   react-aria-components element needs a `data-*` name it does not write itself, where a HeroUI `ListBox` or `Tree`'s
-  padding and fade go, why a Tailwind class name has to stand in the source as literal text and why a `docked:` utility
+  padding and fade go, that a `Tabs` panel is mounted only while its own tab is selected, so nothing a section must
+  not lose is held inside it, why a Tailwind class name has to stand in the source as literal text and why a `docked:` utility
   loses to an `sm:` or `rtl:` twin, dimming a region with a veil rather than `opacity`, why every icon-only control also
   gets a tooltip and the one shape a tooltip takes (the control directly inside HeroUI's `Tooltip` through
   `TitledControl`, never `Tooltip.Trigger`, with `IndicatorTooltip` for a non-control indicator), how user-facing text
