@@ -12,10 +12,13 @@ import { SettingRow } from "./SettingRow";
 
 /** The directory a `git` association clones into when none is named (see `Settings.default_clone_dir`
  * in protocol.ts). The text is sent when the field loses focus or Enter is pressed, and a directory
- * picked with Browse is sent at once; blanking the field goes back to the built-in default. Once a
- * send is answered the field shows the daemon's value again: the normalised form of whatever was
- * typed, written with the daemon host's home directory as `~` (which the daemon expands again when
- * it is sent back), with the full path as the tooltip whenever the two differ. */
+ * picked with Browse is sent at once; blanking the field goes back to the built-in default. Escape
+ * is the one way out that sends nothing: it closes Settings from under the field, which takes the
+ * input away without its ever losing focus, so what was typed is discarded — which is what Escape
+ * is taken to mean here. Once a send is answered the field shows the daemon's value again: the
+ * normalised form of whatever was typed, written with the daemon host's home directory as `~`
+ * (which the daemon expands again when it is sent back), with the full path as the tooltip whenever
+ * the two differ. */
 export function CloneDirSetting(): React.ReactElement {
   const t = useT();
   const { request, toastError } = useDaemon();
@@ -56,14 +59,20 @@ export function CloneDirSetting(): React.ReactElement {
               draftField.onBlur();
               save(draft);
             }}
-            onKeyDown={(event) => event.key === "Enter" && !isImeKey(event.nativeEvent) && save(draft)}
             className="min-w-0 flex-1"
           >
             <InputGroup title={stored === storedFull ? undefined : storedFull}>
               <InputGroup.Prefix>
                 <Folder size={14} aria-hidden />
               </InputGroup.Prefix>
-              <InputGroup.Input dir="ltr" className="font-mono" placeholder={t("settings.cloneDir.placeholder")} />
+              {/* The key handler is on the input rather than on `TextField`, which stops every key it is
+                  handed a handler for: Escape would never reach the dialog around the field. */}
+              <InputGroup.Input
+                dir="ltr"
+                className="font-mono"
+                placeholder={t("settings.cloneDir.placeholder")}
+                onKeyDown={(event) => event.key === "Enter" && !isImeKey(event.nativeEvent) && save(draft)}
+              />
             </InputGroup>
           </TextField>
           {/* Not taking focus on a mouse press keeps the field from losing it, and so from sending

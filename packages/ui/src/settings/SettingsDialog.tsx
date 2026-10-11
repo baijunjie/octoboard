@@ -3,6 +3,7 @@ import { Bell, FolderCheck, GitBranch, KeyRound, Settings2, type LucideIcon } fr
 import React, { useCallback, useRef, useState } from "react";
 
 import { TitledControl } from "../components/TitledControl";
+import { dialogAround } from "../dialogs/dialogElement";
 import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
@@ -49,7 +50,7 @@ export function SettingsDialog({
   const selectedRef = useRef<HTMLDivElement | null>(null);
   const focusedOnOpen = useRef(false);
   const markerRef = useRef<HTMLSpanElement>(null);
-  useEscapeWhileTooltipOpen(markerRef, onClose);
+  useEscapeWhileTooltipOpen(() => dialogAround(markerRef), onClose);
 
   // HeroUI's tabs build their collection in a first pass before the tab elements exist, so the
   // selected tab is not in `selectedRef` yet when an effect on mount runs. Focus it as it attaches.

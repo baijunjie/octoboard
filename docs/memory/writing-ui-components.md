@@ -80,6 +80,10 @@ content that can hold focus — a listing swapped for the next one, a queue movi
 with `useRefocusIfLost` from `packages/ui/src/dialogs/Dialog.tsx`, or pass the shared `Dialog` a `resetKey` naming the
 current item, which does it for you.
 
+No `blur` fires on that removal either, and closing a dialog unmounts the control holding focus, so a field that sends
+what was typed on blur sends nothing when its dialog closes from under it. Decide for such a field whether the edit is
+meant to be discarded there, or has to be sent on the way out.
+
 Do not switch a dialog to its next subject by re-keying it (`key={item.id}`): the remounted modal records the
 outgoing one's soon-detached element as its focus-restore target, so focus is lost again when it closes. Keep it
 mounted and reset the per-item state from `resetKey` instead (`useDialogAction(resetKey)` does that for the error and
@@ -112,12 +116,26 @@ The second is react-aria's, and it is unconditional: while any tooltip is open, 
 capture-phase listener on `document` that calls `stopPropagation()` on every Escape, whatever else was waiting for the
 key (react-aria 3.52.1, unchanged in 3.53.1). Every icon-only control here carries a tooltip through `TitledControl`,
 and a tooltip opens on keyboard focus as much as on hover, so one Tab inside any dialog or view reaches that state —
-when Escape does nothing somewhere, what predicts it is "a tooltip is open", not which control holds focus. Dialogs
-are already compensated for it (`useEscapeWhileTooltipOpen` in `packages/ui/src/dialogs/`), so add nothing of your own
-there; any other surface that dismisses itself from a React `onKeyDown` still loses the key, and handling Escape from
-a `window` capture-phase listener instead is the only way out. Such a handler can only choose whether to act, never
+when Escape does nothing somewhere, what predicts it is "a tooltip is open", not which control holds focus. A surface
+that dismisses itself from a React `onKeyDown` loses the key, and a `window` capture-phase listener is the only way
+out — which is what `useEscapeWhileTooltipOpen` (`packages/ui/src/dialogs/`) is: it closes whatever surface it is
+handed, dialog or not, and only while a tooltip is open. Call it rather than writing your own, and add nothing of your
+own to a surface that already calls it, every dialog included. Such a handler can only choose whether to act, never
 route the key onwards: once react-aria has swallowed it nothing can hand it back to the control that wanted it, which
 is why a combo box's suggestion list inside a dialog does not withdraw on Escape while a tooltip is open.
+
+## A key handler goes on a plain DOM element, not on a HeroUI or react-aria component
+
+react-aria routes a component's `onKeyDown` / `onKeyUp` through `useKeyboard`, which wraps the handler in
+`createEventHandler` and calls `stopPropagation()` for you once it returns, unless the handler calls
+`continuePropagation()` — stopping is deliberate there, not a bug. So a handler written for one key takes every
+keydown away from everything above it in the React tree: an Enter-to-save handed to a HeroUI `TextField` is enough to
+stop the Escape that closes the dialog around the field, and nothing warns — not the types, not a console message, not
+the suite. Put the handler on the plain DOM element the component renders instead: a HeroUI field's inner
+`InputGroup.Input` is a react-aria-components `Input`, which passes `onKeyDown` straight to the DOM, and `useKeyboard`
+installs no handler at all when it is given none, so moving it off the component costs nothing. When a handler
+genuinely has to sit on the component, call `continuePropagation()` on every path through it, the one that handled the
+key included.
 
 ## A surface that stays usable while a dialog is open is marked a top layer before the dialog opens
 

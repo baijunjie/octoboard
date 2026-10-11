@@ -9,6 +9,7 @@ import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
 import type { DialogRequest } from "../dialogs/dialogRequest";
+import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Account, Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
@@ -63,6 +64,8 @@ export function ArchiveView({
   const [shown, setShown] = useState(PAGE);
   const sentinelRef = useRef<HTMLLIElement>(null);
   const rootRef = useRef<HTMLElement>(null);
+  // The view's own Escape below is a React handler, which an open tooltip's takes the key from.
+  useEscapeWhileTooltipOpen(() => rootRef.current, onClose);
   const more = shown < archived.length;
 
   useEffect(() => {

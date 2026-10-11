@@ -166,7 +166,7 @@ export function Dialog({
   const markerRef = useRef<HTMLSpanElement>(null);
   useRefocusIfLost(() => dialogAround(markerRef), [resetKey]);
   useToastClearance(markerRef, footer !== null);
-  useEscapeWhileTooltipOpen(markerRef, onClose);
+  useEscapeWhileTooltipOpen(() => dialogAround(markerRef), onClose);
 
   const Frame = alert ? AlertDialog : Modal;
   // An alert dialog is described by its whole body, so a screen reader announces what is asked
