@@ -9,15 +9,18 @@ import React from "react";
  * flush with the window's end and bottom edges. `overflow-hidden` clips what it holds to that
  * corner; the panes that float over the content are fixed overlays, which it does not clip.
  *
- * `-ms-px` lets the panel's start border overlap the rail's last pixel, so the content starts exactly
- * `--rail-width` in, which is what the pane widths and the drawers count on. A `bare` panel is for
- * the screens that have no rail (starting up, failed to start): it spans the window, with a top
- * border only, and holds a column.
+ * `-mt-px` and `-ms-px` let the panel's borders overlap the chrome's last pixel — the top bar's
+ * bottom row and the rail's end column — so the content starts exactly `--top-chrome-height` down
+ * and `--rail-width` in, which is what the pane widths, the drawers and the floating cards' gap
+ * count on. Without the top one the gap above a floating card would read 1px narrower than the gap
+ * beside it. A `bare` panel is for the screens that have no rail (starting up, failed to start): it
+ * spans the window, with a top border only — it sits under the top bar all the same, so it keeps the
+ * top overlap — and holds a column.
  */
 export function ContentPanel({ children, bare = false }: { children: React.ReactNode; bare?: boolean }): React.ReactElement {
   return (
     <div
-      className={`flex min-h-0 min-w-0 flex-1 overflow-hidden border-t border-separator bg-panel ${bare ? "flex-col" : "-ms-px rounded-ss-xl border-s"}`}
+      className={`-mt-px flex min-h-0 min-w-0 flex-1 overflow-hidden border-t border-separator bg-panel ${bare ? "flex-col" : "-ms-px rounded-ss-xl border-s"}`}
     >
       {children}
     </div>

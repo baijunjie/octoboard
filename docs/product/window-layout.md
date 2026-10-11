@@ -50,9 +50,9 @@ dark one.
 header (see `docs/product/sidebar.md` and `docs/product/focus-mode.md`), the archive view's header (see "The archive
 view" in `docs/product/sidebar.md`), the project pane's header and the report panel's bar — so the lines under them
 run on as one line across the panel. The top bar's 40 px is a tier of its own and no part of this. A pane that floats
-in is a card inset from the panel's edges (see "A hidden pane floats in on hover" below), and its headers are shorter
-by that inset, 48 px, so the line under a card's header stays level with the line under the headers docked beside it;
-the text in a card's header therefore sits 4 px lower than theirs.
+in is a card inset from the panel's edges (see "A hidden pane floats in on hover" below), and its headers are **47 px**
+— shorter by that inset and by the card's own 1 px top border — so the line under a card's header stays level with the
+line under the headers docked beside it; the text in a card's header therefore sits 4.5 px lower than theirs.
 
 On the screens shown before there is anything to show — while connecting to the daemon, and the screens for a daemon
 that could not start or a UI that failed — there is no rail: under the top bar, the content panel spans the window.
@@ -338,8 +338,8 @@ they are not how the docked column opens and closes (see "Hiding the sidebar and
     connection banner). It slides in from under the rail and out again behind it, never drawn over the rail.
   - The **right pane's card** keeps the same 8 px gap from the top bar, from the window's right edge and from the
     window's bottom (or the connection banner), and slides in from that edge.
-  - A card's own headers are 8 px shorter than the docked panes', so the line under a header stays level across the
-    panel (see "The window chrome and the content panel" above).
+  - A card's own headers are 9 px shorter than the docked panes' — the 8 px gap plus the card's own 1 px top border —
+    so the line under a header stays level across the panel (see "The window chrome and the content panel" above).
 - **How it goes away**: it slides away 200 ms after the pointer has left it. What counts as having left is the same on
   both sides: the pointer is on none of the card, the 8 px gap around it, or the pane's own toggle in the top bar —
   and, for the sidebar, none of the console avatars on the rail either. **The gap counts as part of the card**: a
