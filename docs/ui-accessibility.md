@@ -260,6 +260,10 @@ and glyphs misses:
   against the bare surface or the fill's own colour overstated one chip's contrast and missed a 4.5:1 failure on
   selected rows.
 
+A ratio read off a capture of the packaged window carries the display's own colour profile, so it says which side of a
+threshold a pair lands on and nothing finer: the selected toggle's fill read 3.26:1 light and 5.0:1 dark against its
+siblings where the tokens give 3.67:1 and 4.58:1. Take a recorded ratio from the tokens, never from a capture.
+
 ### A region with a surface colour of its own
 
 A region given a surface colour of its own needs HeroUI's `--default`-filled controls checked on it in particular: the

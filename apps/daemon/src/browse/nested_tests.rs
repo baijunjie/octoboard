@@ -217,6 +217,11 @@ fn a_submodule_side_and_an_absent_side_keep_the_route_that_cuts_the_patch_down()
     // Two gitlinks named as `<commit>:<path>` would have `git` look for commits this repository
     // does not have and diff whole trees; they are read by their paths, as a removal and an
     // addition showing the commits they record.
+    //
+    // The two sides record different commits so that each one's own is visible in the patch. A
+    // listing only ever pairs two gitlinks that record the *same* commit, `git` pairing them by
+    // exact match alone, so a real repository reaches this read with one commit on both sides; the
+    // route the sides take does not depend on what they record.
     git(&repo, &["branch", "before", before.trim()]);
     let compared = fixture.compare(&project, "before", "main").unwrap();
     let read = fixture

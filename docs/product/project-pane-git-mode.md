@@ -88,7 +88,9 @@ Not listed:
 - Files the repository ignores, which the Files mode still shows.
 - A submodule's own uncommitted work, which belongs to that repository. A submodule is listed only when it is checked
   out at another commit than the index records. An untracked folder that is a repository of its own is listed as one
-  entry.
+  entry. **A submodule moved to another path** is listed as one renamed change only when both sides record the same
+  commit — Git pairs two submodules by exact match and never by similarity — and as a deletion at the old path plus
+  an addition at the new one as soon as the recorded commits differ, whether or not the two paths nest.
 
 For a project that is a subdirectory of its repository, a change is listed when its old or its new path is inside the
 project's folder (the folder itself is not inside it).
@@ -327,8 +329,8 @@ branches are read again.
   more than 8 MiB of output from Git — far-apart branches of a large repository — a subdirectory project is compared
   within its own folder instead, where a rename across the boundary is listed as the addition or the deletion of its
   half inside. A project at the repository's root whose comparison is that large cannot be compared, and says so.
-- A submodule is listed when the two commits record it at different commits. A type change is one change, as in the
-  Uncommitted view.
+- A submodule is listed when the two commits record it at different commits. A type change is one change, and a
+  submodule moved to another path is paired by the same exact-match rule, both as in the Uncommitted view.
 
 ### When a comparison is made
 
@@ -447,7 +449,9 @@ commit and its new side from To's, and is shown as a staged change is below; it 
   to. This holds in the Staged section and in the Compare view, in both directions of the nesting, and it takes both
   sides being a file or a symbolic link: with a side that is a repository of its own the change is shown instead as
   the old path's removal followed by the new path's addition in one diff, collapsing nothing and with no separator to
-  expand, as a type change is.
+  expand, as a type change is; each side shows only the commit it records, nothing from inside the nested repository.
+  Two submodules are listed as one renamed change only when both record the same commit (see "What is listed" above),
+  so that is the only way a nesting pair of them is ever opened.
 - **A rename with nothing else changed** says it was renamed and its content is unchanged, and shows that content as
   below. It is the wording of every rename whose patch shows nothing but the path changed — an empty patch, or one
   holding the rename's header alone — wherever it was listed and whether or not its two paths nest. A rename whose

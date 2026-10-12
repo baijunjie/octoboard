@@ -139,6 +139,20 @@ export function unchanged(group: TwoSided, path: string, from: ContentSource, to
   return { entry: { group, old: sideFile(path, from), new: sideFile(path, to) }, patch: "", ...answering(read) };
 }
 
+/** A rename into or out of a path below itself whose content came through unchanged. The daemon
+ * diffs such a pair between the two versions it names, and `git` writes nothing at all for two
+ * operands of equal content, so the patch is empty rather than a rename's headers. */
+export function nestedUnchanged(
+  group: TwoSided,
+  from: string,
+  to: string,
+  fromSource: ContentSource,
+  toSource: ContentSource,
+  read: UnchangedRead,
+): FixtureChange {
+  return { entry: { group, old: sideFile(from, fromSource), new: sideFile(to, toSource) }, patch: "", ...answering(read) };
+}
+
 /** A plain `git mv`: rename detection writes the rename's headers and no hunk, so there is no diff
  * here either. */
 export function renamedUnchanged(
@@ -301,8 +315,8 @@ export function expandable(
 }
 
 /** A file renamed into or out of a path below itself, its content changed with it: one section, the
- * diff between its two versions under the rename's headers, which `git` writes above the `index`
- * line whenever it detected a rename. `similarity` is the percentage it put on the rename. */
+ * diff between the two versions the daemon names. It carries no rename header, since `git` detects
+ * no rename between two operands it was handed. */
 export function nested(
   group: TwoSided,
   from: string,
@@ -310,11 +324,10 @@ export function nested(
   fromSource: ObjectSource,
   toSource: ObjectSource,
   source: GeneratedSource,
-  similarity: number,
 ): FixtureChange {
   const patch = source.patch
     .replace(`diff --git a/${source.path} b/${source.path}`, `diff --git a/${from} b/${to}`)
-    .replace(GENERATED_INDEX, [`similarity index ${similarity}%`, `rename from ${from}`, `rename to ${to}`, indexOf(fromSource, toSource)].join("\n"))
+    .replace(GENERATED_INDEX, indexOf(fromSource, toSource))
     .replace(`--- a/${source.path}`, `--- a/${from}`)
     .replace(`+++ b/${source.path}`, `+++ b/${to}`);
   return renamedTo(group, from, to, fromSource, toSource, { ...source, patch }, { delay: EXPAND_DELAY_MS });

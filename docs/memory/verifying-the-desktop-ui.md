@@ -128,7 +128,10 @@ layout, include a long text and a CJK one: overflow defects there showed only wi
 dimming from computed styles or full-resolution pixels, not from a downscaled screenshot. A packaged build offers no DOM
 to measure, so settle a geometry question there from ink extents read off a capture at the display's native resolution,
 allowing for its scale factor (a Retina display gives 2 image pixels per CSS pixel), and settle a question of overlap or
-reachability with a real click at the measured point, since a capture only ever shows what is on top.
+reachability with a real click at the measured point, since a capture only ever shows what is on top. Colours read off
+such a capture carry the display's own profile, so a contrast ratio measured from one differs from the ratio the tokens
+give by a few tenths, either way: it is good for confirming which side of a threshold a pair lands on, and never for
+correcting a token-derived ratio recorded in the stylesheet or the accessibility standard.
 
 ## Rule out a locked screen before reading anything off a window capture
 
@@ -182,8 +185,13 @@ the app: Safari's lookups leave through the same WebKit networking path.
 A key combination that fails to arrive may be the probe's fault rather than the app's: through `osascript` / System
 Events, `keystroke "<letter>" using control down` can be dropped silently where the same combination sent as
 `key code <n> using control down` arrives. `cliclick`'s key presses (`kp:`) do not reach this app's window at all,
-where the same key sent as `key code` moves it immediately; its clicks (`c:`) are fine. Prefer `osascript` with
-`key code`, and never conclude "the app swallows this key" from a scripted probe without confirming by hand.
+where the same key sent as `key code` moves it immediately. Prefer `osascript` with `key code`, and never conclude
+"the app swallows this key" from a scripted probe without confirming by hand.
+
+Its clicks (`c:`) are dropped often enough on this window's HeroUI controls that a press has to be set up and then
+checked: move the pointer onto the control (`m:`) and leave it there before pressing, and confirm from a capture that
+the press took effect before taking the next step. An in-app dropdown of the page's own (not a native `<select>`) does
+open by pointer, but is reliably chosen from only with the keyboard.
 
 macOS mangles typed text of its own accord as well: with automatic correction and capitalization on (the default),
 text sent character by character into a packaged app's search field arrived as `Note` for `note` and `ran k` for
@@ -222,7 +230,10 @@ live agent's trust confirmation, so seed them by inserting rows into the `truste
 
 Keystrokes go to whichever application is frontmost, and a click at screen coordinates to whichever window is on top
 at that point, not to Octoboard. Activate it and confirm it is the frontmost process immediately before every
-keystroke and every click: a `Cmd+Q` or `Cmd+W` that lands on another application closes the user's own work.
+keystroke and every click: a `Cmd+Q` or `Cmd+W` that lands on another application closes the user's own work. One check
+does not cover a sequence — another application came forward between two steps of one, and the click and the Enter
+after it edited a file open in the user's editor — and a capture taken after the input is the only way to know where it
+landed, so take one between steps rather than reading the next step's result as proof of the last.
 
 It cuts the other way too: whatever is typed while Octoboard sits frontmost lands in it. Left frontmost on an agent's
 sign-in screen, stray keystrokes completed a real Codex sign-in through the default browser, which was already
