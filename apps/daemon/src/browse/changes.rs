@@ -29,7 +29,8 @@
 //!
 //! A reply whose patch shows a change's content also carries the line count of each side that is a
 //! file object, so a client can tell whether a last hunk reaches the end of a file; see
-//! `Reader::object_lines`. A side on the disk is never counted.
+//! `Reader::object_lines`. A side on the disk is never counted from the disk: it is counted only
+//! where the reply carries its body, from those very bytes.
 //!
 //! A change between two commits — one of a branch comparison's (`read_between`) — is read the way a
 //! staged one is, its two sides from the two commits; nothing it reads can move, so nothing is

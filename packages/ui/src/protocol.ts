@@ -413,13 +413,14 @@ export type SideRef = { state: "present"; path: string } | { state: "absent" } |
 export type SideVersion = { state: "present"; source: ContentSource } | { state: "absent" };
 
 /** One side of a change as `read_project_change` read it. `file` is its body, carried only where no
- * patch shows the content: a side alone, or both sides of a binary change. `lines` is how many lines
- * the stored content of that very version holds (an unterminated last line counts, so an empty side
- * is 0); `null` when the daemon does not know: a link or a submodule, a side read from the worktree
- * disk unless its body is carried, and both sides of a patch with no hunk (a change of mode alone,
- * a pure rename). The disk side is not counted because a clean filter such as Git-LFS makes the
- * count of the file on disk disagree with the patch the diff was made from (see "Changes and
- * comparisons" in `apps/daemon/PROTOCOL.md`). */
+ * patch shows the content: a side alone, or both sides of a binary change. `lines` is how many
+ * lines the stored content of that very version holds (an unterminated last line counts, so an
+ * empty side is 0); `null` when the daemon does not know: a link or a submodule, a side read from
+ * the worktree disk unless its body is carried, and either side of a patch with no hunk that no
+ * body is carried for (a change of mode alone, a pure rename) — a binary change's patch has no hunk
+ * either, and its two sides are counted from the bodies the reply carries. The disk side is not
+ * counted because a clean filter such as Git-LFS makes the count of the file on disk disagree with
+ * the patch the diff was made from (see "Changes and comparisons" in `apps/daemon/PROTOCOL.md`). */
 export type SideRead =
   | { state: "present"; path: string; kind: "file" | "symlink" | "submodule"; source: ContentSource; file: FileContent | null; lines: number | null }
   | { state: "absent" }
