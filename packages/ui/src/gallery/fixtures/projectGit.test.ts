@@ -6,6 +6,7 @@ import type { ChangeSide, Event, SideRead, SideVersion } from "../../protocol";
 import { hasHunks, joinedPatch, linesAfterLastHunk } from "../../viewer/patch";
 import { FixtureUnfillableError, createFixtureDaemon } from "../fixtureDaemon";
 import type { FixtureGit } from "./changeFixtures";
+import { objectIdCheck } from "./invariants";
 import { SAMPLE_GIT } from "./projectGit";
 
 describe("the sample repository's changes", () => {
@@ -32,6 +33,16 @@ describe("the sample repository's changes", () => {
     return undefined;
   };
   afterEach(() => vi.restoreAllMocks());
+
+  // Git names an object by its content, so the same id is never two contents and one content is
+  // never two ids. A change carries its sides' content, which the list entry does not, so the rule
+  // is held over the changes and not over what the daemon replies with — and the ids it cannot be
+  // held over are named, so that a side added later cannot drop out of the check unnoticed: the
+  // link a type change ends at, whose target the patch alone holds, the rename whose content
+  // cannot be read, and the change whose patch is past the daemon's limit.
+  it("name an object by its content", () => {
+    expect(objectIdCheck(SAMPLE_GIT)).toEqual({ conflicts: [], unchecked: ["1b2c3d4", "1f2e3d4", "8d2f1a0"] });
+  });
 
   // A side with no line count leaves an expandable diff ending in a bar promising unmodified lines
   // it may have none of, which a count takes away (`docs/product/project-pane-git-mode.md`, "The

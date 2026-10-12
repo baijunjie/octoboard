@@ -56,6 +56,12 @@ const HUGE = editedSource("src/pipeline.ts", 11000, [10, 70, 100]);
 /** The same shape as `PIPELINE` with every line far wider than a window, for the diff unwrapped. */
 const WIDE = editedSource("src/pipeline.ts", 120, [10, 70, 117], ` // ${"a note that runs on well past the edge of the window ".repeat(8)}`);
 
+/** The ids of the contents `PIPELINE` holds, which every change that places it at a path names its
+ * sides by: Git names an object by its content, so the same text is the same id at any path. A
+ * source that shares its old text with another (`PIPELINE_TAIL`, which edits other lines of it)
+ * shares the id too. */
+const PIPELINE_IDS = { old: "a1b2c3d", new: "b2c3d4e" };
+
 /** The small files the sample changes rewrite, each with the patch `git` writes between its two
  * versions. Every one of these changes reaches its file's last line, so its diff is drawn with no
  * bar for lines beyond it. */
@@ -84,7 +90,7 @@ const SERVER_ON_DISK: Versions = {
   new: `${SERVER_STAGING.new}\nexport const PORT = 8080;\n`,
   patch: [
     "diff --git a/src/server.ts b/src/server.ts",
-    "index 5d6e7f8..9a8b7c6 100644",
+    "index 5d6e7f8..2b3c4d5 100644",
     "--- a/src/server.ts",
     "+++ b/src/server.ts",
     '@@ -2,3 +2,5 @@ import http from "node:http";',
@@ -161,34 +167,34 @@ const MAIN_CHANGES: FixtureChange[] = [
   renamedTo("staged", "src/conf.ts", "src/config.ts", commit("0f1e2d3"), index("4c5b6a7"), CONF_RENAME),
   fromOutsideTheProject("staged", "shared/search-index.ts", "src/index.ts", index("2e3d4c5"), INDEX_BODY),
   typeChange("staged", "current", commit("0d1c2b3"), index("8d2f1a0"), CURRENT_AS_FILE, "releases/2.4"),
-  nested("staged", "nest", "nest/leaf.ts", commit("3b18e51"), index("9c8d7e6"), PIPELINE, 97),
-  renamedUnchanged("staged", "nest2/leaf.ts", "nest2", commit("3b18e51"), index("3b18e51"), { content: PIPELINE.new, delay: EXPAND_DELAY_MS }),
-  expandable("staged", "src/pipeline.ts", commit("a1b2c3d"), index("b2c3d4e"), PIPELINE),
-  expandable("staged", "src/tail.ts", commit("8b9c0d1"), index("2d3e4f5"), PIPELINE_TAIL),
+  nested("staged", "nest", "nest/leaf.ts", commit(PIPELINE_IDS.old), index(PIPELINE_IDS.new), PIPELINE, 97),
+  renamedUnchanged("staged", "nest2/leaf.ts", "nest2", commit(PIPELINE_IDS.new), index(PIPELINE_IDS.new), { content: PIPELINE.new, delay: EXPAND_DELAY_MS }),
+  expandable("staged", "src/pipeline.ts", commit(PIPELINE_IDS.old), index(PIPELINE_IDS.new), PIPELINE),
+  expandable("staged", "src/tail.ts", commit(PIPELINE_IDS.old), index("2d3e4f5"), PIPELINE_TAIL),
   expandable("staged", "src/stages.ts", commit("5e6f7a8"), index("7a8b9c0"), SHORT_GAP),
   expandable("staged", "src/huge.ts", commit("1d2e3f4"), index("4f5a6b7"), HUGE),
   expandable("staged", "src/wide.ts", commit("9a8b7c6"), index("6c7d8e9"), WIDE),
-  expandable("staged", "src/limits.ts", commit("c3d4e5f"), index("d4e5f6a"), PIPELINE, {
+  expandable("staged", "src/limits.ts", commit(PIPELINE_IDS.old), index(PIPELINE_IDS.new), PIPELINE, {
     code: "limit_exceeded",
     params: { limit: "file_bytes", size: "5242880", max: "4194304" },
     message: "the file is larger than the 4194304-byte limit",
   }),
-  expandable("staged", "src/moved.ts", commit("e5f6a7b"), index("f6a7b8c"), PIPELINE, {
+  expandable("staged", "src/moved.ts", commit(PIPELINE_IDS.old), index(PIPELINE_IDS.new), PIPELINE, {
     code: "source_changed",
     params: {},
     message: "the file changed while it was being read",
   }),
-  expandable("staged", "src/flaky.ts", commit("a7b8c9d"), index("b8c9d0e"), PIPELINE, UNREADABLE),
+  expandable("staged", "src/flaky.ts", commit(PIPELINE_IDS.old), index(PIPELINE_IDS.new), PIPELINE, UNREADABLE),
   // Unstaged, which is where an empty patch is actually met: the file on disk compares equal to the
   // version staged before it.
-  unchanged("unstaged", "src/same.ts", index("0a1b2c3"), live("v-same"), { content: PIPELINE.new, delay: EXPAND_DELAY_MS }),
+  unchanged("unstaged", "src/same.ts", index(PIPELINE_IDS.new), live("v-same"), { content: PIPELINE.new, delay: EXPAND_DELAY_MS }),
   renamedUnchanged("staged", "src/old-name.ts", "src/new-name.ts", commit("1b2c3d4"), index("1b2c3d4"), { error: UNREADABLE }),
   conflicted("package.json", "both_modified"),
   // Its new side is the file on disk, which carries no line count; the old side's settles the run
   // past the last hunk on its own, the lines past a hunk being the same on both sides.
   textChange("unstaged", "src/server.ts", index("5d6e7f8"), live("v2"), SERVER_ON_DISK),
   deletion("unstaged", "docs/old-notes.md", index("7c6b5a4"), DELETED_NOTES),
-  binaryChange("unstaged", "docs/logo.png", index("6a5b4c3"), hashedOnDisk(live("v3"), "cc44dd5"), LOGO_BODIES),
+  binaryChange("unstaged", "docs/logo.png", index("6a5b4c3"), hashedOnDisk(live("v3"), "8b7c6d5"), LOGO_BODIES),
   refused("unstaged", "data/fixtures.bin", index("1f2e3d4"), live("v4"), {
     code: "limit_exceeded",
     params: { limit: "patch_bytes", max: "4194304" },
@@ -221,7 +227,7 @@ const FEATURE_COMPARISON: FixtureChange[] = [
   textChange("committed", "src/ranking.ts", onMain("3c4d5e6"), onFeature("7f8a9b0"), RANKING_EDIT),
   renamedTo("committed", "src/conf.ts", "src/config.ts", onMain("0f1e2d3"), onFeature("4c5b6a7"), CONF_RENAME),
   fromOutsideTheProject("committed", "shared/search-index.ts", "src/index.ts", onFeature("2e3d4c5"), INDEX_BODY),
-  expandable("committed", "src/pipeline.ts", onMain("a1b2c3d"), onFeature("b2c3d4e"), PIPELINE),
+  expandable("committed", "src/pipeline.ts", onMain(PIPELINE_IDS.old), onFeature(PIPELINE_IDS.new), PIPELINE),
   deletion("committed", "docs/old-notes.md", onMain("7c6b5a4"), DELETED_NOTES),
   binaryChange("committed", "docs/logo.png", onMain("6a5b4c3"), onFeature("8b7c6d5"), LOGO_BODIES),
   typeChange("committed", "current", onMain("0d1c2b3"), onFeature("8d2f1a0"), CURRENT_AS_FILE, "releases/2.4"),
