@@ -77,7 +77,9 @@ badge they sit in, or the text beside them. These are:
 - a session's agent icon on its row, on a focus mode's card or archived row and on the archive view's row, whose
   tooltip names the account the session runs under (see "Session rows" in `docs/product/sidebar.md`);
 - the branch badge's warning triangle, whose tooltip carries the failed check's message (see "The branch badge" in
-  `docs/product/project-git-status.md`).
+  `docs/product/project-git-status.md`);
+- the creator badge, the ring a branch carries in the Git mode's branch lists, whose tooltip names the session that
+  created the branch (see "The creator badge" in `docs/product/branch-creator.md`).
 
 ## Names too long for their space
 

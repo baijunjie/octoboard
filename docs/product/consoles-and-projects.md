@@ -368,7 +368,9 @@ reference among them, and the model and the effort back to unset.
 ### Removing a project
 
 Removing a project **never touches the directory or anything in it**. It removes the association, and with it the
-records of that project's sessions, archived ones included.
+records of that project's sessions, archived ones included. It also clears what Octoboard recorded about which session
+created which branch in the project's repository, unless another project still points into that repository (see "What
+the record is" in `docs/product/branch-creator.md`).
 
 Removing a project asks for confirmation. **Sessions of the project that are still running do not block it**:
 

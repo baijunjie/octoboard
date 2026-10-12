@@ -85,6 +85,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   when a comparison is made, a branch that moves or goes away) — that it never writes to the repository and how it
   differs from the branch badge, opening a change in the file viewer and expanding the lines its diff collapses,
   errors, and what is kept for the window's lifetime.
+- [Which session created a branch](product/branch-creator.md) — the creator badge on a branch's row in the Git mode's
+  From and To lists: what it answers and what it never does, the snapshot title it names a session by, when a branch
+  gets a creator and when it carries none, how a record is scoped to a repository and when it goes, the caps on how
+  many branches carry one, that nothing is written to the repository, and where a record can be missing or wrong.
 - [Toasts](product/toasts.md) — failures and notices that need no answer: where they appear, how one about a session
   is titled, when they dismiss themselves, how an identical one replaces rather than stacks, copying their text
   without taking focus off the terminal, and reaching them with F6.

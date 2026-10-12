@@ -286,6 +286,9 @@ At the top of the Compare view are two branch selectors, each with its label bef
 - Each one offers every local branch of the repository — checked out in some worktree or in none — in byte order of
   their names, each with the first seven characters of the commit at its tip. At most 10,000 branches, or as many as
   2 MiB of names hold, are offered, the first in that order; nothing says the list was cut.
+- A branch Octoboard can name the session that created it for carries a small ring between its name and its commit,
+  **in the two lists only and never on a selector's chosen branch**; most branches carry none, which is ordinary (see
+  "The creator badge" in `docs/product/branch-creator.md`).
 - A selector with no branch chosen says to choose one. A chosen branch's name too long for its space fades out (see
   "Names too long for their space" in `docs/product/labels-and-tooltips.md`), in the selector and in its list.
 - A chosen branch that a complete branch list no longer has stays chosen, its name marked as no longer existing, until
