@@ -22,6 +22,9 @@ repeated trial — should go to a subagent wherever you can; you take only the c
 - One task per dispatch, with the completion criteria spelled out; give the full background (it knows none of the
   premises you did not write down); ask it for conclusions, not a replay of its process.
 - Never let several subagents change the same place at once.
+- Dispatch blocking wherever you need the result to go on: a subagent's turn ends when it stops calling tools, so one
+  that leaves a subtask running in the background hands back before that subtask has reported. This reaches any dispatch
+  a subagent makes in turn — the change check, the writers — not only your own.
 - If a dedicated subagent owns the job, give it to them; otherwise pick by task difficulty from the table below,
   and do not reach for the strongest every time.
 
