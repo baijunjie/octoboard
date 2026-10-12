@@ -19,6 +19,22 @@ on that record's `*_deleted` event, cascading from a console down to each of its
 worked example of the whole shape; the trust prompts are the same idea with the repeat sent after each `snapshot`
 rather than inside it.
 
+## A store write outside a transaction is a journalled pair of fsyncs under the one lock
+
+`Store::open` (`apps/daemon/src/store.rs`) sets only `foreign_keys`: `journal_mode` and `synchronous` keep SQLite's
+defaults, and the store is a single `Connection` behind a mutex that every method takes. So each statement run outside
+a transaction commits on its own — a rollback journal written and fsynced, the pages written and fsynced, the journal
+removed — while every other caller of the store waits on the mutex for it. A loop calling a one-row method is
+therefore the wrong shape wherever the number of rows follows a repository, a listing or anything else rather than
+the single thing the user did: reconciling a repository's branch records writes up to a thousand rows, from a hook
+callback and from inside a browse slot.
+
+So a store method that can write more than one row opens one `conn.transaction()` for the lot. When those writes
+follow from a read of the same rows, or the caller needs what the rows hold afterwards, do both reads inside that
+transaction instead of around the call: a method of this kind is reached from a hook callback and from the repeating
+refresh each connected client runs on its own phase, so a read-modify-write split across two takes of the mutex gets
+another caller's writes in between and one of the two is lost. `Store::apply_branch_origins` is the shape to copy.
+
 ## Time a repeating refresh from the client, and bound it in the daemon
 
 Work that only matters while a client is showing something — the projects of the console in the sidebar, a list in
