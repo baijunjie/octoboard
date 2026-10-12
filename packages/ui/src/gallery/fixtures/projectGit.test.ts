@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DaemonRequestError } from "../../daemon-client";
 import type { ChangeSide, Event, SideRead, SideVersion } from "../../protocol";
 import { hasHunks, joinedPatch, linesAfterLastHunk } from "../../viewer/patch";
-import { FixtureUnfillableError, createFixtureDaemon } from "../fixtureDaemon";
+import { FixtureUnfillableError } from "../banner";
+import { createFixtureDaemon } from "../fixtureDaemon";
 import type { FixtureGit } from "./changeFixtures";
 import { objectIdCheck } from "./invariants";
 import { SAMPLE_GIT } from "./projectGit";
@@ -224,6 +225,25 @@ describe("the sample repository's changes", () => {
     changes: { "wt-gap": [{ entry, patch: ["diff --git a/src/gap.ts b/src/gap.ts", "@@ -1,1 +1,1 @@", "-one", "+two", ""].join("\n") }] },
   });
   const banner = () => document.querySelector("[data-gallery-failure]")?.textContent ?? "";
+
+  // The check the daemon makes before it reads a body: a request naming a version other than the
+  // one the daemon finds is refused rather than answered with a body of another revision. The
+  // window names back what the diff reply just reported, so only a side that moved on under it
+  // reaches this — which is the state `src/moved.ts` stages.
+  it("refuse a request for bodies at a version a side is no longer at", async () => {
+    const listed = SAMPLE_GIT.changes["wt-main"];
+    if (!Array.isArray(listed)) throw new Error("the sample worktree lists its changes");
+    const pipeline = listed.find(({ entry }) => "old" in entry && entry.old.state === "present" && entry.old.path === "src/pipeline.ts")?.entry;
+    if (!pipeline || !("old" in pipeline) || pipeline.old.state !== "present") throw new Error("the sample worktree has a change of src/pipeline.ts");
+    const change = { group: "staged" as const, old: { state: "present" as const, path: "src/pipeline.ts" }, new: { state: "present" as const, path: "src/pipeline.ts" } };
+    const named = versionsOf(pipeline);
+    // Everything the window would name back, with the old side's object alone moved on.
+    const moved = { ...named, old: { state: "present" as const, source: { ...pipeline.old.source, blob: "0000001" } } };
+    const at = { type: "read_project_change_bodies" as const, project: "p-1", worktree: "wt-main", change };
+
+    await expect(sampleDaemon().request({ ...at, ...named })).resolves.toMatchObject({ type: "project_change_bodies" });
+    await expect(sampleDaemon().request({ ...at, ...moved })).rejects.toMatchObject({ code: "source_changed", params: { path: "src/pipeline.ts" } });
+  });
 
   it("refuse a reply whose side the daemon would count and the fixture cannot fill", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});

@@ -49,12 +49,12 @@ supplies those bodies, and give a new change presentation a scenario in that gro
 ## A fixture daemon answers as fully as the real one, or the gallery shows a state no daemon sends
 
 Applies whenever a daemon reply gains a field the UI draws from, and whenever a gallery scenario still shows the old
-behaviour after a fix. The fixture daemon (`packages/ui/src/gallery/fixtureDaemon.ts`) answers every scenario from what
-that scenario's fixture happens to hold, so a field the fixture cannot supply goes out as the real daemon's "not known"
-value and the UI draws the fallback for it. A complete fix can therefore leave every scenario showing what it showed
-before, with nothing in the type checker or the unit tests to say which side is wrong: the viewer's bar for the lines
-past a diff's last hunk went on claiming more might follow because no fixture change carried both sides' whole text for
-the new line count to be taken from.
+behaviour after a fix. The fixture daemon (`packages/ui/src/gallery/fixtureDaemon.ts`, and `fixtureGit.ts` for a
+project's Git mode) answers every scenario from what that scenario's fixture happens to hold, so a field the fixture
+cannot supply goes out as the real daemon's "not known" value and the UI draws the fallback for it. A complete fix can
+therefore leave every scenario showing what it showed before, with nothing in the type checker or the unit tests to say
+which side is wrong: the viewer's bar for the lines past a diff's last hunk went on claiming more might follow because
+no fixture change carried both sides' whole text for the new line count to be taken from.
 
 So a reply that gains such a field is taught to the fixture together with the condition the real daemon fills it under,
 and every scenario's fixture is given what that condition needs — the scenarios whose fixture answers with an error

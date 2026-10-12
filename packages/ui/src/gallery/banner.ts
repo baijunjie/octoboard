@@ -1,5 +1,6 @@
-// A failure of the gallery's own machinery — a scenario step that did not run, a fixture that
-// cannot be answered faithfully — shown over the page.
+// How a failure of the gallery's own machinery is reported — a scenario step that did not run, a
+// fixture that cannot be answered faithfully: the banner it is shown in over the page, and the
+// error a refused fixture reply is raised as.
 
 /** The one container every banner line is appended to, made on the first failure. */
 let container: HTMLElement | undefined;
@@ -26,4 +27,25 @@ export function galleryFailure(message: string, cause?: unknown): void {
   const line = document.createElement("div");
   line.textContent = message;
   container.append(line);
+}
+
+/**
+ * Why a fixture cannot be answered as the real daemon would answer. Deliberately not a
+ * `DaemonRequestError`: scenarios answer requests with a daemon error on purpose, and those are
+ * legitimate UI states under test, so a gap in the gallery's own data must not be dressed as one.
+ */
+export class FixtureUnfillableError extends Error {
+  constructor(reason: string) {
+    super(`gallery fixture cannot answer faithfully — ${reason}`);
+    this.name = "FixtureUnfillableError";
+  }
+}
+
+/** Refuses a reply the fixture cannot fill as the real daemon would. It goes on the page as well as
+ * to the rejected request, because the window swallows a failed read into the diff's own error line
+ * and a scenario would otherwise look merely broken rather than under-filled. */
+export function refuseUnfillable(reason: string): never {
+  const error = new FixtureUnfillableError(reason);
+  galleryFailure(error.message);
+  throw error;
 }

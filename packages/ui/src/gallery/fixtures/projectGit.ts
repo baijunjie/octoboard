@@ -1,4 +1,4 @@
-// The sample repository the fixture daemon answers a project's Git mode with (`fixtureDaemon.ts`),
+// The sample repository the fixture daemon answers a project's Git mode with (`fixtureGit.ts`),
 // and the gallery's "Project Git" scenarios over it: the worktree selector, the change list in its
 // sections, a diff of each kind opened from it, and the states a source or a list can end in. Every
 // change here is built by the factory for its kind (`changeFixtures.ts`).
@@ -175,16 +175,12 @@ const MAIN_CHANGES: FixtureChange[] = [
   expandable("staged", "src/huge.ts", commit("1d2e3f4"), index("4f5a6b7"), HUGE),
   expandable("staged", "src/wide.ts", commit("9a8b7c6"), index("6c7d8e9"), WIDE),
   expandable("staged", "src/limits.ts", commit(PIPELINE_IDS.old), index(PIPELINE_IDS.new), PIPELINE, {
-    code: "limit_exceeded",
-    params: { limit: "file_bytes", size: "5242880", max: "4194304" },
-    message: "the file is larger than the 4194304-byte limit",
+    error: { code: "limit_exceeded", params: { limit: "file_bytes", size: "5242880", max: "4194304" }, message: "the file is larger than the 4194304-byte limit" },
   }),
-  expandable("staged", "src/moved.ts", commit(PIPELINE_IDS.old), index(PIPELINE_IDS.new), PIPELINE, {
-    code: "source_changed",
-    params: {},
-    message: "the file changed while it was being read",
-  }),
-  expandable("staged", "src/flaky.ts", commit(PIPELINE_IDS.old), index(PIPELINE_IDS.new), PIPELINE, UNREADABLE),
+  // The one side that moved on under the window: the daemon finds a version other than the one the
+  // request names, and refuses before it reads anything.
+  expandable("staged", "src/moved.ts", commit(PIPELINE_IDS.old), index(PIPELINE_IDS.new), PIPELINE, { movedOn: true }),
+  expandable("staged", "src/flaky.ts", commit(PIPELINE_IDS.old), index(PIPELINE_IDS.new), PIPELINE, { error: UNREADABLE }),
   // Unstaged, which is where an empty patch is actually met: the file on disk compares equal to the
   // version staged before it.
   unchanged("unstaged", "src/same.ts", index(PIPELINE_IDS.new), live("v-same"), { content: PIPELINE.new, delay: EXPAND_DELAY_MS }),

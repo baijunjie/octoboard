@@ -1,5 +1,5 @@
 // The vocabulary a repository's change fixtures are written in, for the fixture daemon's Git-mode
-// replies (`fixtureDaemon.ts`): what a fixture repository and one of its changes hold, a factory per
+// replies (`fixtureGit.ts`): what a fixture repository and one of its changes hold, a factory per
 // kind of change, and the generator the long files a diff collapses lines of are written with.
 //
 // A sample change is always built by the factory for its kind, never written out as a literal — a
@@ -23,9 +23,9 @@ export interface FixtureChange {
   /** The whole text of each side: what the diff reply counts the side's lines from, and what a
    * request for the bodies answers with. One source for both, so the two cannot disagree. */
   whole?: { old?: string; new?: string };
-  /** What answering a request for the whole bodies costs, where it is not answered straight away:
-   * the delay before it, or the error in place of it. Whether the change has bodies to read at all
-   * is not from here — that follows from the change's own sides, as it does in the daemon. */
+  /** How a request for the whole bodies is answered where it is not answered straight away, as
+   * `Expansion` below sets out. Whether the change has bodies to read at all is not from here —
+   * that follows from the change's own sides, as it does in the daemon. */
   expand?: Expansion;
 }
 
@@ -63,12 +63,14 @@ export interface GeneratedSource extends Versions {
   path: string;
 }
 
-/** How a request for a change's whole bodies is answered: after `delay` milliseconds, or with
- * `error` in place of the bodies — the diff reply counted the versions all the same. The fixture
- * answers from the change alone and never compares the versions a request names against the sides
- * it finds, so a side that moved on under the client is written here as one of these errors. */
+/** How a request for a change's whole bodies is answered, after `delay` milliseconds. The daemon
+ * can refuse it at either of two moments, which the fixture keeps apart: `movedOn` says the side
+ * the request names is not the one the daemon finds any more, which it answers `source_changed`
+ * for before it reads anything at all; `error` is what reading a side's body then meets. The diff
+ * reply counted the versions whichever way this goes. */
 export interface Expansion {
   delay?: number;
+  movedOn?: boolean;
   error?: FixtureError;
 }
 
@@ -283,12 +285,19 @@ export function editedSource(path: string, count: number, edits: number[], tail 
 /** How long reading the bodies of an expandable change takes, long enough to see it loading. */
 export const EXPAND_DELAY_MS = 600;
 
-/** A change of a long file whose diff can be expanded, with `error` where reading its bodies fails
- * instead of answering (the patch's own counts are taken from `source` either way); `source` is
- * written at `path` wherever it was generated for another. */
-export function expandable(group: TwoSided, path: string, from: ObjectSource, to: ObjectSource, source: GeneratedSource, error?: FixtureError): FixtureChange {
+/** A change of a long file whose diff can be expanded, with `expand` where reading its bodies ends
+ * in a refusal instead of an answer (the patch's own counts are taken from `source` either way);
+ * `source` is written at `path` wherever it was generated for another. */
+export function expandable(
+  group: TwoSided,
+  path: string,
+  from: ObjectSource,
+  to: ObjectSource,
+  source: GeneratedSource,
+  expand: Omit<Expansion, "delay"> = {},
+): FixtureChange {
   const patch = source.patch.replaceAll(source.path, path).replace(GENERATED_INDEX, indexOf(from, to));
-  return textChange(group, path, from, to, { ...source, patch }, { delay: EXPAND_DELAY_MS, ...(error && { error }) });
+  return textChange(group, path, from, to, { ...source, patch }, { delay: EXPAND_DELAY_MS, ...expand });
 }
 
 /** A file renamed into or out of a path below itself, its content changed with it: one section, the
