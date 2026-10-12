@@ -258,6 +258,15 @@ build it in from the start:
   quarter points up.
 - Content whose direction is not the UI's sets its own: a path `dir="ltr"`, a name the user typed `dir="auto"`
   (`FadeOverflow` takes the same `dir` and fades along it).
+- `dir="auto"` only decides for an element that holds the text itself: the engine reads the element's own text and
+  stops at every descendant carrying a `dir` of its own, so a container whose text all sits in such descendants — the
+  paragraphs of a rendered Markdown list or quote — can never resolve. An unresolved `auto` falls back to `ltr`
+  rather than inheriting, which leaves a right-to-left block's markers, quote bar and alignment on the left, and
+  WebKit lays such a container out in time quadratic in the document's size (a document of 10,000 of them held the
+  main thread for 15 s as one task). So where blocks wrap their text in further elements, take each block's direction
+  from the first strong directional character of its whole subtree and write that out as an explicit `dir`, with no
+  `dir` at all on a block that has none so that it inherits (`packages/ui/src/viewer/blockDirection.ts` does this for
+  the Markdown document).
 
 ## Only icon-only chrome sits on the window material; text goes on the opaque panel
 

@@ -453,6 +453,8 @@ Not mirrored:
   is; a commit's id reads left to right.
 - **A rendered Markdown document in the file viewer** (see "A Markdown file as a document" in
   `docs/product/project-pane.md`), which is laid out in the direction of its own text, block by block: each paragraph,
-  heading, list, quote and table takes the direction of its own first strong letter, so a right-to-left passage in a
-  left-to-right document reads from its own side, with its quote bar on that side; inline code and a fenced block
-  always read left to right, and the frame around the document follows the window.
+  heading, list, quote and table takes the direction of its own first strong character, so a right-to-left passage in
+  a left-to-right document reads from its own side, with its markers, quote bar and columns on that side, and an
+  English block in an Arabic document reads from the left; inline code and a fenced block always read left to right.
+  The document as a whole, frame included, follows the window only where it holds no strong directional character
+  at all.

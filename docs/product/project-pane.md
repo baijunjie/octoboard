@@ -245,6 +245,31 @@ reads in — and only an unaligned column follows the direction of its table. GF
 under a heading only assistive technology is given; a reference moves to its definition and the definition's back link
 moves to the reference, both scrolling within the document rather than taking the viewer anywhere.
 
+**Which direction the document reads.** Every block — each heading, paragraph, list, quote and table — is laid out in
+the direction of **its own text**, whichever direction the window reads in (see "Right-to-left layout" in
+`docs/product/window-layout.md`): the direction of the first strong directional character anywhere in that block's
+text, nested content included. So a list, a quote or a table whose text begins in Arabic or Hebrew reads from the
+right — its markers, its quote bar and its columns with it — inside an otherwise English document, and an English one
+reads from the left inside an Arabic document.
+
+- A list, a quote and a table are each **one block with one direction**, taken from the first strong character of the
+  whole of their text: a list that begins in English and goes on in Arabic reads from the left throughout, and a cell
+  reads with its table.
+- A paragraph of its own inside a list item — which is what a list with blank lines between its items is made of — is
+  a block in its own right and may read the other way than the list around it does.
+- Digits, Western and Arabic-Indic alike, punctuation and symbols are passed over, as is the text of inline code, of a
+  fenced block, and of anything between Unicode isolate controls (U+2066 to U+2069); an image counts as its alt text.
+  Chinese, Japanese and Korean text reads left to right. The scripts read right to left are Hebrew, Arabic, Syriac,
+  Thaana, N'Ko, Samaritan, Mandaic, Adlam and Hanifi Rohingya; a letter of any other script reads left to right.
+- A left-to-right, right-to-left or Arabic letter mark (U+200E, U+200F, U+061C) counts as a strong character, so one
+  put before a block's text sets that block's direction whatever letters follow it.
+- A block with no strong directional character at all — a list of version numbers, a heading of numerals — is given no
+  direction of its own and reads the way the document around it does.
+- **Inline code and a fenced block always read left to right**, and text the file holds as raw HTML, which comes out
+  with no block of its own, reads the way the document does.
+- **The document as a whole** takes the direction of the first strong character of its whole text, and only where it
+  holds none does it follow the window's direction.
+
 **The document is inert.** Raw HTML in the file is shown as text and never run. An image becomes its alt text and is
 never fetched. Only an absolute `http:`, `https:` or `mailto:` address is a link; a relative path, an anchor of the
 author's own and a `javascript:` address are drawn as their text alone. A link carries the address it leads to as its

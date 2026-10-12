@@ -265,6 +265,19 @@ An empty fence follows.
 - عنصر أول
 - عنصر ثان
 
+وهذه قائمة مفتوحة، بين عناصرها أسطر فارغة:
+
+- عنصر أول
+
+- عنصر ثان
+
+> اقتباس بالعربية يمتد على أكثر من سطر واحد، ليظهر الشريط بجانبه من جهة النص نفسه.
+
+| الاسم | النوع |
+| --- | --- |
+| ألف | نص |
+| باء | صورة |
+
 こんにちは、世界。これは日本語の段落です。
 
 ## Footnotes
@@ -284,6 +297,71 @@ A claim in Chinese[^注1].
 
 <script>window.__viewerPwned = "markdown-script";</script>
 <img src="https://example.com/raw.png" onerror="window.__viewerPwned = 'markdown-onerror'">
+`;
+
+// A document in Arabic, which reads from the right as a whole, with the blocks that may read
+// otherwise or not at all: an English paragraph inside an Arabic list, a list that starts in English,
+// one with no letters, and code.
+const ARABIC_GUIDE = `# دليل العارض
+
+يُقرأ هذا المستند كله من اليمين إلى اليسار، وفيه \`شيفرة مضمنة\` وروابط مثل [الموقع](https://example.com/guide).
+
+## قوائم
+
+- عنصر أول
+- عنصر ثان
+
+قائمة مفتوحة تفصل بين عناصرها أسطر فارغة، وفي عنصرها الثاني فقرة إنجليزية:
+
+- عنصر أول
+
+- عنصر ثان
+
+  This paragraph is in English, inside an Arabic list.
+
+* [x] مهمة منجزة
+* [ ] مهمة مفتوحة
+
++ Starts in English
++ ثم يتابع بالعربية
+
+- 2024
+- 2025
+
+2024 – 2025
+
+> اقتباس بالعربية يمتد على أكثر من سطر واحد، ليظهر الشريط بجانبه من جهة النص نفسه.
+
+> A quotation in English inside this Arabic document.
+
+## جدول
+
+| الاسم | النوع | ملاحظات |
+| --- | --- | --- |
+| ألف | نص | الأول |
+| باء | صورة | خلية أطول بكثير يجب أن تلتف داخل عمودها بدل أن توسع الجدول |
+
+## شيفرة
+
+\`\`\`ts
+export const answer = 42;
+\`\`\`
+`;
+
+// A document with no letter at all, so that nothing in it decides its direction and it takes the
+// interface's.
+const FIGURES = `# 2024
+
+1 + 1 = 2
+
+- 1
+- 2
+
+> 3
+
+| 1 | 2 |
+| - | - |
+| 3 | 4 |
 `;
 
 const JSON_TEXT = `{
@@ -418,6 +496,8 @@ async function files(): Promise<ViewerSubject[]> {
     file("src/describe.ts", text("src/describe.ts", longLines())),
     file("README.md", text("README.md", MARKDOWN)),
     file("docs/guide.md", text("docs/guide.md", GUIDE)),
+    file("docs/arabic.md", text("docs/arabic.md", ARABIC_GUIDE)),
+    file("docs/figures.md", text("docs/figures.md", FIGURES)),
     file("package.json", text("package.json", JSON_TEXT)),
     file("notes/plan.zzplan", text("notes/plan.zzplan", UNKNOWN)),
     file("web/index.html", text("web/index.html", HOSTILE_HTML)),
@@ -630,7 +710,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     title: "Files",
     description:
-      "Code in several languages (one file with lines wider than the viewer), Markdown that opens as a document (headings, lists, tables, fenced code, right-to-left text, and markup that must stay inert), every image format, an SVG and HTML whose scripts must not run, unsupported binary, a grammar that fails, files past the budgets, loading and failed reads. Previous / Next walks them in the same mounted viewer.",
+      "Code in several languages (one file with lines wider than the viewer), Markdown that opens as a document (headings, lists, tables, fenced code, markup that must stay inert, and right-to-left text: in the guide, a list, quote and table that read from the right inside a left-to-right document; in the Arabic document, the same blocks in the other direction, with an English paragraph and an English-first list among them; the figures document has no letters, so with the ar language it reads from the right), every image format, an SVG and HTML whose scripts must not run, unsupported binary, a grammar that fails, files past the budgets, loading and failed reads. Previous / Next walks them in the same mounted viewer.",
     viewer: { subjects: files },
   },
   {

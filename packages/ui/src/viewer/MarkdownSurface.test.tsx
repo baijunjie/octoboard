@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { currentLanguage, setLanguage } from "../i18n/language";
 import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import { RENDER_BUDGETS } from "./budgets";
@@ -96,6 +97,13 @@ const region = () => document.querySelector<HTMLElement>("[role=region]")!;
 const choice = (label: string) => document.querySelector<HTMLElement>(`button[aria-label="${label}"]`)!;
 // The one Markdown view button, whichever view it would switch to.
 const viewToggle = () => document.querySelector<HTMLElement>('button[aria-label="Show source"], button[aria-label="Show document"]');
+
+/** Makes the app's language `language` for the test, and puts the earlier one back after it. */
+function withLanguage(language: Parameters<typeof setLanguage>[0]): void {
+  const before = currentLanguage();
+  act(() => setLanguage(language));
+  onTestFinished(() => act(() => setLanguage(before)));
+}
 
 it("opens a Markdown file as a document, with the choice in the header's controls", async () => {
   const dialog = await open(markdownFile());
@@ -309,4 +317,24 @@ it("accepts only web and mail addresses as links", () => {
   for (const href of ["javascript:alert(1)", "./a.md", "#top", "/a", "file:///etc/passwd", "", undefined]) {
     expect(openableAddress(href)).toBeUndefined();
   }
+});
+
+it("gives a loose Arabic list and an Arabic quote a right-to-left direction of their own", async () => {
+  await open(markdownFile("a.md", "- مرحبا\n\n- عالم\n\n> اقتباس\n"));
+  expect(region().querySelector("ul")?.getAttribute("dir")).toBe("rtl");
+  expect(region().querySelector("blockquote")?.getAttribute("dir")).toBe("rtl");
+  expect(region().querySelector("[data-markdown-document]")?.getAttribute("dir")).toBe("rtl");
+  expect(region().querySelector("[dir=auto]")).toBeNull();
+});
+
+it("keeps a paragraph's own direction inside a list that reads the other way", async () => {
+  await open(markdownFile("a.md", "- مرحبا\n\n- hello\n"));
+  expect([...region().querySelectorAll("p")].map((p) => p.getAttribute("dir"))).toEqual(["rtl", "ltr"]);
+});
+
+it("takes the app's direction for the frame of a document with no strong character", async () => {
+  withLanguage("ar");
+  await open(markdownFile("a.md", "1. 2\n"));
+  expect(region().querySelector("[data-markdown-document]")?.getAttribute("dir")).toBe("rtl");
+  expect(region().querySelector("ol")?.hasAttribute("dir")).toBe(false);
 });

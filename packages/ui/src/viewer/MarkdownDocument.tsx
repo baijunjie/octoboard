@@ -7,7 +7,9 @@ import Markdown, { type Components, type ExtraProps, type Options } from "react-
 import remarkGfm from "remark-gfm";
 
 import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
-import { useT } from "../i18n/react";
+import { textDirection } from "../i18n/languages";
+import { useCurrentLanguage, useT } from "../i18n/react";
+import { type Direction, type DirectionNode, firstStrongDirection } from "./blockDirection";
 import { RENDER_BUDGETS } from "./budgets";
 
 // The library's syntax tree types, which it does not export by name.
@@ -94,6 +96,23 @@ function limitFences() {
 
 const REMARK_PLUGINS: NonNullable<Options["remarkPlugins"]> = [remarkGfm, limitFences];
 
+/** Puts the document's content in the frame `<div data-markdown-document>`, which takes the
+ * direction of the first strong letter of the whole text, or `fallback` when it has none. Done on the
+ * syntax tree because the wrapper has to be told a direction that only the tree can give: the library
+ * is a component of its own, which draws after the one around it. */
+function frameDocument(fallback: Direction) {
+  return () => (tree: DirectionNode & { children: DirectionNode[] }) => {
+    tree.children = [
+      {
+        type: "element",
+        tagName: "div",
+        properties: { dir: firstStrongDirection(tree) ?? fallback, dataMarkdownDocument: "" },
+        children: tree.children,
+      },
+    ];
+  };
+}
+
 /** A link in the document. It never navigates the viewer: an address is handed to `onActivate`
  * (the platform opens it), and so is a footnote's, which scrolls to its target within the document. */
 function DocumentLink({
@@ -154,17 +173,20 @@ function followFootnote(link: HTMLAnchorElement, href: string): void {
  * their order deciding which wins. The one exception is the footnote heading, which the library
  * marks `sr-only` and which keeps to that alone: it is for screen readers, and the styling of a
  * heading would show it. Made once, here, so every element keeps one identity for the library to
- * keep mounted. */
+ * keep mounted. A `dir` of "first-strong" gives the element the direction of the first strong
+ * letter of its whole text, see `blockDirection.ts`; a block with no strong letter of its own is
+ * given no `dir` at all, so that it reads the way the document around it does rather than being
+ * pinned left to right the way an unresolved `dir="auto"` would be. */
 function styled(
   tag:
     "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "p" | "ul" | "ol" | "li" | "blockquote" | "hr" | "table" | "th" | "td" | "code" | "section",
   base: string,
-  attributes?: Record<string, string>,
+  dir?: "ltr" | "first-strong",
 ) {
-  return function Styled({ node: _, className, ...props }: ExtraProps & React.HTMLAttributes<HTMLElement>): React.ReactElement {
+  return function Styled({ node, className, ...props }: ExtraProps & React.HTMLAttributes<HTMLElement>): React.ReactElement {
     const screenReaderOnly = className?.split(" ").includes("sr-only");
     return React.createElement(tag, {
-      ...attributes,
+      dir: dir === "first-strong" ? (node && firstStrongDirection(node as DirectionNode)) : dir,
       ...props,
       className: screenReaderOnly ? className : className ? `${base} ${className}` : base,
     });
@@ -173,25 +195,25 @@ function styled(
 
 const HEADING = "mt-6 mb-3 font-semibold break-words first:mt-0";
 
-// A list, a table or a quote is one block and takes one direction from its first strong letter
-// (`dir="auto"`), as the paragraphs and headings do each for themselves; so a list that starts in
+// A list, a table or a quote is one block and takes one direction from the first strong letter of
+// its whole text, as the paragraphs and headings do each for themselves; so a list that starts in
 // English and goes on in Arabic is drawn left to right throughout. Giving its items a direction of
 // their own would put their markers outside the list's padding.
 const BLOCKS = {
-  h1: styled("h1", `${HEADING} border-b border-current/25 pb-1 text-2xl`, { dir: "auto" }),
-  h2: styled("h2", `${HEADING} border-b border-current/25 pb-1 text-xl`, { dir: "auto" }),
-  h3: styled("h3", `${HEADING} text-lg`, { dir: "auto" }),
-  h4: styled("h4", `${HEADING} text-base`, { dir: "auto" }),
-  h5: styled("h5", `${HEADING} text-sm`, { dir: "auto" }),
-  h6: styled("h6", `${HEADING} text-sm`, { dir: "auto" }),
-  p: styled("p", "my-3 break-words first:mt-0 last:mb-0", { dir: "auto" }),
-  ul: styled("ul", "my-3 list-disc ps-6", { dir: "auto" }),
-  ol: styled("ol", "my-3 list-decimal ps-6", { dir: "auto" }),
+  h1: styled("h1", `${HEADING} border-b border-current/25 pb-1 text-2xl`, "first-strong"),
+  h2: styled("h2", `${HEADING} border-b border-current/25 pb-1 text-xl`, "first-strong"),
+  h3: styled("h3", `${HEADING} text-lg`, "first-strong"),
+  h4: styled("h4", `${HEADING} text-base`, "first-strong"),
+  h5: styled("h5", `${HEADING} text-sm`, "first-strong"),
+  h6: styled("h6", `${HEADING} text-sm`, "first-strong"),
+  p: styled("p", "my-3 break-words first:mt-0 last:mb-0", "first-strong"),
+  ul: styled("ul", "my-3 list-disc ps-6", "first-strong"),
+  ol: styled("ol", "my-3 list-decimal ps-6", "first-strong"),
   // A task list item shows its box in place of a bullet.
   li: styled("li", "my-1 break-words [&.task-list-item]:list-none"),
-  blockquote: styled("blockquote", "my-3 break-words border-s-4 border-current/40 ps-4 italic", { dir: "auto" }),
+  blockquote: styled("blockquote", "my-3 break-words border-s-4 border-current/40 ps-4 italic", "first-strong"),
   hr: styled("hr", "my-6 border-current/25"),
-  table: styled("table", "my-3 w-full border-collapse", { dir: "auto" }),
+  table: styled("table", "my-3 w-full border-collapse", "first-strong"),
   // A column's alignment reaches the cell as an inline `text-align` (the library turns `align` into
   // one), which wins over `text-start`; that is only the default, as a header cell would otherwise
   // take the browser's own centring. The alignment stays the author's physical left and right, not
@@ -200,7 +222,7 @@ const BLOCKS = {
   th: styled("th", "border border-current/25 px-3 py-1.5 text-start font-semibold break-words"),
   td: styled("td", "border border-current/25 px-3 py-1.5 text-start break-words"),
   // Reached for inline code only: a fenced block's `<pre>` is drawn whole.
-  code: styled("code", "rounded bg-current/10 px-1 py-0.5 font-mono text-[0.9em] break-words", { dir: "ltr" }),
+  code: styled("code", "rounded bg-current/10 px-1 py-0.5 font-mono text-[0.9em] break-words", "ltr"),
   // The footnotes, where `remark-gfm` makes any.
   section: styled("section", "mt-6 border-t border-current/25 pt-3 text-xs"),
 } satisfies Components;
@@ -216,16 +238,21 @@ function ImageAlt({ alt }: { alt?: string }): React.ReactElement | null {
   return alt ? <span>{alt}</span> : null;
 }
 
-/** A Markdown text as a document, drawn again only when its text or callbacks change. Paragraphs
- * and headings take the direction of their own first strong letter (`dir="auto"`), as the document
- * does as a whole, so a right-to-left passage in a left-to-right document, or the reverse, reads from
- * its own side, with its quote bar there too; the frame around it follows the app's direction. */
+/** A Markdown text as a document, drawn again only when its text or callbacks change. Each block
+ * takes the direction of its own first strong letter, as the document does as a whole, so a
+ * right-to-left passage in a left-to-right document, or the reverse, reads from its own side, with
+ * its quote bar there too. Raw HTML in the text comes out as bare text with no block around it, which
+ * takes the direction of the document. A document with no strong letter takes the app's direction. */
 export const MarkdownDocument = memo(function MarkdownDocument({
   text,
   renderCode,
   onOpenLink,
 }: MarkdownDocumentProps): React.ReactElement {
   const t = useT();
+  const appDirection = textDirection(useCurrentLanguage());
+  // Not memoised, unlike the components below: the library builds its processor on every render
+  // whatever this array's identity is, so holding one would buy nothing.
+  const rehypePlugins: NonNullable<Options["rehypePlugins"]> = [frameDocument(appDirection)];
   // Memoised: the library takes a new component for an element to be a new kind of element and
   // mounts it afresh, which would take the focus of a link with it and draw every fenced block again
   // each time the caller renders (as it does when the frame gains or loses its focus ring).
@@ -273,12 +300,8 @@ export const MarkdownDocument = memo(function MarkdownDocument({
     [t],
   );
   return (
-    // Raw HTML in the text comes out as bare text with no block around it, which takes the direction
-    // of the document as a whole.
-    <div dir="auto" data-markdown-document="">
-      <Markdown remarkPlugins={REMARK_PLUGINS} remarkRehypeOptions={remarkRehypeOptions} components={components}>
-        {text}
-      </Markdown>
-    </div>
+    <Markdown remarkPlugins={REMARK_PLUGINS} rehypePlugins={rehypePlugins} remarkRehypeOptions={remarkRehypeOptions} components={components}>
+      {text}
+    </Markdown>
   );
 });
