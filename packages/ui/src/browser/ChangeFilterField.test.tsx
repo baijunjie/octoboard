@@ -101,10 +101,13 @@ it("hands keyboard focus to the toggle when the field goes from under it", () =>
   expect(document.activeElement).toBe(view.toggle);
 });
 
-it("clears the filter with the field's own Clear button", () => {
+it("clears the filter with the field's own Clear button, named from the catalog", () => {
   const view = render(true);
   view.type("alpha");
-  act(() => view.container.querySelector<HTMLElement>("button")!.click());
+  const clear = view.container.querySelector<HTMLElement>("button")!;
+  // HeroUI's close button carries an English literal of its own where it is not named here.
+  expect(clear.getAttribute("aria-label")).toBe("Clear");
+  act(() => clear.click());
   expect(field(view.container).value).toBe("");
   expect(view.rows()).toBe(3);
 });

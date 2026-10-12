@@ -12,6 +12,7 @@ export const en = {
   "common.add": "Add",
   "common.browse": "Browse…",
   "common.cancel": "Cancel",
+  "common.clear": "Clear",
   "common.close": "Close",
   "common.confirm": "Confirm",
   "common.create": "Create",

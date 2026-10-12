@@ -8,6 +8,7 @@ export const zhHans: Translation<"other"> = {
   "common.add": "添加",
   "common.browse": "浏览…",
   "common.cancel": "取消",
+  "common.clear": "清除",
   "common.close": "关闭",
   "common.confirm": "确认",
   "common.create": "创建",

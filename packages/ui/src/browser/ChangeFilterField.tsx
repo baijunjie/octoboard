@@ -58,7 +58,10 @@ export function ChangeFilterField({ changeView }: { changeView: ChangeViewState 
             <SearchField.Group>
               <SearchField.SearchIcon />
               <SearchField.Input ref={input} placeholder={t("git.filter.placeholder")} />
-              <SearchField.ClearButton />
+              {/* HeroUI's close button hardcodes an English `aria-label` ahead of its spread
+                  props, which also shadows the name react-aria supplies through the `clear` slot,
+                  so the button is named from the catalog here. */}
+              <SearchField.ClearButton aria-label={t("common.clear")} />
             </SearchField.Group>
           </SearchField>
         </div>

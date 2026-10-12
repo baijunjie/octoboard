@@ -237,7 +237,9 @@ labels — is a message in `packages/ui/src/i18n/messages/en.ts` and in every tr
 - A HeroUI part can carry an English string of its own that no catalog sees: `Tag.RemoveButton` renders
   `aria-label="Remove tag"` ahead of its spread props, which both ships that literal when you pass no `aria-label` and
   shadows the localized name react-aria would otherwise supply through the part's slot. So for every part you give no
-  visible text, read its file for a hardcoded string and pass your own message over it.
+  visible text, read its file for a hardcoded string, following through to whatever part that file renders in turn, and
+  pass your own message over it: `SearchField.ClearButton`'s own file carries no string, and the `aria-label="Close"` it
+  showed in every language comes from the `CloseButton` it delegates to.
 
 Only what the user reads in Octoboard's own UI is translated; text aimed at an agent stays English (see "What follows
 the language" in `docs/product/language.md`).
