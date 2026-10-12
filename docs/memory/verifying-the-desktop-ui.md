@@ -64,6 +64,13 @@ can lag the rule it enumerates, and the first implementation of the refusal belo
 the rule covers and the list did not (a binary change, whose patch has no hunk and whose two sides are nonetheless both
 counted, from the bodies the reply carries).
 
+Hold that condition in a signature before holding it at run time. A repository's change fixtures are written through a
+factory per kind of change rather than as literals (`packages/ui/README.md`, section "The UI state gallery"), so a field
+the reply gains goes first into the parameters of the factories whose kind the real daemon fills it for: an unfilled
+field is a legal value of the reply, so nothing but a parameter that has to be passed stops a fixture being written that
+cannot be answered faithfully. Leave to the run-time refusal below only what no signature can settle — a field whose
+condition is a property of the data rather than of the kind of thing the fixture is.
+
 Do not hold that condition by remembering it. Where the real daemon would fill the field and the fixture carries nothing
 to fill it from, the fixture daemon refuses the request rather than answering with the field unfilled, and the refusal
 is painted over the page as well as rejected to the caller, because the window swallows a failed read into its own
@@ -73,6 +80,19 @@ gallery's own data must never be dressed as one. Extend that refusal to each new
 test over the fixture daemon's replies read every scenario's reply — including the ones that carry no such field — so a
 refusal fails the test run too and not only the scenario someone opens by hand. And before reading a scenario as a fix
 that did not work, check that its fixture can produce the input the fix reads at all.
+
+## Settle what `git` writes against real `git` in a throwaway repository
+
+Applies to `git` output written out by hand rather than taken from a run of `git`: a patch in a gallery change fixture
+or a viewer fixture, an expected patch in a viewer test. Nothing here can see such a literal being wrong — the type
+check sees a string, a unit test compares it against itself, and the gallery renders whatever it says — so it is worth
+no more than the reading of whoever wrote it. Build the case in a throwaway repository, run the command the daemon runs
+for it, and take the output from there.
+
+Two premises had stood in these fixtures as literals for a long time, and both were wrong: that `git` writes zeros in a
+patch's `index` line for a side it read from the worktree disk (it hashes the file; it is `git diff --raw` that writes
+zeros for that side), and that a rename whose content is unchanged has an empty patch (`git` writes the rename's headers
+with no hunk; only a change at one path whose two sides are equal is empty).
 
 ## Stage a defect's states in the order it was reported, not in whatever order is easy to reach
 

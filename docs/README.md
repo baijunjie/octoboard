@@ -190,16 +190,18 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   app: why a verification stays as narrow as the change and why a shared component's markup widens that scope to every
   surface already using it, settling a change to the data a fixture answers with on the replies rather than on
   renderings, looking at a UI state in the gallery before staging it through a daemon and what the gallery cannot
-  settle, the fixture daemon refusing a reply the real one would fill and the fixture cannot, and where to take that
-  condition from, checking in WebKit with real pointer input and with long and CJK text, ruling out a locked screen
-  before trusting a capture, getting an error out of a blank window, bisecting a symptom against the daemon, what a
-  scripted GUI probe can and cannot prove and why its setup goes through the daemon's protocol (raising a session's hand
-  with a forged hook event, seeding trusted folders), serving the shipped frontend bundle to a headless browser as a
-  real client where a check needs no native window, confirming Octoboard is frontmost before a scripted keystroke,
-  freezing the app's WebContent process, where to watch for a report page's blocked navigation, where a network probe's
-  positive control comes from, proving that no key reached the terminal with a stand-in agent that echoes every byte,
-  judging a packaged window's geometry from measured pixels and a real click rather than from a capture alone, macOS's
-  own autocorrect mangling scripted typing, and which checks need a person (input methods, reduced motion).
+  settle, holding what a reply carries in a fixture factory's signature first and in the fixture daemon's refusal only
+  where no signature can settle it, and where to take that condition from, settling hand-written `git` output against
+  real `git` in a throwaway repository, checking in WebKit with real pointer input and with long and CJK text, ruling
+  out a locked screen before trusting a capture, getting an error out of a blank window, bisecting a symptom against the
+  daemon, what a scripted GUI probe can and cannot prove and why its setup goes through the daemon's protocol (raising a
+  session's hand with a forged hook event, seeding trusted folders), serving the shipped frontend bundle to a headless
+  browser as a real client where a check needs no native window, confirming Octoboard is frontmost before a scripted
+  keystroke, freezing the app's WebContent process, where to watch for a report page's blocked navigation, where a
+  network probe's positive control comes from, proving that no key reached the terminal with a stand-in agent that
+  echoes every byte, judging a packaged window's geometry from measured pixels and a real click rather than from a
+  capture alone, macOS's own autocorrect mangling scripted typing, and which checks need a person (input methods,
+  reduced motion).
 - [Writing UI components](memory/writing-ui-components.md) — conventions for `packages/ui` components: why a component
   HeroUI 3 already provides is used rather than hand-built, where to check what it provides, which overrides on one are
   allowed (a colour fix, never a border HeroUI does not draw itself; layout and sizing) and what a justified hand-built

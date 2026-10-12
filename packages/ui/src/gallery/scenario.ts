@@ -2,7 +2,7 @@ import type { MacosPermissionsStatus } from "../platform";
 import type { Agent, AgentModel, DirEntry, MessageParams, ModelsUnavailable } from "../protocol";
 import type { FixtureError, FixtureFiles } from "./fixtures/projectFiles";
 import type { GroupTitle } from "./fixtures/groups";
-import type { FixtureGit } from "./fixtures/projectGit";
+import type { FixtureGit } from "./fixtures/changeFixtures";
 import type { ViewerSubject } from "../viewer/content";
 import type { State, ToastRequest } from "../store";
 import type { TerminalBehaviour } from "./fakeTerminal";

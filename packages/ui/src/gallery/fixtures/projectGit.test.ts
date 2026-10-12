@@ -3,9 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DaemonRequestError } from "../../daemon-client";
 import type { ChangeSide, SideRead } from "../../protocol";
+import type { FixtureChange } from "./changeFixtures";
 import { hasHunks, joinedPatch, linesAfterLastHunk } from "../../viewer/patch";
 import { FixtureUnfillableError, createFixtureDaemon } from "../fixtureDaemon";
-import { SAMPLE_GIT, type FixtureGit } from "./projectGit";
+import type { FixtureGit } from "./changeFixtures";
+import { SAMPLE_GIT } from "./projectGit";
 
 describe("the sample repository's changes", () => {
   const fileSide = (side: ChangeSide) => side.state === "present" && side.kind === "file";
@@ -91,24 +93,42 @@ describe("the sample repository's changes", () => {
   // would carry a field it cannot fill, so a gap fails where it is used instead of shifting the UI
   // into a state the app cannot reach. It gets a fixture of its own, since no sample one has the
   // gap and nothing else would exercise it.
+  const blob = (id: string): ChangeSide => ({ state: "present", path: "src/gap.ts", kind: "file", source: { kind: "index", worktree: "wt-gap", blob: id } });
+  const entry = { group: "staged" as const, old: blob("1111111"), new: blob("2222222") };
+  const change = { group: entry.group, old: entry.old, new: entry.new };
+  /** A worktree holding one change that carries no whole text, with a patch whose hunk makes the
+   * daemon count both of its sides, and `expand` where the change is to have bodies to read. */
+  const gap = (expand?: FixtureChange["expand"]): FixtureGit => ({
+    worktrees: [{ id: "wt-gap", root: "/Users/dev/code/search-api", main: true, head: "c0ffee0", branch: "main", scope_present: true }],
+    changes: { "wt-gap": [{ entry, patch: ["diff --git a/src/gap.ts b/src/gap.ts", "@@ -1,1 +1,1 @@", "-one", "+two", ""].join("\n"), expand }] },
+  });
+  const banner = () => document.querySelector("[data-gallery-failure]")?.textContent ?? "";
+
   it("refuse a reply whose side the daemon would count and the fixture cannot fill", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
-    const blob = (id: string): ChangeSide => ({ state: "present", path: "src/gap.ts", kind: "file", source: { kind: "index", worktree: "wt-gap", blob: id } });
-    const entry = { group: "staged" as const, old: blob("1111111"), new: blob("2222222") };
-    // A patch with a hunk, two sides the daemon reads the content of, and no whole text to count.
-    const patch = ["diff --git a/src/gap.ts b/src/gap.ts", "@@ -1,1 +1,1 @@", "-one", "+two", ""].join("\n");
-    const git: FixtureGit = { worktrees: [{ id: "wt-gap", root: "/Users/dev/code/search-api", main: true, head: "c0ffee0", branch: "main", scope_present: true }], changes: { "wt-gap": [{ entry, patch }] } };
-    const change = { group: entry.group, old: entry.old, new: entry.new };
-    const read = sampleDaemon(git).request({ type: "read_project_change", project: "p-1", worktree: "wt-gap", change });
+    const read = sampleDaemon(gap()).request({ type: "read_project_change", project: "p-1", worktree: "wt-gap", change });
 
     // Not a daemon error, which a scenario answers with on purpose.
     await expect(read).rejects.toThrow(FixtureUnfillableError);
     await expect(read).rejects.not.toBeInstanceOf(DaemonRequestError);
     // Visible to whoever opened the scenario, not only to a test run, and it names the change it is
     // about, since a fixture is found by its worktree, its section and its path.
-    const banner = document.querySelector("[data-gallery-failure]")?.textContent ?? "";
-    expect(banner).toContain("carries no whole text");
-    expect(banner).toContain("wt-gap staged (src/gap.ts)");
+    expect(banner()).toContain("carries no whole text");
+    expect(banner()).toContain("wt-gap staged (src/gap.ts)");
+    expect(logged).toHaveBeenCalled();
+  });
+
+  // The same for a request for the bodies, whose rule is the stricter one: the daemon reads every
+  // present file side there, wherever it is read from, so a side it would read and the fixture
+  // carries nothing for is refused rather than answered with an empty body.
+  it("refuse the bodies of a change the fixture carries none of", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const versions = { old: { state: "absent" as const }, new: { state: "absent" as const } };
+    const read = sampleDaemon(gap({})).request({ type: "read_project_change_bodies", project: "p-1", worktree: "wt-gap", change, ...versions });
+
+    await expect(read).rejects.toThrow(FixtureUnfillableError);
+    await expect(read).rejects.not.toBeInstanceOf(DaemonRequestError);
+    expect(banner()).toContain("wt-gap staged bodies (src/gap.ts): the daemon reads this side's whole body, and the fixture carries none");
     expect(logged).toHaveBeenCalled();
   });
 });

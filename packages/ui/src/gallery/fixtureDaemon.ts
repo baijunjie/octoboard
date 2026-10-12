@@ -9,7 +9,7 @@ import { terminalFixtureUrl } from "./fakeTerminal";
 import { SAMPLE_MODELS } from "./fixtures/agentModels";
 import { text } from "./fixtures/builders";
 import { SAMPLE_FILES, type FixtureError, type FixtureFile, type FixtureFiles } from "./fixtures/projectFiles";
-import { SAMPLE_GIT, type FixtureChange } from "./fixtures/projectGit";
+import { SAMPLE_GIT } from "./fixtures/projectGit";
 
 /** How long after the app subscribes to toasts the scenario's own are raised, for the stack to be
  * on screen to receive them. */
@@ -137,13 +137,13 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
     }
     return { ...side, file: null, lines: lineCount(content) };
   };
-  /** The whole text of each side that a diff reply gives its line count from: both sides of what
-   * expanding its diff answers, which is the same text, with what the fixture states per side over
-   * it. */
-  const wholeOf = ({ expand, whole }: Pick<FixtureChange, "expand" | "whole">): { old?: string; new?: string } => ({
-    ...(expand && "old" in expand ? { old: expand.old, new: expand.new } : {}),
-    ...whole,
-  });
+  /** The daemon's refusal to read a side that is not a regular file, which a request for a change's
+   * bodies meets before it reads anything. */
+  const notAFile = (side: ChangeSide): FixtureError | undefined => {
+    if (side.state !== "present" || side.kind === "file") return undefined;
+    const params = { path: side.path, file_type: side.kind };
+    return { code: "unsupported_file_type", params, message: `${side.path} is a ${side.kind}, which cannot be read here` };
+  };
   /** The worktree a request is answered from: the one it names, else the project's own, as the
    * daemon resolves an omitted one. */
   const worktreeOf = (named: string | undefined) => named ?? git?.worktrees[0]?.id ?? "";
@@ -238,7 +238,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const found = changes.find(({ entry }) => entry.group === "committed" && sameSide(entry.old, body.change.old) && sameSide(entry.new, body.change.new));
           if (!found || found.entry.group === "conflicted") return fail({ code: "file_not_found", params: { path: "" }, message: "no such change" });
           if (found.error) return fail(found.error);
-          const whole = wholeOf(found);
+          const whole = found.whole ?? {};
           const at = `${body.left.branch}..${body.right.branch}`;
           return {
             type: "project_comparison_change",
@@ -263,7 +263,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
             return fail({ code: "file_not_found", params: { path: "" }, message: "no such change" });
           }
           if (found.error) return fail(found.error);
-          const whole = wholeOf(found);
+          const whole = found.whole ?? {};
           const at = `${worktree} ${found.entry.group}`;
           return {
             type: "project_change",
@@ -292,15 +292,26 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
                   sameSide(entry.new, body.change.new),
               )
             : undefined;
-          if (!found?.expand || found.entry.group === "conflicted") return fail({ code: "invalid_change", params: {}, message: "no patch to expand" });
-          const { delay, ...expand } = found.expand;
+          if (!found || found.entry.group === "conflicted") return fail({ code: "invalid_change", params: {}, message: "no patch to expand" });
+          // The daemon reads no content for a link or a submodule, and refuses the whole request
+          // rather than answering that side empty.
+          const unsupported = notAFile(found.entry.old) ?? notAFile(found.entry.new);
+          if (unsupported) return fail(unsupported);
+          if (!found.expand) return fail({ code: "invalid_change", params: {}, message: "no patch to expand" });
+          const { delay, error } = found.expand;
           if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
-          if ("code" in expand) return fail(expand);
-          if (expand.error) return fail(expand.error);
-          const sides = {
-            old: readSide(at, found.entry.old, text(expand.old), expand.old),
-            new: readSide(at, found.entry.new, text(expand.new), expand.new),
+          if (error) return fail(error);
+          const whole = found.whole ?? {};
+          /** A side as the bodies reply reads it. Unlike a diff reply, this one reads every present
+           * file side whatever its source, so a side with no whole text here is a gap in the
+           * fixture rather than one the daemon leaves empty. */
+          const readWhole = (side: ChangeSide, content: string | undefined): SideRead => {
+            if (side.state === "present" && side.kind === "file" && content === undefined) {
+              refuseUnfillable(`${at} (${side.path}): the daemon reads this side's whole body, and the fixture carries none`);
+            }
+            return readSide(at, side, content === undefined ? undefined : text(content));
           };
+          const sides = { old: readWhole(found.entry.old, whole.old), new: readWhole(found.entry.new, whole.new) };
           return asked
             ? { type: "project_change_bodies", project: body.project, worktree: body.worktree ?? null, group: body.change.group, ...sides }
             : { type: "project_comparison_change_bodies", project: body.project, left: body.left, right: body.right, ...sides };
