@@ -36,7 +36,26 @@ move focus to a named element yourself, in the removal handler, rather than leav
 in `packages/ui/src/sidebar/ProjectFilter.tsx` hands it to `returnFocusTo` through `handFocusOff`
 (`packages/ui/src/components/handFocusOff.ts`) on the removal that empties the group, and `TagsInput` in
 `packages/ui/src/dialogs/TagsInput.tsx` hands it to its text input on every removal, a dialog being where focus on
-`<body>` costs Escape and Tab as well.
+`<body>` costs Escape and Tab as well. Where the element goes away from a state change rather than from a handler of
+its own — a region closed by a toggle pressed with `preventFocusOnPress`, a control removed by the answer it was
+waiting for — there is no removal handler to put focus back from, so wrap it in `useFocusHandoff`
+(`packages/ui/src/components/useFocusHandoff.ts`), which after each render notices that the element focus was on has
+left the document. Its caller has to stay mounted and render nothing for that check to run in, rather than unmount
+with the element.
+
+## "Focus left" is three things: check `document.hasFocus()` before answering a `focusout` with no `relatedTarget`
+
+Applies to `packages/ui`, to any rule of the shape "hide this, close this, hand focus on once focus leaves it". A
+`focusout` (React's `onBlur`) carrying no `relatedTarget` has three causes, and only one of them is the user moving
+on: focus fell to `<body>` in this document; focus went into another document — the report panel's iframe, which this
+document then shows as its own active element; or the window itself lost focus, with the element still active and the
+user about to come back to it. A rule that answers all three takes its region off the screen while the user is in
+another application, and moves keyboard focus behind their back with it.
+
+So gate such a rule on `document.hasFocus()`, which is false in the third case alone, and where the iframe has to be
+told apart from `<body>` as well, read `document.activeElement` a task later, once focus has settled — the iframe
+element is what it shows then. Nothing catches the ungated rule on its own: jsdom answers `hasFocus()` with `true`, so
+a test reaches the case only by stubbing it, and no gallery scenario leaves the window for another application.
 
 ## Inside a dialog, a focused control that unmounts or turns disabled takes Escape and Tab with it
 

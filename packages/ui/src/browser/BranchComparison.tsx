@@ -10,7 +10,9 @@ import { useFocusHandoff } from "../components/useFocusHandoff";
 import { Message, useT } from "../i18n/react";
 import type { BranchInfo } from "../protocol";
 import { displayWirePath } from "../wirePath";
-import { ChangeList, type ChangeListView } from "./ChangeList";
+import { ChangeFilterField } from "./ChangeFilterField";
+import { ChangeList } from "./ChangeList";
+import type { ChangeViewState } from "./changeView";
 import type { ChangeItem } from "./changes";
 import { comparisonNotices } from "./comparisonNotices";
 import { GitFailure, GitLoading } from "./gitStates";
@@ -54,7 +56,7 @@ export function BranchComparisonView({
   listRef: React.Ref<HTMLDivElement>;
   /** The selectors' strip, which takes keyboard focus when what held it below goes. */
   selectorsRef: React.RefObject<HTMLDivElement | null>;
-  changeView: ChangeListView;
+  changeView: ChangeViewState;
 }): React.ReactElement {
   const t = useT();
   // When what holds focus below the selectors goes — the list replaced by a failure or an empty
@@ -87,6 +89,7 @@ export function BranchComparisonView({
           </Button>
         </TitledControl>
       </div>
+      <ChangeFilterField changeView={changeView} />
       {branchesError !== undefined && !(comparison.state === "idle" && branches.state === "error") && (
         <p role="alert" className="shrink-0 px-3 py-2 text-xs text-muted">
           {t("git.compare.branchesError", { message: branchesError })}
@@ -122,7 +125,7 @@ function ComparisonContent({
   onOpen: (item: ChangeItem) => void;
   onRetry: (from: Element | null) => void;
   listRef: React.Ref<HTMLDivElement>;
-  changeView: ChangeListView;
+  changeView: ChangeViewState;
 }): React.ReactElement {
   const t = useT();
   if (comparison.state === "idle") {

@@ -261,12 +261,10 @@ const openGitInDrawer = [
   (ui: Ui) => ui.press(ui.t("browser.mode.git")),
   (ui: Ui) => ui.wait(400),
 ];
-/** Types `text` in the change list's filter field, leaving focus in it. */
-const filterBy = (text: string) => [
-  (ui: Ui) => ui.focus(ui.t("git.filter.label")),
-  (ui: Ui) => ui.type(text),
-  (ui: Ui) => ui.wait(300),
-];
+/** Opens the Git view's filter field from the tab row's toggle, where it takes focus. */
+const openFilter = [(ui: Ui) => ui.press(ui.t("git.filter.show")), (ui: Ui) => ui.wait(300)];
+/** Types `text` in the Git view's filter field, leaving focus in it. */
+const filterBy = (text: string) => [...openFilter, (ui: Ui) => ui.type(text), (ui: Ui) => ui.wait(300)];
 
 /** Shows the comparison of branch `left` with branch `right`, choosing each in its selector: From
  * is the first one still to choose, then To. */
@@ -443,11 +441,21 @@ export const projectGitScenarios: Scenario[] = [
     steps: openGit,
   },
   {
+    id: "git-changes-filter-open",
+    group: GROUP,
+    title: "The change filter field just opened",
+    description:
+      "The tab row's filter toggle has opened the field above the list, with keyboard focus in it and nothing typed yet; it goes away again once focus leaves it empty.",
+    width: 1440,
+    state,
+    steps: [...openGit, ...openFilter],
+  },
+  {
     id: "git-changes-filter",
     group: GROUP,
     title: "A worktree's changes filtered by file name",
     description:
-      "\"server\" typed in the field above the list: only the changes whose file name contains it remain, in their sections, and the sections' counts follow.",
+      "\"server\" typed in the field the tab row's filter toggle opened: only the changes whose file name contains it remain, in their sections, and the sections' counts follow.",
     width: 1440,
     state,
     steps: [...openGit, ...filterBy("server")],

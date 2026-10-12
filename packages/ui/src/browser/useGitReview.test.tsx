@@ -291,3 +291,27 @@ it("moves the viewer through the rows a file name filter leaves", async () => {
   act(() => latest.git.view.changeView.onFilterChange(""));
   expect(latest.git.viewer?.navigation?.onPrevious).toBeDefined();
 });
+
+it("drops the filter text with the field, so no filter out of sight narrows a list", () => {
+  let latest!: ReturnType<typeof useGitReview>;
+  const Probe = () => {
+    latest = useGitReview("p", useProjectBrowserState("p"), true);
+    return null;
+  };
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  act(() =>
+    root.render(
+      <DaemonProvider value={daemon}>
+        <Probe />
+      </DaemonProvider>,
+    ),
+  );
+  expect(latest.view.changeView.filterOpen).toBe(false);
+  act(() => latest.view.changeView.onFilterOpenChange(true));
+  act(() => latest.view.changeView.onFilterChange("alpha"));
+  act(() => latest.view.changeView.onFilterOpenChange(false));
+  expect(latest.view.changeView.filter).toBe("");
+  act(() => latest.view.changeView.onFilterOpenChange(true));
+  expect(latest.view.changeView.filter).toBe("");
+});

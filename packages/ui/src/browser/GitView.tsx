@@ -1,5 +1,5 @@
 import { Label, ListBox, Select, Tabs } from "@heroui/react";
-import { FileCheck, FolderTree, GitBranch, GitFork, List, TriangleAlert } from "lucide-react";
+import { FileCheck, FolderTree, FunnelX, GitBranch, GitFork, List, ListFilter, TriangleAlert } from "lucide-react";
 import React, { useRef } from "react";
 
 import { EmptyPanel } from "../components/EmptyPanel";
@@ -17,7 +17,9 @@ import { displayWirePath } from "../wirePath";
 import { BranchComparisonView } from "./BranchComparison";
 import type { GitView as GitViewKind } from "./browserState";
 import { changeLayout } from "./changeLayout";
-import { ChangeList, type ChangeListView } from "./ChangeList";
+import { ChangeFilterField } from "./ChangeFilterField";
+import { ChangeList } from "./ChangeList";
+import type { ChangeViewState } from "./changeView";
 import type { ChangeItem } from "./changes";
 import { GitFailure, GitLoading } from "./gitStates";
 import type { ChangeList as ChangeListState } from "./useChangeList";
@@ -93,7 +95,7 @@ function GitContent({
   worktree: WorktreeViewProps;
   compare: Omit<React.ComponentProps<typeof BranchComparisonView>, "onRetry" | "changeView">;
   /** How both views' change lists show their changes. */
-  changeView: ChangeListView;
+  changeView: ChangeViewState;
   /**
    * Asks again for whatever failed. `from` is the control pressed, which goes away with the
    * failure.
@@ -118,27 +120,16 @@ function GitContent({
       onSelectionChange={(key) => onViewChange(key as GitViewKind)}
       className="flex min-h-0 flex-1 flex-col gap-0"
     >
-      {/* The layout toggle is a member of the tab row: the tabs' container draws only its list, and
-          wrapping it would switch its variant's styles off, so the toggle joins it through the
-          container's `render`. The tabs are `h-10` because HeroUI's small icon-only button is 36px
-          below 48rem and 32px above, and the row's height is the tabs'. */}
+      {/* The filter and layout toggles are members of the tab row: the tabs' container draws only
+          its list, and wrapping it would switch its variant's styles off, so they join it through
+          the container's `render`. The tabs are `h-10` because HeroUI's small icon-only button is
+          36px below 48rem and 32px above, and the row's height is the tabs'. */}
       <Tabs.ListContainer
         className="flex shrink-0 items-center ps-3 pe-2"
         render={(props) => (
           <div {...props}>
             {props.children}
-            <IconToggle
-              className="ms-auto shrink-0"
-              label={t(changeView.layout === "tree" ? "git.layout.flat" : "git.layout.tree")}
-              isSelected={changeView.layout === "tree"}
-              onChange={(selected) => changeLayout.set(selected ? "tree" : "flat")}
-            >
-              {changeView.layout === "tree" ? (
-                <FolderTree aria-hidden="true" className="size-4" />
-              ) : (
-                <List aria-hidden="true" className="size-4" />
-              )}
-            </IconToggle>
+            <ChangeViewToggles changeView={changeView} />
           </div>
         )}
       >
@@ -179,7 +170,7 @@ function WorktreeChanges({
 }: WorktreeViewProps & {
   worktrees: WorktreeInfo[];
   own: string;
-  changeView: ChangeListView;
+  changeView: ChangeViewState;
   onRetry: (from: Element | null) => void;
 }): React.ReactElement {
   const t = useT();
@@ -200,6 +191,7 @@ function WorktreeChanges({
         missing={!shown}
         onChange={(id) => onWorktreeChange(id === own ? undefined : id)}
       />
+      <ChangeFilterField changeView={changeView} />
       <div className="flex min-h-0 flex-1 flex-col" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
         {shown && !gone && !shown.scope_present && <p className="shrink-0 px-3 py-2 text-xs text-muted">{t("git.worktree.scopeMissing")}</p>}
         {gone ? (
@@ -218,6 +210,34 @@ function WorktreeChanges({
         )}
       </div>
     </>
+  );
+}
+
+/** The two view toggles at the end of the row of view tabs: the one that holds the filter field
+ * the views draw (`ChangeFilterField`), then Group by folder. Closing the filter drops the text with the field,
+ * so no filter out of sight narrows a list; the field hands keyboard focus back to the toggle as
+ * it goes, which is what `filterToggleRef` is for. */
+function ChangeViewToggles({ changeView }: { changeView: ChangeViewState }): React.ReactElement {
+  const t = useT();
+  return (
+    <div className="ms-auto flex shrink-0 items-center gap-1">
+      <IconToggle
+        ref={changeView.filterToggleRef}
+        label={t(changeView.filterOpen ? "git.filter.hide" : "git.filter.show")}
+        isSelected={changeView.filterOpen}
+        expanded={changeView.filterOpen}
+        onChange={changeView.onFilterOpenChange}
+      >
+        {changeView.filterOpen ? <FunnelX aria-hidden="true" className="size-4" /> : <ListFilter aria-hidden="true" className="size-4" />}
+      </IconToggle>
+      <IconToggle
+        label={t(changeView.layout === "tree" ? "git.layout.flat" : "git.layout.tree")}
+        isSelected={changeView.layout === "tree"}
+        onChange={(selected) => changeLayout.set(selected ? "tree" : "flat")}
+      >
+        {changeView.layout === "tree" ? <FolderTree aria-hidden="true" className="size-4" /> : <List aria-hidden="true" className="size-4" />}
+      </IconToggle>
+    </div>
   );
 }
 

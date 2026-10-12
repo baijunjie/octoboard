@@ -226,13 +226,15 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   receives a key in `packages/ui`: why a HeroUI control pressed with the mouse takes focus off the terminal, when
   `preventFocusOnPress` is needed and why "⋯" menus are built on `ActionMenu`, the other ways focus falls to `<body>` (a
   region hidden with CSS, a reordered list, a wrapper that renders nothing once its last child is gone) and the hooks
-  that put it back, why a dialog loses its Escape and its Tab containment when a focused control unmounts or turns
-  disabled — so its subject is switched with a reset key rather than by re-keying it, and an action that takes seconds
-  marks its button pending rather than disabled — and why no `blur` fires on that removal either, why nothing in the
-  React tree gets Escape first (a pane's own `window` listener, and react-aria's while any tooltip is open), why a key
-  handler goes on a plain DOM element rather than on a HeroUI or react-aria component, which swallows every key it is
-  handed a handler for, and how a surface that has to stay usable while a dialog is open is marked a top layer and
-  ordered against the backdrop.
+  that put it back, including the one to reach for where a region goes away from a state change and there is no removal
+  handler to hand focus on from, why a `focusout` with no `relatedTarget` is three different things — so a region that
+  hides itself once focus leaves it is gated on `document.hasFocus()` — why a dialog loses its Escape and its Tab
+  containment when a focused control unmounts or turns disabled — so its subject is switched with a reset key rather
+  than by re-keying it, and an action that takes seconds marks its button pending rather than disabled — and why no
+  `blur` fires on that removal either, why nothing in the React tree gets Escape first (a pane's own `window` listener,
+  and react-aria's while any tooltip is open), why a key handler goes on a plain DOM element rather than on a HeroUI or
+  react-aria component, which swallows every key it is handed a handler for, and how a surface that has to stay usable
+  while a dialog is open is marked a top layer and ordered against the backdrop.
 - [Reading daemon state in the UI](memory/reading-daemon-state-in-the-ui.md) — why a map read through
   `useDaemonStore` has a new identity after every daemon event of its kind, so an effect or memo meant to fire on one
   change depends on the resolved values it reads and never on the map, and the derivations that do take the map; why an

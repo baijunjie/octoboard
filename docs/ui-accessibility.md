@@ -310,7 +310,15 @@ in and whose accessible name and tooltip say what pressing will do, so the name 
 "Two-state icon toggles" in `docs/product/labels-and-tooltips.md`). Nothing distinguishes the pressed button from the
 unpressed one by fill: `.icon-toggle` in `packages/ui/src/style.css` resets HeroUI's selected tokens back to the
 resting ones, and `aria-pressed` carries the state for assistive technology. The window chrome's two pane toggles were
-already built this way; the Git mode's group-by-folder choice and the viewer's three view controls now are too.
+already built this way; the Git mode's two view toggles — the one that shows and hides the change filter field, and
+group by folder — and the viewer's three view controls now are too.
+
+A two-state control that is also what shows and hides a region carries `aria-expanded` beside its `aria-pressed`, the
+two saying the same thing in the two vocabularies: the Git mode's filter toggle is pressed while its field is on
+screen, and expanded for the same reason (`expanded` on `IconToggle`). The region it shows has no id of its own and so
+no `aria-controls`; "Expanded and selected" above asks only for `aria-expanded`. A region taken away this way hands
+keyboard focus back to the toggle when it was holding it, the toggle being pressed without taking focus itself; the
+hand-off's ring follows how the press came, as "Focus moved by a change the user did not make" above has it.
 
 **A notice carries its severity in a glyph, never in its fill alone.** The file viewer's notices — what is said above
 content that is still shown — are one block in three tones (`Notice` in `packages/ui/src/viewer/viewerStates.tsx`):

@@ -407,6 +407,8 @@ export const zhHans: Translation<"other"> = {
   "git.views": "Git 视图",
   "git.layout.tree": "按文件夹分组",
   "git.layout.flat": "不按文件夹分组",
+  "git.filter.show": "按文件名筛选",
+  "git.filter.hide": "隐藏筛选框",
   "git.filter.label": "文件名包含",
   "git.filter.placeholder": "筛选更改",
   "git.filter.noMatch": "没有匹配的更改",

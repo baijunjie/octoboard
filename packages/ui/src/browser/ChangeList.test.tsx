@@ -2,29 +2,26 @@
 import { act } from "react";
 import { expect, it, vi } from "vitest";
 
-import { ChangeList, type ChangeListView } from "./ChangeList";
-import { change, mountRows } from "./changeListTestSupport";
+import { ChangeList } from "./ChangeList";
+import type { ChangeViewState } from "./changeView";
+import { change, changeViewFixture, mountRows } from "./changeListTestSupport";
 import { changeItems } from "./changes";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const items = changeItems([change("staged", "src/utils/alpha.ts"), change("staged", "src/beta.ts"), change("unstaged", "src/beta.ts"), change("unstaged", "docs/alpha.md")]);
 
-function render(view: Partial<ChangeListView> = {}) {
-  const onFilterChange = vi.fn();
-  const full: ChangeListView = { layout: "flat", collapsed: new Set(), onCollapsedChange: () => {}, filter: "", onFilterChange, ...view };
-  const container = mountRows(<ChangeList items={items} selected={undefined} label="Changes" onOpen={() => {}} listRef={() => {}} changeView={full} />, {
-    clipboard: { writeText: async () => {} },
-  });
-  return { container, onFilterChange };
+function render(view: Partial<ChangeViewState> = {}) {
+  const container = mountRows(
+    <ChangeList items={items} selected={undefined} label="Changes" onOpen={() => {}} listRef={() => {}} changeView={changeViewFixture(view)} />,
+    { clipboard: { writeText: async () => {} } },
+  );
+  return { container };
 }
 const rows = (container: HTMLElement) => [...container.querySelectorAll("[role=row][data-key]")].map((row) => row.getAttribute("aria-label") ?? row.textContent);
-const field = (container: HTMLElement) => container.querySelector<HTMLInputElement>("input")!;
 
-it("shows every row, and the field above them, when nothing is typed", () => {
+it("shows every row when nothing narrows them", () => {
   const { container } = render();
-  expect(field(container)).not.toBeNull();
-  expect(field(container).getAttribute("aria-label")).toBe("File name contains");
   expect(rows(container)).toEqual(["alpha.ts, modified, src/utils", "beta.ts, modified, src", "alpha.md, modified, docs", "beta.ts, modified, src"]);
   expect(container.textContent).toContain("Staged2");
   expect(container.textContent).toContain("Unstaged2");
@@ -44,46 +41,12 @@ it("narrows the tree the same way: only the directories that lead to a match and
   expect(container.textContent).toContain("Unstaged1");
 });
 
-it("says so when no file name matches, and keeps the field", () => {
+it("says so when no file name matches", () => {
   for (const layout of ["flat", "tree"] as const) {
     const { container } = render({ layout, filter: "zzz" });
     expect(rows(container)).toEqual([]);
     expect(container.textContent).toContain("No matching changes");
-    expect(field(container).value).toBe("zzz");
   }
-});
-
-it("clears the filter with the field's Clear button", () => {
-  const { container, onFilterChange } = render({ filter: "alpha" });
-  act(() => container.querySelector<HTMLElement>("button")!.click());
-  expect(onFilterChange).toHaveBeenLastCalledWith("");
-});
-
-it("keeps the field out of the list, so its keys never reach the list's type-ahead or arrows", () => {
-  const { container } = render();
-  const input = field(container);
-  expect(input.closest("[role=grid], [role=treegrid]")).toBeNull();
-  act(() => input.focus());
-  act(() => {
-    for (const key of ["b", "ArrowDown"]) input.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
-  });
-  expect(container.querySelector("[data-current]")).toBeNull();
-  expect(document.activeElement).toBe(input);
-});
-
-it("keeps an input method's composition from anything above the field", () => {
-  const { container, onFilterChange } = render({ filter: "alpha" });
-  const above = vi.fn();
-  container.addEventListener("keydown", above);
-  const input = field(container);
-  act(() => input.focus());
-  act(() => void input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, isComposing: true })));
-  act(() => void input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, keyCode: 229 })));
-  expect(above).not.toHaveBeenCalled();
-  expect(onFilterChange).not.toHaveBeenCalled();
-  // Outside a composition Escape clears the field, and goes on up.
-  act(() => void input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-  expect(above).toHaveBeenCalledOnce();
 });
 
 it("announces that nothing matches, and only when something is typed", () => {

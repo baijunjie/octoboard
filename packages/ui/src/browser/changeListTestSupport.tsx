@@ -8,6 +8,7 @@ import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import type { ChangeEntry } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import type { ChangeViewState } from "./changeView";
 
 /** jsdom has no ResizeObserver, which the rows' names (`FadeOverflow`) need. */
 class StubResizeObserver {
@@ -23,6 +24,25 @@ export const change = (group: "staged" | "unstaged", path: string): ChangeEntry 
   old: { state: "present", path, kind: "file", source: { kind: "index", worktree: "w", blob: "b" } },
   new: { state: "present", path, kind: "file", source: { kind: "live", root_id: "r", version: "v" } },
 });
+
+/** A `ChangeViewState` for a list that does nothing of its own, with `view` over it. The toggle the
+ * filter field hands keyboard focus to as it goes lives outside the list, so a stand-in for it is
+ * put in the document and taken out again when the test ends. */
+export function changeViewFixture(view: Partial<ChangeViewState> = {}): ChangeViewState {
+  const toggle = document.body.appendChild(document.createElement("button"));
+  onTestFinished(() => toggle.remove());
+  return {
+    layout: "flat",
+    collapsed: new Set(),
+    onCollapsedChange: () => {},
+    filterOpen: false,
+    onFilterOpenChange: () => {},
+    filter: "",
+    onFilterChange: () => {},
+    filterToggleRef: { current: toggle },
+    ...view,
+  };
+}
 
 interface ToastSpies {
   notice: (message: string) => void;

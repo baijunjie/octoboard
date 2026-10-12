@@ -23,7 +23,8 @@ Git mode does neither, and neither one refreshes the other.
 Two tabs at the top of the Git mode switch between its views, **Uncommitted** and **Compare**; a project starts on
 Uncommitted. The tabs are there once the project's repository is found (see "The repository and its worktrees" below);
 while it is being read, when it cannot be read, or when there is none, what the Git mode says takes their place. At the
-end of the tabs' row is the one control both views share, **Group by folder** (see "Flat or grouped by folder" below).
+end of the tabs' row are the two controls both views share: the one that shows and hides the file name filter field,
+then **Group by folder** (see "Filtering by file name" and "Flat or grouped by folder" below).
 
 Each view reads the repository only while it is on screen: the Uncommitted view as "Keeping the list up to date"
 below says, the Compare view as "The branch selectors" and "When a comparison is made" below say. Switching views
@@ -161,11 +162,12 @@ action so far. A folder's row in the grouped form has no such button, and neithe
 
 ### Flat or grouped by folder
 
-**Group by folder**, the toggle at the end of the row of view tabs, switches the change list between one row per
-change and the changes grouped under the folders they are in. It is a single icon button whose icon shows which form
-the lists are in and whose name says what pressing it will do, so the name alternates between "Group by folder" and
-"Show as flat list" (see "Two-state icon toggles" in `docs/product/labels-and-tooltips.md`). It is the one choice for
-both views, kept across projects and after the application restarts; both lists are flat until it is turned on.
+**Group by folder**, the last of the two toggles at the end of the row of view tabs, switches the change list between
+one row per change and the changes grouped under the folders they are in. It is a single icon button whose icon shows
+which form the lists are in and whose name says what pressing it will do, so the name alternates between "Group by
+folder" and "Show as flat list" (see "Two-state icon toggles" in `docs/product/labels-and-tooltips.md`). It is the one
+choice for both views, kept across projects and after the application restarts; both lists are flat until it is turned
+on.
 
 Grouped by folder, a list keeps its sections and their counts — the Uncommitted view's Staged, Conflicted, Unstaged
 and Untracked, the comparison's one section — and within each section the changes sit under their folders:
@@ -191,11 +193,23 @@ changes" below).
 
 ### Filtering by file name
 
-Above the change list, in both views and both forms of the list, flat or grouped by folder, is a **filter field**
-that narrows the rows to the changes whose file name contains its text. It is there whenever the list is: not in
-place of the lines that say there is nothing to list (see "What the list says instead" and "What the view says"
-below).
+The **filter field** narrows a change list to the changes whose file name contains its text, in both views and both
+forms of the list, flat or grouped by folder. It is not on screen to begin with: the **first of the two toggles at the
+end of the row of view tabs** shows and hides it, its name saying what pressing it will do — "Filter by file name"
+while the field is hidden, "Hide the filter" while it is shown (see "Two-state icon toggles" in
+`docs/product/labels-and-tooltips.md`). Assistive technology is also told whether the field is on screen.
 
+- **Opening it from the toggle puts the field under the view's selectors** — the worktree selector in the Uncommitted
+  view, the From and To selectors in the Compare view — and **keyboard focus in the field**. The field is there in
+  every state of a view, over the lines that say the changes are being read, that reading them failed, that there is
+  nothing to list, or that a branch has still to be chosen (see "What the list says instead" and "What the view says"
+  below), so the toggle always has a field to open.
+- **An empty field takes itself away once keyboard focus leaves it** — on Tab out of it, or on a press that puts focus
+  elsewhere — so the only field on screen is one whose effect can be seen; a field holding nothing but whitespace
+  counts as empty. The window itself losing focus is not focus leaving the field: the field stays for the user coming
+  back to it. **A field with text typed in it stays**, so no list is left narrowed by a field that has gone.
+- **Closing it from the toggle drops the text with the field**, and hands keyboard focus back to the toggle when the
+  field was holding it. Opening the field again starts from empty.
 - **Only the file's name is matched** — the last part of its path, as its row shows it — ignoring case and any
   whitespace around the text; the folders it is in are not, so `src` does not keep every file under `src/`. A rename
   is matched by its new name. An empty field, or one holding only whitespace, shows every change.
@@ -204,18 +218,20 @@ below).
   is listed again, is unchanged; a list listed again is narrowed by the same text.
 - **When nothing matches**, the list's place says there are no matching changes (announced to assistive technology
   as it appears), and the field stays, so the text can be changed or cleared. Clearing it brings the whole list back.
-- The field has a **clear** button, and **Escape** in it clears it. In a drawer or a floating pane, Escape
-  in a field with text only clears it and leaves the pane; Escape in the then empty field closes the pane, as it does
-  from anywhere else in it.
+- The field has a **clear** button, and **Escape** in it clears it; the field itself stays, keyboard focus not having
+  left it. In a drawer or a floating pane, Escape in a field with text only clears it and leaves the pane; Escape in
+  the then empty field closes the pane, as it does from anywhere else in it.
 - The field is apart from the list: typing in it never moves through the list's rows, as typing a name's first
   letters in the list does. While an input method is composing text in it, its keys, Escape included, belong to the
   composition, and do not clear the field.
 
-The text is **one for both views** of a project, and is kept while the project's pane stays in the right pane —
-through switching views and modes, choosing worktrees or branches, and the pane being hidden. Once the right pane is
-given to something else (see "What the right pane shows" in `docs/product/window-layout.md`), or the window is
-reloaded or the application restarted, the project's pane starts with the field empty. It is not a choice kept like
-the grouping by folder.
+The text, and whether the field is on screen, are **one for both views** of a project: switching views carries the
+open field over with the same text in it, and leaves keyboard focus where it is rather than taking it into the field
+again. Both are kept while the project's pane stays in the right pane — through switching views and modes, choosing
+worktrees or branches, and the pane being hidden — the text no longer than the field, which drops it as it closes.
+Once the right pane is given to something else (see "What the right pane shows" in
+`docs/product/window-layout.md`), or the window is reloaded or the application restarted, the project's pane starts
+with no filter field. It is not a choice kept like the grouping by folder.
 
 The viewer moves through the rows the filter leaves (see "Moving between changes" below). The Files mode's tree has no
 such field.
@@ -600,8 +616,9 @@ in place of the diff, in the current language. The cases beyond those of a file 
 the Uncommitted view's selected change; the branches chosen for From and To and the Compare view's selected change;
 and, grouped by folder, the folders folded away. Reloading the window, or restarting the application, starts every
 project on the Uncommitted view and the worktree holding its folder, with no branches chosen, no change selected and
-every folder open. Change lists, branch lists, comparisons and their contents are never stored. The filter's text is
-kept only while the project's pane stays in the right pane (see "Filtering by file name" above).
+every folder open. Change lists, branch lists, comparisons and their contents are never stored. Whether the filter
+field is on screen, and the text in it, last only while the project's pane stays in the right pane, and the text only
+until the field is closed (see "Filtering by file name" above).
 
 **Across projects and restarts**: whether the change lists are grouped by folder (see "Flat or grouped by folder"
 above), kept as the file viewer's document-or-source, unified-or-split and wrap choices are. The mode itself is kept

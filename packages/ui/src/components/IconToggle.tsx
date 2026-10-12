@@ -11,25 +11,32 @@ import { TitledControl } from "./TitledControl";
  */
 export function IconToggle({
   label,
-  className,
   isSelected,
   onChange,
+  expanded,
+  ref,
   children,
 }: {
   label: string;
-  className?: string;
   isSelected: boolean;
   onChange: (selected: boolean) => void;
+  /** For a toggle that shows or hides a region rather than only restyling one: whether the region
+   * is on screen, as `aria-expanded`. */
+  expanded?: boolean;
+  /** The button itself, for a region that has to hand keyboard focus back to it as it goes. */
+  ref?: React.Ref<HTMLButtonElement>;
   /** The icon of the current state. */
   children: React.ReactNode;
 }): React.ReactElement {
   return (
     <TitledControl title={label}>
       <ToggleButton
+        ref={ref}
         isIconOnly
         size="sm"
-        className={className ? `icon-toggle ${className}` : "icon-toggle"}
+        className="icon-toggle"
         aria-label={label}
+        aria-expanded={expanded}
         isSelected={isSelected}
         onChange={onChange}
         preventFocusOnPress

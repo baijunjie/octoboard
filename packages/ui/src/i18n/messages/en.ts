@@ -447,6 +447,8 @@ export const en = {
   "git.views": "Git view",
   "git.layout.tree": "Group by folder",
   "git.layout.flat": "Show as flat list",
+  "git.filter.show": "Filter by file name",
+  "git.filter.hide": "Hide the filter",
   "git.filter.label": "File name contains",
   "git.filter.placeholder": "Filter changes",
   "git.filter.noMatch": "No matching changes",

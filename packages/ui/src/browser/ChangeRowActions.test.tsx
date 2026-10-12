@@ -4,7 +4,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 import type { PlatformAdapter } from "../platform";
 import { ChangeList } from "./ChangeList";
-import { change, mountRows } from "./changeListTestSupport";
+import { change, changeViewFixture, mountRows } from "./changeListTestSupport";
 import { changeItems } from "./changes";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -22,7 +22,7 @@ function render(layout: "flat" | "tree", clipboard: PlatformAdapter["clipboard"]
       label="Changes"
       onOpen={onOpen}
       listRef={() => {}}
-      changeView={{ layout, collapsed: new Set(), onCollapsedChange: () => {}, filter: "", onFilterChange: () => {} }}
+      changeView={changeViewFixture({ layout })}
     />,
     { clipboard, toasts },
   );

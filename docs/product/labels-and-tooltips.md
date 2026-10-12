@@ -33,8 +33,9 @@ consoles' avatars, the ⋮ buttons and the pin buttons below. These are:
 - the project pane's Refresh button, a folder's chevron in its file tree and in the Git mode's change tree ("Expand" /
   "Collapse"), the file viewer's Previous file and Next file buttons (see `docs/product/project-pane.md`), and the Git
   mode's Swap branches (see "The branch selectors" in `docs/product/project-pane-git-mode.md`);
-- the file viewer's three view controls and the Git mode's Group by folder, whose tooltip is the name they announce
-  and alternates with their state (see "Two-state icon toggles" below);
+- the file viewer's three view controls and the Git mode's two view toggles — the one that shows and hides the change
+  filter field, and Group by folder — whose tooltip is the name they announce and alternates with their state (see
+  "Two-state icon toggles" below);
 - the two controls of the console dialog's Avatar field (see "Avatar" in
   `docs/product/consoles-and-projects.md`) — the round control itself, named for choosing an image while it is empty
   and for replacing it once one is picked, and the delete button over its corner, named for removing the image;
@@ -48,14 +49,16 @@ rail" in `docs/product/sidebar.md`).
 
 A control that switches a view between two states is **one icon button**, not a set of choices side by side. These are
 the two pane toggles (see "The two pane toggles" in `docs/product/window-layout.md`), the file viewer's three view
-controls (see "The file viewer" in `docs/product/project-pane.md`) and the Git mode's Group by folder (see "Flat or
-grouped by folder" in `docs/product/project-pane-git-mode.md`). For all of them:
+controls (see "The file viewer" in `docs/product/project-pane.md`) and the Git mode's two — the toggle of its change
+filter field (see "Filtering by file name" in `docs/product/project-pane-git-mode.md`) and Group by folder (see "Flat
+or grouped by folder" in the same doc). For all of them:
 
 - Pressing the button switches the state, and its icon becomes the other state's.
 - **The icon shows the state the view is in; the name says what pressing will do**, so the name alternates with the
   state. That name is both the tooltip and what assistive technology announces, as "Tooltips on icon-only controls"
-  above says. Assistive technology is also told which state the control is in: whether the button is pressed, or, for
-  a pane toggle, whether its pane is expanded.
+  above says. Assistive technology is also told which state the control is in: whether the button is pressed; a pane
+  toggle says instead whether its pane is expanded, and the Git mode's filter toggle says both, pressed while its
+  field is on screen.
 - **Nothing about the state is said in colour**: the button in its pressed state is drawn exactly as in its
   unpressed one.
 

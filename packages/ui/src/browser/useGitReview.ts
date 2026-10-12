@@ -59,10 +59,18 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
   const selectorsRef = useRef<HTMLDivElement>(null);
   const layout = changeLayout.useValue();
   const collapsed = browser.collapsedChangeDirs;
-  // The file name text narrowing both views' lists: kept while this project's browser is, shared by
-  // the two views, and not stored (it narrows what is on screen now, not a choice to come back to).
+  // The file name text narrowing both views' lists, and whether the field it is typed in is on
+  // screen at all: kept while this project's browser is, shared by the two views, and not stored
+  // (they narrow what is on screen now, not a choice to come back to). Closing the field drops the
+  // text with it, so no filter the user cannot see narrows a list.
   const [filter, setFilter] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterToggleRef = useRef<HTMLButtonElement>(null);
   const shownFilter = filter.trim();
+  const openFilter = (open: boolean) => {
+    setFilterOpen(open);
+    if (!open) setFilter("");
+  };
 
   // A worktree found gone may have been replaced by another at its place, or others added: what
   // the selector offers is asked for again.
@@ -192,7 +200,16 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
     };
   }, [changes.list, shownComparison, viewedChange, viewedOrigin, layout, collapsed, shownFilter]);
 
-  const changeView = { layout, collapsed, onCollapsedChange: browser.setCollapsedChangeDirs, filter, onFilterChange: setFilter };
+  const changeView = {
+    layout,
+    collapsed,
+    onCollapsedChange: browser.setCollapsedChangeDirs,
+    filterOpen,
+    onFilterOpenChange: openFilter,
+    filter,
+    onFilterChange: setFilter,
+    filterToggleRef,
+  };
 
   return {
     view: {

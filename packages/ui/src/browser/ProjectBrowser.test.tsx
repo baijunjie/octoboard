@@ -17,6 +17,9 @@ const roots: Root[] = [];
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+  // jsdom has no Web Animations API, which react-aria asks the tabs' indicator for as the chosen
+  // tab changes; it is taken off the prototype again so no later file inherits it.
+  Element.prototype.getAnimations = () => [];
 });
 
 afterEach(async () => {
@@ -24,6 +27,7 @@ afterEach(async () => {
   await act(async () => pending.splice(0).forEach((request) => request.reject(new Error("test over"))));
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  delete (Element.prototype as Partial<Element>).getAnimations;
 });
 
 const daemon: Daemon = {
@@ -175,6 +179,26 @@ it("keeps spinning after two quick presses until the last refresh settles", asyn
   expect(spinning(icon())).toBe(true);
   await answer("list_project_dir", dir("files-twice"));
   expect(spinning(icon())).toBe(false);
+});
+
+it("opens one filter field from the Git tab row's toggle, and keeps one across both views", async () => {
+  await mount("git-filter", "git");
+  await answer("get_project_source", source("git-filter"));
+  await answer("list_project_changes", changes("git-filter"));
+  const fields = () => document.querySelectorAll("input[aria-label='File name contains']");
+  const toggle = (label: string) => document.querySelector<HTMLElement>(`button[aria-label='${label}']`)!;
+  expect(fields()).toHaveLength(0);
+
+  await act(async () => toggle("Filter by file name").click());
+  expect(fields()).toHaveLength(1);
+  expect(toggle("Hide the filter").getAttribute("aria-expanded")).toBe("true");
+
+  // The Compare view draws the same one field, so the toggle never shows two or none.
+  await act(async () => document.querySelector<HTMLElement>("[role=tab][data-key=compare]")!.click());
+  expect(fields()).toHaveLength(1);
+
+  await act(async () => toggle("Hide the filter").click());
+  expect(fields()).toHaveLength(0);
 });
 
 // A live region inserted already holding its text is not announced (WebKit, VoiceOver), so each
