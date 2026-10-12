@@ -540,12 +540,14 @@ A session's title can be changed at any time, archived sessions included. An emp
 With no session selected, the terminal's area says so and asks for a session to be selected, and the terminal cannot
 take keyboard focus: whatever would hand focus to it (hiding a pane that holds focus, or the session going away while
 the terminal holds it) puts focus on the top bar's first enabled control instead, and leaves it on nothing when it is
-already on nothing. That empty state is what a console with no session selected shows; with **no console at all**
-there is no terminal in the window and the welcome screen fills the content panel instead (see
-`docs/product/welcome-screen.md`). The selected session's terminal is live: keystrokes go straight to the agent,
-exactly as in a system terminal. Mouse reporting works, so an agent's own mouse-driven TUI is usable. `Ctrl+C` reaches
-the agent, and so do `Tab` and `Shift+Tab`. `F6` and `Shift+F6` never do: they move keyboard focus to another region
-of the window (see "Moving focus between regions with F6" in `docs/product/moving-focus-between-regions.md`).
+already on nothing. That empty state is what a console with no session selected shows; with **no console at all** there
+is no terminal in the window and the welcome screen fills the content panel instead (see
+`docs/product/welcome-screen.md`). **The one exception to that line and to those focus rules is a console with nothing
+in it at all**, whose area offers a project instead — see "A console with nothing in it" below. The selected session's
+terminal is live: keystrokes go straight to the agent, exactly as in a system terminal. Mouse reporting works, so an
+agent's own mouse-driven TUI is usable. `Ctrl+C` reaches the agent, and so do `Tab` and `Shift+Tab`. `F6` and `Shift+F6`
+never do: they move keyboard focus to another region of the window (see "Moving focus between regions with F6" in
+`docs/product/moving-focus-between-regions.md`).
 
 - Attaching to a session replays the **most recent 2 MiB** of that session's output, then follows live output. The
   terminal itself keeps 10,000 lines of scrollback.
@@ -619,3 +621,30 @@ of the window (see "Moving focus between regions with F6" in `docs/product/movin
   the new process's replay rather than appending to it. A session whose process ended before Octoboard kept this
   output, or with the daemon killed outright, shows a blank terminal, even if an earlier process left some. Deleting
   the session's record deletes the output too (see "Files Octoboard owns" in `docs/product/application-lifecycle.md`).
+
+### A console with nothing in it
+
+While the **current** console holds neither a project nor a session that is not archived, the terminal's area shows a
+full empty panel in place of the line asking for a session to be selected: a folder glyph, a heading saying there are
+no projects yet, a line saying a project is a directory the user works in and runs sessions in, and an **Add project**
+button, which opens the same new-project dialog the console's action menu does (see "The console header" in
+`docs/product/sidebar.md` and "Associating a project" in `docs/product/consoles-and-projects.md`). The sidebar's
+Projects section carries the same offer as a row (see "Empty rows" in `docs/product/sidebar.md`).
+
+- It is shown only while **nothing is selected**, as the line it stands in for is. The selection survives a console
+  switch, so right after switching to such a console, or creating one, the terminal still shows the session selected
+  in the console before it and no panel; the sidebar's row carries the offer then.
+- The console read is the **current** one, not the one the sidebar is previewing while the pointer rests on another
+  console's avatar on the rail (see "Previewing a console from the rail" in `docs/product/sidebar.md`).
+- An **archived** session does not count, so a console whose sessions are all archived shows the panel. A console
+  session that is not archived does count, and a console can hold one with no project at all; the area then asks for a
+  session to be selected as usual.
+- **The archive view covering the terminal suppresses the panel**: while it is open the area shows the line instead
+  (see "The archive view" in `docs/product/sidebar.md`).
+- **Keyboard**: with the panel up the terminal's area is a stop in the `F6` cycle, which it is not while it only shows
+  the line, and whatever hands keyboard focus to the terminal puts it on the **Add project** button rather than on the
+  top bar, exactly as it does on the cover's Reconnect button (see "Moving focus between regions with F6" in
+  `docs/product/moving-focus-between-regions.md`). Focus that is on nothing is left on nothing, so launching the
+  application pulls it onto no control and `Shift+F6` pressed with focus nowhere passes the area over for the region
+  before it. When the button goes away because a project has been added, from this window or another client, while it
+  holds focus, focus goes to the top bar's first enabled control.

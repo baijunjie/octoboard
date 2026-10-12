@@ -15,14 +15,16 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   glyphs and their transitions, the raised hand and its notification, how a declined Claude Code prompt lowers the
   hand from the agent's own transcript and what that costs to keep working, archiving, interruption and resuming,
   switching a session to another account of its agent, how a console session's archive, reopen and delete follow the
-  sessions bound to it, where archived sessions are kept, and the terminal.
+  sessions bound to it, where archived sessions are kept, and the terminal, including what its area offers in place of
+  asking for a session to be selected while the console has nothing in it.
 - [Sidebar](product/sidebar.md) — one console at a time, picked on the rail's console switcher with each console's
   activity badge, previewing another console from the rail while the sidebar is hidden, the console header, the
   console sessions section and the project list, project and session rows and their menus, the sessions bound to a
   project session listed under it, the binding badge a bound session carries, keyboard focus on rows, the order of
   projects and sessions and pinning, filtering the project list and folding every project from its heading, how the
-  sidebar follows the selected session, how its view changes are animated, the archive view, and right-clicking a
-  row, header or rail avatar for its action menu (and where focus goes when the menu closes).
+  sidebar follows the selected session, how its view changes are animated, the shared shape of the empty row a section
+  with nothing to list takes, the archive view, and right-clicking a row, header or rail avatar for its action menu
+  (and where focus goes when the menu closes).
 - [Focus mode](product/focus-mode.md) — a project's and a console session's focus mode: what each view lists, where a
   lead session and the sessions under it are listed and where they are only counted, the switch strip of a console
   session's focus mode (its fixed chip order, the activity each chip carries, a click versus ⌃Tab / ⌃⇧Tab and which

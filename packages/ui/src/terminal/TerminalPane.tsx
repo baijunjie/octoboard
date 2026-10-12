@@ -1,5 +1,5 @@
 import { Button, Spinner, Surface } from "@heroui/react";
-import { SquareTerminal, Unplug } from "lucide-react";
+import { FolderOpen, FolderPlus, SquareTerminal, Unplug } from "lucide-react";
 import React, { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 
 import "@xterm/xterm/css/xterm.css";
@@ -23,12 +23,18 @@ interface TerminalPaneProps {
   onResume: (sessionId: string) => Promise<boolean>;
   /** A resume of `session` is in flight: its process is being started. */
   resuming?: boolean;
+  /** Adds a project to the console, offered by the empty state in place of its line while the
+   * console has neither a project nor a session to select, since asking for a session to be
+   * selected says nothing then. */
+  onAddProject?: () => void;
   ref?: React.Ref<TerminalPaneHandle>;
 }
 
 export interface TerminalPaneHandle {
-  /** Puts keyboard focus on the terminal, or on the cover's Reconnect button while it is offered:
-   * the terminal's Tab belongs to the agent, so this is how the keyboard reaches the button. */
+  /** Puts keyboard focus on the terminal, or on the button the pane offers in its place — the
+   * cover's Reconnect, or the empty state's Add project — since the terminal's Tab belongs to the
+   * agent and this is how the keyboard reaches either. With nothing to focus it goes to the top
+   * bar, except from `<body>`, which is left alone (`focusTerminal`). */
   focus: () => void;
 }
 
@@ -54,6 +60,7 @@ export function TerminalPane({
   session,
   onResume,
   resuming = false,
+  onAddProject,
   ref,
 }: TerminalPaneProps): React.ReactElement {
   const t = useT();
@@ -62,6 +69,7 @@ export function TerminalPane({
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const coverRef = useRef<HTMLDivElement>(null);
+  const emptyRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<TerminalController | undefined>(undefined);
   const [status, setStatus] = useState<TermStatus>("closed");
   const [painted, setPainted] = useState(false);
@@ -104,7 +112,17 @@ export function TerminalPane({
     () => ({
       focus: () => {
         const button = coverRef.current?.querySelector("button");
-        if (button) button.focus();
+        if (button) {
+          button.focus();
+          return;
+        }
+        // The empty state's Add project button is this region's only control while it is offered,
+        // so focus asked for the terminal goes there rather than out to the top bar — it is what
+        // F6 lands on, which `App` makes the region a stop for. Not from `<body>`, as
+        // `focusTerminal` has it: `refocusIfLost` asks at mount, and launching must not pull focus
+        // onto a control.
+        const add = emptyRef.current?.querySelector("button");
+        if (add && document.activeElement !== document.body) add.focus();
         else focusTerminal();
       },
     }),
@@ -389,8 +407,20 @@ export function TerminalPane({
         {cover?.text}
       </div>
       {!session && (
-        <div className="absolute inset-0 flex items-center justify-center bg-panel">
-          <EmptyPanel icon={SquareTerminal} message={t("terminal.empty")} />
+        // `held`: the Add project button goes away the moment a project arrives, from this window
+        // or another, and a focused element that is removed leaves focus on `<body>`. It is the
+        // same hand-off the cover's button uses, which can never be on screen at the same time.
+        <div ref={emptyRef} {...held} className="absolute inset-0 flex items-center justify-center bg-panel">
+          {onAddProject ? (
+            <EmptyPanel
+              icon={FolderOpen}
+              message={t("sidebar.noProjects")}
+              description={t("terminal.noProjects.description")}
+              action={{ label: t("sidebar.console.addProject"), icon: FolderPlus, onPress: onAddProject }}
+            />
+          ) : (
+            <EmptyPanel icon={SquareTerminal} message={t("terminal.empty")} />
+          )}
         </div>
       )}
       {/* Floats over the terminal rather than covering it: a session that has just ended keeps its

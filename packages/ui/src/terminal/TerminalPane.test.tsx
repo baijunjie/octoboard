@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, createRef } from "react";
+import React, { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
@@ -197,7 +197,10 @@ it("names the terminal's input in the UI language, and follows a language change
   }
 });
 
-it("keeps focus off the covered terminal while no session is selected", () => {
+/** A pane mounted beside the top bar focus falls back to and a control elsewhere to put focus on:
+ * the three cases below all turn on where focus goes while the terminal is empty. `show` renders
+ * again with the props it is given, the mount's own where it is given none. */
+function mountEmpty(props: Partial<React.ComponentProps<typeof TerminalPane>> = {}) {
   const topBar = document.body.appendChild(document.createElement("div"));
   topBar.dataset.region = "topbar";
   const topBarButton = topBar.appendChild(document.createElement("button"));
@@ -206,7 +209,14 @@ it("keeps focus off the covered terminal while no session is selected", () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(<TerminalPane ref={handle} onResume={async () => true} />));
+  const show = (next: Partial<React.ComponentProps<typeof TerminalPane>> = props) =>
+    act(() => root.render(<TerminalPane ref={handle} onResume={async () => true} {...next} />));
+  show();
+  return { container, handle, topBarButton, elsewhere, show };
+}
+
+it("keeps focus off the covered terminal while no session is selected", () => {
+  const { container, handle, topBarButton, elsewhere, show } = mountEmpty();
   expect(container.querySelector("[inert]")?.contains(container.querySelector("[dir=ltr]"))).toBe(true);
 
   // Focus asked for goes to the top bar from anywhere but `<body>`, which is left alone so that the
@@ -218,22 +228,41 @@ it("keeps focus off the covered terminal while no session is selected", () => {
   expect(document.activeElement).toBe(topBarButton);
   expect(FakeController.last.focuses).toBe(0);
 
-  act(() => root.render(<TerminalPane ref={handle} session={session} onResume={async () => true} />));
+  show({ session });
   expect(container.querySelector("[inert]")).toBeNull();
   act(() => handle.current?.focus());
   expect(FakeController.last.focuses).toBe(1);
 });
 
 it("hands focus to the top bar when the session goes away while the terminal holds it", () => {
-  const topBar = document.body.appendChild(document.createElement("div"));
-  topBar.dataset.region = "topbar";
-  const topBarButton = topBar.appendChild(document.createElement("button"));
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  roots.push(root);
-  act(() => root.render(<TerminalPane session={session} onResume={async () => true} />));
+  const { container, topBarButton, show } = mountEmpty({ session });
   const input = container.querySelector("[dir=ltr]")!.appendChild(document.createElement("textarea"));
   input.focus();
-  act(() => root.render(<TerminalPane onResume={async () => true} />));
+  show({});
+  expect(document.activeElement).toBe(topBarButton);
+});
+
+it("offers Add project in place of the select-a-session line while the console is bare", () => {
+  const onAddProject = vi.fn();
+  const { container, handle, topBarButton, elsewhere, show } = mountEmpty({ onAddProject });
+  const button = container.querySelector("button")!;
+  expect(button.textContent).toContain("Add project");
+  expect(container.textContent).not.toContain("Select a session");
+
+  // The button is this region's only control, so focus asked for the terminal lands on it rather
+  // than going out to the top bar — but never from `<body>`, as at launch.
+  act(() => handle.current?.focus());
+  expect(document.activeElement).toBe(document.body);
+  elsewhere.focus();
+  act(() => handle.current?.focus());
+  expect(document.activeElement).toBe(button);
+
+  act(() => button.click());
+  expect(onAddProject).toHaveBeenCalledTimes(1);
+
+  // A project added anywhere takes the button away while it holds focus; the line is back and
+  // focus is handed on rather than left on `<body>`.
+  show({});
+  expect(container.textContent).toContain("Select a session");
   expect(document.activeElement).toBe(topBarButton);
 });

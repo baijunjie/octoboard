@@ -89,23 +89,25 @@ what selecting one does, and what its row's menu offers are in "Console sessions
 `docs/product/sessions.md`.
 
 The section's own heading carries a **+** button, **New console session**, which opens one with the console's current
-default agent and its account for that agent, and, while the console has an archived console session, the
-section's action menu, whose only entry is **Archived console sessions** — a submenu of the console's newest archived
-console sessions, each of which can be selected, and the way to the archive view of all of them (see "The archive
-view" below). This is the one entry a console session's own row never carries: archived console sessions are reached
-from the section, not from a row. With no console session at all, a line says so; the whole line is a button, named
-**New console session**, that does what the heading's **+** button does.
+default agent and its account for that agent, and, while the console has an archived console session, the section's
+action menu, whose only entry is **Archived console sessions** — a submenu of the console's newest archived console
+sessions, each of which can be selected, and the way to the archive view of all of them (see "The archive view" below).
+This is the one entry a console session's own row never carries: archived console sessions are reached from the section,
+not from a row. With no console session at all, the section shows an empty row saying so; the whole row is a button that
+does what the heading's **+** button does (see "Empty rows" below).
 
 With no agent available on the machine at all, the section instead carries a line saying which agents Octoboard
 supports and that one of them has to be on the user's `PATH`, without saying how to install one, and the **+** button
 is disabled, since starting one would only be refused. The line wraps onto as many lines as the sidebar's width needs
 rather than being cut, since it is an instruction to act on. It shows whatever the section lists — a console session
 left interrupted from before an agent went off the `PATH` still has its row — and it takes the place of the "no
-console session" line.
+console session" row.
 
-Below it, a **Projects** heading and the console's projects (see "Order of projects
-and sessions" below). With no project, a message saying the console has none yet and an **Add project** button take
-their place.
+Below it, a **Projects** heading and the console's projects (see "Order of projects and sessions" below). With no
+project, an empty row saying the console has none yet takes their place; the whole row is a button opening the
+new-project dialog, as the console's **Add project** does (see "The console header" above and "Empty rows" below). While
+the console has nothing in it at all, the terminal's area carries the same offer as a full panel (see "A console with
+nothing in it" in `docs/product/sessions.md`).
 
 ### Filtering the project list
 
@@ -172,6 +174,23 @@ followed by this button.
   take rows away, so it does not move focus. The project rows themselves stay, so focus already on a project row is
   left where it is.
 
+## Empty rows
+
+A list with nothing to show puts a single **empty row** in its rows' place: a glyph and a short message on one line, in
+the padding of the rows it stands among. Where there is one thing to do about the list being empty the whole row is a
+button, and a press anywhere in it does that one thing — the console sessions section's row, the Projects section's and
+an expanded project's, each described where its list is. Such a row:
+
+- is **named by its visible message followed by its action** for assistive technology — "No projects yet", then "Add
+  project" — so that saying the words on screen reaches it by voice;
+- carries the action's name alone as its **tooltip**, on mouse hover and on keyboard focus.
+
+The rows with nothing to do about them carry no tooltip: the one saying no project matches the filter (see "Filtering
+the project list" above) and the one saying no agent is installed (see "The console sessions section and the project
+list" above). A focus mode's own empty states are full panels with a separate button rather than rows (see
+`docs/product/focus-mode.md`), as is the terminal's offer of a project (see "A console with nothing in it" in
+`docs/product/sessions.md`).
+
 ## Project rows
 
 A project row shows the project's name, its pin button when the project is pinned (see "Pinning" below), and a chevron
@@ -208,9 +227,9 @@ At the row's end are a **+** button, **New session**, which opens the new-sessio
 - **Remove project** — see "Removing a project" in `docs/product/consoles-and-projects.md`; it asks for confirmation
   first.
 
-An expanded project lists its sessions that are not archived as session rows. With none, it shows a single line
-saying there are no sessions yet; the whole line is a button, named **New session**, that opens the new-session dialog
-for that project, as the row's **+** button does.
+An expanded project lists its sessions that are not archived as session rows. With none, it shows an empty row saying
+there are no sessions yet; the whole row is a button that opens the new-session dialog for that project, as the row's
+**+** button does (see "Empty rows" above).
 
 A session **bound to another of the project's sessions** — one that session started, a lead session's own sessions
 included (see "Lead sessions" in `docs/product/hub-orchestration.md`) — is listed **under that session**, one level
@@ -384,9 +403,10 @@ open. A session that appears any other way, such as one the console session star
 daemon opened, is listed unselected and is put on screen by the user selecting it.
 
 When the selected session stops existing — deleted from the archive, by this client or another, for instance — nothing
-is selected in its place, and the terminal's area shows its empty state. The one exception is the session going with
-the last console: there is then no terminal at all, and the content panel shows the welcome screen (see
-`docs/product/welcome-screen.md`).
+is selected in its place, and the terminal's area shows its empty state: the line asking for a session to be selected,
+or the offer of a project where the console is left with nothing in it (see "The terminal" in
+`docs/product/sessions.md`). The one exception is the session going with the last console: there is then no terminal at
+all, and the content panel shows the welcome screen (see `docs/product/welcome-screen.md`).
 
 ## How the sidebar's view changes
 

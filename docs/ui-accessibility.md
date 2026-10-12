@@ -53,7 +53,12 @@ is made by hand from the code frame (`focusFirstSeparatorControl`, `moveAlongCon
 The terminal keeps Tab and Shift+Tab for the agent, so F6 / Shift+F6 region cycling
 (`packages/ui/src/layout/useRegionCycle.ts`) is the only keyboard way out of it. Every new region of the window that
 holds controls — a pane, a panel, an overlay — is marked `data-region` and added to that hook's `REGIONS` and `shown`,
-or F6 skips it and a keyboard user in the terminal has no way to reach it.
+or F6 skips it and a keyboard user in the terminal has no way to reach it. `shown` follows whether a region holds a
+control, not whether its element is in the document: the terminal counts while a session is selected, and also while
+its empty state offers Add project to a console that has neither a project nor a session to select, since that button
+is then the one thing to do there; with only its empty line it is skipped. A region whose focus goes through a method
+of its own rather than its first control (the terminal's) is only a stop when that method actually leaves focus inside
+it, which is how the cycle tells the two apart.
 
 ## Visible focus
 
@@ -83,7 +88,10 @@ A hand-off that runs because what held focus went away — a pane hidden, a regi
 calls `setInteractionModality("keyboard")` before it focuses the destination. The user did not ask for the move, so
 they have to be able to see where focus went, and the previous input was often a pointer press, which leaves the
 destination without a ring. `handFocusOff` takes a `showRing` flag for the hand-off whose trigger is a press, where the
-ring follows how the press came; `HandOffOnUnmount` always sets it, its trigger being a render.
+ring follows how the press came; `HandOffOnUnmount` always sets it, its trigger being a render, and so does
+`useFocusHandoff`, whose trigger is the render that took the control away. That covers the one hand-off through it
+whose trigger is really a press — the change filter field closed from the tab row's toggle, which takes no focus
+itself — knowingly: focus lands on a control the user did not aim it at either way.
 
 A separator of collapsed lines taken off the screen is such a move: the bar for the run past a diff's last hunk goes
 once the daemon's reply says that hunk reaches the end of the file, and the hand-off to the code frame sets the
@@ -103,12 +111,18 @@ Every control has an accessible name: its visible text, or an `aria-label` when 
 
 - An icon beside a name is `aria-hidden="true"`.
 - An icon that is the only carrier of a meaning gets `role="img"` and an `aria-label`.
-- A control carrying visible text *and* an `aria-label` has the visible text inside the name, verbatim, numbers
+- A control carrying visible text *and* a name of its own has the visible text inside the name, verbatim, numbers
   included (WCAG 2.2 A 2.5.3), so that saying what is on screen reaches it by voice. A separator of collapsed lines is
-  the instance: its visible text counts the lines it hides and its name is "Show all 17 unmodified lines", which is why
+  one instance: its visible text counts the lines it hides and its name is "Show all 17 unmodified lines", which is why
   that message takes the count as a placeholder rather than reading "Show the unmodified lines". Check such a name
   against every state the visible text has, not only the first: the same bar also says it is loading, says a read
   failed, and says the count is unknown.
+- A name made of two messages is assembled with `aria-labelledby` over the elements that already carry them, not by
+  joining them into one `aria-label`: a catalog's messages are whole sentences and a joined string is a fragment
+  nobody can translate. An empty row that is itself the button filling the list (`EmptyPanel`'s compact form with an
+  action) is the instance — its visible message, then an `sr-only` span with the action, giving "No projects yet Add
+  project". Such a row also sets an empty `aria-describedby` itself, since `TitledControl` only recognizes a tooltip
+  that repeats an `aria-label`.
 - An element that takes an `aria-label` without being a control — a scrolling `div` or `pre` made focusable with
   `tabIndex={0}` — also gets a role that can be named (`role="region"`). ARIA prohibits naming a generic element, so
   the name may never be spoken.

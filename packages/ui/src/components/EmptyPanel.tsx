@@ -1,6 +1,6 @@
 import { Button, EmptyState } from "@heroui/react";
 import type { LucideIcon } from "lucide-react";
-import React from "react";
+import React, { useId } from "react";
 
 import { TitledControl } from "./TitledControl";
 
@@ -24,32 +24,46 @@ export function EmptyPanel({
   action?: { label: string; icon?: LucideIcon; onPress: () => void };
   compact?: boolean;
 }): React.ReactElement {
+  const messageId = useId();
+  const actionId = useId();
   if (compact) {
     // A `span` rather than a `p`: inside a button only phrasing content is valid.
     const row = (
       <>
         <Icon aria-hidden="true" className="size-4 shrink-0" />
-        <span className="min-w-0 flex-1 break-words">{message}</span>
+        <span id={messageId} className="min-w-0 flex-1 break-words">
+          {message}
+        </span>
       </>
     );
     if (!action) return <EmptyState className="flex items-center gap-2 py-1 ps-2 pe-1">{row}</EmptyState>;
-    // Named by the action rather than the message: what a press does is what the control is. The
-    // classes keep the plain row's look and the session rows' hover tint, where HeroUI's button
-    // would recolour the text, pull its icon in by 2px (`margin-inline: -2px` on a child `svg`)
-    // and keep the label on one line. `p-0` drops `EmptyState`'s own padding — the row carries the
-    // padding of the rows it stands among, and a wrapper's on top of it would inset the row from
-    // its list, and its glyph from theirs. The plain row above overrides that padding outright.
+    // Named by its visible message and then by what a press does: the message has to be inside the
+    // name verbatim (WCAG 2.2 A 2.5.3), and the action says what the row is, which the message
+    // alone does not. Two referenced elements rather than one joined string, so neither half is a
+    // fragment a catalog has to join. The classes keep the plain row's look and the session rows'
+    // hover tint, where HeroUI's button would recolour the text, pull its icon in by 2px
+    // (`margin-inline: -2px` on a child `svg`) and keep the label on one line. `p-0` drops
+    // `EmptyState`'s own padding — the row carries the padding of the rows it stands among, and a
+    // wrapper's on top of it would inset the row from its list, and its glyph from theirs. The
+    // plain row above overrides that padding outright.
     return (
       <EmptyState className="flex p-0">
         <TitledControl title={action.label}>
           <Button
             variant="ghost"
-            aria-label={action.label}
+            aria-labelledby={`${messageId} ${actionId}`}
+            // The tooltip says the action and nothing more, which the name already ends with, so it
+            // is not also this row's description — `TitledControl` drops a tooltip that repeats an
+            // `aria-label` by itself, but cannot see into a name assembled from other elements.
+            aria-describedby=""
             preventFocusOnPress
             onPress={action.onPress}
             className="h-auto min-h-0 w-full justify-start gap-2 rounded-lg py-1 ps-2 pe-1 text-start font-normal text-[inherit] whitespace-normal hover:bg-panel-hover [&_svg]:m-0"
           >
             {row}
+            <span id={actionId} className="sr-only">
+              {action.label}
+            </span>
           </Button>
         </TitledControl>
       </EmptyState>

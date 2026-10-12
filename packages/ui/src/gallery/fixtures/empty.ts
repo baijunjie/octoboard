@@ -55,6 +55,8 @@ export const emptyScenarios: Scenario[] = [
     id: "empty-console-no-projects",
     group: GROUP,
     title: "A console with no projects",
+    description:
+      "With neither a project nor a session, the terminal's area offers Add project instead of asking for a session to be selected, and F6 reaches that button; the sidebar's Projects section carries the same offer as a row.",
     state: snapshotState({ consoles: [consoleOf("c-1", "Main")] }),
   },
   {

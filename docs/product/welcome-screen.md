@@ -26,8 +26,9 @@ start from, so creating a console starts no agent and nothing about it would be 
   `docs/product/sidebar.md`) and nothing to own the right pane (see "What the right pane shows" in
   `docs/product/window-layout.md`). So there is no sidebar to float in on hover either, and no drawer to open below
   1148 px.
-- **No terminal.** The terminal's "select a session" empty state does not appear here; that state is what a console
-  with no session selected shows (see "The terminal" in `docs/product/sessions.md`).
+- **No terminal.** Neither of the terminal's empty states appears here: the line asking for a session to be selected,
+  which is what a console with no session selected shows, nor the panel offering **Add project**, which a console with
+  nothing in it shows (see "The terminal" and "A console with nothing in it" in `docs/product/sessions.md`).
 - **Neither pane toggle in the top bar**: there is no sidebar for the sidebar toggle to control, and the right pane's
   toggle, at the bar's end, is there only while the right pane has an owner (see "The two pane toggles" in
   `docs/product/window-layout.md`). The top bar keeps **Back** and **Forward**, and **both are disabled**: every place
@@ -54,8 +55,9 @@ exactly as the user had left them — a sidebar the user had hidden is still hid
   `docs/product/moving-focus-between-regions.md`).
 - Wherever the window would hand keyboard focus to the terminal — the connection banner's Retry going away, a toast
   being dealt with — it hands focus to the New console button instead, and leaves focus on nothing when it is already
-  on nothing. This is the rule the terminal itself follows with no session selected, which hands focus to the top bar
-  (see "The terminal" in `docs/product/sessions.md`); here the top bar has no enabled control to take it.
+  on nothing. This is the rule the terminal itself follows with no session selected and nothing to offer in its place,
+  which hands focus to the top bar (see "The terminal" in `docs/product/sessions.md`); here the top bar has no enabled
+  control to take it.
 - **When the first console is created** from the welcome screen, focus moves to the first control in the top bar a
   keyboard can reach.
 - **When the last console goes away** while keyboard focus is inside the sidebar, the archive view, the terminal or

@@ -1,3 +1,4 @@
+import { setInteractionModality } from "react-aria";
 import { useEffect, useRef } from "react";
 
 import { focusTopBar } from "./regionFocus";
@@ -10,7 +11,10 @@ import { focusTopBar } from "./regionFocus";
  * remembered. Focus moved by script while the window is unfocused fires nothing either, so the
  * hand-off also needs focus to have actually fallen to `<body>`. It then goes where `restore` puts
  * it — the terminal, say, or a control beside the one that went — or to the top bar's first
- * control when that leaves it on `<body>`.
+ * control when that leaves it on `<body>`. The user did not ask for the move, so the modality is
+ * set to keyboard first: the previous input was often a pointer press, which would leave the
+ * destination without a ring (see "Focus moved by a change the user did not make" in
+ * `docs/ui-accessibility.md`).
  *
  * The caller must stay mounted while the control goes away (render `null`, not unmount): the check
  * runs in the caller's own effect. */
@@ -24,6 +28,7 @@ export function useFocusHandoff(restore: () => void): {
     if (!el || el.isConnected) return;
     held.current = null;
     if (document.activeElement !== document.body) return;
+    setInteractionModality("keyboard");
     restore();
     if (document.activeElement === document.body) focusTopBar();
   });

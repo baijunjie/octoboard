@@ -367,6 +367,9 @@ export const en = {
   "welcome.newConsole": "New console",
 
   "terminal.empty": "Select a session to view its terminal.",
+  // Under `sidebar.noProjects` as the heading: what the terminal's area says in place of asking
+  // for a session to be selected, while the console has neither a project nor a session.
+  "terminal.noProjects.description": "A project is a directory you work in and run sessions in.",
   "terminal.input": "Terminal input",
   "terminal.loading": "Loading terminal…",
   "terminal.resuming": "Resuming session…",

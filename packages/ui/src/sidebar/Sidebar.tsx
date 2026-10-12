@@ -3,7 +3,6 @@ import {
   ChevronDown,
   ChevronRight,
   FolderOpen,
-  FolderPlus,
   ListChevronsDownUp,
   ListChevronsUpDown,
   MessageSquarePlus,
@@ -476,10 +475,15 @@ function ConsoleBody({
       {projects.length > 0 && ordered.length === 0 ? (
         <EmptyPanel compact icon={SearchX} message={t("sidebar.filter.noMatch")} />
       ) : ordered.length === 0 ? (
+        // A row, as the console sessions section's own empty state is: the full panel with the same
+        // offer now stands in the terminal's area (`TerminalPane`), but only while nothing at all
+        // is selected there, which a console switch leaves it short of — so the offer stays here
+        // too rather than falling back to the console header's menu alone.
         <EmptyPanel
+          compact
           icon={FolderOpen}
           message={t("sidebar.noProjects")}
-          action={{ label: t("sidebar.console.addProject"), icon: FolderPlus, onPress: () => handlers.onOpenDialog({ kind: "new-project", console: thisConsole }) }}
+          action={{ label: t("sidebar.console.addProject"), onPress: () => handlers.onOpenDialog({ kind: "new-project", console: thisConsole }) }}
         />
       ) : (
         // The inactive projects (no running session) sit at the end, dimmed as one group; pointing at

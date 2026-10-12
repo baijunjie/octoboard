@@ -327,6 +327,7 @@ export const zhHans: Translation<"other"> = {
   "welcome.newConsole": "新建控制台",
 
   "terminal.empty": "选择一个会话以查看其终端。",
+  "terminal.noProjects.description": "项目是你工作的目录，会话在其中运行。",
   "terminal.input": "终端输入",
   "terminal.loading": "终端加载中…",
   "terminal.resuming": "正在恢复会话…",

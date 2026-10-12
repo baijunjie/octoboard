@@ -120,6 +120,18 @@ export function App(): React.ReactElement {
 
   useFirstConsoleHandoff(hosts !== undefined && noConsoles, dialogRequest?.kind === "new-console");
 
+  // The current console holds no project to open a session in and nothing to select, so the
+  // terminal's area offers Add project wherever it would otherwise ask for a session to be
+  // selected (`TerminalPane` renders that only while nothing is selected, which a console switch
+  // leaves it short of — the selection stays on the console it was made in). That makes the region
+  // one holding a control, and so an F6 stop. An archived session is not something to select; a
+  // console session is, and a console can hold those with no project at all, which is why asking
+  // for a session to be selected still says something then. The previewed console is not
+  // consulted: the terminal belongs to the current console whatever the sidebar is showing.
+  const consoleIsBare =
+    currentConsole !== undefined &&
+    !projectList.some((p) => p.console_id === currentConsole.id) &&
+    !sessionList.some((s) => s.console_id === currentConsole.id && s.status !== "archived");
   // A region off screen is skipped by F6: a hidden docked pane, a closed drawer, and a floating pane
   // too, which is only a hover away rather than shown. The top bar and the rail are always there.
   const regionCycle = useRegionCycle({
@@ -129,7 +141,7 @@ export function App(): React.ReactElement {
       welcome: noConsoles,
       sidebar: !noConsoles && panes.sidebarShown,
       archive: archiveOpen,
-      terminal: selectedSession !== undefined && !archiveOpen,
+      terminal: (selectedSession !== undefined || consoleIsBare) && !archiveOpen,
       aside: hasAside && panes.asideShown,
       banner: connectionState === "reconnecting" || connectionState === "closed",
     },
@@ -620,6 +632,13 @@ export function App(): React.ReactElement {
                     session={selectedSession}
                     onResume={resumeSession}
                     resuming={selectedSessionId !== undefined && resumingIds.has(selectedSessionId)}
+                    onAddProject={
+                      // Not while the archive covers the terminal: its button would be a tab stop
+                      // behind a surface that hides it.
+                      consoleIsBare && !archiveOpen && currentConsole
+                        ? () => openDialog({ kind: "new-project", console: currentConsole })
+                        : undefined
+                    }
                   />
                 </div>
                 {/* Keyed on what owns the aside, so a new owner mounts a fresh instance: a report does not
