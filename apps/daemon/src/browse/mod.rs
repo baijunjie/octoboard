@@ -235,7 +235,8 @@ pub fn serve(
         BrowseBody::ListProjectBranches { project } => {
             let record = stored_project(state, &project)?;
             let at = locate(&record, None, &git, cancel)?;
-            let list = compare::branches(git.env()?, &at, cancel)?;
+            let mut list = compare::branches(git.env()?, &at, cancel)?;
+            crate::branch_origin::annotate(state, &at.repository.common_dir, &mut list);
             Ok(Event::ProjectBranches {
                 id,
                 project,

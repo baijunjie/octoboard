@@ -83,6 +83,21 @@ pub const BRANCH_LIST_STDOUT: usize = 4 * 1024 * 1024;
 /// commit id (64 hex digits in a SHA-256 repository) and the JSON around the two.
 pub const BRANCH_ENTRY_BYTES: usize = 128;
 
+/// The most branches of one repository the daemon keeps an origin for (`store::BranchOrigin`), and
+/// so the most one branch listing attaches. A repository with more branches than this has the ones
+/// a look reaches first attributed — the listing it works from is in the byte order of the names,
+/// so a branch late in that order carries none — and a row past the cap is dropped by the time its
+/// branch was created, oldest first.
+pub const MAX_BRANCH_ORIGINS: usize = 1_000;
+
+/// The most characters of a session's title a branch origin keeps.
+pub const MAX_ORIGIN_TITLE_CHARS: usize = 80;
+
+/// What one attached origin takes, counted generously as JSON writes it: a session id, the title at
+/// six bytes a character if every one needed a `\u00XX` escape, a source, a time and the JSON
+/// around them.
+pub const BRANCH_ORIGIN_BYTES: usize = 768;
+
 /// The largest patch one change's diff returns. 99 % of the measured commits' whole patches were
 /// under about 1.2 MB, so one file's patch under this is the overwhelming case; a larger one is
 /// refused, never cut, since part of a patch is not the change.
@@ -132,10 +147,12 @@ pub const COMPARISON_RESERVATION: usize =
     COMPARISON_STDOUT + 2 * (MAX_CHANGE_PATH_BYTES + MAX_CHANGE_ENTRIES * CHANGE_ENTRY_BYTES);
 
 /// What a branch listing reserves: the `git for-each-ref` output while it is parsed, and its
-/// entries, at [`MAX_BRANCHES`] with [`MAX_BRANCH_NAME_BYTES`] of names, held as built and as
-/// serialized.
-pub const BRANCH_LIST_RESERVATION: usize =
-    BRANCH_LIST_STDOUT + 2 * (MAX_BRANCH_NAME_BYTES + MAX_BRANCHES * BRANCH_ENTRY_BYTES);
+/// entries, at [`MAX_BRANCHES`] with [`MAX_BRANCH_NAME_BYTES`] of names and [`MAX_BRANCH_ORIGINS`]
+/// origins, held as built and as serialized.
+pub const BRANCH_LIST_RESERVATION: usize = BRANCH_LIST_STDOUT
+    + 2 * (MAX_BRANCH_NAME_BYTES
+        + MAX_BRANCHES * BRANCH_ENTRY_BYTES
+        + MAX_BRANCH_ORIGINS * BRANCH_ORIGIN_BYTES);
 
 /// What one change's diff reserves: its worst case is two bodies at their worst, each as a file
 /// read reserves, beside a patch of at most [`BODIES_PATCH_BYTES`] held as read and serialized; a

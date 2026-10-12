@@ -180,11 +180,13 @@ fn local_branches_are_listed_with_their_tips_and_cut_at_their_budget() {
         [
             BranchInfo {
                 name: "feature/x".to_string(),
-                commit: feature
+                commit: feature,
+                origin: None
             },
             BranchInfo {
                 name: "main".to_string(),
-                commit: main.clone()
+                commit: main.clone(),
+                origin: None
             }
         ],
         "local branches only, whether checked out or not"

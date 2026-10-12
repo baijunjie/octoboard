@@ -7,6 +7,7 @@ mod access;
 mod adapter;
 mod agent_models;
 mod availability;
+mod branch_origin;
 mod browse;
 mod console_request;
 mod coordinator;

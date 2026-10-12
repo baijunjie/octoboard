@@ -248,7 +248,7 @@ pub fn find_worktree(
 
 /// The git directory a worktree's `.git` leads to: the directory itself, or the one a `.git` file
 /// names (relative to the worktree when it is written relative).
-fn admin_dir(root: &Path) -> Option<PathBuf> {
+pub(crate) fn admin_dir(root: &Path) -> Option<PathBuf> {
     let dot_git = root.join(".git");
     let metadata = fs::symlink_metadata(&dot_git).ok()?;
     if metadata.is_dir() {

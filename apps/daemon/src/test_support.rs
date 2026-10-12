@@ -336,9 +336,17 @@ pub(crate) fn git_bytes(dir: &Path, args: &[&[u8]]) -> Vec<u8> {
 /// [`git`] with `input` on its stdin, for a subcommand that reads one. Its own output is left to
 /// the test's, so a failure reports the arguments alone rather than `git`'s complaint.
 pub(crate) fn git_stdin(dir: &Path, args: &[&str], input: &[u8]) {
+    git_stdin_env(dir, args, &[], input);
+}
+
+/// [`git_stdin`] with `env` set for that one `git`, for a fixture that needs a variable the
+/// isolated environment leaves out: a committer date, which is the time a reflog entry `git`
+/// writes carries.
+pub(crate) fn git_stdin_env(dir: &Path, args: &[&str], env: &[(&str, &str)], input: &[u8]) {
     use std::io::Write as _;
     let mut child = fixture_git(dir)
         .args(args)
+        .envs(env.iter().copied())
         .stdin(std::process::Stdio::piped())
         .spawn()
         .unwrap();
@@ -403,5 +411,17 @@ pub(crate) fn move_modification_time_back(path: &Path) {
         .open(path)
         .expect("the tracked file is writable");
     file.set_modified(std::time::SystemTime::now() - Duration::from_secs(60))
+        .expect("its modification time is settable");
+}
+
+/// Moves `dir`'s modification time a minute back, leaving what is in it alone: a directory that
+/// looks untouched since, which is what a stamp over a repository's refs is read from.
+///
+/// A minute rather than a sleep: on a filesystem keeping modification times to the whole second, a
+/// sleep short enough not to slow the suite down does not reach the next time the directory can
+/// record. Opened read-only, since a directory cannot be opened for writing.
+pub(crate) fn move_directory_time_back(dir: &Path) {
+    let dir = std::fs::File::open(dir).expect("the directory opens");
+    dir.set_modified(std::time::SystemTime::now() - Duration::from_secs(60))
         .expect("its modification time is settable");
 }

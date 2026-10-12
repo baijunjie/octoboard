@@ -696,6 +696,40 @@ pub struct ChangeRef {
 pub struct BranchInfo {
     pub name: String,
     pub commit: String,
+    /// The session that created the branch, when the daemon can name one; absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<BranchOriginInfo>,
+}
+
+/// How the daemon came to attribute a branch to a session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BranchOriginSource {
+    /// A session's hook arrived and the branch had appeared since the last look at the repository,
+    /// with no other session that could have made it.
+    HookDiff,
+    /// The branch predates the daemon's look at it; the first entry of its reflog falls inside the
+    /// lifetime of exactly one session of the repository.
+    ReflogMatch,
+    /// No session can be named: several could have made it, or nothing was acting for it. Never
+    /// sent to a client, and kept so the branch is not held against its reflog again — a later
+    /// hook window that names one session does replace it.
+    Unknown,
+}
+
+/// The session a branch is attributed to having created, with the title that session had when the
+/// attribution was made — the record outlives the session, which a project's deletion takes with
+/// it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BranchOriginInfo {
+    /// `hook_diff` or `reflog_match`: a branch with no session to name carries no origin at all.
+    pub source: BranchOriginSource,
+    /// The creating session's id. It may name a session that no longer exists.
+    pub session: String,
+    pub title: String,
+    /// When the branch was created (milliseconds since the epoch): its reflog's first entry where
+    /// it has one, else when the daemon noticed it.
+    pub created_at: i64,
 }
 
 /// One end of a branch comparison: the branch, as a wire path, and the full id of the commit it was

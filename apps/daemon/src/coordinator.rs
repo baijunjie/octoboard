@@ -213,18 +213,18 @@ pub async fn handle(
             // store drops this console's projects with it, and nothing else would ever clean up
             // their git statuses afterwards — the daemon keeps no timer of its own that would
             // notice they are gone.
-            let project_ids: Vec<String> = state
+            let projects: Vec<Project> = state
                 .store
                 .list_projects()?
                 .into_iter()
                 .filter(|project| project.console_id == id)
-                .map(|project| project.id)
                 .collect();
             // Its sessions cascade the same way, and their saved output is Octoboard's own.
             let session_ids = session_ids_where(state, |session| session.console_id == id)?;
             state.store.delete_console(&id)?;
-            for project_id in &project_ids {
-                state.remove_git_status(project_id);
+            for project in &projects {
+                state.remove_git_status(&project.id);
+                crate::branch_origin::project_deleted(state, &project.path);
             }
             for session_id in &session_ids {
                 state.forget_saved_output(session_id);
@@ -372,7 +372,7 @@ pub async fn handle(
             project: id,
             stop_sessions,
         } => {
-            state
+            let deleted = state
                 .store
                 .get_project(&id)?
                 .ok_or_else(|| CodedError::unknown_project(&id))?;
@@ -421,6 +421,7 @@ pub async fn handle(
             let session_ids = session_ids_where(state, in_project)?;
             state.store.delete_project(&id)?;
             state.remove_git_status(&id);
+            crate::branch_origin::project_deleted(state, &deleted.path);
             for session_id in &session_ids {
                 state.forget_saved_output(session_id);
             }

@@ -534,7 +534,8 @@ ChangeSide        = { state: "present", path, kind: "file"|"symlink"|"submodule"
 SideRead          = { state: "present", path, kind, source: ContentSource, file: FileContent? }
                   | { state: "absent" }
                   | { state: "out_of_scope" }
-BranchInfo        { name, commit }
+BranchInfo        { name, commit, origin? }
+BranchOriginInfo  { source: "hook_diff" | "reflog_match", session, title, created_at }
 ComparisonEndpoint { branch, commit }
 ```
 
@@ -805,6 +806,30 @@ listed as it is rather than looked into, since asking `git` what a missing objec
 comparison of it is refused with `unknown_branch`, as a branch read is. At most 10,000 branches, or 2 MiB of names as
 sent, are listed, the first in byte order; a list cut there carries `complete: false`.
 
+A branch the daemon can name the creating session of carries `origin`, a `BranchOriginInfo`: `session` is that
+session's id (the session may be gone), `title` is what it had when the attribution was made, and `created_at` is when
+the branch was created in milliseconds. `source` says how it was told: `hook_diff` for a branch that appeared while
+only that session was acting in the repository, `reflog_match` for one that predates the daemon's look at it whose
+first reflog entry is one a branch's own creation writes (`branch: Created from …`) and falls inside only that
+session's lifetime. A first entry of any other shape — the default branch a `git init` leaves, a clone's, a bare
+`git update-ref` — says a reference was written rather than that a branch was made there, and is never backfilled,
+however clear the session. Both sources name the session the branch appeared alongside, whatever command made it — a
+branch the user makes in their own terminal while exactly one session is acting in the repository is attributed to that
+session. A branch whose creator cannot be told — several sessions could have made it, nothing was acting for it, or the
+session that was acting was not running when the branch was made — carries no `origin`. Listing the branches is
+also what removes the record of a branch that no longer exists, and at most 1,000 branches of a repository carry one:
+in a repository with more, the branches a listing reaches first, in the byte order of their names, are the ones
+attributed, and a record past the cap is dropped by the time its branch was created, oldest first. The record is kept
+in the daemon's database only; nothing is written to the repository.
+
+In a repository whose references are kept in reftable format there are no reflog files, so nothing is backfilled there
+and no record can be held against its branch's birth: a branch deleted and made again under the same name keeps the
+first one's `origin` until the name itself goes. That is the one place a record can outlive the branch it was made for
+by more than a second. The same holds anywhere for a branch deleted and made again at the same commit within the same
+second, whose first reflog entry is then identical. Nor does a record outlast its reflog: `git gc` drops reflog entries
+older than `gc.reflogExpire` (90 days by default), and a branch whose first entry has gone is recorded again with no
+`origin`, for good.
+
 `compare_project_branches` compares the left branch's tip, as the old side, with the right branch's tip, as the new
 side: the two commits themselves, never their merge base, so whatever the left branch has that the right one does not
 reads as undone, and swapping the two turns every change around. Each branch is checked and resolved to its commit as
@@ -885,6 +910,8 @@ born yet, and its staged changes are compared with the empty tree.
 | Change paths | 2 MiB, as sent | Bounds a change list whose entries are few but whose paths are long, counted as JSON writes them, the repository paths of sides outside the project included. A change list past it is cut |
 | Branches | 10,000 | A repository usually has a handful to tens of local branches, and one kept for years with every branch left behind a few thousand. A branch list past it is cut |
 | Branch names | 2 MiB, as sent | Bounds a branch list whose branches are few but whose names are long, counted as JSON writes them. A branch list past it is cut |
+| Branch origins, per repository | 1,000 | Which session created a branch, kept in the daemon's database (see "Comparing two branches"). In a repository with more branches than this the ones a listing reaches first keep theirs and the rest carry none; a record past the cap is dropped oldest first, by the time its branch was created. A branch list reserves 768 bytes for each one it attaches, as JSON writes it |
+| Origin title | 80 characters | The creating session's title as the record snapshots it, so the attribution outlives the session; a longer title is cut to this |
 | `git for-each-ref` output for a branch list | 4 MiB | One branch past the budget is asked for, each a line of about 90 bytes beside its name, so this is room for names averaging some 300 bytes. Past it the branch list is refused (`git_output`) |
 | `git diff-tree` output for a comparison | 8 MiB | As a change list's `git status`, it covers the whole tree, so a rename into the project is found against the rest of the repository; a record is about 100 bytes and its paths. Past it a project below the repository's root is compared within its own directory instead (see "Comparing two branches"), and a project at the root is refused (`git_output`), as is a directory's own comparison past it. That second run can double a comparison's worst-case time: two runs of up to the 30 s `git` deadline each |
 | `git status` output for a change list | 8 MiB | The status covers the whole worktree, since a rename into the project is only found against the rest of the repository; a record is about 120 bytes and its path, so this holds tens of thousands of changes. Past it the change list is refused (`git_output`) rather than built from part of the output |
@@ -893,7 +920,7 @@ born yet, and its staged changes are compared with the empty tree.
 | `git` deadline | 30 s | Browse reads are local, so this only catches a wedged repository (a dead network volume, a held lock) |
 | Reads at once, daemon-wide | 4 | A viewer, its neighbour and a couple of directory expansions in parallel; more waits its turn. A read from disk has no deadline, so a volume that stops answering can hold these |
 | Outstanding requests, per connection | 16 | Waiting, being read, or queued until their reply is written. One more is refused with `limit_exceeded` at once, so a flooding client cannot grow the daemon's backlog |
-| Reserved per request | about 12 MiB for a file or a project source, about 7.8 MiB for a listing, about 10.4 MiB for a branch list, about 26.6 MiB for a change list or a comparison, about 24.3 MiB for a change of either, or for the bodies of one | Each request reserves its worst case before it starts. For a file that is three times the file body (a text body held as read and serialized, JSON escaping at most doubling it; a binary body held base64-encoded and serialized again) and room for the rest of the frame; for a listing, its names and the rest of its entries, each held as read and serialized; for a branch list, the `git for-each-ref` output while it is read and its branches, at 128 bytes each beside their names, held as built and serialized; for a change list, the `git status` output while it is read and its entries, at 768 bytes each beside their paths, held as built and serialized, and for a comparison the same with its `git diff-tree` output; for a change of either kind, two bodies as a file reserves them beside a patch of at most 64 KiB, a body coming with a patch only when the patch carries no content (a text patch alone, at most 4 MiB, needs no more than one body). The reservation shrinks to the serialized reply and is given back once the reply is written to the socket. A reply that would be larger than its reservation is refused (`reply_bytes`) |
+| Reserved per request | about 12 MiB for a file or a project source, about 7.8 MiB for a listing, about 11.9 MiB for a branch list, about 26.6 MiB for a change list or a comparison, about 24.3 MiB for a change of either, or for the bodies of one | Each request reserves its worst case before it starts. For a file that is three times the file body (a text body held as read and serialized, JSON escaping at most doubling it; a binary body held base64-encoded and serialized again) and room for the rest of the frame; for a listing, its names and the rest of its entries, each held as read and serialized; for a branch list, the `git for-each-ref` output while it is read, its branches at 128 bytes each beside their names and the origins attached to at most 1,000 of them at 768 bytes each, held as built and serialized; for a change list, the `git status` output while it is read and its entries, at 768 bytes each beside their paths, held as built and serialized, and for a comparison the same with its `git diff-tree` output; for a change of either kind, two bodies as a file reserves them beside a patch of at most 64 KiB, a body coming with a patch only when the patch carries no content (a text patch alone, at most 4 MiB, needs no more than one body). The reservation shrinks to the serialized reply and is given back once the reply is written to the socket. A reply that would be larger than its reservation is refused (`reply_bytes`) |
 | Bytes held for replies, per connection | about 48 MiB | Four file reads at their worst, so one window gets every read the daemon runs at a time |
 | Bytes held for replies, daemon-wide | about 96 MiB | Twice one connection's share, so a client that stops reading cannot hold every other connection's reads up |
 | Writing one frame | 30 s | Any frame on the control socket, not only a browse reply. On a loopback connection a client that takes no bytes for this long has stopped reading; its connection is closed, giving back what its queued replies held, and it reconnects to a fresh `snapshot` and asks again |

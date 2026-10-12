@@ -12,7 +12,9 @@
 //! touches the project; a side outside it is named by its repository path alone, and nothing of
 //! its content is read or returned.
 
+use std::path::Path;
 use std::sync::atomic::AtomicBool;
+use std::time::Instant;
 
 use anyhow::Result;
 
@@ -29,6 +31,11 @@ pub struct BranchList {
     pub branches: Vec<BranchInfo>,
     /// False when the list was cut at a budget.
     pub complete: bool,
+    /// When the listing was taken. A list is a snapshot, and what has happened to the repository
+    /// since it was taken is not in it; `branch_origin` holds its own records against this rather
+    /// than against the time they are read. An [`Instant`] because only the order of the two
+    /// matters, and it is the one clock a step of the wall clock cannot move.
+    pub listed_at: Instant,
 }
 
 /// Lists the local branches of the repository `at` is in, each with the object id its reference
@@ -37,6 +44,15 @@ pub struct BranchList {
 /// what a missing object is fails the whole listing; comparing it is refused
 /// (`blob::resolve_branch`).
 pub fn branches(env: &GitEnv, at: &Located, cancel: &AtomicBool) -> Result<BranchList> {
+    branches_in(env, &at.root, cancel)
+}
+
+/// [`branches`] for the repository `dir` is in, where `dir` is any directory `git` can run in
+/// there: a worktree, or the repository's common directory itself.
+pub fn branches_in(env: &GitEnv, dir: &Path, cancel: &AtomicBool) -> Result<BranchList> {
+    // Taken before `git` reads the refs, so nothing that happens while it runs is claimed to be
+    // in the list.
+    let listed_at = Instant::now();
     // One past the budget, so a cut list is told from one that just fits.
     let count = format!("--count={}", budget::MAX_BRANCHES + 1);
     let args: &[&[u8]] = &[
@@ -46,7 +62,7 @@ pub fn branches(env: &GitEnv, at: &Located, cancel: &AtomicBool) -> Result<Branc
     ];
     let stdout = env
         .run(
-            &at.root,
+            dir,
             "for-each-ref",
             args,
             budget::BRANCH_LIST_STDOUT,
@@ -56,6 +72,7 @@ pub fn branches(env: &GitEnv, at: &Located, cancel: &AtomicBool) -> Result<Branc
     let mut list = BranchList {
         branches: Vec::new(),
         complete: true,
+        listed_at,
     };
     let mut name_bytes = 0;
     // A reference name holds no space, newline or other control character, so one per line, its
@@ -83,6 +100,7 @@ pub fn branches(env: &GitEnv, at: &Located, cancel: &AtomicBool) -> Result<Branc
         list.branches.push(BranchInfo {
             name,
             commit: String::from_utf8_lossy(oid).into_owned(),
+            origin: None,
         });
     }
     Ok(list)

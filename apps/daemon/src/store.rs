@@ -1,4 +1,5 @@
-//! The coordinator's SQLite storage: consoles, projects, sessions and the host table.
+//! The coordinator's SQLite storage: consoles, projects, sessions, branch origins and the host
+//! table.
 //!
 //! Enum columns hold the same text the protocol puts on the wire — the conversion goes through
 //! serde (`enum_to_text` / `enum_from_text`) rather than a second hand-written mapping, so a
@@ -20,9 +21,9 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::protocol::{
-    error_code, now_millis, Account, Agent, CodedError, Console, ConsoleSessionColour, Host,
-    HostKind, Origin, Page, Project, ProjectAccount, ProjectSource, Role, Session, SessionStatus,
-    Settings,
+    error_code, now_millis, Account, Agent, BranchOriginSource, CodedError, Console,
+    ConsoleSessionColour, Host, HostKind, Origin, Page, Project, ProjectAccount, ProjectSource,
+    Role, Session, SessionStatus, Settings,
 };
 
 /// The single local host record every project and session points at. There is no other host yet,
@@ -189,6 +190,25 @@ impl Store {
                 html              TEXT NOT NULL,
                 anchor_message_id TEXT,
                 created_at        INTEGER NOT NULL
+            );
+            -- Which session created a branch, keyed on the branch because one session creates many
+            -- and a branch has one creator. No `REFERENCES` on `session_id`: a project's deletion
+            -- cascades its sessions away and the attribution outlives them, which is what the
+            -- title snapshot is for. `repository` is the repository's canonical common directory,
+            -- so a row belongs to the repository and not to any project.
+            -- `birth_commit` and `birth_time` are the first entry of the branch's reflog, which
+            -- tells a branch deleted and made again under the same name from the one the row was
+            -- made for; both are NULL for a branch with no reflog.
+            CREATE TABLE IF NOT EXISTS branch_origins (
+                repository     TEXT NOT NULL,
+                branch         TEXT NOT NULL,
+                session_id     TEXT,
+                session_title  TEXT,
+                source         TEXT NOT NULL,
+                created_at     INTEGER NOT NULL,
+                birth_commit   TEXT,
+                birth_time     INTEGER,
+                PRIMARY KEY (repository, branch)
             );
             CREATE TABLE IF NOT EXISTS settings (
                 id                     TEXT PRIMARY KEY,
@@ -1009,6 +1029,126 @@ impl Store {
         )?;
         Ok(changed)
     }
+
+    // -- branch origins ------------------------------------------------------
+
+    /// Every origin recorded for the repository.
+    pub fn branch_origins(&self, repository: &str) -> Result<Vec<BranchOrigin>> {
+        let conn = self.lock();
+        read_branch_origins(&conn, repository)
+    }
+
+    /// Applies one reconcile of a repository's origins: removes the rows of `dropped`, writes
+    /// `put` over whatever those branches had, and trims the repository to `keep` rows when
+    /// anything was written. Returns what the repository holds afterwards.
+    ///
+    /// One transaction for the lot, and the read of the result inside it: every write here follows
+    /// from a snapshot of the same rows, so a second reconcile landing between the delete and the
+    /// insert of the first would delete a live branch's row or overwrite a fresh attribution with
+    /// a stale one. It is also what keeps a repository with hundreds of branches to one journalled
+    /// transaction on the first look at it, rather than one per branch.
+    pub fn apply_branch_origins(
+        &self,
+        repository: &str,
+        dropped: &[String],
+        put: &[BranchOrigin],
+        keep: usize,
+    ) -> Result<Vec<BranchOrigin>> {
+        let mut conn = self.lock();
+        let tx = conn.transaction()?;
+        {
+            let mut delete =
+                tx.prepare("DELETE FROM branch_origins WHERE repository = ?1 AND branch = ?2")?;
+            for branch in dropped {
+                delete.execute(params![repository, branch])?;
+            }
+            let mut insert = tx.prepare(
+                "INSERT OR REPLACE INTO branch_origins
+                     (repository, branch, session_id, session_title, source,
+                      created_at, birth_commit, birth_time)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            )?;
+            for origin in put {
+                insert.execute(params![
+                    repository,
+                    origin.branch,
+                    origin.session_id,
+                    origin.session_title,
+                    enum_to_text(&origin.source),
+                    origin.created_at,
+                    origin.birth_commit,
+                    origin.birth_time,
+                ])?;
+            }
+        }
+        if !put.is_empty() {
+            // The oldest past the cap go, by the time their branch was created.
+            tx.execute(
+                "DELETE FROM branch_origins WHERE repository = ?1 AND branch NOT IN (
+                     SELECT branch FROM branch_origins WHERE repository = ?1
+                     ORDER BY created_at DESC, branch LIMIT ?2)",
+                params![repository, keep as i64],
+            )?;
+        }
+        let rows = read_branch_origins(&tx, repository)?;
+        tx.commit()?;
+        Ok(rows)
+    }
+
+    /// Removes every origin recorded for the repository.
+    pub fn delete_repository_branch_origins(&self, repository: &str) -> Result<()> {
+        self.lock().execute(
+            "DELETE FROM branch_origins WHERE repository = ?1",
+            params![repository],
+        )?;
+        Ok(())
+    }
+
+    /// The connection itself, for a test that has to make a read of the store fail.
+    #[cfg(test)]
+    pub(crate) fn connection(&self) -> std::sync::MutexGuard<'_, Connection> {
+        self.lock()
+    }
+}
+
+fn read_branch_origins(conn: &Connection, repository: &str) -> Result<Vec<BranchOrigin>> {
+    let mut stmt = conn.prepare(
+        "SELECT repository, branch, session_id, session_title, source,
+                created_at, birth_commit, birth_time
+         FROM branch_origins WHERE repository = ?1 ORDER BY branch",
+    )?;
+    let rows = stmt
+        .query_map(params![repository], |row| {
+            Ok(BranchOrigin {
+                repository: row.get(0)?,
+                branch: row.get(1)?,
+                session_id: row.get(2)?,
+                session_title: row.get(3)?,
+                source: enum_from_row::<BranchOriginSource>(row, 4)?,
+                created_at: row.get(5)?,
+                birth_commit: row.get(6)?,
+                birth_time: row.get(7)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+/// What the daemon knows of who created one branch. `session_id` and the title beside it are
+/// `None` exactly when `source` is [`BranchOriginSource::Unknown`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BranchOrigin {
+    pub repository: String,
+    /// The branch's name below `refs/heads/`, as a wire path.
+    pub branch: String,
+    pub session_id: Option<String>,
+    pub session_title: Option<String>,
+    pub source: BranchOriginSource,
+    /// Milliseconds since the epoch.
+    pub created_at: i64,
+    /// The commit and the second of the branch's first reflog entry.
+    pub birth_commit: Option<String>,
+    pub birth_time: Option<i64>,
 }
 
 /// Whether a table has a column of this name.
@@ -1879,6 +2019,44 @@ mod tests {
             pinned: false,
             tags: Vec::new(),
         }
+    }
+
+    /// The table is created on a database that predates it, and its rows are not the sessions':
+    /// deleting the project takes the sessions with it and leaves the attribution.
+    #[test]
+    fn branch_origins_are_added_in_place_and_outlive_their_session() {
+        let path = temp_db("branch-origins");
+        let origin = BranchOrigin {
+            repository: "/r/.git".to_string(),
+            branch: "feature".to_string(),
+            session_id: Some("session-1".to_string()),
+            session_title: Some("Title".to_string()),
+            source: BranchOriginSource::HookDiff,
+            created_at: 7,
+            birth_commit: Some("abc".to_string()),
+            birth_time: Some(7),
+        };
+        let put = |store: &Store| {
+            store
+                .apply_branch_origins("/r/.git", &[], std::slice::from_ref(&origin), 10)
+                .expect("origin");
+        };
+        {
+            let store = Store::open(&path).expect("store");
+            store
+                .insert_console(&console(None, None, None))
+                .expect("console");
+            store.insert_project(&project(false)).expect("project");
+            put(&store);
+            let conn = store.lock();
+            conn.execute_batch("DROP TABLE branch_origins").unwrap();
+        }
+        let store = Store::open(&path).expect("opens a database without the table");
+        assert!(store.branch_origins("/r/.git").unwrap().is_empty());
+
+        put(&store);
+        store.delete_project("project-1").expect("project deleted");
+        assert_eq!(store.branch_origins("/r/.git").unwrap(), [origin]);
     }
 
     /// A project's pinned flag starts unset and round-trips through an update.
