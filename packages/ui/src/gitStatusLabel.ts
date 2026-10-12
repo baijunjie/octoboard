@@ -1,4 +1,5 @@
 import type { Translate } from "./i18n/catalog";
+import { isolate } from "./i18n/isolate";
 import { joinPhrases } from "./i18n/joinPhrases";
 import type { Language } from "./i18n/languages";
 import type { GitStatus } from "./protocol";
@@ -11,7 +12,7 @@ import type { GitStatus } from "./protocol";
  * phrase from it — so this returns `undefined` for a failed read rather than a second, emptier
  * phrase saying the same thing. */
 function branchPhrase(t: Translate, status: GitStatus): string | undefined {
-  const branch = status.branch ?? undefined;
+  const branch = status.branch == null ? undefined : isolate(status.branch);
   if (status.activity === "checking") return branch ? t("sidebar.git.checking", { branch }) : t("sidebar.git.checkingUnknown");
   if (status.activity === "syncing") return branch ? t("sidebar.git.syncing", { branch }) : t("sidebar.git.syncingUnknown");
   if (branch) return status.detached ? t("sidebar.git.detachedBranch", { branch }) : t("sidebar.git.branch", { branch });
@@ -29,7 +30,7 @@ export function gitBadgeAriaLabel(language: Language, t: Translate, status: GitS
   const phrases = branch ? [branch] : [];
   if (status.ahead > 0) phrases.push(t("sidebar.git.ahead", { count: status.ahead }));
   if (status.behind > 0) phrases.push(t("sidebar.git.behind", { count: status.behind }));
-  if (status.error) phrases.push(t("sidebar.git.error", { error: status.error }));
+  if (status.error) phrases.push(t("sidebar.git.error", { error: isolate(status.error) }));
   return joinPhrases(language, phrases);
 }
 

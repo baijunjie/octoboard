@@ -6,6 +6,7 @@ import { AgentIcon } from "../components/AgentIcon";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { MarkedPath } from "../components/MarkedPath";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
+import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Account } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
@@ -79,7 +80,7 @@ export function AgentAccountsSection(): React.ReactElement {
                       size="sm"
                       variant="outline"
                       preventFocusOnPress
-                      aria-label={t("settings.accounts.editLabel", { name: account.name, agent: AGENT_LABEL[agent] })}
+                      aria-label={t("settings.accounts.editLabel", { name: isolate(account.name), agent: AGENT_LABEL[agent] })}
                       onPress={() => setEditing(account)}
                     >
                       {t("common.edit")}
@@ -88,7 +89,7 @@ export function AgentAccountsSection(): React.ReactElement {
                       size="sm"
                       variant="outline"
                       preventFocusOnPress
-                      aria-label={t("settings.accounts.removeLabel", { name: account.name, agent: AGENT_LABEL[agent] })}
+                      aria-label={t("settings.accounts.removeLabel", { name: isolate(account.name), agent: AGENT_LABEL[agent] })}
                       onPress={() => setRemoving(account)}
                     >
                       {t("common.remove")}
@@ -103,7 +104,7 @@ export function AgentAccountsSection(): React.ReactElement {
       {editing !== undefined && <AccountDialog account={editing ?? undefined} onClose={() => setEditing(undefined)} />}
       {removing && (
         <ConfirmDialog
-          title={t("settings.accounts.removeTitle", { name: removing.name })}
+          title={t("settings.accounts.removeTitle", { name: isolate(removing.name) })}
           message={t("settings.accounts.removeMessage", { agent: AGENT_LABEL[removing.agent] })}
           confirmLabel={t("common.remove")}
           destructive

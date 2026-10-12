@@ -2,6 +2,7 @@ import { createElement, useEffect, useRef, useState } from "react";
 
 import { DaemonRequestError } from "../daemon-client";
 import type { Translate } from "../i18n/catalog";
+import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { abbreviateHome } from "../pathDisplay";
 import type {
@@ -343,7 +344,7 @@ export function useChangeReader(project: string): ChangeReader {
   const key = subjectKey(opened.item, origin);
   const current = shown?.key === key ? shown : undefined;
   const content = current?.content ?? { state: "loading" };
-  const isolate = (name: string) => `\u2068${displayWirePath(name)}\u2069`;
+  const isolatedWirePath = (name: string) => isolate(displayWirePath(name));
   // A worktree's change says where it is from in two ways: the stage of a staged or unstaged one, as
   // a tag of its own; and nothing for the rest, which their status chip already says (untracked,
   // in conflict). Only a comparison has a source to word.
@@ -356,21 +357,21 @@ export function useChangeReader(project: string): ChangeReader {
           id: "git.compare.source",
           params: {
             from: createElement("bdi", { dir: "auto" }, displayWirePath(origin.left.branch)),
-            fromCommit: shortCommit(origin.left.commit),
+            fromCommit: createElement("bdi", { dir: "auto" }, shortCommit(origin.left.commit)),
             to: createElement("bdi", { dir: "auto" }, displayWirePath(origin.right.branch)),
-            toCommit: shortCommit(origin.right.commit),
+            toCommit: createElement("bdi", { dir: "auto" }, shortCommit(origin.right.commit)),
           },
         })
       : undefined;
   // The same wording as `source`, as plain text for its tooltip, each branch name
-  // isolated by U+2068/U+2069 the way the `<bdi>`s isolate it in `source`.
+  // and commit isolated by U+2068/U+2069 the way the `<bdi>`s isolate them in `source`.
   const sourceText =
     origin.kind === "comparison"
       ? t("git.compare.source", {
-          from: isolate(origin.left.branch),
-          fromCommit: shortCommit(origin.left.commit),
-          to: isolate(origin.right.branch),
-          toCommit: shortCommit(origin.right.commit),
+          from: isolatedWirePath(origin.left.branch),
+          fromCommit: isolate(shortCommit(origin.left.commit)),
+          to: isolatedWirePath(origin.right.branch),
+          toCommit: isolate(shortCommit(origin.right.commit)),
         })
       : undefined;
   return {

@@ -6,6 +6,7 @@ import { handFocusOff } from "../components/handFocusOff";
 import { TitledControl } from "../components/TitledControl";
 import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
 import { FadeOverflow } from "../components/FadeOverflow";
+import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 
 /** Stops a row's own mousedown from moving focus off whatever had it (typically the terminal) —
@@ -187,7 +188,7 @@ export function PinButton({
           isIconOnly
           size="sm"
           variant="ghost"
-          aria-label={t("sidebar.unpinItem", { name })}
+          aria-label={t("sidebar.unpinItem", { name: isolate(name) })}
           preventFocusOnPress
           onPress={unpin}
           className="group/pin size-6 min-w-0 rounded-md text-muted hover:text-foreground"

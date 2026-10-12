@@ -13,6 +13,7 @@ import { Collection, ListLayout, Tree, TreeItem, TreeItemContent, Virtualizer, t
 
 import { FadeOverflow } from "../components/FadeOverflow";
 import { useScrollFade } from "../components/useScrollFade";
+import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { BrowseEntry } from "../protocol";
 import { wireBaseName } from "../wirePath";
@@ -159,11 +160,11 @@ export function FileTree({
     const missing = node.missing === "removed" ? t("browser.tree.removed") : node.missing === "unlisted" ? t("browser.tree.unlisted") : undefined;
     const ariaLabel =
       node.missing === "removed"
-        ? t("browser.tree.row.removed", { name })
+        ? t("browser.tree.row.removed", { name: isolate(name) })
         : node.missing === "unlisted"
-          ? t("browser.tree.row.unlisted", { name })
+          ? t("browser.tree.row.unlisted", { name: isolate(name) })
           : isSelected
-            ? t("browser.tree.row.selected", { name })
+            ? t("browser.tree.row.selected", { name: isolate(name) })
             : name;
     // Marked `data-current`, not `data-selected`: react-aria-components writes the row's
     // `data-selected` itself, from a selection the tree does not have.
@@ -211,9 +212,11 @@ function StatusItem({ node }: { node: Extract<TreeNode, { type: "status" }> }): 
         ? t("browser.tree.empty")
         : node.status === "partial"
           ? t("browser.tree.partial")
-          : t("browser.tree.error", { message: node.message ?? "" });
+          : t("browser.tree.error", { message: isolate(node.message ?? "") });
   return (
-    <TreeItem id={node.key} textValue={text} className={ROW_CLASS}>
+    // Named by the plain message, not by `text`: `textValue` is what react-aria collates for
+    // type-to-select, which an isolate mark in the middle of would only get in the way of.
+    <TreeItem id={node.key} textValue={node.status === "error" ? (node.message ?? "") : text} className={ROW_CLASS}>
       <TreeItemContent>
         <RowContent>
           <span className="size-4 shrink-0" />

@@ -144,7 +144,9 @@ export function ReportPanel({
             <ChevronLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
           </Button>
         </TitledControl>
-        <span className="whitespace-nowrap">
+        {/* The page count is a range written with `/`, which reads left to right whatever the
+            interface direction is: mirrored, "1 / 12" would say page 12 of 1. */}
+        <span dir="ltr" className="whitespace-nowrap">
           {t("report.position", { index: displayIndex + 1, total: sessionPages.length })}
         </span>
         <TitledControl title={t("report.next")}>

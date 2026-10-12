@@ -3,7 +3,9 @@ import { Hand, Plus, Settings } from "lucide-react";
 import React, { useMemo, useRef } from "react";
 
 import type { DialogRequest } from "../dialogs/dialogRequest";
-import { useT } from "../i18n/react";
+import { isolate } from "../i18n/isolate";
+import { textDirection } from "../i18n/languages";
+import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Session } from "../protocol";
 import { activityLabelKey } from "../sessionLabel";
 import { consoleMenu } from "../sidebar/menus";
@@ -28,21 +30,29 @@ export function focusNewConsole(): void {
  * colour of its own. Each mask is the hole for one badge geometry, so it is written next to the
  * classes placing that badge.
  *
- * The waiting count is as large as the 16px glyph itself, so centred on the glyph's top right corner
- * it would hide a quarter of it; it sits above the glyph's top right, 4px past it along the diagonal,
- * so the glyph keeps its shape. The pill is 16px high with no padding (`*:px-0` takes away the
+ * The waiting count is as large as the 16px glyph itself, so centred on the glyph's top end corner
+ * it would hide a quarter of it; it sits above that corner, 4px past it along the diagonal, so the
+ * glyph keeps its shape. The pill is 16px high with no padding (`*:px-0` takes away the
  * label's own `px-0.5`, which would make two digits a 19px pill); two semibold 11px digits measure
  * up to 15px, so up to two digits it is a 16px circle, and the overflow label ("99+", about 26px)
  * is a pill of its own 28px width, centred 2px nearer the glyph so that its end stays clear of the
  * content panel's edge. Its hole is the two end circles, each 1.5px wider than the
  * pill's own ends, as one mask layer each: the layers are intersected, so what is cut out is their
- * union. */
-const COUNT_PLACEMENT = "pointer-events-none translate-x-[calc(25%+4px)] -translate-y-[calc(25%+4px)]";
-const COUNT_OVERFLOW_PLACEMENT = "pointer-events-none translate-x-[calc(25%+2px)] -translate-y-[calc(25%+4px)]";
-const COUNT_CUT_OUT = "[mask-image:radial-gradient(circle_at_18px_-8px,transparent_9.5px,black_10px)]";
+ * union.
+ *
+ * The count is a decoration of the layout rather than a physical thing, so under right-to-left it
+ * moves to the glyph's other top corner, the one that still points into the content: the rail is at
+ * the window's start side, which under right-to-left is its right edge, so left at the glyph's
+ * physical top right the overflow pill would run into that edge.
+ * HeroUI's `Badge` has only physical placements, so the corner is picked by `placement`, and the
+ * offsets and the mask coordinates (measured across the 16px glyph) are mirrored to match it. */
+const COUNT_PLACEMENT = "pointer-events-none translate-x-[calc(25%+4px)] -translate-y-[calc(25%+4px)] rtl:-translate-x-[calc(25%+4px)]";
+const COUNT_OVERFLOW_PLACEMENT = "pointer-events-none translate-x-[calc(25%+2px)] -translate-y-[calc(25%+4px)] rtl:-translate-x-[calc(25%+2px)]";
+const COUNT_CUT_OUT =
+  "[mask-image:radial-gradient(circle_at_18px_-8px,transparent_9.5px,black_10px)] rtl:[mask-image:radial-gradient(circle_at_-2px_-8px,transparent_9.5px,black_10px)]";
 const COUNT_OVERFLOW_PILL = "w-7";
 const COUNT_OVERFLOW_CUT_OUT =
-  "[mask-image:radial-gradient(circle_at_10px_-8px,transparent_9.5px,black_10px),radial-gradient(circle_at_22px_-8px,transparent_9.5px,black_10px)] [mask-composite:intersect]";
+  "[mask-image:radial-gradient(circle_at_10px_-8px,transparent_9.5px,black_10px),radial-gradient(circle_at_22px_-8px,transparent_9.5px,black_10px)] [mask-composite:intersect] rtl:[mask-image:radial-gradient(circle_at_6px_-8px,transparent_9.5px,black_10px),radial-gradient(circle_at_-6px_-8px,transparent_9.5px,black_10px)]";
 /** The activity badge on a 28px avatar: 14px, at the avatar's bottom end corner and 3px past it,
  * so it stays inside the current console's tile, leaving a 2px ring. Under right-to-left the
  * corner, and so the hole, is on the left. */
@@ -83,7 +93,7 @@ function ConsoleTile({
           isIconOnly
           size="sm"
           variant="ghost"
-          aria-label={activityKey ? t(activityKey, { name: thisConsole.name }) : thisConsole.name}
+          aria-label={activityKey ? t(activityKey, { name: isolate(thisConsole.name) }) : thisConsole.name}
           aria-current={current ? "true" : undefined}
           // Not styling: `usePanePeekPointer` (`Sidebar.tsx`) matches this to keep the floating sidebar
           // up while the pointer is on an avatar, which lies outside the card and its gap. Without it
@@ -103,7 +113,7 @@ function ConsoleTile({
       </TitledControl>
       <ActionMenu
         className="hidden"
-        label={t("sidebar.console.actions", { name: thisConsole.name })}
+        label={t("sidebar.console.actions", { name: isolate(thisConsole.name) })}
         tooltip={false}
         items={consoleMenu(t, thisConsole, onOpenDialog)}
         contextTargetRef={tileRef}
@@ -154,6 +164,7 @@ export function Rail({
   focusTerminal,
 }: RailProps): React.ReactElement {
   const t = useT();
+  const rtl = textDirection(useCurrentLanguage()) === "rtl";
   const overflow = waitingCount > 99;
   const activities = useMemo(() => {
     const byConsole = new Map<string, Session[]>();
@@ -203,6 +214,10 @@ export function Rail({
                 color="warning"
                 variant="primary"
                 size="sm"
+                placement={rtl ? "top-left" : "top-right"}
+                // The overflow label is a number followed by a sign, which reads in that order in
+                // any language; left to the surrounding direction it would come out as "+99".
+                dir="ltr"
                 className={`${overflow ? COUNT_OVERFLOW_PLACEMENT : COUNT_PLACEMENT} border-0 text-[11px] leading-none font-semibold *:px-0 ${overflow ? COUNT_OVERFLOW_PILL : ""}`}
               >
                 {overflow ? t("rail.waitingBadgeOverflow") : waitingCount}

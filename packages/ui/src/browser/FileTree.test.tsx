@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it } from "vitest";
 
+import { isolate } from "../i18n/isolate";
 import { FileTree } from "./FileTree";
 import { rowKey, type TreeNode } from "./tree";
 
@@ -43,7 +44,7 @@ it("tints the selected file's row and names it as selected", () => {
   );
   const row = (name: string) => container.querySelector(`[role=row][data-key="${rowKey(name)}"]`)!;
   expect(row("b.ts").hasAttribute("data-current")).toBe(true);
-  expect(row("b.ts").getAttribute("aria-label")).toBe("b.ts, selected");
+  expect(row("b.ts").getAttribute("aria-label")).toBe(`${isolate("b.ts")}, selected`);
   expect(row("a.ts").hasAttribute("data-current")).toBe(false);
 });
 

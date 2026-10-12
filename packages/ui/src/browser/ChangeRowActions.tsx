@@ -3,6 +3,7 @@ import React from "react";
 
 import { ActionMenu } from "../components/ActionMenu";
 import { RowControls } from "../components/RowControls";
+import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { displayWirePath } from "../wirePath";
 import type { ChangeItem } from "./changes";
@@ -20,7 +21,7 @@ export function ChangeRowActions({ item, name }: { item: ChangeItem; name: strin
   return (
     <RowControls className="ms-auto">
       <ActionMenu
-        label={t("git.row.actions", { name })}
+        label={t("git.row.actions", { name: isolate(name) })}
         items={[
           {
             label: t("git.row.copyPath"),

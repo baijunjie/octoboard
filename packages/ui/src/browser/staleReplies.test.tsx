@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
+import { isolate } from "../i18n/isolate";
 import type { BrowseEntry, ChangeGroup, Event, FileContent, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { changeItem, type ChangeItem } from "./changes";
@@ -226,7 +227,7 @@ it("shows the change moved to loading until its own reply, and never a change of
   expect(hook.current().subject?.content).toEqual({ state: "loading" });
 });
 
-it("words a comparison's source as plain text too, each branch isolated, for a tooltip", () => {
+it("words a comparison's source as plain text too, each branch and commit isolated, for a tooltip", () => {
   const { daemon } = controlledDaemon();
   const hook = mount<ChangeReader>(daemon, () => useChangeReader("p"));
   act(() =>
@@ -236,7 +237,7 @@ it("words a comparison's source as plain text too, each branch isolated, for a t
       right: { branch: "feature", commit: "fedcba0987654321" },
     }),
   );
-  expect(hook.current().subject?.sourceText).toBe(`\u2068main\u2069 at ${shortCommit("1234567890abcdef")} to \u2068feature\u2069 at ${shortCommit("fedcba0987654321")}`);
+  expect(hook.current().subject?.sourceText).toBe(`${isolate("main")} at ${isolate(shortCommit("1234567890abcdef"))} to ${isolate("feature")} at ${isolate(shortCommit("fedcba0987654321"))}`);
 });
 
 it("tags a staged or unstaged change with its stage, and marks the rest by their status", () => {

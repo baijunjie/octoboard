@@ -1,4 +1,5 @@
 import { format, isMessageKey } from "./i18n/catalog";
+import { isolate } from "./i18n/isolate";
 import type { Language } from "./i18n/languages";
 import type { MessageParams } from "./protocol";
 import type { State } from "./store";
@@ -28,7 +29,7 @@ export function daemonMessage(
   const key = `daemon.${code}`;
   if (!isMessageKey(key)) return fallback;
   const shown: Record<string, string | number> = Object.fromEntries(
-    Object.entries(params).map(([name, value]) => [name, RECORD_NAMES[name]?.(records, value) ?? value]),
+    Object.entries(params).map(([name, value]) => [name, isolate(RECORD_NAMES[name]?.(records, value) ?? value)]),
   );
   // A count arrives as text; as a number it selects the singular or plural wording.
   if (/^\d+$/.test(params.count ?? "")) shown.count = Number(params.count);

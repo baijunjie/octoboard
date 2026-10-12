@@ -7,10 +7,11 @@ import { useNotificationPermission } from "../lifecycle/useNotificationPermissio
 import { ChromeButton } from "./ChromeButton";
 import { useFocusHandoff } from "./useFocusHandoff";
 
-/** Where the bell's dot badge sits: centred on the glyph's top right corner, which stays the
- * physical top right under a right-to-left language, since HeroUI's `Badge` has only physical
- * placements. Its `top-right` placement only pushes a badge a quarter of its size past the corner;
- * `translate` stacks with that placement's own `transform`, adding the other quarter. */
+/** Where the bell's dot badge sits: centred on the glyph's top right corner, and it stays there under
+ * a right-to-left language. The dot is a physical mark on the bell, not a decoration of the layout,
+ * so it deliberately does not move. Its `top-right` placement only pushes a badge a quarter of its
+ * size past the corner; `translate` stacks with that placement's own `transform`, adding the other
+ * quarter. */
 const BADGE_PLACEMENT = "pointer-events-none translate-x-1/4 -translate-y-1/4";
 
 /** The dot is cut out of the 16px glyph under it: masked away in a 1.5px ring around the dot, so it

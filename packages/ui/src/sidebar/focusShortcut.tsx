@@ -24,7 +24,9 @@ export function FocusShortcutKbd(): React.ReactElement {
     // a hovered item it would vanish into it; there it takes the surface colour instead. Hover
     // only: an item keeps focus after the pointer leaves it but loses that fill, and a surface cap
     // would then vanish into the menu.
-    <Kbd slot="keyboard" className="ms-auto in-data-[hovered=true]:bg-surface">
+    // `dir` holds the caps in the order the shortcut is written in: the notation is the same
+    // sequence in every language, and a right-to-left interface would otherwise reverse it.
+    <Kbd dir="ltr" slot="keyboard" className="ms-auto in-data-[hovered=true]:bg-surface">
       <Kbd.Abbr keyValue="shift" />
       <Kbd.Abbr keyValue={IS_MAC ? "command" : "ctrl"} />
       <Kbd.Content>F</Kbd.Content>

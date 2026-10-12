@@ -11,7 +11,13 @@ const PRESSABLE =
  * browser's accessible-name computation, which folds in the label of a `role="img"` child — such a
  * child inside a control does not enter the name a `Matcher` is handed. */
 function nameOf(element: Element): string {
-  return (element.getAttribute("aria-label") ?? element.textContent ?? "").trim();
+  return withoutIsolates(element.getAttribute("aria-label") ?? element.textContent ?? "").trim();
+}
+
+/** A name without its bidi isolate characters (U+2066 to U+2069). The app puts them round a value
+ * substituted into a sentence, and they are invisible, so a step names a control without them. */
+function withoutIsolates(text: string): string {
+  return text.replace(/[\u2066-\u2069]/g, "");
 }
 
 /** An exact name, a pattern, or a test of the name. */
@@ -102,7 +108,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     async focus(label) {
       for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {
         const field = Array.from(doc.querySelectorAll("input")).find(
-          (input) => (input.labels?.[0]?.textContent ?? input.getAttribute("aria-label")) === label,
+          (input) => withoutIsolates(input.labels?.[0]?.textContent ?? input.getAttribute("aria-label") ?? "") === label,
         );
         if (field) {
           field.focus();

@@ -4,6 +4,7 @@ import React from "react";
 import { AgentIcon } from "../components/AgentIcon";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { StatusIcon } from "../components/StatusIcon";
+import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { isLive, type Session } from "../protocol";
 import { sessionAgentLabel } from "../sessionLabel";
@@ -77,7 +78,7 @@ export function RequestedDialog({
     case "delete-console":
       return (
         <ConfirmDialog
-          title={t("dialog.deleteConsole.title", { name: dialog.console.name })}
+          title={t("dialog.deleteConsole.title", { name: isolate(dialog.console.name) })}
           message={t("dialog.deleteConsole.message")}
           confirmLabel={t("common.delete")}
           typeToConfirm={t("dialog.typeToConfirm.delete")}
@@ -101,7 +102,7 @@ export function RequestedDialog({
         .sort(compareSessions);
       return (
         <ConfirmDialog
-          title={t("dialog.removeProject.title", { name: project.name })}
+          title={t("dialog.removeProject.title", { name: isolate(project.name) })}
           message={
             <>
               <p>{t("dialog.removeProject.message")}</p>
@@ -163,7 +164,7 @@ export function RequestedDialog({
       const withIt = boundSessionsArchivedWith(Array.from(sessions.values()), dialog.session.id);
       return (
         <ConfirmDialog
-          title={t("dialog.archiveSession.title", { title: dialog.session.title })}
+          title={t("dialog.archiveSession.title", { title: isolate(dialog.session.title) })}
           message={
             <>
               <p>{t("dialog.archiveSession.message")}</p>
@@ -182,7 +183,7 @@ export function RequestedDialog({
     case "switch-account":
       return (
         <ConfirmDialog
-          title={t("dialog.switchAccount.title", { title: dialog.session.title, account: dialog.accountName })}
+          title={t("dialog.switchAccount.title", { title: isolate(dialog.session.title), account: isolate(dialog.accountName) })}
           message={t(dialog.session.has_conversation ? "dialog.switchAccount.message" : "dialog.switchAccount.messageFresh")}
           confirmLabel={t("dialog.switchAccount.confirm")}
           pendingLabel={t("dialog.switchAccount.pending")}
@@ -198,7 +199,7 @@ export function RequestedDialog({
       const withIt = boundArchivedSessions(Array.from(sessions.values()), dialog.session.id);
       return (
         <ConfirmDialog
-          title={t("dialog.deleteSession.title", { title: dialog.session.title })}
+          title={t("dialog.deleteSession.title", { title: isolate(dialog.session.title) })}
           message={
             <>
               <p>{t("dialog.deleteSession.message")}</p>

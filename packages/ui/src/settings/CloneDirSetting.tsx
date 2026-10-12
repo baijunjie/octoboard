@@ -61,14 +61,16 @@ export function CloneDirSetting(): React.ReactElement {
             }}
             className="min-w-0 flex-1"
           >
-            <InputGroup title={stored === storedFull ? undefined : storedFull}>
+            {/* The whole group reads left to right, not just the input: a path is an LTR value, and
+                in a right-to-left interface the folder mark would otherwise sit against the far edge
+                with the text pushed away from it, the two no longer reading as one control. */}
+            <InputGroup dir="ltr" title={stored === storedFull ? undefined : storedFull}>
               <InputGroup.Prefix>
                 <Folder size={14} aria-hidden />
               </InputGroup.Prefix>
               {/* The key handler is on the input rather than on `TextField`, which stops every key it is
                   handed a handler for: Escape would never reach the dialog around the field. */}
               <InputGroup.Input
-                dir="ltr"
                 className="font-mono"
                 placeholder={t("settings.cloneDir.placeholder")}
                 onKeyDown={(event) => event.key === "Enter" && !isImeKey(event.nativeEvent) && save(draft)}

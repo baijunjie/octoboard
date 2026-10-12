@@ -1,6 +1,7 @@
 import React from "react";
 
 import { IndicatorTooltip } from "../components/IndicatorTooltip";
+import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Session } from "../protocol";
 
@@ -38,7 +39,7 @@ export function BindingBadge({ owner, decorative }: { owner: Session; decorative
     />
   );
   if (decorative) return dot;
-  const label = t("sidebar.session.boundTo", { name: owner.title });
+  const label = t("sidebar.session.boundTo", { name: isolate(owner.title) });
   return (
     <IndicatorTooltip tooltip={label} label={label} className="inline-flex">
       {dot}

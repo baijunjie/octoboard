@@ -1,6 +1,7 @@
 import React from "react";
 
 import { IndicatorTooltip } from "../components/IndicatorTooltip";
+import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { BranchOrigin } from "../protocol";
 
@@ -19,7 +20,7 @@ import type { BranchOrigin } from "../protocol";
  */
 export function BranchOriginBadge({ origin }: { origin: BranchOrigin }): React.ReactElement {
   const t = useT();
-  const label = t("git.compare.branchOrigin", { title: origin.title });
+  const label = t("git.compare.branchOrigin", { title: isolate(origin.title) });
   return (
     <IndicatorTooltip tooltip={label} label={label} className="inline-flex shrink-0">
       <span aria-hidden="true" className="inline-block size-2.5 rounded-full border-2 border-muted" />

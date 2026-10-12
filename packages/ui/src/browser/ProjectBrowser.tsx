@@ -9,6 +9,7 @@ import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { FADE_SIZE } from "../components/useScrollFade";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
+import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { AsidePane, type AsideLayout } from "../layout/AsidePane";
 import type { Project } from "../protocol";
@@ -148,7 +149,7 @@ export function ProjectBrowser({
   const root = dirs.listings.get("");
   const rootLoading = root === undefined || root.state === "loading";
   return (
-    <AsidePane layout={layout} label={t("browser.label", { project: project.name })} className="control-fills">
+    <AsidePane layout={layout} label={t("browser.label", { project: isolate(project.name) })} className="control-fills">
       <Tabs selectedKey={mode} onSelectionChange={(key) => browser.setMode(key as BrowserMode)} className="flex min-h-0 flex-1 flex-col gap-0">
         <div ref={headerRef} className="flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator ps-3 pe-2 text-sm">
           <FolderOpen aria-hidden="true" className="size-4 shrink-0 text-muted" />

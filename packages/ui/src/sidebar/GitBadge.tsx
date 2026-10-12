@@ -4,6 +4,7 @@ import React from "react";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { IndicatorTooltip } from "../components/IndicatorTooltip";
 import { gitBadgeAriaLabel } from "../gitStatusLabel";
+import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { GitStatus } from "../protocol";
 
@@ -16,7 +17,7 @@ function ErrorTooltip({ error, children }: { error: string | null | undefined; c
   const t = useT();
   if (!error) return <>{children}</>;
   return (
-    <IndicatorTooltip tooltip={t("sidebar.git.error", { error })} className="flex shrink-0 items-center">
+    <IndicatorTooltip tooltip={t("sidebar.git.error", { error: isolate(error) })} className="flex shrink-0 items-center">
       {children}
     </IndicatorTooltip>
   );

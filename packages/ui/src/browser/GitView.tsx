@@ -9,6 +9,7 @@ import { PathText } from "../components/PathText";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import type { Translate } from "../i18n/catalog";
+import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { abbreviateHome } from "../pathDisplay";
 import type { WorktreeInfo } from "../protocol";
@@ -25,10 +26,12 @@ import { GitFailure, GitLoading } from "./gitStates";
 import type { ChangeList as ChangeListState } from "./useChangeList";
 import type { SourceState } from "./useProjectSource";
 
-/** How a worktree is named: by its branch, or by the commit a detached `HEAD` is at. */
+/** How a worktree is named: by its branch, or by the commit a detached `HEAD` is at. Not isolated
+ * here: the name is the item's `textValue` and the children of a `dir="auto"` element, neither of
+ * which wants it. The detached wording is prose that isolates its own commit. */
 function worktreeName(t: Translate, worktree: WorktreeInfo): string {
   if (worktree.branch !== null) return displayWirePath(worktree.branch);
-  return worktree.head === null ? t("git.worktree.unborn") : t("git.worktree.detached", { commit: worktree.head.slice(0, 7) });
+  return worktree.head === null ? t("git.worktree.unborn") : t("git.worktree.detached", { commit: isolate(worktree.head.slice(0, 7)) });
 }
 
 /** What the worktree view shows and does: the chosen worktree's change list. */
@@ -108,7 +111,7 @@ function GitContent({
   const git = source.source.git;
   if (!git) {
     return source.source.git_error !== null ? (
-      <EmptyPanel icon={TriangleAlert} message={t("git.unavailable", { reason: source.source.git_error })} />
+      <EmptyPanel icon={TriangleAlert} message={t("git.unavailable", { reason: isolate(source.source.git_error) })} />
     ) : (
       <EmptyPanel icon={GitFork} message={t("git.notARepository")} />
     );
@@ -235,7 +238,9 @@ function ChangeViewToggles({ changeView }: { changeView: ChangeViewState }): Rea
         isSelected={changeView.layout === "tree"}
         onChange={(selected) => changeLayout.set(selected ? "tree" : "flat")}
       >
-        {changeView.layout === "tree" ? <FolderTree aria-hidden="true" className="size-4" /> : <List aria-hidden="true" className="size-4" />}
+        {/* Both glyphs hang their rows off the leading side, so they mirror under right-to-left,
+            as the sidebar's fold control does. */}
+        {changeView.layout === "tree" ? <FolderTree aria-hidden="true" className="size-4 rtl:-scale-x-100" /> : <List aria-hidden="true" className="size-4 rtl:-scale-x-100" />}
       </IconToggle>
     </div>
   );
@@ -284,7 +289,7 @@ function WorktreeSelect({
           <ListBox>
             {worktrees.map((worktree) => {
               const name = worktreeName(t, worktree);
-              const shownName = worktree.id === own ? t("git.worktree.own", { name }) : name;
+              const shownName = worktree.id === own ? t("git.worktree.own", { name: worktree.branch === null ? name : isolate(name) }) : name;
               const path = abbreviateHome(displayWirePath(worktree.root), homeDir);
               // `pe-7` restores the room HeroUI reserves for the check mark, which its Select styles
               // override with a narrower padding, so a long name would run under the mark.

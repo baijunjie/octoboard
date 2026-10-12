@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { isolate } from "../i18n/isolate";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
@@ -110,7 +111,7 @@ it("opens a Markdown file as a document, with the choice in the header's control
   expect(region().querySelector("h1")?.textContent).toBe("Title");
   expect(region().querySelectorAll("li")).toHaveLength(2);
   expect(region().querySelector("table th")?.textContent).toBe("Name");
-  expect(region().getAttribute("aria-label")).toBe("Contents of README.md");
+  expect(region().getAttribute("aria-label")).toBe(`Contents of ${isolate("README.md")}`);
   expect(region().tabIndex).toBe(0);
   expect(region().parentElement?.classList.contains("surface--tertiary")).toBe(true);
   expect(choice("Show source").closest("[data-viewer-description]")).not.toBeNull();

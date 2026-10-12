@@ -7,6 +7,7 @@ import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
 import { useFocusHandoff } from "../components/useFocusHandoff";
+import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { BranchInfo } from "../protocol";
 import { displayWirePath } from "../wirePath";
@@ -93,7 +94,7 @@ export function BranchComparisonView({
       <ChangeFilterField changeView={changeView} />
       {branchesError !== undefined && !(comparison.state === "idle" && branches.state === "error") && (
         <p role="alert" className="shrink-0 px-3 py-2 text-xs text-muted">
-          {t("git.compare.branchesError", { message: branchesError })}
+          {t("git.compare.branchesError", { message: isolate(branchesError) })}
         </p>
       )}
       <div className="flex min-h-0 flex-1 flex-col" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
@@ -141,7 +142,7 @@ function ComparisonContent({
   return (
     <>
       <p className="shrink-0 px-3 py-2 text-xs text-muted">
-        {t("git.compare.commits", { from: shortCommit(left.commit), to: shortCommit(right.commit) })}
+        {t("git.compare.commits", { from: isolate(shortCommit(left.commit)), to: isolate(shortCommit(right.commit)) })}
       </p>
       {/* Mounted for as long as the comparison is, so a notice appearing in it is announced. */}
       <div role="status" className="flex shrink-0 flex-col gap-1 px-3 text-xs text-muted not-empty:pb-2">
@@ -154,7 +155,7 @@ function ComparisonContent({
               ) : (
                 <Message
                   id="git.compare.deleted"
-                  params={{ branch: <bdi dir="auto">{displayWirePath(notice.branch)}</bdi>, commit: shortCommit(notice.commit) }}
+                  params={{ branch: <bdi dir="auto">{displayWirePath(notice.branch)}</bdi>, commit: <bdi dir="auto">{shortCommit(notice.commit)}</bdi> }}
                 />
               )}
             </span>
@@ -194,7 +195,7 @@ export function BranchSelect({
   const name = value === undefined ? undefined : displayWirePath(value);
   const shown =
     name === undefined ? t("git.compare.choose") : gone ? <Message id="git.compare.branchGone" params={{ branch: <bdi dir="auto">{name}</bdi> }} /> : name;
-  const title = name === undefined ? undefined : gone ? t("git.compare.branchGone", { branch: name }) : name;
+  const title = name === undefined ? undefined : gone ? t("git.compare.branchGone", { branch: isolate(name) }) : name;
   return (
     // The subgrid restates the column gap: HeroUI's `.select` sets a gap of its own, which would
     // otherwise replace the parent grid's for this row's gutter. The secondary variant draws from

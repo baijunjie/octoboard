@@ -44,7 +44,9 @@ function ErrorScreen({ error, onRetry }: { error: Error; onRetry: () => void }):
       message={
         <>
           {t("error.crashed")}
-          <pre className="mt-4 max-h-[40vh] max-w-[70ch] overflow-auto rounded-lg bg-surface p-3 text-left text-xs">{error.stack ?? error.message}</pre>
+          {/* A stack trace is program text: its indentation and its frames read left to right in
+              any interface language. */}
+          <pre dir="ltr" className="mt-4 max-h-[40vh] max-w-[70ch] overflow-auto rounded-lg bg-surface p-3 text-left text-xs">{error.stack ?? error.message}</pre>
         </>
       }
       action={{ label: t("error.tryAgain"), onSelect: onRetry }}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { isolate } from "../i18n/isolate";
 import { t } from "../i18n/language";
 import { usePlatform } from "../platform/react";
 import { isLive, type Session } from "../protocol";
@@ -85,7 +86,7 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
       // Quitting must not depend on this succeeding, but a quit that silently does nothing is
       // worse than one that says why, so the failure is surfaced rather than swallowed.
       quittingRef.current = false;
-      optionsRef.current.toastError?.(t("exit.failed", { error: (err as Error).message }));
+      optionsRef.current.toastError?.(t("exit.failed", { error: isolate((err as Error).message) }));
     }
   };
 
@@ -125,7 +126,7 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
           // The daemon going away is the quit's own doing, which needs neither a notice nor the
           // window.
           if (quittingRef.current) return;
-          optionsRef.current.toastError?.(t("exit.daemonExited", { detail }));
+          optionsRef.current.toastError?.(t("exit.daemonExited", { detail: isolate(detail) }));
           // A window hidden in the background would leave the notice unseen; a visible one is left
           // where it is, so a crash does not take the focus from whatever the user is doing.
           void (async () => {

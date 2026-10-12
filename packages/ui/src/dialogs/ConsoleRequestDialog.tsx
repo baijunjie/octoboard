@@ -1,6 +1,7 @@
 import React from "react";
 
 import { DaemonRequestError } from "../daemon-client";
+import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { CONSOLE_REQUEST_ANSWERED, CONSOLE_REQUEST_NOT_WAITING, type Session } from "../protocol";
 import { useDaemon, useDaemonStore, type ConsoleRequest } from "../store";
@@ -16,7 +17,7 @@ function ConsoleRequestMessage({ request }: { request: ConsoleRequest }): React.
     useDaemonStore((s) => (request.project ? s.projects.get(request.project)?.name : undefined)) ?? request.project ?? "";
   // Named rather than "this console": the window may be showing another one.
   const console_ = useDaemonStore((s) => s.consoles.get(request.console)?.name) ?? request.console;
-  return <p>{t("dialog.consoleRequest.question", { session, project, console: console_ })}</p>;
+  return <p>{t("dialog.consoleRequest.question", { session: isolate(session), project: isolate(project), console: isolate(console_) })}</p>;
 }
 
 /** What the dialog for an unbound project session's request for a console session shows and does,

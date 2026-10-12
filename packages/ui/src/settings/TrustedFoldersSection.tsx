@@ -3,6 +3,7 @@ import React from "react";
 
 import { MarkedPath } from "../components/MarkedPath";
 import { TitledControl } from "../components/TitledControl";
+import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { useDaemon, useDaemonStore } from "../store";
 import { SettingRow } from "./SettingRow";
@@ -41,7 +42,7 @@ export function TrustedFoldersSection(): React.ReactElement {
                   size="sm"
                   variant="outline"
                   preventFocusOnPress
-                  aria-label={t("settings.trusted.removeLabel", { path })}
+                  aria-label={t("settings.trusted.removeLabel", { path: isolate(path) })}
                   onPress={() => remove(path)}
                 >
                   {t("common.remove")}

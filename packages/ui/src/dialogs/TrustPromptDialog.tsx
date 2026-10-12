@@ -3,6 +3,7 @@ import React, { useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
 import { DaemonRequestError } from "../daemon-client";
+import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { TRUST_NOT_WAITING, TRUST_REFUSED_CODES, type Agent } from "../protocol";
 import { abbreviateHome } from "../pathDisplay";
@@ -55,7 +56,7 @@ function TrustPromptMessage({
       <div className="flex flex-col gap-2">
         <p>
           {sessionTitle
-            ? t("dialog.trust.questionForSession", { agent, session: sessionTitle })
+            ? t("dialog.trust.questionForSession", { agent, session: isolate(sessionTitle) })
             : t("dialog.trust.question", { agent })}
         </p>
         <Path block>{abbreviateHome(prompt.path, home)}</Path>

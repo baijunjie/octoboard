@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { consoleOf } from "../gallery/fixtures/builders";
+import { isolate } from "../i18n/isolate";
 import type { Account, AgentModel, Console, Event, ModelsUnavailable, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { imageToAvatar } from "../avatarImage";
@@ -289,11 +290,11 @@ it("locks the pickers and says so while the list is out, with the stored value i
 });
 
 it.each([
-  ["models_binary_not_found", { binary: "claude" }, "claude was not found, so the models cannot be listed."],
-  ["models_shell_environment_failed", { detail: "no shell" }, "The shell environment could not be read, so the models cannot be listed: no shell"],
-  ["models_timed_out", { agent: "Claude Code" }, "Claude Code took too long to list its models."],
-  ["models_command_failed", { agent: "Claude Code", detail: "exit 1" }, "Claude Code could not list its models: exit 1"],
-  ["models_unreadable_output", { agent: "Claude Code" }, "Claude Code printed no models that could be read."],
+  ["models_binary_not_found", { binary: "claude" }, `${isolate("claude")} was not found, so the models cannot be listed.`],
+  ["models_shell_environment_failed", { detail: "no shell" }, `The shell environment could not be read, so the models cannot be listed: ${isolate("no shell")}`],
+  ["models_timed_out", { agent: "Claude Code" }, `${isolate("Claude Code")} took too long to list its models.`],
+  ["models_command_failed", { agent: "Claude Code", detail: "exit 1" }, `${isolate("Claude Code")} could not list its models: ${isolate("exit 1")}`],
+  ["models_unreadable_output", { agent: "Claude Code" }, `${isolate("Claude Code")} printed no models that could be read.`],
 ])("says why there is no list for %s, and leaves the form usable", async (code, params, reason) => {
   const request = render(stored, [], async (body) => listing(body, [], { code, params, message: "daemon words" }));
   await openAdvanced();

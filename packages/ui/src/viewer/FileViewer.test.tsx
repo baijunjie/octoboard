@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { isolate } from "../i18n/isolate";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 import { ThemeProvider } from "../theme";
 import { ChangeBodiesError, type ViewerChangeSide, type ViewerContent, type ViewerSubject } from "./content";
@@ -315,7 +316,7 @@ it("falls back to saying nothing changed when that content cannot be read", asyn
   const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", "git failed"));
   show({ key: "e", path: "f", content: { state: "change", change: { old: side("f"), new: side("f"), patch: "", loadBodies } } });
   await settled();
-  expect(dialog()?.textContent).toContain("Could not read this file's content. git failed");
+  expect(dialog()?.textContent).toContain(`Could not read this file's content. ${isolate("git failed")}`);
   expect(dialog()?.textContent).toContain("No differences");
 });
 
@@ -410,7 +411,7 @@ it("offers expansion only to a change that can be expanded, and says why one did
   report("changed");
   expect(dialog()?.textContent).toContain("This change has moved on since it was read, so its unmodified lines cannot be shown.");
   report("failed");
-  expect(dialog()?.textContent).toContain("Could not read the unmodified lines. No luck.");
+  expect(dialog()?.textContent).toContain(`Could not read the unmodified lines. ${isolate("No luck.")}`);
   expect(dialog()?.querySelector("[data-renderer]")?.textContent).toBe(patch);
   show(change("another", true));
   expect(dialog()?.textContent).not.toContain("unmodified lines");

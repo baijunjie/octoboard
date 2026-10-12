@@ -20,6 +20,7 @@ import { handFocusOff } from "../components/handFocusOff";
 import { RowControls } from "../components/RowControls";
 import { ActivityMarker, StatusIcon } from "../components/StatusIcon";
 import { withGitBadge } from "../gitStatusLabel";
+import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { drawerClass, PANE_ID, RailClip, usePanePeekPointer } from "../layout/paneOverlay";
 import type { PaneWidth } from "../layout/paneWidth";
@@ -344,7 +345,7 @@ function ConsoleHeader({ handlers, current }: { handlers: SidebarHandlers; curre
         <span className="text-base font-semibold">{current.name}</span>
       </RowLabel>
       <ActionMenu
-        label={t("sidebar.console.actions", { name: current.name })}
+        label={t("sidebar.console.actions", { name: isolate(current.name) })}
         items={consoleMenu(t, current, handlers.onOpenDialog)}
         contextTargetRef={headerRef}
       />
@@ -570,7 +571,7 @@ function ConsoleSessionsSection({
           <>
             <RowIconButton icon={Plus} label={t("sidebar.consoleSessions.new")} onPress={openNew} isDisabled={blocked} />
             {archivedConsoleSessions.length > 0 && (
-              <ActionMenu label={t("sidebar.consoleSessions.actions", { name: thisConsole.name })} items={menu} />
+              <ActionMenu label={t("sidebar.consoleSessions.actions", { name: isolate(thisConsole.name) })} items={menu} />
             )}
           </>
         }
@@ -634,9 +635,9 @@ function ProjectNode({
     handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project, binding: { kind: "choose" } });
   const activityKey = activityLabelKey(activity, project.pinned);
   const nameLabel = activityKey
-    ? t(activityKey, { name: project.name })
+    ? t(activityKey, { name: isolate(project.name) })
     : project.pinned
-      ? t("sidebar.project.ariaLabelPinned", { name: project.name })
+      ? t("sidebar.project.ariaLabelPinned", { name: isolate(project.name) })
       : project.name;
 
   return (
@@ -673,7 +674,7 @@ function ProjectNode({
         {isCollapsed && <ActivityMarker activity={activity} />}
         <RowControls>
           <RowIconButton icon={Plus} label={t("sidebar.project.openSession")} onPress={openSession} />
-          <ActionMenu label={t("sidebar.project.actions", { name: project.name })} items={projectMenu(t, handlers, project, archived, { gitRepository: gitStatus?.repository })} contextTargetRef={rowRef} />
+          <ActionMenu label={t("sidebar.project.actions", { name: isolate(project.name) })} items={projectMenu(t, handlers, project, archived, { gitRepository: gitStatus?.repository })} contextTargetRef={rowRef} />
         </RowControls>
       </TreeRow>
       {!isCollapsed && (
@@ -754,7 +755,7 @@ function SessionRow({
       )}
       {session.pinned && <PinButton name={session.title} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}
       <RowControls>
-        <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
+        <ActionMenu label={t("sidebar.session.actions", { title: isolate(session.title) })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
       </RowControls>
     </TreeRow>
   );

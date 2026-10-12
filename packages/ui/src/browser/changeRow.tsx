@@ -2,6 +2,7 @@ import React from "react";
 
 import { FadeOverflow } from "../components/FadeOverflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
+import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { StatusChip } from "../viewer/StatusChip";
 import { STATUS_MARKS, type StatusKey } from "../viewer/statusMarks";
@@ -27,20 +28,25 @@ const STATUS_WORDS: Record<StatusKey, PlainMessageKey> = {
 };
 
 /** What a row says beside its file's name: where a rename came from or went, and otherwise, unless
- * the row sits under its folder in a tree (`inFolder`), the folder the file is in. */
-function rowDetail(t: Translate, item: ChangeItem, inFolder: boolean): string {
+ * the row sits under its folder in a tree (`inFolder`), the folder the file is in. `shown` is what
+ * is painted, and `sentence` what goes into the row's accessible name: they differ for a bare
+ * folder, which is isolated only in the sentence, since the element painting it isolates it already. */
+function rowDetail(t: Translate, item: ChangeItem, inFolder: boolean): { shown: string; sentence: string } {
   const { entry } = item;
   if (entry.group !== "conflicted") {
     const { old: before, new: after } = entry;
-    if (before.state === "out_of_scope") return t("git.row.fromOutside", { path: displayWirePath(before.repository_path) });
-    if (after.state === "out_of_scope") return t("git.row.toOutside", { path: displayWirePath(after.repository_path) });
-    if (before.state === "present" && after.state === "present" && before.path !== after.path) {
-      return t("git.row.from", { path: displayWirePath(before.path) });
+    let prose: string | undefined;
+    if (before.state === "out_of_scope") prose = t("git.row.fromOutside", { path: isolate(displayWirePath(before.repository_path)) });
+    else if (after.state === "out_of_scope") prose = t("git.row.toOutside", { path: isolate(displayWirePath(after.repository_path)) });
+    else if (before.state === "present" && after.state === "present" && before.path !== after.path) {
+      prose = t("git.row.from", { path: isolate(displayWirePath(before.path)) });
     }
+    if (prose !== undefined) return { shown: prose, sentence: prose };
   }
-  if (inFolder) return "";
   const slash = item.path.lastIndexOf("/");
-  return slash === -1 ? "" : displayWirePath(item.path.slice(0, slash));
+  if (inFolder || slash === -1) return { shown: "", sentence: "" };
+  const folder = displayWirePath(item.path.slice(0, slash));
+  return { shown: folder, sentence: isolate(folder) };
 }
 
 /** What a change's row is named, for assistive technology, and says beside its name. */
@@ -51,12 +57,12 @@ export function changeRowText(
   inFolder: boolean,
 ): { name: string; detail: string; ariaLabel: string } {
   const name = wireBaseName(item.path);
-  const detail = rowDetail(t, item, inFolder);
+  const { shown: detail, sentence } = rowDetail(t, item, inFolder);
   const status = t(STATUS_WORDS[item.status]);
   const ariaLabel =
     detail === ""
-      ? t(isSelected ? "git.row.selected" : "git.row", { name, status })
-      : t(isSelected ? "git.row.detail.selected" : "git.row.detail", { name, status, detail });
+      ? t(isSelected ? "git.row.selected" : "git.row", { name: isolate(name), status })
+      : t(isSelected ? "git.row.detail.selected" : "git.row.detail", { name: isolate(name), status, detail: sentence });
   return { name, detail, ariaLabel };
 }
 

@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, useCallback } from "react";
 
 import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
+import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { textPlan } from "./budgets";
@@ -97,7 +98,7 @@ function DocumentSurface({
           key={resetKey}
           tabIndex={0}
           role="region"
-          aria-label={t("viewer.contents", { name })}
+          aria-label={t("viewer.contents", { name: isolate(name) })}
           {...focus}
           onKeyDown={(event) => {
             if (isSelectAll(event) && selectDocument(event.currentTarget)) event.preventDefault();

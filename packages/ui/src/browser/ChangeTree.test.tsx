@@ -2,6 +2,7 @@
 import { act } from "react";
 import { expect, it, vi } from "vitest";
 
+import { isolate } from "../i18n/isolate";
 import { ChangeTree } from "./ChangeTree";
 import { change, mountRows } from "./browserTestSupport";
 import { changeItems, directoryKey } from "./changes";
@@ -36,13 +37,23 @@ const press = (element: HTMLElement, key: string) =>
 
 it("shows each section with its count and its changes under their directories, a chain of single-child directories as one row", () => {
   const container = render(new Set());
-  expect(labels(container)).toEqual(["Staged2", "src", "utils/kickback", "a.ts, modified", "b.ts, modified, selected", "Unstaged2", "src", "b.ts, modified", "top.ts, modified"]);
+  expect(labels(container)).toEqual([
+    "Staged2",
+    "src",
+    "utils/kickback",
+    `${isolate("a.ts")}, modified`,
+    `${isolate("b.ts")}, modified, selected`,
+    "Unstaged2",
+    "src",
+    `${isolate("b.ts")}, modified`,
+    `${isolate("top.ts")}, modified`,
+  ]);
   expect(row(container, directoryKey("staged", "src/utils/kickback")).getAttribute("aria-expanded")).toBe("true");
 });
 
 it("drops the rows under a collapsed directory and says so on the directory's row", () => {
   const container = render(new Set([directoryKey("staged", "src/utils/kickback"), directoryKey("unstaged", "src")]));
-  expect(labels(container)).toEqual(["Staged2", "src", "utils/kickback", "b.ts, modified, selected", "Unstaged2", "src", "top.ts, modified"]);
+  expect(labels(container)).toEqual(["Staged2", "src", "utils/kickback", `${isolate("b.ts")}, modified, selected`, "Unstaged2", "src", `${isolate("top.ts")}, modified`]);
   expect(row(container, directoryKey("staged", "src/utils/kickback")).getAttribute("aria-expanded")).toBe("false");
   expect(row(container, directoryKey("unstaged", "src")).getAttribute("aria-expanded")).toBe("false");
 });

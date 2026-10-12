@@ -3,6 +3,7 @@ import React, { Suspense, useCallback, useMemo, useState } from "react";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
 import type { PlainMessageKey } from "../i18n/catalog";
+import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { diffPlan, textPlan } from "./budgets";
 import { CODE_THEMES } from "./codeTheme";
@@ -126,7 +127,7 @@ export function CodeSurface({
   const t = useT();
   const [plainFor, setPlainFor] = useState<string>();
   const onPlainChange = useCallback((plain: boolean) => setPlainFor(plain ? resetKey : undefined), [resetKey]);
-  const label = t("viewer.contents", { name });
+  const label = t("viewer.contents", { name: isolate(name) });
   const wrap = wordWrap.useValue();
   if (textPlan(text) === "plain") {
     return (
@@ -190,7 +191,7 @@ export function DiffSurface({
   lines?: { old?: number | null; new?: number | null };
 }): React.ReactElement {
   const t = useT();
-  const label = t("viewer.contents", { name });
+  const label = t("viewer.contents", { name: isolate(name) });
   const wrap = wordWrap.useValue();
   const marked = useMemo(() => withoutNoNewlineMarkers(patch), [patch]);
   const trailing = useMemo(() => linesAfterLastHunk(marked.patch, { old: lines?.old, new: lines?.new }), [marked.patch, lines?.old, lines?.new]);
@@ -214,7 +215,7 @@ export function DiffSurface({
   const status = reported?.key === resetKey && reported.read === loadBodies ? reported.status : undefined;
   const onExpansion = useCallback((next: ExpansionStatus) => setReported({ key: resetKey, read: loadBodies, status: next }), [resetKey, loadBodies]);
   const note = status && EXPANSION_NOTES[status.kind];
-  const expansionNote = status?.kind === "failed" ? t("viewer.expand.failed", { reason: status.message }) : note ? t(note) : undefined;
+  const expansionNote = status?.kind === "failed" ? t("viewer.expand.failed", { reason: isolate(status.message) }) : note ? t(note) : undefined;
   const asText = (reason: string, tone: NoticeTone, speak?: string) => (
     <>
       <WrapToggle />

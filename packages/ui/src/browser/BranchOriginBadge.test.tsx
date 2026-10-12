@@ -2,6 +2,7 @@
 import { act } from "react";
 import { expect, it } from "vitest";
 
+import { isolate } from "../i18n/isolate";
 import type { BranchInfo } from "../protocol";
 import { BranchSelect } from "./BranchComparison";
 import { mountRows } from "./browserTestSupport";
@@ -20,7 +21,7 @@ it("marks only a branch with an origin, naming the session that created it", () 
   act(() => container.querySelector<HTMLElement>("button")!.click());
 
   const badge = optionOf("made-by-session").querySelector<HTMLElement>("[role=img]")!;
-  expect(badge.getAttribute("aria-label")).toBe("Created by session Fix the layout");
+  expect(badge.getAttribute("aria-label")).toBe(`Created by session ${isolate("Fix the layout")}`);
   expect(badge.tabIndex).toBe(-1);
   expect(optionOf("made-in-terminal").querySelector("[role=img]")).toBeNull();
 });

@@ -356,6 +356,67 @@ its position and by `aria-pressed`, and the fill difference meets 1.4.11's 3:1 f
 measured ratios sit in the comment above `.toggle-button-group .toggle-button` in `packages/ui/src/style.css`; a
 two-state choice does not belong in that group, because the icon form above has no shortfall to accept.
 
+## Text direction
+
+Under a right-to-left language the window mirrors, and what mirrors with it is settled per part in "Right-to-left
+layout" in `docs/product/window-layout.md`. What follows is the rule behind that list and how to meet it in code; it is
+WCAG 2.2 A 1.3.2, since a value read in the wrong order says something else.
+
+**Prose follows the interface; a value keeps its own order.** A sentence takes the document's direction. A value that
+is not prose — a path, a URL, a branch name, a commit id, a shell command, a port, a keyboard shortcut, a count written
+as `1 / 12`, a literal to type — reads left to right in every language, and the element that *draws* it says so with
+`dir="ltr"`.
+
+- Say it on the element that draws the value, not on one inside it. A field whose group holds an affix needs the
+  `dir` on the group: with it on the input alone, the affix stays on the mirrored side and the text pulls away from it,
+  and the two stop reading as one control (`packages/ui/src/settings/CloneDirSetting.tsx`).
+- `dir` sets direction, not alignment. It does not override an inherited `text-align`, so an element that needs both
+  keeps its alignment class as well (`packages/ui/src/ErrorBoundary.tsx`, whose crash stack sits inside a centred
+  wrapper).
+
+**A value substituted into a sentence is isolated.** Without it the bidi algorithm reorders the value against the
+sentence around it: `“/Users/dev/app”` reads as `”Users/dev/app/“`, and a trailing full stop or a closing parenthesis
+lands on the wrong side. Two forms, one per kind of text:
+
+- rendered as React children: `<bdi dir="auto">{value}</bdi>`;
+- as a plain string — a tooltip, a `title`, a toast, an accessible name: `isolate` from
+  `packages/ui/src/i18n/isolate.ts`, which wraps the value in U+2068 / U+2069. The isolates are invisible and ignored
+  by assistive technology, so an accessible name carrying them still reads as its text.
+
+Isolate where the value enters the sentence, and prefer the point every value of a kind passes through: `daemonMessage`
+isolates every param of a daemon message, which covers a browse error's too. A name the user typed is isolated for the
+same reason as a path — it may be in any script.
+
+Two cases take no isolate, and putting one there breaks something:
+
+- **A string that is matched, sorted, keyed or handed to a collection as `textValue` is never isolated.** The isolate
+  characters are collation-ignorable, so a comparison stops matching: react-aria's type-to-select compares `textValue`
+  with a collator, and a leading U+2068 makes typing `m` skip `main`. Keep the plain value for those and isolate only
+  the copy that goes into a sentence.
+- **A value rendered as the children of an element that carries a `dir` needs none.** That element already isolates its
+  content, so only a value going into a *string* needs `isolate`. A string wholly wrapped in an isolate also has no
+  strong character left for `dir="auto"` to read, which can lay the element out left to right.
+
+`packages/ui/src/browser/BranchComparison.tsx` shows the split: the branch name is plain for `textValue`, for the
+children, and for the `title` that is the name alone, and isolated only where it enters a sentence — the `title` that
+says the branch is gone.
+
+**An icon mirrors only when its meaning is a direction.** Back and Forward, a disclosure or submenu chevron, a pane
+toggle, a glyph whose rows hang off the leading side (the fold control, the list and folder-tree layout toggles):
+`rtl:-scale-x-100` on the icon. A glyph standing for a physical thing — pause, a rotation, a camera — and a checkmark
+keep their shape. A component library's own indicator is worth checking rather than trusting: HeroUI's submenu
+indicator is a fixed right-pointing chevron, while react-aria opens the submenu towards the inline start, so
+`ActionMenu` flips it itself.
+
+**A badge or overlay placed with physical offsets needs an `rtl:` twin.** Tailwind's logical utilities mirror
+themselves, but a hand-placed decoration — and any mask cut for it — does not: give each one its mirrored counterpart,
+as `packages/ui/src/components/Rail.tsx` does for the waiting count and its hole. Where a library offers only physical
+placements, pick the placement from the language (`textDirection(useCurrentLanguage())`).
+
+Verify a direction change by rendering it, not by reading it: the gallery serves every scenario under `ar`, and a
+run of it against `en` at the same width catches a part that fails to mirror as readily as one that mirrors when it
+should not (see "The UI state gallery" in `packages/ui/README.md`).
+
 ## Motion
 
 An animation or transition that is not essential stops under `prefers-reduced-motion: reduce` (Tailwind's

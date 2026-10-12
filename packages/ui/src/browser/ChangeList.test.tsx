@@ -2,6 +2,7 @@
 import { act } from "react";
 import { expect, it, vi } from "vitest";
 
+import { isolate } from "../i18n/isolate";
 import { ChangeList } from "./ChangeList";
 import { change, changeViewFixture, mountRows } from "./browserTestSupport";
 import type { ChangeViewState } from "./changeView";
@@ -22,21 +23,26 @@ const rows = (container: HTMLElement) => [...container.querySelectorAll("[role=r
 
 it("shows every row when nothing narrows them", () => {
   const { container } = render();
-  expect(rows(container)).toEqual(["alpha.ts, modified, src/utils", "beta.ts, modified, src", "alpha.md, modified, docs", "beta.ts, modified, src"]);
+  expect(rows(container)).toEqual([
+    `${isolate("alpha.ts")}, modified, ${isolate("src/utils")}`,
+    `${isolate("beta.ts")}, modified, ${isolate("src")}`,
+    `${isolate("alpha.md")}, modified, ${isolate("docs")}`,
+    `${isolate("beta.ts")}, modified, ${isolate("src")}`,
+  ]);
   expect(container.textContent).toContain("Staged2");
   expect(container.textContent).toContain("Unstaged2");
 });
 
 it("narrows a flat list to the file names that match, each section counting what is left", () => {
   const { container } = render({ filter: "ALPHA" });
-  expect(rows(container)).toEqual(["alpha.ts, modified, src/utils", "alpha.md, modified, docs"]);
+  expect(rows(container)).toEqual([`${isolate("alpha.ts")}, modified, ${isolate("src/utils")}`, `${isolate("alpha.md")}, modified, ${isolate("docs")}`]);
   expect(container.textContent).toContain("Staged1");
   expect(container.textContent).toContain("Unstaged1");
 });
 
 it("narrows the tree the same way: only the directories that lead to a match and the matches", () => {
   const { container } = render({ layout: "tree", filter: "alpha" });
-  expect(rows(container)).toEqual(["src/utils", "alpha.ts, modified", "docs", "alpha.md, modified"]);
+  expect(rows(container)).toEqual(["src/utils", `${isolate("alpha.ts")}, modified`, "docs", `${isolate("alpha.md")}, modified`]);
   expect(container.textContent).toContain("Staged1");
   expect(container.textContent).toContain("Unstaged1");
 });

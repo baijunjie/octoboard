@@ -7,6 +7,7 @@ import { PlainMarkedPath } from "../components/MarkedPath";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { TitledControl } from "../components/TitledControl";
 import { Dialog, useRefocusIfLost } from "../dialogs/Dialog";
+import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { useOctoboardTheme } from "../theme";
@@ -600,7 +601,7 @@ function UnchangedView({
     done === undefined || done.text !== undefined
       ? undefined
       : done.why === "failed"
-        ? { tone: "failed" as const, text: t("viewer.change.contentFailed", { reason: done.message ?? "" }) }
+        ? { tone: "failed" as const, text: t("viewer.change.contentFailed", { reason: isolate(done.message ?? "") }) }
         : { tone: "explained" as const, text: t(done.why === "changed" ? "viewer.change.contentChanged" : "viewer.change.contentUnavailable") };
   return (
     <>

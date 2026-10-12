@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { sessionOf } from "./gallery/fixtures/builders";
 import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
+import { isolate } from "./i18n/isolate";
 import type { Account } from "./protocol";
 import { sessionAgentLabel } from "./sessionLabel";
 
@@ -11,9 +12,9 @@ const accounts: Account[] = [{ id: "w", agent: "claude", name: "Work", config_di
 
 describe("sessionAgentLabel", () => {
   it.each([
-    ["the default account by its own name, not a path", {}, "Claude Code (Default)"],
-    ["a stored account by its name", { account_id: "w", config_dir: "/home/w" }, "Claude Code (Work)"],
-    ["a removed account by the directory it recorded", { account_id: "gone", config_dir: "/home/old" }, "Claude Code (/home/old)"],
+    ["the default account by its own name, not a path", {}, `Claude Code (${isolate("Default")})`],
+    ["a stored account by its name", { account_id: "w", config_dir: "/home/w" }, `Claude Code (${isolate("Work")})`],
+    ["a removed account by the directory it recorded", { account_id: "gone", config_dir: "/home/old" }, `Claude Code (${isolate("/home/old")})`],
     ["a removed account that recorded no directory by the agent alone", { account_id: "gone" }, "Claude Code"],
   ] as const)("names %s", (_, extra, expected) => {
     expect(sessionAgentLabel(t, sessionOf("s", "c", "p", "Title", "idle", extra), accounts)).toBe(expected);

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 
 import { choiceGroups, currentChoice, initialChoice, type AccountChoice } from "../accountChoices";
 import { noAgentAvailable } from "../agents";
+import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { BindingBadge } from "../sidebar/BindingBadge";
@@ -102,7 +103,7 @@ export function SessionDialog({
 
   return (
     <Dialog
-      title={t("dialog.session.title", { project: project.name })}
+      title={t("dialog.session.title", { project: isolate(project.name) })}
       onClose={onClose}
       submitLabel={t("dialog.session.open")}
       busy={busy}
@@ -116,11 +117,11 @@ export function SessionDialog({
         <div className="flex items-center gap-2 text-sm">
           <BindingBadge owner={fixedOwner} decorative />
           <span dir="auto" className="min-w-0 truncate">
-            {t("dialog.session.ownerFixed", { name: fixedOwner.title })}
+            {t("dialog.session.ownerFixed", { name: isolate(fixedOwner.title) })}
           </span>
         </div>
       )}
-      {fixedOwner && fixedOwnerGone && <p className="text-sm text-danger">{t("dialog.session.ownerGone", { name: fixedOwner.title })}</p>}
+      {fixedOwner && fixedOwnerGone && <p className="text-sm text-danger">{t("dialog.session.ownerGone", { name: isolate(fixedOwner.title) })}</p>}
       {binding.kind === "choose" && ownerOffered && (
         <OptionSelect
           label={t("dialog.session.owner")}

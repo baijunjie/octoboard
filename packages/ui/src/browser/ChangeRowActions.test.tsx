@@ -2,6 +2,7 @@
 import { act } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 
+import { isolate } from "../i18n/isolate";
 import type { PlatformAdapter } from "../platform";
 import { ChangeList } from "./ChangeList";
 import { change, changeViewFixture, mountRows } from "./browserTestSupport";
@@ -29,7 +30,7 @@ function render(layout: "flat" | "tree", clipboard: PlatformAdapter["clipboard"]
   return { container, onOpen };
 }
 const rowOf = (container: HTMLElement, name: string) =>
-  [...container.querySelectorAll<HTMLElement>("[role=row]")].find((row) => row.getAttribute("aria-label")?.startsWith(name))!;
+  [...container.querySelectorAll<HTMLElement>("[role=row]")].find((row) => row.getAttribute("aria-label")?.startsWith(isolate(name)))!;
 const actionsOf = (row: HTMLElement) => row.querySelector<HTMLButtonElement>("button[aria-haspopup]")!;
 const press = (element: HTMLElement, key: string) =>
   act(() => {
@@ -42,7 +43,7 @@ const flush = () => act(async () => {});
 it.each(["flat", "tree"] as const)("%s: gives each change row an actions button, named for its change, that the row's arrow keys reach", (layout) => {
   const { container } = render(layout, { writeText: async () => {} });
   const row = rowOf(container, "alpha.ts");
-  expect(actionsOf(row).getAttribute("aria-label")).toBe("Actions for file alpha.ts");
+  expect(actionsOf(row).getAttribute("aria-label")).toBe(`Actions for file ${isolate("alpha.ts")}`);
   act(() => row.focus());
   press(row, "ArrowRight");
   expect(document.activeElement).toBe(actionsOf(row));

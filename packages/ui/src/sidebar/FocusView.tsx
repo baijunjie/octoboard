@@ -11,6 +11,7 @@ import { FadeOverflow } from "../components/FadeOverflow";
 import { RowControls } from "../components/RowControls";
 import { ActivityMarker, StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
+import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
@@ -129,7 +130,7 @@ export function ProjectFocusView({
         <GitBadge status={gitStatus} />
         <RowIconButton icon={Plus} label={t("sidebar.project.openSession")} onPress={openSession} />
         <ActionMenu
-          label={t("sidebar.project.actions", { name: project.name })}
+          label={t("sidebar.project.actions", { name: isolate(project.name) })}
           items={projectMenu(t, handlers, project, archived, { placement: "focused", gitRepository: gitStatus?.repository })}
           contextTargetRef={headerRef}
         />
@@ -223,7 +224,7 @@ export function ConsoleSessionFocusView({
           />
         )}
         <ActionMenu
-          label={t("sidebar.session.actions", { title: consoleSession.title })}
+          label={t("sidebar.session.actions", { title: isolate(consoleSession.title) })}
           items={sessionMenu(t, handlers, consoleSession, accounts, { placement: "focused" })}
           contextTargetRef={headerRef}
         />
@@ -310,7 +311,7 @@ function SwitchStrip({
             size="sm"
             variant="tertiary"
             preventFocusOnPress
-            aria-label={activityKey ? t(activityKey, { name: consoleSession.title }) : consoleSession.title}
+            aria-label={activityKey ? t(activityKey, { name: isolate(consoleSession.title) }) : consoleSession.title}
             aria-current={current ? "true" : undefined}
             data-switch-current={current || undefined}
             onPress={() => handlers.onSwitchConsoleSession(consoleSession)}
@@ -367,9 +368,9 @@ function FocusProjectGroup({
         </h4>
         {project.pinned && <PinButton name={project.name} onUnpin={() => handlers.onSetPinned({ project }, false)} returnFocusTo={openSessionHolder} />}
         {/* Named for its project: the header's "+" is beside it in the same view. */}
-        <RowIconButton ref={openSessionHolder} icon={Plus} label={t("sidebar.focus.newSessionIn", { name: project.name })} onPress={onOpenSession} />
+        <RowIconButton ref={openSessionHolder} icon={Plus} label={t("sidebar.focus.newSessionIn", { name: isolate(project.name) })} onPress={onOpenSession} />
         <ActionMenu
-          label={t("sidebar.project.actions", { name: project.name })}
+          label={t("sidebar.project.actions", { name: isolate(project.name) })}
           items={projectMenu(t, handlers, project, archived, { placement: "nested", gitRepository: gitStatus?.repository })}
           contextTargetRef={headerRef}
         />
@@ -405,7 +406,7 @@ function BoundElsewhere({
             size="sm"
             variant="tertiary"
             preventFocusOnPress
-            aria-label={t("sidebar.focus.enterConsoleSession", { name: owner.title, count: bound })}
+            aria-label={t("sidebar.focus.enterConsoleSession", { name: isolate(owner.title), count: bound })}
             onPress={() => handlers.onFocus({ consoleSession: owner })}
             // Pill-shaped on purpose, on the sidebar's tinted tertiary fill (`.sidebar-fills`): a chip
             // reads as a tag, not as one of the sidebar's buttons.
@@ -482,7 +483,7 @@ function ArchivedList({
         ))}
       </div>
       <Button size="sm" variant="ghost" fullWidth preventFocusOnPress onPress={onViewAll} className="mt-1 justify-start font-normal text-muted hover:text-foreground">
-        <List aria-hidden="true" className="size-4" />
+        <List aria-hidden="true" className="size-4 rtl:-scale-x-100" />
         {t("sidebar.archive.viewAll", { count: archived.length })}
       </Button>
     </>
@@ -523,7 +524,7 @@ function SessionCard({
         <span className="flex-1" />
         {session.pinned && <PinButton name={session.title} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}
         <RowControls always>
-          <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
+          <ActionMenu label={t("sidebar.session.actions", { title: isolate(session.title) })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
         </RowControls>
       </div>
       <div dir="auto" className="line-clamp-2 text-sm font-medium break-words">
@@ -577,7 +578,7 @@ function ArchivedRow({
         {formatRelativeTime(language, session.ended_at ?? session.started_at)}
       </span>
       <RowControls>
-        <ActionMenu label={t("sidebar.session.actions", { title: session.title })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
+        <ActionMenu label={t("sidebar.session.actions", { title: isolate(session.title) })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
       </RowControls>
     </TreeRow>
   );

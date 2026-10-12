@@ -37,6 +37,9 @@ export interface ActionMenuItem {
   content?: React.ReactNode;
   /** A lucide glyph, or any element of about the same size (an agent's mark, a console's avatar). */
   icon: LucideIcon | React.ReactElement;
+  /** Added to a lucide glyph's own classes (`rtl:-scale-x-100` for one whose meaning is a direction);
+   * an element keeps the classes it was given. */
+  iconClassName?: string;
   onClick: () => void;
   destructive?: boolean;
   disabled?: boolean;
@@ -60,10 +63,18 @@ export type ActionMenuEntry = ActionMenuItem | ActionMenuSubmenu | "separator";
 
 /** A lucide glyph is drawn quieter than the label beside it, or in the danger colour with a
  * destructive item's label; an element (an agent's mark) keeps its own colours. */
-function ItemIcon({ icon, destructive }: { icon: LucideIcon | React.ReactElement; destructive?: boolean }): React.ReactElement {
+function ItemIcon({
+  icon,
+  destructive,
+  className,
+}: {
+  icon: LucideIcon | React.ReactElement;
+  destructive?: boolean;
+  className?: string;
+}): React.ReactElement {
   if (React.isValidElement(icon)) return icon;
   const Icon = icon;
-  return <Icon aria-hidden="true" className={`size-4 shrink-0 ${destructive ? "text-danger" : "text-muted"}`} />;
+  return <Icon aria-hidden="true" className={`size-4 shrink-0 ${destructive ? "text-danger" : "text-muted"}${className ? ` ${className}` : ""}`} />;
 }
 
 function isChoice(entry: ActionMenuEntry): entry is ActionMenuItem {
@@ -86,7 +97,7 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
       variant={entry.destructive ? "danger" : "default"}
       isDisabled={entry.disabled}
     >
-      <ItemIcon icon={entry.icon} destructive={entry.destructive} />
+      <ItemIcon icon={entry.icon} destructive={entry.destructive} className={entry.iconClassName} />
       {/* A label is often a name the user typed, so it reads in its own direction; `content` sets
           its own. */}
       <Label dir={entry.content ? undefined : "auto"} className="min-w-0 flex-1 truncate">{entry.content ?? entry.label}</Label>
@@ -122,7 +133,10 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
           <Dropdown.Item id={String(index)} textValue={entry.label}>
             <ItemIcon icon={entry.icon} />
             <Label>{entry.label}</Label>
-            <Dropdown.SubmenuIndicator />
+            {/* HeroUI's indicator is a chevron that always points right, while the submenu opens
+                towards the start of the line in a right-to-left interface; a flip points it towards
+                the submenu. */}
+            <Dropdown.SubmenuIndicator className="rtl:-scale-x-100" />
           </Dropdown.Item>
           {/* The submenu's menu is named after its trigger item, so its dialog goes without. */}
           <Dropdown.Popover aria-labelledby="" className="max-w-72">

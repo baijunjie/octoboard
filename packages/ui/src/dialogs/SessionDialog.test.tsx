@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 
+import { isolate } from "../i18n/isolate";
 import type { Agent, AgentAvailability, Session } from "../protocol";
 import type { NewSessionBinding } from "./dialogRequest";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
@@ -102,7 +103,7 @@ it.each([
   { name: "binds to the console session chosen", sessions: [hub1, hub2, hubArchived], pick: "Hub", binding: choose, options: ["No console session", "Hub 2", "Hub"], boundTo: "s-hub-1" },
   { name: "offers no choice with no live console session", sessions: [hubArchived], pick: undefined, binding: choose, options: [], boundTo: undefined },
   { name: "offers no choice and sends no binding when unbound", sessions: [hub1, hub2], pick: undefined, binding: { kind: "unbound" } as const, options: [], boundTo: undefined },
-  { name: "binds to the fixed owner without offering a choice", sessions: [hub1, hub2], pick: undefined, binding: { kind: "bound", to: hub1 } as const, options: [], boundTo: "s-hub-1", fixedLine: "Reports to Hub" },
+  { name: "binds to the fixed owner without offering a choice", sessions: [hub1, hub2], pick: undefined, binding: { kind: "bound", to: hub1 } as const, options: [], boundTo: "s-hub-1", fixedLine: `Reports to ${isolate("Hub")}` },
 ])("$name", async ({ sessions, pick, binding, options, boundTo, fixedLine }) => {
   const result = await openWith(sessions, pick, binding);
   expect(result.options).toEqual(options);
@@ -114,7 +115,7 @@ it.each([
 it("cannot open a session for a fixed owner that is no longer live", () => {
   const { container, root } = renderDialog([{ ...hub1, status: "archived" }], {}, {}, { kind: "bound", to: hub1 });
   expect(buttons().find((b) => b.textContent === "Open")?.hasAttribute("disabled")).toBe(true);
-  expect(document.body.textContent).toContain("Hub is no longer available");
+  expect(document.body.textContent).toContain(`${isolate("Hub")} is no longer available`);
   act(() => root.unmount());
   container.remove();
 });

@@ -7,6 +7,7 @@ import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "../di
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
 import { OptionSelect } from "../dialogs/OptionSelect";
 import { TextInput } from "../dialogs/TextInput";
+import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Account, Agent } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
@@ -36,8 +37,8 @@ export function AccountDialog({
   const nameError = !name
     ? t("dialog.nameRequired")
     : collision?.kind === "default"
-      ? t("settings.accounts.nameTakenDefault", { name: collision.name, agent: AGENT_LABEL[agent] })
-      : collision && t("settings.accounts.nameTaken", { name: collision.name, agent: AGENT_LABEL[agent] });
+      ? t("settings.accounts.nameTakenDefault", { name: isolate(collision.name), agent: AGENT_LABEL[agent] })
+      : collision && t("settings.accounts.nameTaken", { name: isolate(collision.name), agent: AGENT_LABEL[agent] });
   const dirError = isAbsoluteConfigDir(configDir) ? undefined : t("settings.accounts.dirNotAbsolute");
 
   const submit = () => {

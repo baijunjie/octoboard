@@ -52,7 +52,7 @@ export function StartupScreen({ message, action }: StartupScreenProps): React.Re
 
 /** What the screen says when the shell passed the daemon's startup failure along as `?error=`. */
 export function DaemonFailedMessage({ error }: { error: string }): React.ReactElement {
-  return <Message id="startup.daemonFailed" params={{ error }} />;
+  return <Message id="startup.daemonFailed" params={{ error: <bdi dir="auto">{error}</bdi> }} />;
 }
 
 /** What the screen says when there is no daemon address to connect to, and how to give it one. */
@@ -60,11 +60,13 @@ export function NoAddressMessage(): React.ReactElement {
   return (
     <Message
       id="startup.noAddress"
+      // Each is a literal to type, so it reads left to right even in a right-to-left interface,
+      // where `?port=` would otherwise come out as `=port?`.
       params={{
-        port: <code>?port=</code>,
-        dev: <code>vite dev</code>,
-        portVar: <code>VITE_DAEMON_PORT</code>,
-        proxyVar: <code>OCTOBOARD_DAEMON_PORT</code>,
+        port: <code dir="ltr">?port=</code>,
+        dev: <code dir="ltr">vite dev</code>,
+        portVar: <code dir="ltr">VITE_DAEMON_PORT</code>,
+        proxyVar: <code dir="ltr">OCTOBOARD_DAEMON_PORT</code>,
       }}
     />
   );

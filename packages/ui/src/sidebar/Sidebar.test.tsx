@@ -6,6 +6,7 @@ import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { ChromeButton } from "../components/ChromeButton";
 import { Rail } from "../components/Rail";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { isolate } from "../i18n/isolate";
 import { PANE_ID } from "../layout/paneOverlay";
 import type { PanePeek } from "../layout/usePaneToggles";
 import { PlatformProvider } from "../platform/react";
@@ -169,10 +170,10 @@ it("lists a project session's own sessions under it, and the binding badge only 
   // The lead session is ranked against the unbound session as ever (idle before interrupted) and
   // its own sessions follow it, ranked among themselves (working before idle).
   expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual([
-    "Rework the gallery session, Claude Code (Default), Awaiting instructions, Bound to Hub",
-    "Measure the first paint session, Claude Code (Default), Working, Bound to Rework the gallery",
-    "Chase the flaky test session, Claude Code (Default), Awaiting instructions, Bound to Rework the gallery",
-    "Tidy the changelog session, Claude Code (Default), Interrupted",
+    `${isolate("Rework the gallery")} session, Claude Code (${isolate("Default")}), Awaiting instructions, Bound to ${isolate("Hub")}`,
+    `${isolate("Measure the first paint")} session, Claude Code (${isolate("Default")}), Working, Bound to ${isolate("Rework the gallery")}`,
+    `${isolate("Chase the flaky test")} session, Claude Code (${isolate("Default")}), Awaiting instructions, Bound to ${isolate("Rework the gallery")}`,
+    `${isolate("Tidy the changelog")} session, Claude Code (${isolate("Default")}), Interrupted`,
   ]);
   const badges = rows.map((row) => row.querySelector('[style*="--console-session"]') !== null);
   expect(badges).toEqual([true, false, false, false]);
@@ -232,9 +233,9 @@ function mountPeeking() {
     peek,
     hide,
     leavePane: () => act(() => void pane.dispatchEvent(pointer("pointerout"))),
-    avatar: () => container.querySelector("[data-region=rail] button[aria-label^=Main]")!,
+    avatar: () => container.querySelector("[data-region=rail] button[aria-label*=Main]")!,
     onToggle: (x: number, y: number) => on(container.querySelector("[data-pane-toggle] svg")!, x, y),
-    onAvatar: (x: number, y: number) => on(container.querySelector("[data-region=rail] button[aria-label^=Main] span")!, x, y),
+    onAvatar: (x: number, y: number) => on(container.querySelector("[data-region=rail] button[aria-label*=Main] span")!, x, y),
     onContent: (x: number, y: number) => on(document.body, x, y),
   };
 }

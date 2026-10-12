@@ -10,6 +10,7 @@ import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen";
+import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Account, Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
@@ -97,10 +98,10 @@ export function ArchiveView({
   }, [archived.length, dialogOpen]);
 
   const heading = project
-    ? t("archive.title.project", { name: project.name })
+    ? t("archive.title.project", { name: isolate(project.name) })
     : boundTo
-      ? t("archive.title.boundSessions", { name: boundTo.title })
-      : t("archive.title.consoleSessions", { name: owner.name });
+      ? t("archive.title.boundSessions", { name: isolate(boundTo.title) })
+      : t("archive.title.consoleSessions", { name: isolate(owner.name) });
   const deleteAll = () =>
     onOpenDialog({ kind: "delete-archived", console: owner, project, consoleSession: boundTo, count: archived.length });
 
@@ -170,7 +171,7 @@ export function ArchiveView({
                   {/* The inset alone says which lead session a row was archived under, and a row
                       here is plain text rather than a button with a name of its own, so the fact is
                       put into words for assistive technology where the rest of the row is read. */}
-                  {under && <span className="sr-only">{t("sidebar.session.boundTo", { name: under.title })}</span>}
+                  {under && <span className="sr-only">{t("sidebar.session.boundTo", { name: isolate(under.title) })}</span>}
                 </div>
                 {/* Shown while the row is hovered or holds focus, like the sidebar rows' controls;
                     hidden by opacity, so they stay reachable with Tab. */}
@@ -179,12 +180,12 @@ export function ArchiveView({
                     <RotateCcw aria-hidden="true" className="size-4" />
                     {t("sidebar.session.reopen")}
                   </Button>
-                  <TitledControl title={t("archive.delete", { title: session.title })}>
+                  <TitledControl title={t("archive.delete", { title: isolate(session.title) })}>
                     <Button
                       isIconOnly
                       size="sm"
                       variant="ghost"
-                      aria-label={t("archive.delete", { title: session.title })}
+                      aria-label={t("archive.delete", { title: isolate(session.title) })}
                       onPress={() => onOpenDialog({ kind: "delete-session", session })}
                       className="text-danger"
                     >

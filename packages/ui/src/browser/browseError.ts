@@ -1,6 +1,7 @@
 import { DaemonRequestError } from "../daemon-client";
 import { daemonMessage } from "../daemonMessage";
 import type { Translate } from "../i18n/catalog";
+import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
 import { REQUEST_SUPERSEDED, SOURCE_CHANGED, type MessageParams } from "../protocol";
 import type { State } from "../store";
@@ -19,7 +20,10 @@ export type BrowseFailure =
 const BYTE_LIMITS = new Set(["file_bytes", "reply_bytes", "git_output", "patch_bytes"]);
 
 /** A browse error's params as they read: a path or a branch is a wire path, shown decoded, and a
- * budget and a size are worded as a size or a number. */
+ * budget and a size are worded as a size or a number. Not isolated here: `daemonMessage` isolates
+ * every param it fills in, so only a message worded from the catalog directly isolates its own.
+ * A formatted size or count is not worth isolating: the direct calls leave it bare, and it is
+ * isolated through `daemonMessage` only because that isolates every param. */
 function shownParams(language: Language, params: MessageParams, root: string | undefined): MessageParams {
   const shown: MessageParams = { ...params };
   for (const name of ["path", "branch"]) {
@@ -69,7 +73,7 @@ export function browseFailure(
     return { kind: "failed", code: err.code, message: t("browser.error.patchTooLarge", { max: params.max }) };
   }
   if (err.code === "unsupported_file_type" && err.params.file_type === "unmerged") {
-    return { kind: "failed", code: err.code, message: t("browser.error.unmerged", { path: params.path ?? "" }) };
+    return { kind: "failed", code: err.code, message: t("browser.error.unmerged", { path: isolate(params.path ?? "") }) };
   }
   return { kind: "failed", code: err.code, message: daemonMessage(language, err.code, params, err.message, records) };
 }

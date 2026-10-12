@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 
+import { isolate } from "../i18n/isolate";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
@@ -77,7 +78,7 @@ it("a project's focus mode lists only its unbound sessions, its archive in full,
   expect(labels.some((l) => l.includes("An old bound spike"))).toBe(true);
   expect(text()).toContain("2 sessions in this project are under console sessions");
 
-  const hub2Link = container.querySelector<HTMLElement>('button[aria-label="Enter focus mode for Hub 2, 1 session under it"]');
+  const hub2Link = container.querySelector<HTMLElement>(`button[aria-label="Enter focus mode for ${isolate("Hub 2")}, 1 session under it"]`);
   act(() => hub2Link?.click());
   expect(handlers.onFocus).toHaveBeenCalledWith({ consoleSession: hub2 });
   unmount();
@@ -96,14 +97,14 @@ it("a console session's focus mode shows only its projects and sessions, naming 
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={sessions} />
   ));
   const labels = sessionLabels(container);
-  expect(labels.filter((l) => l.includes(" session,") && !l.startsWith("Hub")).map((l) => l.split(" session,")[0]).sort()).toEqual(
-    ["Add idempotency keys", "An old bound spike", "Fix the layout"].sort(),
+  expect(labels.filter((l) => l.includes(" session,") && !l.startsWith(isolate("Hub"))).map((l) => l.split(" session,")[0]).sort()).toEqual(
+    ["Add idempotency keys", "An old bound spike", "Fix the layout"].map(isolate).sort(),
   );
   expect(text()).toContain("Claude Code (Work)");
   expect(text()).toContain("Website");
   expect(text()).toContain("Search API");
 
-  const newInProject = container.querySelector<HTMLElement>('button[aria-label="New session in Website"]');
+  const newInProject = container.querySelector<HTMLElement>(`button[aria-label="New session in ${isolate("Website")}"]`);
   act(() => newInProject?.click());
   expect(handlers.onOpenDialog).toHaveBeenCalledWith(expect.objectContaining({ kind: "new-session", binding: { kind: "bound", to: hub1 } }));
   unmount();
@@ -126,7 +127,7 @@ it("a console session's focus mode has a strip of the console's console sessions
   ));
   // Hub's own bound session is working; Hub 2's console session is merely running; Hub 3 is archived.
   expect(chips(container).map((chip) => [chip.getAttribute("aria-label"), chip.getAttribute("aria-current")])).toEqual([
-    ["Hub, a session is working", "true"],
+    [`${isolate("Hub")}, a session is working`, "true"],
     ["Hub 2", null],
   ]);
   act(() => chips(container)[1].click());
@@ -148,7 +149,7 @@ it("a pinned session's pin button unpins it without selecting its card", () => {
   const { container, handlers, unmount } = mount((h) => (
     <ProjectFocusView handlers={h} console={main} project={web} sessions={[pinned]} owners={owners} />
   ));
-  const unpin = container.querySelector<HTMLElement>('button[aria-label="Unpin Pinned chore"]');
+  const unpin = container.querySelector<HTMLElement>(`button[aria-label="Unpin ${isolate("Pinned chore")}"]`);
   act(() => unpin?.click());
   expect(handlers.onSetPinned).toHaveBeenCalledWith({ session: pinned }, false);
   expect(handlers.onSelectSession).not.toHaveBeenCalled();
@@ -163,13 +164,13 @@ it("a project's focus mode nests an unbound session's own sessions under it and 
     card.className.includes("flex-col"),
   );
   expect(cards.map((card) => [card.getAttribute("aria-label")?.split(" session,")[0], card.parentElement!.className.includes("ms-[17px]")])).toEqual([
-    ["Tidy the changelog", false],
-    ["Measure the first paint", true],
+    [isolate("Tidy the changelog"), false],
+    [isolate("Measure the first paint"), true],
   ]);
   expect(text()).toContain("Sessions (2)");
   // The line and the chip count the lead session and the session under it.
   expect(text()).toContain("4 sessions in this project are under console sessions");
-  expect(container.querySelector('button[aria-label="Enter focus mode for Hub, 3 sessions under it"]')).not.toBeNull();
+  expect(container.querySelector(`button[aria-label="Enter focus mode for ${isolate("Hub")}, 3 sessions under it"]`)).not.toBeNull();
   unmount();
 });
 
@@ -181,10 +182,10 @@ it("a console session's focus mode nests a lead session's own sessions under it"
     card.className.includes("flex-col"),
   );
   expect(cards.map((card) => [card.getAttribute("aria-label")?.split(" session,")[0], card.parentElement!.className.includes("ms-[17px]")])).toEqual([
-    ["Fix the layout", false],
-    ["Rework the gallery", false],
-    ["Chase the flaky test", true],
-    ["Add idempotency keys", false],
+    [isolate("Fix the layout"), false],
+    [isolate("Rework the gallery"), false],
+    [isolate("Chase the flaky test"), true],
+    [isolate("Add idempotency keys"), false],
   ]);
   expect(text()).toContain("Sessions (4)");
   unmount();

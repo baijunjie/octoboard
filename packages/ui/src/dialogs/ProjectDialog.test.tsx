@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { consoleOf, projectOf } from "../gallery/fixtures/builders";
+import { isolate } from "../i18n/isolate";
 import type { Account, Agent, Event, ModelsUnavailable, Project, ProjectAccount, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ProjectDialog } from "./ProjectDialog";
@@ -434,7 +435,7 @@ it("offers the stored model alone and the reason when the agent cannot list its 
   await click(buttonText("Advanced"));
   expect(document.body.textContent).toContain("Loading the models this agent offers");
   await answerModels(pending, { code: "models_timed_out", params: { agent: "claude" }, message: "" });
-  expect(document.body.textContent).toContain("claude took too long to list its models.");
+  expect(document.body.textContent).toContain(`${isolate("claude")} took too long to list its models.`);
   await click(pickerNamed("Model"));
   expect(optionTexts()).toEqual(["retired (not in the list)"]);
 });

@@ -13,6 +13,7 @@ import {
   unboundArchived,
   underArchivedLead,
 } from "../gallery/fixtures/archive";
+import { isolate } from "../i18n/isolate";
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import type { Session } from "../protocol";
 import { ArchiveView } from "./ArchiveView";
@@ -74,7 +75,7 @@ it("lists a console session's own archived bound sessions, not its own archived 
 it("titles the view after the owning console session, not the console", () => {
   const { container } = renderArchiveView();
   const section = container.querySelector("section[data-region='archive']");
-  expect(section?.getAttribute("aria-label")).toBe(`Archived sessions bound to ${boundConsoleSession.title}`);
+  expect(section?.getAttribute("aria-label")).toBe(`Archived sessions bound to ${isolate(boundConsoleSession.title)}`);
 });
 
 it("deletes all of a console session's archive by naming that console session", () => {
@@ -100,7 +101,7 @@ it("lists the sessions archived under a lead session after it, inset, and names 
     [boundArchived[1].title, false],
     [boundArchived[2].title, false],
   ]);
-  expect(rows[2].querySelector(".sr-only")?.textContent).toBe(`Bound to ${archivedLead.title}`);
+  expect(rows[2].querySelector(".sr-only")?.textContent).toBe(`Bound to ${isolate(archivedLead.title)}`);
 });
 
 /** Presses Escape on the control the way a keyboard user gets there — a key press, then the focus,
