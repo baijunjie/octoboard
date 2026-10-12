@@ -94,15 +94,9 @@ export const projectFilesScenarios: Scenario[] = [
   {
     id: "files-viewer",
     group: GROUP,
-    title: "A file open from the tree",
-    state,
-    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600)],
-  },
-  {
-    id: "files-viewer-toast",
-    group: GROUP,
-    title: "A toast while the viewer is open",
-    description: "The toast stack rides above the viewer's footer, clear of Previous file and Next file.",
+    title: "A file open from the tree, with a toast",
+    description:
+      "The viewer opened over the project's files, on a file pressed in the tree. A toast is raised while it is open: the toast stack rides above the viewer's footer, clear of Previous file and Next file.",
     state,
     toasts: [{ kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "" }],
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600)],

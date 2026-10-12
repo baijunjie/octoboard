@@ -73,15 +73,8 @@ export const busyScenarios: Scenario[] = [
     group: GROUP,
     title: "Many consoles, projects and sessions",
     description:
-      "Twelve projects with long and pinned names and long paths, a pinned session, all three agents, a waiting session in another console.",
+      "Twelve projects with long and pinned names and long paths, a pinned session, all three agents. Sessions in every status the list shows (Working, Waiting for you, Awaiting instructions, Interrupted), one of them waiting in another console. A session of Media gateway with a title far wider than the sidebar row is selected: the breadcrumb in the top bar and its row both have to fit it.",
     state,
-  },
-  {
-    id: "busy-long-selected",
-    group: GROUP,
-    title: "Two long session titles, one selected",
-    description: "The breadcrumb in the top bar and the sidebar row with a title far wider than either.",
-    state,
-    steps: [(ui) => ui.press(ui.session(LONG_TITLE))],
+    steps: [(ui) => ui.press(ui.session(SECOND_LONG_TITLE))],
   },
 ];

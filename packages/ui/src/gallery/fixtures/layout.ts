@@ -7,9 +7,11 @@ const { console: console_, web, api, consoleSession, sessions } = SAMPLE;
 const pages = [pageOf("pg-1", consoleSession.id, "<h1>Report</h1><p>Nothing needs your attention.</p>", 5)];
 const state = snapshotState({ consoles: [console_], projects: [web, api], sessions, pages: { [consoleSession.id]: pages } });
 
-// Five consoles, each in a different state, for what the rail shows per console: a raised hand
-// (Main, which has two waiting sessions, so the waiting count reads 2), work in progress (Operations),
-// a session merely running (Billing), and nothing going on (Docs, Lab).
+// `railState` has five consoles covering everything the rail shows per console: a raised hand (Main,
+// which has two waiting sessions there, and the one with the long name, which has one, so the waiting
+// count reads 3 across both), work in progress (Operations), a session merely running (Billing), and
+// nothing going on (Docs). Main and Website are also borrowed by `layout-waiting-overflow`, which
+// gives them sessions of its own.
 const main = consoleOf("c-main", "Main");
 const operations = consoleOf("c-ops", "Operations");
 const billing = consoleOf("c-billing", "Billing");
@@ -19,10 +21,11 @@ const website = projectOf("p-web", main.id, "Website");
 const deploys = projectOf("p-deploys", operations.id, "Deploys");
 const invoices = projectOf("p-invoices", billing.id, "Invoices");
 const manual = projectOf("p-manual", docs.id, "User manual");
+const experiments = projectOf("p-experiments", lab.id, "Experiments");
 const hub = sessionOf("s-hub", main.id, undefined, "Hub", "waiting_user", { colour: "teal" });
 const railState = snapshotState({
   consoles: [main, operations, billing, docs, lab],
-  projects: [website, deploys, invoices, manual],
+  projects: [website, deploys, invoices, manual, experiments],
   sessions: [
     hub,
     sessionOf("s-web-1", main.id, website.id, "Fix the summary layout", "working"),
@@ -32,6 +35,7 @@ const railState = snapshotState({
     sessionOf("s-ops-1", operations.id, deploys.id, "Roll back the last deploy", "working"),
     sessionOf("s-bill-1", billing.id, invoices.id, "Reconcile March", "idle"),
     sessionOf("s-docs-1", docs.id, manual.id, "Old draft", "archived"),
+    sessionOf("s-lab-1", lab.id, experiments.id, "Asks which branch to use", "waiting_user"),
   ],
   pages: { [hub.id]: [pageOf("pg-hub", hub.id, "<h1>Report</h1><p>Two sessions need you.</p>", 5)] },
 });
@@ -44,9 +48,23 @@ export const layoutScenarios: Scenario[] = [
     group: GROUP,
     title: "Rail with five consoles",
     description:
-      "Console avatars on the left rail with their activity marker (a hand, a working dot, a speech bubble, none), the current one on a tile; New console under them. At the bottom: the waiting count, Settings. Right-click an avatar for its console's actions.",
+      "Console avatars on the left rail with their activity marker (a hand, a working dot, a speech bubble, none), the current one on a tile; New console under them. At the bottom: the waiting count, which adds up the raised hands of every console (two in Main, one in the console with the long name, so 3), and Settings. Right-click an avatar for its console's actions.",
     state: railState,
     steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500)],
+  },
+  {
+    id: "layout-waiting-overflow",
+    group: GROUP,
+    title: "More than 99 raised hands",
+    description:
+      "The rail's waiting count at its limit: a hundred and five sessions waiting in one console, so the count shows its overflow label and the glyph is cut out around the wider pill.",
+    state: snapshotState({
+      consoles: [main],
+      projects: [website],
+      sessions: Array.from({ length: 105 }, (_, i) =>
+        sessionOf(`s-${i}`, main.id, website.id, `Needs an answer ${i + 1}`, "waiting_user"),
+      ),
+    }),
   },
   {
     id: "layout-history",
@@ -94,14 +112,6 @@ export const layoutScenarios: Scenario[] = [
     preferences: { sidebarVisible: false, sidebarConsole: main.id },
     state: railState,
     steps: [(ui) => ui.press(ui.session("Hub"))],
-  },
-  {
-    id: "layout-wide-console-session",
-    group: GROUP,
-    title: "Wide window, console session selected",
-    description: "Sidebar, terminal and the report panel docked side by side.",
-    state,
-    steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500)],
   },
   {
     id: "layout-report-hidden",

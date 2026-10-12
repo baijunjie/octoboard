@@ -385,21 +385,11 @@ export const dialogScenarios: Scenario[] = [
     ],
   },
   {
-    id: "dialog-edit-project-default-account",
-    group: GROUP,
-    title: "Edit a project on the agent's default account",
-    description: "The console pins a named account; the project is on the agent's default account, so its sessions do not take the console's.",
-    state: onDefaultState,
-    steps: [
-      (ui) => projectActions(ui, onDefault.name),
-      (ui) => ui.press(ui.t("sidebar.project.edit")),
-    ],
-  },
-  {
     id: "dialog-edit-project-account-choices",
     group: GROUP,
-    title: "Edit a project with its account choices open",
-    description: "Inheriting the console's, the agent's default account, then its named accounts.",
+    title: "Edit a project on the agent's default account, with its account choices open",
+    description:
+      "The console pins a named account while the project is on the agent's default account, so its sessions do not take the console's: the picker rests on the default account, and its choices are inheriting the console's (named for that account), the agent's default account, then the named accounts.",
     state: onDefaultState,
     steps: [
       (ui) => projectActions(ui, onDefault.name),

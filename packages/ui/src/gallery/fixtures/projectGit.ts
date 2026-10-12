@@ -304,7 +304,6 @@ export const projectGitScenarios: Scenario[] = [
     state,
     steps: openGit,
   },
-  { id: "git-diff", group: GROUP, title: "A staged change's diff", state, steps: openChange(/^server\.ts, modified, src$/) },
   { id: "git-rename-outside", group: GROUP, title: "A rename from outside the project", state, steps: openChange(/^index\.ts, renamed/) },
   { id: "git-type-change", group: GROUP, title: "A file that became a symbolic link", state, steps: openChange(/^current, type changed/) },
   { id: "git-nested-into", group: GROUP, title: "A file renamed into a path below itself", state, steps: openChange(/^leaf\.ts, renamed/) },
@@ -329,9 +328,9 @@ export const projectGitScenarios: Scenario[] = [
   {
     id: "git-expand",
     group: GROUP,
-    title: "A change with collapsed lines to expand",
+    title: "A staged change with collapsed lines to expand",
     description:
-      "src/pipeline.ts has three hunks with unmodified lines between them. Each expansion of a separator reveals 20 lines, the third reveals the rest of the gap, and Show whole file opens everything.",
+      "A staged change's diff as the Git mode opens it, the Staged tag in its header. src/pipeline.ts has three hunks with unmodified lines between them. Each expansion of a separator reveals 20 lines, the third reveals the rest of the gap, and Show whole file opens everything.",
     state,
     steps: openChange(/^pipeline\.ts, modified/),
   },
@@ -477,13 +476,6 @@ export const projectGitScenarios: Scenario[] = [
     steps: [...openGit, ...filterBy("no-such-file")],
   },
   {
-    id: "git-compare-filter",
-    group: GROUP,
-    title: "A comparison's changes filtered by file name",
-    state,
-    steps: [...compare("main", "feature/ranking-experiments"), ...filterBy("rank")],
-  },
-  {
     id: "git-compare",
     group: GROUP,
     title: "Comparing two branches",
@@ -519,13 +511,6 @@ export const projectGitScenarios: Scenario[] = [
     steps: compare("main", "feature/ranking-experiments"),
   },
   {
-    id: "git-compare-diff",
-    group: GROUP,
-    title: "A change between two branches",
-    state,
-    steps: [...compare("main", "feature/ranking-experiments"), (ui) => ui.press(/^ranking\.ts, modified/), (ui) => ui.wait(800)],
-  },
-  {
     id: "git-compare-type-change",
     group: GROUP,
     title: "A file that became a symbolic link, between two branches",
@@ -536,7 +521,8 @@ export const projectGitScenarios: Scenario[] = [
     id: "git-compare-expand",
     group: GROUP,
     title: "A change between two branches, expanded",
-    description: "src/pipeline.ts between the two commits: its collapsed lines are read from the same two commits.",
+    description:
+      "A change between two branches, the comparison named in the viewer's header. src/pipeline.ts between the two commits: its collapsed lines are read from the same two commits.",
     state,
     steps: [...compare("main", "feature/ranking-experiments"), (ui) => ui.press(/^pipeline\.ts, modified/), (ui) => ui.wait(800)],
   },
@@ -604,15 +590,6 @@ export const projectGitScenarios: Scenario[] = [
     title: "Narrow window, Git mode in the drawer",
     width: 800,
     state,
-    steps: openGitInDrawer,
-  },
-  {
-    id: "git-narrow-tree",
-    group: GROUP,
-    title: "Narrow window, changes as a tree in the drawer",
-    width: 800,
-    state,
-    preferences: { changeLayout: "tree" },
     steps: openGitInDrawer,
   },
 ];

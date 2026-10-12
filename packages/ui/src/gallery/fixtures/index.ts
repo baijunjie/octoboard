@@ -15,7 +15,6 @@ import { noticeScenarios } from "./notices";
 import { reportScenarios } from "./report";
 import { settingsScenarios } from "./settings";
 import { startupScenarios } from "./startup";
-import { statusScenarios } from "./statuses";
 import { viewerScenarios } from "./viewer";
 
 export { GROUPS } from "./groups";
@@ -26,7 +25,6 @@ export { GROUPS } from "./groups";
 export const SCENARIOS: Scenario[] = [
   ...emptyScenarios,
   ...busyScenarios,
-  ...statusScenarios,
   ...focusScenarios,
   ...consoleSessionsScenarios,
   ...gitScenarios,

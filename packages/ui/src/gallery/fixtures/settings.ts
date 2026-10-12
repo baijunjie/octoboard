@@ -100,21 +100,25 @@ export const settingsScenarios: Scenario[] = [
     id: "settings-permissions",
     group: GROUP,
     title: "Permissions",
-    description: "Screen Recording has not been granted, Accessibility has.",
+    description: "Neither Screen Recording nor Accessibility has been granted: each row offers Grant.",
     state,
-    macosPermissions: { screenRecording: false, accessibility: true, screenRecordingAtLaunch: false },
+    macosPermissions: { screenRecording: false, accessibility: false, screenRecordingAtLaunch: false },
     steps: [(ui) => ui.press(ui.t("rail.settings")), (ui) => ui.press(ui.t("settings.section.permissions"))],
   },
   {
     id: "settings-permissions-refused",
     group: GROUP,
-    title: "Permissions, the prompt answered no",
-    description: "The row points at System Settings once a request comes back without the grant.",
+    title: "Permissions, the prompts answered no",
+    description:
+      "Each row points at System Settings, in its own words, once a request comes back without the grant: Grant was pressed on Screen Recording and then on Accessibility.",
     state,
-    macosPermissions: { screenRecording: false, accessibility: true, screenRecordingAtLaunch: false },
+    macosPermissions: { screenRecording: false, accessibility: false, screenRecordingAtLaunch: false },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.permissions")),
+      // The first Grant is Screen Recording's; once it is refused that row offers Open System Settings
+      // instead, so the next Grant found is Accessibility's.
+      (ui) => ui.press(ui.t("settings.permissions.grant")),
       (ui) => ui.press(ui.t("settings.permissions.grant")),
     ],
   },

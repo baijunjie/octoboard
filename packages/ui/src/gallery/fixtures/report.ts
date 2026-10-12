@@ -66,14 +66,6 @@ export const reportScenarios: Scenario[] = [
     steps: [(ui) => ui.press(ui.session("Hub"))],
   },
   {
-    id: "report-pages",
-    group: GROUP,
-    title: "Several pages, a form on the newest",
-    description: "The newest page is a form, which can be submitted (the fixture accepts it).",
-    state: withPages(pages),
-    steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500)],
-  },
-  {
     id: "report-history",
     group: GROUP,
     title: "A history page, read-only",
@@ -94,7 +86,7 @@ export const reportScenarios: Scenario[] = [
     title: "Two console sessions, each with its own pages",
     description:
       "Hub is paged back to its first page (read-only, 1 / 2). Selecting Hub 2 shows only its own pages, " +
-      "on its newest (3 / 3, a form). Selecting Hub again shows its newest page, not where it was left.",
+      "on its newest (3 / 3, a form that can be submitted; the fixture accepts it). Selecting Hub again shows its newest page, not where it was left.",
     state: twoSessions,
     steps: [
       (ui) => ui.press(ui.session("Hub")),
