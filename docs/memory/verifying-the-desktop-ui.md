@@ -81,6 +81,14 @@ test over the fixture daemon's replies read every scenario's reply — including
 refusal fails the test run too and not only the scenario someone opens by hand. And before reading a scenario as a fix
 that did not work, check that its fixture can produce the input the fix reads at all.
 
+A fixture field says what a reply costs, never whether it is given. Whether the daemon answers a request at all follows
+from the change's own data — its group, its sides, whether making its patch already failed — so the fixture daemon reads
+it from there, and the daemon error it refuses with is one the real daemon sends for that data. An optional field saying
+how a reply is answered (the delay before it, the error in place of it) is carried by exactly the scenarios that need
+something special, which makes its presence look like the condition for answering at all: gating on `expand` refused a
+deletion, a binary change and a change past the patch budget with an `invalid_change` the real daemon never sends there.
+A factory parameter likewise carries the content a reply needs, not the right to ask for it.
+
 ## Settle what `git` writes against real `git` in a throwaway repository
 
 Applies to `git` output written out by hand rather than taken from a run of `git`: a patch in a gallery change fixture

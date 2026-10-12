@@ -144,6 +144,12 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
     const params = { path: side.path, file_type: side.kind };
     return { code: "unsupported_file_type", params, message: `${side.path} is a ${side.kind}, which cannot be read here` };
   };
+  /** Whether a change reaches across the project's boundary, which the daemon makes no patch for
+   * and so reads no bodies of. */
+  const outsideTheProject = (change: { old: ChangeSide; new: ChangeSide }): boolean =>
+    change.old.state === "out_of_scope" || change.new.state === "out_of_scope";
+  /** The daemon's refusal of a change whose patch has no lines to expand. */
+  const noBodies = (): never => fail({ code: "invalid_change", params: {}, message: "no patch to expand" });
   /** The worktree a request is answered from: the one it names, else the project's own, as the
    * daemon resolves an omitted one. */
   const worktreeOf = (named: string | undefined) => named ?? git?.worktrees[0]?.id ?? "";
@@ -292,26 +298,40 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
                   sameSide(entry.new, body.change.new),
               )
             : undefined;
-          if (!found || found.entry.group === "conflicted") return fail({ code: "invalid_change", params: {}, message: "no patch to expand" });
+          if (!found || found.entry.group === "conflicted") return noBodies();
+          // The two refusals the daemon makes from the request alone, before it resolves the change
+          // at all: an untracked file has no patch whose lines could be collapsed, and neither has a
+          // change with a side outside the project, since a patch would carry that side's content.
+          if (found.entry.group === "untracked" || outsideTheProject(found.entry)) return noBodies();
+          // The change is resolved by making its patch first, so a change whose patch the daemon
+          // refuses to make answers a request for its bodies with that very refusal.
+          if (found.error) return fail(found.error);
           // The daemon reads no content for a link or a submodule, and refuses the whole request
           // rather than answering that side empty.
           const unsupported = notAFile(found.entry.old) ?? notAFile(found.entry.new);
           if (unsupported) return fail(unsupported);
-          if (!found.expand) return fail({ code: "invalid_change", params: {}, message: "no patch to expand" });
-          const { delay, error } = found.expand;
+          const { delay, error } = found.expand ?? {};
           if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
           if (error) return fail(error);
           const whole = found.whole ?? {};
+          /** The whole body of a side as this reply carries it. The fixture spells a side's content
+           * as text (`whole`) or, where it is not text, as the body the diff reply carries for it
+           * (`bodies`); the daemon reads one and the same version for both replies, so a side has
+           * one content whichever way it is spelled. */
+          const wholeBody = (which: "old" | "new"): FileContent | undefined => {
+            const content = whole[which];
+            return content === undefined ? found.bodies?.[which] : text(content);
+          };
           /** A side as the bodies reply reads it. Unlike a diff reply, this one reads every present
-           * file side whatever its source, so a side with no whole text here is a gap in the
-           * fixture rather than one the daemon leaves empty. */
-          const readWhole = (side: ChangeSide, content: string | undefined): SideRead => {
-            if (side.state === "present" && side.kind === "file" && content === undefined) {
+           * file side whatever its source, so a side with no body here is a gap in the fixture
+           * rather than one the daemon leaves empty. */
+          const readWhole = (side: ChangeSide, file: FileContent | undefined): SideRead => {
+            if (side.state === "present" && side.kind === "file" && file === undefined) {
               refuseUnfillable(`${at} (${side.path}): the daemon reads this side's whole body, and the fixture carries none`);
             }
-            return readSide(at, side, content === undefined ? undefined : text(content));
+            return readSide(at, side, file);
           };
-          const sides = { old: readWhole(found.entry.old, whole.old), new: readWhole(found.entry.new, whole.new) };
+          const sides = { old: readWhole(found.entry.old, wholeBody("old")), new: readWhole(found.entry.new, wholeBody("new")) };
           return asked
             ? { type: "project_change_bodies", project: body.project, worktree: body.worktree ?? null, group: body.change.group, ...sides }
             : { type: "project_comparison_change_bodies", project: body.project, left: body.left, right: body.right, ...sides };

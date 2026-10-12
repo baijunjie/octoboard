@@ -2,8 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DaemonRequestError } from "../../daemon-client";
-import type { ChangeSide, SideRead } from "../../protocol";
-import type { FixtureChange } from "./changeFixtures";
+import type { ChangeSide, Event, SideRead, SideVersion } from "../../protocol";
 import { hasHunks, joinedPatch, linesAfterLastHunk } from "../../viewer/patch";
 import { FixtureUnfillableError, createFixtureDaemon } from "../fixtureDaemon";
 import type { FixtureGit } from "./changeFixtures";
@@ -15,6 +14,17 @@ describe("the sample repository's changes", () => {
   const lines = (side: SideRead) => (side.state === "present" ? side.lines : null);
   /** The daemon only the `git` of a scenario is read from; the rest of the scenario is unused. */
   const sampleDaemon = (git?: FixtureGit) => createFixtureDaemon({ id: "sample-git", group: "Project pane: Git", title: "", git });
+  /** The version a request names a side at, which the daemon compares the side it finds against
+   * before it reads any body: the one the diff reply reported, as the window names it back. */
+  const versionOf = (side: ChangeSide): SideVersion => (side.state === "present" ? { state: "present", source: side.source } : { state: "absent" });
+  const versionsOf = (change: { old: ChangeSide; new: ChangeSide }) => ({ old: versionOf(change.old), new: versionOf(change.new) });
+  /** The two ends a comparison keyed `<left>..<right>` is read from, at the commits the branch list
+   * names, as the window names them back. */
+  const endsOf = (comparison: string) => {
+    const commitOf = (branch: string) => SAMPLE_GIT.branches?.find((b) => b.name === branch)?.commit ?? "";
+    const [left, right] = comparison.split("..");
+    return { left: { branch: left, commit: commitOf(left) }, right: { branch: right, commit: commitOf(right) } };
+  };
   /** Swallows the daemon errors a fixture answers on purpose, but never a refusal: that is a gap in
    * the gallery's own data, and the check below exists to name it. */
   const rethrowUnfillable = (error: unknown): undefined => {
@@ -54,14 +64,12 @@ describe("the sample repository's changes", () => {
       }
     }
 
-    const commitOf = (branch: string) => SAMPLE_GIT.branches?.find((b) => b.name === branch)?.commit ?? "";
     for (const [comparison, changes] of Object.entries(SAMPLE_GIT.comparisons ?? {})) {
-      const [left, right] = comparison.split("..");
-      const sides = { left: { branch: left, commit: commitOf(left) }, right: { branch: right, commit: commitOf(right) } };
+      const ends = endsOf(comparison);
       for (const { entry } of changes) {
         if (entry.group === "conflicted") continue;
         const reply = await daemon
-          .request({ type: "read_project_comparison_change", project: "p-1", ...sides, change: entry })
+          .request({ type: "read_project_comparison_change", project: "p-1", ...ends, change: entry })
           .catch(rethrowUnfillable);
         if (reply?.type !== "project_comparison_change" || !fileSide(entry.old) || !fileSide(entry.new)) continue;
         check(`${comparison}: ${pathOf(entry.new)}`, reply.patch?.text ?? null, reply.old, reply.new);
@@ -89,6 +97,107 @@ describe("the sample repository's changes", () => {
     ]);
   });
 
+  // What a request for a change's whole bodies is answered with, which follows the change's own
+  // sides and nothing else: the daemon reads every present file side whatever the change's kind and
+  // leaves an absent one absent, and refuses only what it refuses from the request alone or while
+  // resolving the change. Every change a request can name is named, in the order its fixture lists
+  // them rather than by section, so a reply that stops being given fails here rather than dropping
+  // out unnoticed; a path in conflict is no two-sided change and no request reaches one. The
+  // requests go together because an expandable change's fixture holds each one for
+  // `EXPAND_DELAY_MS`. One is put for every change whether or not the viewer would ask — what is
+  // pinned is the daemon's answer, and the viewer offers to expand only a change whose two sides
+  // are both present files.
+  it("answer a request for a change's bodies the way the daemon answers it", async () => {
+    const daemon = sampleDaemon();
+    /** A side of the reply, as its kind, the bytes it carries and the lines counted from them. */
+    const side = (read: SideRead): string => {
+      if (read.state !== "present") return read.state;
+      if (!read.file) return `${read.kind} no body`;
+      const kind = read.file.media_type ?? read.file.kind;
+      return `${kind} ${read.file.size}/${read.lines}`;
+    };
+    const answer = async (at: string, request: Promise<Event>): Promise<string> => {
+      const reply = await request.catch((error: unknown) => {
+        rethrowUnfillable(error);
+        if (!(error instanceof DaemonRequestError)) throw error;
+        return error;
+      });
+      if (reply instanceof DaemonRequestError) {
+        return `${at}: ${reply.code}${reply.params.limit ? ` (${reply.params.limit})` : ""}`;
+      }
+      if (reply.type !== "project_change_bodies" && reply.type !== "project_comparison_change_bodies") throw new Error(`${at}: ${reply.type}`);
+      return `${at}: old ${side(reply.old)}, new ${side(reply.new)}`;
+    };
+
+    const asked: Promise<string>[] = [];
+    for (const [worktree, changes] of Object.entries(SAMPLE_GIT.changes)) {
+      if (!Array.isArray(changes)) continue;
+      for (const { entry } of changes) {
+        if (entry.group === "conflicted" || entry.group === "committed") continue;
+        const change = { group: entry.group, old: entry.old, new: entry.new };
+        const at = `${worktree} ${entry.group} ${pathOf(entry.new) || pathOf(entry.old)}`;
+        const request = { type: "read_project_change_bodies" as const, project: "p-1", worktree, change, ...versionsOf(entry) };
+        asked.push(answer(at, daemon.request(request)));
+      }
+    }
+    for (const [comparison, changes] of Object.entries(SAMPLE_GIT.comparisons ?? {})) {
+      const ends = endsOf(comparison);
+      for (const { entry } of changes) {
+        if (entry.group === "conflicted") continue;
+        const at = `${comparison} ${pathOf(entry.new) || pathOf(entry.old)}`;
+        const request = { type: "read_project_comparison_change_bodies" as const, project: "p-1", ...ends, change: entry, ...versionsOf(entry) };
+        asked.push(answer(at, daemon.request(request)));
+      }
+    }
+
+    // Every request is in flight before the first is awaited, so a second refusal would go
+    // unhandled under `Promise.all` and be reported against whichever test file ran next.
+    const rows = (await Promise.allSettled(asked)).map((one) => {
+      if (one.status === "rejected") throw one.reason;
+      return one.value;
+    });
+    expect(rows).toEqual([
+      "wt-main staged src/server.ts: old text 86/3, new text 134/4",
+      "wt-main staged src/config.ts: old text 92/3, new text 100/3",
+      // A side outside the project: no patch is made across the boundary, so there is nothing to expand.
+      "wt-main staged src/index.ts: invalid_change",
+      // The new side is a symbolic link, which has no body to read.
+      "wt-main staged current: unsupported_file_type",
+      "wt-main staged nest/leaf.ts: old text 5304/120, new text 5349/120",
+      "wt-main staged nest2: old text 5349/120, new text 5349/120",
+      "wt-main staged src/pipeline.ts: old text 5304/120, new text 5349/120",
+      "wt-main staged src/tail.ts: old text 5304/120, new text 5349/120",
+      "wt-main staged src/stages.ts: old text 3502/80, new text 3562/80",
+      "wt-main staged src/huge.ts: old text 527788/11000, new text 527833/11000",
+      "wt-main staged src/wide.ts: old text 56664/120, new text 56709/120",
+      "wt-main staged src/limits.ts: limit_exceeded (file_bytes)",
+      "wt-main staged src/moved.ts: source_changed",
+      "wt-main staged src/flaky.ts: git_failed",
+      "wt-main unstaged src/same.ts: old text 5349/120, new text 5349/120",
+      "wt-main staged src/new-name.ts: git_failed",
+      // The new side is the file on disk, which this reply counts though the diff reply does not:
+      // it reads the side's whole body, and a body is counted from the very bytes it carries.
+      "wt-main unstaged src/server.ts: old text 134/4, new text 161/6",
+      // A deletion: the side that is there is read, and the one that is not stays absent.
+      "wt-main unstaged docs/old-notes.md: old text 53/2, new absent",
+      // A binary change: both sides are read and counted, the same bodies its diff reply carries.
+      "wt-main unstaged docs/logo.png: old image/png 507/7, new image/png 516/8",
+      // The patch is past the patch budget, and the bodies are resolved by making it first.
+      "wt-main unstaged data/fixtures.bin: limit_exceeded (patch_bytes)",
+      // An untracked file has no patch, so it has no collapsed lines to expand either.
+      "wt-main untracked src/log.ts: invalid_change",
+      "wt-main untracked tools/release/notes.md: invalid_change",
+      "wt-side unstaged README.md: old text 13/1, new text 35/1",
+      "main..feature/ranking-experiments src/ranking.ts: old text 114/3, new text 180/4",
+      "main..feature/ranking-experiments src/config.ts: old text 92/3, new text 100/3",
+      "main..feature/ranking-experiments src/index.ts: invalid_change",
+      "main..feature/ranking-experiments src/pipeline.ts: old text 5304/120, new text 5349/120",
+      "main..feature/ranking-experiments docs/old-notes.md: old text 53/2, new absent",
+      "main..feature/ranking-experiments docs/logo.png: old image/png 507/7, new image/png 516/8",
+      "main..feature/ranking-experiments current: unsupported_file_type",
+    ]);
+  });
+
   // The refusal the check above leans on: the fixture daemon answers nothing where the real daemon
   // would carry a field it cannot fill, so a gap fails where it is used instead of shifting the UI
   // into a state the app cannot reach. It gets a fixture of its own, since no sample one has the
@@ -97,10 +206,11 @@ describe("the sample repository's changes", () => {
   const entry = { group: "staged" as const, old: blob("1111111"), new: blob("2222222") };
   const change = { group: entry.group, old: entry.old, new: entry.new };
   /** A worktree holding one change that carries no whole text, with a patch whose hunk makes the
-   * daemon count both of its sides, and `expand` where the change is to have bodies to read. */
-  const gap = (expand?: FixtureChange["expand"]): FixtureGit => ({
+   * daemon count both of its sides. Two present file sides are bodies to read whatever else the
+   * fixture says, so there is nothing to pass to make the request reach them. */
+  const gap = (): FixtureGit => ({
     worktrees: [{ id: "wt-gap", root: "/Users/dev/code/search-api", main: true, head: "c0ffee0", branch: "main", scope_present: true }],
-    changes: { "wt-gap": [{ entry, patch: ["diff --git a/src/gap.ts b/src/gap.ts", "@@ -1,1 +1,1 @@", "-one", "+two", ""].join("\n"), expand }] },
+    changes: { "wt-gap": [{ entry, patch: ["diff --git a/src/gap.ts b/src/gap.ts", "@@ -1,1 +1,1 @@", "-one", "+two", ""].join("\n") }] },
   });
   const banner = () => document.querySelector("[data-gallery-failure]")?.textContent ?? "";
 
@@ -123,8 +233,8 @@ describe("the sample repository's changes", () => {
   // carries nothing for is refused rather than answered with an empty body.
   it("refuse the bodies of a change the fixture carries none of", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
-    const versions = { old: { state: "absent" as const }, new: { state: "absent" as const } };
-    const read = sampleDaemon(gap({})).request({ type: "read_project_change_bodies", project: "p-1", worktree: "wt-gap", change, ...versions });
+    const versions = { old: versionOf(entry.old), new: versionOf(entry.new) };
+    const read = sampleDaemon(gap()).request({ type: "read_project_change_bodies", project: "p-1", worktree: "wt-gap", change, ...versions });
 
     await expect(read).rejects.toThrow(FixtureUnfillableError);
     await expect(read).rejects.not.toBeInstanceOf(DaemonRequestError);

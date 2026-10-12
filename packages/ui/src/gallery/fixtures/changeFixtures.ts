@@ -23,8 +23,9 @@ export interface FixtureChange {
   /** The whole text of each side: what the diff reply counts the side's lines from, and what a
    * request for the bodies answers with. One source for both, so the two cannot disagree. */
   whole?: { old?: string; new?: string };
-  /** How a request for the whole bodies is answered, where the change has bodies to read at all;
-   * absent where it has none. */
+  /** What answering a request for the whole bodies costs, where it is not answered straight away:
+   * the delay before it, or the error in place of it. Whether the change has bodies to read at all
+   * is not from here — that follows from the change's own sides, as it does in the daemon. */
   expand?: Expansion;
 }
 
@@ -63,7 +64,9 @@ export interface GeneratedSource extends Versions {
 }
 
 /** How a request for a change's whole bodies is answered: after `delay` milliseconds, or with
- * `error` in place of the bodies — the diff reply counted the versions all the same. */
+ * `error` in place of the bodies — the diff reply counted the versions all the same. The fixture
+ * answers from the change alone and never compares the versions a request names against the sides
+ * it finds, so a side that moved on under the client is written here as one of these errors. */
 export interface Expansion {
   delay?: number;
   error?: FixtureError;
@@ -97,7 +100,7 @@ function removalOf(path: string, content: string): string[] {
 
 /** A change of a text file: the patch shows its content, so the reply counts both sides from
  * `versions` and a request for the bodies answers with them. */
-export function textChange(group: TwoSided, path: string, from: ContentSource, to: ContentSource, versions: Versions, expand: Expansion = {}): FixtureChange {
+export function textChange(group: TwoSided, path: string, from: ContentSource, to: ContentSource, versions: Versions, expand?: Expansion): FixtureChange {
   return renamedTo(group, path, path, from, to, versions, expand);
 }
 
@@ -109,7 +112,7 @@ export function renamedTo(
   fromSource: ContentSource,
   toSource: ContentSource,
   versions: Versions,
-  expand: Expansion = {},
+  expand?: Expansion,
 ): FixtureChange {
   return {
     entry: { group, old: sideFile(from, fromSource), new: sideFile(to, toSource) },
@@ -160,7 +163,9 @@ const sourceOf = (side: HashedSide): ContentSource => ("source" in side ? side.s
 const hashOf = (side: HashedSide): string => ("source" in side ? side.hashed : side.blob);
 
 /** A change `git` treats as binary: its patch is the one line saying the files differ, so the reply
- * carries both bodies instead and counts each side's lines from its own. */
+ * carries both bodies instead and counts each side's lines from its own. A request for the whole
+ * bodies answers with those same bodies: the daemon reads every present file side there whatever
+ * the change's kind, and these are the whole of each side. */
 export function binaryChange(group: TwoSided, path: string, from: HashedSide, to: HashedSide, bodies: { old: FileContent; new: FileContent }): FixtureChange {
   return {
     entry: { group, old: sideFile(path, sourceOf(from)), new: sideFile(path, sourceOf(to)) },
@@ -171,7 +176,8 @@ export function binaryChange(group: TwoSided, path: string, from: HashedSide, to
 
 /** A file that became a symbolic link: `git` writes the file's removal and the link's addition as
  * two sections, which the viewer joins into one diff with nothing collapsed, so there is nothing to
- * expand. Only the file side is counted, from `content`; a link's lines are never counted. */
+ * expand. Only the file side is counted, from `content`; a link's lines are never counted. A request
+ * for the whole bodies is refused outright, the link having no body to read. */
 export function typeChange(group: TwoSided, path: string, from: ObjectSource, to: ObjectSource, content: string, target: string): FixtureChange {
   return {
     entry: { group, old: sideFile(path, from), new: { state: "present", path, kind: "symlink", source: to } },
@@ -195,8 +201,9 @@ export function typeChange(group: TwoSided, path: string, from: ObjectSource, to
   };
 }
 
-/** A file removed: `git` writes every line of it as a deletion. The new side does not exist, so
- * there are no bodies to read, and only the old side is counted, from `content`. */
+/** A file removed: `git` writes every line of it as a deletion. Only the old side exists, so it
+ * alone is counted, from `content`, and a request for the whole bodies answers with that content
+ * and an absent new side — the daemon reads the side that is there and leaves the other absent. */
 export function deletion(group: TwoSided, path: string, from: ObjectSource, content: string): FixtureChange {
   return {
     entry: { group, old: sideFile(path, from), new: { state: "absent" } },
@@ -206,14 +213,16 @@ export function deletion(group: TwoSided, path: string, from: ObjectSource, cont
 }
 
 /** A file Git neither tracks nor ignores: there is nothing to compare it with, so the reply carries
- * its body in place of a patch and counts its lines from that body. */
+ * its body in place of a patch and counts its lines from that body. Having no patch, it has no
+ * collapsed lines either, so a request for its whole bodies is refused. */
 export function untracked(path: string, source: ContentSource, content: string): FixtureChange {
   return { entry: { group: "untracked", old: { state: "absent" }, new: sideFile(path, source) }, bodies: { new: text(content) } };
 }
 
 /** A change one side of which lies outside the project's scope: the daemon delivers neither that
  * side nor a patch across the boundary, so the reply carries the in-scope side's body alone. Only a
- * staged or a committed change can have such a side; unstaged, the daemon refuses the read. */
+ * staged or a committed change can have such a side; unstaged, the daemon refuses the read. With no
+ * patch, a request for the whole bodies is refused as well. */
 export function fromOutsideTheProject(
   group: "staged" | "committed",
   repositoryPath: string,
@@ -233,7 +242,9 @@ export function conflicted(path: string, conflict: ConflictKind): FixtureChange 
 }
 
 /** A change the daemon refuses to read at all — its patch past a limit, say: the list has it, and
- * opening it answers with `error`. */
+ * opening it answers with `error`. Where `error` is what making the patch raised — a patch past the
+ * budget, a change `git` could not read — a request for the whole bodies answers with it too, those
+ * being resolved by making the patch first. */
 export function refused(group: TwoSided, path: string, from: ContentSource, to: ContentSource, error: FixtureError): FixtureChange {
   return { entry: { group, old: sideFile(path, from), new: sideFile(path, to) }, error };
 }
