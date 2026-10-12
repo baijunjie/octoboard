@@ -7,7 +7,9 @@ import type { Daemon } from "../store";
 const PRESSABLE =
   "button, [role=button], [role=menuitem], [role=menuitemradio], [role=tab], [role=option], [role=row], a[href]";
 
-/** The name a control is found by: its `aria-label`, otherwise its text. */
+/** The name a control is found by: its `aria-label`, otherwise its text. Deliberately not the
+ * browser's accessible-name computation, which folds in the label of a `role="img"` child — such a
+ * child inside a control does not enter the name a `Matcher` is handed. */
 function nameOf(element: Element): string {
   return (element.getAttribute("aria-label") ?? element.textContent ?? "").trim();
 }
