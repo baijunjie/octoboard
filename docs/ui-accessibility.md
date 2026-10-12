@@ -13,7 +13,10 @@ as it is, and do not add a new exception without the user's say.
 
 ## Keyboard
 
-Every interactive control is reachable from the keyboard and operable with Enter / Space.
+Every interactive control is reachable from the keyboard and operable with Enter / Space, with one exception the
+platform imposes: a checkbox inside a dialog's form takes Space, while Enter submits the dialog from it, as Enter does
+from every other control in that form. So a dialog whose confirm button carries weight does not also rely on Enter to
+settle a choice a checkbox holds.
 
 ### Reaching a control with Tab
 
@@ -282,7 +285,9 @@ affordance does not have.
 Where the drawn size has to stay under 24, extend the target rather than the drawing, as HeroUI does for its own
 select clear button (`.select__clear-button:after{inset:-2px}`): an absolutely positioned `::after` with a negative
 inset enlarges what the pointer hits and changes nothing visible. The avatar field's delete button
-(`packages/ui/src/dialogs/AvatarField.tsx`) is drawn at 20 and hit at 24 that way.
+(`packages/ui/src/dialogs/AvatarField.tsx`) is drawn at 20 and hit at 24 that way, and so is the pressable part of a
+checkbox whose label is one line of `text-sm` (`TrustDirCheckbox` in `packages/ui/src/dialogs/TrustPromptDialog.tsx`),
+which HeroUI lays out at the line's own height.
 
 A control whose height is set in units of something else inherits that thing's constraint. The separators of
 collapsed lines are sized in multiples of the diff's own code line height rather than in pixels, so that they keep

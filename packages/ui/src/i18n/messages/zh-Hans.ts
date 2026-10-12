@@ -623,7 +623,6 @@ export const zhHans: Translation<"other"> = {
   "dialog.trust.behavior":
     "同意后，{appName} 会按下 {agent} 自身的确认，由 {agent} 记录此信任，之后在此不会再询问。{appName} 还会记录一项所有智能体共用的授权，之后此项目的信任确认会直接按下，无需询问。",
   "dialog.trust.codexRoot": "{agent} 会为此文件夹所在 git 仓库的根目录记录信任。如果此项目是子文件夹或链接的工作树，范围会超出此项目。",
-  "dialog.trust.parentNote": "“{label}”会改为记录 {directory}，涵盖其中的每个项目（包括之后添加的项目），适用于所有智能体。",
   "dialog.trust.cautionLabel": "注意：",
   "dialog.trust.caution.claude": "信任后，此项目自身的权限规则和钩子会生效：其 {file} 可能会预先批准工具权限。",
   "dialog.trust.caution.codex":
@@ -631,7 +630,8 @@ export const zhHans: Translation<"other"> = {
   "dialog.trust.caution.grok": "信任后，{agent} 会加载此项目自身的指令、钩子和 MCP 服务器。",
   "dialog.trust.confirm": "信任并继续",
   "dialog.trust.notNow": "暂不",
-  "dialog.trust.parent": "信任父文件夹",
+  "dialog.trust.parent": "信任 {directory} 下的所有项目",
+  "dialog.trust.parentNote": "这会改为记录该文件夹，涵盖其下任意层级的每个项目（包括之后添加的项目），适用于所有智能体。",
   "dialog.trust.alreadyAnswered": "信任确认已被回应，因此没有信任该文件夹。请在下一次确认出现时再次使用此对话框。",
   "dialog.consoleRequest.title": "启动控制台会话？",
   "dialog.consoleRequest.question": "{project} 中的会话“{session}”请求在“{console}”中启动一个控制台会话。",

@@ -1127,8 +1127,8 @@ fn the_parent_to_trust_is_never_the_root_the_home_directory_or_above_it() {
     assert!(trustable_parent("relative/app", home).is_err());
 }
 
-/// "Trust parent folder" answers this screen and, once that worked, records the
-/// parent directory — and leaves the project's own consent unset.
+/// A go-ahead that asks for the parent directory answers this screen and, once that worked,
+/// records the parent directory — and leaves the project's own consent unset.
 #[tokio::test]
 async fn confirming_for_the_parent_directory_records_it_after_the_answer() {
     let (state, dir) = state_with_project("confirm-parent");

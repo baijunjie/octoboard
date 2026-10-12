@@ -738,7 +738,8 @@ export type Event =
       project: string;
       path: string;
       /** The directory `trust_parent_dir` would trust, or null when there is none to offer (too broad
-       * to trust, the home directory cannot be determined, or `path` is not absolute): the button is shown only when it is not null. */
+       * to trust, the home directory cannot be determined, or `path` is not absolute): the choice
+       * is offered only when it is not null. */
       trust_dir: string | null;
     }
   /** An unbound project session asked for a console session (`request_console_session`) and its

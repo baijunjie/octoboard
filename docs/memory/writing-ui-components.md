@@ -91,6 +91,25 @@ both, a field assembled anywhere else has to:
   `hidden` / `inert` / `translate`, the global events and `data-*`; anything else — `role` among them — is dropped
   without a warning, and a message that appears only on submit is then never announced at all.
 
+## A field's note is its `Description`; HeroUI typography inside a field throws
+
+A react-aria field that offers description and error slots — `Checkbox`, `Switch`, `TextField`, `Select`,
+`RadioGroup`, `SearchField`, `NumberField`, `ComboBox`, a date field or picker, a `ListBox` / `GridList` / `Menu`
+item, `TagGroup`, `Toast`; the list is what
+`grep -rl "description: descriptionProps" packages/ui/node_modules/react-aria-components/dist/private/` answers —
+puts a *slotted* `TextContext` over its whole subtree, and react-aria's `Text` throws outright when it finds one and
+was given no `slot`: `A slot prop is required. Valid slot names are "description" and "errorMessage"`. HeroUI's
+typography is that `Text` — `Paragraph`, `Heading`, `Typography` and `Code`, which the dialogs' `Path` helper renders
+— so a path or any other marked-up fragment in a field's label brings the render down however deep it sits. Write
+that fragment as a plain element instead (a `<span>` carrying the same classes), or wrap it in
+`<TextContext.Provider value={{}}>`.
+
+A field's explanatory note is HeroUI's `Description`, as a **direct child of the field** and a sibling of the part
+that holds the control and label (`Checkbox.Content`). HeroUI styles it only in that position — the rules are keyed
+on `& > [data-slot="description"]` (`packages/ui/node_modules/@heroui/styles/dist/components/`), which is what
+indents it under the label — and react-aria folds its id into the control's `aria-describedby` on its own. So never
+hand-roll the note as an element of your own with a `useId` and an `aria-describedby` you wire up yourself.
+
 ## A react-aria-components element owns its state `data-*` attributes: it writes over yours, and may never set its own
 
 A react-aria-components element spreads the props it is given first and then sets the state attributes it owns —

@@ -214,8 +214,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   control also gets a tooltip and the one shape a tooltip takes (the control directly inside HeroUI's `Tooltip` through
   `TitledControl`, never `Tooltip.Trigger`, with `IndicatorTooltip` for a non-control indicator), how user-facing text
   goes through the message catalog (`useT` over the module-level `t()`, a helper taking the translator,
-  `PlainMessageKey` tables, placeholders and plural messages instead of joined fragments), how layout follows the
-  reading direction (logical utilities, mirrored directional icons, two-glyph chevrons, `dir` on paths and typed names,
+  `PlainMessageKey` tables, placeholders and plural messages instead of joined fragments), that a field's own note is
+  its `Description` while HeroUI typography inside a field throws, how layout follows the reading direction (logical
+  utilities, mirrored directional icons, two-glyph chevrons, `dir` on paths and typed names,
   `docked:rtl:` twins), why only icon-only chrome sits on the translucent window material and text goes on the opaque
   panel, and the WCAG 2.2 AA bar in both appearances, the shortfalls kept on purpose being left alone, with the three
   rules that decide how the code is written stated there — the focus ring taken from `useFocusVisibleProps` rather than

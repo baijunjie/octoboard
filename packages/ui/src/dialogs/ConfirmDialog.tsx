@@ -1,7 +1,6 @@
 import { Button, Input, Label, TextField } from "@heroui/react";
 import React, { useState } from "react";
 
-import { TitledControl } from "../components/TitledControl";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
 import { useTrimmedField } from "./useTrimmedField";
@@ -16,8 +15,9 @@ export interface ConfirmDialogProps {
   /** What the button that declines is called. */
   cancelLabel?: string;
   destructive?: boolean;
-  /** A third action beside Cancel and Confirm, run and reported on the same way as Confirm. */
-  extraAction?: { label: string; title?: string; onClick: () => Promise<void> };
+  /** A control shown under the message that settles what Confirm does, such as a checkbox widening
+   * what the action covers; the caller holds its state and reads it in `onConfirm`. */
+  extraControl?: React.ReactNode;
   /** Names what the dialog currently asks about, for one reused across subjects: a change clears
    * the failure shown for the previous one. */
   resetKey?: string;
@@ -38,7 +38,7 @@ export function ConfirmDialog({
   confirmLabel,
   pendingLabel,
   cancelLabel,
-  extraAction,
+  extraControl,
   destructive,
   resetKey,
   size,
@@ -59,13 +59,6 @@ export function ConfirmDialog({
       <Button type="button" variant="secondary" onPress={onCancel} isDisabled={busy}>
         {cancelLabel ?? t("common.cancel")}
       </Button>
-      {extraAction && (
-        <TitledControl title={extraAction.title}>
-          <Button type="button" variant="secondary" onPress={() => void run(extraAction.onClick)} isDisabled={busy}>
-            {extraAction.label}
-          </Button>
-        </TitledControl>
-      )}
       {/* Pending rather than disabled while it runs: a natively disabled button drops the focus the
           press gave it, and the dialog's Escape and Tab containment go with it. */}
       <Button type="submit" variant={destructive ? "danger" : "primary"} isPending={busy} isDisabled={!confirmed}>
@@ -81,6 +74,7 @@ export function ConfirmDialog({
       ) : (
         <div className="flex flex-col gap-3 text-sm text-foreground">{message}</div>
       )}
+      {extraControl}
       {word !== undefined && (
         <TextField
           fullWidth

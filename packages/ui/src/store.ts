@@ -45,7 +45,8 @@ export interface TrustPrompt {
   agent: Agent;
   project: string;
   path: string;
-  /** The directory the "Trust parent folder" choice would trust, or null when none is offered. */
+  /** The directory the trust dialog's folder-wide checkbox would trust, or null when none is
+   * offered. */
   trustDir: string | null;
 }
 

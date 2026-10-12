@@ -36,13 +36,13 @@ What lets Octoboard press a confirmation without asking is one permission, **sha
 Octoboard's own record, not any agent's trust record, and it comes in two forms; either one is enough:
 
 - **A project's permission** belongs to one project, is stored with it, and covers every later trust confirmation in
-  that project, a resume included. It is set only by "Trust and continue" and cannot be withdrawn from the
-  application; editing the project leaves it as it is, and removing the project removes it with the association. A
-  project starts without it.
+  that project, a resume included. It is set only by "Trust and continue" with the dialog's folder checkbox left
+  unticked, and cannot be withdrawn from the application; editing the project leaves it as it is, and removing the
+  project removes it with the association. A project starts without it.
 - **A trusted folder** covers every project whose directory is that folder or lies anywhere below it, in any console,
   including projects associated after the folder was trusted — by the user or by a console session. It is set only by
-  "Trust parent folder", is stored on its own rather than with any project, and can be removed in Settings. Its rules
-  are in "Trusted folders" below.
+  "Trust and continue" with that checkbox ticked, is stored on its own rather than with any project, and can be
+  removed in Settings. Its rules are in "Trusted folders" below.
 
 Because it is shared, agreeing when one agent asks covers a later confirmation from either of the other two in the same
 project. Pressing one agent's confirmation records that agent's trust only; each of the others records its own when its
@@ -59,8 +59,6 @@ the named session, when the session is known — with the project's path set apa
   project is pressed without asking;
 - for Codex only, that Codex records the trust for the root of the git repository the folder is in, which covers more
   than this project when the project is a subfolder or a linked worktree;
-- when "Trust parent folder" is offered, that it records that folder instead, which covers every project in it,
-  including ones added there later, for every agent;
 - a caution, tinted and set apart at the end, true for the agent that is asking: for Claude Code, that trusting lets
   the project's own permission rules and hooks take effect and its `.claude/settings.json` may pre-approve tool
   permissions; for Codex, that trusting lets Codex load the project's own configuration, hooks and command rules, which
@@ -71,31 +69,39 @@ the named session, when the session is known — with the project's path set apa
 The project's path and the folder offered are shown with the home directory written as `~`, as in "How paths are
 shown" in `docs/product/settings.md`, so the folder reads the same as the row it would add to Settings.
 
+**The folder-wide choice** is a checkbox under the message, shown only when the daemon offers a folder for this
+project (see "Trusted folders" below for which folder that is); a project with none to offer gets no checkbox. It
+starts unticked. Its label names that folder, as the choice to trust every project under it, and a note below the
+label says that this records the folder instead of this project and covers every project under it, at any depth,
+including ones added there later, for every agent. The label is where the folder's path is read: it wraps rather than
+being cut, and no tooltip carries it.
+
 Its buttons:
 
-- **Trust and continue** — Octoboard presses this session's confirmation. Only if that succeeded is the project's
-  permission recorded; Octoboard then also presses the confirmations already waiting in other sessions of the same
-  project, whichever agent shows them, and their prompts leave the queue. A press that fails records nothing.
-- **Trust parent folder** — shown only when the daemon offers a folder for this project (see "Trusted folders" below
-  for which folder that is); a project with none to offer gets only the other two buttons. The button's tooltip gives
-  the full path of the folder offered. Octoboard presses this session's confirmation, and only if that succeeded is
-  that folder added to the trusted folders. The project's own permission is not recorded; a press that fails records
-  nothing. If the folder can no longer be offered by the time the button is chosen (see "Trusted folders" below), it
-  is refused before anything is pressed: the dialog stays open and shows why, and the user can still choose another
-  button.
+- **Trust and continue** — Octoboard presses this session's confirmation. Only a press that succeeded records
+  anything, and what it records is what the checkbox says:
+  - *left unticked* — the project's permission is recorded; Octoboard then also presses the confirmations already
+    waiting in other sessions of the same project, whichever agent shows them, and their prompts leave the queue;
+  - *ticked* — that folder is added to the trusted folders instead, and the project's own permission is not recorded.
+    If the folder can no longer be offered by the time the go-ahead is given (see "Trusted folders" below), it is
+    refused before anything is pressed: the dialog stays open and shows why, with the box still ticked, so the user
+    can untick it and go on without the folder.
 - **Not now** — also what Escape, the dialog's close button and a click outside it do. Nothing is sent and nothing is
   recorded; the confirmation stays for the user to answer in the session's terminal. The same session is asked about
   again only if the application reloads its state (a reconnect, or catching up after falling behind) while the
   confirmation is still up, and a later session of the project is asked about again, since the project still has no
   permission.
 
-Once either trust button has been chosen the dialog closes, whether or not the confirmation could be pressed — a
-confirmation is pressed at most once, so trying again from the dialog could not succeed. A failure is then shown as a
-toast about the session. Two outcomes differ: the refusal of a folder that can no longer be offered keeps the dialog
-open, and a go-ahead for a confirmation that is no longer waiting — already answered, whether from another client, in
-the terminal or by Octoboard itself — closes the dialog without any message when it was "Trust and continue", since
-nothing went wrong. For "Trust parent folder" it shows a message saying the folder was not trusted, because that choice
-was not carried out.
+The box belongs to the one showing of the dialog: it is cleared when the dialog is dismissed with "Not now" and when a
+go-ahead is sent, so the next prompt in the queue starts unticked, and so does the same prompt asked about again after
+the application reloads its state.
+
+Once the go-ahead has been given the dialog closes, whether or not the confirmation could be pressed — a confirmation
+is pressed at most once, so trying again from the dialog could not succeed. A failure is then shown as a toast about
+the session. Two outcomes differ: the refusal of a folder that can no longer be offered keeps the dialog open, and a
+go-ahead for a confirmation that is no longer waiting — already answered, whether from another client, in the terminal
+or by Octoboard itself — closes the dialog without any message when the box was unticked, since nothing went wrong;
+with the box ticked it shows a message saying the folder was not trusted, because that choice was not carried out.
 
 Prompts are shown one at a time, oldest first; closing one brings up the next. A prompt still waiting is dropped,
 without being answered, when its session stops running. When a project gains the permission, or a folder becomes
@@ -163,7 +169,7 @@ next time it opens the folder. The reason given is one of:
 - reading or writing the file failed, with the system's own message.
 
 When Octoboard pressed the confirmation itself, such a failure is also the failure of that press, so "Trust and
-continue" or "Trust parent folder" records nothing.
+continue" records nothing, the folder checkbox ticked or not.
 
 ## Trusted folders
 
@@ -178,7 +184,7 @@ as the folder stays trusted.
 
 **Which folder.** The folder offered, and the only one that can be trusted from a session's dialog, is the parent
 directory of that session's project; the daemon derives it from the project's path, and no client can name a folder of
-its own. None is offered — and the "Trust parent folder" button is not shown — when:
+its own. None is offered — and the dialog shows no folder checkbox — when:
 
 - the project's path is not absolute;
 - the parent is the filesystem root, which includes a project directly inside `/`;
@@ -188,9 +194,9 @@ its own. None is offered — and the "Trust parent folder" button is not shown �
   that does not tell case apart, is caught as well;
 - the home directory cannot be determined.
 
-Such a project can still be trusted on its own with "Trust and continue". The same check is made again when the button
-is chosen, and a folder that fails it then is refused before anything is pressed — with the error code
-`trust_directory_too_broad` when it is the root, the home directory or a directory containing it,
+Such a project can still be trusted on its own with "Trust and continue". The same check is made again when a go-ahead
+with the folder ticked arrives, and a folder that fails it then is refused before anything is pressed — with the error
+code `trust_directory_too_broad` when it is the root, the home directory or a directory containing it,
 `trust_path_not_absolute` when the project's path is not absolute, and `trust_home_unknown` when the home directory
 cannot be determined.
 

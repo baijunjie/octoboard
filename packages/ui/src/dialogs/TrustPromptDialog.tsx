@@ -1,5 +1,5 @@
-import { Alert, Code } from "@heroui/react";
-import React from "react";
+import { Alert, Checkbox, Code, Description, Label } from "@heroui/react";
+import React, { useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
 import { DaemonRequestError } from "../daemon-client";
@@ -36,9 +36,8 @@ function Caution({ agent }: { agent: Agent }): React.ReactElement {
 
 /** What the trust dialog says: which agent asks, the question with the project's path, what
  * agreeing does (the agent records its own trust, and the permission Octoboard records is shared by
- * every agent), for Codex that its record covers the whole repository, a line on the folder-wide
- * choice when it is offered, since it reaches beyond the project asked about (every project in the
- * folder, including ones added there later), and the caution set apart. */
+ * every agent), for Codex that its record covers the whole repository, and the caution set apart.
+ * The folder-wide choice is the checkbox under all of it (`TrustDirCheckbox`). */
 function TrustPromptMessage({
   prompt,
   sessionTitle,
@@ -63,14 +62,6 @@ function TrustPromptMessage({
       </div>
       <p>{t("dialog.trust.behavior", { agent })}</p>
       {prompt.agent === "codex" && <p>{t("dialog.trust.codexRoot", { agent })}</p>}
-      {prompt.trustDir && (
-        <p>
-          <Message
-            id="dialog.trust.parentNote"
-            params={{ label: t("dialog.trust.parent"), directory: <Path>{abbreviateHome(prompt.trustDir, home)}</Path> }}
-          />
-        </p>
-      )}
       {/* HeroUI's own warning tint rather than its default surface, which is the dialog's own fill and
           leaves the callout unmarked. */}
       <Alert status="warning" className="bg-warning-soft shadow-none">
@@ -87,6 +78,51 @@ function TrustPromptMessage({
   );
 }
 
+/** The folder-wide choice: checked, the confirmation is answered and that folder is trusted instead
+ * of this project alone, which reaches beyond the project asked about — every project under the
+ * folder, including ones added there later, for every agent. Shown only when the daemon offers a
+ * folder. `directory` is already written as Settings writes it. */
+function TrustDirCheckbox({
+  directory,
+  checked,
+  onChange,
+}: {
+  directory: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}): React.ReactElement {
+  const t = useT();
+  return (
+    <Checkbox variant="secondary" isSelected={checked} onChange={onChange}>
+      {/* Aligned to the top of a label that wraps, which a folder's name of any length can. The
+          pressable part is one line of `text-sm`, so an `::after` lifts what the pointer hits to the
+          24-pixel floor without changing what is drawn. */}
+      <Checkbox.Content className="relative items-start after:absolute after:-inset-y-0.5 after:inset-x-0 after:content-['']">
+        <Checkbox.Control>
+          <Checkbox.Indicator />
+        </Checkbox.Control>
+        <Label>
+          {/* The folder is named in plain text rather than through `Path`: HeroUI's `Code` is a
+              react-aria `Text`, which inside a checkbox's field demands a slot of its own. */}
+          <Message
+            id="dialog.trust.parent"
+            params={{
+              directory: (
+                <span dir="ltr" className="[overflow-wrap:anywhere]">
+                  {directory}
+                </span>
+              ),
+            }}
+          />
+        </Label>
+      </Checkbox.Content>
+      {/* A direct child of `Checkbox`, beside `Checkbox.Content`: from there it indents under the
+          label and react-aria folds its id into the box's own `aria-describedby`. */}
+      <Description>{t("dialog.trust.parentNote")}</Description>
+    </Checkbox>
+  );
+}
+
 /** What the dialog for a session waiting at its agent's folder-trust confirmation shows and does,
  * or nothing without a prompt. `sessionTitle` names the session when it is known. A hook rather
  * than a component, so the one dialog slot it shares with the requests for a console session
@@ -97,7 +133,15 @@ export function useTrustPromptDialogProps(
 ): ConfirmDialogProps | undefined {
   const t = useT();
   const { request, toastError, dismissTrustPrompt } = useDaemon();
+  // Written as Settings lists trusted folders, with the home directory as `~`, so the folder the
+  // checkbox names reads the same as the row it adds there.
+  const home = useDaemonStore((s) => s.homeDir);
+  // Held against the session it was ticked for, so the next prompt in the queue starts unticked
+  // without an effect watching the one dialog that serves them all in turn.
+  const [trustDirFor, setTrustDirFor] = useState<string>();
   if (!prompt) return undefined;
+
+  const trustDir = prompt.trustDir !== null && trustDirFor === prompt.session;
 
   const answer = async (trustParentDir: boolean) => {
     // Dismissed whether or not the request worked: the daemon answers a confirmation once, so retrying
@@ -123,6 +167,7 @@ export function useTrustPromptDialogProps(
         toastError((err as Error).message, prompt.session);
       }
     }
+    setTrustDirFor(undefined);
     dismissTrustPrompt(prompt.session);
   };
 
@@ -130,22 +175,23 @@ export function useTrustPromptDialogProps(
     // Not keyed on the session: remounting the modal for the next queued prompt would leave its
     // focus scope restoring focus to the element the previous one was holding, by then detached.
     resetKey: `trust:${prompt.session}`,
-    // Wide enough for the three buttons on one row.
+    // Wide enough that the paths it sets apart wrap no more than they have to.
     size: "lg",
     title: t("dialog.trust.title"),
     message: <TrustPromptMessage prompt={prompt} sessionTitle={sessionTitle} />,
     confirmLabel: t("dialog.trust.confirm"),
     cancelLabel: t("dialog.trust.notNow"),
-    onCancel: () => dismissTrustPrompt(prompt.session),
-    onConfirm: () => answer(false),
-    extraAction: prompt.trustDir
-      ? {
-          // Short, so the three buttons fit one row; the message names the folder, and the
-          // button's tooltip gives its full path.
-          label: t("dialog.trust.parent"),
-          title: prompt.trustDir,
-          onClick: () => answer(true),
-        }
-      : undefined,
+    onCancel: () => {
+      setTrustDirFor(undefined);
+      dismissTrustPrompt(prompt.session);
+    },
+    onConfirm: () => answer(trustDir),
+    extraControl: prompt.trustDir !== null && (
+      <TrustDirCheckbox
+        directory={abbreviateHome(prompt.trustDir, home)}
+        checked={trustDir}
+        onChange={(checked) => setTrustDirFor(checked ? prompt.session : undefined)}
+      />
+    ),
   };
 }

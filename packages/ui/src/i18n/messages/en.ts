@@ -675,8 +675,6 @@ export const en = {
     "If you agree, {appName} presses {agent}'s own confirmation, and {agent} records the trust, so it does not ask again here. {appName} also records a permission every agent shares, so a later trust confirmation for this project is pressed without asking.",
   "dialog.trust.codexRoot":
     "{agent} records the trust for the root of the git repository this folder is in. If this project is a subfolder or a linked worktree, that covers more than this project.",
-  "dialog.trust.parentNote":
-    "“{label}” records {directory} instead, which covers every project in it, including ones added there later, for every agent.",
   "dialog.trust.cautionLabel": "Caution:",
   "dialog.trust.caution.claude": "Trusting lets this project's own permission rules and hooks take effect: its {file} may pre-approve tool permissions.",
   "dialog.trust.caution.codex":
@@ -684,7 +682,9 @@ export const en = {
   "dialog.trust.caution.grok": "Trusting lets {agent} load this project's own instructions, hooks and MCP servers.",
   "dialog.trust.confirm": "Trust and continue",
   "dialog.trust.notNow": "Not now",
-  "dialog.trust.parent": "Trust parent folder",
+  "dialog.trust.parent": "Trust every project under {directory}",
+  "dialog.trust.parentNote":
+    "This records the folder instead of this project, and covers every project under it, at any depth, including ones added there later, for every agent.",
   "dialog.trust.alreadyAnswered":
     "The trust confirmation was already answered, so this folder was not trusted. Use this dialog again for the next one.",
   "dialog.consoleRequest.title": "Start a console session?",
