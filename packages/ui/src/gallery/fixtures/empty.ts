@@ -10,7 +10,7 @@ export const emptyScenarios: Scenario[] = [
     group: GROUP,
     title: "No consoles",
     description:
-      "A fresh install: the welcome screen fills the content area with New console, and there is no sidebar, terminal hint or top bar sidebar toggle. The rail keeps its New console, bell and Settings.",
+      "A fresh install: the welcome screen fills the content area with New console, and there is no sidebar, terminal hint or top bar sidebar toggle. The rail keeps its New console, bell and Settings. Narrow the window too: the welcome screen still fills the content area, and there is no drawer to open.",
     state: snapshotState({}),
   },
   {
@@ -28,14 +28,6 @@ export const emptyScenarios: Scenario[] = [
       (ui) => ui.type("Work"),
       (ui) => ui.press(ui.t("common.create")),
     ],
-  },
-  {
-    id: "empty-no-consoles-narrow",
-    group: GROUP,
-    title: "No consoles, narrow window",
-    description: "Below the breakpoint the welcome screen still fills the content area, and there is no drawer to open.",
-    width: 800,
-    state: snapshotState({}),
   },
   {
     id: "empty-no-consoles-no-agent",

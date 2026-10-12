@@ -26,12 +26,14 @@ an untouched scenario as the control in the same run.
 
 To see how the UI renders in a given state — connection loss, a session status, a dialog, the archive, report pages,
 toasts, a narrow window, a language or the right-to-left layout — open it in the UI state gallery
-(`packages/ui/README.md`, section "The UI state gallery") rather than building the state up against a running daemon;
-if the state has no scenario yet, add one and look at that. The gallery is the real `App` over a fixture daemon in
-the Vite dev server, so it settles rendering, layout and copy and nothing more: it has no real daemon timing, protocol
-round trips or agent terminal, and it is not the app's WKWebView. A pointer interaction or a WebKit rendering question
-is still checked with the gallery page loaded in Playwright's `webkit`, a paint defect still in the real window, and
-behaviour that depends on the daemon, the shell or how the window starts up still in the real app.
+(`packages/ui/README.md`, section "The UI state gallery") rather than building the state up against a running daemon.
+Where no scenario shows the state, do not write one yourself: hand it to the `agent-gallery` skill, which dispatches
+the subagent that owns the gallery and the criteria for what a scenario is worth carrying (`CLAUDE.md`, section
+"Dispatching subagents"). The gallery is the real `App` over a fixture daemon in the Vite dev server, so it settles
+rendering, layout and copy and nothing more: it has no real daemon timing, protocol round trips or agent terminal, and
+it is not the app's WKWebView. A pointer interaction or a WebKit rendering question is still checked with the gallery
+page loaded in Playwright's `webkit`, a paint defect still in the real window, and behaviour that depends on the
+daemon, the shell or how the window starts up still in the real app.
 
 How the bundle loads what it fetches at run time — lazy chunks, a worker, WebAssembly, assets — and anything a
 build-only Vite plugin changes are not settled there either: the gallery runs Vite's unbundled dev modules from
@@ -44,7 +46,8 @@ The gallery's "File viewer" group hands `FileViewer` a fixed subject instead of 
 what the project browser supplies while running — above all the loader for a change's whole bodies, which is the only
 thing that makes the renderer offer to expand the lines a diff collapsed. A diff's expansion is therefore never
 exercised there, however right the scenario looks: verify it in the "Project pane: Git" group, whose fixture change
-supplies those bodies, and give a new change presentation a scenario in that group as well.
+supplies those bodies, and when handing a new change presentation to the `agent-gallery` skill, say that it has to be
+shown in that group.
 
 ## A fixture daemon answers as fully as the real one, or the gallery shows a state no daemon sends
 

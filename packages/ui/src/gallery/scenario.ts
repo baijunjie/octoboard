@@ -44,6 +44,10 @@ export interface ToastFixture {
  * the archive view, which session is selected) rather than in the store. */
 export type Step = (ui: Ui) => Promise<void>;
 
+/** The window the gallery page opens a scenario at when the scenario names none and no width has been
+ * chosen above the window. */
+export const DEFAULT_WIDTH = 1440;
+
 export interface Scenario {
   id: string;
   /** The heading it is listed under. */
@@ -51,7 +55,9 @@ export interface Scenario {
   title: string;
   /** Said under the title in the gallery; what to look at. */
   description?: string;
-  /** The window width it opens at unless the URL says otherwise; the `docked` breakpoint is 1148. */
+  /** The window width the gallery page opens it at, over a width chosen for an earlier scenario; the
+   * `docked` breakpoint is 1148. Left out for `DEFAULT_WIDTH`; see "The UI state gallery" in
+   * `packages/ui/README.md` for when a scenario earns a width of its own. */
   width?: number;
   /** Shown in place of the app; without it the real `App` is rendered over `state`. */
   startup?: Startup;

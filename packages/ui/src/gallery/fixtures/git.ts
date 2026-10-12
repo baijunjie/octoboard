@@ -80,7 +80,6 @@ export const gitScenarios: Scenario[] = [
     description:
       "A long project name and a long branch name with both counts non-zero and an error, docked at 200px. Hover " +
       "the row: that is the tighter case, since it widens the trailing controls at the row's end.",
-    width: 1440,
     preferences: { sidebarWidth: 200 },
     state: snapshotState({
       consoles: [console_],
@@ -94,7 +93,6 @@ export const gitScenarios: Scenario[] = [
     group: GROUP,
     title: "Branch badge at the sidebar's minimum width, in focus mode",
     description: "The same worst case for the header's own, narrower, share of the row.",
-    width: 1440,
     preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
     state: snapshotState({
       consoles: [console_],

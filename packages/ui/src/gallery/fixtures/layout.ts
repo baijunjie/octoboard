@@ -45,7 +45,6 @@ export const layoutScenarios: Scenario[] = [
     title: "Rail with five consoles",
     description:
       "Console avatars on the left rail with their activity marker (a hand, a working dot, a speech bubble, none), the current one on a tile; New console under them. At the bottom: the waiting count, Settings. Right-click an avatar for its console's actions.",
-    width: 1440,
     state: railState,
     steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500)],
   },
@@ -54,7 +53,6 @@ export const layoutScenarios: Scenario[] = [
     group: GROUP,
     title: "Back and Forward available",
     description: "Four locations visited, then Back: both buttons in the top bar are enabled.",
-    width: 1440,
     state: railState,
     steps: [
       (ui) => ui.press(ui.session("Hub")),
@@ -93,7 +91,6 @@ export const layoutScenarios: Scenario[] = [
     title: "Docked sidebar hidden, five consoles",
     description:
       "The breadcrumb follows the buttons when the sidebar is not docked. Main is current. Rest the mouse on an avatar to float the sidebar in showing that console, current or not; move along the avatars to switch the preview, and press inside it to make that console current. Resting on the sidebar toggle at the top bar's start floats it in at once, showing the current console.",
-    width: 1440,
     preferences: { sidebarVisible: false, sidebarConsole: main.id },
     state: railState,
     steps: [(ui) => ui.press(ui.session("Hub"))],
@@ -103,7 +100,6 @@ export const layoutScenarios: Scenario[] = [
     group: GROUP,
     title: "Wide window, console session selected",
     description: "Sidebar, terminal and the report panel docked side by side.",
-    width: 1440,
     state,
     steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500)],
   },
@@ -113,7 +109,6 @@ export const layoutScenarios: Scenario[] = [
     title: "Docked report panel hidden",
     description:
       "Rest the pointer on the window's end edge, or on the toggle at the top bar's end, to float the report panel in.",
-    width: 1440,
     preferences: { asideVisible: false },
     state,
     steps: [(ui) => ui.press(ui.session("Hub"))],
@@ -122,7 +117,6 @@ export const layoutScenarios: Scenario[] = [
     id: "layout-wide-panes",
     group: GROUP,
     title: "Widest panes",
-    width: 1440,
     preferences: { sidebarWidth: 480, asideWidth: 720 },
     state,
     steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500)],

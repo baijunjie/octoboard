@@ -62,7 +62,19 @@ is reached with `steps`, which press controls by name as a user would (`ui.press
 sets what the app persists (pane visibility and widths, the sidebar's console and focus target), `toasts` raises daemon
 errors and notices, `terminal: "refuse"` makes a session's terminal unreachable, and `macosPermissions` stubs the
 desktop shell's macOS privacy grants for the settings dialog's Permissions section (`"unreadable"` for a shell that
-refuses the read; without it the page is a plain browser's, whose section says it is macOS-only).
+refuses the read; without it the page is a plain browser's, whose section says it is macOS-only). `width` is the window
+this page opens the scenario at. On its own, a width chosen above the window follows you from scenario to
+scenario, so picking a scenario that carries its own width drops the chosen width; a link that names both still
+reproduces what it names. A chosen width does stay on the scenarios that carry none, which is what sweeping the list
+at one width is for — so press Wide again before reading a scenario that rests on the docked window. The standalone frame has no width of its own and takes the browser window's, so "Open alone" on a
+scenario that needs a narrow window needs a narrow browser window.
+
+A scenario is written without a `width` unless the window itself is part of it: the page opens one at 1440, so that
+width is never written, and a scenario that rests on the wide window needs none. Set one where steps open a drawer,
+which exists only below the breakpoint, or where the layout under test is about a single width (the tightest docked
+window, the width a label starts clipping at), and say in the title or the description what that width buys. The width
+controls above the window reproduce any width a scenario's steps can run at, so a copy of another scenario that differs
+only by its width earns nothing.
 
 ### Pointing it at a daemon
 

@@ -6,9 +6,10 @@ import ReactDOM from "react-dom/client";
 
 import { LANGUAGES, LANGUAGE_NAMES, isLanguage, type Language } from "../i18n/languages";
 import { GROUPS, SCENARIOS } from "./fixtures";
+import { DEFAULT_WIDTH, type Scenario } from "./scenario";
 
 const WIDTHS = [
-  { label: "Wide", width: 1440 },
+  { label: "Wide", width: DEFAULT_WIDTH },
   { label: "Docked", width: 1148 },
   { label: "Narrow", width: 800 },
   { label: "Phone", width: 420 },
@@ -65,11 +66,19 @@ function WidthBox({ width, onCommit }: { width: number; onCommit: (width: number
   );
 }
 
+/** The view that picking `scenario` reaches: a scenario carrying its own width opens at it, dropping
+ * whatever width was chosen for an earlier one. A width is otherwise sticky across the list, and a
+ * scenario whose steps open the drawer that exists only below the breakpoint cannot run in a wide
+ * window — the press finds nothing and the page paints its failure overlay. */
+function viewOf(view: View, scenario: Scenario): View {
+  return { ...view, scenario: scenario.id, width: scenario.width ? undefined : view.width };
+}
+
 function Gallery(): React.ReactElement {
   const [view, setView] = useState(readView);
   const [run, setRun] = useState(0);
   const scenario = SCENARIOS.find((s) => s.id === view.scenario) ?? SCENARIOS[0];
-  const width = view.width ?? scenario.width ?? 1440;
+  const width = view.width ?? scenario.width ?? DEFAULT_WIDTH;
   const update = (patch: Partial<View>) => setView((current) => ({ ...current, ...patch }));
 
   useEffect(() => {
@@ -90,11 +99,11 @@ function Gallery(): React.ReactElement {
             {SCENARIOS.filter((s) => s.group === title).map((s) => (
               <a
                 key={s.id}
-                href={viewQuery({ ...view, scenario: s.id })}
+                href={viewQuery(viewOf(view, s))}
                 aria-current={s.id === scenario.id ? "page" : undefined}
                 onClick={(e) => {
                   e.preventDefault();
-                  update({ scenario: s.id });
+                  setView((current) => viewOf(current, s));
                 }}
               >
                 {s.title}

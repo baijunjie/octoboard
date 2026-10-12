@@ -88,7 +88,6 @@ export const projectFilesScenarios: Scenario[] = [
     title: "A project session's files",
     description:
       "Selecting a project session puts its project's files in the aside: folders first, natural order, .git left out. src is expanded; press a file to open the viewer, then Left and Right to move through the files on screen.",
-    width: 1440,
     state,
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.wait(300)],
   },
@@ -96,7 +95,6 @@ export const projectFilesScenarios: Scenario[] = [
     id: "files-viewer",
     group: GROUP,
     title: "A file open from the tree",
-    width: 1440,
     state,
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600)],
   },
@@ -105,7 +103,6 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     title: "A toast while the viewer is open",
     description: "The toast stack rides above the viewer's footer, clear of Previous file and Next file.",
-    width: 1148,
     state,
     toasts: [{ kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "" }],
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600)],
@@ -115,7 +112,6 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     title: "Browsing a project with no session",
     description: "Browse files from a project's menu: the console session stays selected, and the aside shows the project's files instead of its report.",
-    width: 1440,
     state,
     steps: [
       (ui) => ui.press(ui.session(consoleSession.title)),
@@ -128,7 +124,6 @@ export const projectFilesScenarios: Scenario[] = [
     id: "files-states",
     group: GROUP,
     title: "Folders that are empty, unreadable or cut short",
-    width: 1440,
     state,
     files: {
       "": { dir: true, complete: false },
@@ -144,7 +139,6 @@ export const projectFilesScenarios: Scenario[] = [
     id: "files-root-error",
     group: GROUP,
     title: "A project folder that cannot be read",
-    width: 1440,
     state,
     files: {
       "": {

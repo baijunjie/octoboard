@@ -25,6 +25,7 @@ repeated trial — should go to a subagent wherever you can; you take only the c
 - Dispatch blocking wherever you need the result to go on: a subagent's turn ends when it stops calling tools, so one
   that leaves a subtask running in the background hands back before that subtask has reported. This reaches any dispatch
   a subagent makes in turn — the change check, the writers — not only your own.
+- The UI state gallery is written only through its own skill, which dispatches the subagent that owns it.
 - If a dedicated subagent owns the job, give it to them; otherwise pick by task difficulty from the table below,
   and do not reach for the strongest every time.
 
@@ -91,6 +92,8 @@ At delivery:
 
 ### This project
 
+- Before "Static checks": when this round added or changed a UI state, hand the gallery to the `agent-gallery` skill
+  so the state can be seen there. Skip it when this round changed no UI state.
 - Within "Documentation update": `docs/ui-accessibility.md`, the UI's accessibility standard, has no writer subagent
   of its own — you maintain it yourself, from what the change turned up and from what a writer subagent hands back as
   belonging to it. Skip it when this round's changes touch nothing it states.
