@@ -3,7 +3,7 @@ import { act } from "react";
 import { expect, it, vi } from "vitest";
 
 import { ChangeTree } from "./ChangeTree";
-import { change, mountRows } from "./changeListTestSupport";
+import { change, mountRows } from "./browserTestSupport";
 import { changeItems, directoryKey } from "./changes";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

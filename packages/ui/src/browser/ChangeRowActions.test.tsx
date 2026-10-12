@@ -4,7 +4,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 import type { PlatformAdapter } from "../platform";
 import { ChangeList } from "./ChangeList";
-import { change, changeViewFixture, mountRows } from "./changeListTestSupport";
+import { change, changeViewFixture, mountRows } from "./browserTestSupport";
 import { changeItems } from "./changes";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

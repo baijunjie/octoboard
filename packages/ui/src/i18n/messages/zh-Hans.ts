@@ -420,6 +420,7 @@ export const zhHans: Translation<"other"> = {
   "git.compare.to": "到",
   "git.compare.choose": "选择分支",
   "git.compare.branchGone": "{branch}（已不存在）",
+  "git.compare.branchOrigin": "由会话 {title} 创建",
   "git.compare.swap": "交换分支",
   "git.compare.prompt": "在两侧各选择一个分支以进行比较。",
   "git.compare.loading": "正在比较分支…",

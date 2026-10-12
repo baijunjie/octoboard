@@ -10,6 +10,7 @@ import { useFocusHandoff } from "../components/useFocusHandoff";
 import { Message, useT } from "../i18n/react";
 import type { BranchInfo } from "../protocol";
 import { displayWirePath } from "../wirePath";
+import { BranchOriginBadge } from "./BranchOriginBadge";
 import { ChangeFilterField } from "./ChangeFilterField";
 import { ChangeList } from "./ChangeList";
 import type { ChangeViewState } from "./changeView";
@@ -176,7 +177,7 @@ function ComparisonContent({
 
 /** One end of the comparison: its label in the grid's first column, its trigger in the second. A
  * branch the list no longer has stays the value, named as gone, until the user picks another. */
-function BranchSelect({
+export function BranchSelect({
   label,
   branches,
   value,
@@ -244,6 +245,7 @@ function BranchSelect({
                   <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={branchName}>
                     {branchName}
                   </FadeOverflow>
+                  {branch.origin && <BranchOriginBadge origin={branch.origin} />}
                   <span dir="ltr" className="shrink-0 font-mono text-xs text-muted">
                     {shortCommit(branch.commit)}
                   </span>

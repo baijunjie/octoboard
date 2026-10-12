@@ -3,7 +3,7 @@
 // sections, a diff of each kind opened from it, and the states a source or a list can end in. Every
 // change here is built by the factory for its kind (`changeFixtures.ts`).
 import type { BranchInfo, ContentSource, FileContent, WorktreeInfo } from "../../protocol";
-import type { Ui } from "../interact";
+import type { Matcher, Ui } from "../interact";
 import type { Scenario } from "../scenario";
 import type { FixtureChange, FixtureGit, Versions } from "./changeFixtures";
 import type { FixtureError } from "./projectFiles";
@@ -208,8 +208,17 @@ const FEATURE_TIP = "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807";
 const LONG_BRANCH = "feature/rework-the-ranking-pipeline-so-that-boosts-are-applied-after-deduplication";
 
 const BRANCHES: BranchInfo[] = [
-  { name: "feature/ranking-experiments", commit: FEATURE_TIP },
-  { name: LONG_BRANCH, commit: "5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a" },
+  {
+    name: "feature/ranking-experiments",
+    commit: FEATURE_TIP,
+    origin: { source: "hook_diff", session: "s-gone", title: "Tune the ranking weights", created_at: 1_760_000_000_000 },
+  },
+  {
+    name: LONG_BRANCH,
+    // The title is the one the session had when the attribution was made, not its live title.
+    commit: "5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a",
+    origin: { source: "reflog_match", session: "s-web-1", title: "Review the deduplication pass", created_at: 1_759_000_000_000 },
+  },
   { name: "main", commit: MAIN_TIP },
   { name: "release/2.4", commit: MAIN_TIP },
 ];
@@ -266,6 +275,10 @@ const openFilter = [(ui: Ui) => ui.press(ui.t("git.filter.show")), (ui: Ui) => u
 /** Types `text` in the Git view's filter field, leaving focus in it. */
 const filterBy = (text: string) => [...openFilter, (ui: Ui) => ui.type(text), (ui: Ui) => ui.wait(300)];
 
+/** Matches a branch's option in a selector: its name followed by the 7 characters of its short
+ * commit id. */
+const branchOption = (name: string): Matcher => (n) => n.startsWith(name) && n.length === name.length + 7;
+
 /** Shows the comparison of branch `left` with branch `right`, choosing each in its selector: From
  * is the first one still to choose, then To. */
 const compare = (left: string, right: string) => [
@@ -273,10 +286,10 @@ const compare = (left: string, right: string) => [
   (ui: Ui) => ui.press(ui.t("git.view.compare")),
   (ui: Ui) => ui.wait(300),
   (ui: Ui) => ui.press(ui.t("git.compare.choose")),
-  (ui: Ui) => ui.press((name) => name.startsWith(left) && name.length === left.length + 7),
+  (ui: Ui) => ui.press(branchOption(left)),
   (ui: Ui) => ui.wait(300),
   (ui: Ui) => ui.press(ui.t("git.compare.choose")),
-  (ui: Ui) => ui.press((name) => name.startsWith(right) && name.length === right.length + 7),
+  (ui: Ui) => ui.press(branchOption(right)),
   (ui: Ui) => ui.wait(600),
 ];
 
@@ -498,6 +511,25 @@ export const projectGitScenarios: Scenario[] = [
     steps: compare("main", "feature/ranking-experiments"),
   },
   {
+    id: "git-compare-origins",
+    group: GROUP,
+    title: "Branches marked with the session that created them",
+    description:
+      "The To selector open: feature/ranking-experiments and the long-named branch each carry a hollow ring for the session that created them, main and release/2.4 none (nothing could name their creator). Hover a ring for the session's name; each ring is named \"Created by session …\" for assistive technology.",
+    width: 1440,
+    state,
+    steps: [
+      ...openGit,
+      (ui: Ui) => ui.press(ui.t("git.view.compare")),
+      (ui: Ui) => ui.wait(300),
+      (ui: Ui) => ui.press(ui.t("git.compare.choose")),
+      (ui: Ui) => ui.press(branchOption("main")),
+      (ui: Ui) => ui.wait(300),
+      (ui: Ui) => ui.press(ui.t("git.compare.choose")),
+      (ui: Ui) => ui.wait(400),
+    ],
+  },
+  {
     id: "git-compare-tree",
     group: GROUP,
     title: "Comparing two branches, as a tree",
@@ -568,7 +600,7 @@ export const projectGitScenarios: Scenario[] = [
       ...openGitInDrawer,
       (ui) => ui.press(ui.t("git.view.compare")),
       (ui) => ui.press(ui.t("git.compare.choose")),
-      (ui) => ui.press((name) => name.startsWith("main") && name.length === 11),
+      (ui) => ui.press(branchOption("main")),
       (ui) => ui.press(ui.t("git.compare.choose")),
       (ui) => ui.press((name) => name.startsWith(LONG_BRANCH)),
       (ui) => ui.wait(600),

@@ -5,7 +5,7 @@ import { expect, it, vi } from "vitest";
 import { ChangeFilterField } from "./ChangeFilterField";
 import { ChangeList } from "./ChangeList";
 import type { ChangeViewState } from "./changeView";
-import { change, changeViewFixture, mountRows } from "./changeListTestSupport";
+import { change, changeViewFixture, mountRows } from "./browserTestSupport";
 import { changeItems } from "./changes";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

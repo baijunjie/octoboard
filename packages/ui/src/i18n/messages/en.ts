@@ -460,6 +460,7 @@ export const en = {
   "git.compare.to": "To",
   "git.compare.choose": "Choose a branch",
   "git.compare.branchGone": "{branch} (no longer exists)",
+  "git.compare.branchOrigin": "Created by session {title}",
   "git.compare.swap": "Swap branches",
   "git.compare.prompt": "Choose a branch on each side to compare them.",
   "git.compare.loading": "Comparing branches…",

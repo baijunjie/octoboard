@@ -1,5 +1,5 @@
-// Shared by the change list's tests: the fixtures, and mounting a row tree in the providers it
-// renders inside.
+// Shared by the project browser's tests: the fixtures, and mounting `children` in the providers
+// they render inside.
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { onTestFinished } from "vitest";

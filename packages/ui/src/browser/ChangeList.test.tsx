@@ -3,8 +3,8 @@ import { act } from "react";
 import { expect, it, vi } from "vitest";
 
 import { ChangeList } from "./ChangeList";
+import { change, changeViewFixture, mountRows } from "./browserTestSupport";
 import type { ChangeViewState } from "./changeView";
-import { change, changeViewFixture, mountRows } from "./changeListTestSupport";
 import { changeItems } from "./changes";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
