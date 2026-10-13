@@ -247,29 +247,46 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   echoes every byte, judging a packaged window's geometry from measured pixels and a real click rather than from a
   capture alone, macOS's own autocorrect mangling scripted typing, and which checks need a person (input methods,
   reduced motion).
-- [Writing UI components](memory/writing-ui-components.md) — conventions for `packages/ui` components: why a component
-  HeroUI 3 already provides is used rather than hand-built, where to check what it provides, which overrides on one are
-  allowed (a colour fix, never a border HeroUI does not draw itself; layout and sizing) and what a justified hand-built
-  one is built on and where its reason is written, that a single-line field hands its form the trimmed value and that
-  what is wrong with one field shows under that field from the first submit on, why a state of your own on a
-  react-aria-components element needs a `data-*` name it does not write itself, where a HeroUI `ListBox` or `Tree`'s
-  padding goes, that every faded scroller takes the fade from one module in one of its two shapes — a wrapper around
-  the content or the scrolling element itself — with the three reasons it has to be the element and where such a
-  scroller's focus ring goes, that a `Tabs` panel is mounted only while its own tab is selected, so nothing a section
-  must not
-  lose is held inside it, why a Tailwind class name has to stand in the source as literal text and why a `docked:`
-  utility loses to an `sm:` or `rtl:` twin, dimming a region with a veil rather than `opacity`, why every icon-only
-  control also gets a tooltip and the one shape a tooltip takes (the control directly inside HeroUI's `Tooltip` through
-  `TitledControl`, never `Tooltip.Trigger`, with `IndicatorTooltip` for a non-control indicator), how user-facing text
-  goes through the message catalog (`useT` over the module-level `t()`, a helper taking the translator,
-  `PlainMessageKey` tables, placeholders and plural messages instead of joined fragments), that a field's own note is
-  its `Description` while HeroUI typography inside a field throws, how layout follows the reading direction (logical
-  utilities, mirrored directional icons, two-glyph chevrons, `dir` on paths and typed names,
-  `docked:rtl:` twins), why only icon-only chrome sits on the translucent window material and text goes on the opaque
-  panel, and the WCAG 2.2 AA bar in both appearances, the shortfalls kept on purpose being left alone, with the three
-  rules that decide how the code is written stated there — the focus ring taken from `useFocusVisibleProps` rather than
-  CSS `:focus-visible`, a status announced through `StatusAnnouncer`, and a colour-token or surface change audited
-  across every gallery scenario — and the accessibility standard itself cited for the rest.
+- [Building on HeroUI and react-aria](memory/building-on-heroui-and-react-aria.md) — reaching for and wrapping the
+  library's own component in `packages/ui`: why one HeroUI 3 provides is used rather than hand-built, where to read
+  what it provides and what it actually puts in the DOM, using the project's own wrapper where one exists and what a
+  justified hand-built one is built on and where its reason is written, why a compound component's parts take their
+  own layout classes and tolerate no element between them, why a control's size follows the window's width and not its
+  container's, why a state of your own needs a `data-*` name react-aria does not write itself, why an ancestor's
+  context beats the default in an element's own file, where a `ListBox` or `Tree`'s padding goes, that a `Tabs` panel
+  is mounted only while its own tab is selected so nothing a section must not lose is held inside it, and the three
+  tooltip shapes — `TitledControl`, `IndicatorTooltip`, `AnchoredTooltip` — with why `Tooltip.Trigger` is not one of
+  them.
+- [Writing UI dialogs and fields](memory/writing-ui-dialogs-and-fields.md) — dialogs and form fields in `packages/ui`:
+  a confirmation, typed-word deletions included, being `ConfirmDialog` rather than a dialog of its own, a single-line
+  field handing its form the trimmed value through `useTrimmedField`, what is wrong with one field
+  showing under that field from the first submit on and the two conditions a field built outside `TextInput` has to
+  meet to mark itself invalid, a field's note being its `Description` while HeroUI typography inside a field throws,
+  and the dialog body being the one scroller, fading where more is hidden, with nothing reaching above it.
+- [Styling the UI](memory/styling-the-ui.md) — getting a style to land in `packages/ui`: styling a HeroUI component
+  through its own variants, slots and theme tokens, with the only two reasons an override stands and the
+  per-component stylesheet under `@heroui/styles` as the readable source of what the component imposes; why a Tailwind
+  class name has to stand in the source as literal text and how to confirm its utility was emitted, why a `docked:`
+  utility loses to an `sm:` or `rtl:` twin on the same property and what to write instead, dimming a region with a
+  veil rather than `opacity` in the app's WKWebView, and taking a style that follows a layout measurement in an effect
+  with no dependency array plus a `ResizeObserver`, since an observer alone misses a box whose content changes without
+  its size and an element React swaps underneath it.
+- [Fading the edge of a scroller](memory/fading-the-edge-of-a-scroller.md) — every surface that hides content behind
+  its own edge taking the fade from one module in one of its two shapes, the three reasons the scrolling element
+  itself has to carry it, where padding and a focus ring go around a mask that clips by the border box, and the fade
+  being a hint over an ordinary overflow container.
+- [UI text and reading direction](memory/ui-text-and-reading-direction.md) — every string the user reads going through
+  the message catalog and in what shape a translation can follow it (`useT` over the module-level `t()`, a helper
+  taking the translator, `PlainMessageKey` tables, placeholders and plural messages, a HeroUI part's own hardcoded
+  English), what must not be cut when an existing message is shortened, and laying out by reading direction with
+  logical utilities, mirrored directional icons, two-glyph chevrons and an explicit `dir` where `auto` cannot resolve.
+- [What goes on the window material](memory/what-goes-on-the-window-material.md) — what may sit on the translucent
+  window material against what belongs on the opaque content panel, the two layouts the user rejected, and a glyph or
+  tint there being measured against the material itself rather than only against `--chrome`.
+- [Meeting the accessibility bar](memory/meeting-the-accessibility-bar.md) — the WCAG 2.2 AA bar held in both
+  appearances, the shortfalls kept on purpose being left alone, and the three rules that decide how the code is
+  written: the focus ring from `useFocusVisibleProps`, a change announced through `StatusAnnouncer`, and a
+  colour-token change audited over every gallery scenario.
 - [Focus and key handling in the UI](memory/focus-and-key-handling-in-the-ui.md) — where keyboard focus goes and who
   receives a key in `packages/ui`: why a HeroUI control pressed with the mouse takes focus off the terminal, when
   `preventFocusOnPress` is needed and why "⋯" menus are built on `ActionMenu`, the other ways focus falls to `<body>` (a

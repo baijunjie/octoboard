@@ -210,5 +210,7 @@ One milestone, below.
 - `docs/product/project-pane.md`, "A Markdown file as a document" and "The file viewer" (and "Notices and stand-ins"
   within it)
 - `docs/ui-accessibility.md`
-- `docs/memory/writing-ui-components.md`
+- `docs/memory/styling-the-ui.md`
+- `docs/memory/ui-text-and-reading-direction.md`
+- `docs/memory/fading-the-edge-of-a-scroller.md`
 - `docs/memory/line-wrapping.md`

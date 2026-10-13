@@ -34,4 +34,5 @@
   tooltip is not a control, so a control's minimum pointer target does not apply. No gallery scenario drives an
   anchored tooltip yet, so this is the first — expect to find whatever the gallery's hover step is missing for it.
 - **Reference docs**: `docs/product/labels-and-tooltips.md`, `docs/product/project-pane-git-mode.md`,
-  `docs/ui-accessibility.md`, `docs/memory/writing-ui-components.md`.
+  `docs/ui-accessibility.md`, `docs/memory/building-on-heroui-and-react-aria.md`,
+  `docs/memory/ui-text-and-reading-direction.md`.

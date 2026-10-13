@@ -83,4 +83,4 @@ require the check to pass on the tree:
 **Reference docs**
 
 - `docs/memory/writing-automated-tests.md` — the testing conventions, including proving a test by breaking its rule.
-- `docs/memory/writing-ui-components.md` — the convention being enforced.
+- `docs/memory/fading-the-edge-of-a-scroller.md` — the convention being enforced.

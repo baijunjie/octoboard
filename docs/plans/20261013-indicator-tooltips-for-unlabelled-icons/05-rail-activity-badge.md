@@ -34,4 +34,4 @@
   instead — and that sidebar shows the sessions themselves, each status glyph with its own tooltip. Watch that the
   tooltip equal to the accessible name is not also given to assistive technology as a description.
 - **Reference docs**: `docs/product/labels-and-tooltips.md`, `docs/product/sidebar.md`, `docs/ui-accessibility.md`,
-  `docs/memory/writing-ui-components.md`.
+  `docs/memory/building-on-heroui-and-react-aria.md`, `docs/memory/ui-text-and-reading-direction.md`.

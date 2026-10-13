@@ -42,4 +42,5 @@
   fifth being the error whose tooltip this replaces. The catalog comment that says those branch phrases are only
   ever an accessible name stops being true and needs correcting.
 - **Reference docs**: `docs/product/labels-and-tooltips.md`, `docs/product/project-git-status.md`,
-  `docs/ui-accessibility.md`, `docs/memory/writing-ui-components.md`.
+  `docs/ui-accessibility.md`, `docs/memory/building-on-heroui-and-react-aria.md`,
+  `docs/memory/ui-text-and-reading-direction.md`.

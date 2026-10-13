@@ -43,5 +43,6 @@
 **Reference docs**
 
 - `docs/memory/verifying-the-desktop-ui.md` — how to settle a change to a surface already in use.
-- `docs/memory/writing-ui-components.md` — the dialog convention.
+- `docs/memory/building-on-heroui-and-react-aria.md` — that a modal is a `Dialog`.
+- `docs/memory/writing-ui-dialogs-and-fields.md` — what a dialog's body does with its overflow.
 - `docs/product/settings.md` — what the settings dialog has to keep doing.
