@@ -534,6 +534,16 @@
   align-self: flex-start;
 }
 
+/* HeroUI's tooltip breaks anywhere (`break-all`), which cuts a sentence mid-word wherever it wraps
+   at the tooltip's width cap. Breaking at word boundaries and only inside a run that cannot fit on
+   a line by itself (a path, a branch name) keeps the cap holding for every tooltip. CJK text still
+   wraps between characters, which is its word boundary, and right-to-left text wraps as any other.
+   Unlayered, so it wins over HeroUI's layered rule. */
+.tooltip {
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
 /* HeroUI's toast region sits 1rem above the window bottom; lifted by the bottom chrome, it floats
    over the content above the connection banner instead of over the banner, and while a dialog whose
    footer reaches this corner is open, above that footer (`dialogs/useToastClearance.ts`), whose

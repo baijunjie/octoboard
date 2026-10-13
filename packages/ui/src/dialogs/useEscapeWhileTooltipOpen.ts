@@ -18,8 +18,11 @@ import { isImeKey } from "../imeKey";
  * surface reaches it too, and so does a pointer resting on one. `window` is above `document` in
  * turn, so that is where this listens.
  *
- * It acts only while a tooltip is open, which is exactly when react-aria will swallow the key, so
- * no other state is touched and the surface cannot be asked to close twice. It leaves the key to
+ * It acts only while a tooltip with a trigger element is open, which is exactly when react-aria
+ * will swallow the key, so no other state is touched and the surface cannot be asked to close
+ * twice. An `AnchoredTooltip` has no trigger element, so react-aria holds no listener for it and the
+ * key reaches the surface; it is marked `data-anchored-tooltip` and left out here, as acting on it
+ * too would close the surface from this listener and from its own handler both. It leaves the key to
  * propagate, so the tooltip is still dismissed and react-aria still reads the press as keyboard
  * input — what decides whether whatever focus returns to on closing draws a focus ring. A
  * modified, held or composing Escape is left alone: react-aria's own dismissal ignores those
@@ -39,7 +42,7 @@ export function useEscapeWhileTooltipOpen(surface: () => HTMLElement | null | un
       if (event.key !== "Escape" || event.repeat || isImeKey(event)) return;
       if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
       // A tooltip fading out has already handed the key back, and is marked while it does.
-      if (!document.querySelector('[role="tooltip"]:not([data-exiting])')) return;
+      if (!document.querySelector('[role="tooltip"]:not([data-exiting], [data-anchored-tooltip])')) return;
       const focused = document.activeElement;
       const around = find.current();
       // Only the surface holding focus acts, so a dialog opened from inside another one keeps

@@ -2,6 +2,7 @@ import { Button, InputGroup, TextField } from "@heroui/react";
 import { Folder } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
+import { AnchoredTooltip } from "../components/AnchoredTooltip";
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
 import { useTrimmedField } from "../dialogs/useTrimmedField";
 import { useT } from "../i18n/react";
@@ -27,6 +28,8 @@ export function CloneDirSetting(): React.ReactElement {
   const stored = abbreviateHome(storedFull, home);
   const [draft, setDraft] = useState(stored);
   const [picking, setPicking] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
   // Follows the daemon's value: another window, or a refused edit, puts the field back to it.
   useEffect(() => setDraft(stored), [stored]);
   // Read after a send is answered, when the closure's `stored` may predate the broadcast.
@@ -64,19 +67,23 @@ export function CloneDirSetting(): React.ReactElement {
             {/* The whole group reads left to right, not just the input: a path is an LTR value, and
                 in a right-to-left interface the folder mark would otherwise sit against the far edge
                 with the text pushed away from it, the two no longer reading as one control. */}
-            <InputGroup dir="ltr" title={stored === storedFull ? undefined : storedFull}>
+            <InputGroup dir="ltr" onHoverChange={setHovered}>
               <InputGroup.Prefix>
                 <Folder size={14} aria-hidden />
               </InputGroup.Prefix>
               {/* The key handler is on the input rather than on `TextField`, which stops every key it is
                   handed a handler for: Escape would never reach the dialog around the field. */}
               <InputGroup.Input
+                ref={input}
                 className="font-mono"
                 placeholder={t("settings.cloneDir.placeholder")}
                 onKeyDown={(event) => event.key === "Enter" && !isImeKey(event.nativeEvent) && save(draft)}
               />
             </InputGroup>
           </TextField>
+          {/* The field says the whole path while the pointer is on it, the hover being the group's
+              and the tooltip anchored to the input inside it. */}
+          {stored !== storedFull && <AnchoredTooltip tooltip={storedFull} anchor={input} hovered={hovered} />}
           {/* Not taking focus on a mouse press keeps the field from losing it, and so from sending
               what is typed, just to open the picker. */}
           <div onMouseDown={(event) => event.preventDefault()}>

@@ -132,9 +132,9 @@ function DocumentLink({
     <a
       {...attributes}
       href={href}
-      // Native, not `TitledControl`'s tooltip: the link is a piece of running text, not a control that
-      // has a name of its own to give, and the tooltip would take it out of the line to be wrapped
-      // in a trigger. It shows where the link goes before it is followed.
+      // Native, not the app's tooltip, which is the rule everywhere else: on a link `title` is also its
+      // accessible description, which a tooltip shown on hover alone cannot give a screen reader.
+      // It shows where the link goes before it is followed.
       title={title}
       {...focus}
       className="rounded-sm break-words text-(--document-link) underline underline-offset-2 outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"

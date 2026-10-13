@@ -1,4 +1,6 @@
-import React, { useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
+
+import { AnchoredTooltip } from "./AnchoredTooltip";
 
 interface Clipped {
   start: boolean;
@@ -177,11 +179,12 @@ interface FadeOverflowProps {
    * aligns it to the end, so what is lost is its beginning (a path whose last folder must stay
    * readable). */
   clip?: "start" | "end";
-  /** Set as the element's `title` only while an edge is clipped, so a name that fits does not
+  /** The tooltip the text carries only while an edge is clipped, so a name that fits does not
    * grow a tooltip repeating itself. */
   titleWhenClipped?: string;
-  /** Set as the element's `title` always, for text that stands for something longer than it shows
-   * even while it fits (an abbreviated path); takes the place of `titleWhenClipped`. */
+  /** The tooltip the text carries whatever is clipped, for text that stands for something longer
+   * than it shows even while it fits (an abbreviated path); takes the place of
+   * `titleWhenClipped`. */
   title?: string;
   /** Off to keep a clipped label still on hover (see `useMarquee`); on by default. */
   marquee?: boolean;
@@ -196,16 +199,16 @@ interface FadeOverflowProps {
  *
  * This is hand-built rather than HeroUI's `ScrollShadow`: that turns its element into a vertical or
  * horizontal scroll container with a scrollbar, fades only an end that can be scrolled to, and has
- * no way to pin a line to its end (a clipped start edge) or to offer a title only while clipped.
+ * no way to pin a line to its end (a clipped start edge) or to offer a tooltip only while clipped.
  *
  * While clipped at its end, the text runs as a marquee while the pointer is over it, or over the
  * nearest ancestor marked `data-marquee-scope` (a row), so all of it can be read without a tooltip.
  *
  * It sets `overflow` and `whitespace-nowrap` itself, so the caller supplies only the sizing
  * (`min-w-0 flex-1` inside a flex row). It has to lay out as a block or a flex item: rendered
- * `as="span"` in running text it stays inline, never overflows, and so never clips, fades or sets
- * its title. The first measurement is made before the first paint, so a
- * label that does not fit never shows a hard cut.
+ * `as="span"` in running text it stays inline, never overflows, and so never clips, fades or grows
+ * a tooltip. The first measurement is made before the first paint, so a label that does not fit
+ * never shows a hard cut.
  */
 export function FadeOverflow({
   fade = 24,
@@ -219,7 +222,17 @@ export function FadeOverflow({
   children,
 }: FadeOverflowProps): React.ReactElement {
   const ref = useRef<HTMLElement>(null);
+  // The tooltip hangs off the box around the text rather than the text's own element: the marquee
+  // moves that element's scroll position, and react-aria closes a tooltip as soon as anything
+  // containing its anchor scrolls, so a label anchored to itself would lose its tooltip to its own
+  // marquee. A scroll of the list or pane around it still closes it, which is the point.
+  const anchor = useRef<Element | null>(null);
+  const attach = useCallback((element: HTMLElement | null) => {
+    ref.current = element;
+    anchor.current = element?.parentElement ?? element;
+  }, []);
   const [clipped, setClipped] = useState<Clipped>({ start: false, end: false, rtl: false });
+  const [hovered, setHovered] = useState(false);
 
   useLayoutEffect(() => {
     const element = ref.current;
@@ -261,15 +274,22 @@ export function FadeOverflow({
   useMarquee(ref, marquee && clip === "end");
 
   const mask = maskImage(fade, clipped);
+  const tooltip = title ?? (clipped.start || clipped.end ? titleWhenClipped : undefined);
+  // The pointer is followed only where a tooltip was asked for, and from the prop rather than from
+  // what is clipped right now, so that a label clipped while the pointer is already on it cannot
+  // be left hovered for good.
+  const follows = title !== undefined || titleWhenClipped !== undefined;
   return (
     <Tag
-      ref={ref as React.RefObject<never>}
+      ref={attach}
       dir={dir}
       className={`overflow-hidden whitespace-nowrap${dir ? " align-match-parent" : ""} ${className}`}
-      title={title ?? (clipped.start || clipped.end ? titleWhenClipped : undefined)}
       style={mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined}
+      onPointerEnter={follows ? () => setHovered(true) : undefined}
+      onPointerLeave={follows ? () => setHovered(false) : undefined}
     >
       {children}
+      {tooltip !== undefined && <AnchoredTooltip tooltip={tooltip} anchor={anchor} hovered={hovered} />}
     </Tag>
   );
 }
