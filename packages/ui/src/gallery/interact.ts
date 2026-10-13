@@ -79,6 +79,17 @@ export interface Ui {
    * (`data-hovered`, `isHovered`) and not CSS `:hover`: what is built with a `hover:` or
    * `group-hover/<name>:` utility shows nothing under it, and the scenario passes all the same. */
   hoverIndicator: (host: Matcher) => Promise<void>;
+  /** Moves the pointer onto the status glyph of the sidebar session row named `row`
+   * (`session(title)`) and leaves it there, as `hoverIndicator` does. The row's glyph is decorative,
+   * so it has no `role="img"` for `hoverIndicator` to find; it is taken as the row's first element
+   * child when that is a tooltip trigger, which is how `SessionRow` lays it out. A row whose glyph
+   * carries no tooltip (focus mode's card) fails rather than match the agent mark's trigger further
+   * along. */
+  hoverRowStatus: (row: Matcher) => Promise<void>;
+  /** Moves the pointer onto the status glyph at the end of the top bar's breadcrumb and leaves it
+   * there, as `hoverIndicator` does. The glyph's tooltip trigger is the one named `role="img"`
+   * in the bar; fails while no session is selected. */
+  hoverTopBarStatus: () => Promise<void>;
   /** Presses `key` on the focused control, for what a user closes or confirms with the keyboard. */
   key: (key: string) => Promise<void>;
   /** Focuses the text field labelled `label`, waiting for it to appear, so `type` has one to fill. */
@@ -138,6 +149,18 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
 
   const find = (matcher: Matcher): HTMLElement | undefined =>
     Array.from(doc.querySelectorAll<HTMLElement>(PRESSABLE)).find((element) => isEnabled(element) && matches(matcher, nameOf(element)));
+
+  /** Puts the pointer on what `look` finds, waiting for it to appear, and waits for its tooltip. */
+  const hover = async (look: () => HTMLElement | null | undefined, missing: string): Promise<void> => {
+    const indicator = await waitFor(() => look() ?? undefined, missing);
+    // A tooltip opens only for a pointer, and react-aria takes the modality from the last event it
+    // saw: the presses before it were clicks, which it reads as virtual. React raises
+    // `onPointerEnter` from a bubbling `pointerover`.
+    for (const type of ["pointermove", "pointerover"]) {
+      indicator.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerType: "mouse" }));
+    }
+    await wait(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS);
+  };
 
   const t: Ui["t"] = (key, ...args) => format(language, key, (args as [Record<string, string | number>?])[0]);
 
@@ -200,21 +223,22 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       field.focus();
     },
     async hoverIndicator(host) {
-      for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {
-        const indicator = find(host)?.querySelector<HTMLElement>("[role=img]");
-        if (indicator) {
-          // A tooltip opens only for a pointer, and react-aria takes the modality from the last
-          // event it saw: the presses before it were clicks, which it reads as virtual. React raises
-          // `onPointerEnter` from a bubbling `pointerover`.
-          for (const type of ["pointermove", "pointerover"]) {
-            indicator.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerType: "mouse" }));
-          }
-          await wait(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS);
-          return;
+      await hover(() => find(host)?.querySelector<HTMLElement>("[role=img]"), `Nothing to hover an indicator of, matching ${String(host)}`);
+    },
+    async hoverRowStatus(row) {
+      await hover(() => {
+        const found = find(row);
+        if (!found) return undefined;
+        const glyph = found.firstElementChild;
+        // Found, so waiting would not change it: the row's glyph is one without a tooltip.
+        if (!glyph?.matches("[role=presentation]")) {
+          throw new Error(`The session row matching ${String(row)} has no tooltip on its status glyph to hover`);
         }
-        await wait(POLL_MS);
-      }
-      throw new Error(`Nothing to hover an indicator of, matching ${String(host)}`);
+        return glyph as HTMLElement;
+      }, `No session row matching ${String(row)} to hover the status glyph of`);
+    },
+    async hoverTopBarStatus() {
+      await hover(() => doc.querySelector<HTMLElement>("[data-region=topbar] [role=img]"), "No status glyph in the top bar");
     },
     async press(matcher) {
       await clickWhenFound(() => find(matcher), `Nothing to press matching ${String(matcher)}`);

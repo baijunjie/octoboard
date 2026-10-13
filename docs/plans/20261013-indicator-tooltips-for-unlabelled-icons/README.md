@@ -30,13 +30,17 @@ one piece of wording and one set of placements.
   technology through the name of the row, chip or badge the graphic sits in, as for the existing indicator
   tooltips; the tooltip is for sighted users and shows on mouse hover only, since the graphic is not a tab stop.
 - **Copy goes through the message catalog in both `en` and `zh-Hans`.**
+- **A graphic's tooltip says exactly what its accessible name says.** Where the name is already a catalog
+  string naming the thing, the tooltip reuses that string rather than a shorter one of its own, so the two
+  cannot drift apart and no second set of keys has to be translated. This is settled for the session status
+  glyph and holds for the graphics still to be done.
 - **Done includes the product doc.** `docs/product/labels-and-tooltips.md` is a closed list of the indicators that
   carry tooltips; each tooltip added by a milestone is added to it, and the state is shown and checked in the UI
   state gallery (owned by the `gallery-writer` subagent).
 
 ## Milestones
 
-1. [Session status glyph](01-session-status-glyph.md)
+1. 01 session-status-glyph (closed)
 2. [Activity marker](02-activity-marker.md)
 3. [Confirmation dialog callout icons](03-confirmation-dialog-callout-icons.md)
 
@@ -65,9 +69,6 @@ goal or completion criteria unclear.
 
 These do not change the milestone split or the completion criteria of the written milestones.
 
-- **Whether the status tooltip text is simply the existing `aria-label` string.** Milestone 1 is where this is
-  decided for the status glyph, and milestone 3 follows it. The same question applies to the activity marker's
-  wording in milestone 2.
 - **What the confirmation dialog's agent icon says.** It already has an `sr-only` name; whether it also gets a
   tooltip, and with what text (for instance the same account wording the agent icon on a session row uses), is not
   settled. Milestone 3 covers the status icon and leaves this to be decided when it is built.

@@ -72,7 +72,7 @@ function Breadcrumb({ session }: { session: Session }): React.ReactElement {
   const trail = session.role === "console" ? [consoleName, session.title] : [consoleName, projectName, session.title];
   return (
     <Trail names={trail.map((part) => part ?? "…")}>
-      <StatusIcon status={session.status} />
+      <StatusIcon status={session.status} withTooltip />
     </Trail>
   );
 }

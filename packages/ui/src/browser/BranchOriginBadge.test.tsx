@@ -2,6 +2,7 @@
 import { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { enter, leave, openTooltip } from "../components/tooltipTestSupport";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import type { BranchInfo } from "../protocol";
@@ -31,20 +32,6 @@ const state = snapshotState({
 
 const optionOf = (name: string) => [...document.querySelectorAll<HTMLElement>("[role=option]")].find((option) => option.textContent?.startsWith(name))!;
 const ringOf = (name: string) => optionOf(name).querySelector<HTMLElement>("[role=img]")!;
-const tooltip = () => document.querySelector("[role=tooltip]");
-// React raises `onPointerEnter` / `onPointerLeave` from `pointerover` / `pointerout`. A tooltip
-// opens on hover only once react-aria has seen the pointer move, so a move comes first.
-const pointer = (type: "pointermove" | "pointerover" | "pointerout") => {
-  const event = new MouseEvent(type, { bubbles: true });
-  Object.defineProperty(event, "pointerType", { value: "mouse" });
-  return event;
-};
-const enter = (element: HTMLElement) =>
-  act(() => {
-    element.dispatchEvent(pointer("pointermove"));
-    element.dispatchEvent(pointer("pointerover"));
-  });
-
 function open(selectedSessionId?: string, daemonState = state, value?: string): void {
   const container = mountRows(
     <BranchSelect label="From" branches={branches} value={value} gone={false} selectedSessionId={selectedSessionId} onChange={() => {}} />,
@@ -97,21 +84,21 @@ it("shows the creator in a tooltip after the delay while the pointer is on the r
   });
   const settle = () => act(() => void vi.runOnlyPendingTimers());
   open();
-  expect(tooltip()).toBeNull();
+  expect(openTooltip()).toBeNull();
 
   enter(optionOf("made-by-session"));
   settle();
-  expect(tooltip()).toBeNull();
-  act(() => void optionOf("made-by-session").dispatchEvent(pointer("pointerout")));
+  expect(openTooltip()).toBeNull();
+  leave(optionOf("made-by-session"));
 
   enter(ringOf("made-by-session"));
-  expect(tooltip()).toBeNull();
+  expect(openTooltip()).toBeNull();
   settle();
-  expect(tooltip()?.textContent).toBe(`Created by session “${isolate("Fix the layout, renamed")}”`);
+  expect(openTooltip()?.textContent).toBe(`Created by session “${isolate("Fix the layout, renamed")}”`);
 
-  act(() => void ringOf("made-by-session").dispatchEvent(pointer("pointerout")));
+  leave(ringOf("made-by-session"));
   settle();
-  expect(tooltip()).toBeNull();
+  expect(openTooltip()).toBeNull();
   expect(vi.getTimerCount()).toBe(0);
 });
 

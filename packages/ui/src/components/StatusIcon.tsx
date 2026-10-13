@@ -5,6 +5,7 @@ import { useT } from "../i18n/react";
 import type { SessionStatus } from "../protocol";
 import { statusLabel } from "../sessionLabel";
 import type { Activity } from "../sidebar/order";
+import { IndicatorTooltip } from "./IndicatorTooltip";
 
 const ICON_CLASS = "size-4 shrink-0";
 
@@ -27,28 +28,26 @@ function WavingHand({ className }: { className: string }): React.ReactElement {
   return <Hand className={`${className} origin-[70%_90%] text-warning-glyph motion-safe:animate-status-wave`} />;
 }
 
-/**
- * The per-session status glyphs, one per status in the "Session statuses" table of
- * docs/product/sessions.md, as lucide glyphs and dots rather than emoji (the project keeps
- * user-facing UI free of decorative emoji, the same convention `CLAUDE.md` sets for committed
- * prose). Each carries the status as its accessible name, since it is the only status cue where
- * nothing else names it; `decorative` drops that for a row whose own label already does. Idle is a
- * speech bubble (sitting at the prompt, waiting to be told), and interrupted a pause sign (stopped
- * where it was, and can be resumed from there).
- */
-export function StatusIcon({ status, decorative }: { status: SessionStatus; decorative?: boolean }): React.ReactElement {
-  const t = useT();
-  const a11y = decorative ? ({ "aria-hidden": true } as const) : ({ role: "img", "aria-label": statusLabel(t, status) } as const);
+/** What a glyph is given for assistive technology: the status as its name, or nothing at all when
+ * something around it already says the status. */
+type Naming = { "aria-hidden": true } | { role: "img"; "aria-label": string };
+
+/** The glyph itself, one per status in the "Session statuses" table of docs/product/sessions.md, as
+ * lucide glyphs and dots rather than emoji (the project keeps user-facing UI free of decorative
+ * emoji, the same convention `CLAUDE.md` sets for committed prose). Idle is a speech bubble
+ * (sitting at the prompt, waiting to be told), and interrupted a pause sign (stopped where it was,
+ * and can be resumed from there). */
+function statusGlyph(status: SessionStatus, naming: Naming): React.ReactElement {
   switch (status) {
     case "working":
       return (
-        <span {...a11y} className="flex shrink-0">
+        <span {...naming} className="flex shrink-0">
           <WorkingDot />
         </span>
       );
     case "waiting_user":
       return (
-        <span {...a11y} className="flex shrink-0">
+        <span {...naming} className="flex shrink-0">
           <WavingHand className={ICON_CLASS} />
         </span>
       );
@@ -56,12 +55,45 @@ export function StatusIcon({ status, decorative }: { status: SessionStatus; deco
       // HeroUI's own success colour, 1.98:1 on the sidebar and 1.70:1 on a selected row, under the 3:1
       // a meaningful glyph needs. The exception is deliberate: the green is only a secondary cue, as
       // the bubble's shape tells idle apart from the working dot and the accessible name says it.
-      return <MessageCircleMore {...a11y} className={`${ICON_CLASS} text-success`} />;
+      return <MessageCircleMore {...naming} className={`${ICON_CLASS} text-success`} />;
     case "interrupted":
-      return <Pause {...a11y} className={`${ICON_CLASS} text-muted`} />;
+      return <Pause {...naming} className={`${ICON_CLASS} text-muted`} />;
     case "archived":
-      return <Archive {...a11y} className={`${ICON_CLASS} text-muted`} />;
+      return <Archive {...naming} className={`${ICON_CLASS} text-muted`} />;
   }
+}
+
+/**
+ * A session's status glyph. It carries the status as its accessible name, since it is the only
+ * status cue where nothing else names it; `decorative` drops that for a row whose own label already
+ * does.
+ *
+ * `withTooltip` gives it the indicator tooltip that puts the status into words for a sighted user,
+ * for the placements where no visible text beside it does. The tooltip says exactly what the name
+ * says, and the name moves out onto the tooltip's trigger, so that the description react-aria links
+ * to the trigger belongs to the named element rather than to a presentational wrapper around it. A
+ * decorative glyph leaves the trigger unnamed too, adding nothing to the name of the row or trail
+ * it sits in.
+ */
+export function StatusIcon({
+  status,
+  decorative,
+  withTooltip,
+}: {
+  status: SessionStatus;
+  decorative?: boolean;
+  withTooltip?: boolean;
+}): React.ReactElement {
+  const t = useT();
+  const label = statusLabel(t, status);
+  const named = !decorative;
+  const glyph = statusGlyph(status, named && !withTooltip ? { role: "img", "aria-label": label } : { "aria-hidden": true });
+  if (!withTooltip) return glyph;
+  return (
+    <IndicatorTooltip tooltip={label} label={named ? label : undefined} className="inline-flex shrink-0">
+      {glyph}
+    </IndicatorTooltip>
+  );
 }
 
 /** The marker a collapsed project row shows for the sessions beneath it (the rail's consoles show

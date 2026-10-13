@@ -100,11 +100,14 @@ export const connectionScenarios: Scenario[] = [
     id: "terminal-archived",
     group: TERMINAL,
     title: "Archived session",
+    description:
+      "The pointer rests on the status glyph at the end of the top bar's breadcrumb, whose tooltip reads Archived. No sidebar row carries an archived session's status, so the top bar is the only place to see this one. Select a session of another status to see its glyph's tooltip there.",
     state: connected("open"),
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
       (ui) => ui.press("Archived and done"),
+      (ui) => ui.hoverTopBarStatus(),
     ],
   },
 ];

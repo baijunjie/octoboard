@@ -188,9 +188,19 @@ opened or resumed, so a running session keeps what it started with. The settings
 The first three mean a process is running; the last two mean none is, and both can be resumed.
 
 The glyph stands for the status wherever one is shown — the sidebar's rows, focus mode's cards, the top bar's
-breadcrumb — and is named after the status for assistive technology. The waving hand and the outward pulse stand still
+breadcrumb and a confirmation's list of the sessions it affects. The waving hand and the outward pulse stand still
 where the system asks for reduced motion, leaving the working glyph a plain accent-coloured dot; working and awaiting
 instructions still differ by shape as well as by colour.
+
+**How the status reaches a user who does not read the glyph** differs by placement:
+
+- On a **sidebar row** and on a **focus mode's card** the glyph adds nothing of its own for assistive technology: the
+  row's own accessible name says the status, and a card shows it in words beside the glyph.
+- On the **top bar's breadcrumb** and in a **confirmation's list of the sessions it affects** nothing around the glyph
+  says the status, so the glyph itself is named after it.
+- Two placements give the glyph a **tooltip** saying the status in the same words — the **sidebar's rows** and the
+  **top bar's breadcrumb**, where no status text sits beside it (see "Tooltips on indicators" in
+  `docs/product/labels-and-tooltips.md`). Focus mode's cards say the status in words already and carry none.
 
 Transitions:
 

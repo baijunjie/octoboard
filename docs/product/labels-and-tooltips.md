@@ -92,8 +92,12 @@ where the chosen option is marked by a fill of its own rather than by its icon (
 
 A few marks that are not controls carry a tooltip too. They are not tab stops, so their tooltip shows only while the
 mouse rests on them, never on keyboard focus; what it says reaches assistive technology through the name of the row or
-badge they sit in, or the text beside them. These are:
+badge they sit in, or the text beside them, and where nothing around a mark says it, through the mark's own name. These
+are:
 
+- a session's status glyph on its sidebar row and on the top bar's breadcrumb, whose tooltip says the status in the
+  same words as everywhere else it is named — the two placements where no status text sits beside the glyph (see
+  "Session statuses" in `docs/product/sessions.md`);
 - the binding badge, the coloured dot on a project session's row bound to a console session, whose tooltip names that
   console session (see "The binding badge" in `docs/product/sidebar.md`);
 - a session's agent icon on its row, on a focus mode's card or archived row and on the archive view's row, whose

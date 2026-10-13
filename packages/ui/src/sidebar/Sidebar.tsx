@@ -747,7 +747,7 @@ function SessionRow({
       selected={session.id === selectedSessionId}
       onActivate={() => handlers.onSelectSession(session)}
     >
-      <StatusIcon status={session.status} decorative />
+      <StatusIcon status={session.status} decorative withTooltip />
       <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
       <RowLabel title={session.title}>{session.title}</RowLabel>
       {/* A console session shows its own colour, decorative here since the row's own label already

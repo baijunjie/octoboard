@@ -167,6 +167,11 @@ assistive technology at all. So whatever a tooltip says must reach a screen read
 full text is in the document whether it fits or not, a row carries its own accessible name, and an indicator that
 means something on its own is a named `role="img"`.
 
+Where such an indicator carries a tooltip of its own, that name goes **on the tooltip's trigger**, not on an element
+nested inside it: react-aria describes the trigger, so a name one level in leaves the description attached to a
+wrapper that is nothing to assistive technology. An indicator whose meaning already reaches it some other way leaves
+the trigger unnamed instead, adding nothing to the name of the row or trail around it.
+
 What is left over is a shortfall kept on purpose, marked at its code: a sighted user who works from the keyboard
 reaches no tooltip, so a name that lives only there is a name they do not get.
 

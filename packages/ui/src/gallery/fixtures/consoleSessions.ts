@@ -42,7 +42,10 @@ export const consoleSessionsScenarios: Scenario[] = [
       "The section above the project list lists every console session, each in its own colour. A bound project " +
       "session carries that colour as a binding badge in its sidebar row; an unbound one carries none. The sessions " +
       "bound to a project session are listed under it, a level below: the lead session keeps the binding badge of " +
-      "the console session it reports to, and the sessions under either owner carry none.",
+      "the console session it reports to, and the sessions under either owner carry none. The pointer rests " +
+      "on the status glyph of \"Add idempotency keys\", whose tooltip reads Waiting for you; every row's glyph " +
+      "has one (Working, Waiting for you, Awaiting instructions, Interrupted), next to the agent mark's own.",
     state: snapshotState({ consoles: [console_], projects: [web, api], sessions }),
+    steps: [(ui) => ui.hoverRowStatus(ui.session("Add idempotency keys"))],
   },
 ];
