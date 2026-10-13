@@ -148,14 +148,18 @@ alone is listed apart, as a step that races an animation or a fixture reply that
 shows and a quiet one hides. `--jobs 1` runs the scenario with nothing else loading. At any `--jobs`, a page that was
 lost rather than slow (a crashed renderer) is reported as such, not as one that never became ready.
 
-Playwright is not a dependency of this repository, and the sweep installs neither it nor a browser. It uses a Playwright
-that is already installed: the directory in `--playwright <dir>` or `OCTOBOARD_PLAYWRIGHT` (one holding
-`node_modules/playwright`, or the package itself), else one the repository resolves. When there is none it says how to
-install one outside the checkout. The browser is Playwright's own Chromium, or, where that revision is not downloaded,
-the newest `chromium_headless_shell` in Playwright's browser cache; `--chromium <path>` / `OCTOBOARD_CHROMIUM` names
-one. Chromium settles the same things the gallery does everywhere (a step that ran, a fixture that answered), not
-WebKit rendering or a pointer interaction: those are checked with the gallery page loaded in Playwright's `webkit`,
-driving the pointer through real input.
+Playwright is a devDependency of this package (pinned to one version), so `pnpm install` is all the script itself needs.
+The dependency installs no browser: fetch the one that version expects with `pnpm exec playwright install chromium`, run
+from `packages/ui` (from the workspace root `pnpm exec playwright` resolves to a machine-global Playwright, or to
+nothing). `--playwright <dir>` / `OCTOBOARD_PLAYWRIGHT` (a directory holding `node_modules/playwright`, or the package
+itself) points the sweep at another installation instead, for a machine whose Playwright browser cache holds another
+version's binaries; that installation fetches its own browser with its own `playwright install chromium`. The browser is
+Playwright's own Chromium, or, where that revision is not downloaded, the newest `chromium_headless_shell` in
+Playwright's browser cache; `--chromium <path>` / `OCTOBOARD_CHROMIUM` names one. A browser that is present but will not
+start usually wants `playwright install --with-deps chromium`. Chromium settles the same things the gallery does
+everywhere (a step that ran, a fixture that answered), not WebKit rendering or a pointer interaction: those are checked
+with the gallery page loaded in Playwright's `webkit`, driving the pointer through real input (that browser is fetched
+the same way, with `pnpm exec playwright install webkit` run from `packages/ui`).
 
 ### Pointing it at a daemon
 

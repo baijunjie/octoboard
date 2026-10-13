@@ -6,9 +6,11 @@
 //
 //   pnpm gallery:sweep [options] [scenario-id-or-pattern ...]
 //
-// Playwright is not a dependency of this repository, so the script finds one that is already installed:
-// `--playwright <dir>` / `OCTOBOARD_PLAYWRIGHT`, else a `playwright` or `playwright-core` the repository
-// resolves. It installs no browser either.
+// Playwright is a devDependency of this package, so `pnpm install` is everything the script itself needs;
+// `--playwright <dir>` / `OCTOBOARD_PLAYWRIGHT` still points it at another installation, for a machine
+// whose browser cache matches a different version. It installs no browser: `pnpm exec playwright install
+// chromium`, run from this package (the workspace root resolves another `playwright` or none), fetches
+// the one this version expects, and `--chromium` names any other already on the machine.
 
 import { existsSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -34,8 +36,9 @@ With no scenario given, every scenario is swept.
   --url <origin>        Use the gallery served at this origin (a running \`pnpm gallery\`) instead of
                         starting a dev server of this checkout.
   --list                Print the scenario ids that would be swept and exit.
-  --playwright <dir>    A directory holding node_modules/playwright (or playwright-core), or the package
-                        itself. Also OCTOBOARD_PLAYWRIGHT.
+  --playwright <dir>    A Playwright other than this package's own: a directory holding
+                        node_modules/playwright (or playwright-core), or the package itself. Also
+                        OCTOBOARD_PLAYWRIGHT.
   --chromium <path>     The Chromium executable to launch. Also OCTOBOARD_CHROMIUM. Without it Playwright's
                         own is used, and failing that the newest headless shell in its browser cache.
   -h, --help            This text.
@@ -121,6 +124,9 @@ function parse() {
 
 // ---- Playwright and the browser ------------------------------------------------------------------
 
+/** Playwright's `chromium`, and whether it came from this package rather than from a directory the
+ * developer named: the advice a failed launch gives depends on whose installation it was, and this is
+ * the function that chooses. */
 async function loadChromium(explicitDir) {
   const attempts = [];
   const firstChromium = async (label, candidates) => {
@@ -143,21 +149,19 @@ async function loadChromium(explicitDir) {
     // The directory may hold node_modules/playwright, or be the package itself.
     const require = createRequire(path.join(dir, "noop.js"));
     const found = await firstChromium(dir, [...packages(require), { name: "the directory itself", resolve: () => require.resolve(dir) }]);
-    if (found) return found;
+    if (found) return { chromium: found, own: false };
     throw new SetupError(`No Playwright found under ${dir}\n  ${attempts.join("\n  ")}`);
   }
   const found = await firstChromium("this repository", packages(createRequire(import.meta.url)));
-  if (found) return found;
+  if (found) return { chromium: found, own: true };
   throw new SetupError(
     [
-      "Playwright is not installed here, and this repository does not depend on it.",
-      "Install it outside the checkout, a version matching the browsers already cached under",
-      "~/Library/Caches/ms-playwright (or ~/.cache/ms-playwright), and point the sweep at it:",
+      "No Playwright resolved here, though this package depends on it. Install the workspace:",
       "",
-      "  mkdir -p /tmp/pw && cd /tmp/pw && npm init -y && npm install playwright@<version>",
-      "  OCTOBOARD_PLAYWRIGHT=/tmp/pw pnpm gallery:sweep",
+      "  pnpm install",
       "",
-      "(or pass --playwright /tmp/pw). The sweep downloads no browser itself.",
+      "To sweep against another installation instead — a machine whose Playwright browser cache holds",
+      "another version's binaries — name it with --playwright <dir> or OCTOBOARD_PLAYWRIGHT.",
     ].join("\n"),
   );
 }
@@ -201,13 +205,40 @@ async function launchAt(chromium, executablePath) {
   }
 }
 
-async function launchBrowser(chromium, executablePath) {
+/** What to do about a Chromium that would not launch. Only a missing executable has a browser to fetch,
+ * and only this package's own Playwright is fetched with this package's CLI: the one named by
+ * `--playwright` expects a revision that CLI would not download. Anything else is a browser that is there
+ * and still would not start, most often for want of its host libraries. */
+function launchAdvice(missingExecutable, ownPlaywright) {
+  if (!missingExecutable) {
+    return [
+      "Name a browser already on the machine with --chromium <path> / OCTOBOARD_CHROMIUM. A browser",
+      "that is there and still will not start usually wants `playwright install --with-deps chromium`.",
+    ];
+  }
+  if (ownPlaywright) {
+    return [
+      "Fetch the browser this Playwright expects with `pnpm exec playwright install chromium`, run",
+      "from this package, or name one with --chromium <path> / OCTOBOARD_CHROMIUM.",
+    ];
+  }
+  return [
+    "This Playwright came from --playwright / OCTOBOARD_PLAYWRIGHT, so fetch its browser with its own",
+    "`playwright install chromium` rather than this package's, or name one with --chromium <path>.",
+  ];
+}
+
+async function launchBrowser(chromium, executablePath, ownPlaywright) {
   if (executablePath) return launchAt(chromium, executablePath);
   try {
     return await chromium.launch(LAUNCH_OPTIONS);
   } catch (error) {
-    const cached = /Executable doesn't exist/.test(String(error.message)) ? cachedHeadlessShell() : undefined;
-    if (!cached) throw new SetupError(`Could not launch Chromium: ${firstLine(error)}\nPass --chromium <path> or set OCTOBOARD_CHROMIUM.`);
+    const missingExecutable = /Executable doesn't exist/.test(String(error.message));
+    const cached = missingExecutable ? cachedHeadlessShell() : undefined;
+    if (!cached) {
+      const advice = launchAdvice(missingExecutable, ownPlaywright);
+      throw new SetupError([`Could not launch Chromium: ${firstLine(error)}`, ...advice].join("\n"));
+    }
     let expected = "unknown";
     try {
       expected = chromium.executablePath();
@@ -377,12 +408,12 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
 
 async function main() {
   const options = parse();
-  const chromium = await loadChromium(options.playwright);
+  const { chromium, own } = await loadChromium(options.playwright);
   const started = Date.now();
   try {
     if (!options.url) running.server = await startServer();
     const origin = options.url ?? running.server.origin;
-    running.browser = await launchBrowser(chromium, options.chromium);
+    running.browser = await launchBrowser(chromium, options.chromium, own);
     const browser = running.browser;
 
     // The first load of a fresh dev server pre-bundles its dependencies, which can reload a page that is

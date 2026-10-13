@@ -192,19 +192,20 @@ that way, extend it until it can rather than reporting the pass the other order 
 
 The app renders in WKWebView, so a pass in Chrome says nothing: a HeroUI tag's remove button that ignored the mouse in
 WebKit passed a scripted click in Chrome. Run a browser check of the page in Playwright's `webkit` and drive the pointer
-through `page.mouse` rather than a click dispatched from script. Playwright is not a dependency of this repository and
-is not to become one for a check: install it in a scratch directory outside the worktree, and install the version that
-matches the browser binaries already cached on the machine (on macOS under `~/Library/Caches/ms-playwright`) rather than
-the latest, which would want binaries that are not there. Headless WebKit still is not the app for how things paint (it
-has no GPU compositing), so a rendering defect is judged in the real window. Where a change puts text in a constrained
-layout, include a long text and a CJK one: overflow defects there showed only with long text. Judge a colour or a
-dimming from computed styles or full-resolution pixels, not from a downscaled screenshot. A packaged build offers no DOM
-to measure, so settle a geometry question there from ink extents read off a capture at the display's native resolution,
-allowing for its scale factor (a Retina display gives 2 image pixels per CSS pixel), and settle a question of overlap or
-reachability with a real click at the measured point, since a capture only ever shows what is on top. Colours read off
-such a capture carry the display's own profile, so a contrast ratio measured from one differs from the ratio the tokens
-give by a few tenths, either way: it is good for confirming which side of a threshold a pair lands on, and never for
-correcting a token-derived ratio recorded in the stylesheet or the accessibility standard.
+through `page.mouse` rather than a click dispatched from script. Playwright is a pinned devDependency of `packages/ui`,
+so `pnpm install` is all such a check needs from the repository; the dependency downloads no browser of its own, and the
+browser is fetched explicitly with `pnpm exec playwright install webkit`, run from `packages/ui` — from the workspace
+root `pnpm exec playwright` resolves to a machine-global Playwright or to nothing, and would silently fetch the wrong
+revision. Headless WebKit still is not the app for how things paint (it has no GPU compositing), so a rendering defect
+is judged in the real window. Where a change puts text in a constrained layout, include a long text and a CJK one:
+overflow defects there showed only with long text. Judge a colour or a dimming from computed styles or full-resolution
+pixels, not from a downscaled screenshot. A packaged build offers no DOM to measure, so settle a geometry question there
+from ink extents read off a capture at the display's native resolution, allowing for its scale factor (a Retina display
+gives 2 image pixels per CSS pixel), and settle a question of overlap or reachability with a real click at the measured
+point, since a capture only ever shows what is on top. Colours read off such a capture carry the display's own profile,
+so a contrast ratio measured from one differs from the ratio the tokens give by a few tenths, either way: it is good for
+confirming which side of a threshold a pair lands on, and never for correcting a token-derived ratio recorded in the
+stylesheet or the accessibility standard.
 
 A scrollbar's own footprint is one layout question that check cannot answer, however much else it settles: Playwright's
 WebKit draws overlay scrollbars only — headless and headed, at `scrollbar-width` `auto` or `thin`, and even with macOS
