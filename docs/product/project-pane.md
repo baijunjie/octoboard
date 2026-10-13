@@ -220,7 +220,8 @@ Each item is one line that is never wrapped: where it does not fit even on a row
 ending in an ellipsis and carries its full text as its tooltip — one fade and one tooltip per detail, not one for the
 row. The title and the subtitle fade the same way. A path — the file's own and a rename's origin — fades at its start
 instead, so the file's own name stays visible, and shows with a file icon in front of it, as paths read elsewhere in
-the application.
+the application. A cut detail, whichever edge it is cut at, runs as a marquee while the pointer is over it (see "Names
+too long for their space" in `docs/product/labels-and-tooltips.md`).
 
 **Moving from file to file can move the code below the header**, when the details of one file need a row that the next
 one's do not, or when one subject has the subtitle row and the next has none.

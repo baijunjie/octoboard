@@ -19,11 +19,27 @@ function scrolledFromStart(element: HTMLElement): number {
   return Math.abs(element.scrollLeft);
 }
 
+/** Puts the element `offset` px from its start edge, whichever direction it lays out in. */
+function scrollToOffset(element: HTMLElement, offset: number): void {
+  element.scrollLeft = getComputedStyle(element).direction === "rtl" ? -offset : offset;
+}
+
+/** How far the element can be scrolled: the width of the text beyond its box. */
+function overflowExtent(element: HTMLElement): number {
+  return element.scrollWidth - element.clientWidth;
+}
+
+/** Where the text sits when nothing is moving it, which is also what the layout would give it: a
+ * label clipped at its end shows its beginning, one clipped at its start is held at its end. */
+function restingOffset(element: HTMLElement, clip: "start" | "end"): number {
+  return clip === "start" ? overflowExtent(element) : 0;
+}
+
 function measure(element: HTMLElement): Clipped {
   const scrolled = scrolledFromStart(element);
   return {
     start: scrolled > OVERFLOW_EPSILON,
-    end: element.scrollWidth - element.clientWidth - scrolled > OVERFLOW_EPSILON,
+    end: overflowExtent(element) - scrolled > OVERFLOW_EPSILON,
     rtl: getComputedStyle(element).direction === "rtl",
   };
 }
@@ -73,12 +89,14 @@ function maskImage(fade: number, { start, end, rtl }: Clipped): string | undefin
   return `linear-gradient(to ${rtl ? "left" : "right"}, ${stops.join(", ")})`;
 }
 
-/** Marquee pacing: a pause at the start, a scroll at reading speed, a pause at the end, a quicker
- * scroll back, and again while the pointer stays. */
+/** Marquee pacing: a pause where the label rests, a scroll at reading speed, a pause at the far
+ * edge it runs to, a quicker scroll back, and again while the pointer stays. The two pauses are
+ * named for the run rather than for the text, whose beginning is the far edge of a label clipped at
+ * its start. */
 const MARQUEE_SPEED = 60; // px per second
 const MARQUEE_RETURN_SPEED = 160;
-const MARQUEE_PAUSE_START = 700; // ms
-const MARQUEE_PAUSE_END = 1200;
+const MARQUEE_PAUSE_REST = 700; // ms
+const MARQUEE_PAUSE_FAR = 1200;
 
 /** The element the pointer has to be over for a label's marquee to run: the nearest ancestor marked
  * `data-marquee-scope` (a whole row), or the label itself. */
@@ -88,11 +106,26 @@ function marqueeScope(element: HTMLElement): HTMLElement {
 
 /**
  * Scrolls a clipped label through its whole text while the pointer is over its scope, and back to
- * its start when the pointer leaves. It moves the element's own scroll position, so the edge fades
- * follow by themselves: the start fades in as text passes it, the end fades out once the last of it
- * is in view. Off where the system asks for reduced motion, and for a label clipped at its start.
+ * where it rests when the pointer leaves. It moves the element's own scroll position, so the edge
+ * fades follow by themselves: an edge fades in as text passes it, and stops fading once the text
+ * beyond it is in view. Which edge the label is clipped at decides only which way it runs: clipped
+ * at its end it rests at its start and runs toward its end, clipped at its start it rests at its
+ * end and runs back toward its beginning. Off where the system asks for reduced motion.
+ *
+ * `holds` is the protocol between this and the pin that otherwise holds a start-clipped label at
+ * its end: it is raised for as long as the marquee owns the scroll position — through the run and
+ * the return after it — and the pin stands aside while it is up, instead of dragging the text back
+ * every frame. Whatever gives the position up lowers it again, and nothing moves the position while
+ * it is down, so that the label is never left away from where it rests with no one to put it back.
+ * A lowered flag therefore means nothing is running and no frame is pending, which is what lets the
+ * pointer leaving a label the marquee never took return at once.
  */
-function useMarquee(ref: React.RefObject<HTMLElement | null>, enabled: boolean): void {
+function useMarquee(
+  ref: React.RefObject<HTMLElement | null>,
+  enabled: boolean,
+  clip: "start" | "end",
+  holds: React.RefObject<boolean>,
+): void {
   useLayoutEffect(() => {
     const element = ref.current;
     if (!element || !enabled) return;
@@ -105,7 +138,7 @@ function useMarquee(ref: React.RefObject<HTMLElement | null>, enabled: boolean):
 
     const setOffset = (offset: number) => {
       position = offset;
-      element.scrollLeft = getComputedStyle(element).direction === "rtl" ? -offset : offset;
+      scrollToOffset(element, offset);
     };
     // Moves toward `target` at `speed` px/s, then waits `pause` ms, then calls `next`.
     const move = (target: number, speed: number, pause: number, next?: () => void) => {
@@ -131,38 +164,54 @@ function useMarquee(ref: React.RefObject<HTMLElement | null>, enabled: boolean):
       };
       frame = requestAnimationFrame(step);
     };
+    // Measured each time rather than once: the text and the room it has can both change under the
+    // pointer. `far` is the edge the run reveals, the one the label is cut at.
+    const resting = () => restingOffset(element, clip);
+    const far = () => (clip === "start" ? 0 : overflowExtent(element));
+
     const cycle = () => {
       if (!running) return;
-      const end = element.scrollWidth - element.clientWidth;
-      if (end <= OVERFLOW_EPSILON) {
+      // Nothing left to run through, so the position goes back to whoever holds it when the marquee
+      // does not: the text now fits, or the label no longer has the room to show it moving.
+      if (overflowExtent(element) <= OVERFLOW_EPSILON) {
         running = false;
+        holds.current = false;
         return;
       }
-      move(end, MARQUEE_SPEED, MARQUEE_PAUSE_END, () => move(0, MARQUEE_RETURN_SPEED, MARQUEE_PAUSE_START, cycle));
+      move(far(), MARQUEE_SPEED, MARQUEE_PAUSE_FAR, () => move(resting(), MARQUEE_RETURN_SPEED, MARQUEE_PAUSE_REST, cycle));
     };
     const start = () => {
       if (running || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-      if (element.scrollWidth - element.clientWidth <= OVERFLOW_EPSILON) return;
+      if (overflowExtent(element) <= OVERFLOW_EPSILON) return;
       running = true;
+      holds.current = true;
       if (frame !== undefined) cancelAnimationFrame(frame);
       position = scrolledFromStart(element);
-      move(0, MARQUEE_RETURN_SPEED, MARQUEE_PAUSE_START, cycle);
+      move(resting(), MARQUEE_RETURN_SPEED, MARQUEE_PAUSE_REST, cycle);
     };
     const stop = () => {
+      // Only a position the marquee took is put back: where it never started — the text fits, or
+      // the system asks for no motion — the pin has the label and `position` is stale.
+      if (!holds.current) return;
       running = false;
       if (frame !== undefined) cancelAnimationFrame(frame);
-      move(0, MARQUEE_RETURN_SPEED, 0);
+      // The hold is given up only once the text is back where it rests, so the return is scrolled
+      // rather than snapped away by the pin.
+      move(resting(), MARQUEE_RETURN_SPEED, 0, () => {
+        holds.current = false;
+      });
     };
 
     scope.addEventListener("pointerenter", start);
     scope.addEventListener("pointerleave", stop);
     return () => {
       running = false;
+      holds.current = false;
       if (frame !== undefined) cancelAnimationFrame(frame);
       scope.removeEventListener("pointerenter", start);
       scope.removeEventListener("pointerleave", stop);
     };
-  }, [enabled]);
+  }, [enabled, clip]);
 }
 
 interface FadeOverflowProps {
@@ -201,8 +250,8 @@ interface FadeOverflowProps {
  * horizontal scroll container with a scrollbar, fades only an end that can be scrolled to, and has
  * no way to pin a line to its end (a clipped start edge) or to offer a tooltip only while clipped.
  *
- * While clipped at its end, the text runs as a marquee while the pointer is over it, or over the
- * nearest ancestor marked `data-marquee-scope` (a row), so all of it can be read without a tooltip.
+ * While clipped, the text runs as a marquee while the pointer is over it, or over the nearest
+ * ancestor marked `data-marquee-scope` (a row), so all of it can be read without a tooltip.
  *
  * It sets `overflow` and `whitespace-nowrap` itself, so the caller supplies only the sizing
  * (`min-w-0 flex-1` inside a flex row). It has to lay out as a block or a flex item: rendered
@@ -231,6 +280,7 @@ export function FadeOverflow({
     ref.current = element;
     anchor.current = element?.parentElement ?? element;
   }, []);
+  const marqueeHolds = useRef(false);
   const [clipped, setClipped] = useState<Clipped>({ start: false, end: false, rtl: false });
   const [hovered, setHovered] = useState(false);
 
@@ -239,11 +289,11 @@ export function FadeOverflow({
     if (!element) return;
     const update = () => {
       // Pinned to the end here rather than by layout: a clipped start edge is the scroll position.
-      if (clip === "start") {
-        const end = element.scrollWidth - element.clientWidth;
-        if (Math.abs(scrolledFromStart(element) - end) > 0.5) {
-          element.scrollLeft = getComputedStyle(element).direction === "rtl" ? -end : end;
-        }
+      // Not while the marquee owns the position (see `useMarquee`), or the pin would undo every
+      // step it takes.
+      if (clip === "start" && !marqueeHolds.current) {
+        const rest = restingOffset(element, clip);
+        if (Math.abs(scrolledFromStart(element) - rest) > 0.5) scrollToOffset(element, rest);
       }
       const next = measure(element);
       setClipped((prev) => (prev.start === next.start && prev.end === next.end && prev.rtl === next.rtl ? prev : next));
@@ -271,7 +321,7 @@ export function FadeOverflow({
     if (ref.current) scheduleMeasure(ref.current);
   });
 
-  useMarquee(ref, marquee && clip === "end");
+  useMarquee(ref, marquee, clip, marqueeHolds);
 
   const mask = maskImage(fade, clipped);
   const tooltip = title ?? (clipped.start || clipped.end ? titleWhenClipped : undefined);

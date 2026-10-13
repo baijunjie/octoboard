@@ -40,9 +40,12 @@ counts and a failed check's message — and only its glyph turns into the spinni
 included; the whole badge is replaced once the check finishes. A project's first check has nothing to keep, so until it
 finishes the badge shows the spinning glyph alone.
 
-**As the row gets tight the branch name is what gives way**: it fades out and can disappear entirely, leaving the
-glyph (the warning triangle after a failed check) and the counts, which carry the same facts. The counts go next, and
-the glyph is the last thing to go. The project's name keeps a floor of its own and never vanishes.
+**As the row gets tight the branch name is what gives way**: it is cut from its start, so the distinguishing end of a
+long name stays in view, and it fades there, carries its full name as its tooltip and runs as a marquee while the
+pointer is over it (see "Names too long for their space" in `docs/product/labels-and-tooltips.md`). It can disappear
+entirely, leaving the glyph (the warning triangle after a failed check) and the counts, which carry the same facts.
+The counts go next, and the glyph is the last thing to go. The project's name keeps a floor of its own and never
+vanishes.
 
 **What assistive technology hears.** A project row announces itself as one control, so the badge's facts are folded
 into the row's own name instead of being announced separately: the branch (or why there is none), the ahead and behind

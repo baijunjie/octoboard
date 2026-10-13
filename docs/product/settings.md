@@ -51,8 +51,9 @@ While Settings is open everything under it stays as it was, the terminal include
 
 A directory path listed in Settings — a trusted folder, an account's directory, the directory an agent's default
 account resolves to — is set apart from the text around it: a folder icon ahead of it and the path in a monospace
-font. A path too long for its row is cut from its start and fades out there, so the directory's own name stays
-visible; the icon stays in place.
+font. A path too long for its row is cut from its start and fades out there rather than ending in an ellipsis, so the
+directory's own name stays visible, and it runs as a marquee while the pointer is over it (see "Names too long for
+their space" in `docs/product/labels-and-tooltips.md`); the icon stays in place.
 
 A path inside the home directory of the host the daemon runs on — the daemon's, not the browser's, since the two may
 be different machines — is shown with that home directory written as `~`: `~/Projects/app`, and `~` for the home

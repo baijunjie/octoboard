@@ -51,8 +51,8 @@ comparison: only changes touching the project's folder are listed (see "What is 
 At the top of the Uncommitted view, the **worktree selector** chooses whose changes are shown. It lists every worktree
 of the repository there is now — not a bare main repository, and not a worktree Git reports as prunable. Each one is
 named by the branch checked out in it, by "Detached at" and the first seven characters of its commit when its `HEAD` is
-detached, or as having no commits yet; under its name is its path, `~` standing for the home directory. A name too
-long for its space fades out (see "Names too long for their space" in `docs/product/labels-and-tooltips.md`).
+detached, or as having no commits yet; under its name is its path, `~` standing for the home directory. A name or path
+too long for its space fades out (see "Names too long for their space" in `docs/product/labels-and-tooltips.md`).
 
 - The worktree holding the project's folder is marked as holding it, and is where the selector starts: the checkout
   the project's folder is in, which may be a linked worktree, never whichever worktree has some branch checked out.

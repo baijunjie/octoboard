@@ -128,16 +128,24 @@ unlike the timestamp, then has its full text as its tooltip, shown while the poi
 keyboard focus; the label's whole text is in the document whether or not it is cut, so assistive technology is given
 it either way.
 
+**A path is cut at its start instead**, so that its last folder stays in view (see "Right-to-left layout" in
+`docs/product/window-layout.md`), and so is the branch name in a project's branch badge, whose distinguishing part is
+its end (see "The branch badge" in `docs/product/project-git-status.md`); every other label is cut at its end.
+Everything this section says holds for a label cut at its start, mirrored: it rests pinned to its end, fades at its
+start, and carries its full text as its tooltip while it is cut.
+
 **While the pointer is over it, such a label runs as a marquee**, so all of it can be read:
 
 - For a sidebar row the pointer only has to be over the row, and for a picked tag over the tag; elsewhere it has to be
   over the label itself.
-- After a short pause the text scrolls through at reading speed, about 60 px a second, pauses at its end, scrolls
-  quickly back to its start and goes round again for as long as the pointer stays.
-- When the pointer leaves, the text scrolls back to its start.
-- The fades follow the text: its start fades once text has scrolled past it, and its end stops fading once the last
-  of the text is in view.
-- Nothing moves where the system asks for reduced motion, and a label that is cut at its start, such as a path
-  (see "Right-to-left layout" in `docs/product/window-layout.md`), never runs.
+- After a short pause the text scrolls at reading speed, about 60 px a second, toward the edge it is cut at — a label
+  cut at its end scrolls forward through its text, one cut at its start scrolls back toward its beginning — pauses
+  there, scrolls quickly back to where it rests and goes round again for as long as the pointer stays. The pacing is
+  the same whichever way it runs.
+- When the pointer leaves, the text scrolls back to where it rests: the beginning of a label cut at its end, the end
+  of one cut at its start.
+- The fades follow the text: an edge fades while text is hidden behind it and stops fading once that text is in view,
+  so the cut edge stops fading as the run reaches it and the opposite edge fades meanwhile.
+- Nothing moves where the system asks for reduced motion.
 - On a picked tag, where the remove button covers the label's end while the pointer is over the tag, the text scrolls
   until its end is clear of the button (see "Picked tags" in `docs/product/consoles-and-projects.md`).
