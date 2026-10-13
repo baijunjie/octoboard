@@ -30,7 +30,8 @@ export const activityScenarios: Scenario[] = [
       "Each collapsed row's marker stands for the most pressing activity among its sessions: a waving hand for " +
       "Website (waiting beats working), a pinging dot for Search API, a speech bubble for Billing, and none for " +
       "Docs. The pointer rests on Website's marker, whose tooltip reads A session is waiting for you; rest it " +
-      "on the others to read A session is working and A session is running.",
+      "on the others to read A session is working and A session is running. These stand alone; a console " +
+      "avatar's tooltip in the rail words the same activities after the console's name instead.",
     state: snapshotState({ consoles: [console_], projects: [website, api, billing, docs], sessions }),
     steps: [
       (ui) => ui.press(ui.t("sidebar.collapseAll")),

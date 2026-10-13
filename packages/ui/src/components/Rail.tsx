@@ -62,8 +62,9 @@ const AVATAR_CUT_OUT =
   "[mask-image:radial-gradient(circle_at_24px_24px,transparent_9px,black_9.5px)] rtl:[mask-image:radial-gradient(circle_at_4px_24px,transparent_9px,black_9.5px)]";
 
 /** One console on the rail: its avatar, marked with what is going on in it, and the current one on a
- * tile of its own. The tooltip is the console's name; the accessible name adds the activity. A
- * right-click offers the console's own actions, from a menu whose trigger is not drawn: the
+ * tile of its own. The tooltip says what the accessible name says, the console's name with the
+ * activity folded in, so the badge, which is decorative, gets its words without a tooltip of its
+ * own. A right-click offers the console's own actions, from a menu whose trigger is not drawn: the
  * sidebar's header has the same menu on a visible button. */
 function ConsoleTile({
   console: thisConsole,
@@ -80,8 +81,10 @@ function ConsoleTile({
   onSelect: () => void;
   /** A mouse pointer entered or left the avatar; touch and pen are ignored. */
   onHoverChange: (hovered: boolean) => void;
-  /** Hovering the avatar floats the hidden sidebar in, whose header already names the console, so
-   * the tooltip then waits for keyboard focus. */
+  /** Hovering the avatar floats the hidden sidebar in, so the tooltip then waits for keyboard
+   * focus. The tooltip says more than that sidebar's header does (the activity, not only the
+   * name), so a mouse user with the docked sidebar hidden never reads those words; the activity
+   * is reachable there only from the session rows' own status glyphs. */
   hoverOpensSidebar: boolean;
   onOpenDialog: (dialog: DialogRequest) => void;
 }): React.ReactElement {
@@ -89,14 +92,15 @@ function ConsoleTile({
   const { configurationFile } = usePlatform();
   const tileRef = useRef<HTMLDivElement>(null);
   const activityKey = activityLabelKey(activity);
+  const label = activityKey ? t(activityKey, { name: isolate(thisConsole.name) }) : thisConsole.name;
   return (
     <div ref={tileRef} className="flex">
-      <TitledControl title={thisConsole.name} placement="end" focusOnly={hoverOpensSidebar}>
+      <TitledControl title={label} placement="end" focusOnly={hoverOpensSidebar}>
         <Button
           isIconOnly
           size="sm"
           variant="ghost"
-          aria-label={activityKey ? t(activityKey, { name: isolate(thisConsole.name) }) : thisConsole.name}
+          aria-label={label}
           aria-current={current ? "true" : undefined}
           // Not styling: `usePanePeekPointer` (`Sidebar.tsx`) matches this to keep the floating sidebar
           // up while the pointer is on an avatar, which lies outside the card and its gap. Without it

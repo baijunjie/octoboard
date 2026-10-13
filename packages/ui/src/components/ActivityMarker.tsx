@@ -60,7 +60,9 @@ function activityMarker(activity: Activity): React.ReactElement | null {
  * colour with its glyph in that colour's foreground, so the glyph reads against the disc whatever
  * the disc sits on — on the light chrome the warning and success colours are fills, too light to
  * read as glyphs of their own. The waiting hand still waves and the working dot still pings, as
- * they do in the sidebar. Decorative: the console's accessible name carries the activity. */
+ * they do in the sidebar. Decorative, and with no tooltip of its own, unlike `ActivityMarker`: the
+ * avatar it sits on carries the tooltip, which says the activity (the rail's `ConsoleTile`), and
+ * the console's accessible name says it too. */
 export function ActivityBadge({ activity, className = "" }: { activity: Activity; className?: string }): React.ReactElement | null {
   if (!activity) return null;
   const disc = `flex size-3.5 items-center justify-center rounded-full ${className}`;

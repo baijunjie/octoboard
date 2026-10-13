@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
+import { Button } from "@heroui/react";
 import { act } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { ActivityMarker } from "../components/ActivityMarker";
 import { AgentIcon } from "../components/AgentIcon";
 import { StatusIcon } from "../components/StatusIcon";
+import { TitledControl } from "../components/TitledControl";
 import { leave, mountForTooltip, openTooltip } from "../components/tooltipTestSupport";
 import { createUi } from "./interact";
 
@@ -19,7 +21,8 @@ afterEach(() => vi.useRealTimers());
  * marker, as an expanded project row does, which is what the step's failure case needs. A confirmation
  * dialog's callout lists sessions, one with a tooltip on its glyph and on its agent icon and one
  * with neither; unlike the rows above, that glyph is the named `role="img"` rather than a
- * presentational one. */
+ * presentational one. Two rail-style avatars carry a tooltip of their own: one opens on hover, one
+ * only on focus, as while the hidden sidebar can float in. */
 function mountWindow(): void {
   mountForTooltip(
     <>
@@ -61,6 +64,12 @@ function mountWindow(): void {
           </li>
         </ul>
       </div>
+      <TitledControl title="Operations, a session is working" placement="end">
+        <Button isIconOnly aria-label="Operations, a session is working" />
+      </TitledControl>
+      <TitledControl title="Billing" placement="end" focusOnly>
+        <Button isIconOnly aria-label="Billing" />
+      </TitledControl>
       <div role="button" aria-label="Card, Claude Code, Idle">
         <div>
           <StatusIcon status="idle" decorative />
@@ -217,4 +226,26 @@ it("hoverCalloutAgent fails for an agent icon with no tooltip", async () => {
   await vi.advanceTimersByTimeAsync(6000);
   await done;
   expect(openTooltip()).toBeNull();
+});
+
+it("hoverTitledControl puts up the tooltip of the control it names", async () => {
+  mountWindow();
+  await settledLive(createUi(document, "en").hoverTitledControl((name) => name.startsWith("Operations")));
+  expect(openTooltip()?.textContent).toBe("Operations, a session is working");
+  release(document.querySelector('[aria-label^="Operations"]')!);
+});
+
+it("hoverTitledControl fails for a control whose tooltip stays shut under the pointer", async () => {
+  mountWindow();
+  const done = expect(createUi(document, "en").hoverTitledControl("Billing")).rejects.toThrow(/has no tooltip of its name: its last tooltip is none/);
+  await vi.advanceTimersByTimeAsync(3000);
+  await done;
+  expect(openTooltip()).toBeNull();
+});
+
+it("hoverTitledControl fails for a control that is not there", async () => {
+  mountWindow();
+  const done = expect(createUi(document, "en").hoverTitledControl("Nothing")).rejects.toThrow(/Nothing to hover/);
+  await vi.advanceTimersByTimeAsync(6000);
+  await done;
 });

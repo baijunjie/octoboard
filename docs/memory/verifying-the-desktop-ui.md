@@ -142,6 +142,22 @@ of the scenarios over the same list accordingly: the status glyph's tooltip and 
 confirmation's session list are shown by ending one scenario on the glyph and another on the icon. Name in the
 scenario's description which mark the pointer ends on, so the next step appended to it can see what it would displace.
 
+## A scenario's steps run in every language, so no matcher spells out the catalog's own punctuation
+
+Applies to the matchers a gallery scenario's steps find a control by name with (`ui.press`, `ui.hover*`,
+`ui.focusControl` in `packages/ui/src/gallery/`). The page renders every scenario in every offered language, so a
+matcher written against the English catalog finds nothing in another one and the scenario fails there — loudly, but
+only in the language that hits it, which the default run never reaches. Matching a rail avatar as the console's name
+followed by `", "` broke in `zh-Hans`, whose catalog writes the full-width `，`, while the English capture was clean.
+
+- Where the matcher can be built inside a step, which has `ui.t`, take the text from the catalog message: format it
+  with a sentinel in place of every placeholder and split on that, as `Ui.session` does in `interact.ts`.
+- A matcher defined at module level has no `t`, so it accepts the name alone or the name followed by a punctuation
+  character (`/^\p{P}/u`), never a literal separator. That still tells the avatar of a console named `Operations`
+  from a row for `Operations hub`, where the next character is a space.
+- Check a new or changed matcher by rendering its scenario in a language other than English, not only in the default
+  one; and when a matcher changes, check the other scenarios that use it in that language too.
+
 ## Settle what `git` writes against real `git` in a throwaway repository
 
 Applies to `git` output written out by hand rather than taken from a run of `git`: a patch in a gallery change fixture

@@ -24,10 +24,9 @@ the order the consoles were created, followed by **New console**. The console th
 console**; its avatar has a tile behind it and is announced as the current one. (A sidebar floating in to preview
 another console is the one exception, see "Previewing a console from the rail" below.) Pressing another avatar makes
 that console the current one, its view fading in (see "How the sidebar's view changes" below); pressing it with the
-mouse leaves keyboard focus where it was. Each avatar's tooltip is its console's name (when it opens is in "Tooltips
-on icon-only controls" in `docs/product/labels-and-tooltips.md`). A console created from this window — by the rail's
-New console or the welcome screen's (see `docs/product/welcome-screen.md`) — becomes the current one as soon as it
-appears; one created from another client is only added to the rail.
+mouse leaves keyboard focus where it was. A console created from this window — by the rail's New console or the
+welcome screen's (see `docs/product/welcome-screen.md`) — becomes the current one as soon as it appears; one created
+from another client is only added to the rail.
 
 An avatar carries a badge at its bottom corner while something is going on in its console, taken from all its
 sessions, its console sessions included, so a raised hand in a console that is not shown is in sight too:
@@ -39,7 +38,10 @@ sessions, its console sessions included, so a raised hand in a console that is n
 | A green speech bubble | otherwise, at least one session is running and awaiting instructions |
 | none | no session has a running process |
 
-The name assistive technology announces for an avatar is the console's name together with what its badge means.
+The name assistive technology announces for an avatar is the console's name together with what its badge means, and
+**the avatar's tooltip is that same text** — the bare console name while nothing is going on. When that tooltip opens,
+and why a mouse user with the docked sidebar hidden does not get to read it, is in "Tooltips on icon-only controls" in
+`docs/product/labels-and-tooltips.md`.
 
 **Right-clicking** (or Control-clicking) an avatar opens that console's action menu at the pointer: **Add project**,
 **Edit console**, **Export configuration…** and, after a separator, **Delete console**, as in the sidebar's header

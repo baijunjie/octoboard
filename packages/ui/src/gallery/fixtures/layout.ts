@@ -51,8 +51,12 @@ const crowdState = snapshotState({
     sessionOf("s-crowd-1", crowd[0].id, "p-crowd", "Fix the summary layout", "working"),
   ],
 });
-/** The rail's button for a console: its accessible name starts with the console's name. */
-const consoleButton = (name: string): Matcher => describing(`consoleButton(${name})`, (label) => label.startsWith(name));
+/** The rail's button for a console: its accessible name is the console's whole name, alone or
+ * followed by punctuation and what is going on in it, whichever language writes that. A name
+ * followed by a letter or a space is another control's ("Operations hub" is a session, not the
+ * console "Operations"); one followed by punctuation of its own is not told apart. */
+const avatar = (name: string): Matcher =>
+  describing(`avatar(${name})`, (label) => label === name || (label.startsWith(name) && /^\p{P}/u.test(label.slice(name.length))));
 
 export const layoutScenarios: Scenario[] = [
   {
@@ -71,6 +75,24 @@ export const layoutScenarios: Scenario[] = [
     description:
       "More consoles than the column holds, which scrolls with no scrollbar to say so: the avatars fade at the bottom edge, where more are waiting. Scroll it and both edges fade until the end, where that edge stops. Rail with five consoles shows the same column with everything in view, and no fade.",
     state: crowdState,
+  },
+  {
+    id: "layout-rail-avatar-long-name",
+    group: GROUP,
+    title: "Rail avatar of a console with a very long name",
+    description:
+      "A console avatar's tooltip where a session is waiting for you: the console's whole name, wrapping over two lines, then that a session is waiting for you. Rest the pointer on the other avatars to read, after their names, that a session is working or is running, and the bare name alone for Docs.",
+    state: railState,
+    steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500), (ui) => ui.hoverTitledControl(avatar(lab.name))],
+  },
+  {
+    id: "layout-rail-avatar-running",
+    group: GROUP,
+    title: "Rail avatar of a console that is merely running",
+    description:
+      "A console avatar's tooltip where a session is merely running: the console's name, then that a session is running. The avatar is the current console's, on its tile.",
+    state: railState,
+    steps: [(ui) => ui.press(avatar(billing.name)), (ui) => ui.wait(500), (ui) => ui.hoverTitledControl(avatar(billing.name))],
   },
   {
     id: "layout-waiting-overflow",
@@ -95,7 +117,7 @@ export const layoutScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.session("Hub")),
       (ui) => ui.press(ui.session("Fix the summary layout")),
-      (ui) => ui.press(consoleButton("Operations")),
+      (ui) => ui.press(avatar(operations.name)),
       (ui) => ui.press(ui.session("Roll back the last deploy")),
       (ui) => ui.press(ui.t("titleBar.back")),
       (ui) => ui.wait(300),
@@ -128,10 +150,10 @@ export const layoutScenarios: Scenario[] = [
     group: GROUP,
     title: "Docked sidebar hidden, five consoles",
     description:
-      "The breadcrumb follows the buttons when the sidebar is not docked. Main is current. Rest the mouse on an avatar to float the sidebar in showing that console, current or not; move along the avatars to switch the preview, and press inside it to make that console current. Resting on the sidebar toggle at the top bar's start floats it in at once, showing the current console.",
+      "The breadcrumb follows the buttons when the sidebar is not docked. Main is current. Rest the mouse on an avatar to float the sidebar in showing that console, current or not; move along the avatars to switch the preview, and press inside it to make that console current. Resting on the sidebar toggle at the top bar's start floats it in at once, showing the current console. Operations' avatar has keyboard focus, the one way left to read its tooltip, which says that a session is working; the pointer never opens it here.",
     preferences: { sidebarVisible: false, sidebarConsole: main.id },
     state: railState,
-    steps: [(ui) => ui.press(ui.session("Hub"))],
+    steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.focusControl(avatar(operations.name))],
   },
   {
     id: "layout-report-hidden",

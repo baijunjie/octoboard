@@ -132,6 +132,13 @@ export interface Ui {
    * the tooltip that opens is not one of the three activities' (an expanded row, which draws no
    * marker, has none to hover), rather than leave whatever else was hovered up. */
   hoverActivityMarker: (host: Matcher) => Promise<void>;
+  /** Moves the pointer onto the first control named `matcher` and leaves it there, as `hoverIndicator`
+   * does, for a control whose tooltip repeats its accessible name, such as a rail avatar's. It is not
+   * for a control whose tooltip says something else (an actions button, a pane toggle): the step fails
+   * unless the tooltip that opens is the control's name, so hovering one whose tooltip stays shut (a
+   * rail avatar while the hidden sidebar can float in, where the pointer floats the sidebar instead)
+   * is not passed over. */
+  hoverTitledControl: (matcher: Matcher) => Promise<void>;
   /** Moves focus onto the first control named `matcher`, waiting for it to appear, with the keyboard
    * as its source, so that the focus ring is drawn as it is for a user who tabbed there, and a key
    * pressed next goes to it: for a row of a list, which a press would open rather than focus. */
@@ -215,8 +222,9 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     return named.find((element) => !named.some((other) => other !== element && element.contains(other)));
   };
 
-  /** Puts the pointer on what `look` finds, waiting for it to appear, and waits for its tooltip. */
-  const hover = async (look: () => HTMLElement | null | undefined, missing: string): Promise<void> => {
+  /** Puts the pointer on what `look` finds, waiting for it to appear, and waits for its tooltip.
+   * Returns what it hovered. */
+  const hover = async (look: () => HTMLElement | null | undefined, missing: string): Promise<HTMLElement> => {
     const indicator = await waitFor(() => look() ?? undefined, missing);
     // A tooltip opens only for a pointer, and react-aria takes the modality from the last event it
     // saw: the presses before it were clicks, which it reads as virtual. React raises
@@ -225,6 +233,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       indicator.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerType: "mouse" }));
     }
     await wait(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS);
+    return indicator;
   };
 
   /** The row of the confirmation dialog's callout list for the session titled `title`: the title is
@@ -357,6 +366,13 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       const shown = doc.querySelector("[role=tooltip]")?.textContent;
       if (!shown || !ACTIVITIES.some((activity) => activityLabel(t, activity) === shown)) {
         throw new Error(`The control matching ${String(host)} has no activity marker: its last tooltip is ${shown ? `"${shown}"` : "none"}`);
+      }
+    },
+    async hoverTitledControl(matcher) {
+      const control = await hover(() => find(matcher), `Nothing to hover matching ${String(matcher)}`);
+      const shown = doc.querySelector("[role=tooltip]")?.textContent;
+      if (!shown || withoutIsolates(shown).trim() !== nameOf(control)) {
+        throw new Error(`The control matching ${String(matcher)} has no tooltip of its name: its last tooltip is ${shown ? `"${shown}"` : "none"}`);
       }
     },
     async press(matcher) {

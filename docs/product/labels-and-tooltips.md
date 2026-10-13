@@ -29,16 +29,16 @@ separators standing for the lines a diff leaves out (see "Expanding the collapse
 ## Tooltips on icon-only controls
 
 A control shown only as an icon has a tooltip naming it, shown both when the mouse rests on it and when it receives
-keyboard focus. The tooltip's text is the same name assistive technology announces for the control, except on the
-consoles' avatars, the ⋮ buttons and the pin buttons below. These are:
+keyboard focus. The tooltip's text is the same name assistive technology announces for the control, except on the ⋮
+buttons and the pin buttons below. These are:
 
 - the top bar's controls — Back, Forward, the sidebar toggle at its start and the right pane's toggle at its end;
   each pane toggle's tooltip follows its "Show …" / "Hide …" label, and the right pane's also names what the pane
   shows (see "The two pane toggles" in `docs/product/window-layout.md`);
-- the rail's buttons — each console's avatar, whose tooltip is the console's name while the name announced for it also
-  says what is going on in it (see "The console switcher" in `docs/product/sidebar.md`), New console, the waiting
-  count, whose tooltip says how many sessions are waiting and that pressing it goes to the next one, Turn on
-  notifications, and Settings;
+- the rail's buttons — each console's avatar, whose tooltip is the console's name with what is going on in it folded
+  in, the same text as the name announced for it (see "The console switcher" in `docs/product/sidebar.md`), New
+  console, the waiting count, whose tooltip says how many sessions are waiting and that pressing it goes to the next
+  one, Turn on notifications, and Settings;
 - the ⋮ button that opens an action menu — a sidebar row's, the console's in the sidebar's header, the project's in
   focus mode, and a file or folder's in the Files mode's tree or a file's in the Git mode's change list (see "A
   row's actions" in `docs/product/project-pane.md`). Its tooltip is a short "More actions", while the name announced
@@ -67,8 +67,10 @@ consoles' avatars, the ⋮ buttons and the pin buttons below. These are:
 - the close button of every dialog, of Settings and of each toast ("Close").
 
 While the docked sidebar is hidden at 1148 px and wider, a console's avatar opens its tooltip on keyboard focus only:
-resting the mouse on it floats the sidebar in, which names the console at its top (see "Previewing a console from the
-rail" in `docs/product/sidebar.md`).
+resting the mouse on it floats the sidebar in instead (see "Previewing a console from the rail" in
+`docs/product/sidebar.md`). That card names the console at its top but not what is going on in it, so **a mouse user
+with the docked sidebar hidden never reads the avatar's tooltip**; what is going on is then read from the sessions the
+card lists, each with its own status glyph and that glyph's tooltip (see "Tooltips on indicators" below).
 
 ## Two-state icon toggles
 
@@ -106,8 +108,9 @@ are:
   strip" in `docs/product/focus-mode.md`), whose tooltip says which of the three activities it stands for — a session
   waiting for the user, one working, one merely running — in the same words the name of the row or chip around it
   folds in beside the project's or console session's own name. The same activity shown as a badge on a console's
-  avatar in the rail adds no tooltip of its own: the avatar is a control, and its tooltip is the console's name (see
-  "The console switcher" in `docs/product/sidebar.md`);
+  avatar in the rail adds no tooltip of its own: the badge is decorative, and the avatar's own tooltip already says the
+  activity, folded in beside the console's name (see "The console switcher" in `docs/product/sidebar.md`). So one
+  activity is worded two ways — on its own in the marker's tooltip, folded into the name in the avatar's;
 - the binding badge, the coloured dot on a project session's row bound to a console session, whose tooltip names that
   console session (see "The binding badge" in `docs/product/sidebar.md`);
 - a session's agent icon on its row, on a focus mode's card or archived row, on the archive view's row and on each
