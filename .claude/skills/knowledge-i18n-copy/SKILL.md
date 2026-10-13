@@ -5,34 +5,43 @@ description: UI copy conventions for a multilingual app. Use when writing, trans
 
 # UI copy conventions
 
-In every language, write short, write smoothly, and make it readable in one pass. Sentences are finished; buttons use
-short words. No slang, no unfinished fragments.
+In every language, write so it reads smoothly, is understood in one pass, and is not wordy: cut what can be cut, but do
+not give up the language's register or a sentence's completeness to save words. Descriptions, body text and hints finish
+their sentences, with no slang and no unfinished fragments; title slots, buttons, labels, status values and input
+placeholders can be fragments by nature, and follow their own subsections; buttons use short words. How long a language
+runs is judged by its own row in "Register per language".
 
-Match the source language in the facts stated and in length, but use the target language's own UI idioms for the
-sentence structure. **Do not carry the source language's sentence frame across word by word** (the 「确认」 in the
-Chinese 「确认删除该文件？」 is a Chinese construction; de simply writes Diese Datei löschen?).
-When reviewing, read every string through as a whole sentence and judge it against that language's register; do not
-just scan for keywords.
+Match the source language in the facts stated: the same amount of information, with the length following the language's
+register, and the sentence structure following the target language's own UI idioms. **Do not carry the source language's
+sentence frame across word by word** (the 「确认」 in the Chinese 「确认删除该文件？」 is a Chinese construction; de simply
+writes Diese Datei löschen?).
+When reviewing, read every string through as a whole sentence and judge it against that language's row; do not just scan
+for keywords.
 
-Where the project's own copy conventions or glossary conflict with this document, the project's win. Values marked
-"default" here suit a typical consumer app; a project with a different positioning (B2B, finance and so on) may
-change them. Report anything that neither this document nor the project's conventions settle, or that you are unsure
-of.
+Where the project's own copy conventions, glossary or design system conflict with this document, the project's win. Values
+marked "default" here suit a typical consumer app; a project with a different positioning (B2B, finance and so on) may
+change them. Report anything that neither this document nor the project's conventions settle, or that you are unsure of.
 
 ## Register per language
 
-Simplified Chinese uses short written-style sentences to cure the convoluted, long-winded phrasing of spoken Chinese;
-that is not the register for every language. Pushing another language one notch toward officialese or honorifics
-usually makes it longer, the opposite of "write short".
-Once a register is chosen for a language, use it throughout, without mixing.
+Simplified Chinese's short written-style sentences cure the convoluted, long-winded phrasing of spoken Chinese; that is
+not the register for every other language. Write each language only at the level the table below gives it, as long as it
+needs to be: don't squeeze it down to Simplified's character count, and don't push it a notch toward officialese or
+honorifics for politeness. When a project has a different positioning, change the level for the whole language: changing
+the level means using that language's polite or formal address throughout, and the items in the "Avoid" column that
+belong to the level (honorifics, administrative tone, officialese, stacked honorifics) are lifted with it; the bans on
+mixing, slang and nominalized openings do not move with positioning. Within one language, never mix.
+When a control squeezes the length: first switch to a shorter idiomatic phrasing in that language, then fall back to an
+abbreviation or a different word, and only last reduce how much information is given; never truncate, and never damage
+the source language for this.
 
 | Language | Default register | Avoid |
 |---|---|---|
 | zh-Hans | Short written-style sentences | Convoluted spoken phrasing, Japanese word order, the Japanese middle dot 「・」 |
 | zh-Hant | Short sentences, Taiwan usage by default, 「你」 for the user; the same concepts as Simplified, worded with Traditional UI vocabulary | Simplified officialese, Simplified vocabulary carried over as is |
-| en | Complete sentences with common contractions | Slang, fragments |
-| ja | です/ます sentences, short button names (キャンセル, 後で) | Stacked honorifics (させていただきます), plain form (〜かも) |
-| ko | Statements in -(스)ㅂ니다 (없습니다), requests in 해 주세요, buttons as nouns (삭제, 취소) | Mixing -세요 / -(으)십시오 in one product, 반말 |
+| en | Complete sentences with common contractions | — |
+| ja | Sentences in です/ます | Stacked honorifics (させていただきます), plain form (〜かも) |
+| ko | Statements in -(스)ㅂ니다 (없습니다), requests in 해 주세요 | Mixing -세요 / -(으)십시오 in one product, 반말 |
 | fr | vous, keep the ne of negation | Administrative tone (il convient de) |
 | ru | вы (lowercase mid-sentence), simple verbs | Officialese (при осуществлении) |
 | ar | Short Modern Standard Arabic sentences | Dialect, long classical sentences |
@@ -44,7 +53,7 @@ Once a register is chosen for a language, use it throughout, without mixing.
 | it | tu | Mixing tu / Lei in one product |
 | pt-BR | você | Over-formal address such as o senhor |
 | th | Omit the pronoun | ท่าน, ครับ / ค่ะ on every sentence |
-| vi | Pronoun-less imperatives | bạn có thể or quý khách added only for politeness |
+| vi | Pronoun-less imperatives; keep bạn có thể where it means "you can" | bạn có thể or quý khách added only for politeness |
 
 Buttons use the verb form the language's UIs conventionally use, not an honorific command to the user:
 
@@ -53,7 +62,7 @@ Buttons use the verb form the language's UIs conventionally use, not an honorifi
 | de, fr, es, pt-BR, ru | Infinitive | Löschen, Supprimer, Eliminar, Apagar, Удалить |
 | it | Second-person singular imperative | Elimina, Annulla |
 | ja | Noun or short name | 削除, キャンセル; not 削除してください |
-| ko | Noun | 삭제, 취소; 해 주세요 only in explanatory sentences |
+| ko | Noun | 삭제, 취소 |
 
 When the user's gender is unknown, do not default adjectives and participles to the masculine (connecté, connesso,
 conectado); use a gender-free construction instead (a noun, an infinitive, a different subject). Words that agree with a
@@ -64,7 +73,6 @@ noun agree with it in gender and number (invariati / invariate).
 | Don't | Do |
 |---|---|
 | 这个文件删不掉 | 无法删除该文件 |
-| 要删除吗？ | 确认删除该文件？ |
 | 好的 | iOS 「好」, Android and web 「确定」 (each following the system dialog) |
 | 用过 N 次, 使用 N 次 | 已使用 N 次; as a label, 「使用次数」 + the value |
 | 第 1/共 2 件 | 第 1 件（共 2 件） |
@@ -102,42 +110,24 @@ Do not convert Simplified vocabulary straight into Traditional characters:
 |---|---|
 | Common contractions | Use them, e.g. can't, don't, isn't, aren't, doesn't, didn't, it's, that's, there's, you're, won't, you'll, couldn't |
 | Uncommon contractions | Don't use them: could've, it'll |
-| Emphatic warnings | Don't contract: cannot, do not, it is |
-| you have | Contract to you've only where have is an auxiliary (You've changed…); not where it means possess (You've more space ✗) |
+| Emphatic warnings, meaning only the sentence in a destructive confirmation that states the consequence | Don't contract: cannot, do not, it is; failure copy contracts as the "Errors" section says |
+| you have | Contract to you've only where the result is still English; You've more doesn't hold |
 | Noun + verb | Don't contract onto the noun: the computer's not → the computer isn't; the possessive 's is unaffected |
 | Object it + is | Don't contract to it's: The best way to find it is to ask them. |
 
-A contraction replaces only the one word it stands for, and takes that word's case: in a Title Case element write
-Couldn't, Don't, without lowercasing the whole string.
+A contraction replaces only the one word it stands for.
 
 ### Pitfalls in other languages
 
 | Language | Rule |
 |---|---|
-| de | When switching to du, change by case: nominative Sie → du, accusative Sie → dich, dative Ihnen → dir, possessive Ihr- → dein- (with endings: Ihre → deine, Ihren → deinen); lowercase sie means "she" or "they" — leave it |
-| it | With tu, lowercase lei means "she" — leave it; with Lei, the formal pronoun is capitalized |
+| de | Lowercase sie means "she" or "they"; leave it |
+| it | With tu, lowercase lei means "she"; leave it |
 | it | Write a condition as a full conditional clause (Se inserisci di nuovo lo stesso nome, viene ricreato), not a gerund clause |
 | th | For a short "can't", use verb + ไม่ได้ (ลบไม่ได้), not ไม่สามารถ…ได้; it can also close a causal sentence. ไม่ได้ before the verb means "didn't" (ไม่ได้ลบ) — don't put it on the wrong side |
 | th | Where it would produce a doubled negation (…ที่ไม่ได้ใช้ไม่ได้), keep ไม่สามารถ…ได้; keep the positive สามารถ |
-| vi | bạn có thể meaning "you can" is the original meaning; keep it |
-| ko | Statements already in -습니다 are not to be converted wholesale to 해요체 |
-| ko | Keep the spaces Korean spacing rules require (할 수 없습니다, not 할수없습니다) |
 | ko | A particle after a placeholder is written with both forms: 을(를), 은(는), 이(가), 과(와), (으)로 |
 | ru | For something impossible by ability or rule, use нельзя + infinitive; for an attempt that failed this time, Не удалось… (Не удалось удалить) |
-| tr | Convert case by tr-TR: i ↔ İ, ı ↔ I; never the default Unicode case mapping, including the all-caps word of a type-to-confirm |
-| id | The prepositions di and ke are written apart from the noun (di rumah); as prefixes they are joined (dihapus) |
-
-### Grammatically required contractions
-
-These are not abbreviations to expand:
-
-| Language | Keep |
-|---|---|
-| fr | du, des, au, aux |
-| pt-BR | do, da, dos, das, no, na, nos, nas, ao, à, pelo, pela |
-| it | The full set of preposition + article: del, al, dal, nel, sul, della, nella and so on |
-| de | am, im, beim, vom, zum, zur, ans, ins |
-| es | del, al; the pronoun él does not contract (de él, a él) |
 
 ## Text not held to the UI register
 
@@ -146,6 +136,9 @@ These are not abbreviations to expand:
 | Voice assistant trigger phrases (Siri / Shortcuts / Google Assistant) | The user says them out loud and they are deliberately colloquial; exempt entirely |
 | Legal text | No contractions, no rewriting into short UI sentences |
 | Marketing and website promotion | A register of its own; passages shared with the UI still follow the UI register |
+
+When the website or legal pages mention a name from the app's UI, copy the app's actual translation language by
+language; when the app renames something, go back and sync it.
 
 ## Writing sentences
 
@@ -180,21 +173,18 @@ These are not abbreviations to expand:
 
 - Make examples concrete enough to be really usable, and keep examples across fields consistent in meaning (if the
   name is a charger, the keyword is a power adapter, not something else).
-- A search field does not correspond to a field to fill in, so it does not follow the example pattern; when written as
-  a prompting question (找什么？ / What are you looking for?), address the user in that language's register (de Was
-  suchst du?).
+- A search field does not correspond to a field to fill in, so it does not follow the example pattern; write it as a
+  prompting question (找什么？ / What are you looking for?).
 
 ### Reference and scope
 
 - Don't repeat an object the page has already scoped: on a page inside a team space, "all members" is enough; don't
-  copy "all members of the team space" from the product docs.
+  copy "all members of the team space" from the product docs. The title of a destructive confirmation is the exception;
+  write it per "Destructive actions".
 - When one sentence covers several cases, use that one sentence ("this project" rather than separate "your project /
   the team's project"); split it only when "this affects other people" and nothing else on the screen says so.
-- Don't hang a description of an object's nature ("visible to all members" and the like) on the description of an
-  action such as a toggle or a clear.
-- When one sentence lists several system permission names, quote either all of them or none; a single one mentioned on
-  its own gets no quotes.
-- When a UI name or permission name needs quoting, use the language's quotation marks:
+- When a UI name or permission name needs quoting, use the language's quotation marks; when one sentence lists several
+  items, either quote all of them or none, and a single one mentioned on its own gets no quotes:
 
   | Language | Quotes |
   |---|---|
@@ -208,14 +198,16 @@ These are not abbreviations to expand:
 
 ### Destructive actions
 
-Clear, delete, remove and discard each mean something different; one action uses one word on every platform and in
-every place.
+Clear, delete, remove and discard each mean something different: clear = the contents are emptied, the container and its
+settings stay; delete = the object is gone; remove = taken out of here, still there at its origin; discard = giving up
+changes not yet saved. An action that is in fact irreversible does not use a word that sounds reversible (remove, clear).
 
-- A description under a button states only the scope or consequence the button's name cannot convey; a button whose
-  name says it all gets no description. State only the consequences directly tied to this action; don't drag in other
-  mechanisms.
+- A description of an action states only the scope and consequence directly tied to this action: a button whose name says
+  it all gets no description, and a description of an object's nature that is unrelated to this action and does not
+  change with state ("visible to all members" and the like) is not hung on either; don't drag in other mechanisms.
 - Choose the sentence pattern by what is to be stated. A consequence does not repeat the action itself (「清除后，将删除…」
-  is ill-formed).
+  is ill-formed). The patterns in the table are for Chinese; for other languages the same content takes that language's
+  UI idiom.
 
   | Stating | Pattern |
   |---|---|
@@ -233,16 +225,15 @@ every place.
 
 - Don't write "cannot be undone" unless the app really has a recoverable deletion it needs to be distinguished from.
 
-Confirmation dialogs:
+A confirmation dialog's title and its confirm button both use the action word on the button that triggered it, not a
+synonym:
 
 | Part | How to write it |
 |---|---|
-| Title | In Chinese 「确认<动作><对象>？」; in other languages, that language's action question. The action is the word on the button that triggered it, not a synonym; include the count or the name when there is one |
+| Title | In Chinese 「确认<动作><对象>？」; in other languages, that language's action question; include the count or the name when there is one |
 | Body, when the triggering button already has a description | Omit it; don't restate that description |
 | Body, when the trigger has no description (swipe, toggle, menu item) | State the scope or consequence; omit it when there is nothing to state |
-| Body that has to say what is not affected | First say what is removed; don't open with "<X> is not affected" |
-| Confirm button | Named like the triggering button; when triggered by a toggle, name the knock-on consequence: "Turn Off and Clear". Never "Yes / No" |
-| Default button | A destructive button is never the default and cannot be triggered by pressing Return |
+| Confirm button | When triggered by a toggle, name the knock-on consequence: 「关闭并清除」. Never "Yes / No" |
 
 ### Descriptions under toggles
 
@@ -260,13 +251,29 @@ The destructive consequences of turning it off do not go into the description; t
 A phrase-style empty-state title has no closing punctuation, in any language: No Activity Yet; Chinese and Japanese
 likewise take no 「。」.
 
+## Ellipsis
+
+The ellipsis is always the single character `…` (U+2026), never three dots; Chinese also uses `…`, not 「……」.
+
+The table below governs command copy only, meaning buttons and menu items that run something when tapped, the two
+treated alike: judge by "after the tap, does the user still have to give another input", not by whether a window or
+panel opens. iOS follows the table; on Android and the web, command copy takes no ellipsis by default. In-progress
+states and status banners are not governed by this rule; every platform writes them per "In-progress states".
+
+| After the tap | Ellipsis | Examples |
+|---|---|---|
+| The user must give another input or make a choice to decide what runs (asks where, what name, which one); a pure confirmation doesn't count | Add | 浏览…, 导出…, 重命名… |
+| Takes effect immediately, or just jumps to another page, view or panel | Don't add | 保存, 删除, 查看详情, 设置 |
+
+- The ellipsis belongs to the command itself and does not vary by language: if one language adds it, the same copy in
+  every language adds it.
+
 ## In-progress states
 
 This governs "the action the user just triggered is still running".
 
 - Chinese writes 「…中」 or 「正在…」; other languages use their own progressive form or a status noun, not a literal
-  rendering of 「中」. Every language ends with an ellipsis (exceptions below), the single character `…` (U+2026), not
-  three dots:
+  rendering of 「中」. Every language ends with an ellipsis (see "Ellipsis" for how to write it; exceptions below):
 
   | Language | Form | Example |
   |---|---|---|
@@ -285,8 +292,7 @@ This governs "the action the user just triggered is still running".
 - Each button in a group gets its own; they don't share a vague "Processing…".
 - A status banner title takes an ellipsis; a title paired with a determinate progress count says "what this is" and
   takes none.
-- A button in progress must still show visible text; it is never replaced wholesale by a bare spinner. Only an
-  icon-only button swaps its icon for a spinner.
+- A button in progress keeps its visible text.
 
 ## Errors
 
@@ -297,22 +303,18 @@ This governs "the action the user just triggered is still running".
   does not suggest retrying.
 - A dialog title says clearly "what did not get done", one sentence per action, never a vague "Operation failed".
 - en failure titles: Couldn't for an attempt that did not succeed; Can't for something the rules do not allow.
-  Capitalization follows the platform:
-
-  | Platform | Example |
-  |---|---|
-  | iOS | Couldn't Clear History |
-  | Android, web | Couldn't clear history |
+  Capitalization follows the title slot under "Capitalization".
 
 - The body states the specific cause. Choose buttons by case:
 
   | Case | Buttons |
   |---|---|
   | Only a cause | One acknowledge button, named as the system dialog names it (for zh-Hans see the "Simplified Chinese" table) |
-  | A cause with a way out the user can take in one tap | "Way out + Cancel", the way out being the default action; when the way out is destructive it is not the default |
+  | A cause with a way out the user can take in one tap | "Way out + Cancel" |
 
-- A load failure may never be expressed through an empty state ("No records yet" or a reading of 0). Use the error
-  form instead: a warning icon + "Couldn't load" + the cause + "Try Again".
+- A load failure may never be expressed through an empty state ("No records yet" or a reading of 0): write "Couldn't
+  load" + the cause + "Try Again". One that truly cannot be retried (a one-time token, an expired link) gets a separate
+  sentence that does not suggest retrying, as in the item above, with the title unchanged.
 
 ## Parentheses and spaces
 
@@ -331,7 +333,7 @@ This governs "the action the user just triggered is still running".
   inside.
 - Add no space where the outside is at the very start or end of the string, next to the language's own sentence
   punctuation (。，、 and , . ; : ? !), or where a space is already there.
-- Korean particles attach directly to the parenthesis: AI 스위치 (%1$s)를; “%1$s”을(를).
+- Korean particles attach directly to the parenthesis: AI 스위치 (%1$s)을(를); “%1$s”을(를).
 - The same applies to half-width parentheses concatenated in code: the space goes into the literal (`" ("`).
 - Language-specific punctuation:
 
@@ -350,8 +352,8 @@ In languages with case, capitalization is decided by the text's **role** in the 
 
 ### Android and web
 
-Sentence case throughout, whether an element name or a complete sentence: Android follows Material; the web does so by
-default, and follows the project's design system where it says otherwise.
+Sentence case throughout, whether an element name or a complete sentence: Android follows Material, and the web does so
+by default.
 
 ### iOS
 
@@ -364,9 +366,10 @@ localization for that language.
 | Fragments or short sentences with no closing punctuation in a title slot (alert, banner, empty state, sheet, upsell) | Title Case (iCloud Storage Is Full) |
 | Fragment questions | Title Case (Delete Note?) |
 | Complete-sentence titles with closing punctuation (including several sentences), and complete questions (Are you sure you want to…?) | Sentence case; prefer a fragment question for a confirmation title |
-| Button in-progress states, badges, tags, readout values and status values | Title Case (Loading Plans…, Not Connected) |
-| Complete sentences: descriptions, body text, footers, placeholders, screen-reader labels, and list rows and toggle labels that are themselves complete sentences | Sentence case |
-| Fragments, plurals and substitution branches spliced into a sentence | Follow that sentence |
+| Button in-progress states, badges, tags, status capsules, readout values and status values | Title Case (Loading Plans…, Not Connected) |
+| Complete sentences: descriptions, body text, footers, screen-reader labels, and list rows and toggle labels that are themselves complete sentences | Sentence case |
+| Input placeholders | The prefix and the whole string in sentence case; the example word keeps the way that value is normally written in that language's UI, and does not change case for having moved into a placeholder (en `Ex. Outside`, es `p. ej. exterior`) |
+| Plural and substitution branches within one key | Follow the sentence they are in |
 
 Title Case words per language:
 
@@ -388,7 +391,12 @@ Title Case words per language:
 ### General
 
 - Text inside parentheses is judged by its own role in the UI; being in parentheses does not change it.
-- A word the user must type to confirm: all caps in languages with case; languages without case are unaffected.
+- A contraction takes the case of the word it replaces; don't lowercase the whole string (write Couldn't, Don't in a
+  Title Case element).
+- tr case conversion uses the tr-TR mapping: i ↔ İ, ı ↔ I, not the default Unicode conversion.
+- A word the user must type to confirm: all caps in languages with case; languages without case are unaffected. A
+  type-to-confirm has two strings, the word the prompt asks for and the word actually compared; change both together,
+  because changing only one side means users of that language can never get through.
 - These do not change with the rules:
 
   | Kind | Examples |
@@ -412,23 +420,53 @@ Title Case words per language:
   understands.
 - The app's own name comes from a placeholder fed by a single source of truth, never a literal in the copy.
 
+## Changing existing copy
+
+Judge by the old translation: if it still holds as is under the new source text, it is polish; if the facts it states
+are now wrong or it leaves out one thing, the meaning has changed.
+
+| Old translation under the new source text | What to do |
+|---|---|
+| Still holds (polish) | Keep the original key and every language's old translation, so the UI keeps showing the old translation; mark the key for re-review; prefer changing only the language that has the problem |
+| Facts wrong or one thing missing (the meaning changed) | Use a new key and don't overwrite the old one; one key carries one meaning and is not reused across pages; every language is retranslated, and the old sentence does not stay in the UI |
+
+- Translations already delivered are matched by key; don't rename keys for tidiness, since changing one makes every
+  language's translation fail to match.
+
 ## Across platforms
 
 - One feature uses the same wording and the same level of detail on every platform (iOS, Android, web), with section
   headers and descriptions present or absent alike; only a feature some platform lacks gets wording of its own.
-  Capitalization, system dialog names and platform-specific names (the system's "Settings" and the like) follow each
-  platform's rules; word-for-word identity is not required.
+  Capitalization, ellipsis, system dialog names and platform-specific names (the system's "Settings" and the like)
+  follow each platform's rules; word-for-word identity is not required.
 - When syncing from one platform to another, first check that the facts in the sentence hold on the target platform
   (permission items, whether the feature exists), and fix grammar errors in the source on the source first.
 - A sentence that points at a control on this platform uses that control's existing translated name on this platform.
+- In an RTL language (ar and so on), when a placeholder carries LTR content (a file name, URL, path, version number, a
+  number with a Latin unit), wrap it in FSI / PDI (U+2068 / U+2069) or the platform's bidi isolation API: the bidi
+  algorithm alone will misplace the adjacent spaces, parentheses and digits.
 - Placeholder syntax follows each platform. A string with two or more placeholders must number them (iOS `%1$@`,
   Android `%1$s`; the web uses ICU named arguments) so translations can reorder them.
+- The count, names and types of placeholders (`%@`, `%d`, `%s`, ICU named-argument names) are identical in every
+  language and the source language; only the order may change, and named arguments' names are not translated: getting
+  this wrong crashes or shows a wrong value in that one language only.
+- A sentence is one key with placeholders; don't concatenate sentence fragments in code: a concatenated sentence breaks
+  on ko particles, de cases, tr vowel harmony and ja word order. Only independent phrases (labels, buttons) get their
+  own keys.
 - Give plurals all their CLDR categories (ar has zero, one, two, few, many, other; ru has one, few, many, other), not
   just one / other; never hand-append an English plural s after a placeholder.
 - In Android strings, write an apostrophe as `\'` and a double quote as `\"` (aapt resource escaping); don't add another
   layer of backslashes, or they show up in the UI.
-- When the website or legal pages mention a name from the app's UI, copy the app's actual translation language by
-  language; when the app renames something, go back and sync it.
+- An Android string that must keep leading or trailing spaces is wrapped whole in double quotes, or the spaces are
+  written as `\u0020`: a bare space is eaten by aapt.
+- In a formatted string, a `%` to be displayed is written `%%`; in ICU copy, a `{` or `}` to be displayed is wrapped in
+  single quotes (`'{'`).
+- Markup inside a string (HTML, ICU, `<xliff:g>`, Markdown), attribute names and character entities are not translated,
+  added or removed, and move only as a whole with the word order; the visible text inside the markup is localized as
+  usual.
+- Numbers, dates, times, currencies and measurements are not written into literals; the platform's formatter produces
+  them and they are substituted through placeholders. Only typography rules such as the space between a number and its
+  unit or percent sign are written per language in the copy conventions.
 
 ## This project
 
@@ -471,3 +509,48 @@ Title Case words per language:
   state said in one breath somewhere else — a notice over content shown anyway, a live region speaking for a panel
   hidden from screen readers — is a `.sentence` message of its own rather than the two joined in code. (the "An empty
   state is a glyph, a heading, and what fills it" section of `docs/ui-accessibility.md`)
+- **Per-language rules beyond the generic tables**: these extend "Register per language" (its "Button form" column),
+  "Simplified Chinese" and "Pitfalls in other languages" above.
+  - ko: requests use 해 주세요 only in explanatory sentences, never on a button (buttons are nouns, per the "Button form"
+    column of the "Register per language" table). Statements already in -습니다 are not converted wholesale to 해요체.
+    Keep the spaces Korean spacing rules require (할 수 없습니다, not 할수없습니다).
+  - de: when switching to du, change by case: nominative Sie → du, accusative Sie → dich, dative Ihnen → dir,
+    possessive Ihr- → dein- (with endings: Ihre → deine, Ihren → deinen). This adds to the de row of "Pitfalls in other
+    languages" (lowercase sie means "she" or "they"; leave it).
+  - it: with Lei, the formal pronoun is capitalized. This adds to the it row of "Pitfalls in other languages" (with tu,
+    lowercase lei means "she"; leave it).
+  - id: the prepositions di and ke are written apart from the noun (di rumah); as prefixes they are joined (dihapus).
+  - zh-Hans: add 要删除吗？ → 确认删除该文件？ to the "Simplified Chinese" table's Don't / Do pairs.
+
+  (the user's decision)
+- **Grammatically required contractions**: the contraction table under "English" is en-only, but these preposition +
+  article contractions are grammatically required in fr, pt-BR, it, de and es; they are not abbreviations to expand, so
+  keep them in the language's copy even where the en rules forbid contracting.
+
+  | Language | Keep |
+  |---|---|
+  | fr | du, des, au, aux |
+  | pt-BR | do, da, dos, das, no, na, nos, nas, ao, à, pelo, pela |
+  | it | The full set of preposition + article: del, al, dal, nel, sul, della, nella and so on |
+  | de | am, im, beim, vom, zum, zur, ans, ins |
+  | es | del, al; the pronoun él does not contract (de él, a él) |
+
+  (the user's decision)
+- **Confirmation, error and search copy**: these add to "Destructive actions", "In-progress states", "Errors" and
+  "Input placeholders" above.
+  - A confirmation body that has to say what is not affected first says what is removed; it does not open with
+    "<X> is not affected". The "Consequence" row of the pattern table under "Destructive actions" is scoped to Chinese;
+    this extends it to every language.
+  - An error with a way out plus Cancel makes the way out the default action.
+  - A load failure also carries a warning icon; its wording is the one "Errors" above already gives.
+  - Only an icon-only button swaps its icon for a spinner while in progress.
+  - A search field's prompting question addresses the user in that language's register (de: Was suchst du?).
+
+  (the user's decision)
+- **Destructive confirmations**: the destructive Confirm is the form's submit button, so Enter triggers it — no design
+  choice permanently removes Return, and copy must not claim otherwise. Only the heaviest loss adds a type-to-confirm
+  word, which disables Confirm, and Enter with it, until the word matches; this project prompts and compares the same
+  single string, so the "two strings to change together" warning under "Capitalization" has nothing to match here. The
+  optional control under the message settles what Confirm does rather than gating it, and Enter submits even from that
+  control, so the Confirm label and the control's own label must each read correctly with it left untouched.
+  (`packages/ui/src/dialogs/ConfirmDialog.tsx`; `docs/ui-accessibility.md`, "Keyboard")

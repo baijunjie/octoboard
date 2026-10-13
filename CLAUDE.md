@@ -21,10 +21,14 @@ repeated trial — should go to a subagent wherever you can; you take only the c
   context you are holding carries bias.
 - One task per dispatch, with the completion criteria spelled out; give the full background (it knows none of the
   premises you did not write down); ask it for conclusions, not a replay of its process.
-- Never let several subagents change the same place at once.
-- Dispatch blocking wherever you need the result to go on: a subagent's turn ends when it stops calling tools, so one
-  that leaves a subtask running in the background hands back before that subtask has reported. This reaches any dispatch
-  a subagent makes in turn — the change check, the writers — not only your own.
+- Never let several subagents change the same place at once, and never dispatch several to do the same thing
+  concurrently: the former overwrite each other, the latter fight over resources and none of them converges.
+- If you need its result to go on, explicitly ask for the dispatch to block until it finishes; do not assume a
+  dispatch will wait, and do not wait on a timer or poll its status: for a subtask dispatched in the background, the
+  report never reaches you, and your turn is handed back the moment it stops. This reaches any dispatch a subagent
+  makes in turn — the change check, the writers — not only your own.
+- Do not hand back without a result: a report that says "dispatched, waiting on it" in place of a conclusion counts
+  as not done.
 - The UI state gallery is written only through its own skill, which dispatches the subagent that owns it.
 - If a dedicated subagent owns the job, give it to them; otherwise pick by task difficulty from the table below,
   and do not reach for the strongest every time.
@@ -66,8 +70,8 @@ skip a step; how each step is done is up to the corresponding skill, and when un
 
 ### Before starting work
 
-- Make sure the branch is up to date first: after `git fetch`, check whether the current branch is behind the
-  branch it merges back into, and align it before doing anything else.
+- Make sure the branch is up to date first: fetch only the branch the current branch merges back into (no need to
+  fetch everything), then check whether the current branch is behind it, and align it before doing anything else.
 - Pick up the project context via the `agent-docs` skill.
 
 ### Before delivery
