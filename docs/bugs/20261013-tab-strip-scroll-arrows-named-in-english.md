@@ -25,9 +25,8 @@ a screen reader announces them in English whatever language the window is in.
 ## Expected vs. actual
 
 - Expected: both names are in the window's current language. Every string the user reads goes through the message
-  catalogs — "Every string the user reads goes through the catalog, in a shape a translation can follow" in
-  `docs/memory/ui-text-and-reading-direction.md`, and "What follows the language" in `docs/product/language.md`, which
-  exempts only text aimed at the agents and a report page the model wrote.
+  catalogs, in a shape a translation can follow; "What follows the language" in `docs/product/language.md` exempts only
+  text aimed at the agents and a report page the model wrote.
 - Actual: both names are English in all 17 languages.
 
 ## Environment

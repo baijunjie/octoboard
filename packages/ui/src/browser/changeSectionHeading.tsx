@@ -70,13 +70,12 @@ function keepHeadingFocus(band: HTMLButtonElement | null): void {
  * one.
  *
  * It is no tab stop of its own, as a control inside a collection's row is none: the list is one tab
- * stop, and `moveAcrossSectionHeadings`, which finds it by the `data-section-heading` it carries, is
- * what reaches it from the keyboard. Nor may a
- * press take focus — react-aria's collection answers focus landing anywhere inside it that is not
- * one of its rows by moving focus to its first row, so a heading that took focus on a mouse press
- * would scroll the list back to the top and leave focus there. Only the running page shows that
- * one: jsdom focuses nothing on a press of its own, as the "Focus dropped to `<body>`" section of
- * `docs/memory/focus-and-key-handling-in-the-ui.md` has it.
+ * stop, and `moveAcrossSectionHeadings`, which finds it by the `data-section-heading` it carries,
+ * is what reaches it from the keyboard. Nor may a press take focus — react-aria's collection
+ * answers focus landing anywhere inside it that is not one of its rows by moving focus to its first
+ * row, so a heading that took focus on a mouse press would scroll the list back to the top and
+ * leave focus there. Only the running page shows that one: jsdom focuses nothing on a press of its
+ * own.
  */
 export function ChangeSectionHeading({
   section,
