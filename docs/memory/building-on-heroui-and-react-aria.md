@@ -129,22 +129,31 @@ not one for this purpose.
 `TitledControl` is one of **three** tooltip shapes and there is no fourth; which one to use follows what carries the
 tooltip:
 
-- A control: `TitledControl`, as above.
+- A control: `TitledControl`, as above. It opens on hover and on keyboard focus, or on keyboard focus alone where
+  its `focusOnly` prop is passed, for a control whose hover already does something else. While it is open react-aria
+  links it to the control as its description, except where the tooltip only repeats the control's `aria-label`:
+  `TitledControl` unlinks that one on purpose, so the same words are not announced twice.
 - A non-control indicator that can be its own trigger — a badge, a status mark: `IndicatorTooltip` in
-  `packages/ui/src/components/IndicatorTooltip.tsx`. It is hover-only by design and fixes what a bare
+  `packages/ui/src/components/IndicatorTooltip.tsx`. It answers the pointer, and fixes what a bare
   `Tooltip.Trigger` gets wrong: the trigger hardcodes `role="button"` (so one left without a `role` exposes an
   unnamed button) and is focusable, so it always sets `tabIndex={-1}`, cancels `mousedown` so a press does not take
   focus off the terminal, and takes either a `label` (`role="img"` and `aria-label`) or `role="presentation"`
-  (browsers ignore that role on a focusable element, so it only keeps the unnamed button role off). A deliberately
-  focusable indicator would use `Tooltip.Trigger` itself.
-- Text or a mark that cannot be wrapped in a trigger where it sits — a run of running text, or anything inside a
-  react-aria collection item, which cannot be wrapped at all without leaving the collection: `AnchoredTooltip` in
-  `packages/ui/src/components/AnchoredTooltip.tsx`. The caller reports the hover itself and names the element the
-  tooltip is placed against, which may be an ancestor of what the tooltip belongs to. Never name as that anchor an
-  element the UI itself scrolls: react-aria closes a tooltip as soon as anything containing its anchor scrolls, so a
-  label that runs as a marquee and anchors to itself loses its tooltip to its own marquee.
+  (browsers ignore that role on a focusable element, so it only keeps the unnamed button role off). That
+  `tabIndex={-1}` keeps the trigger out of the Tab order, not out of every keyboard route: a row that walks its
+  focusable descendants with the arrow keys — a react-aria `GridList` or `Tree` row — reaches the trigger as a stop
+  of its own and opens the tooltip on focus, which is a stop the row should not have, so a mark inside such a row
+  takes the anchored shape below instead. A mark inside a collection item whose row has no such walk (a
+  `ListBox.Item`) carries this shape as usual. A deliberately focusable indicator would use `Tooltip.Trigger`
+  itself.
+- Text or a mark that cannot be a trigger where it sits — a run of running text, or a mark in a row that walks its
+  focusable descendants as above: `AnchoredTooltip` in `packages/ui/src/components/AnchoredTooltip.tsx`. The caller
+  reports the hover itself and names the element the tooltip is placed against, which may be an ancestor of what the
+  tooltip belongs to. Never name as that anchor an element the UI itself scrolls: react-aria closes a tooltip as soon
+  as anything containing its anchor scrolls, so a label that runs as a marquee and anchors to itself loses its
+  tooltip to its own marquee.
 
-Only the first two open on keyboard focus, and only they are linked to what they belong to for assistive technology.
-An `AnchoredTooltip` adds no element of its own, so what it says has to reach a screen reader another way — the text
-itself, which is in the document whether or not it is clipped, or the name of the row it sits in. Do not reach for
-this shape where no such route exists.
+Only a control's tooltip opens on keyboard focus, so neither of the other two shapes may be the only route to what
+it says. An `IndicatorTooltip`'s own `label` is that route where the mark means something on its own. An
+`AnchoredTooltip` adds no element at all and is not linked to what it belongs to for assistive technology either, so
+its text has to reach a screen reader some other way — the text itself, which is in the document whether or not it is
+clipped, or the name of the row it sits in. Do not reach for that shape where no such route exists.

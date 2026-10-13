@@ -3,9 +3,10 @@ import React, { useContext, useEffect } from "react";
 import { TooltipTriggerStateContext } from "react-aria-components";
 
 /**
- * A tooltip on something that cannot be a tooltip's trigger: a run of text, or a mark inside a
- * react-aria collection item. Neither takes the trigger props a control picks up from context, and
- * a collection's item cannot be wrapped in anything without leaving the collection. So the caller
+ * A tooltip on something that cannot be a tooltip's trigger: a run of text, or a mark inside a row
+ * that walks its focusable descendants with the arrow keys, where a trigger of its own would become
+ * a stop in that walk and open on focus. Neither takes the trigger props a control picks up from
+ * context, and that walk reaches whatever is wrapped around the mark as well. So the caller
  * reports the hover itself and names the element the tooltip is placed against, which may be an
  * ancestor of what it belongs to — the row a mark sits in.
  *

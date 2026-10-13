@@ -97,20 +97,27 @@ where the chosen option is marked by a fill of its own rather than by its icon (
 
 A few marks that are not controls carry a tooltip too. They are not tab stops, so their tooltip shows only while the
 mouse rests on them, never on keyboard focus; what it says reaches assistive technology through the name of the row or
-badge they sit in, or the text beside them, and where nothing around a mark says it, through the mark's own name. These
-are:
+badge they sit in, or the text beside them, and where nothing around a mark says it, through the mark's own name.
+
+Carrying a tooltip makes none of them a control. A mouse press on such a mark does nothing of its own and takes no
+keyboard focus; where the mark sits in something that answers a press, the press goes on to that and does what a press
+there does — pressing a session's status glyph on its sidebar row selects the session, as pressing the row does, and
+pressing a change row's status letter opens the change. So such a mark is no dead spot in what carries it.
+
+These are:
 
 - a session's status glyph on its sidebar row, on the top bar's breadcrumb and on each session a confirmation lists
   among the ones it affects, whose tooltip says the status in the same words as everywhere else it is named — the
   placements where no status text sits beside the glyph (see "Session statuses" in `docs/product/sessions.md`);
 - the activity marker, the mark standing for what is going on beneath a **collapsed project's row** in the sidebar
   (see "Project rows" in `docs/product/sidebar.md`) and inside focus mode's **console-switch chip** (see "The switch
-  strip" in `docs/product/focus-mode.md`), whose tooltip says which of the three activities it stands for — a session
-  waiting for the user, one working, one merely running — in the same words the name of the row or chip around it
-  folds in beside the project's or console session's own name. The same activity shown as a badge on a console's
-  avatar in the rail adds no tooltip of its own: the badge is decorative, and the avatar's own tooltip already says the
-  activity, folded in beside the console's name (see "The console switcher" in `docs/product/sidebar.md`). So one
-  activity is worded two ways — on its own in the marker's tooltip, folded into the name in the avatar's;
+  strip" in `docs/product/focus-mode.md`), whose tooltip says which activity it stands for, in the same words the name
+  of the row or chip around it folds in beside the project's or console session's own name. Beneath a collapsed
+  project's row that is one of three — a session waiting for the user, one working, one merely running — while a chip
+  only ever shows the first two of them. The same activity shown as a badge on a console's avatar in the rail adds no
+  tooltip of its own: the badge is decorative, and the avatar's own tooltip already says the activity, folded in beside
+  the console's name (see "The console switcher" in `docs/product/sidebar.md`). So one activity is worded two ways — on
+  its own in the marker's tooltip, folded into the name in the avatar's;
 - the binding badge, the coloured dot on a project session's row bound to a console session, whose tooltip names that
   console session (see "The binding badge" in `docs/product/sidebar.md`);
 - a session's agent icon on its row, on a focus mode's card or archived row, on the archive view's row and on each

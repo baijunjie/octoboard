@@ -205,12 +205,44 @@ has one. Two places keep it, and both are a case where nothing else can serve:
 - A link inside a Markdown document in the file viewer. A `title` on an `<a>` is also the accessible description
   assistive technology reads, which a tooltip that only answers the pointer cannot supply.
 
-That second reason is the rule the replacement has to be read against: **the application's tooltip answers the pointer
-and nothing else**. It is no tab stop, and the anchored shape (`AnchoredTooltip`, which a run of text or a mark inside
-a collection item takes, since neither can be a trigger of its own) is not associated with what it describes for
-assistive technology at all. So whatever a tooltip says must reach a screen reader by another route: a clipped label's
-full text is in the document whether it fits or not, a row carries its own accessible name, and an indicator that
-means something on its own is a named `role="img"`.
+That second reason is the rule the replacement has to be read against, for every tooltip but a control's own:
+**such a tooltip answers the pointer and nothing else**, and is no tab stop. A control's opens on keyboard focus as
+well, and the control is a tab stop either way (see "An icon-only control: tooltip and `aria-label`" above). The
+anchored shape (`AnchoredTooltip`, which a run of running text takes, and a mark in a row that walks its focusable
+descendants with the arrow keys, since neither can be a trigger of its own) is not associated with what it describes
+for assistive technology at all. So whatever a tooltip says must reach a screen reader by another route: a clipped
+label's full text is in the document whether it fits or not, a row carries its own accessible name, and an indicator
+that means something on its own is a named `role="img"`.
+
+### A tooltip on a mark that is not a control
+
+**A mark whose meaning nothing else on screen carries gets a tooltip**: without one the meaning reaches assistive
+technology alone, and a sighted user who does not already know the mark has no route to it at all. Two things count
+as carrying it instead, and each leaves the mark without one:
+
+- **A text beside the mark that already names it.** Focus mode's card shows the status glyph beside the status in
+  words, and the branch badge's no-commits-yet state says so in the badge itself. The words are on screen either way,
+  and a second route to them is a second thing to keep in step.
+- **A tooltip already covering that spot.** The activity badge on a console's avatar in the rail says nothing of its
+  own, because the avatar's own tooltip says the activity, and one on the disc would open in the one gap where that
+  tooltip is deliberately held back — while hovering the avatar floats the hidden sidebar in instead. It would also
+  put a second indicator trigger inside a real `<button>`, which this standard keeps as one exception, below.
+
+One mark keeps its tooltip beside a text that names it: the agent icon, whose tooltip means the account the session
+runs under wherever it carries one. A meaning the window has settled does not come and go placement by placement, so
+it stays on a focus mode's card and an archive view's row, where the agent and the account are also written out beside
+the icon.
+
+One gap is left open on purpose: no mark on a menu's transient surface carries a tooltip — a clipped path label in a
+menu item does carry its own through the anchored shape, as in the Switch account submenu, but no indicator there
+does — so the agent icon beside each session in the archive submenu says which agent it is to nobody, its `svg`
+being `aria-hidden` as well. The agent is read from the archive view's own rows instead, where that icon carries its
+tooltip and the agent is written out beside it.
+
+**A tooltip is worded from the string that already names the mark**, not from one of its own: the same string where
+it names the mark on its own, so the two cannot drift apart; its own key only where the only string naming it folds
+it into the name of what carries it ("{name}, a session is waiting for you"), since reusing that would make the
+tooltip repeat the row's visible name, and composing it out of a fragment is worse to translate.
 
 The anchored shape takes the hover from its caller rather than listening for one itself, so it can be scoped to a
 single mark wherever that mark can carry the pointer handlers: the Git mode's change row hands it the hover from the
