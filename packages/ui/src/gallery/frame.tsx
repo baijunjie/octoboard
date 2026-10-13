@@ -108,7 +108,7 @@ function Crash({ stack }: { stack?: string }): never {
 // A viewer scenario has one too: the viewer's header copies a path through the daemon's toasts.
 const daemon = scenario && !scenario.startup ? createFixtureDaemon(scenario) : undefined;
 const { ViewerGallery } = scenario?.viewer ? await import("./viewerGallery") : { ViewerGallery: undefined };
-const viewerSubjects = scenario?.viewer ? await scenario.viewer.subjects() : undefined;
+const viewerSubjects = scenario?.viewer ? await scenario.viewer.subjects(language) : undefined;
 
 function screen(): React.ReactElement {
   if (!scenario) return <p className="p-4">Unknown scenario “{params.get("scenario")}”.</p>;

@@ -155,6 +155,9 @@ export interface Ui {
    * A name that spells the row out in English fails in the other languages, so the row is named
    * with `changeRow`, which builds it in the window's own. */
   hoverChangeStatus: (row: Matcher, status: StatusKey) => Promise<void>;
+  /** Presses the hovered status letter without moving the pointer or sending pointerleave. Fails
+   * if its anchored tooltip survives the press that opens the change viewer. */
+  pressChangeStatus: (row: Matcher) => Promise<void>;
   /** Moves the pointer onto one part of the branch badge whose state is `status`, and leaves it
    * there, as `hoverIndicator` does. The badge has one tooltip for the glyph and the text line
    * (the branch and both counts, which fade and run together), so which of the two the pointer
@@ -419,6 +422,14 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       if (shown !== t(STATUS_LABELS[status])) {
         throw new Error(`The row matching ${String(row)} did not open the tooltip for ${status} (${t(STATUS_LABELS[status])}): ${shown ? `"${shown}"` : "none"} is up`);
       }
+    },
+    async pressChangeStatus(row) {
+      const chip = await waitFor(() => find(row)?.querySelector<HTMLElement>("[data-slot=chip]") ?? undefined, `No change row matching ${String(row)} with a status letter to press`);
+      chip.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse", button: 0 }));
+      chip.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "mouse", button: 0 }));
+      chip.click();
+      await wait(150);
+      await waitFor(() => doc.querySelector("[data-anchored-tooltip]") ? undefined : true, `The status tooltip survived pressing ${String(row)} without pointerleave`);
     },
     async hoverGitBadge(status, over, row) {
       const sentence = gitBadgeAriaLabel(language, t, status);

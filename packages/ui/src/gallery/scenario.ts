@@ -1,3 +1,4 @@
+import type { Language } from "../i18n/languages";
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/ImportReview";
 import type { MacosPermissionsStatus } from "../platform";
@@ -145,5 +146,5 @@ export interface Scenario {
   /** Renders the file viewer over the subjects `subjects` builds, in place of the app; built only
    * when the scenario opens. `loadDelay` shows each one's loading state for that many milliseconds
    * first. */
-  viewer?: { subjects: () => Promise<ViewerSubject[]>; loadDelay?: number };
+  viewer?: { subjects: (language: Language) => Promise<ViewerSubject[]>; loadDelay?: number };
 }

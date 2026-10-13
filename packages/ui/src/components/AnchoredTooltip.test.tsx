@@ -98,3 +98,31 @@ it("leaves Escape to whatever is waiting for it while it is open", () => {
   expect(reached).toBe(true);
   finish();
 });
+
+it.each([
+  ["pointerdown", false],
+  ["pointerdown", true],
+  ["keydown", false],
+  ["keydown", true],
+] as const)("closes on %s without pointerleave, including while waiting (shown: %s)", (event, shown) => {
+  const { container, hover, settle, finish } = mount();
+  hover(true);
+  if (shown) {
+    settle();
+    expect(tooltip()).not.toBeNull();
+  }
+
+  // Opening an overlay need not move the pointer or send pointerleave to the covered anchor.
+  act(() => void container.querySelector("span")!.dispatchEvent(event === "keydown" ? new KeyboardEvent(event, { key: "Enter", bubbles: true }) : new Event(event, { bubbles: true })));
+  settle();
+  expect(tooltip()).toBeNull();
+  hover(true);
+  settle();
+  expect(tooltip()).toBeNull();
+
+  hover(false);
+  hover(true);
+  settle();
+  expect(tooltip()).not.toBeNull();
+  finish();
+});

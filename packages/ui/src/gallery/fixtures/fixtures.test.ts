@@ -1,10 +1,15 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 
 import { GROUPS, SCENARIOS } from ".";
-import { CATALOGS, messageText, splitPlaceholders, type Message, type MessageKey } from "../../i18n/catalog";
+import { CATALOGS, format, messageText, splitPlaceholders, type Message, type MessageKey } from "../../i18n/catalog";
 import type { Language } from "../../i18n/languages";
 import { en } from "../../i18n/messages/en";
 import { createUi, type Matcher, type Ui } from "../interact";
+import { changeRowText } from "../../browser/changeRow";
+import { changeItems } from "../../browser/changes";
+import { SAMPLE_GIT } from "./projectGit";
+import { viewerScenarios } from "./viewer";
 import { DEFAULT_WIDTH, MIN_HEIGHT } from "../scenario";
 
 /** The arguments of a step that hold a value (a status) and not a name to look for, by position: a
@@ -101,6 +106,33 @@ describe("gallery scenarios", () => {
     // The limit: a name shaped like a message's frame is flagged, whatever it is. Name such a control
     // through a helper or a closure.
     expect(isEnglishCopy("notes, drafts.txt")).toBe(true);
+  });
+
+  it("Git steps match Chinese session and change labels, including rename detail and selection", async () => {
+    const t: import("../../i18n/catalog").Translate = (key, ...args) => format("zh-Hans", key, ...args);
+    const recorded = (await matchersOf("zh-Hans")).filter(({ id }) => id.startsWith("git-"));
+    const sessionMatchers = recorded.filter(({ matcher }) => String(matcher).startsWith("session("));
+    expect(sessionMatchers.length).toBeGreaterThan(0);
+    for (const { matcher } of sessionMatchers) {
+      expect(typeof matcher === "function" && matcher("会话 Fix the summary layout，Claude Code，工作中")).toBe(true);
+    }
+    const changes = [...Object.values(SAMPLE_GIT.changes), ...Object.values(SAMPLE_GIT.comparisons ?? {})].flatMap((list) => Array.isArray(list) ? list.map(({ entry }) => entry) : []);
+    const labels = changeItems(changes).flatMap((item) => [false, true].map((selected) => changeRowText(t, item, selected, false).ariaLabel.replace(/[\u2066-\u2069]/g, "")));
+    const rowMatchers = recorded.filter(({ matcher }) => String(matcher).startsWith("changeRow("));
+    expect(rowMatchers.length).toBeGreaterThan(0);
+    for (const { id, matcher } of rowMatchers) {
+      expect(typeof matcher === "function" && labels.some(matcher), `${id}: ${String(matcher)}`).toBe(true);
+    }
+    const selector = recorded.filter(({ id }) => id === "git-worktrees").at(-1)!.matcher;
+    expect(typeof selector === "function" && selector("main")).toBe(true);
+  });
+
+  it.each(["en", "zh-Hans", "ar"] as const)("viewer change stages follow the window language in %s", async (language) => {
+    const subjects = await viewerScenarios.find(({ id }) => id === "viewer-changes")!.viewer!.subjects(language);
+    const stages = subjects.flatMap(({ stage }) => stage === undefined ? [] : [stage]);
+    expect(new Set(stages)).toEqual(new Set([format(language, "git.group.staged"), format(language, "git.group.unstaged")]));
+    expect(subjects.find(({ path, content }) => path === "src/offline.ts" && content.state === "disconnected")!.stage).toBe(format(language, "git.group.unstaged"));
+    expect(subjects.filter(({ key }) => key.startsWith("Compare:") || key.startsWith("Untracked:")).every(({ stage }) => stage === undefined)).toBe(true);
   });
 
   it("leave no group empty, which would list a bare heading", () => {

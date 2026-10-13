@@ -59,10 +59,19 @@ function OpenWhileMounted(): null {
   const state = useContext(TooltipTriggerStateContext);
   useEffect(() => {
     state?.open();
+    // A press can cover the anchor with an overlay without sending pointerleave. Close the
+    // tooltip, including its pending opening, before the press reaches that overlay's trigger.
+    const close = () => state?.close(true);
+    document.addEventListener("pointerdown", close, true);
+    document.addEventListener("keydown", close, true);
     // Closing on the way out is not optional: whether a tooltip has just been shown is tracked
     // globally, over every tooltip in the window, and one that goes away without closing leaves
     // that state standing, so the next tooltip to open shows with no delay.
-    return () => state?.close(true);
+    return () => {
+      document.removeEventListener("pointerdown", close, true);
+      document.removeEventListener("keydown", close, true);
+      state?.close(true);
+    };
     // Mount and unmount alone: opening again would undo a close react-aria made for a reason of
     // its own, with the pointer still where it was.
   }, []);

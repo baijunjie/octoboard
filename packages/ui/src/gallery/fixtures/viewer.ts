@@ -3,6 +3,8 @@
 // the renderer cannot read, a grammar that fails to load, and repository markup that must stay
 // inert — and a rendered document's diagrams, formulas, project images and links. The viewer
 // renders them outside the app (see `viewerGallery.tsx`).
+import { format, type Translate } from "../../i18n/catalog";
+import type { Language } from "../../i18n/languages";
 import type { FileContent } from "../../protocol";
 import { RENDER_BUDGETS } from "../../viewer/budgets";
 import { bodyFromFileContent, type ViewerBody, type ViewerChangeSide, type ViewerSubject } from "../../viewer/content";
@@ -603,8 +605,8 @@ const newSession = text("src/session.ts", NEW_SESSION);
 const before = binary("assets/logo.png", IMAGES.before_png);
 const after = binary("assets/logo.png", IMAGES.after_png);
 
-function change(path: string, oldSide: ViewerChangeSide, newSide: ViewerChangeSide, patch?: string, stage = "Unstaged"): ViewerSubject {
-  return { key: `${stage}:${path}`, path, stage, content: { state: "change", change: { old: oldSide, new: newSide, patch } } };
+function change(t: Translate, path: string, oldSide: ViewerChangeSide, newSide: ViewerChangeSide, patch?: string, stage: "staged" | "unstaged" = "unstaged"): ViewerSubject {
+  return { key: `${stage}:${path}`, path, stage: t(stage === "staged" ? "git.group.staged" : "git.group.unstaged"), content: { state: "change", change: { old: oldSide, new: newSide, patch } } };
 }
 
 // An untracked file is shown alone, with the Untracked chip and no stage tag.
@@ -636,19 +638,20 @@ async function withoutClipboard(): Promise<ViewerSubject[]> {
   return [file("docs/guide.md", text("docs/guide.md", GUIDE)), file("assets/before.png", binary("assets/before.png", IMAGES.before_png)), compared()];
 }
 
-async function changes(): Promise<ViewerSubject[]> {
+async function changes(language: Language): Promise<ViewerSubject[]> {
+  const t: Translate = (key, ...args) => format(language, key, ...args);
   return [
-    change("src/session.ts", present("src/session.ts", oldSession), present("src/session.ts", newSession), MODIFIED_PATCH),
-    change("src/describe.ts", present("src/describe.ts"), present("src/describe.ts"), LONG_LINES_PATCH),
-    change("src/badge.ts", { state: "absent" }, present("src/badge.ts"), ADDED_PATCH),
-    change("src/legacy.ts", present("src/legacy.ts"), { state: "absent" }, DELETED_PATCH),
-    change("src/badgeLabel.ts", present("src/badge.ts"), present("src/badgeLabel.ts"), RENAMED_PATCH),
-    change("src/current.ts", present("src/current.ts", undefined, "symlink"), present("src/current.ts", newSession), TYPE_CHANGE_PATCH),
-    change("lib/index.ts", present("lib"), present("lib/index.ts"), BELOW_ITSELF_PATCH),
-    change("lib", present("lib/index.ts"), present("lib"), OUT_OF_ITSELF_PATCH),
-    change("src/moved-in.ts", { state: "out_of_scope", repositoryPath: "packages/shared/src/moved-in.ts" }, present("src/moved-in.ts", newSession)),
-    change("src/moved-out.ts", present("src/moved-out.ts", oldSession), { state: "out_of_scope", repositoryPath: "packages/shared/src/moved-out.ts" }),
-    change("assets/logo.png", present("assets/logo.png", before), present("assets/logo.png", after)),
+    change(t, "src/session.ts", present("src/session.ts", oldSession), present("src/session.ts", newSession), MODIFIED_PATCH),
+    change(t, "src/describe.ts", present("src/describe.ts"), present("src/describe.ts"), LONG_LINES_PATCH),
+    change(t, "src/badge.ts", { state: "absent" }, present("src/badge.ts"), ADDED_PATCH),
+    change(t, "src/legacy.ts", present("src/legacy.ts"), { state: "absent" }, DELETED_PATCH),
+    change(t, "src/badgeLabel.ts", present("src/badge.ts"), present("src/badgeLabel.ts"), RENAMED_PATCH),
+    change(t, "src/current.ts", present("src/current.ts", undefined, "symlink"), present("src/current.ts", newSession), TYPE_CHANGE_PATCH),
+    change(t, "lib/index.ts", present("lib"), present("lib/index.ts"), BELOW_ITSELF_PATCH),
+    change(t, "lib", present("lib/index.ts"), present("lib"), OUT_OF_ITSELF_PATCH),
+    change(t, "src/moved-in.ts", { state: "out_of_scope", repositoryPath: "packages/shared/src/moved-in.ts" }, present("src/moved-in.ts", newSession)),
+    change(t, "src/moved-out.ts", present("src/moved-out.ts", oldSession), { state: "out_of_scope", repositoryPath: "packages/shared/src/moved-out.ts" }),
+    change(t, "assets/logo.png", present("assets/logo.png", before), present("assets/logo.png", after)),
     untracked("assets/new.png", after),
     untracked("src/scratch.ts", text("src/scratch.ts", NEW_SESSION)),
     untracked("docs/draft.md", text("docs/draft.md", MARKDOWN)),
@@ -684,11 +687,12 @@ async function changes(): Promise<ViewerSubject[]> {
       content: { state: "change", change: { old: { state: "absent" }, new: present("docs/guide.md", text("docs/guide.md", GUIDE)) } },
     },
     change(
+      t,
       "docs/handbook/engineering/onboarding/renamed-guide.md",
       present("docs/handbook/engineering/onboarding/previous-locations/legacy/old-guide.md", text("old-guide.md", GUIDE)),
       present("docs/handbook/engineering/onboarding/renamed-guide.md", text("renamed-guide.md", GUIDE)),
       "diff --git a/docs/handbook/engineering/onboarding/previous-locations/legacy/old-guide.md b/docs/handbook/engineering/onboarding/renamed-guide.md\nsimilarity index 100%\nrename from docs/handbook/engineering/onboarding/previous-locations/legacy/old-guide.md\nrename to docs/handbook/engineering/onboarding/renamed-guide.md\n",
-      "Staged",
+      "staged",
     ),
     // The tallest header: a Compare-view rename with long branches and a long origin, the comparison
     // a subtitle row of its own and the origin a row of its own, and a Markdown diff with the layout
@@ -718,12 +722,13 @@ async function changes(): Promise<ViewerSubject[]> {
       sourceText: CJK_COMPARISON,
       content: { state: "change", change: { old: { state: "absent" }, new: present(CJK_PATH, text("设计说明.md", GUIDE)) } },
     },
-    change("bin/tool.wasm", present("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAA=" })), present("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAABBAFgAAA=" }))),
-    change("data/rows.ts", present("data/rows.ts"), present("data/rows.ts"), longPatch()),
-    change("data/table.ts", present("data/table.ts"), present("data/table.ts"), largePatch()),
+    change(t, "bin/tool.wasm", present("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAA=" })), present("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAABBAFgAAA=" }))),
+    change(t, "data/rows.ts", present("data/rows.ts"), present("data/rows.ts"), longPatch()),
+    change(t, "data/table.ts", present("data/table.ts"), present("data/table.ts"), largePatch()),
     // A hunk header that promises three lines per side and delivers two: the renderer rejects it,
     // and the viewer falls back to the raw patch.
     change(
+      t,
       "src/garbled.ts",
       present("src/garbled.ts"),
       present("src/garbled.ts"),
@@ -731,20 +736,21 @@ async function changes(): Promise<ViewerSubject[]> {
     ),
     // An empty file staged as added: its patch has no hunk, so the diff draws no line.
     change(
+      t,
       "src/empty.ts",
       { state: "absent" },
       present("src/empty.ts", text("src/empty.ts", "")),
       "diff --git a/src/empty.ts b/src/empty.ts\nnew file mode 100644\nindex 0000000..e69de29\n",
-      "Staged",
+      "staged",
     ),
-    { key: "Unstaged:src/offline.ts", path: "src/offline.ts", stage: "Unstaged", status: "modified", content: { state: "disconnected", what: "change" } },
+    { key: "Unstaged:src/offline.ts", path: "src/offline.ts", stage: t("git.group.unstaged"), status: "modified", content: { state: "disconnected", what: "change" } },
     // A rename whose two versions are equal: git's diff of them is empty.
-    change("src/kept.ts", present("src/previous.ts", oldSession), present("src/kept.ts", oldSession), "", "Staged"),
+    change(t, "src/kept.ts", present("src/previous.ts", oldSession), present("src/kept.ts", oldSession), "", "staged"),
     // Two versions that are the same file: git's diff of them is empty, and with no way to read the
     // whole file the viewer can only say nothing differs.
-    change("src/unchanged.ts", present("src/unchanged.ts", oldSession), present("src/unchanged.ts", oldSession), "", "Staged"),
+    change(t, "src/unchanged.ts", present("src/unchanged.ts", oldSession), present("src/unchanged.ts", oldSession), "", "staged"),
     // A change that arrived without a patch, which has no diff to draw.
-    change("src/session.ts", present("src/session.ts", oldSession), present("src/session.ts", newSession), undefined, "Staged"),
+    change(t, "src/session.ts", present("src/session.ts", oldSession), present("src/session.ts", newSession), undefined, "staged"),
   ];
 }
 

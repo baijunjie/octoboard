@@ -397,3 +397,16 @@ it("hoverGitBadge says a row's badge has no tooltip rather than hover the activi
   );
   expect(openTooltip()).toBeNull();
 });
+
+it.each(["flat", "tree"] as const)("pressChangeStatus dismisses the %s tooltip without a pointerleave", async (layout) => {
+  mountChanges(layout);
+  const ui = createUi(document, "en");
+  await settledLive(ui.hoverChangeStatus(changeRow("gone.ts"), "deleted"));
+  const events: string[] = [];
+  const chip = chipOf("gone.ts");
+  for (const event of ["pointerdown", "pointerup", "pointerleave", "click"]) chip.addEventListener(event, () => events.push(event));
+  await settledLive(ui.pressChangeStatus(changeRow("gone.ts")));
+  expect(events).toEqual(["pointerdown", "pointerup", "click"]);
+  expect(document.querySelector("[data-anchored-tooltip]")).toBeNull();
+  release(chip);
+});

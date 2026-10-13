@@ -305,7 +305,7 @@ export const SAMPLE_GIT: FixtureGit = {
 const { console: console_, web, api, sessions } = SAMPLE;
 const state = snapshotState({ consoles: [console_], projects: [web, api], sessions });
 const openGit = [
-  (ui: Ui) => ui.press(ui.session("Fix the summary layout")),
+  (ui: Ui) => ui.press(ui.session(sessions[1].title)),
   (ui: Ui) => ui.wait(400),
   (ui: Ui) => ui.press(ui.t("browser.mode.git")),
   (ui: Ui) => ui.wait(400),
@@ -314,7 +314,7 @@ const openChange = (name: string, status: StatusKey) => [...openGit, (ui: Ui) =>
 /** Opens Git mode in a narrow window, where the project pane is a drawer. */
 const openGitInDrawer = [
   (ui: Ui) => ui.press(ui.t("titleBar.sidebar.show")),
-  (ui: Ui) => ui.press(ui.session("Fix the summary layout")),
+  (ui: Ui) => ui.press(ui.session(sessions[1].title)),
   (ui: Ui) => ui.press(ui.t("titleBar.projectPane.show")),
   (ui: Ui) => ui.wait(500),
   (ui: Ui) => ui.press(ui.t("browser.mode.git")),
@@ -407,7 +407,14 @@ export const projectGitScenarios: Scenario[] = [
     ],
   },
   { id: "git-rename-outside", group: GROUP, title: "A rename from outside the project", state, steps: openChange("index.ts", "renamed") },
-  { id: "git-type-change", group: GROUP, title: "A file that became a symbolic link", state, steps: openChange("current", "typeChanged") },
+  {
+    id: "git-type-change",
+    group: GROUP,
+    title: "A file that became a symbolic link",
+    description: "The viewer opens by pressing the hovered status letter with the pointer stationary. Its tooltip closes with the press, even without pointerleave.",
+    state,
+    steps: [...openGit, hoverStatus("current", "typeChanged"), (ui) => ui.pressChangeStatus(ui.changeRow("current", "typeChanged")), (ui) => ui.wait(800)],
+  },
   { id: "git-nested-into", group: GROUP, title: "A file renamed into a path below itself", state, steps: openChange("leaf.ts", "renamed") },
   { id: "git-nested-out", group: GROUP, title: "A file renamed out of a path below itself", state, steps: openChange("nest2", "renamed") },
   {
