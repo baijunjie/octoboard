@@ -232,6 +232,10 @@ button rather than on the indicator, which is the whole point of that tooltip. N
 it: the trigger cancels only the focus a mouse press would otherwise give it, and the press itself still reaches the
 button, so pressing the indicator activates the control exactly as pressing its label does.
 
+Cancelling that press has one cost, which only shows where the trigger wraps text rather than a glyph: a drag starting
+inside it selects nothing, so the branch badge's text cannot be selected with the mouse in focus mode's header, where
+the surface around it does not forbid selection. It is accepted there because the tooltip says the same text in full.
+
 ## Roles and states
 
 ### Expanded and selected

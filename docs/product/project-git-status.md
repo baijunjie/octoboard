@@ -25,11 +25,11 @@ What it holds, in this order:
   fast-forwarded.
   The four differ in shape, not in motion alone, and nothing animates where the system asks for reduced motion.
 - **A warning triangle**, in red, when the last check failed, standing in for the branch or commit glyph; the
-  refresh and download glyphs still take its place while a check or a fast-forward runs. The glyph then carries a
-  tooltip with the message `git` or the operating system itself gave, shown as it came inside localized wording (see
-  "What follows the language" in `docs/product/language.md`); the tooltip shows on pointer hover only, since the
-  badge is no tab stop. A failed check does not blank the rest of the badge: the branch and the counts are still read
-  from the repository and shown beside the warning.
+  refresh and download glyphs still take its place while a check or a fast-forward runs. The message `git` or the
+  operating system itself gave is then part of what the badge says — in its tooltip and in its name, shown as it came
+  inside localized wording (see "What follows the language" in `docs/product/language.md`) — and the triangle itself
+  carries nothing of its own. A failed check does not blank the rest of the badge: the branch and the counts are
+  still read from the repository and shown beside the warning.
 - **The branch name** — or the short commit id, when `HEAD` is detached. A repository with no commit yet says so in its
   place, and nothing stands there when the branch could not be read at all, the warning carrying the reason instead.
 - **How far the branch is ahead of its upstream**, after an up arrow, and **how far behind**, after a down arrow, each
@@ -44,11 +44,20 @@ finishes the badge shows the spinning glyph alone.
 **As the row gets tight the branch and counts give way together**: the branch name (or short commit id) and both
 upstream counts form one line, showing its beginning and fading at its right edge. This line reads left to right
 even under a right-to-left language. The glyph stays in place while the whole line runs as a marquee, through the
-branch and the last count (see "Names too long for their space" in `docs/product/labels-and-tooltips.md`). While the
-line is cut, its tooltip gives the full branch, nonzero counts, activity and any error. The text can disappear
-entirely, leaving the glyph (the warning triangle after a failed check). The project's name keeps a floor of its own
-and never vanishes. When the line only says that the repository has no commits yet, it follows the window's reading
-direction instead.
+branch and the last count (see "Names too long for their space" in `docs/product/labels-and-tooltips.md`). The text
+can disappear entirely, leaving the glyph (the warning triangle after a failed check). The project's name keeps a
+floor of its own and never vanishes. When the line only says that the repository has no commits yet, it follows the
+window's reading direction instead.
+
+**One tooltip for the whole badge.** Resting the mouse anywhere on the badge — the state glyph, the branch name or
+either count — shows one tooltip, after the window's usual wait and on pointer hover only, since the badge is no tab
+stop (see "How a tooltip behaves" in `docs/product/labels-and-tooltips.md`). It says the badge's whole state in one
+sentence, the same one assistive technology is given: the branch (or that a check or a fast-forward is in flight, or
+why there is no branch), the ahead and behind counts, each only while it is not zero, and a failed check's message.
+It is one tooltip in both placements, the sidebar row and focus mode's header, and it shows whether or not the badge's
+text is cut — so the branch name and the error can still be read once the row has squeezed the text away. The one
+state with no tooltip at all is the one saying in visible text that the repository has no commits yet, which a tooltip
+would only repeat; that text still runs as a marquee while the pointer is over the row.
 
 **What assistive technology hears.** A project row announces itself as one control, so the badge's facts are folded
 into the row's own name instead of being announced separately: the branch (or why there is none), the ahead and behind
@@ -99,8 +108,8 @@ again until its next check.
   one; with no upstream and several, `git`'s own default. A repository with no remote at all is not fetched, and that
   is not an error.
 - Then the branch, its upstream and the ahead/behind counts are read from the repository. A fetch that failed —
-  offline, authentication, a host key that has never been accepted — records its message for the warning triangle but
-  does not stop this read, so the branch and the counts still show.
+  offline, authentication, a host key that has never been accepted — records its message for the badge but does not
+  stop this read, so the branch and the counts still show.
 - Finally the branch may be fast-forwarded; see "Automatically syncing repositories" and "Syncing one project by
   hand" below.
 
@@ -123,8 +132,8 @@ Two consequences are worth knowing:
 - Certificates and keys an enterprise network needs still reach the fetch, and a push, when they are given through
   those variables alone rather than through a configuration file.
 - A setting only a dropped variable carries does not apply. The check then fails, rather than quietly reporting the
-  branch and counts of whatever repository such a variable names, and its reason reaches the badge's warning triangle
-  like any other failure (see "The branch badge" above). A push fails the same way, as an error toast, rather than
+  branch and counts of whatever repository such a variable names, and its reason reaches the badge like any other
+  failure (see "The branch badge" above). A push fails the same way, as an error toast, rather than
   publishing some other repository (see "Pushing the current branch" below).
 
 A git association's clone, and the check the association form makes of a git URL, are **not** filtered this way: they
@@ -154,7 +163,7 @@ on" below) — and the badge shows the fast-forward in flight. With it off, only
   upstream and a detached `HEAD`.
 - Whether the project has a running agent session makes no difference: the working tree can move under an agent that
   is working in that project.
-- A fast-forward `git` refuses records its message for the warning triangle, as a failed fetch does.
+- A fast-forward `git` refuses records its message for the badge, as a failed fetch does.
 
 Fast-forwarding a branch — with the switch on, or by Sync repository — moves that branch's working tree. Pushing
 the current branch does not: it updates the remote and, in the repository, the remote-tracking refs `git` updates
@@ -182,7 +191,7 @@ no check follows it and nothing is fetched, so the branch moves only if the pass
 its upstream with no commits of its own.
 
 The badge shows the check and the fast-forward in flight as for any check, and a failed fetch or a fast-forward `git`
-refuses records its message for the warning triangle the same way.
+refuses records its message for the badge the same way.
 
 ### Turning the switch on
 
@@ -205,8 +214,8 @@ nowhere near the remote. A project whose check is in flight is skipped and left 
 itself.
 
 The badge shows the fast-forward in flight exactly as during a check, and a fast-forward `git` refuses records its
-message for the warning triangle the same way. A warning the last check left stays on the badge: it stands for that
-check against the remote, which a local fast-forward says nothing about. An error this pass records for a project of a
+message for the badge the same way. A warning the last check left stays on the badge: it stands for that check
+against the remote, which a local fast-forward says nothing about. An error this pass records for a project of a
 console that is current in no window therefore stays on it until that console is current again and its projects are
 checked, since a status is dropped only when the project or its console is deleted.
 

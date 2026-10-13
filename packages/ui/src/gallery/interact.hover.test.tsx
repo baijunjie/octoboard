@@ -11,7 +11,10 @@ import { AgentIcon } from "../components/AgentIcon";
 import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
 import { leave, mountForTooltip, openTooltip } from "../components/tooltipTestSupport";
+import { gitBadgeAriaLabel } from "../gitStatusLabel";
 import type { ChangeEntry } from "../protocol";
+import { GitBadge } from "../sidebar/GitBadge";
+import { gitStatusOf } from "./fixtures/builders";
 import { createUi } from "./interact";
 
 beforeEach(() => vi.useFakeTimers());
@@ -295,4 +298,102 @@ it("hoverTitledControl fails for a control that is not there", async () => {
   const done = expect(createUi(document, "en").hoverTitledControl("Nothing")).rejects.toThrow(/Nothing to hover/);
   await vi.advanceTimersByTimeAsync(6000);
   await done;
+});
+
+const branchStatus = gitStatusOf("p-1", { ahead: 3, behind: 2 });
+const sentenceOf = (status: typeof branchStatus) => gitBadgeAriaLabel("en", createUi(document, "en").t, status);
+
+/** The badge as focus mode's header draws it: in the sidebar, and named by itself. */
+function mountFocusBadge(status: typeof branchStatus): void {
+  mountForTooltip(
+    <div data-region="sidebar">
+      <GitBadge status={status} />
+    </div>,
+  );
+}
+
+/** A project row as the sidebar draws it: named with the badge's sentence folded in, the badge (which
+ * names nothing itself there) and then the activity marker. */
+function mountProjectRow(status: typeof branchStatus): void {
+  mountForTooltip(
+    <div role="button" aria-label={`Website, ${sentenceOf(status)}`}>
+      <span>Website</span>
+      <GitBadge status={status} decorative />
+      <ActivityMarker activity="running" />
+    </div>,
+  );
+}
+
+it("hoverGitBadge puts the pointer on the line of a row's badge and puts up the badge's sentence", async () => {
+  mountProjectRow(branchStatus);
+  const badge = document.querySelector("[role=button] [role=presentation]")!;
+  const seen: Element[] = [];
+  document.addEventListener("pointerover", (event) => seen.push(event.target as Element), { capture: true });
+  await settledLive(createUi(document, "en").hoverGitBadge(branchStatus, "line", (name) => name.startsWith("Website")));
+  expect(openTooltip()?.textContent).toBe(sentenceOf(branchStatus));
+  // The row's badge holds its parts in a box of their own, which is not itself one of them.
+  expect(seen[0]).toBe(badge.querySelector("[dir=ltr]"));
+  release(badge);
+});
+
+it("hoverGitBadge puts the pointer on the glyph or on the line, as asked", async () => {
+  const targets: Element[] = [];
+  for (const over of ["glyph", "line"] as const) {
+    mountFocusBadge(branchStatus);
+    const badge = document.querySelector("[role=img]")!;
+    document.addEventListener("pointerover", (event) => targets.push(event.target as Element), { capture: true, once: true });
+    await settledLive(createUi(document, "en").hoverGitBadge(branchStatus, over));
+    expect(openTooltip()?.textContent).toBe(sentenceOf(branchStatus));
+    release(badge);
+    document.body.replaceChildren();
+  }
+  expect(targets.map((target) => target.tagName.toLowerCase())).toEqual(["svg", "span"]);
+  expect(targets[1]!.textContent).toBe("main32");
+});
+
+it("hoverGitBadge takes the badge of the glyph the status draws", async () => {
+  const checking = gitStatusOf("p-1", { activity: "checking", error: "fetch failed" });
+  mountFocusBadge(checking);
+  await settledLive(createUi(document, "en").hoverGitBadge(checking, "glyph"));
+  expect(openTooltip()?.textContent).toBe(sentenceOf(checking));
+  release(document.querySelector("[role=img]")!);
+});
+
+it("hoverGitBadge fails for a line the badge does not have", async () => {
+  const lone = gitStatusOf("p-1", { branch: null, error: "fetch failed" });
+  mountFocusBadge(lone);
+  await expect(createUi(document, "en").hoverGitBadge(lone, "line")).rejects.toThrow(/no line to hover/);
+  expect(openTooltip()).toBeNull();
+});
+
+it("hoverGitBadge fails for a header badge that says so in text and has no tooltip", async () => {
+  const empty = gitStatusOf("p-1", { branch: null, upstream: null });
+  mountFocusBadge(empty);
+  await expect(createUi(document, "en").hoverGitBadge(empty, "glyph")).rejects.toThrow(/carries no tooltip/);
+  expect(openTooltip()).toBeNull();
+});
+
+it("hoverGitBadge fails for a row that does not name the sentence of the status it was given", async () => {
+  mountProjectRow(branchStatus);
+  const other = gitStatusOf("p-1", { ahead: 9 });
+  await expect(createUi(document, "en").hoverGitBadge(other, "glyph", (name) => name.startsWith("Website"))).rejects.toThrow(
+    /does not name the badge's sentence/,
+  );
+  expect(openTooltip()).toBeNull();
+});
+
+it("hoverGitBadge fails where there is no such row", async () => {
+  mountProjectRow(branchStatus);
+  const done = expect(createUi(document, "en").hoverGitBadge(branchStatus, "glyph", (name) => name.startsWith("Nothing"))).rejects.toThrow(/No sidebar row/);
+  await vi.advanceTimersByTimeAsync(6000);
+  await done;
+});
+
+it("hoverGitBadge says a row's badge has no tooltip rather than hover the activity marker beside it", async () => {
+  const empty = gitStatusOf("p-1", { branch: null, upstream: null });
+  mountProjectRow(empty);
+  await expect(createUi(document, "en").hoverGitBadge(empty, "glyph", (name) => name.startsWith("Website"))).rejects.toThrow(
+    /has a badge that carries no tooltip/,
+  );
+  expect(openTooltip()).toBeNull();
 });

@@ -20,10 +20,10 @@ function branchPhrase(t: Translate, status: GitStatus): string | undefined {
 }
 
 /**
- * The git badge's accessible name: the branch (or why there is none), `ahead` and `behind` each
- * only when they are not zero, and the last error, if any — independent facts, joined by
- * `joinPhrases` rather than assembled from translated word fragments, whose order a
- * sentence built in code could not get right in every language.
+ * The git badge's accessible name, which is also the text of its one tooltip: the branch (or why
+ * there is none), `ahead` and `behind` each only when they are not zero, and the last error, if
+ * any — independent facts, joined by `joinPhrases` rather than assembled from translated word
+ * fragments, whose order a sentence built in code could not get right in every language.
  */
 export function gitBadgeAriaLabel(language: Language, t: Translate, status: GitStatus): string {
   const branch = branchPhrase(t, status);

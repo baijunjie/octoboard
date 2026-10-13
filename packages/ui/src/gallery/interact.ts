@@ -1,6 +1,7 @@
+import { gitBadgeAriaLabel } from "../gitStatusLabel";
 import { format, type MessageArgs, type MessageKey } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
-import { DORMANT_STATUSES, LIVE_STATUSES } from "../protocol";
+import { DORMANT_STATUSES, LIVE_STATUSES, type GitStatus } from "../protocol";
 import { activityLabel, statusLabel } from "../sessionLabel";
 import { ACTIVITIES } from "../sidebar/order";
 import type { Daemon } from "../store";
@@ -43,6 +44,9 @@ function matches(matcher: Matcher, name: string): boolean {
 
 /** Whether a control can be pressed. */
 const isEnabled = (element: Element): boolean => !element.hasAttribute("disabled") && element.getAttribute("aria-disabled") !== "true";
+
+/** What HeroUI marks a tooltip's trigger with. */
+const TOOLTIP_TRIGGER = "[data-slot=tooltip-trigger]";
 
 const POLL_MS = 50;
 const TIMEOUT_MS = 5000;
@@ -130,7 +134,10 @@ export interface Ui {
    * switch strip chip named `host`, and leaves it there, as `hoverIndicator` does. The marker is
    * decorative and the last tooltip trigger in either, so it is taken as that; the step fails if
    * the tooltip that opens is not one of the three activities' (an expanded row, which draws no
-   * marker, has none to hover), rather than leave whatever else was hovered up. */
+   * marker, has none to hover), rather than leave whatever else was hovered up. The row's git badge
+   * is a `role="presentation"` trigger as well, and the two are told apart by nothing but their
+   * order in the row: the badge comes before the marker (`Sidebar.tsx`), which `hoverGitBadge`
+   * avoids by matching the state glyph instead. */
   hoverActivityMarker: (host: Matcher) => Promise<void>;
   /** Moves the pointer onto the first control named `matcher` and leaves it there, as `hoverIndicator`
    * does, for a control whose tooltip repeats its accessible name, such as a rail avatar's. It is not
@@ -148,6 +155,16 @@ export interface Ui {
    * A name that spells the row out in English fails in the other languages, so the row is named
    * with `changeRow`, which builds it in the window's own. */
   hoverChangeStatus: (row: Matcher, status: StatusKey) => Promise<void>;
+  /** Moves the pointer onto one part of the branch badge whose state is `status`, and leaves it
+   * there, as `hoverIndicator` does. The badge has one tooltip for the glyph and the text line
+   * (the branch and both counts, which fade and run together), so which of the two the pointer
+   * lands on is the scenario's to choose (`over`); it fails where the badge has no line, such as a
+   * lone glyph. With `row` it is the badge of the sidebar project row named `row`, whose own name
+   * must fold the badge's sentence in; without it, the badge in focus mode's header, found by its
+   * own name. It fails unless the tooltip that opens is that sentence exactly, which also takes a
+   * `status` that is not the one on screen. A badge that says "No commits yet" in visible text has
+   * no tooltip, and fails here rather than hover the activity marker beside it. */
+  hoverGitBadge: (status: GitStatus, over: "glyph" | "line", row?: Matcher) => Promise<void>;
   /** Moves focus onto the first control named `matcher`, waiting for it to appear, with the keyboard
    * as its source, so that the focus ring is drawn as it is for a user who tabbed there, and a key
    * pressed next goes to it: for a row of a list, which a press would open rather than focus. */
@@ -165,6 +182,15 @@ export interface Ui {
    * starts at `closed` answers no request, so nothing a step would open over it, the file viewer
    * among them, ever lists. */
   dropConnection: () => Promise<void>;
+}
+
+/** The icon the git badge draws for `status`, by the name lucide gives its class (`GitBadge.tsx`
+ * chooses it: a check or a fast-forward in flight, a failed check, a detached `HEAD`, else a branch). */
+function gitGlyphOf(status: GitStatus): string {
+  if (status.activity === "checking") return "refresh-cw";
+  if (status.activity === "syncing") return "arrow-down-to-line";
+  if (status.error) return "triangle-alert";
+  return status.detached ? "git-commit-horizontal" : "git-branch";
 }
 
 /** What react-aria marks `data-exiting` while it plays an element's exit transition, and removes the
@@ -370,6 +396,9 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       await hover(() => {
         const found = find(host);
         if (!found) return undefined;
+        // The last trigger: a project row's git badge is a `role="presentation"` trigger too, and
+        // comes before the marker. A row with no marker would end up on the badge, which the check
+        // below then refuses.
         return Array.from(found.querySelectorAll<HTMLElement>("[role=presentation]")).at(-1);
       }, `No row or chip matching ${String(host)} with an activity marker to hover`);
       const shown = doc.querySelector("[role=tooltip]")?.textContent;
@@ -389,6 +418,49 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       const shown = doc.querySelector("[data-anchored-tooltip]")?.textContent;
       if (shown !== t(STATUS_LABELS[status])) {
         throw new Error(`The row matching ${String(row)} did not open the tooltip for ${status} (${t(STATUS_LABELS[status])}): ${shown ? `"${shown}"` : "none"} is up`);
+      }
+    },
+    async hoverGitBadge(status, over, row) {
+      const sentence = gitBadgeAriaLabel(language, t, status);
+      const glyph = `svg.lucide-${gitGlyphOf(status)}`;
+      await hover(
+        () => {
+          let trigger: HTMLElement | undefined;
+          if (row === undefined) {
+            const named = Array.from(doc.querySelectorAll<HTMLElement>("[data-region=sidebar] [role=img]")).find(
+              (element) => element.getAttribute("aria-label") === sentence,
+            );
+            // Found, so waiting would not change it: the badge is a plain box, with no trigger.
+            if (named && !named.matches(TOOLTIP_TRIGGER)) throw new Error("The git badge in focus mode's header carries no tooltip to hover");
+            trigger = named;
+          } else {
+            const found = find(row);
+            if (!found) return undefined;
+            if (!nameOf(found).includes(withoutIsolates(sentence))) {
+              throw new Error(`The row matching ${String(row)} does not name the badge's sentence "${sentence}": its name is "${nameOf(found)}"`);
+            }
+            // A row holds more than one tooltip trigger (the badge, then the activity marker of a
+            // collapsed one), so the badge is the one holding its state glyph: a row whose badge is
+            // no trigger (a repository with no commit yet, a directory that is not a repository)
+            // fails here rather than hover the marker.
+            trigger = Array.from(found.querySelectorAll<HTMLElement>(TOOLTIP_TRIGGER)).find((element) => element.querySelector(glyph));
+            // Found, so waiting would not change it: the row's badge has no tooltip.
+            if (!trigger) throw new Error(`The row matching ${String(row)} has a badge that carries no tooltip to hover`);
+          }
+          const mark = trigger?.querySelector(glyph);
+          if (!mark) return undefined;
+          // The glyph and the line are siblings: the trigger's own flex items, or, in a row, those of
+          // the `contents` box that keeps them out of the accessible tree.
+          const part = over === "glyph" ? mark : mark.nextElementSibling;
+          // Found, so waiting would not change it: the badge has no line, only its glyph.
+          if (!part) throw new Error(`The git badge has no ${over} to hover`);
+          return part as HTMLElement;
+        },
+        row === undefined ? `No git badge named "${sentence}" in the sidebar` : `No sidebar row matching ${String(row)} with a git badge to hover`,
+      );
+      const shown = doc.querySelector("[role=tooltip]")?.textContent;
+      if (shown !== sentence) {
+        throw new Error(`The git badge's tooltip is not its sentence "${sentence}": the last tooltip is ${shown ? `"${shown}"` : "none"}`);
       }
     },
     async press(matcher) {

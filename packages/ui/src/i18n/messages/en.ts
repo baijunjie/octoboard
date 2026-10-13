@@ -369,8 +369,8 @@ export const en = {
   "sidebar.git.detachedBranch": "Detached at {branch}",
   "sidebar.git.noCommitsYet": "No commits yet",
   // No ellipsis, unlike this project's other in-progress wording: these four are only ever an
-  // accessible name (`gitBadgeAriaLabel` in `gitStatusLabel.ts`), never visible text, and a screen
-  // reader voicing a trailing "…" is worse than silence.
+  // accessible name and the badge's tooltip (`gitBadgeAriaLabel` in `gitStatusLabel.ts` is both),
+  // and a screen reader voicing a trailing "…" is worse than silence.
   "sidebar.git.checking": "Checking branch {branch}",
   "sidebar.git.checkingUnknown": "Checking the branch",
   "sidebar.git.syncing": "Fast-forwarding branch {branch}",

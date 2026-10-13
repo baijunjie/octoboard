@@ -50,7 +50,7 @@ one piece of wording and one set of placements.
 4. 04 callout-agent-icon (closed)
 5. 05 rail-activity-badge (closed)
 6. 06 change-row-status-chip (closed)
-7. [The branch badge](07-git-badge.md)
+7. 07 git-badge (closed)
 
 ## Decisions the later milestones rest on
 

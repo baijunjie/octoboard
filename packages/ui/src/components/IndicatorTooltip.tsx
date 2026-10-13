@@ -11,6 +11,11 @@ import React from "react";
  * meaning reaches assistive technology some other way (the row's own accessible name); browsers
  * ignore that role on a focusable element, so the trigger is still exposed as a generic one, which
  * is harmless. `className` lays out the trigger around `children`.
+ *
+ * The trigger takes no `aria-hidden`: `role="presentation"` keeps the trigger itself out of the
+ * way, but not what it wraps, so an indicator carrying text rather than a hidden glyph has to hide
+ * its own contents, in a wrapper that leaves them the trigger's own layout children (`aria-hidden`
+ * on a `display: contents` span). Nothing inside such a wrapper may be focusable.
  */
 export function IndicatorTooltip({
   tooltip,
