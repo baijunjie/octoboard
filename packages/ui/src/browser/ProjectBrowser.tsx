@@ -36,7 +36,8 @@ const MIN_SPIN_MS = 1000;
  * A project's browser, the aside's content while the project owns it (`asideOwner.ts`), in two
  * modes: Files, the project's files live from its directory, and Git, a worktree's uncommitted
  * changes to them or the changes between two of its repository's branches (`useGitReview`); the
- * read-only viewer opens over any of them. It needs no session: the project is all it reads from.
+ * read-only viewer opens over any of them. It reads only the project, bar the selected session,
+ * which the Git mode marks the branches of that it created.
  * The caller mounts one per project (keyed by its id), so nothing read for one project can land in
  * another's; what belongs to the project across mounts — the mode, the expanded directories, the
  * selections — is in `browserState.ts`. Only the mode on screen is refreshed on its own.
@@ -50,12 +51,16 @@ export function ProjectBrowser({
   project,
   layout,
   active,
+  selectedSessionId,
 }: {
   project: Project;
   layout: AsideLayout;
   /** Whether the browser is on screen, docked, as an open drawer or floating in; only then is it
    * refreshed on its own. */
   active: boolean;
+  /** The session selected in the sidebar, which the Git mode's branch lists mark the branches of
+   * that it created. Nothing else here reads a session. */
+  selectedSessionId: string | undefined;
 }): React.ReactElement {
   const t = useT();
   const browser = useProjectBrowserState(project.id);
@@ -213,6 +218,7 @@ export function ProjectBrowser({
         <Tabs.Panel id="git" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
           <GitView
             {...git.view}
+            selectedSessionId={selectedSessionId}
             onRetry={(from) => {
               // The failure and its button go as the request starts again; focus on it moves to
               // the header's Refresh, which stays.

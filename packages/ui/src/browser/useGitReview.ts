@@ -20,7 +20,7 @@ import { useProjectSource } from "./useProjectSource";
 
 export interface GitReview {
   /** What the Git mode's view shows and does, but for asking again after a failure. */
-  view: Omit<React.ComponentProps<typeof GitView>, "onRetry">;
+  view: Omit<React.ComponentProps<typeof GitView>, "onRetry" | "selectedSessionId">;
   /** Asks again for what the Git mode shows: the worktrees, and the view on screen. Settles once
    * those have been answered or have failed. */
   refresh: () => Promise<void>;

@@ -233,6 +233,12 @@ const BRANCHES: BranchInfo[] = [
     commit: "5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a",
     origin: { source: "reflog_match", session: "s-web-1", title: "Review the deduplication pass", created_at: 1_759_000_000_000 },
   },
+  {
+    name: "chore/update-dependencies",
+    commit: "7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807e8d9",
+    // A live session that is not the selected one: the plain ring. The session has been renamed since.
+    origin: { source: "hook_diff", session: "s-web-2", title: "Bump the packages", created_at: 1_758_000_000_000 },
+  },
   { name: "main", commit: MAIN_TIP },
   { name: "release/2.4", commit: MAIN_TIP },
 ];
@@ -296,6 +302,21 @@ const filterBy = (text: string) => [...openFilter, (ui: Ui) => ui.type(text), (u
 /** Matches a branch's option in a selector: its name followed by the 7 characters of its short
  * commit id. */
 const branchOption = (name: string): Matcher => (n) => n.startsWith(name) && n.length === name.length + 7;
+
+/** Puts the pointer on the creator ring of branch `name` in an open selector. */
+const ringOf = (name: string) => (ui: Ui) => ui.hoverIndicator(branchOption(name));
+
+/** Opens the Compare view with `main` as From and the To selector open. */
+const openToSelector = [
+  ...openGit,
+  (ui: Ui) => ui.press(ui.t("git.view.compare")),
+  (ui: Ui) => ui.wait(300),
+  (ui: Ui) => ui.press(ui.t("git.compare.choose")),
+  (ui: Ui) => ui.press(branchOption("main")),
+  (ui: Ui) => ui.wait(300),
+  (ui: Ui) => ui.press(ui.t("git.compare.choose")),
+  (ui: Ui) => ui.wait(400),
+];
 
 /** Shows the comparison of branch `left` with branch `right`, choosing each in its selector: From
  * is the first one still to choose, then To. */
@@ -525,18 +546,26 @@ export const projectGitScenarios: Scenario[] = [
     group: GROUP,
     title: "Branches marked with the session that created them",
     description:
-      "The To selector open: feature/ranking-experiments and the long-named branch each carry a hollow ring for the session that created them, main and release/2.4 none (nothing could name their creator). Hover a ring for the session's name; each ring is named \"Created by session …\" for assistive technology.",
+      "The To selector open, the pointer on the ring of feature/ranking-experiments, whose tooltip says its session no longer exists, in the title the session had when the branch was attributed. Three branches carry a ring and main and release/2.4 none (nothing could name their creator). The long-named branch's is filled in the accent colour because the session selected in the sidebar created it; chore/update-dependencies's is the plain hollow one.",
     state,
-    steps: [
-      ...openGit,
-      (ui: Ui) => ui.press(ui.t("git.view.compare")),
-      (ui: Ui) => ui.wait(300),
-      (ui: Ui) => ui.press(ui.t("git.compare.choose")),
-      (ui: Ui) => ui.press(branchOption("main")),
-      (ui: Ui) => ui.wait(300),
-      (ui: Ui) => ui.press(ui.t("git.compare.choose")),
-      (ui: Ui) => ui.wait(400),
-    ],
+    steps: [...openToSelector, ringOf("feature/ranking-experiments")],
+  },
+  {
+    id: "git-compare-origins-selected",
+    group: GROUP,
+    title: "The selected session's branch",
+    description:
+      "The To selector open, the pointer on the long-named branch's ring, which is filled in the accent colour because the session selected in the sidebar created it. The tooltip says so and names the session by the title the sidebar shows (\"Fix the summary layout\").",
+    state,
+    steps: [...openToSelector, ringOf(LONG_BRANCH)],
+  },
+  {
+    id: "git-compare-origins-other",
+    group: GROUP,
+    title: "A branch created by another session",
+    description: "The To selector open, the pointer on the hollow ring of chore/update-dependencies, created by a session that still exists and is not the selected one. The tooltip names that session by the title the sidebar shows (\"Update the dependencies\"), not the one it had when the branch was attributed.",
+    state,
+    steps: [...openToSelector, ringOf("chore/update-dependencies")],
   },
   {
     id: "git-compare-tree",

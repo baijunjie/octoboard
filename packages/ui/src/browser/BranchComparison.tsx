@@ -46,6 +46,7 @@ export function BranchComparisonView({
   listRef,
   selectorsRef,
   changeView,
+  selectedSessionId,
 }: {
   branches: BranchList;
   comparison: Comparison;
@@ -59,6 +60,8 @@ export function BranchComparisonView({
   /** The selectors' strip, which takes keyboard focus when what held it below goes. */
   selectorsRef: React.RefObject<HTMLDivElement | null>;
   changeView: ChangeViewState;
+  /** The session selected in the sidebar, whose branches the creator badge marks. */
+  selectedSessionId: string | undefined;
 }): React.ReactElement {
   const t = useT();
   // When what holds focus below the selectors goes — the list replaced by a failure or an empty
@@ -86,6 +89,7 @@ export function BranchComparisonView({
             value={left}
             gone={!known(left)}
             isDisabled={noBranches}
+            selectedSessionId={selectedSessionId}
             onChange={(name) => onBranchesChange(name, right)}
           />
           <BranchSelect
@@ -94,6 +98,7 @@ export function BranchComparisonView({
             value={right}
             gone={!known(right)}
             isDisabled={noBranches}
+            selectedSessionId={selectedSessionId}
             onChange={(name) => onBranchesChange(left, name)}
           />
         </div>
@@ -208,6 +213,7 @@ export function BranchSelect({
   value,
   gone,
   isDisabled,
+  selectedSessionId,
   onChange,
 }: {
   label: string;
@@ -217,6 +223,7 @@ export function BranchSelect({
   /** For a repository that has no branches to offer: a selector that could only open on an empty
    * list is a control with nothing behind it. */
   isDisabled?: boolean;
+  selectedSessionId: string | undefined;
   onChange: (branch: string) => void;
 }): React.ReactElement {
   const t = useT();
@@ -275,7 +282,7 @@ export function BranchSelect({
                   <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={branchName}>
                     {branchName}
                   </FadeOverflow>
-                  {branch.origin && <BranchOriginBadge origin={branch.origin} />}
+                  {branch.origin && <BranchOriginBadge origin={branch.origin} selectedSessionId={selectedSessionId} />}
                   <span dir="ltr" className="shrink-0 font-mono text-xs text-muted">
                     {shortCommit(branch.commit)}
                   </span>

@@ -661,6 +661,7 @@ export function App(): React.ReactElement {
                     project={asideProject}
                     layout={asideLayout}
                     active={panes.asideShown || panes.asidePeek.active}
+                    selectedSessionId={selectedSessionId}
                     focusTerminal={focusTerminal}
                   />
                 )}

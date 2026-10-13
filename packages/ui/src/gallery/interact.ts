@@ -34,6 +34,12 @@ const isEnabled = (element: Element): boolean => !element.hasAttribute("disabled
 const POLL_MS = 50;
 const TIMEOUT_MS = 5000;
 
+/** HeroUI's default tooltip delay (`--tooltip-delay`), which the app leaves as it is: a tooltip
+ * opens this long after the pointer comes to rest on its trigger. */
+const TOOLTIP_DELAY_MS = 1500;
+/** Left after the delay for the tooltip to mount, be placed and finish fading in. */
+const TOOLTIP_SHOW_MS = 500;
+
 /**
  * What a scenario's steps drive the mounted app with: they press controls the way a user would, by
  * name, so a dialog or a view that lives in component state opens through the app's own code. Names
@@ -56,6 +62,15 @@ export interface Ui {
    * A disabled button (`isDisabled`, such as Confirm before a `typeToConfirm` word is typed) is
    * waited out by its native `disabled` attribute, which HeroUI sets beside `data-disabled`. */
   confirm: () => Promise<void>;
+  /** Moves the pointer onto the indicator inside the first control named `host`, waiting for the
+   * control to appear, and leaves it there, for the tooltip that shows only while the pointer is
+   * on it. It returns once the app's tooltip delay has passed and the tooltip is up. The indicator
+   * is the control's first `role="img"` descendant, which `nameOf` leaves out of the control's
+   * name, so `host` names the control as everywhere else. It dispatches no matching `pointerout`,
+   * so a second call leaves both indicators hovered. It drives react-aria's hover state
+   * (`data-hovered`, `isHovered`) and not CSS `:hover`: what is built with a `hover:` or
+   * `group-hover/<name>:` utility shows nothing under it, and the scenario passes all the same. */
+  hoverIndicator: (host: Matcher) => Promise<void>;
   /** Presses `key` on the focused control, for what a user closes or confirms with the keyboard. */
   key: (key: string) => Promise<void>;
   /** Focuses the text field labelled `label`, waiting for it to appear, so `type` has one to fill. */
@@ -136,6 +151,23 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
         `No text field labelled ${label}`,
       );
       field.focus();
+    },
+    async hoverIndicator(host) {
+      for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {
+        const indicator = find(host)?.querySelector<HTMLElement>("[role=img]");
+        if (indicator) {
+          // A tooltip opens only for a pointer, and react-aria takes the modality from the last
+          // event it saw: the presses before it were clicks, which it reads as virtual. React raises
+          // `onPointerEnter` from a bubbling `pointerover`.
+          for (const type of ["pointermove", "pointerover"]) {
+            indicator.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerType: "mouse" }));
+          }
+          await wait(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS);
+          return;
+        }
+        await wait(POLL_MS);
+      }
+      throw new Error(`Nothing to hover an indicator of, matching ${String(host)}`);
     },
     async press(matcher) {
       await clickWhenFound(() => find(matcher), `Nothing to press matching ${String(matcher)}`);

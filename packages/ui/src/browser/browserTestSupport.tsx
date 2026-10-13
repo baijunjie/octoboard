@@ -7,7 +7,7 @@ import { onTestFinished } from "vitest";
 import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import type { ChangeEntry } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import type { ChangeViewState } from "./changeView";
 
 /** jsdom has no ResizeObserver, which the rows' names (`FadeOverflow`) need. */
@@ -54,6 +54,8 @@ interface MountRowsOptions {
   clipboard?: PlatformAdapter["clipboard"];
   /** Where the daemon's toasts go. */
   toasts?: ToastSpies;
+  /** What the daemon's store holds; without it, the state before the first snapshot. */
+  state?: Partial<State>;
 }
 
 /**
@@ -68,7 +70,7 @@ interface MountRowsOptions {
  * is being torn down: the scheduler then dies on the missing `window`, as an unhandled error the
  * whole run is blamed for.
  */
-export function mountRows(children: React.ReactNode, { clipboard, toasts = { notice: () => {}, error: () => {} } }: MountRowsOptions = {}): HTMLElement {
+export function mountRows(children: React.ReactNode, { clipboard, toasts = { notice: () => {}, error: () => {} }, state }: MountRowsOptions = {}): HTMLElement {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -76,7 +78,7 @@ export function mountRows(children: React.ReactNode, { clipboard, toasts = { not
     container.remove();
   });
   const daemon: Daemon = {
-    store: createStateStore({}),
+    store: createStateStore(state),
     request: () => Promise.reject(new Error("no daemon")),
     toastError: toasts.error,
     toastNotice: toasts.notice,

@@ -424,7 +424,10 @@
    dark label. Dark keeps HeroUI's own (5.03:1 on the dark material, 4.00:1 hovered, 3.29:1
    pressed). The accent glyph is `--accent` in light (3.62 on a selected sidebar row) and a lighter
    blue in dark, where `--accent` is 2.56:1 on a selected sidebar row (this one 4.48 there, its
-   floor). Idle's speech bubble keeps HeroUI's `--success`, below 3:1 (see `StatusIcon.tsx`). */
+   floor). The filled ring that marks the selected session's branches in a branch selector's popover
+   (`BranchOriginBadge.tsx`) takes it as well: 4.66:1 on `--overlay` and 3.91:1 on a hovered row
+   (`--default`) in light, 6.63 and 5.58 in dark. Idle's speech bubble keeps HeroUI's `--success`,
+   below 3:1 (see `StatusIcon.tsx`). */
 :root {
   --warning-glyph: oklch(0.5 0.15 55);
   --accent-glyph: var(--accent);
@@ -568,7 +571,11 @@
 
    Muted text sits on none of the sidebar's translucent fills (`.sidebar-fills`) in either theme:
    in light it is 4.55:1 on a fill resting and 4.14:1 hovered, in dark 4.63:1 resting, 4.06:1
-   hovered and 3.67:1 on a fill over a selected row. */
+   hovered and 3.67:1 on a fill over a selected row.
+
+   The hollow ring that marks a branch's creating session in a branch selector's popover
+   (`BranchOriginBadge.tsx`) is drawn in it: 6.04:1 on `--overlay` and 5.07:1 on a hovered row
+   (`--default`) in light, 6.75 and 5.68 in dark. */
 :root:not(.dark):not([data-theme="dark"]) {
   --muted: oklch(0.5 0.0138 285.94);
 }

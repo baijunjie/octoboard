@@ -90,15 +90,18 @@ function GitContent({
   worktree,
   compare,
   changeView,
+  selectedSessionId,
   onRetry,
 }: {
   source: SourceState;
   view: GitViewKind;
   onViewChange: (view: GitViewKind) => void;
   worktree: WorktreeViewProps;
-  compare: Omit<React.ComponentProps<typeof BranchComparisonView>, "onRetry" | "changeView">;
+  compare: Omit<React.ComponentProps<typeof BranchComparisonView>, "onRetry" | "changeView" | "selectedSessionId">;
   /** How both views' change lists show their changes. */
   changeView: ChangeViewState;
+  /** The session selected in the sidebar, whose branches the Compare view marks. */
+  selectedSessionId: string | undefined;
   /**
    * Asks again for whatever failed. `from` is the control pressed, which goes away with the
    * failure.
@@ -159,7 +162,7 @@ function GitContent({
         <WorktreeChanges worktrees={git.worktrees} own={git.worktree} {...worktree} changeView={changeView} onRetry={onRetry} />
       </Tabs.Panel>
       <Tabs.Panel id="compare" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
-        <BranchComparisonView {...compare} changeView={changeView} onRetry={onRetry} />
+        <BranchComparisonView {...compare} changeView={changeView} selectedSessionId={selectedSessionId} onRetry={onRetry} />
       </Tabs.Panel>
     </Tabs>
   );
