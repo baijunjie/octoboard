@@ -65,7 +65,7 @@ export const connectionScenarios: Scenario[] = [
     id: "terminal-output",
     group: TERMINAL,
     title: "A terminal with output",
-    description: "A canned ANSI sample: colours, box drawing, CJK and a long line.",
+    description: "A canned ANSI sample: colours, a prompt box whose right bar lines up on every row (one row is CJK, double-width) and a long line that wraps.",
     state: connected("open"),
     steps: [(ui) => ui.press(ui.session("Fix the summary layout"))],
   },

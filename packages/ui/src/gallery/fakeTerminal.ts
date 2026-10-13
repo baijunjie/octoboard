@@ -15,14 +15,46 @@ export function terminalFixtureUrl(behaviour: TerminalBehaviour, session: string
 }
 
 const ESC = "\x1b[";
+
+/** The box's inner width in cells. The docked terminal pane keeps 520px, about 53 columns once its
+ * padding is taken off (`docs/product/window-layout.md`, "Pane widths at 1148 px and wider"), so
+ * the box (this plus its two bars) is 48 and does not wrap there. That makes only the box safe,
+ * and only while docked: below the breakpoint the floor is about 40 columns, and the sample's
+ * plain lines already run to 53. */
+const BOX_INNER = 46;
+
+/** The cells a string takes: a CJK character is two, everything else one. Enough for this sample
+ * only: it strips SGR colour codes and no other escape, and counts BMP CJK alone (a wide ideograph
+ * from U+20000 up counts as one), with no combining marks or emoji. */
+function cells(text: string): number {
+  return [...text.replace(/\x1b\[[0-9;]*m/g, "")].reduce(
+    (sum, ch) => sum + (/[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]/.test(ch) ? 2 : 1),
+    0,
+  );
+}
+
+/** A box around `lines`, each padded to `BOX_INNER` by what it measures, so a line cannot drift off
+ * the right bar when its text changes. */
+function box(lines: string[]): string[] {
+  const bar = `${ESC}36m│${ESC}0m`;
+  return [
+    `${ESC}36m╭${"─".repeat(BOX_INNER)}╮${ESC}0m`,
+    ...lines.map((line) => `${bar}${line}${" ".repeat(BOX_INNER - cells(line))}${bar}`),
+    `${ESC}36m╰${"─".repeat(BOX_INNER)}╯${ESC}0m`,
+  ];
+}
+
 const SAMPLE = [
   `${ESC}1;38;5;208m ✻ Welcome to Claude Code${ESC}0m`,
   "",
   `${ESC}2m  cwd: /Users/dev/code/website${ESC}0m`,
   "",
-  `${ESC}36m╭──────────────────────────────────────────────────────────────╮${ESC}0m`,
-  `${ESC}36m│${ESC}0m ${ESC}1m>${ESC}0m Fix the summary layout on narrow screens                    ${ESC}36m│${ESC}0m`,
-  `${ESC}36m╰──────────────────────────────────────────────────────────────╯${ESC}0m`,
+  // A CJK row, double-width, so a cell-width bug misaligns the right bar: "Confirm the summary layout
+  // on narrow screens once more".
+  ...box([
+    ` ${ESC}1m>${ESC}0m Fix the summary layout on narrow screens`,
+    "   再确认一下窄屏上的摘要布局",
+  ]),
   "",
   `${ESC}32m●${ESC}0m I will start by reading the summary styles.`,
   "",
