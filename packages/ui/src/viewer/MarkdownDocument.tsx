@@ -1,16 +1,25 @@
-// The one module that touches the Markdown library (`react-markdown` with `remark-gfm`). It is
-// loaded lazily by `MarkdownSurface.tsx`, the first time a document is shown. The document it draws
-// is inert: the library turns raw HTML in the text into text, an image is its alt text and never a
-// request, and an address is only ever handed to `onOpenLink`, never followed.
-import React, { memo, useMemo } from "react";
+// The one module that touches the Markdown library (`react-markdown`, `remark-gfm`, `remark-math`).
+// It is loaded lazily by `MarkdownSurface.tsx`, the first time a document is shown. Raw HTML in the
+// text stays text. A diagram, a formula and a project image are drawn inside the document; the
+// libraries load on first use, and a project file is the only thing a path in the text can read.
+// An address is never followed by the viewer itself: a project file is handed to `onOpenFile`, and
+// an absolute web or mail address to `onOpenLink`.
+import React, { memo, useEffect, useMemo, useRef } from "react";
 import Markdown, { type Components, type ExtraProps, type Options } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 
 import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
 import { textDirection } from "../i18n/languages";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { type Direction, type DirectionNode, firstStrongDirection } from "./blockDirection";
-import { RENDER_BUDGETS } from "./budgets";
+import { DocumentImage } from "./DocumentImage";
+import { FormulaView } from "./FormulaView";
+import { headingIds, limitFences, prepareMarkdown } from "./markdownPlugins";
+import { MermaidBlock } from "./MermaidBlock";
+import { resolveProjectAddress } from "./projectAddress";
+
+export { openableAddress } from "./projectAddress";
 
 // The library's syntax tree types, which it does not export by name.
 type Element = NonNullable<ExtraProps["node"]>;
@@ -18,24 +27,24 @@ type ElementContent = Element["children"][number];
 
 export interface MarkdownDocumentProps {
   text: string;
+  /** The document's own wire path, which relative addresses resolve against. */
+  path: string;
+  /** The project a relative image is read from. Without it, an image stays its description. */
+  project?: string;
   /** Draws a fenced block of code; `language` is the fence's info word, when it has one, and
    * `highlight` is false for a block past the document's budget of highlighted ones. */
   renderCode: (code: { language?: string; text: string; highlight: boolean }) => React.ReactNode;
-  /** Opens an address the document links to; without it a link is drawn as its text alone. */
+  /** The appearance a diagram is drawn in. */
+  theme: "light" | "dark";
+  /** Opens an absolute web or mail address; without it such a link is drawn as its text alone. */
   onOpenLink?: (url: string) => void;
-}
-
-/** The address of a link that may be opened: absolute, and one a person or a mail client takes.
- * Anything else — a relative path, an anchor, a script — is not a place this document can send
- * the user to (the footnote links of the document itself are its own case, `DocumentLink`). */
-export function openableAddress(href: string | undefined): string | undefined {
-  if (!href) return undefined;
-  try {
-    const url = new URL(href.trim());
-    return url.protocol === "http:" || url.protocol === "https:" || url.protocol === "mailto:" ? url.href : undefined;
-  } catch {
-    return undefined;
-  }
+  /** Opens a project file the document links to, and a heading in it when `fragment` is set.
+   * Without it a relative link is drawn as its text alone. */
+  onOpenFile?: (path: string, fragment?: string) => void;
+  /** A path the project's listing shows as a directory is not opened. */
+  isDirectory?: (path: string) => boolean;
+  /** A heading to move to once the document is shown, from a link that opened this file. */
+  anchor?: string;
 }
 
 /** The text a node reads as; an image reads as its alt text. */
@@ -60,46 +69,12 @@ function fenceOf(node: Element): { language?: string; text: string; highlight: b
   };
 }
 
-/** The Markdown syntax tree as far as `limitFences` reads it. */
-interface MdNode {
-  type: string;
-  value?: string;
-  children?: MdNode[];
-  data?: { hProperties?: Record<string, unknown> };
-}
-
-/** Marks the fenced blocks past the document's budget (`RENDER_BUDGETS.documentFences`) as plain,
- * for `fenceOf`. Each highlighted block is a renderer instance of its own, so the count and the total
- * length of what is highlighted are bounded, in document order. Only a block that stays highlighted
- * counts against either, so one over-size block does not turn the later, small ones plain; a single block
- * longer than the total budget is plain itself, though a whole file of that size is highlighted: it
- * would be one instance drawing all of it inside the document's scroll, not a file's own frame. */
-function limitFences() {
-  return (tree: MdNode) => {
-    let blocks = 0;
-    let chars = 0;
-    const visit = (node: MdNode) => {
-      if (node.type === "code") {
-        const length = node.value?.length ?? 0;
-        if (blocks + 1 > RENDER_BUDGETS.documentFences || chars + length > RENDER_BUDGETS.documentFenceChars) {
-          node.data = { ...node.data, hProperties: { ...node.data?.hProperties, dataPlain: true } };
-        } else {
-          blocks += 1;
-          chars += length;
-        }
-      }
-      node.children?.forEach(visit);
-    };
-    visit(tree);
-  };
-}
-
-const REMARK_PLUGINS: NonNullable<Options["remarkPlugins"]> = [remarkGfm, limitFences];
-
 /** Puts the document's content in the frame `<div data-markdown-document>`, which takes the
  * direction of the first strong letter of the whole text, or `fallback` when it has none. Done on the
  * syntax tree because the wrapper has to be told a direction that only the tree can give: the library
- * is a component of its own, which draws after the one around it. */
+ * is a component of its own, which draws after the one around it. Called with that direction before
+ * it is placed in the plugin list, so this returns the plugin: unified calls each entry to obtain
+ * the transformer, and a transformer placed in the list runs once at setup and never on the tree. */
 function frameDocument(fallback: Direction) {
   return () => (tree: DirectionNode & { children: DirectionNode[] }) => {
     tree.children = [
@@ -113,8 +88,8 @@ function frameDocument(fallback: Direction) {
   };
 }
 
-/** A link in the document. It never navigates the viewer: an address is handed to `onActivate`
- * (the platform opens it), and so is a footnote's, which scrolls to its target within the document. */
+/** A link in the document. The anchor does not follow `href` itself. `onActivate` scrolls within
+ * the document, opens a project file, or hands an absolute address to the platform. */
 function DocumentLink({
   href,
   title,
@@ -149,15 +124,19 @@ function DocumentLink({
   );
 }
 
-/** Moves to the element a footnote link names, inside the document it is in; the browser's own
- * navigation to a fragment would move the viewer's page. Focus goes with it, so a screen reader
- * follows. */
-function followFootnote(link: HTMLAnchorElement, href: string): void {
-  // The library writes the fragment and the id it names through the same encoding (a footnote
-  // labelled in Chinese is percent-encoded in both), so they are compared as they are, not decoded.
-  const fragment = href.slice(1);
-  const ids = [...(link.closest("[data-markdown-document]")?.querySelectorAll<HTMLElement>("[id]") ?? [])];
-  const target = ids.find((element) => element.id === fragment);
+/** Moves to the element `fragment` names, inside `root`. A heading id is the slug text; a footnote
+ * id is stored percent-encoded and matches the fragment as written, so both are tried. The
+ * browser's own navigation to a fragment would move the viewer's page. Focus goes with it, so a
+ * screen reader follows. */
+export function revealInDocument(root: ParentNode, fragment: string): void {
+  let decoded = fragment;
+  try {
+    decoded = decodeURIComponent(fragment);
+  } catch {
+    // A fragment that is not valid encoding is compared as written.
+  }
+  const ids = [...root.querySelectorAll<HTMLElement>("[id]")];
+  const target = ids.find((element) => element.id === fragment || element.id === decoded);
   if (!target) return;
   // Not a no-op: the getter answers -1 for an element with no `tabindex` attribute, a definition's
   // `<li>`, while the setter writes the attribute, which is what lets it take focus from a script. A
@@ -165,6 +144,19 @@ function followFootnote(link: HTMLAnchorElement, href: string): void {
   if (target.tabIndex < 0) target.tabIndex = -1;
   target.focus({ preventScroll: true });
   target.scrollIntoView({ block: "nearest" });
+}
+
+function classNamesOf(node: Element | undefined): string[] {
+  const names = node?.properties.className;
+  return Array.isArray(names) ? names.filter((name): name is string => typeof name === "string") : [];
+}
+
+function codeChild(node: Element): Element | undefined {
+  return node.children.find((child): child is Element => child.type === "element" && child.tagName === "code");
+}
+
+function overBudget(node: Element | undefined): boolean {
+  return node?.properties.dataOverBudget !== undefined;
 }
 
 /** An element the library draws, with a class string of ours merged into the classes the library
@@ -233,26 +225,36 @@ function TaskBox({ node: _, className, ...props }: ExtraProps & React.InputHTMLA
   return <input {...props} disabled className={className ? `me-2 align-middle ${className}` : "me-2 align-middle"} />;
 }
 
-// Never fetched: an image is its description, which is all the document can know of it.
-function ImageAlt({ alt }: { alt?: string }): React.ReactElement | null {
-  return alt ? <span>{alt}</span> : null;
-}
-
 /** A Markdown text as a document, drawn again only when its text or callbacks change. Each block
  * takes the direction of its own first strong letter, as the document does as a whole, so a
  * right-to-left passage in a left-to-right document, or the reverse, reads from its own side, with
  * its quote bar there too. Raw HTML in the text comes out as bare text with no block around it, which
- * takes the direction of the document. A document with no strong letter takes the app's direction. */
+ * takes the direction of the document. A document with no strong letter takes the app's direction.
+ * A diagram and a formula are left to right of their own, and do not lend their source to the
+ * direction of the paragraph they sit in. */
 export const MarkdownDocument = memo(function MarkdownDocument({
   text,
+  path,
+  project,
   renderCode,
+  theme,
   onOpenLink,
+  onOpenFile,
+  isDirectory,
+  anchor,
 }: MarkdownDocumentProps): React.ReactElement {
   const t = useT();
   const appDirection = textDirection(useCurrentLanguage());
+  const frameRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!anchor) return;
+    const root = frameRef.current?.querySelector("[data-markdown-document]");
+    if (root) revealInDocument(root, anchor);
+  }, [anchor, text]);
   // Not memoised, unlike the components below: the library builds its processor on every render
   // whatever this array's identity is, so holding one would buy nothing.
-  const rehypePlugins: NonNullable<Options["rehypePlugins"]> = [frameDocument(appDirection)];
+  const remarkPlugins: NonNullable<Options["remarkPlugins"]> = [remarkGfm, remarkMath, prepareMarkdown(text, path), limitFences];
+  const rehypePlugins: NonNullable<Options["rehypePlugins"]> = [headingIds, frameDocument(appDirection)];
   // Memoised: the library takes a new component for an element to be a new kind of element and
   // mounts it afresh, which would take the focus of a link with it and draw every fenced block again
   // each time the caller renders (as it does when the frame gains or loses its focus ring).
@@ -260,33 +262,70 @@ export const MarkdownDocument = memo(function MarkdownDocument({
     () => ({
       ...BLOCKS,
       input: TaskBox,
-      img: ImageAlt,
-      pre: ({ node }) => <div className="my-3">{node ? renderCode(fenceOf(node)) : null}</div>,
+      img: ({ src, alt, node }) => (
+        <DocumentImage src={src} alt={alt} documentPath={path} project={project} overBudget={overBudget(node)} />
+      ),
+      code: ({ node, className, ...props }) => {
+        if (classNamesOf(node).includes("math-inline")) {
+          return (
+            <FormulaView
+              source={(node ? textOf(node) : "").replace(/\n$/, "")}
+              display={node?.properties.dataDisplay !== undefined}
+              inline
+              overBudget={overBudget(node)}
+            />
+          );
+        }
+        return <BLOCKS.code node={node} className={className} {...props} />;
+      },
+      pre: ({ node }) => {
+        const code = node && codeChild(node);
+        if (code && classNamesOf(code).includes("math-display")) {
+          return <FormulaView source={fenceOf(node).text} display inline={false} overBudget={overBudget(node) || overBudget(code)} />;
+        }
+        if (node && fenceOf(node).language === "mermaid") {
+          return <MermaidBlock source={fenceOf(node).text} overBudget={overBudget(code)} theme={theme} />;
+        }
+        return <div className="my-3">{node ? renderCode(fenceOf(node)) : null}</div>;
+      },
       a: ({ node, href, children, ...rest }) => {
-        // The links `remark-gfm` makes for a footnote and back from it. They stay in the document, so
-        // they are not for the platform to open (and `openableAddress` is not relaxed for them): the
-        // one fragment links the document follows. A fragment link of the author's own has no target
-        // (headings carry no id) and is its text alone, like any address that is not openable.
+        // The links `remark-gfm` makes for a footnote and back from it. They stay in the document.
         const props = rest as Record<string, unknown>;
         if (href?.startsWith("#") && (props["data-footnote-ref"] !== undefined || props["data-footnote-backref"] !== undefined)) {
           return (
-            <DocumentLink {...rest} href={href} onActivate={(event) => followFootnote(event.currentTarget, href)}>
+            <DocumentLink {...rest} href={href} onActivate={(event) => revealInDocument(event.currentTarget.closest("[data-markdown-document]") ?? event.currentTarget, href.slice(1))}>
               {children}
             </DocumentLink>
           );
         }
-        const address = openableAddress(href);
-        if (!address || !onOpenLink) return <>{children}</>;
-        // A link whose text is empty or only an image has no name for a screen reader but its address.
+        const address = resolveProjectAddress(path, href);
         const unnamed = node ? node.children.map(textOf).join("").trim() === "" : false;
-        return (
-          <DocumentLink href={address} title={address} onActivate={() => onOpenLink(address)}>
-            {unnamed ? address : children}
-          </DocumentLink>
-        );
+        if (address.kind === "anchor") {
+          return (
+            <DocumentLink {...rest} href={href ?? "#"} onActivate={(event) => revealInDocument(event.currentTarget.closest("[data-markdown-document]") ?? event.currentTarget, address.id)}>
+              {children}
+            </DocumentLink>
+          );
+        }
+        if (address.kind === "external" && onOpenLink) {
+          return (
+            <DocumentLink href={address.href} title={address.href} onActivate={() => onOpenLink(address.href)}>
+              {unnamed ? address.href : children}
+            </DocumentLink>
+          );
+        }
+        if (address.kind === "file" && onOpenFile && !isDirectory?.(address.path)) {
+          const where = address.fragment ? `${address.path}#${address.fragment}` : address.path;
+          return (
+            <DocumentLink href={href ?? where} title={where} onActivate={() => onOpenFile(address.path, address.fragment)}>
+              {unnamed ? where : children}
+            </DocumentLink>
+          );
+        }
+        return <>{children}</>;
       },
     }),
-    [renderCode, onOpenLink],
+    [renderCode, onOpenLink, onOpenFile, isDirectory, path, project, theme],
   );
   // The library words the footnotes' heading and each backlink's name in English.
   const remarkRehypeOptions = useMemo<Options["remarkRehypeOptions"]>(
@@ -300,8 +339,10 @@ export const MarkdownDocument = memo(function MarkdownDocument({
     [t],
   );
   return (
-    <Markdown remarkPlugins={REMARK_PLUGINS} rehypePlugins={rehypePlugins} remarkRehypeOptions={remarkRehypeOptions} components={components}>
-      {text}
-    </Markdown>
+    <div ref={frameRef} className="contents">
+      <Markdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} remarkRehypeOptions={remarkRehypeOptions} components={components}>
+        {text}
+      </Markdown>
+    </div>
   );
 });

@@ -13,17 +13,19 @@ export function ViewerHost({
   clipboard,
   links,
   toasts = NO_TOASTS,
+  request,
   children,
 }: {
   clipboard?: PlatformAdapter["clipboard"];
   links?: PlatformAdapter["links"];
   toasts?: { notice: (message: string) => void; error: (message: string) => void };
+  request?: Daemon["request"];
   children: React.ReactNode;
 }): React.ReactElement {
   const daemon = React.useMemo<Daemon>(
     () => ({
       store: createStateStore(),
-      request: () => Promise.reject(new Error("no daemon")),
+      request: request ?? (() => Promise.reject(new Error("no daemon"))),
       toastError: toasts.error,
       toastNotice: toasts.notice,
       onToast: () => () => {},
@@ -31,7 +33,7 @@ export function ViewerHost({
       reconnect: () => {},
       terminalUrl: () => "",
     }),
-    [toasts.error, toasts.notice],
+    [toasts.error, toasts.notice, request],
   );
   return (
     <PlatformProvider value={{ kind: "browser", clipboard, links }}>

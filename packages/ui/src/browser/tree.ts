@@ -45,6 +45,17 @@ export function childPath(dir: string, name: string): string {
   return dir === "" ? name : `${dir}/${name}`;
 }
 
+/** Whether a loaded listing says `path` is a directory. An unlisted path is not: the caller may
+ * still try to open it as a file. */
+export function listingSaysDirectory(listings: ReadonlyMap<string, DirListing>, path: string): boolean {
+  const parent = parentPath(path);
+  const name = parent === "" ? path : path.slice(parent.length + 1);
+  const listing = listings.get(parent);
+  if (!listing || listing.state !== "loaded") return false;
+  const entry = listing.entries.find((item) => item.name === name);
+  return entry ? isDirectory(entry) : false;
+}
+
 /** The directory holding `path`, empty for an entry of the project's own directory. */
 export function parentPath(path: string): string {
   const slash = path.lastIndexOf("/");

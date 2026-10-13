@@ -267,10 +267,12 @@ and each tone draws its own fill and its own glyph, so a tone never rests on col
 
 A notice that can appear only once the content has been drawn, which a reader would otherwise never meet, is announced
 to assistive technology, each one once: the fall back to plain text where the grammar or the drawing fails, to a
-Markdown file's source, to a plain patch where the diff could not be drawn, and to an image's own text, and what
-a diff says about its collapsed lines (see "Expanding the collapsed lines" in
-`docs/product/project-pane-git-mode.md`). A notice that arrives with the content it describes is not announced on its
-own; it is read with the rest of the dialog.
+Markdown file's source, to a plain patch where the diff could not be drawn, and to an image's own text; a diagram, a
+formula or a project image in a rendered document that cannot be shown after the document has been drawn (see "A
+Markdown file as a document" below); and what a diff says about its collapsed lines (see "Expanding the collapsed
+lines" in `docs/product/project-pane-git-mode.md`). A notice that arrives with the content it describes is not
+announced on its own; it is read with the rest of the dialog. Inside a rendered document, a notice for an image or for
+a formula inside a paragraph sits in the paragraph rather than as the block above; it uses the same tones.
 
 **A stand-in** fills the body when there is nothing to draw at all: the empty state's own panel, centred in the body — a
 glyph saying what kind of nothing this is, a heading naming it, and, where there is more to say than the heading
@@ -301,15 +303,17 @@ other text file gets. The choice is remembered, like the unified-or-split and wr
 Markdown file, and after the application restarts.
 
 **What the document shows.** Headings, paragraphs, lists — GFM task lists among them, whose boxes show the state the
-text records and cannot be ticked — quotes, horizontal rules, tables, inline code, links and fenced code. A fenced
-block is highlighted the way the source view highlights code, by the grammar its info word names (a file extension
-such as `ts` as readily as a grammar's own name), and it wraps rather than scrolling sideways; a block whose grammar
-is not one the viewer knows is shown as plain text, and so are the blocks past the document's budget for highlighting
-them, in a document that holds a great many of them or very long ones. A table's columns keep the alignment the
-author wrote — GFM's left, centre and right, which stay physical as GFM defines them whichever direction the text
-reads in — and only an unaligned column follows the direction of its table. GFM footnotes are set off at the end,
-under a heading only assistive technology is given; a reference moves to its definition and the definition's back link
-moves to the reference, both scrolling within the document rather than taking the viewer anywhere.
+text records and cannot be ticked — quotes, horizontal rules, tables, inline code, links, images, diagrams, formulas
+and fenced code. A fenced block is highlighted the way the source view highlights code, by the grammar its info word
+names (a file extension such as `ts` as readily as a grammar's own name), and it wraps rather than scrolling sideways;
+a block whose grammar is not one the viewer knows is shown as plain text, and so are the blocks past the document's
+budget for highlighting them, in a document that holds a great many of them or very long ones. A fence whose info word
+is exactly `mermaid` is a diagram instead of highlighted code, and it does not count against that budget. A table's
+columns keep the alignment the author wrote — GFM's left, centre and right, which stay physical as GFM defines them
+whichever direction the text reads in — and only an unaligned column follows the direction of its table. GFM footnotes
+are set off at the end, under a heading only assistive technology is given; a reference moves to its definition and
+the definition's back link moves to the reference, both scrolling within the document rather than taking the viewer
+anywhere.
 
 **Which direction the document reads.** Every block — each heading, paragraph, list, quote and table — is laid out in
 the direction of **its own text**, whichever direction the window reads in (see "Right-to-left layout" in
@@ -324,24 +328,98 @@ reads from the left inside an Arabic document.
 - A paragraph of its own inside a list item — which is what a list with blank lines between its items is made of — is
   a block in its own right and may read the other way than the list around it does.
 - Digits, Western and Arabic-Indic alike, punctuation and symbols are passed over, as is the text of inline code, of a
-  fenced block, and of anything between Unicode isolate controls (U+2066 to U+2069); an image counts as its alt text.
-  Chinese, Japanese and Korean text reads left to right. The scripts read right to left are Hebrew, Arabic, Syriac,
-  Thaana, N'Ko, Samaritan, Mandaic, Adlam and Hanifi Rohingya; a letter of any other script reads left to right.
+  fenced block, of a diagram and of a formula, and of anything between Unicode isolate controls (U+2066 to U+2069); an
+  image counts as its alt text. Chinese, Japanese and Korean text reads left to right. The scripts read right to left
+  are Hebrew, Arabic, Syriac, Thaana, N'Ko, Samaritan, Mandaic, Adlam and Hanifi Rohingya; a letter of any other script
+  reads left to right.
 - A left-to-right, right-to-left or Arabic letter mark (U+200E, U+200F, U+061C) counts as a strong character, so one
   put before a block's text sets that block's direction whatever letters follow it.
 - A block with no strong directional character at all — a list of version numbers, a heading of numerals — is given no
   direction of its own and reads the way the document around it does.
-- **Inline code and a fenced block always read left to right**, and text the file holds as raw HTML, which comes out
+- **Inline code, a fenced block, a diagram and a formula always read left to right.** An inline formula is isolated
+  inside its paragraph, so it does not reorder the words around it. Text the file holds as raw HTML, which comes out
   with no block of its own, reads the way the document does.
 - **The document as a whole** takes the direction of the first strong character of its whole text, and only where it
   holds none does it follow the window's direction.
 
-**The document is inert.** Raw HTML in the file is shown as text and never run. An image becomes its alt text and is
-never fetched. Only an absolute `http:`, `https:` or `mailto:` address is a link; a relative path, an anchor of the
-author's own and a `javascript:` address are drawn as their text alone. A link carries the address it leads to as its
-tooltip, and a link with no text of its own reads as that address. **Following a link never moves the viewer**: the
-address is handed to the user's own browser or mail client — to a new tab, in the UI opened in a browser — and the
-viewer stays on the file it was showing.
+**Nothing in the file runs or reaches outside the project.** Raw HTML is shown as text and never run. The text does not
+use the network and does not read a path outside the project. Beyond the file itself, what is loaded for the document
+is the diagram library and the formula library, each the first time one is drawn, and a project file read the same way
+the viewer reads a file opened for itself.
+
+**Addresses.** A relative image or link is resolved against the document's own path: `.` and `..` are applied, and a
+query is dropped. A path that would leave the project is not read and is not followed. So is an address that does not
+resolve to a path inside the project, which stays its text: a `javascript:` address, any scheme other than `http`,
+`https` and `mailto`, a protocol-relative address (`//host`), a path that starts with `/`, and a path that contains a
+backslash or that cannot be decoded.
+
+**Links.** An absolute `http:`, `https:` or `mailto:` address is a link only when the window can hand it to the user's
+own browser or mail client — to a new tab, in the UI opened in a browser. Following it does not move the viewer. It
+carries that address as its tooltip and as its accessible description, and one with no text of its own reads as the
+address.
+
+A relative link that resolves to a project file opens that file in the viewer, replacing the file that was open. There
+is no way back to the previous document from the link itself. The link carries the path within the project as its
+tooltip and as its accessible description, with the heading id after `#` when it names one, and a link with no text of
+its own reads as that path. `other.md#heading` opens that file and scrolls to the heading with that id when the
+document is shown. A bare `#heading` scrolls inside the current document and does not open another file. A path the
+loaded directory listing shows as a folder — a symbolic link to a folder inside the project counts as one (see "What
+is listed" above) — is not opened and stays its text. A path whose parent folder has not been listed yet may still be
+opened as a file.
+
+From a document shown in Git mode, following such a file link closes the change viewer without moving focus onto a Git
+row, switches to Files, and opens the live file.
+
+**Headings.** Headings get ids compatible with GitHub. A repeated heading stays distinct. An id a footnote already
+uses is not taken. A heading that already has an id keeps it. A heading whose text yields no id is `section`, and a
+later one stays distinct on that basis.
+
+**Images.** An address that is not a project file, an absolute image address included, is not a link and is never
+fetched: the reader sees its alt text, with no notice and no read. A relative image that stays inside the project is
+shown, in the formats the viewer already shows as images (see "What it shows" above), no wider than the document. An
+SVG is shown as an image, so its scripts never run and nothing it refers to is fetched, as for an SVG opened for
+itself. Its alt text is its accessible name. Until the read has answered, the alt text is what is shown.
+
+**Diagrams.** A fence whose info word is exactly `mermaid` is a diagram, in both light and dark, using the same ink
+and paper as highlighted code (see "What follows the choice" in `docs/product/appearance.md`). Its accessible name is
+the title the diagram declares (`accTitle`), or a generic diagram name. Its text alternative is the description the
+diagram declares (`accDescr`), or the diagram's source when it declares none. A link drawn inside a diagram is not
+followed. The diagram is configured so the text cannot make it emit HTML or run a script: `securityLevel` is strict,
+and `htmlLabels` cannot be turned back on.
+
+**Formulas.** `$...$` and `$$...$$` outside code are formulas. `$$` on its own line is a block formula. `$$` inside a
+paragraph is display math that stays in the paragraph. A single-dollar run that GitHub leaves as text stays text: the
+inside starts or ends with whitespace, or a digit follows the closing dollar. Those two exceptions do not apply to
+`$$`. `$20 and $30` stays text. A backslash-escaped dollar stays text. Text in code stays code. A `math` fence and a
+dollar wrapped in backticks are not formulas. A formula is read as math, not as an image. The renderer does not trust
+the text: a command that would fetch or create a link is not honored, so the formula contains no link and no image.
+Those commands stay visible as part of the formula rather than switching the formula to its failure fallback. A link
+inside a formula is not followed. Display math that stays in the paragraph counts as an inline formula for direction
+(see **Which direction the document reads** above).
+
+Once drawn, a diagram and a block formula are each a named region the keyboard can reach, and one wider than the
+document scrolls inside that region, fading the side it hides. An inline formula takes a tab stop only while it is
+wider than the line, so that side can be scrolled from the keyboard. While it fits, it is not a tab stop.
+
+**When one cannot be drawn.** Until a diagram or a formula has been drawn, its source is what is shown, with no
+notice. One that cannot be drawn shows its source under a failure notice, and the rest of the document stays. A
+failure that appears after the document has been drawn is announced once (see "Notices and stand-ins" above). A
+diagram or a formula past either of its limits below, and a project image past the count, are shown as source — or, for
+the image, as its alt text — under a neutral notice. That notice is part of the first paint and is not announced on
+its own.
+
+The budget is per document:
+
+- At most 12 diagrams, each at most 8,000 characters. A diagram over that length does not consume one of the 12. Past
+  either limit the source is shown under the neutral notice that the document is large.
+- At most 80 formulas, each at most 2,000 characters. A formula over that length does not consume one of the 80. Past
+  either limit, the same notice and the source.
+- At most 30 project images, each at most 4 MiB, the most a file read delivers (see "Errors" below). An address that
+  is not a project file does not consume one of the 30. Over the count: the alt text and a neutral notice that the
+  document is large, part of the first paint and not announced on its own. A reply larger than 4 MiB is not shown: the
+  alt text and a neutral notice that the image is large, announced once, because it appears after the read. A read
+  that fails — which is also what a file larger than 4 MiB does, since the read does not deliver it — or a file that
+  is not an image: the alt text and a failure notice, announced once.
 
 **The document always wraps** and offers no wrap control (see "Wrapping long lines" below).
 
@@ -385,7 +463,8 @@ text is two code regions, and the key selects the one with keyboard focus.
 
 A **rendered Markdown document** (see "A Markdown file as a document" above) is a region of the same kind, named for
 the file as the code region is: Tab or a click puts keyboard focus on it so it can be scrolled from the keyboard, and
-Tab from there goes on through the links the document holds, each its own stop, before leaving it. ⌘A with keyboard
+Tab from there goes on, in the document's order, through each link, each diagram and each block formula, before
+leaving it. An inline formula is a stop only while it is wider than the line (see "A Markdown file as a document" above). ⌘A with keyboard
 focus on the document selects the document and not the viewer's title, path and size. Copying a selection that is the
 whole document puts the file's **Markdown source** on the clipboard, the source inside its fenced blocks included,
 which a selection of the drawn document cannot reach; a selection of part of the document copies as what is selected.

@@ -41,8 +41,13 @@
         the panel would render at all. For the same reason no nonce or hash source may ever be
         added to these two directives: either one makes `'unsafe-inline'` inert and the panel
         stops working.
-      - `img-src data:`: for a report page's inline images, inherited the same way. The UI's
-        own code loads no images of its own (no `<img>`, no CSS `url()`), so `'self'` is left out.
+      - `font-src 'self'`: KaTeX's stylesheet refers to its own font files, which Vite serves
+        from this origin. A formula's glyphs are drawn from those fonts; without this directive
+        the request is refused (`default-src` is `'none'`) and the formula is not readable.
+        The fonts are the only thing this directive admits.
+      - `img-src data:`: for a report page's inline images, inherited the same way, and for a
+        Markdown document's project images, which are `data:` URLs too. No image is loaded from
+        the network or from `'self'`.
       - `connect-src`: `'self'` is the daemon when it serves this UI, and the dev server's proxy
         to one (the page then reaches `/ws/...` on its own origin; per CSP3, `'self'` covers the
         `ws:`/`wss:` scheme matching the page's `http:`/`https:`). Otherwise the daemon binds an
@@ -62,7 +67,7 @@
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src data:; connect-src 'self' ipc: ws://127.0.0.1:* ws://localhost:*; frame-src 'none'; form-action 'none'; base-uri 'none'"
+      content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src data:; connect-src 'self' ipc: ws://127.0.0.1:* ws://localhost:*; frame-src 'none'; form-action 'none'; base-uri 'none'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>%APP_NAME%</title>

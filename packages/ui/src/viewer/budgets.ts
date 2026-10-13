@@ -23,6 +23,21 @@ export const RENDER_BUDGETS = {
    * past either are shown as plain text. */
   documentFences: 40,
   documentFenceChars: 200_000,
+  /** Diagrams drawn in one document, and the length of one diagram's source. One past either is
+   * shown as its source. An over-size diagram does not take a place in the count, so one long
+   * diagram does not turn the later, small ones into source. The length is per diagram, not a
+   * total: each diagram is a draw of its own. */
+  documentDiagrams: 12,
+  documentDiagramChars: 8_000,
+  /** Formulas drawn in one document, and the length of one formula's source. Counted the same way
+   * as diagrams. */
+  documentFormulas: 80,
+  documentFormulaChars: 2_000,
+  /** Images read for one document. The byte cap is the daemon's own file limit, so a file it will
+   * send is within it and the count is what bounds the document; a reply at the cap is still
+   * checked, and one past it is left as its description. */
+  documentImages: 30,
+  documentImageBytes: 4 * 1024 * 1024,
 } as const;
 
 /** Counts the lines of `text`, a final line without a newline included. */

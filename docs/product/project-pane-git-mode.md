@@ -495,7 +495,8 @@ content can be read, a rename between two symbolic links among them. Every one o
 A whole file body shown here instead of a diff — an untracked file, one added with no patch, the version inside the
 project of a rename across the boundary, or a change with no lines to draw whose content was read — is a Markdown
 document when the file is Markdown, as it is for a file read for itself (see "A Markdown file as a document" in
-`docs/product/project-pane.md`). A diff and the file behind a path in conflict are shown as source whatever the file is.
+`docs/product/project-pane.md`). Following a link in that document to another project file leaves Git mode, as that
+section describes. A diff and the file behind a path in conflict are shown as source whatever the file is.
 
 How a diff is coloured in each appearance is in "What follows the choice" in `docs/product/appearance.md`. A diff's
 code is focused, selected and copied as a file's is (see "Selecting and copying" in `docs/product/project-pane.md`).

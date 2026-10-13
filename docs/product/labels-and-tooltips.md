@@ -21,10 +21,10 @@ carries it — a control, an indicator or a label too long for its space:
   its characters, which is its word boundary.
 
 Two places show the operating system's own tooltip instead, which follows the system's styling and timing: a link
-inside a Markdown document in the file viewer, where the address it leads to is also what assistive technology is
-given as the link's description (see "A Markdown file as a document" in `docs/product/project-pane.md`), and the
-separators standing for the lines a diff leaves out (see "Expanding the collapsed lines" in
-`docs/product/project-pane-git-mode.md`).
+inside a Markdown document in the file viewer, where — for a web or mail address, or a path in the project — the
+address it leads to is also what assistive technology is given as the link's description (see "A Markdown file as a
+document" in `docs/product/project-pane.md`), and the separators standing for the lines a diff leaves out (see
+"Expanding the collapsed lines" in `docs/product/project-pane-git-mode.md`).
 
 ## Tooltips on icon-only controls
 

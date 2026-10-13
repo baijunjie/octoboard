@@ -35,12 +35,13 @@ Everything the window shows follows the chosen appearance, including:
 - **Code in a project pane's file viewer**, highlighted in a high-contrast colour scheme of its own for each
   appearance, every colour of which meets 4.5:1 against the code's background. That background — white in the light
   appearance, near-black in the dark one — fills the whole code area, and a file shown as plain text sits on it too;
-  an image there sits on a checkerboard drawn in the appearance's colours (see "The file viewer" in
+  a file shown as an image sits on a checkerboard drawn in the appearance's colours (see "The file viewer" in
   `docs/product/project-pane.md`). A diff there (see "Opening a change" in `docs/product/project-pane-git-mode.md`) is
   highlighted in the same scheme, with added and removed lines tinted and marked `+` and `-`, and a changed word within
   a line underlined rather than tinted, so that every colour still meets 4.5:1 on the tinted lines. A rendered
   Markdown document (see "A Markdown file as a document" in `docs/product/project-pane.md`) sits on that background
-  too, its links underlined as well as coloured, in a colour that meets 4.5:1 on it in either appearance.
+  too, its links underlined as well as coloured, in a colour that meets 4.5:1 on it in either appearance. A diagram
+  in that document is drawn in the same ink and paper as the highlighted code.
 - **A console's default avatar**, whose fills have their own light and dark values (see "Avatar" in
   `docs/product/consoles-and-projects.md`).
 - **The native window's own appearance** in the macOS application — the window's close, minimise and zoom buttons

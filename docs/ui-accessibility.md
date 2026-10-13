@@ -179,7 +179,11 @@ Every control has an accessible name: its visible text, or an `aria-label` when 
   heading does not hold the text twice (`packages/ui/src/viewer/FileViewer.tsx`).
 - An element that takes an `aria-label` without being a control — a scrolling `div` or `pre` made focusable with
   `tabIndex={0}` — also gets a role that can be named (`role="region"`). ARIA prohibits naming a generic element, so
-  the name may never be spoken.
+  the name may never be spoken. A diagram and a block formula in a Markdown document are such regions
+  (`MermaidBlock`, `FormulaView` in `packages/ui/src/viewer/`). The diagram's name is its own title, or the generic
+  diagram name, and an inner `role="img"` carries that same name with a text alternative. A formula is not an image:
+  its MathML is what is read, and naming the region does not replace that. An inline formula is a region, and a tab
+  stop, only while it is wider than the line. While it fits, it is not a tab stop.
 
 ### An icon-only control: tooltip and `aria-label`
 
@@ -516,7 +520,12 @@ show. Each is a HeroUI `Alert` of its own status, which draws the glyph that goe
 warning triangle, the circled `!` — from a childless `Alert.Indicator`; the fill is named by the tone, as the section
 above requires. The glyph is what carries the tone: those fills sit at 1.1–1.5:1 against the dialog body and say
 nothing on their own. Measured on the fill each one actually sits on, in both appearances: the sentence is 11.9:1 or
-better in every tone and the glyph 5.1:1 or better, against 4.5:1 and 3:1. The error block for a subject that cannot be
+better in every tone and the glyph 5.1:1 or better, against 4.5:1 and 3:1. A notice that sits inside a paragraph
+cannot be that Alert: an Alert is a `div`, and a `div` inside a `p` is not valid. `InlineNotice` in
+`packages/ui/src/viewer/inlineNotice.tsx` is a `span`. The sentence inherits the document colour, which already meets
+the contrast above, and the same three glyphs tell the tones apart. When that notice appears after the first paint,
+it is announced by `StatusAnnouncer` rendered as a `span`, with the viewer's own first-write delay; the visible
+sentence is `aria-hidden` so it is not read twice. The error block for a subject that cannot be
 opened at all takes the same danger fill and glyph, so an error is never quieter than a notice about one part of it;
 its muted reason line on that fill is the tightest text in the family, at 4.80:1 light and 5.60:1 dark. A viewer with
 nothing to draw takes neither: it fills the body with a centred glyph and sentence (`NothingToShow`).
@@ -535,8 +544,12 @@ WCAG 2.2 A 1.3.2, since a value read in the wrong order says something else.
 
 **Prose follows the interface; a value keeps its own order.** A sentence takes the document's direction. A value that
 is not prose — a path, a URL, a branch name, a commit id, a shell command, a port, a keyboard shortcut, a count written
-as `1 / 12`, a literal to type — reads left to right in every language, and the element that *draws* it says so with
-`dir="ltr"`.
+as `1 / 12`, a literal to type, a diagram, a formula — reads left to right in every language, and the element that
+*draws* it says so with `dir="ltr"`.
+
+An inline formula sits inside a paragraph, so that element is also a bidi isolate: `dir` on it is not always enough
+once a utility class resets `unicode-bidi`, and Tailwind's `isolate` does not do this job (`isolation: isolate` is a
+stacking context). The formula sets `unicode-bidi: isolate` itself (`FormulaView`).
 
 - Say it on the element that draws the value, not on one inside it. A field whose group holds an affix needs the
   `dir` on the group: with it on the input alone, the affix stays on the mirrored side and the text pulls away from it,

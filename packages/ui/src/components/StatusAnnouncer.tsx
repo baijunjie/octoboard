@@ -14,14 +14,17 @@ const FIRST_WRITE_DELAY_MS = 100;
  * the delay has passed is never spoken. The visible placeholder is `aria-hidden` and has no role of
  * its own, so nothing is said twice. `firstWriteDelayMs` stretches the wait for a surface that
  * takes focus as it opens, so the status comes after the announcement of that focus move, which
- * would otherwise replace it.
+ * would otherwise replace it. `element` is `span` where the region sits inside a paragraph: a
+ * `div` there is not valid HTML, and the announcement is the same either way.
  */
 export function StatusAnnouncer({
   text,
   firstWriteDelayMs = FIRST_WRITE_DELAY_MS,
+  element: Element = "div",
 }: {
   text: string | undefined;
   firstWriteDelayMs?: number;
+  element?: "div" | "span";
 }): React.ReactElement {
   const [ready, setReady] = useState(false);
   // Read once: the delay only applies to the first write.
@@ -30,8 +33,8 @@ export function StatusAnnouncer({
     return () => clearTimeout(timer);
   }, []);
   return (
-    <div role="status" className="sr-only">
+    <Element role="status" className="sr-only">
       {ready ? text : undefined}
-    </div>
+    </Element>
   );
 }

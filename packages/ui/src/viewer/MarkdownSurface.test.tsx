@@ -9,9 +9,11 @@ import type { PlatformAdapter } from "../platform";
 import { RENDER_BUDGETS } from "./budgets";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 import { ThemeProvider } from "../theme";
+import type { Daemon } from "../store";
 import type { ViewerSubject } from "./content";
 import { FileViewer } from "./FileViewer";
 import { markdownView } from "./markdownView";
+import type { MarkdownLocation } from "./markdownLocation";
 import { openableAddress } from "./MarkdownDocument";
 import { ViewerHost } from "./viewerTestSupport";
 
@@ -29,6 +31,14 @@ vi.mock("./renderer", () => ({
   },
   RenderedDiff: () => <div data-renderer="" />,
   endRendererPool: () => {},
+}));
+
+vi.mock("./MermaidBlock", () => ({
+  MermaidBlock: ({ source, overBudget }: { source: string; overBudget: boolean }) => (
+    <div data-diagram="" data-over-budget={overBudget ? "true" : "false"}>
+      {source}
+    </div>
+  ),
 }));
 
 window.matchMedia ??= (query: string) =>
@@ -68,7 +78,11 @@ const markdownFile = (path = "docs/README.md", text = SOURCE): ViewerSubject => 
 
 /** Mounts the viewer on `subject`, with the page's link capability, and lets the lazily loaded
  * document renderer arrive. */
-async function open(subject: ViewerSubject, links?: PlatformAdapter["links"]): Promise<HTMLElement> {
+async function open(
+  subject: ViewerSubject,
+  links?: PlatformAdapter["links"],
+  extra?: { location?: Omit<MarkdownLocation, "path">; request?: Daemon["request"] },
+): Promise<HTMLElement> {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -77,9 +91,9 @@ async function open(subject: ViewerSubject, links?: PlatformAdapter["links"]): P
   });
   act(() =>
     root.render(
-      <ViewerHost links={links}>
+      <ViewerHost links={links} request={extra?.request}>
         <ThemeProvider>
-          <FileViewer subject={subject} onClose={() => {}} />
+          <FileViewer subject={subject} onClose={() => {}} location={extra?.location} />
         </ThemeProvider>
       </ViewerHost>,
     ),
@@ -332,4 +346,130 @@ it("takes the app's direction for the frame of a document with no strong charact
   await open(markdownFile("a.md", "1. 2\n"));
   expect(region().querySelector("[data-markdown-document]")?.getAttribute("dir")).toBe("rtl");
   expect(region().querySelector("ol")?.hasAttribute("dir")).toBe(false);
+});
+
+it("gives headings distinct ids and does not take one a footnote already has", async () => {
+  await open(markdownFile("docs/notes.md", "# Title\n\n# Title\n\n# user-content-fn-1\n\nA claim[^1].\n\n[^1]: The proof.\n"));
+  expect([...region().querySelectorAll("h1")].map((heading) => heading.id)).toEqual(["title", "title-1", "user-content-fn-1-1"]);
+  expect(region().querySelector("li")?.id).toBe("user-content-fn-1");
+  expect(region().querySelector("h2.sr-only")?.id).toBe("footnote-label");
+});
+
+it("names a heading with no slug section, and keeps the next one on that name", async () => {
+  await open(markdownFile("docs/notes.md", "# ???\n\n# ???\n\n# section\n"));
+  expect([...region().querySelectorAll("h1")].map((heading) => heading.id)).toEqual(["section", "section-1", "section-2"]);
+});
+
+it("scrolls to a heading the link names, and follows one that opens another file", async () => {
+  const scrolled = vi.fn();
+  Element.prototype.scrollIntoView = scrolled;
+  onTestFinished(() => void delete (Element.prototype as Partial<Element>).scrollIntoView);
+  const opened: string[] = [];
+  await open(markdownFile("docs/notes.md", "# Title\n\nSee [below](#title) and [other](./other.md#there)."), undefined, {
+    location: {
+      anchor: "title",
+      onOpenFile: (path, fragment) => opened.push(`${path}${fragment ? `#${fragment}` : ""}`),
+    },
+  });
+  expect(document.activeElement?.id).toBe("title");
+  expect(scrolled).toHaveBeenCalled();
+  const links = [...region().querySelectorAll("a")];
+  expect(links.map((link) => link.textContent)).toEqual(["below", "other"]);
+  act(() => void links[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
+  expect(opened).toEqual(["docs/other.md#there"]);
+  act(() => void links[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
+  expect(document.activeElement?.id).toBe("title");
+});
+
+it("does not open a path the listing says is a directory", async () => {
+  await open(markdownFile("docs/notes.md", "[folder](./images)"), undefined, {
+    location: { onOpenFile: () => {}, isDirectory: (path) => path === "docs/images" },
+  });
+  expect(region().querySelector("a")).toBeNull();
+  expect(region().textContent).toContain("folder");
+});
+
+it("keeps a formula left to right inside a right-to-left paragraph, and a math fence as code", async () => {
+  await open(markdownFile("docs/math.md", "مرحبا $E=mc^2$ بالعالم\n\n```math\nx\n```\n"));
+  for (let i = 0; i < 30 && region().querySelector(".katex") === null; i += 1) {
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  }
+  const formula = region().querySelector(".katex")?.parentElement;
+  expect(formula?.getAttribute("dir")).toBe("ltr");
+  expect(formula?.className).toContain("[unicode-bidi:isolate]");
+  expect(region().querySelector("p")?.getAttribute("dir")).toBe("rtl");
+  expect(region().querySelector("[data-renderer]")?.getAttribute("data-language")).toBe("math");
+  expect(region().querySelectorAll(".katex")).toHaveLength(1);
+});
+
+it("leaves a price as text and draws a formula, without a link from an untrusted command", async () => {
+  await open(markdownFile("docs/math.md", "It costs $20 and $30, and $100/2$ of it, and $E=mc^2$.\n\n$$\\href{https://example.com}{x}$$\n"));
+  expect(region().textContent).toContain("$20 and $30");
+  for (let i = 0; i < 30 && region().querySelectorAll(".katex").length < 2; i += 1) {
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  }
+  expect(region().querySelectorAll(".katex").length).toBeGreaterThanOrEqual(2);
+  expect(region().querySelector("math")).not.toBeNull();
+  expect(region().querySelector(".katex a, .katex img")).toBeNull();
+});
+
+it("draws a mermaid fence as a diagram and does not count it as highlighted code", async () => {
+  const fences = Array.from({ length: RENDER_BUDGETS.documentFences }, (_, i) => `\`\`\`ts\nconst a${i} = 1;\n\`\`\``);
+  await open(markdownFile("docs/diagram.md", `\`\`\`mermaid\ngraph TD\nA-->B\n\`\`\`\n\n${fences.join("\n\n")}`));
+  expect(region().querySelector("[data-diagram]")?.textContent).toContain("A-->B");
+  expect(region().querySelectorAll("[data-renderer]")).toHaveLength(RENDER_BUDGETS.documentFences);
+});
+
+it("shows a diagram past the count as its source", async () => {
+  const fences = Array.from({ length: RENDER_BUDGETS.documentDiagrams + 1 }, (_, i) => `\`\`\`mermaid\ngraph TD\nA${i}-->B\n\`\`\``);
+  await open(markdownFile("docs/diagrams.md", fences.join("\n\n")));
+  const diagrams = [...region().querySelectorAll("[data-diagram]")];
+  expect(diagrams.filter((diagram) => diagram.getAttribute("data-over-budget") === "false")).toHaveLength(RENDER_BUDGETS.documentDiagrams);
+  expect(diagrams.at(-1)?.getAttribute("data-over-budget")).toBe("true");
+});
+
+it("shows a project image and does not fetch one that leaves the project", async () => {
+  const requested: string[] = [];
+  const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  await open(markdownFile("docs/a.md", "![chart](pic.png)\n\n![secret](../../secret.png)\n\n![web](https://example.com/a.png)\n"), undefined, {
+    location: { project: "p" },
+    request: (async (body) => {
+      if (body.type !== "read_project_file") throw new Error(body.type);
+      requested.push(body.path);
+      if (body.slot !== undefined) throw new Error("slot");
+      return {
+        type: "project_file" as const,
+        project: body.project,
+        worktree: null,
+        path: body.path,
+        source: { kind: "live" as const, root_id: "t", version: "1" },
+        file: { size: 8, kind: "binary" as const, media_type: "image/png", text: null, data: png },
+      };
+    }) as Daemon["request"],
+  });
+  for (let i = 0; i < 20 && region().querySelector("img") === null; i += 1) {
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  }
+  const image = region().querySelector("img");
+  expect(image?.getAttribute("alt")).toBe("chart");
+  expect(image?.getAttribute("src")?.startsWith("data:image/png")).toBe(true);
+  expect(requested).toEqual(["docs/pic.png"]);
+  expect(region().querySelectorAll("img")).toHaveLength(1);
+  expect(region().textContent).toContain("secret");
+  expect(region().textContent).toContain("web");
+});
+
+it("says when a project image cannot be shown", async () => {
+  await open(markdownFile("docs/a.md", "![chart](missing.png)"), undefined, {
+    location: { project: "p" },
+    request: (async () => {
+      throw new Error("missing");
+    }) as Daemon["request"],
+  });
+  for (let i = 0; i < 20 && !region().textContent?.includes("could not be shown"); i += 1) {
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  }
+  expect(region().querySelector("img")).toBeNull();
+  expect(region().textContent).toContain("chart");
+  expect(region().textContent).toContain("This image could not be shown.");
 });

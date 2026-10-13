@@ -11,10 +11,12 @@ import { displayWirePath } from "../wirePath";
 export function ViewerGallery({ subjects, loadDelay }: { subjects: ViewerSubject[]; loadDelay?: number }): React.ReactElement {
   const [open, setOpen] = useState<number | null>(0);
   const [loaded, setLoaded] = useState<number | null>(loadDelay ? null : 0);
+  const [anchor, setAnchor] = useState<{ path: string; fragment?: string }>();
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const show = (index: number | null) => {
+  const show = (index: number | null, linked?: { path: string; fragment?: string }) => {
     setOpen(index);
+    setAnchor(linked);
     clearTimeout(timer.current);
     if (!loadDelay) return setLoaded(index);
     setLoaded(null);
@@ -45,6 +47,14 @@ export function ViewerGallery({ subjects, loadDelay }: { subjects: ViewerSubject
           navigation={{
             onPrevious: open > 0 ? () => show(open - 1) : undefined,
             onNext: open < subjects.length - 1 ? () => show(open + 1) : undefined,
+          }}
+          location={{
+            project: "gallery",
+            anchor: anchor && shown.path === anchor.path ? anchor.fragment : undefined,
+            onOpenFile: (path, fragment) => {
+              const index = subjects.findIndex((item) => item.path === path);
+              if (index !== -1) show(index, fragment === undefined ? { path } : { path, fragment });
+            },
           }}
         />
       )}

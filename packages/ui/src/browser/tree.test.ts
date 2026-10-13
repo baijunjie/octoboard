@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { BrowseEntry } from "../protocol";
-import { buildTree, compareFilePaths, fileEvidence, neighbours, rereadFor, treeEntries, type DirListing, type FileEvidence } from "./tree";
+import { buildTree, compareFilePaths, fileEvidence, listingSaysDirectory, neighbours, rereadFor, treeEntries, type DirListing, type FileEvidence } from "./tree";
 
 const file = (name: string, version = "v1"): BrowseEntry => ({ name, kind: "file", size: 1, version, target: null });
 const dir = (name: string): BrowseEntry => ({ name, kind: "directory", size: null, version: null, target: null });
@@ -31,6 +31,14 @@ describe("buildTree", () => {
     ["docs", loaded([file("guide.md")])],
     ["empty", loaded([])],
   ]);
+
+  it("says a path is a directory only when a loaded listing does", () => {
+    expect(listingSaysDirectory(listings, "docs")).toBe(true);
+    expect(listingSaysDirectory(listings, "docs/guide.md")).toBe(false);
+    expect(listingSaysDirectory(listings, "src/lib")).toBe(true);
+    expect(listingSaysDirectory(listings, "src/lib/nested")).toBe(false);
+    expect(listingSaysDirectory(listings, "missing")).toBe(false);
+  });
 
   it("shows only expanded directories' rows, with a status row for loading, empty and cut listings", () => {
     const tree = buildTree(listings, new Set(["src", "src/lib", "empty"]), undefined);

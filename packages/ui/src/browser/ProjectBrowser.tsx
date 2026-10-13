@@ -18,7 +18,7 @@ import { useProjectBrowserState, type BrowserMode } from "./browserState";
 import { FileTree } from "./FileTree";
 import { focusRow } from "./focusRow";
 import { GitView } from "./GitView";
-import { buildTree, fileEvidence, neighbours, parentPath, rereadFor, rowKey, type DirListing, type FileEvidence } from "./tree";
+import { buildTree, fileEvidence, listingSaysDirectory, neighbours, parentPath, rereadFor, rowKey, type DirListing, type FileEvidence } from "./tree";
 import { ROW_HEIGHT } from "./treeRow";
 import { useDirectoryListings } from "./useDirectoryListings";
 import { useFileReader } from "./useFileReader";
@@ -88,9 +88,20 @@ export function ProjectBrowser({
     dirs.refresh(opened);
   };
 
-  const openFile = (path: string) => {
+  // A heading a document link asked to show, kept until another file is opened. Previous and Next
+  // open a file with no heading, which clears it.
+  const [pendingAnchor, setPendingAnchor] = useState<{ path: string; fragment?: string }>();
+  const openFile = (path: string, fragment?: string) => {
     browser.setSelected(path);
     reader.open(path);
+    setPendingAnchor(fragment === undefined ? undefined : { path, fragment });
+  };
+  // A document link replaces the file on screen. Closing the change viewer here does not move
+  // focus to its row: that would take focus out of the file viewer that is about to show.
+  const openLinkedFile = (path: string, fragment?: string) => {
+    git.dismissViewer();
+    browser.setMode("files");
+    openFile(path, fragment);
   };
 
   const closeViewer = () => {
@@ -228,8 +239,29 @@ export function ProjectBrowser({
           />
         </Tabs.Panel>
       </Tabs>
-      {reader.subject && <FileViewer subject={reader.subject} onClose={closeViewer} navigation={navigation} />}
-      {git.viewer && <FileViewer {...git.viewer} />}
+      {reader.subject && (
+        <FileViewer
+          subject={reader.subject}
+          onClose={closeViewer}
+          navigation={navigation}
+          location={{
+            project: project.id,
+            anchor: pendingAnchor && reader.subject.path === pendingAnchor.path ? pendingAnchor.fragment : undefined,
+            onOpenFile: openLinkedFile,
+            isDirectory: (path) => listingSaysDirectory(dirs.listings, path),
+          }}
+        />
+      )}
+      {git.viewer && (
+        <FileViewer
+          {...git.viewer}
+          location={{
+            project: project.id,
+            onOpenFile: openLinkedFile,
+            isDirectory: (path) => listingSaysDirectory(dirs.listings, path),
+          }}
+        />
+      )}
     </AsidePane>
   );
 }

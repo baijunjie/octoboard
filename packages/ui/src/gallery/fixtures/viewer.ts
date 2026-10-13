@@ -1,8 +1,10 @@
 // The file viewer's gallery scenarios: representative files, images and changes, plus the inputs
 // each fallback exists for — content past the render budgets, a body that is not an image, a patch
 // the renderer cannot read, a grammar that fails to load, and repository markup that must stay
-// inert. The viewer renders them outside the app (see `viewerGallery.tsx`).
+// inert — and a rendered document's diagrams, formulas, project images and links. The viewer
+// renders them outside the app (see `viewerGallery.tsx`).
 import type { FileContent } from "../../protocol";
+import { RENDER_BUDGETS } from "../../viewer/budgets";
 import { bodyFromFileContent, type ViewerBody, type ViewerChangeSide, type ViewerSubject } from "../../viewer/content";
 import type { Scenario } from "../scenario";
 import { IMAGES } from "./viewerImages";
@@ -207,12 +209,12 @@ pnpm build:app --bundles app
 // A fenced block far taller than the viewer, to be scrolled within the document's own frame.
 const LONG_FENCE = Array.from({ length: 200 }, (_, i) => `export const entry${i} = { id: ${i}, label: "Entry ${i}" };`).join("\n");
 
-// A document exercising every element the document view draws, plus what it must keep inert: raw
-// HTML, a remote image and a script link; and a passage in Arabic and one in Japanese.
+// Prose, lists, tables, fences, footnotes and right-to-left passages, plus inert markup: raw HTML,
+// a remote image and a script link. No relative link: this text is also shown from paths where the
+// target would not be a subject.
 const GUIDE = `# Viewer guide
 
-A paragraph with **bold**, _italic_, \`inline code\`, a [web link](https://example.com/guide), a bare https://example.com/bare address,
-a [relative link](./README.md) and a [script link](javascript:alert(1)).
+A paragraph with **bold**, _italic_, \`inline code\`, a [web link](https://example.com/guide), a bare https://example.com/bare address and a [script link](javascript:alert(1)).
 
 ## Lists and tasks
 
@@ -746,6 +748,89 @@ async function changes(): Promise<ViewerSubject[]> {
   ];
 }
 
+/** A diagram whose source is past the per-diagram length. An over-long diagram does not take a
+ * count slot, so it does not turn the diagrams above it into source. */
+function diagramPastBudget(): string {
+  const unit = "A --> B ";
+  return unit.repeat(Math.ceil((RENDER_BUDGETS.documentDiagramChars + 1) / unit.length));
+}
+
+// One note that holds the document states that can be on screen together. The other file is only
+// there so a relative link has a subject to open, with lines above the heading the link names:
+// opening it on that heading is not the same as opening it at the top.
+const NOTES =
+  `# Notes
+
+` +
+  // Mermaid 12.2.0 rejects accTitle and accDescr before the diagram type ("No diagram type detected").
+  // They stay after flowchart LR, the order this scenario relies on, which produces the SVG title "Request flow".
+  `\`\`\`mermaid
+flowchart LR
+accTitle: Request flow
+accDescr: A request goes from the client to the index.
+  Client --> Index --> Reply
+\`\`\`
+
+\`\`\`mermaid
+flowchart LR
+  A --> B
+\`\`\`
+
+\`\`\`mermaid
+flowchart LR
+  Client -->
+\`\`\`
+
+The note continues under the diagram that could not be drawn.
+
+It costs $20 and $30, and $100/2$ of it, and $E=mc^2$.
+
+$$
+\\int_0^1 x^2 \\, dx
+$$
+
+This formula is unfinished: $\\frac{1}{$.
+
+\`\`\`math
+x = y
+\`\`\`
+
+مرحبا $E=mc^2$ بالعالم.
+
+![A small picture](picture.png)
+
+![A picture outside the project](../../outside.png)
+
+![The missing figure](missing.png)
+
+See [the other note](./other.md#kept) and [the heading below](#kept-aside).
+
+## Another diagram
+
+\`\`\`mermaid
+${diagramPastBudget()}
+\`\`\`
+
+## Kept aside
+
+What the link in this note scrolls to.
+`;
+
+const OTHER_LEAD = Array.from({ length: 50 }, (_, index) => `Line ${index + 1} of the other note, above its heading.`).join("\n\n");
+
+const OTHER = `# Other note
+
+${OTHER_LEAD}
+
+## Kept
+
+What the link from the first note opens this file on.
+`;
+
+async function documentSubjects(): Promise<ViewerSubject[]> {
+  return [file("docs/notes.md", text("docs/notes.md", NOTES)), file("docs/other.md", text("docs/other.md", OTHER))];
+}
+
 export const viewerScenarios: Scenario[] = [
   {
     id: "viewer-files",
@@ -770,6 +855,15 @@ export const viewerScenarios: Scenario[] = [
       "A rendered document taller than the viewer, tabbed to: the focus ring is drawn on the frame round the document, whole, above the fade at its bottom edge. Next file shows highlighted code in the same frame; Tab onto it for the same ring.",
     viewer: { subjects: focusable },
     steps: [(ui) => ui.tabToRegion((name) => name.includes("guide.md"))],
+  },
+  {
+    id: "viewer-document",
+    group: GROUP,
+    title: "Rendered document",
+    description:
+      "The note opens as a document. The first diagram runs left to right, from Client to Reply, and is named Request flow; the theme control above the window switches its background and text with highlighted code (white and #0e1116 in light, #0a0c10 and #f0f3f6 in dark). The next diagram has no title, so it is named Diagram, or 图表 when the language is Chinese. The one after that cannot be drawn: its source sits under the failure notice, and the sentence under it is still there. In the line about cost, $20 and $30 stay text, while $100/2$ and E=mc^2 are formulas, as is the formula on its own line. An unfinished formula shows its source, a math fence stays code, and the formula in the Arabic sentence stays left to right. The picture is shown and named by its description. The picture whose path leaves the project keeps only its description. The missing one keeps its description and says it could not be shown. Further down, a diagram is left as source under the notice that the document is large. The link to the other note opens that file on the heading Kept; Next opens the same file from the top. The link to the heading in this note scrolls to it.",
+    files: { "docs/picture.png": { image: IMAGES.before_png } },
+    viewer: { subjects: documentSubjects },
   },
   {
     id: "viewer-changes",

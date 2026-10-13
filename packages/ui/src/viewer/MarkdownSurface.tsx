@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useCallback } from "react";
+import React, { Suspense, lazy, useCallback, useRef } from "react";
 
 import { useFadeRegion, useScrollFade } from "../components/scrollFade";
 import { isolate } from "../i18n/isolate";
@@ -11,6 +11,7 @@ import { CodeSurface } from "./CodeSurface";
 import { FencedCode } from "./FencedCode";
 import { FrameSurface } from "./FrameSurface";
 import { markdownView, MarkdownViewToggle } from "./markdownView";
+import { useMarkdownLocation } from "./markdownLocation";
 import { copyDocument, isSelectAll, selectDocument } from "./selectAll";
 import { LoadingOverlay, Notice } from "./viewerStates";
 
@@ -69,6 +70,7 @@ function DocumentSurface({
 }): React.ReactElement {
   const t = useT();
   const links = usePlatform().links;
+  const location = useMarkdownLocation();
   const colours = CODE_THEMES[theme];
   const region = useFadeRegion({ label: t("viewer.contents", { name: isolate(name) }), always: true });
   const fade = useScrollFade({
@@ -76,6 +78,16 @@ function DocumentSurface({
     style: { backgroundColor: colours.background, color: colours.foreground, "--document-link": LINK_COLOURS[theme] } as React.CSSProperties,
     className: "relative min-h-0 flex-1 overflow-auto rounded-xl p-4 text-sm leading-6",
   });
+  // Stable across the caller's renders. A new callback would mount every link and diagram again,
+  // and take the focus of a link with it, whenever the frame gains or loses its focus ring.
+  const openFileRef = useRef(location?.onOpenFile);
+  openFileRef.current = location?.onOpenFile;
+  const isDirectoryRef = useRef(location?.isDirectory);
+  isDirectoryRef.current = location?.isDirectory;
+  const onOpenFile = useCallback((file: string, fragment?: string) => {
+    openFileRef.current?.(file, fragment);
+  }, []);
+  const isDirectory = useCallback((file: string) => isDirectoryRef.current?.(file) ?? false, []);
   // Stable, so the frame's focus ring changing does not draw the document again.
   const renderCode = useCallback(
     ({ language, text: code, highlight }: { language?: string; text: string; highlight: boolean }) => (
@@ -108,7 +120,17 @@ function DocumentSurface({
           onCopy={(event) => void copyDocument(event, event.currentTarget, text)}
         >
           <Suspense fallback={<LoadingOverlay />}>
-            <MarkdownDocument text={text} renderCode={renderCode} onOpenLink={links && onOpenLink} />
+            <MarkdownDocument
+              text={text}
+              path={location?.path ?? ""}
+              project={location?.project}
+              theme={theme}
+              renderCode={renderCode}
+              onOpenLink={links && onOpenLink}
+              onOpenFile={location?.onOpenFile && onOpenFile}
+              isDirectory={isDirectory}
+              anchor={location?.anchor}
+            />
           </Suspense>
         </div>
       </FrameSurface>

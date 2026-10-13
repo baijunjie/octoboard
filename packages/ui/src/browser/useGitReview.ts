@@ -26,6 +26,8 @@ export interface GitReview {
   refresh: () => Promise<void>;
   /** The change the viewer shows, when one is open. */
   viewer?: { subject: ViewerSubject; onClose: () => void; navigation?: ViewerNavigation };
+  /** Closes the change viewer without moving focus to its row. */
+  dismissViewer: () => void;
 }
 
 /**
@@ -98,6 +100,10 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
     if (!shownComparison) return;
     browser.setSelectedComparedChange(item.key);
     changeReader.open(item, comparedOrigin(shownComparison));
+  };
+
+  const dismissViewer = () => {
+    changeReader.close();
   };
 
   const closeChange = () => {
@@ -239,6 +245,7 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
     },
     refresh,
     viewer: changeReader.subject && { subject: changeReader.subject, onClose: closeChange, navigation },
+    dismissViewer,
   };
 }
 

@@ -31,6 +31,7 @@ import { ControlsSlot } from "./controlsSlot";
 import { diffLayout, type DiffLayout } from "./diffLayout";
 import { formatFileSize } from "./format";
 import { FrameSurface } from "./FrameSurface";
+import { MarkdownLocationProvider, type MarkdownLocation } from "./markdownLocation";
 import { MarkdownSurface } from "./MarkdownSurface";
 import { hasTwoSides } from "./patch";
 import { StatusChip } from "./StatusChip";
@@ -69,10 +70,13 @@ export function FileViewer({
   subject,
   onClose,
   navigation,
+  location,
 }: {
   subject: ViewerSubject;
   onClose: () => void;
   navigation?: ViewerNavigation;
+  /** How a link or an image in a document is followed. The document's path is the subject's. */
+  location?: Omit<MarkdownLocation, "path">;
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
@@ -267,7 +271,9 @@ export function FileViewer({
         {renamedFrom !== undefined && <RenamedFrom path={renamedFrom} />}
       </div>
       <ControlsSlot value={controls}>
-        <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} />
+        <MarkdownLocationProvider value={{ path: subject.path, ...location }}>
+          <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} />
+        </MarkdownLocationProvider>
       </ControlsSlot>
     </Dialog>
   );
