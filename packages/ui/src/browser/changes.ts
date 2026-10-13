@@ -13,9 +13,9 @@ import { compareFilePaths } from "./tree";
  * section of a branch comparison, which never shares a list with the others. */
 export type ChangeSection = ChangeGroup | "conflicted" | "committed";
 
-/** The sections top to bottom, in the order `git status` tells them: what a commit would take, what
- * stops one, then the rest. */
-export const SECTION_ORDER: readonly ChangeSection[] = ["staged", "conflicted", "unstaged", "untracked", "committed"];
+/** The sections top to bottom: a path in conflict first, since it is the most important thing to
+ * deal with and stops a commit, then what a commit would take, then the rest. */
+export const SECTION_ORDER: readonly ChangeSection[] = ["conflicted", "staged", "unstaged", "untracked", "committed"];
 
 /** Each section's name, which is what the list heads it with and, for a staged or unstaged change,
  * what the viewer tags it with. */

@@ -59,6 +59,15 @@ exercised there, however right the scenario looks: verify it in the "Project pan
 supplies those bodies, and when handing a new change presentation to the `agent-gallery` skill, say that it has to be
 shown in that group.
 
+That group also stands in for the app around the viewer, in both directions, and only running its pages shows a
+mismatch. The contexts the app would provide are wired for that branch alone in `packages/ui/src/gallery/frame.tsx`, so
+a viewer component that starts calling a hook needing one — anything that reaches the daemon, a toast included — throws
+on mount in every scenario of the group, with the type check and the unit tests still green. The other way round, its
+subjects are literals standing in for what the project browser's own hooks build, so a field those hooks fill only
+under a condition (a `ViewerSubject`'s `source`, which only the change reader sets, and only for a comparison) is left
+unset in every fixture that does not meet that condition, read off the hook that builds the subject rather than off
+what the header happens to draw. So open the group's pages for any change to the viewer or to what it depends on.
+
 ## A fixture daemon answers as fully as the real one, or the gallery shows a state no daemon sends
 
 Applies whenever a daemon reply gains a field the UI draws from, and whenever a gallery scenario still shows the old

@@ -28,6 +28,14 @@ and the Files tree's chevron, all rely on it, so do not give such a control a ta
 
 `preventFocusOnPress` only keeps a *mouse* press from taking focus; the control still has to be reachable.
 
+**Where a float decides the source order, every control of that row goes in the float.** A group that floats to the
+end of a row has to come first in the source, because a float only shortens the lines that follow it; the text it
+leaves beside it then reads after it. That is only a reading-order cost while the row's other content is inert text,
+and it becomes a focus-order one — focus jumping back against the reading direction — the moment a control sits in
+that text. So a control belonging to such a row joins the floating group rather than standing among the text: the
+file viewer's header floats its view controls to the end of the detail row, and its Copy path button is the group's
+first control rather than a button beside the path it copies (`packages/ui/src/viewer/FileViewer.tsx`).
+
 A control inside a collection's **section header** is reached by neither of those: react-aria's keyboard delegate
 walks the collection's items alone, so the arrow keys never land on a header, Tab inside the collection jumps to the
 last tabbable element and leaves, and focus arriving anywhere in the collection that is not a row is moved to its
@@ -145,6 +153,11 @@ Every control has an accessible name: its visible text, or an `aria-label` when 
   action) is the instance — its visible message, then an `sr-only` span with the action, giving "No projects yet Add
   project". Such a row also sets an empty `aria-describedby` itself, since `TitledControl` only recognizes a tooltip
   that repeats an `aria-label`.
+- **A name drawn as several boxes in a flex row is built as one string of its own**, with the drawn boxes hidden from
+  the name (`aria-hidden="true"`): WebKit puts a space around every flex item while composing a name, so the boxes
+  would be announced as "Modified , Staged : a.ts". The file viewer's title is the instance — an `sr-only` span holds
+  the whole name, assembled from the catalog in the order the boxes are drawn in, and carries `select-none` so a copied
+  heading does not hold the text twice (`packages/ui/src/viewer/FileViewer.tsx`).
 - An element that takes an `aria-label` without being a control — a scrolling `div` or `pre` made focusable with
   `tabIndex={0}` — also gets a role that can be named (`role="region"`). ARIA prohibits naming a generic element, so
   the name may never be spoken.

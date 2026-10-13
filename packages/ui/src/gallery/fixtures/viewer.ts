@@ -424,8 +424,9 @@ function binary(path: string, image: { mediaType: string | null; data: string })
   return bodyFromFileContent(path, { size, kind: "binary", media_type: image.mediaType, text: null, data: image.data });
 }
 
-function file(path: string, body: ViewerBody, source = "Working tree"): ViewerSubject {
-  return { key: `live:${path}`, path, source, content: { state: "file", body } };
+// A file from the tree has no source: only a change opened from the Compare view says where it is from.
+function file(path: string, body: ViewerBody): ViewerSubject {
+  return { key: `live:${path}`, path, content: { state: "file", body } };
 }
 
 function present(path: string, body?: ViewerBody, kind: "file" | "symlink" | "submodule" = "file"): ViewerChangeSide {
@@ -519,14 +520,13 @@ async function files(): Promise<ViewerSubject[]> {
     file("src/generated/table.ts", text("src/generated/table.ts", nearBudget())),
     file("logs/server.log", text("logs/server.log", largeLog())),
     file("src/empty.ts", text("src/empty.ts", "")),
-    { key: "live:src/pending.ts", path: "src/pending.ts", source: "Working tree", content: { state: "loading" } },
+    { key: "live:src/pending.ts", path: "src/pending.ts", content: { state: "loading" } },
     {
       key: "live:src/gone.ts",
       path: "src/gone.ts",
-      source: "Working tree",
       content: { state: "error", message: "src/gone.ts no longer exists in this project." },
     },
-    { key: "live:src/offline.ts", path: "src/offline.ts", source: "Working tree", content: { state: "disconnected", what: "file" } },
+    { key: "live:src/offline.ts", path: "src/offline.ts", content: { state: "disconnected", what: "file" } },
     // Names too long for the header, in Latin and in CJK script.
     file(
       "packages/settings/src/components/notification-preferences/an-extraordinarily-long-component-file-name-that-keeps-going.tsx",
@@ -575,6 +575,25 @@ function untrackedNotFile(path: string, kind: "symlink" | "submodule"): ViewerSu
   return { key: `Untracked:${path}`, path, status: "untracked", content: { state: "change", change: { old: { state: "absent" }, new: present(path, undefined, kind) } } };
 }
 
+/** A change opened from the Compare view: the comparison is the subtitle under the title. */
+function compared(): ViewerSubject {
+  return {
+    key: "Compare:src/session.ts",
+    path: "src/session.ts",
+    source: "main at 1234567 to feature at fedcba0",
+    sourceText: "main at 1234567 to feature at fedcba0",
+    content: { state: "change", change: { old: present("src/session.ts", oldSession), new: present("src/session.ts", newSession), patch: MODIFIED_PATCH } },
+  };
+}
+
+/** Subjects for a header on a platform with no clipboard, one for each way the control group can then
+ * be: a Markdown file (the view choice, and the wrap choice once it is in source), an image (no
+ * control left, so the group is empty) and a compared change (the layout and wrap choices, with the
+ * subtitle). */
+async function withoutClipboard(): Promise<ViewerSubject[]> {
+  return [file("docs/guide.md", text("docs/guide.md", GUIDE)), file("assets/before.png", binary("assets/before.png", IMAGES.before_png)), compared()];
+}
+
 async function changes(): Promise<ViewerSubject[]> {
   return [
     change("src/session.ts", present("src/session.ts", oldSession), present("src/session.ts", newSession), MODIFIED_PATCH),
@@ -611,29 +630,16 @@ async function changes(): Promise<ViewerSubject[]> {
         body: text("src/merge.ts", "<<<<<<< ours\nconst a = 1;\n=======\nconst a = 2;\n>>>>>>> theirs\n"),
       },
     },
-    {
-      key: "Compare:src/session.ts",
-      path: "src/session.ts",
-      source: "main at 1234567 to feature at fedcba0",
-      sourceText: "main at 1234567 to feature at fedcba0",
-      content: { state: "change", change: { old: present("src/session.ts", oldSession), new: present("src/session.ts", newSession), patch: MODIFIED_PATCH } },
-    },
-    // Long branches beside the Markdown view choice: a Markdown file shown alone, from the Compare
-    // view, has the source / document choice and the wrap choice in source (a Markdown diff has the
-    // layout and wrap choices and no document, so all three never show together).
+    compared(),
+    // A long comparison under the title, and a Markdown file shown alone from the Compare view, which
+    // has the source / document choice and the wrap choice in source (a Markdown diff has the layout
+    // and wrap choices and no document, so all three never show together).
     {
       key: "Compare:docs/guide.md",
       path: "docs/guide.md",
       source: LONG_COMPARISON,
       sourceText: LONG_COMPARISON,
       content: { state: "change", change: { old: { state: "absent" }, new: present("docs/guide.md", text("docs/guide.md", GUIDE)) } },
-    },
-    {
-      key: "Compare:docs/short.md",
-      path: "docs/short.md",
-      source: "main at 1234567 to feature at fedcba0",
-      sourceText: "main at 1234567 to feature at fedcba0",
-      content: { state: "change", change: { old: { state: "absent" }, new: present("docs/short.md", text("docs/short.md", GUIDE)) } },
     },
     change(
       "docs/handbook/engineering/onboarding/renamed-guide.md",
@@ -642,8 +648,9 @@ async function changes(): Promise<ViewerSubject[]> {
       "diff --git a/docs/handbook/engineering/onboarding/previous-locations/legacy/old-guide.md b/docs/handbook/engineering/onboarding/renamed-guide.md\nsimilarity index 100%\nrename from docs/handbook/engineering/onboarding/previous-locations/legacy/old-guide.md\nrename to docs/handbook/engineering/onboarding/renamed-guide.md\n",
       "Staged",
     ),
-    // The tallest header: a Compare-view rename with long branches and a long origin, each taking a
-    // row.
+    // The tallest header: a Compare-view rename with long branches and a long origin, the comparison
+    // a subtitle row of its own and the origin a row of its own, and a Markdown diff with the layout
+    // and wrap choices.
     {
       key: "Compare:docs/handbook/renamed-notes.md",
       path: "docs/handbook/engineering/onboarding/renamed-notes.md",
@@ -661,23 +668,7 @@ async function changes(): Promise<ViewerSubject[]> {
         },
       },
     },
-    // A Markdown file modified between long-named branches: the layout and wrap choices beside a long
-    // comparison.
-    {
-      key: "Compare:docs/modified.md",
-      path: "docs/modified.md",
-      source: LONG_COMPARISON,
-      sourceText: LONG_COMPARISON,
-      content: {
-        state: "change",
-        change: {
-          old: present("docs/modified.md", text("docs/modified.md", GUIDE)),
-          new: present("docs/modified.md", text("docs/modified.md", GUIDE)),
-          patch: markdownPatch("docs/modified.md", "docs/modified.md"),
-        },
-      },
-    },
-    // CJK in the widest places: a long path and long branch names.
+    // CJK in the widest places: a long path and long branch names in the subtitle.
     {
       key: `Compare:${CJK_PATH}`,
       path: CJK_PATH,
@@ -720,7 +711,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     title: "Files",
     description:
-      "Code in several languages (one file with lines wider than the viewer), Markdown that opens as a document (headings, lists, tables, fenced code, markup that must stay inert, and right-to-left text: in the guide, a list, quote and table that read from the right inside a left-to-right document; in the Arabic document, the same blocks in the other direction, with an English paragraph and an English-first list among them; the figures document has no letters, so with the ar language it reads from the right), every image format, an SVG and HTML whose scripts must not run, unsupported binary, a grammar that fails, files past the budgets, loading and failed reads. Previous / Next walks them in the same mounted viewer.",
+      "Code in several languages (one file with lines wider than the viewer), Markdown that opens as a document (headings, lists, tables, fenced code, markup that must stay inert, and right-to-left text: in the guide, a list, quote and table that read from the right inside a left-to-right document; in the Arabic document, the same blocks in the other direction, with an English paragraph and an English-first list among them; the figures document has no letters, so with the ar language it reads from the right), every image format, an SVG and HTML whose scripts must not run, unsupported binary, a grammar that fails, files past the budgets, loading and failed reads. Previous / Next walks them in the same mounted viewer. In each header the path is followed by the size as a chip, and no subtitle row sits under the title. The copy button is the first of the controls at the end of the row, ahead of the Markdown view choice and the word wrap choice (a Markdown file switched to source shows all three), and it stays there when a long name pushes the size chip, or in a narrow window the path itself, down to a row of its own.",
     viewer: { subjects: files },
   },
   {
@@ -735,7 +726,16 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     title: "Changes",
     description:
-      "Modified (one with lines wider than the viewer), added, deleted, renamed, type-changed and renamed-below-itself files, in both directions, from patches, sides outside the project, image changes, a binary change, an untracked symbolic link and repository of its own, a change whose two sides are the same, a patch past the budget, a patch that cannot be read and a change without a patch.",
+      "Modified (one with lines wider than the viewer), added, deleted, renamed, type-changed and renamed-below-itself files, in both directions, from patches, sides outside the project, image changes, a binary change, an untracked symbolic link and repository of its own, a change whose two sides are the same, a patch past the budget, a patch that cannot be read and a change without a patch. In each title the name comes first, then the status chip, then the stage tag; a conflicted, untracked or compared change has no stage tag. A change from the Compare view has its comparison as a subtitle directly under the title, faded where clipped (the long and the Chinese ones), and the neighbouring changes show that a subject without one loses that row. At the end of the path's row the copy button comes first, then the diff layout and word wrap choices (the Markdown diffs show all three); the rename with long branches and a long origin has the most rows once the window is narrow (the width controls above the window).",
     viewer: { subjects: changes },
+  },
+  {
+    id: "viewer-no-clipboard",
+    group: GROUP,
+    title: "Header on a platform with no clipboard",
+    description:
+      "A Markdown file, an image and a change from the Compare view on a platform with no clipboard: the controls at the end of the path's row start at the view choices, with no copy button ahead of them (switch the Markdown file to source for the wrap choice beside the view choice), and the image has none at all. The rest of the header (the size chip, the subtitle) is unchanged.",
+    clipboard: "unavailable",
+    viewer: { subjects: withoutClipboard },
   },
 ];

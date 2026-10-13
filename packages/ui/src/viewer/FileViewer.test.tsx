@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
@@ -9,6 +9,7 @@ import { ThemeProvider } from "../theme";
 import { ChangeBodiesError, type ViewerChangeSide, type ViewerContent, type ViewerSubject } from "./content";
 import { diffLayout } from "./diffLayout";
 import { FileViewer, type ViewerNavigation } from "./FileViewer";
+import { ViewerHost } from "./viewerTestSupport";
 import { wordWrap } from "./wordWrap";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -86,13 +87,15 @@ afterEach(() => {
   container.remove();
 });
 
-function show(subject: ViewerSubject | undefined, navigation?: ViewerNavigation): void {
+function show(subject: ViewerSubject | undefined, navigation?: ViewerNavigation, host: Omit<React.ComponentProps<typeof ViewerHost>, "children"> = {}): void {
   act(() => {
     root.render(
-      <ThemeProvider>
-        <button type="button">Open</button>
-        {subject && <FileViewer subject={subject} onClose={() => {}} navigation={navigation} />}
-      </ThemeProvider>,
+      <ViewerHost {...host}>
+        <ThemeProvider>
+          <button type="button">Open</button>
+          {subject && <FileViewer subject={subject} onClose={() => {}} navigation={navigation} />}
+        </ThemeProvider>
+      </ViewerHost>,
     );
   });
 }
@@ -516,6 +519,8 @@ it("keeps focus in the dialog when the wrap choice it was on goes", () => {
 });
 
 // The title's accessible name: the one screen-reader-only string the drawn tags and name are hidden from.
+// The subtitle is the row under the title, present only for a subject with a source.
+const subtitle = () => dialog()!.querySelector<HTMLElement>("[data-viewer-subtitle]");
 const titleName = () => dialog()!.querySelector("h2 > .sr-only")!.textContent;
 
 const modified = (path = "src/c.ts"): ViewerSubject => {
@@ -523,17 +528,18 @@ const modified = (path = "src/c.ts"): ViewerSubject => {
   return { key: `m:${path}`, path, stage: "Unstaged", content: { state: "change", change: { old: side, new: side, patch: "@@ -1 +1 @@\n-a\n+b\n" } } };
 };
 
-// The kind of change and the stage are tags before the name in the title, the kind coloured and the
-// stage neutral; the description line has the path, where the change is from, and the layout choice at its end.
+// The kind of change and the stage are tags after the name in the title, the kind coloured and the
+// stage neutral; the description line has the path and the layout choice at its end.
 it("puts the status and the stage in the title and the layout choice on the description's row", () => {
   show(modified());
   const heading = dialog()!.querySelector("h2")!;
-  expect(titleName()).toBe("Modified, Unstaged: c.ts");
+  expect(titleName()).toBe("c.ts: Modified, Unstaged");
   const tags = heading.querySelectorAll(".chip");
   expect([...tags].map((tag) => tag.textContent)).toEqual(["Modified", "Unstaged"]);
   const drawn = heading.querySelector('[aria-hidden="true"]')!;
   expect([...tags].every((tag) => drawn.contains(tag))).toBe(true);
-  expect(drawn.textContent).toContain("c.ts");
+  // The drawn name comes first, then the tags, as the accessible name reads.
+  expect(drawn.textContent).toBe("c.tsModifiedUnstaged");
   const row = layoutToggles()[0].closest<HTMLElement>("[data-viewer-description]")!;
   expect(row.textContent).toContain("src/c.ts");
   expect(row.textContent).not.toMatch(/Modified|staged/i);
@@ -541,14 +547,15 @@ it("puts the status and the stage in the title and the layout choice on the desc
 
 // The tags are one group, closer to each other than the group is to the name, and each detail of the
 // description line is an item of its own, so one too long for the space beside the view controls can
-// move to a row of its own (layout is checked in WebKit); the paths carry the file icon.
+// move to a row of its own (layout is checked in WebKit); the paths carry the file icon. Where a
+// compared change is from is no detail but the subtitle under the title.
 it("keeps the tags in one group and each detail as an item of its own, the paths with an icon", () => {
   const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file", body: { kind: "binary", size: 3 } });
   show({
     ...modified(),
     source: "main at 1234567 to feature at fedcba0",
     content: { state: "change", change: { old: side("src/old.ts"), new: side("src/c.ts") } },
-  });
+  }, undefined, { clipboard: { writeText: async () => {} } });
   const tags = dialog()!.querySelectorAll(".chip");
   expect(tags[0].parentElement).toBe(tags[1].parentElement);
   expect(tags[0].parentElement!.children.length).toBe(2);
@@ -556,7 +563,8 @@ it("keeps the tags in one group and each detail as an item of its own, the paths
   // The view controls come first in the source, floated to the row's end; they are what the details flow around.
   const [controls, ...details] = [...row.children];
   expect(controls.className).toContain("float-end");
-  expect(details.map((item) => item.textContent)).toEqual(["src/c.ts", "main at 1234567 to feature at fedcba0", "Renamed from src/old.ts"]);
+  expect(details.map((item) => item.textContent)).toEqual(["src/c.ts", "Renamed from src/old.ts"]);
+  // The path and the rename origin carry the file icon.
   expect(details.filter((item) => item.querySelector("svg")).length).toBe(2);
 });
 
@@ -564,20 +572,21 @@ it("keeps the tags in one group and each detail as an item of its own, the paths
 // accessible name has no tag separator, since there is no status tag to separate it from.
 it("names a title that has only a stage tag without a tag separator", () => {
   show({ ...modified(), content: { state: "disconnected", what: "change" } });
-  expect(titleName()).toBe("Unstaged: c.ts");
+  expect(titleName()).toBe("c.ts: Unstaged");
 });
 
 it("shows no stage tag for an untracked, conflicted or compared change, and the branches for the last", () => {
   const row = () => dialog()!.querySelector<HTMLElement>("[data-viewer-description]")!;
   const body = { kind: "text", text: "x\n", size: 2 } as const;
   show({ ...modified(), stage: undefined, status: "untracked" });
-  expect(titleName()).toBe("Untracked: c.ts");
+  expect(titleName()).toBe("c.ts: Untracked");
   show({ key: "c", path: "src/m.ts", content: { state: "conflict", conflict: "Both sides modified this file.", body } });
-  expect(titleName()).toBe("Conflicted: m.ts");
+  expect(titleName()).toBe("m.ts: Conflicted");
   expect(row().textContent).not.toMatch(/staged/i);
   show({ ...modified(), stage: undefined, source: "main at 1234567 to feature at fedcba0" });
-  expect(titleName()).toBe("Modified: c.ts");
-  expect(row().textContent).toContain("main at 1234567 to feature at fedcba0");
+  expect(titleName()).toBe("c.ts: Modified");
+  expect(row().textContent).not.toContain("main at");
+  expect(subtitle()!.textContent).toBe("main at 1234567 to feature at fedcba0");
 });
 
 // An untracked file has no old side, which reads as added; the list says untracked, and so does the
@@ -589,20 +598,80 @@ it("marks an untracked file Untracked, with no note that it is new content", () 
     change: { old: { state: "absent" }, new: { state: "present", path: "src/n.ts", kind: "file", body } },
   };
   show({ key: "u", path: "src/n.ts", status: "untracked", content });
-  expect(titleName()).toBe("Untracked: n.ts");
+  expect(titleName()).toBe("n.ts: Untracked");
   expect(dialog()!.querySelector("h2 .chip")!.classList).toContain("chip-untracked");
   expect(dialog()!.textContent).not.toMatch(/new content/i);
   show({ key: "a", path: "src/n.ts", content });
-  expect(titleName()).toBe("Added: n.ts");
+  expect(titleName()).toBe("n.ts: Added");
   expect(dialog()!.querySelector("h2 .chip")!.classList).not.toContain("chip-untracked");
   // The status the list gave holds while the content is not read, and when reading it failed.
   show({ key: "l", path: "src/n.ts", status: "untracked", content: { state: "loading" } });
-  expect(titleName()).toBe("Untracked: n.ts");
+  expect(titleName()).toBe("n.ts: Untracked");
   const unavailable: ViewerContent = { state: "change", change: { old: { state: "absent" }, new: { state: "absent" }, unavailable: "Could not read it." } };
   show({ key: "f", path: "src/n.ts", status: "untracked", content: unavailable });
-  expect(titleName()).toBe("Untracked: n.ts");
+  expect(titleName()).toBe("n.ts: Untracked");
   show({ key: "d", path: "src/n.ts", status: "untracked", content: { state: "disconnected", what: "change" } });
-  expect(titleName()).toBe("Untracked: n.ts");
+  expect(titleName()).toBe("n.ts: Untracked");
+});
+
+// Where a compared change is from is a subtitle directly under the title and above the description
+// line, isolated per branch and commit, with the plain text as the tooltip; a subject without a
+// source has no such row at all.
+it("shows where a compared change is from as a subtitle in the header, under the title and before the description line", () => {
+  const source = (
+    <>
+      <bdi>main</bdi> at <bdi>1234567</bdi> to <bdi>feature</bdi> at <bdi>fedcba0</bdi>
+    </>
+  );
+  show({ ...modified(), stage: undefined, source, sourceText: "main at 1234567 to feature at fedcba0" });
+  const row = subtitle()!;
+  expect(row.textContent).toBe("main at 1234567 to feature at fedcba0");
+  expect(row.querySelectorAll("bdi").length).toBe(4);
+  const description = dialog()!.querySelector("[data-viewer-description]")!;
+  const heading = dialog()!.querySelector("h2")!;
+  expect(heading.nextElementSibling).toBe(row);
+  expect(row.parentElement).toBe(heading.parentElement);
+  expect(row.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  show(modified());
+  expect(subtitle()).toBeNull();
+});
+
+it("draws the size as a chip after the path", () => {
+  show(binary);
+  const items = [...dialog()!.querySelector("[data-viewer-description]")!.children].slice(1);
+  expect(items.map((item) => item.textContent)).toEqual(["bin/b.wasm", "3 bytes"]);
+  expect(items[1].querySelector(".chip")!.textContent).toBe("3 bytes");
+});
+
+// The header offers Copy path only where the platform has a clipboard, as a row does, and copies
+// the path the path item shows. Its button is the first control of the group at the row's end.
+it("copies the project-relative path from the view-control group's first button, and says so", async () => {
+  const writeText = vi.fn(async () => {});
+  const toasts = { notice: vi.fn(), error: vi.fn() };
+  show(modified("src/dir/c.ts"), undefined, { clipboard: { writeText }, toasts });
+  const copy = button("Copy path");
+  const [group, pathItem] = [...dialog()!.querySelector("[data-viewer-description]")!.children];
+  expect(group.className).toContain("float-end");
+  expect(group.querySelector("button")).toBe(copy);
+  expect(pathItem.querySelector("button")).toBeNull();
+  expect(controlNamed("Copy path").length).toBe(1);
+  await act(async () => copy.click());
+  expect(writeText).toHaveBeenCalledWith("src/dir/c.ts");
+  expect(toasts.notice).toHaveBeenCalledWith("Path copied");
+});
+
+it("says when the path could not be copied", async () => {
+  const toasts = { notice: vi.fn(), error: vi.fn() };
+  show(modified(), undefined, { clipboard: { writeText: async () => Promise.reject(new Error("no")) }, toasts });
+  await act(async () => button("Copy path").click());
+  expect(toasts.error).toHaveBeenCalledWith("Could not copy the path");
+  expect(toasts.notice).not.toHaveBeenCalled();
+});
+
+it("shows no copy button where the platform has no clipboard", () => {
+  show(modified());
+  expect(document.querySelector('button[aria-label="Copy path"]')).toBeNull();
+  expect(dialog()!.querySelector("[data-viewer-description]")!.textContent).toContain("src/c.ts");
 });
 
 it("has no status chip for a file, and none for a loading change whose caller gives no status", () => {
@@ -693,7 +762,10 @@ it("wraps nothing by default, then wraps files and diffs alike once chosen, and 
 // The two controls portal into places of their own, so the Tab order stays the order on screen
 // whichever mounts first: stepping from a one-sided diff (the wrap choice only) to a two-sided one
 // brings the layout choice in after it.
-it("keeps the layout choice before the wrap choice when the layout choice mounts second", () => {
+it.each([
+  ["with a clipboard", { clipboard: { writeText: async () => {} } }, ["Copy path"]],
+  ["without a clipboard", undefined, []],
+])("keeps Copy path, then the layout choice, then the wrap choice, when the layout choice mounts second, %s", (_, host, leading) => {
   const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
   const change = (key: string, patch: string, old: ViewerChangeSide): ViewerSubject => ({
     key,
@@ -701,10 +773,10 @@ it("keeps the layout choice before the wrap choice when the layout choice mounts
     content: { state: "change", change: { old, new: side, patch } },
   });
   const controls = () => [...dialog()!.querySelector("[data-viewer-description]")!.querySelectorAll("button")].map((b) => b.getAttribute("aria-label"));
-  show(change("one", "@@ -0,0 +1 @@\n+a\n", { state: "absent" }));
-  expect(controls()).toEqual(["Wrap lines"]);
-  show(change("two", "@@ -1 +1 @@\n-a\n+b\n", side));
-  expect(controls()).toEqual(["Show split diff", "Wrap lines"]);
+  show(change("one", "@@ -0,0 +1 @@\n+a\n", { state: "absent" }), undefined, host);
+  expect(controls()).toEqual([...leading, "Wrap lines"]);
+  show(change("two", "@@ -1 +1 @@\n-a\n+b\n", side), undefined, host);
+  expect(controls()).toEqual([...leading, "Show split diff", "Wrap lines"]);
 });
 
 // An image that cannot be decoded falls back to its text on whichever side it happens to, and the

@@ -350,7 +350,7 @@ export const projectGitScenarios: Scenario[] = [
     group: GROUP,
     title: "A worktree's uncommitted changes",
     description:
-      "The Git mode: the worktree selector, then the changes in sections — staged, conflicted, unstaged, untracked. src/server.ts is in both Staged and Unstaged, as two changes. Press one to open its diff; Left and Right move through the list across sections.",
+      "The Git mode: the worktree selector, then the changes in sections — conflicted first, then staged, unstaged, untracked. src/server.ts is in both Staged and Unstaged, as two changes. Press one to open its diff; Left and Right move through the list across sections.",
     state,
     steps: openGit,
   },

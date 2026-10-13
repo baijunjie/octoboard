@@ -1,11 +1,12 @@
 import { Button, Chip } from "@heroui/react";
-import { ChevronLeft, ChevronRight, File } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, File } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { FadeOverflow } from "../components/FadeOverflow";
 import { PlainMarkedPath } from "../components/MarkedPath";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { TitledControl } from "../components/TitledControl";
+import { useCopyPath } from "../components/useCopyPath";
 import { Dialog, useRefocusIfLost } from "../dialogs/Dialog";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
@@ -163,21 +164,26 @@ export function FileViewer({
     </>
   ) : null;
 
-  // The header is the title, with the tags of what the change is before the name, and under it the
-  // details (path, source, size, rename origin) beside the view controls (the Markdown view, diff
-  // layout and word wrap choices), which float at the row's end. The details are separate items laid
-  // out like words around that float (`DetailItem`): they share the row with the controls to use the
-  // width beside them, and one too long for the space left moves down to a row of its own, where it
-  // has the whole width, rather than being squeezed against the others. Each item is one line cut by
+  // The header is the title, the file's name with the tags of what the change is after it; under
+  // it, when the subject has one, the subtitle (where a compared change is from, which is a tag in
+  // meaning but far too long to sit in the tag group); and under that, in the body, the details
+  // (path, size, rename origin) beside the controls (Copy path, then the Markdown view, diff layout
+  // and word wrap choices), which float at the row's end. The details are separate items laid out like
+  // words around that float (`DetailItem`): they share the row with the controls to use the width
+  // beside them, and one too long for the space left moves down to a row of its own, where it has
+  // the whole width, rather than being squeezed against the others. Each item is one line cut by
   // a fade, so only a detail that does not fit even alone is clipped.
   // The block is the row beside the controls plus a row for each further line the dropped items
   // need (short items that all miss the space beside the controls share one): two rows when a long
-  // comparison drops, three when a rename's long origin drops too, each taking 32 px of the code
-  // area from the dialog. That is accepted, because the milestone asks that a long detail take a
-  // row of its own rather than be squeezed, and capping it would squeeze one. It also gives up what
-  // the header held before, each row one line that is never wrapped, so that moving between files
-  // could not move the code below; the code now moves when the rows needed differ from one file to
-  // the next.
+  // path drops, three when a rename's long origin drops too, each taking 32 px of the code area
+  // from the dialog. That is accepted, because the milestone asks that a long detail take a row of
+  // its own rather than be squeezed, and capping it would squeeze one. The subtitle is a 32 px row
+  // in the dialog's header, directly under the heading (`Dialog`'s `subtitle`), for a compared
+  // change and nothing for any other subject. It costs those 32 px and no more, and since the
+  // header is not the scroller it is not clipped by it.
+  // The header also gives up what it held before, each row one line that is never wrapped, so that
+  // moving between files could not move the code below; the code now moves when the rows needed
+  // differ from one file to the next, and between a compared change and a worktree one.
   // An untracked file is a change with an absent old side, which `changeStatus` calls added; the
   // list marks it untracked and says so in `subject.status`, which also holds while the content is
   // not read (yet). Without one, a change's sides give it, and a path in conflict has none to compare.
@@ -186,7 +192,8 @@ export function FileViewer({
   const renamedFrom = content.state === "change" ? renamedFromPath(content.change) : undefined;
   const statusLabel = status ? t(STATUS_LABELS[status]) : undefined;
   const tags = [statusLabel, subject.stage].filter((tag): tag is string => tag !== undefined);
-  const titleName = tags.length > 0 ? `${tags.join(t("viewer.tagSeparator"))}${t("viewer.titleSeparator")}${name}` : name;
+  const titleName = tags.length > 0 ? `${name}${t("viewer.titleSeparator")}${tags.join(t("viewer.tagSeparator"))}` : name;
+  const copyPath = useCopyPath();
   return (
     <Dialog
       size="viewer"
@@ -198,7 +205,10 @@ export function FileViewer({
               text twice. */}
           <span className="sr-only select-none">{titleName}</span>
           <span aria-hidden="true" className="flex min-w-0 items-center gap-2.5">
-            {/* What the change is, coloured, then where it is from, neutral: both tags come before the name,
+            <FadeOverflow as="span" dir="ltr" className="min-w-0" titleWhenClipped={name}>
+              {name}
+            </FadeOverflow>
+            {/* What the change is, coloured, then where it is from, neutral: both tags come after the name,
                 whichever the subject has, and never shrink, so the name is what the fade cuts. The
                 tags sit closer to each other than the group does to the name. */}
             {tags.length > 0 && (
@@ -211,37 +221,16 @@ export function FileViewer({
                 )}
               </span>
             )}
-            <FadeOverflow as="span" dir="ltr" className="min-w-0" titleWhenClipped={name}>
-              {name}
-            </FadeOverflow>
           </span>
         </>
       }
-      onClose={onClose}
-      footer={footer}
-      resetKey={subject.key}
-    >
-      <div ref={headerRef} data-viewer-description="" className="flow-root min-h-8 min-w-0 shrink-0 text-xs leading-8">
-        {/* Fixed places, the Markdown view choice, then the layout choice, then the wrap choice, so
-            the Tab order is the order on screen whichever of them mounts first. The slots have no
-            box of their own while empty, so they take none of the gap. The group floats to the end of
-            the row, ahead of the details in the source so the line next to it is the one it shortens
-            (a float shortens only the lines that follow it). That puts the three controls before
-            the file's path for a screen reader. That cost was weighed and accepted: the details are
-            independent, separately labelled facts and the path is not needed to use the controls. The
-            dialog's body text is muted, which the icons' strokes would inherit (under 4.5:1
-            on a hovered `.control-fills` fill), so the controls take the foreground colour and each
-            detail item the muted one. */}
-        <div className="float-end flex h-8 items-center gap-2 text-foreground">
-          <div ref={setMarkdownViewSlot} className="contents" />
-          <div ref={setLayoutSlot} className="contents" />
-          {wrapClaimed && <WrapToggleHost />}
-        </div>
-        <DetailItem>
-          <PlainMarkedPath path={displayWirePath(subject.path)} icon={File} />
-        </DetailItem>
-        {subject.source && (
-          <DetailItem>
+      subtitle={
+        subject.source ? (
+          // Part of the subject's identity, so it comes straight after the title in the reading order.
+          // Rendered only while there is a source, so a subject without one loses no height. The muted
+          // colour is set here rather than inherited: the dialog's header carries none of its own, and
+          // this line is the subject's metadata, not a second title.
+          <div data-viewer-subtitle="" className="flex h-8 min-w-0 items-center text-xs text-muted">
             <FadeOverflow
               as="span"
               className="min-w-0"
@@ -249,9 +238,43 @@ export function FileViewer({
             >
               {subject.source}
             </FadeOverflow>
+          </div>
+        ) : undefined
+      }
+      onClose={onClose}
+      footer={footer}
+      resetKey={subject.key}
+    >
+      <div ref={headerRef} data-viewer-description="" className="flow-root min-h-8 min-w-0 shrink-0 text-xs leading-8">
+        {/* Copy path first, then fixed places for the Markdown view choice, the layout choice and the
+            wrap choice, so the Tab order is the order on screen whichever of the three mounts first.
+            Copy path is here, not beside the path it copies, because the group sits at the row's end
+            and a button at the row's start would be tabbed to after the three at its end, against the
+            reading direction. The slots have no box of their own while empty, so they take none of
+            the gap. The group floats to the end of the row, ahead of the details in the source so
+            the line next to it is the one it shortens (a float shortens only the lines that follow
+            it). That puts the controls before the file's path for a screen reader, so Copy path is
+            met before the path it copies. That cost was weighed and accepted: the details are
+            independent, separately labelled facts, and Copy path and the other controls are labelled
+            on their own. The dialog's body text is muted, which the icons' strokes would inherit
+            (under 4.5:1 on a hovered `.control-fills` fill), so the controls take the foreground
+            colour and each detail item the muted one. */}
+        <div className="float-end flex h-8 items-center gap-2 text-foreground">
+          {copyPath && <CopyPathButton onPress={() => copyPath(subject.path)} />}
+          <div ref={setMarkdownViewSlot} className="contents" />
+          <div ref={setLayoutSlot} className="contents" />
+          {wrapClaimed && <WrapToggleHost />}
+        </div>
+        <DetailItem>
+          <PlainMarkedPath path={displayWirePath(subject.path)} icon={File} />
+        </DetailItem>
+        {content.state === "file" && (
+          <DetailItem>
+            <Chip size="sm" variant="soft">
+              {formatFileSize(language, content.body.size)}
+            </Chip>
           </DetailItem>
         )}
-        {content.state === "file" && <DetailItem>{formatFileSize(language, content.body.size)}</DetailItem>}
         {renamedFrom !== undefined && <RenamedFrom path={renamedFrom} />}
       </div>
       <ControlsSlot value={controls}>
@@ -290,6 +313,20 @@ function NavigationButton({
         onBlur={onBlur}
       >
         <Icon aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+      </Button>
+    </TitledControl>
+  );
+}
+
+/** The header's Copy path: the first control of the group at the row's end, an icon button that
+ * takes no focus from a press, as the view controls do. */
+function CopyPathButton({ onPress }: { onPress: () => void }): React.ReactElement {
+  const t = useT();
+  const label = t("common.copyPath");
+  return (
+    <TitledControl title={label}>
+      <Button isIconOnly size="sm" variant="tertiary" aria-label={label} onPress={onPress} preventFocusOnPress>
+        <Copy aria-hidden="true" className="size-4" />
       </Button>
     </TitledControl>
   );

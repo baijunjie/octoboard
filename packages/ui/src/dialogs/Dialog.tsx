@@ -114,6 +114,7 @@ let openDialogs = 0;
  */
 export function Dialog({
   title,
+  subtitle,
   onClose,
   children,
   footer,
@@ -127,6 +128,9 @@ export function Dialog({
 }: {
   /** Text, or an element for a title that needs markup of its own (a file name kept left to right). */
   title: string | React.ReactElement;
+  /** A line under the title that belongs to it (where a compared change is from): in the header, so
+   * it reads after the title and is never clipped by the body's scroller. It brings its own height. */
+  subtitle?: React.ReactElement;
   onClose: () => void;
   children: BodyChildren;
   /** `wide` is `lg` with room for a list of rows that each carry a path; `viewer` is a frame for
@@ -262,9 +266,12 @@ export function Dialog({
           </TitledControl>
           {/* HeroUI places the close button over the header's end without reserving room for it, so
               the heading is padded clear of it; a long title (a session's name, say) has to wrap
-              anywhere, since a name with no place to break would run out of the dialog. */}
-          <Frame.Header className="pe-6">
+              anywhere, since a name with no place to break would run out of the dialog. The header's
+              own gap between its children is dropped, so a subtitle sits against the heading instead
+              of 12px below it; with the heading alone there is nothing for the gap to separate. */}
+          <Frame.Header className="gap-0 pe-6">
             <Frame.Heading className="[overflow-wrap:anywhere]">{title as BodyChildren}</Frame.Heading>
+            {subtitle}
           </Frame.Header>
           {onSubmit ? (
             <form

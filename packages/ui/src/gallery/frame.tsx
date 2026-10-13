@@ -32,9 +32,10 @@ document.documentElement.setAttribute("data-theme", theme);
 
 installFakeTerminal();
 
-const [{ App }, { ErrorBoundary }, { LanguageProvider }, { selectPlatform }, { PlatformProvider }, startup, store, { ThemeProvider }] =
+const [{ App }, { Toasts }, { ErrorBoundary }, { LanguageProvider }, { selectPlatform }, { PlatformProvider }, startup, store, { ThemeProvider }] =
   await Promise.all([
     import("../App"),
+    import("../components/Toasts"),
     import("../ErrorBoundary"),
     import("../i18n/react"),
     import("../platform"),
@@ -102,7 +103,8 @@ function Crash(): never {
   throw new Error("Gallery: a component threw while rendering.");
 }
 
-const daemon = scenario && !scenario.startup && !scenario.viewer ? createFixtureDaemon(scenario) : undefined;
+// A viewer scenario has one too: the viewer's header copies a path through the daemon's toasts.
+const daemon = scenario && !scenario.startup ? createFixtureDaemon(scenario) : undefined;
 const { ViewerGallery } = scenario?.viewer ? await import("./viewerGallery") : { ViewerGallery: undefined };
 const viewerSubjects = scenario?.viewer ? await scenario.viewer.subjects() : undefined;
 
@@ -116,7 +118,13 @@ function screen(): React.ReactElement {
     case "crash":
       return <Crash />;
   }
-  if (viewerSubjects && ViewerGallery) return <ViewerGallery subjects={viewerSubjects} loadDelay={scenario.viewer?.loadDelay} />;
+  if (viewerSubjects && ViewerGallery)
+    return (
+      <store.DaemonProvider value={daemon!}>
+        <ViewerGallery subjects={viewerSubjects} loadDelay={scenario.viewer?.loadDelay} />
+        <Toasts focusTerminal={() => {}} />
+      </store.DaemonProvider>
+    );
   return (
     <store.DaemonProvider value={daemon!}>
       <App />

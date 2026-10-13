@@ -3,10 +3,9 @@ import React from "react";
 
 import { ActionMenu } from "../components/ActionMenu";
 import { RowControls } from "../components/RowControls";
+import { useCopyPath } from "../components/useCopyPath";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
-import { displayWirePath } from "../wirePath";
-import { useCopyPath } from "./useCopyPath";
 
 /** The one button at the end of a row of the Files tree or of the Git mode's changes, opening the
  * menu of what can be done with that row's file; Copy path is the only action so far. The button's
@@ -23,11 +22,9 @@ export function RowActions({ path, name }: { path: string; name: string }): Reac
         label={t("browser.row.actions", { name: isolate(name) })}
         items={[
           {
-            label: t("browser.row.copyPath"),
+            label: t("common.copyPath"),
             icon: Copy,
-            // The path as the row's own text shows it: for a human to paste, so a byte that is not
-            // UTF-8 comes out as U+FFFD rather than as the wire form's `%XX`.
-            onClick: () => copyPath(displayWirePath(path)),
+            onClick: () => copyPath(path),
           },
         ]}
       />

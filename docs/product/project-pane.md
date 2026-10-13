@@ -133,9 +133,11 @@ so far.
 
 - **Copy path** puts the file's path on the clipboard, slash separated, as a path within the project. For a change it
   is the path the row names, which for a rename is its new path — the old one only where the new side is absent (a
-  deletion) or outside the project (see "What is listed" in `docs/product/project-pane-git-mode.md`). A **toast** then
-  confirms that the path was copied; where the clipboard refuses it, an error toast says it could not be copied (see
-  `docs/product/toasts.md`).
+  deletion) or outside the project (see "What is listed" in `docs/product/project-pane-git-mode.md`). The path is
+  copied **as the window shows it**, for a human to paste: a byte of a name that is not valid UTF-8 is copied as the
+  replacement character U+FFFD, the character the name is displayed with. A **toast** then confirms that the path was
+  copied; where the clipboard refuses it, an error toast says it could not be copied (see `docs/product/toasts.md`).
+  The file viewer's header offers the same action (see "The file viewer" below).
 - **Only a file's row has one.** A directory's row has none — in the Files mode's tree, and in the Git mode's list
   grouped by folder — and neither has a row that says something about a folder instead of listing a file (loading,
   empty, unreadable, cut short; see "Rows and the keyboard" above).
@@ -175,20 +177,38 @@ Listings, change lists and file contents are never stored.
 
 ## The file viewer
 
-Opening a file shows it in the **file viewer**, a dialog nearly as large as the window (at most 1440 px wide). Its title
-is the file's name; under it are the file's path within the project and its size. The Git mode opens a change in the
-same viewer; what it shows of a change is in "Opening a change" in `docs/product/project-pane-git-mode.md`.
+Opening a file shows it in the **file viewer**, a dialog nearly as large as the window (at most 1440 px wide). The Git
+mode opens a change in the same viewer; what it shows of a change is in "Opening a change" in
+`docs/product/project-pane-git-mode.md`.
 
-The header is the title row and, under it, the subject's **details** — the file's path within the project, the
-comparison a change is read from, a file's size, and the path a rename came from — laid out beside the **view
-controls**, which hold the end of the row in a fixed order: the document-or-source choice for a Markdown file (see "A
-Markdown file as a document" below), then the diff's unified-or-split choice, then the wrap choice (see "Wrapping long
-lines" below). At most two of the three are ever offered at once, since the document-or-source choice belongs to a
-whole Markdown file's body and the unified-or-split choice to a two-sided diff, and a Markdown diff keeps its source
-view alone.
+The header has three parts, one under the other:
 
-**Each of the three is a single icon button**: its icon shows the view on screen, pressing it switches to the other
-view, and its name — the tooltip and what assistive technology announces — says what pressing will do, so it
+- **The title** — the file's name, and after it the tags saying what the subject is, which only a change carries
+  (see "Opening a change" in `docs/product/project-pane-git-mode.md`). The name comes first and the tags follow it,
+  on screen and in what assistive technology is given alike — "server.ts: Modified, Unstaged". The tags never
+  shrink, so the name is what the fade cuts.
+- **A subtitle**, a line of its own directly under the title, which carries one thing only: the comparison a change
+  from the Compare view is read from. It belongs to the title as a tag does, but is far too long to sit among them.
+  A subject with no comparison has no such row at all, and the row costs the content below it that one line and no
+  more. It is a single line that fades out where it is cut off and carries its full wording as its tooltip.
+- **The details** — the file's path within the project, its size and the path a rename came from — laid out beside
+  the **controls**, which hold the end of the row in a fixed order: **Copy path**, then the document-or-source
+  choice for a Markdown file (see "A Markdown file as a document" below), then the diff's unified-or-split choice,
+  then the wrap choice (see "Wrapping long lines" below). The size shows as a tag of its own, drawn as the title's
+  neutral stage tag is; a rename's origin reads as a sentence naming the path.
+
+At most two of the three view choices are ever offered at once, since the document-or-source choice belongs to a whole
+Markdown file's body and the unified-or-split choice to a two-sided diff, and a Markdown diff keeps its source view
+alone. So the header never holds more than Copy path and two view choices, and Copy path being first, the order on
+screen is also the order the keyboard moves through them.
+
+**Copy path** is the same action a file's row offers, on the same path and in the same form, with the same toast
+saying the path was copied or that it could not be (see "A row's actions" above). It is a single icon button, named
+"Copy path" in its tooltip and in what assistive technology announces. **Where the platform has no clipboard the
+button is not there at all**, as no row offers the action there either.
+
+**Each of the three view choices is a single icon button**: its icon shows the view on screen, pressing it switches to
+the other view, and its name — the tooltip and what assistive technology announces — says what pressing will do, so it
 alternates between "Show document" and "Show source", between "Show split diff" and "Show unified diff", and between
 "Wrap lines" and "Don't wrap lines". Nothing about the state is said in colour; the whole convention is in "Two-state
 icon toggles" in `docs/product/labels-and-tooltips.md`.
@@ -198,11 +218,12 @@ detail is an item of its own, and one too long for the space left beside the con
 where it has the header's whole width; several can move down, so the header is one row of details, or two, or three.
 Each item is one line that is never wrapped: where it does not fit even on a row of its own it fades out rather than
 ending in an ellipsis and carries its full text as its tooltip — one fade and one tooltip per detail, not one for the
-row. The title fades the same way. A path — the file's own and a rename's origin — fades at its start instead, so the
-file's own name stays visible, and shows with a file icon in front of it, as paths read elsewhere in the application.
+row. The title and the subtitle fade the same way. A path — the file's own and a rename's origin — fades at its start
+instead, so the file's own name stays visible, and shows with a file icon in front of it, as paths read elsewhere in
+the application.
 
 **Moving from file to file can move the code below the header**, when the details of one file need a row that the next
-one's do not.
+one's do not, or when one subject has the subtitle row and the next has none.
 
 ### What it shows
 

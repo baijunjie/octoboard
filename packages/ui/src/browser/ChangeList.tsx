@@ -34,7 +34,7 @@ export function changeRowOffset(items: readonly ChangeItem[], key: string, layou
 
 
 /**
- * A worktree's changes as a list in sections — staged, in conflict, unstaged, untracked — each
+ * A worktree's changes as a list in sections — in conflict, staged, unstaged, untracked — each
  * headed with its count: a react-aria `GridList`, virtualized, one row per change; or, when the
  * layout is the tree, the same sections with their changes grouped under directories
  * (`ChangeTree`). A row's action is to open its change in the viewer, and a button at its end opens

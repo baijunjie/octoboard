@@ -76,8 +76,8 @@ meantime appears in the selector then.
 The Uncommitted view's changes are listed in sections, in this order, each headed with its name and how many changes
 it holds; a section with none is left out:
 
+- **Conflicted** — paths in conflict. It is first, being what has to be dealt with before a commit can be made.
 - **Staged** — the commit at `HEAD` against the index. Before the first commit every staged file is an addition.
-- **Conflicted** — paths in conflict.
 - **Unstaged** — the index against the files on disk.
 - **Untracked** — files on disk Git neither tracks nor ignores, each listed by itself rather than as its folder.
 
@@ -136,7 +136,7 @@ long for their space" in `docs/product/labels-and-tooltips.md`).
 ### Folding a section
 
 **Every section heading is a control**: pressing anywhere on its band folds the section away, and pressing it again
-unfolds it. That holds for every section of either view — Staged, Conflicted, Unstaged, Untracked and the
+unfolds it. That holds for every section of either view — Conflicted, Staged, Unstaged, Untracked and the
 comparison's Changed files (see "What the view says" below) — and in both forms of the list, flat or grouped by
 folder.
 
@@ -168,7 +168,7 @@ folder" and "Show as flat list" (see "Two-state icon toggles" in `docs/product/l
 choice for both views, kept across projects and after the application restarts; both lists are flat until it is turned
 on.
 
-Grouped by folder, a list keeps its sections and their counts — the Uncommitted view's Staged, Conflicted, Unstaged
+Grouped by folder, a list keeps its sections and their counts — the Uncommitted view's Conflicted, Staged, Unstaged
 and Untracked, the comparison's one section — and within each section the changes sit under their folders:
 
 - Within a folder, folders come first and then changes, each in the order the flat list has them (see "What is
@@ -380,22 +380,26 @@ has them (see "Errors" below).
 ## Opening a change
 
 A change opens in the project pane's file viewer (see "The file viewer" in `docs/product/project-pane.md`). Its title is
-the file's name, with the kind of change before it as a tag — Added, Deleted, Modified, Renamed or Type changed —
+the file's name, with the kind of change after it as a tag — Added, Deleted, Modified, Renamed or Type changed —
 coloured as the change's letter in the list is (green, red, amber, blue; the same colours for the same kind). A staged
-or unstaged change has its stage — Staged or Unstaged — as a second, neutral tag between the kind and the name: the two
-things a change says, what kind it is and whether it is staged, are kept apart, the first coloured and the second not.
-Both tags are in front of the name, and read with it as "Modified, Unstaged: server.ts". An untracked file is always
-new, so its only tag is Untracked, in the muted coral the list's U has, which is no kind of change and shares no colour
-with Added or Deleted; a path in conflict has only a Conflicted tag, coloured as its C is. Neither has a stage tag, its
-status tag already saying where it is from; a change from the Compare view has none either. The tags read as one group,
+or unstaged change has its stage — Staged or Unstaged — as a second, neutral tag after the kind: the two things a
+change says, what kind it is and whether it is staged, are kept apart, the first coloured and the second not. Both tags
+come after the name, and read with it as "server.ts: Modified, Unstaged". An untracked file is always new, so its only
+tag is Untracked, in the muted coral the list's U has, which is no kind of change and shares no colour with Added or
+Deleted; a path in conflict has only a Conflicted tag, coloured as its C is. Neither has a stage tag, its status tag
+already saying where it is from; a change from the Compare view has none either. The tags read as one group,
 spaced closer to each other than the group is to the name, and each of them, the neutral stage tag included, is visibly
 a tag against the viewer's background in either appearance. The tags never shrink; the name fades out when there is no
 room for it.
 
-Under the title are the change's details, laid out as the viewer lays out any subject's (see "The file viewer" in
-`docs/product/project-pane.md`): the path within the project and, for a rename, the path it was renamed from. A change
-from the Compare view names, after the path, the two branches and the commit each was at — "main at 4f2a9c1 to feature
-at 9e8d7c6", say.
+A change from the Compare view carries the comparison it is read from in the header's **subtitle**, the line directly
+under the title: the two branches and the commit each was at, each commit by its first seven characters — "main at
+4f2a9c1 to feature at 9e8d7c6", say. The full wording is that line's tooltip where it is cut off (see "The file
+viewer" in `docs/product/project-pane.md`), and each branch name in it is laid out in the direction of its own text
+(see "Right-to-left layout" in `docs/product/window-layout.md`). A change from the Uncommitted view has no such line.
+
+Under that are the change's details, laid out as the viewer lays out any subject's (see "The file viewer" in
+`docs/product/project-pane.md`): the path within the project and, for a rename, the path it was renamed from.
 
 A change from the Compare view is read from the two commits of the comparison on screen, its old side from From's
 commit and its new side from To's, and is shown as a staged change is below; it is never untracked or in conflict.

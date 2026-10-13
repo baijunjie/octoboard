@@ -6,7 +6,6 @@ import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { isolate } from "../i18n/isolate";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { PlatformAdapter } from "../platform";
-import { PlatformProvider } from "../platform/react";
 import { RENDER_BUDGETS } from "./budgets";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 import { ThemeProvider } from "../theme";
@@ -14,6 +13,7 @@ import type { ViewerSubject } from "./content";
 import { FileViewer } from "./FileViewer";
 import { markdownView } from "./markdownView";
 import { openableAddress } from "./MarkdownDocument";
+import { ViewerHost } from "./viewerTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -77,11 +77,11 @@ async function open(subject: ViewerSubject, links?: PlatformAdapter["links"]): P
   });
   act(() =>
     root.render(
-      <PlatformProvider value={{ kind: "browser", links }}>
+      <ViewerHost links={links}>
         <ThemeProvider>
           <FileViewer subject={subject} onClose={() => {}} />
         </ThemeProvider>
-      </PlatformProvider>,
+      </ViewerHost>,
     ),
   );
   for (let i = 0; i < 5; i += 1) await act(() => new Promise((resolve) => setTimeout(resolve, 0)));

@@ -31,11 +31,11 @@ const entries: ChangeEntry[] = [
   { group: "staged", old: { state: "out_of_scope", repository_path: "lib/b.ts" }, new: at("b.ts") },
 ];
 
-it("orders sections as git status does, and paths within one as the file tree does", () => {
+it("puts the paths in conflict first, then the other sections, and paths within one as the file tree does", () => {
   expect(changeItems(entries).map((item) => `${item.section} ${item.path} ${item.status}`)).toEqual([
+    "conflicted z.txt conflicted",
     "staged src/a.ts modified",
     "staged b.ts renamed",
-    "conflicted z.txt conflicted",
     "unstaged src/a.ts modified",
     "untracked new.txt untracked",
   ]);
@@ -54,8 +54,9 @@ it("tells one path's staged and unstaged changes apart", () => {
 
 it("moves from one section into the next, places a change the list lost where it was, and does not wrap", () => {
   const items = changeItems(entries);
-  const lastStaged = items[1];
-  expect(changeNeighbours(items, lastStaged).next?.section).toBe("conflicted");
+  expect(changeNeighbours(items, items[0]).next?.section).toBe("staged");
+  const lastStaged = items[2];
+  expect(changeNeighbours(items, lastStaged).next?.section).toBe("unstaged");
   expect(changeNeighbours(items, items[0]).previous).toBeUndefined();
   expect(changeNeighbours(items, items[items.length - 1]).next).toBeUndefined();
   const gone = changeItem({ group: "unstaged", old: at("src/zz.ts"), new: absent });

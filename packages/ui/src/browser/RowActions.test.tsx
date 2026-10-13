@@ -15,10 +15,10 @@ beforeEach(() => vi.clearAllMocks());
 
 const items = changeItems([change("unstaged", "src/alpha.ts"), change("unstaged", "beta.ts")]);
 
-function render(layout: "flat" | "tree", clipboard: PlatformAdapter["clipboard"], onOpen = vi.fn()) {
+function render(layout: "flat" | "tree", clipboard: PlatformAdapter["clipboard"], rows = items, onOpen = vi.fn()) {
   const container = mountRows(
     <ChangeList
-      items={items}
+      items={rows}
       selected={undefined}
       label="Changes"
       onOpen={onOpen}
@@ -70,6 +70,18 @@ it("copies the change's path from the menu and confirms with a toast, without op
   expect(writeText).toHaveBeenCalledWith("src/alpha.ts");
   expect(toasts.notice).toHaveBeenCalledWith("Path copied");
   expect(onOpen).not.toHaveBeenCalled();
+});
+
+it("copies a path as text to paste: a percent-encoded UTF-8 byte sequence decoded, an invalid byte as U+FFFD, never the wire form", async () => {
+  const writeText = vi.fn(async () => {});
+  const wirePaths = ["src/caf%C3%A9.ts", "src/bad%FF.ts"];
+  const { container } = render("flat", { writeText }, changeItems(wirePaths.map((path) => change("unstaged", path))));
+  for (const name of ["café.ts", "bad\uFFFD.ts"]) {
+    act(() => actionsOf(rowOf(container, name)).click());
+    act(() => document.querySelector<HTMLElement>("[role=menuitem]")!.click());
+    await flush();
+  }
+  expect(writeText.mock.calls).toEqual([["src/café.ts"], ["src/bad\uFFFD.ts"]]);
 });
 
 it("says so when the clipboard refuses", async () => {

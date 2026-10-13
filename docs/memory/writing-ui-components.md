@@ -169,6 +169,11 @@ a HeroUI `ScrollShadow`, which shows a fade only while there is something to scr
 - Put the content in `Dialog`'s children and nothing else. Do not give the dialog a scroll container of your own
   (`overflow-y-auto` on a wrapper, a `max-h-*` list): its overflow would scroll apart from the body and carry no fade,
   and the body would be fading nothing.
+- Nothing reaches above the body either. A line that belongs under the dialog's title goes in `Dialog`'s `subtitle`
+  slot, never at the top of the children pulled up with a negative margin: the body is the scroller, so a row lifted
+  above its padding box is clipped there with nothing able to scroll to it, because overflow at a scroller's block
+  start adds no scrollable area. Such a row still renders right while the strip that is cut holds nothing but space,
+  and the first background, border, focus ring, icon or taller text in it loses its top silently.
 - Where something inside a dialog must scroll on its own, apart from the body, it fades itself: `DirectoryPicker`'s list
   through `useScrollFade` as the previous section says. `SettingsDialog` is the one dialog that does not use `Dialog`
   (it is a window of its own, with a section list beside the content), so each section's panel holds a `ScrollShadow`
