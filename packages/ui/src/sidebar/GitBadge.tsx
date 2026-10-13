@@ -45,31 +45,24 @@ function ErrorTooltip({ error, children }: { error: string | null | undefined; c
  * row would announce each project's `checking` → `idle` roundtrip every five minutes, for every
  * project, which is noise rather than news. Left unannounced on purpose.
  *
- * As the badge is squeezed, the branch name gives way first — it fades out and then goes entirely,
- * leaving the glyph (the error one when the check failed) and the counts, which carry the same
- * facts between them — and only below that do the counts clip against `overflow-hidden`, in DOM
- * order. The glyph comes first for exactly that reason: it is the most important signal here, so
- * it has to be the last thing clipped, not the first.
+ * The branch and upstream counts share one line: as the badge is squeezed, they fade and run as
+ * a marquee together from the branch's beginning to the last count. The activity glyph stays
+ * outside that line so it remains visible even when none of the text fits.
  */
 export function GitBadge({ status, decorative }: { status: GitStatus | undefined; decorative?: boolean }): React.ReactElement | null {
   const t = useT();
   const language = useCurrentLanguage();
   if (!status || !status.repository) return null;
-  const a11y = decorative ? ({ "aria-hidden": true } as const) : ({ role: "img", "aria-label": gitBadgeAriaLabel(language, t, status) } as const);
+  const label = gitBadgeAriaLabel(language, t, status);
+  const a11y = decorative ? ({ "aria-hidden": true } as const) : ({ role: "img", "aria-label": label } as const);
   // A lone glyph with no branch and no error (a freshly-`git init`'d repository) would otherwise
   // read as nothing at all to a sighted user, unlike every other state here, so this is the one
   // case where the badge falls back to the catalog's own wording rather than leaving it to the
   // accessible name alone.
   const noCommitsYet = !status.branch && status.activity === "idle" && !status.error;
   return (
-    // `min-w-0` is what lets the badge shrink at all: the project name has its own floor
-    // (`min-w-16` on the flex item around `RowLabel` in `Sidebar.tsx` / `FocusView.tsx`), so past
-    // that point the badge is what keeps giving way, and the branch name inside it is the only
-    // part that can — everything else here is `shrink-0`. Deliberately uncapped: a cap that binds
-    // while the row still has room clips the counts on an ordinary-width sidebar, which is the
-    // common case, to protect a name that is not under pressure there. `overflow-hidden` is the
-    // backstop for the width below which even the `shrink-0` glyphs no longer fit, so the row
-    // itself never overflows.
+    // The project name has its own floor; this badge keeps giving way while the activity glyph
+    // remains fixed. No cap: use the room the row offers before fading the shared text line.
     <span {...a11y} className="flex min-w-0 items-center gap-1 overflow-hidden text-xs text-muted">
       <ErrorTooltip error={status.error}>
         {status.activity === "checking" ? (
@@ -84,34 +77,29 @@ export function GitBadge({ status, decorative }: { status: GitStatus | undefined
           <GitBranch aria-hidden="true" className="size-3.5 shrink-0" />
         )}
       </ErrorTooltip>
-      {status.branch ? (
-        // `ltr`: a branch name is a path-like technical identifier, not text in the UI's language.
-        // `clip="start"`: the distinguishing part of a long branch name (`feature/JIRA-1234-...`)
-        // is its end, so that is what has to stay in view when it does not fit. No floor: a floor
-        // would hold the branch open past the point where the badge can fit it, and what shows then
-        // is a fragment cut mid-name against a hard edge — worse than letting it fade away and
-        // leaving the glyph and the counts, which carry the same facts.
-        <FadeOverflow as="span" dir="ltr" clip="start" className="min-w-0 flex-1" titleWhenClipped={status.branch}>
-          {status.branch}
+      {(status.branch || noCommitsYet || status.ahead > 0 || status.behind > 0) && (
+        <FadeOverflow
+          as="span"
+          dir={status.branch || status.ahead > 0 || status.behind > 0 ? "ltr" : undefined}
+          className="min-w-0 flex-1"
+          titleWhenClipped={label}
+        >
+          <span className="inline-flex items-center gap-1">
+            {status.branch ? <span>{status.branch}</span> : noCommitsYet && <span dir="auto">{t("sidebar.git.noCommitsYet")}</span>}
+            {status.ahead > 0 && (
+              <span className="inline-flex shrink-0 items-center">
+                <ArrowUp aria-hidden="true" className="size-3 shrink-0" />
+                {status.ahead.toLocaleString(language)}
+              </span>
+            )}
+            {status.behind > 0 && (
+              <span className="inline-flex shrink-0 items-center">
+                <ArrowDown aria-hidden="true" className="size-3 shrink-0" />
+                {status.behind.toLocaleString(language)}
+              </span>
+            )}
+          </span>
         </FadeOverflow>
-      ) : (
-        noCommitsYet && (
-          <FadeOverflow as="span" className="min-w-0 flex-1" titleWhenClipped={t("sidebar.git.noCommitsYet")}>
-            {t("sidebar.git.noCommitsYet")}
-          </FadeOverflow>
-        )
-      )}
-      {status.ahead > 0 && (
-        <span className="flex shrink-0 items-center">
-          <ArrowUp aria-hidden="true" className="size-3 shrink-0" />
-          {status.ahead.toLocaleString(language)}
-        </span>
-      )}
-      {status.behind > 0 && (
-        <span className="flex shrink-0 items-center">
-          <ArrowDown aria-hidden="true" className="size-3 shrink-0" />
-          {status.behind.toLocaleString(language)}
-        </span>
       )}
     </span>
   );

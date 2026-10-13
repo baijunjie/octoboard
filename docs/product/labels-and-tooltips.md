@@ -129,10 +129,13 @@ keyboard focus; the label's whole text is in the document whether or not it is c
 it either way.
 
 **A path is cut at its start instead**, so that its last folder stays in view (see "Right-to-left layout" in
-`docs/product/window-layout.md`), and so is the branch name in a project's branch badge, whose distinguishing part is
-its end (see "The branch badge" in `docs/product/project-git-status.md`); every other label is cut at its end.
-Everything this section says holds for a label cut at its start, mirrored: it rests pinned to its end, fades at its
-start, and carries its full text as its tooltip while it is cut.
+`docs/product/window-layout.md`); every other label is cut at its end. Everything this section says holds for a label
+cut at its start, mirrored: it rests pinned to its end, fades at its start, and carries its full text as its tooltip
+while it is cut.
+
+A project's branch badge also follows these fade and marquee rules, with its branch and upstream counts sharing one
+line and its clipped tooltip describing the full git state (see "The branch badge" in
+`docs/product/project-git-status.md`).
 
 **While the pointer is over it, such a label runs as a marquee**, so all of it can be read:
 

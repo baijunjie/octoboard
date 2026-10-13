@@ -41,7 +41,8 @@ const gitStatuses = [
 // A long project name beside a long branch name with both counts non-zero and an error, at the
 // sidebar's minimum docked width (`layout/paneWidth.ts`'s `PANES.sidebar.min`): the worst case for
 // the badge-versus-name squeeze (see the doc comment at `GitBadge.tsx`'s `min-w-0`) and for the
-// badge's own clip order (see the doc comment there on what clips first).
+// branch-and-count line's shared fade and marquee. The CJK branch also keeps its beginning on
+// the left in an RTL interface; the short branch exposes a fade falling within the counts.
 const squeezeProject = projectOf(
   "p-squeeze",
   console_.id,
@@ -54,6 +55,21 @@ const squeezeStatus = gitStatusOf(squeezeProject.id, {
   behind: 345,
   error: "fetch: Could not resolve host 'origin'",
 });
+const cjkProject = projectOf("p-cjk", console_.id, "日本語のプロジェクト名も長くなってサイドバーに収まらない");
+const cjkStatus = gitStatusOf(cjkProject.id, {
+  branch: "機能/日本語ブランチの表示確認",
+  ahead: 12,
+  behind: 345,
+});
+const countsProject = projectOf("p-counts", console_.id, "Counts at the fade");
+const countsStatus = gitStatusOf(countsProject.id, { branch: "main", ahead: 12345, behind: 67890 });
+const squeezeProjects = [squeezeProject, cjkProject, countsProject];
+const squeezeSessions = [
+  squeezeSession,
+  sessionOf("s-cjk", console_.id, cjkProject.id, "Working on it", "idle"),
+  sessionOf("s-counts", console_.id, countsProject.id, "Working on it", "idle"),
+];
+const squeezeStatuses = [squeezeStatus, cjkStatus, countsStatus];
 
 export const gitScenarios: Scenario[] = [
   {
@@ -66,39 +82,35 @@ export const gitScenarios: Scenario[] = [
     state: snapshotState({ consoles: [console_], projects, sessions, gitStatuses }),
   },
   {
-    id: "git-badge-focus",
-    group: GROUP,
-    title: "Branch badge in focus mode",
-    description: "The same ahead-and-behind badge, in focus mode's header.",
-    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${aheadBehindProject.id}` },
-    state: snapshotState({ consoles: [console_], projects, sessions, gitStatuses }),
-  },
-  {
     id: "git-badge-squeeze-sidebar",
     group: GROUP,
     title: "Branch badge at the sidebar's minimum width",
     description:
-      "A long project name and a long branch name with both counts non-zero and an error, docked at 200px. Hover " +
-      "the row: that is the tighter case, since it widens the trailing controls at the row's end.",
+      "Latin and Japanese branches keep their beginnings visible and fade toward the right at 200px, even in Arabic. " +
+      "Hover each row: branch and counts scroll together, while the activity glyph stays visible. " +
+      "The short main branch puts its large counts at the fading edge; drag the sidebar wider to reveal the shared line.",
     preferences: { sidebarWidth: 200 },
     state: snapshotState({
       consoles: [console_],
-      projects: [squeezeProject],
-      sessions: [squeezeSession],
-      gitStatuses: [squeezeStatus],
+      projects: squeezeProjects,
+      sessions: squeezeSessions,
+      gitStatuses: squeezeStatuses,
     }),
   },
   {
     id: "git-badge-squeeze-focus",
     group: GROUP,
     title: "Branch badge at the sidebar's minimum width, in focus mode",
-    description: "The same worst case for the header's own, narrower, share of the row.",
-    preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
+    description:
+      "The Japanese branch starts on the left in the focus header, including in Arabic. Hover the badge to read " +
+      "the branch and both counts as one scrolling line. Drag the sidebar wider to move the fading edge through " +
+      "the branch and counts; the activity glyph stays visible.",
+    preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `project:${cjkProject.id}` },
     state: snapshotState({
       consoles: [console_],
-      projects: [squeezeProject],
-      sessions: [squeezeSession],
-      gitStatuses: [squeezeStatus],
+      projects: squeezeProjects,
+      sessions: squeezeSessions,
+      gitStatuses: squeezeStatuses,
     }),
   },
 ];
