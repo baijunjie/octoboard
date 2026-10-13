@@ -369,11 +369,13 @@ export const dialogScenarios: Scenario[] = [
     id: "dialog-archive-console-session",
     group: GROUP,
     title: "Confirm archiving a console session with bound sessions",
-    description: "The confirmation lists the interrupted sessions bound to it, which are archived with it.",
+    description:
+      "The confirmation lists the interrupted sessions bound to it, which are archived with it. The pointer rests on the status glyph of the first, whose tooltip reads Interrupted.",
     state: cascadeState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 4" })),
       (ui) => ui.press(ui.t("sidebar.session.archive")),
+      (ui) => ui.hoverCalloutStatus("Tidy the changelog"),
     ],
   },
   {

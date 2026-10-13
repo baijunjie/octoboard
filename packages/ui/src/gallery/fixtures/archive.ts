@@ -61,6 +61,20 @@ export const underArchivedLead = Array.from({ length: 2 }, (_, i) =>
   }),
 );
 
+const boundState = snapshotState({
+  consoles: [console_],
+  projects: [project],
+  sessions: [
+    boundConsoleSession,
+    otherConsoleSession,
+    otherOwnerArchived,
+    unboundArchived,
+    ...boundArchived,
+    archivedLead,
+    ...underArchivedLead,
+  ],
+});
+
 export const archiveScenarios: Scenario[] = [
   {
     id: "archive-many",
@@ -112,19 +126,21 @@ export const archiveScenarios: Scenario[] = [
     description:
       "Reached from the console session's focus mode, one list: the sessions archived under the archived lead session are inset below it; the sessions bound to another console session and the unbound one are not listed.",
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
-    state: snapshotState({
-      consoles: [console_],
-      projects: [project],
-      sessions: [
-        boundConsoleSession,
-        otherConsoleSession,
-        otherOwnerArchived,
-        unboundArchived,
-        ...boundArchived,
-        archivedLead,
-        ...underArchivedLead,
-      ],
-    }),
+    state: boundState,
     steps: [(ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: boundArchived.length + 1 + underArchivedLead.length }))],
+  },
+  {
+    id: "archive-delete-bound-sessions",
+    group: GROUP,
+    title: "Deleting an archived lead session takes its archived sessions along",
+    description:
+      "The confirmation lists the two sessions archived under the lead session. The pointer rests on the status glyph of the first, whose tooltip reads Archived.",
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
+    state: boundState,
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: boundArchived.length + 1 + underArchivedLead.length })),
+      (ui) => ui.press(ui.t("archive.delete", { title: archivedLead.title })),
+      (ui) => ui.hoverCalloutStatus(underArchivedLead[0].title),
+    ],
   },
 ];

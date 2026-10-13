@@ -95,9 +95,9 @@ mouse rests on them, never on keyboard focus; what it says reaches assistive tec
 badge they sit in, or the text beside them, and where nothing around a mark says it, through the mark's own name. These
 are:
 
-- a session's status glyph on its sidebar row and on the top bar's breadcrumb, whose tooltip says the status in the
-  same words as everywhere else it is named — the two placements where no status text sits beside the glyph (see
-  "Session statuses" in `docs/product/sessions.md`);
+- a session's status glyph on its sidebar row, on the top bar's breadcrumb and on each session a confirmation lists
+  among the ones it affects, whose tooltip says the status in the same words as everywhere else it is named — the
+  placements where no status text sits beside the glyph (see "Session statuses" in `docs/product/sessions.md`);
 - the activity marker, the mark standing for what is going on beneath a **collapsed project's row** in the sidebar
   (see "Project rows" in `docs/product/sidebar.md`) and inside focus mode's **console-switch chip** (see "The switch
   strip" in `docs/product/focus-mode.md`), whose tooltip says which of the three activities it stands for — a session

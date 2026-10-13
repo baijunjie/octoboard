@@ -46,7 +46,7 @@ one piece of wording and one set of placements.
 
 1. 01 session-status-glyph (closed)
 2. 02 activity-marker (closed)
-3. [Confirmation dialog callout icons](03-confirmation-dialog-callout-icons.md)
+3. 03 confirmation-dialog-callout-icons (closed)
 
 ## Not yet written
 
@@ -72,8 +72,9 @@ goal or completion criteria unclear.
 
 ## Open
 
-These do not change the milestone split or the completion criteria of the written milestones.
+Questions the work so far did not have to answer. Each belongs to a milestone still to be written.
 
-- **What the confirmation dialog's agent icon says.** It already has an `sr-only` name; whether it also gets a
-  tooltip, and with what text (for instance the same account wording the agent icon on a session row uses), is not
-  settled. Milestone 3 covers the status icon and leaves this to be decided when it is built.
+- **What the confirmation dialog's agent icon says.** The status icon beside it now carries its tooltip, while the
+  agent icon still has only an `sr-only` name; whether it also gets a tooltip, and with what text (for instance the
+  same account wording the agent icon on a session row uses), is not settled. A milestone for it has to be written
+  before it can be built.

@@ -198,9 +198,10 @@ instructions still differ by shape as well as by colour.
   row's own accessible name says the status, and a card shows it in words beside the glyph.
 - On the **top bar's breadcrumb** and in a **confirmation's list of the sessions it affects** nothing around the glyph
   says the status, so the glyph itself is named after it.
-- Two placements give the glyph a **tooltip** saying the status in the same words — the **sidebar's rows** and the
-  **top bar's breadcrumb**, where no status text sits beside it (see "Tooltips on indicators" in
-  `docs/product/labels-and-tooltips.md`). Focus mode's cards say the status in words already and carry none.
+- Every placement where no status text sits beside the glyph gives it a **tooltip** saying the status in the same
+  words — the **sidebar's rows**, the **top bar's breadcrumb** and a **confirmation's list** (see "Tooltips on
+  indicators" in `docs/product/labels-and-tooltips.md`). Focus mode's cards say the status in words already and
+  carry none.
 
 Transitions:
 

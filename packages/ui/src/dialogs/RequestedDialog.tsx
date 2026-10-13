@@ -37,7 +37,7 @@ function SessionCallout({ title, sessions }: { title: string; sessions?: Session
           <ul className="mt-1 flex min-w-0 flex-col gap-1 self-stretch text-sm text-foreground">
             {sessions.map((session) => (
               <li key={session.id} className="flex min-w-0 items-center gap-2">
-                <StatusIcon status={session.status} />
+                <StatusIcon status={session.status} withTooltip />
                 <AgentIcon agent={session.agent} />
                 {/* The icon is decorative, and nothing else here names the agent. */}
                 <span className="sr-only">{sessionAgentLabel(t, session, accounts)}</span>

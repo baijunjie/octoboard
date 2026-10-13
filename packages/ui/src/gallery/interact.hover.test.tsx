@@ -16,7 +16,9 @@ afterEach(() => vi.useRealTimers());
  * row like focus mode's card, whose glyph carries no tooltip and whose agent mark does, and the
  * activity marker's two hosts: a row with a status glyph before the marker, as a project row has its
  * git badge, and a chip with the marker alone. "Docs" is named as a row with an activity but draws no
- * marker, as an expanded project row does, which is what the step's failure case needs. */
+ * marker, as an expanded project row does, which is what the step's failure case needs. A confirmation
+ * dialog's callout lists sessions, one with a tooltip on its glyph and one without; unlike the rows
+ * above, that glyph is the named `role="img"` rather than a presentational one. */
 function mountWindow(): void {
   mountForTooltip(
     <>
@@ -41,6 +43,22 @@ function mountWindow(): void {
       </div>
       <div role="button" aria-label="Docs, a session is running">
         <span>Docs</span>
+      </div>
+      <div role="alertdialog">
+        <ul>
+          <li>
+            <StatusIcon status="interrupted" withTooltip />
+            <AgentIcon agent="claude" />
+            <span className="sr-only">Claude Code</span>
+            <span>Tidy the changelog</span>
+          </li>
+          <li>
+            <StatusIcon status="archived" />
+            <AgentIcon agent="claude" />
+            <span className="sr-only">Claude Code</span>
+            <span>Bare glyph</span>
+          </li>
+        </ul>
       </div>
       <div role="button" aria-label="Card, Claude Code, Idle">
         <div>
@@ -150,4 +168,27 @@ it("hoverActivityMarker fails where the last tooltip is not an activity's", asyn
   await vi.advanceTimersByTimeAsync(3000);
   await done;
   release(glyphOf("Write the migration"));
+});
+
+it("hoverCalloutStatus puts up the status of the callout's session it names", async () => {
+  mountWindow();
+  await settledLive(createUi(document, "en").hoverCalloutStatus("Tidy the changelog"));
+  expect(openTooltip()?.textContent).toBe("Interrupted");
+  release(document.querySelector("[role=alertdialog] li")!.firstElementChild!);
+});
+
+it("hoverCalloutStatus fails for a session whose glyph has no tooltip", async () => {
+  mountWindow();
+  const done = expect(createUi(document, "en").hoverCalloutStatus("Bare glyph")).rejects.toThrow(/has no tooltip: its last tooltip is none/);
+  await vi.advanceTimersByTimeAsync(3000);
+  await done;
+  expect(openTooltip()).toBeNull();
+});
+
+it("hoverCalloutStatus fails for a session that is not listed", async () => {
+  mountWindow();
+  const done = expect(createUi(document, "en").hoverCalloutStatus("Nothing")).rejects.toThrow(/callout list/);
+  await vi.advanceTimersByTimeAsync(6000);
+  await done;
+  expect(openTooltip()).toBeNull();
 });
