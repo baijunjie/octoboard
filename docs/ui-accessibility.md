@@ -212,6 +212,11 @@ assistive technology at all. So whatever a tooltip says must reach a screen read
 full text is in the document whether it fits or not, a row carries its own accessible name, and an indicator that
 means something on its own is a named `role="img"`.
 
+The anchored shape takes the hover from its caller rather than listening for one itself, so it can be scoped to a
+single mark wherever that mark can carry the pointer handlers: the Git mode's change row hands it the hover from the
+status letter alone and anchors it to the letter, and the rest of the row — the name, the detail — keeps its own
+tooltips.
+
 Where such an indicator carries a tooltip of its own, that name goes **on the tooltip's trigger**, not on an element
 nested inside it: react-aria describes the trigger, so a name one level in leaves the description attached to a
 wrapper that is nothing to assistive technology. An indicator whose meaning already reaches it some other way leaves
@@ -419,6 +424,11 @@ dark material is a grey far lighter than dark `--chrome`.
 
 A control's pointer target is at least 24 by 24 CSS pixels (WCAG 2.2 AA 2.5.8). HeroUI's own sizes already clear it —
 its smallest icon-only button is 32 — so this only bites where a control is drawn smaller than HeroUI would draw it.
+
+The criterion is about controls, so a mark that only opens a tooltip is not held to it: a tooltip is not an action,
+and a mark too small to aim at reliably costs a hover that can be tried again, not an activation. Several such marks
+are drawn well under 24 — the binding badge on a session row, a branch's creator badge, a change row's status letter —
+and the press under them, where there is one, belongs to the row and keeps the row's own target.
 
 Neither exception in the criterion is easy to rely on here. *Spacing* needs a 24-pixel circle centred on the target to
 touch no other target, which a small control placed over a larger one (a delete badge on a corner) fails by

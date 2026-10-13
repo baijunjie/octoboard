@@ -1,14 +1,18 @@
-import React from "react";
+import React, { useRef, useState } from "react";
 
+import { AnchoredTooltip } from "../components/AnchoredTooltip";
 import { FadeOverflow } from "../components/FadeOverflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
+import { useT } from "../i18n/react";
 import { StatusChip } from "../viewer/StatusChip";
-import { STATUS_MARKS, type StatusKey } from "../viewer/statusMarks";
+import { STATUS_LABELS, STATUS_MARKS, type StatusKey } from "../viewer/statusMarks";
 import { displayWirePath, wireBaseName } from "../wirePath";
 import type { ChangeItem } from "./changes";
 import { RowActions } from "./RowActions";
 
+// The lowercase words the row's accessible name is built from; the tooltip says the capitalised
+// `STATUS_LABELS` instead, which is what the viewer's header chip shows.
 const STATUS_WORDS: Record<StatusKey, PlainMessageKey> = {
   added: "git.status.added",
   untracked: "git.status.untracked",
@@ -63,9 +67,7 @@ export function changeRowText(
 export function ChangeRowBody({ item, name, detail }: { item: ChangeItem; name: string; detail: string }): React.ReactElement {
   return (
     <>
-      <StatusChip aria-hidden="true" status={item.status} className="w-5 shrink-0 justify-center px-0 font-mono">
-        {STATUS_MARKS[item.status].letter}
-      </StatusChip>
+      <ChangeStatusChip status={item.status} />
       <FadeOverflow as="span" dir="auto" className="min-w-0 shrink" titleWhenClipped={name}>
         {name}
       </FadeOverflow>
@@ -75,6 +77,33 @@ export function ChangeRowBody({ item, name, detail }: { item: ChangeItem; name: 
         </FadeOverflow>
       )}
       <RowActions path={item.path} name={name} />
+    </>
+  );
+}
+
+/** The row's status letter, which says in a tooltip what it stands for. The row's accessible name
+ * already carries the status, so the chip stays out of the accessibility tree. It takes the
+ * anchored shape, not `IndicatorTooltip`: a row of a react-aria collection walks every focusable
+ * descendant with the arrow keys, and an indicator's trigger would be a new stop in that walk
+ * that opens its tooltip on focus. The chip reports the hover itself and is what the tooltip is
+ * placed against, so nothing else in the row opens it. */
+function ChangeStatusChip({ status }: { status: StatusKey }): React.ReactElement {
+  const t = useT();
+  const chip = useRef<HTMLSpanElement>(null);
+  const [hovered, setHovered] = useState(false);
+  return (
+    <>
+      <StatusChip
+        ref={chip}
+        aria-hidden="true"
+        status={status}
+        className="w-5 shrink-0 justify-center px-0 font-mono"
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
+      >
+        {STATUS_MARKS[status].letter}
+      </StatusChip>
+      <AnchoredTooltip tooltip={t(STATUS_LABELS[status])} anchor={chip} hovered={hovered} />
     </>
   );
 }

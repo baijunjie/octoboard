@@ -12,6 +12,7 @@ import type { FixtureError } from "./projectFiles";
 import { SAMPLE, snapshotState } from "./builders";
 import {
   EXPAND_DELAY_MS,
+  addition,
   binaryChange,
   conflicted,
   deletion,
@@ -155,6 +156,8 @@ const RANKING_EDIT: Versions = {
 const CURRENT_AS_FILE = "releases/2.3\n";
 /** What `docs/old-notes.md` held before it was removed. */
 const DELETED_NOTES = "# Old notes\nSuperseded by the architecture document.\n";
+/** What `src/cache.ts` holds, a file the feature branch adds. */
+const CACHE_BODY = "export const cache = new Map<string, unknown>();\n";
 /** The body of the file whose other side lies outside the project's scope. */
 const INDEX_BODY = "export const buildIndex = (docs: string[]) => new Map(docs.map((d, i) => [i, d]));\n";
 /** The images the binary change compares, and the ids `git` hashed each of them to. */
@@ -255,6 +258,7 @@ const FEATURE_COMPARISON: FixtureChange[] = [
   renamedTo("committed", "src/conf.ts", "src/config.ts", onMain("0f1e2d3"), onFeature("4c5b6a7"), CONF_RENAME),
   fromOutsideTheProject("committed", "shared/search-index.ts", "src/index.ts", onFeature("2e3d4c5"), INDEX_BODY),
   expandable("committed", "src/pipeline.ts", onMain(PIPELINE_IDS.old), onFeature(PIPELINE_IDS.new), PIPELINE),
+  addition("committed", "src/cache.ts", onFeature("5a6b7c8"), CACHE_BODY),
   deletion("committed", "docs/old-notes.md", onMain("7c6b5a4"), DELETED_NOTES),
   binaryChange("committed", "docs/logo.png", onMain("6a5b4c3"), onFeature("8b7c6d5"), LOGO_BODIES),
   typeChange("committed", "current", onMain("0d1c2b3"), onFeature("8d2f1a0"), CURRENT_AS_FILE, "releases/2.4"),
@@ -324,6 +328,9 @@ const sectionHeading =
     const label = ui.t(SECTION_LABELS[section]);
     return describing(`sectionHeading(${section})`, (name) => name.startsWith(label) && /^\p{N}[\p{N},.\s]*$/u.test(name.slice(label.length)));
   };
+/** Puts the pointer on the status letter of the row of `file`, which is `status`. */
+const hoverStatus = (file: string, status: StatusKey) => (ui: Ui) => ui.hoverChangeStatus(ui.changeRow(file, status), status);
+
 /** Presses the heading of `section`, which folds it or unfolds it. */
 const foldSection = (section: ChangeSection) => (ui: Ui) => ui.press(sectionHeading(section)(ui));
 
@@ -374,6 +381,15 @@ export const projectGitScenarios: Scenario[] = [
       "The Git mode: the worktree selector, then the changes in sections — conflicted first, then staged, unstaged, untracked. src/server.ts is in both Staged and Unstaged, as two changes. Press one to open its diff; Left and Right move through the list across sections.",
     state,
     steps: openGit,
+  },
+  {
+    id: "git-changes-status-tooltip",
+    group: GROUP,
+    title: "A change's status letter, in the list",
+    description:
+      "The pointer rests on the letter beside current, whose tooltip names the status in words; every row's letter does the same, in the list and in the tree.",
+    state,
+    steps: [...openGit, hoverStatus("current", "typeChanged")],
   },
   {
     id: "git-changes-folded",
@@ -638,6 +654,15 @@ export const projectGitScenarios: Scenario[] = [
     state,
     preferences: { changeLayout: "tree" },
     steps: compare("main", "feature/ranking-experiments"),
+  },
+  {
+    id: "git-compare-tree-status-tooltip",
+    group: GROUP,
+    title: "A compared file's status letter, in the tree",
+    description: "The pointer rests on the letter beside cache.ts, the one added file, whose tooltip names the status in words.",
+    state,
+    preferences: { changeLayout: "tree" },
+    steps: [...compare("main", "feature/ranking-experiments"), hoverStatus("cache.ts", "added")],
   },
   {
     id: "git-compare-folded",

@@ -10,7 +10,6 @@ import { useCopyPath } from "../components/useCopyPath";
 import { Dialog, useRefocusIfLost } from "../dialogs/Dialog";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
-import type { PlainMessageKey } from "../i18n/catalog";
 import { useOctoboardTheme } from "../theme";
 import { displayWirePath, wireBaseName } from "../wirePath";
 import { arrowNavigation } from "./arrowKeys";
@@ -35,7 +34,7 @@ import { FrameSurface } from "./FrameSurface";
 import { MarkdownSurface } from "./MarkdownSurface";
 import { hasTwoSides } from "./patch";
 import { StatusChip } from "./StatusChip";
-import type { StatusKey } from "./statusMarks";
+import { STATUS_LABELS, type StatusKey } from "./statusMarks";
 import {
   Disconnected,
   DISCONNECTED,
@@ -49,16 +48,6 @@ import {
   Unsupported,
 } from "./viewerStates";
 import { useWrapClaims, WrapToggleHost } from "./wordWrap";
-
-const STATUS_LABELS: Record<StatusKey, PlainMessageKey> = {
-  added: "viewer.change.added",
-  untracked: "viewer.change.untracked",
-  conflicted: "viewer.change.conflicted",
-  deleted: "viewer.change.deleted",
-  renamed: "viewer.change.renamed",
-  typeChanged: "viewer.change.typeChanged",
-  modified: "viewer.change.modified",
-};
 
 /** Moving to the subject before or after this one, from the footer's buttons and from Left and Right;
  * a missing callback disables its button and its key. */

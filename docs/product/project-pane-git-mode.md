@@ -124,9 +124,15 @@ below). At the row's end is the button of its own actions (see "A row's actions"
 | U | untracked — in a muted coral of its own, not Added's green |
 | C | in conflict |
 
-The letter is decoration: assistive technology hears a row as its name, its status in words and what follows the
-name. A name, or what follows it, too long for its row fades out, with its full text as its tooltip (see "Names too
-long for their space" in `docs/product/labels-and-tooltips.md`).
+**The letter says in a tooltip what it stands for**: resting the mouse on it shows the status named in words, in the
+same capitalised wording the file viewer's header carries as an opened change's tag (see "Opening a change" below).
+The letter is the only part of the row that opens it, and it opens on the mouse alone, after the usual wait: the
+letter is no tab stop and adds none to the row, so the tooltip never shows on keyboard focus (see "Tooltips on
+indicators" in `docs/product/labels-and-tooltips.md`). The letter itself stays out of the accessibility tree, which
+costs nothing: assistive technology hears a row as its name, its status in words and what follows the name.
+
+A name, or what follows it, too long for its row fades out, with its full text as its tooltip (see "Names too
+long for their space" in `docs/product/labels-and-tooltips.md`), each on the part of the row it belongs to.
 
 - **Up** and **Down** move through the rows and the section headings between them (see "Folding a section" below),
   **Home** and **End** through the rows alone, and typing a name's first letters moves to a row.

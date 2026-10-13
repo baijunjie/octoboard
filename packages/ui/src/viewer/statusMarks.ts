@@ -1,3 +1,4 @@
+import type { PlainMessageKey } from "../i18n/catalog";
 import type { ChangeStatus } from "./content";
 
 /** What a change can be marked as: a change's own status, in conflict, or untracked. */
@@ -16,4 +17,16 @@ export const STATUS_MARKS: Record<StatusKey, { letter: string; color: "success" 
   renamed: { letter: "R", color: "accent" },
   typeChanged: { letter: "T", color: "accent" },
   conflicted: { letter: "C", color: "danger" },
+};
+
+/** The word that names each status on its own, capitalised: what the viewer's header chip shows for
+ * an opened change, and what the change list's letter says in its tooltip. */
+export const STATUS_LABELS: Record<StatusKey, PlainMessageKey> = {
+  added: "viewer.change.added",
+  untracked: "viewer.change.untracked",
+  conflicted: "viewer.change.conflicted",
+  deleted: "viewer.change.deleted",
+  renamed: "viewer.change.renamed",
+  typeChanged: "viewer.change.typeChanged",
+  modified: "viewer.change.modified",
 };

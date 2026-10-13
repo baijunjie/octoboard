@@ -7,8 +7,13 @@ import { en } from "../../i18n/messages/en";
 import { createUi, type Matcher, type Ui } from "../interact";
 import { DEFAULT_WIDTH, MIN_HEIGHT } from "../scenario";
 
+/** The arguments of a step that hold a value (a status) and not a name to look for, by position: a
+ * value can spell the same as a message, and would be flagged for it. */
+const VALUE_ARGUMENTS: Partial<Record<keyof Ui, number[]>> = { hoverChangeStatus: [1] };
+
 /** Every scenario's steps, run against a `Ui` that presses nothing and records the names it was
- * given to look for, in `language`. Only `t`, `session` and `changeRow` are real. */
+ * given to look for, in `language`. Only `t`, `session` and `changeRow` are real. `key` and `type`
+ * take text, and `hoverCalloutStatus` a title, so they record nothing. */
 async function matchersOf(language: Language): Promise<{ id: string; matcher: Matcher }[]> {
   const real = createUi({} as Document, language);
   const matchers: { id: string; matcher: Matcher }[] = [];
@@ -18,7 +23,10 @@ async function matchersOf(language: Language): Promise<{ id: string; matcher: Ma
         if (property === "t" || property === "session" || property === "changeRow") return target[property];
         return async (...args: unknown[]) => {
           if (property === "key" || property === "type" || property === "hoverCalloutStatus") return;
-          for (const arg of args) if (typeof arg === "string" || typeof arg === "function") matchers.push({ id: scenario.id, matcher: arg as Matcher });
+          args.forEach((arg, index) => {
+            if (VALUE_ARGUMENTS[property]?.includes(index)) return;
+            if (typeof arg === "string" || typeof arg === "function") matchers.push({ id: scenario.id, matcher: arg as Matcher });
+          });
         };
       },
     });

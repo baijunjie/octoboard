@@ -3,11 +3,15 @@ import { Button } from "@heroui/react";
 import { act } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { change, changeViewFixture, mountRows } from "../browser/browserTestSupport";
+import { ChangeList } from "../browser/ChangeList";
+import { changeItems } from "../browser/changes";
 import { ActivityMarker } from "../components/ActivityMarker";
 import { AgentIcon } from "../components/AgentIcon";
 import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
 import { leave, mountForTooltip, openTooltip } from "../components/tooltipTestSupport";
+import type { ChangeEntry } from "../protocol";
 import { createUi } from "./interact";
 
 beforeEach(() => vi.useFakeTimers());
@@ -223,6 +227,49 @@ it("hoverCalloutAgent fails where the tooltip is not the one it was told", async
 it("hoverCalloutAgent fails for an agent icon with no tooltip", async () => {
   mountWindow();
   const done = expect(createUi(document, "en").hoverCalloutAgent("Bare glyph", "Work")).rejects.toThrow(/with an agent icon to hover/);
+  await vi.advanceTimersByTimeAsync(6000);
+  await done;
+  expect(openTooltip()).toBeNull();
+});
+
+/** A change list of a modified file and a deleted one, as a change row is mounted in the app: each
+ * row a collection item whose status letter is `aria-hidden` and carries the anchored tooltip. */
+function mountChanges(layout: "flat" | "tree"): void {
+  const index = { kind: "index", worktree: "w", blob: "b" } as const;
+  const deleted: ChangeEntry = { group: "unstaged", old: { state: "present", path: "gone.ts", kind: "file", source: index }, new: { state: "absent" } };
+  mountRows(
+    <ChangeList
+      items={changeItems([change("unstaged", "kept.ts"), deleted])}
+      selected={undefined}
+      label="Changes"
+      onOpen={() => {}}
+      listRef={() => {}}
+      changeView={changeViewFixture({ layout })}
+    />,
+  );
+}
+
+const changeRow = (name: string) => (label: string) => label.startsWith(name);
+const chipOf = (name: string): Element => document.querySelector(`[aria-label*="${name}"]`)!.querySelector("[data-slot=chip]")!;
+
+it.each(["flat", "tree"] as const)("hoverChangeStatus puts up the word of the status of the %s row's letter", async (layout) => {
+  mountChanges(layout);
+  await settledLive(createUi(document, "en").hoverChangeStatus(changeRow("gone.ts"), "deleted"));
+  expect(openTooltip()?.textContent).toBe("Deleted");
+  release(chipOf("gone.ts"));
+});
+
+it("hoverChangeStatus fails where the tooltip that opens is another status's", async () => {
+  mountChanges("flat");
+  const done = expect(createUi(document, "en").hoverChangeStatus(changeRow("kept.ts"), "deleted")).rejects.toThrow(/for deleted \(Deleted\): "Modified" is up/);
+  await vi.advanceTimersByTimeAsync(3000);
+  await done;
+  release(chipOf("kept.ts"));
+});
+
+it("hoverChangeStatus fails for a row that is not there", async () => {
+  mountChanges("flat");
+  const done = expect(createUi(document, "en").hoverChangeStatus(changeRow("nothing.ts"), "modified")).rejects.toThrow(/No change row/);
   await vi.advanceTimersByTimeAsync(6000);
   await done;
   expect(openTooltip()).toBeNull();

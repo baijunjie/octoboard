@@ -85,6 +85,21 @@ const rangeOf = (count: number) => (count === 1 ? "1" : `1,${count}`);
 /** A text's lines, without the empty one its terminating newline leaves after it. */
 const linesOf = (content: string) => content.replace(/\n$/, "").split("\n");
 
+/** The addition of a whole file as `git` writes it, from `--- /dev/null` down, the mirror of
+ * `removalOf`: nothing at all for an empty file, which has no line to add, and the marker after the
+ * last line where the file does not end in a newline. */
+function additionOf(path: string, content: string): string[] {
+  if (content === "") return [];
+  const lines = linesOf(content);
+  return [
+    "--- /dev/null",
+    `+++ b/${path}`,
+    `@@ -0,0 +${rangeOf(lines.length)} @@`,
+    ...lines.map((line) => `+${line}`),
+    ...(content.endsWith("\n") ? [] : ["\\ No newline at end of file"]),
+  ];
+}
+
 /** The removal of a whole file as `git` writes it, from `--- a/<path>` down: nothing at all for an
  * empty file, which has no line to remove, and the marker after the last line where the file does
  * not end in a newline. */
@@ -205,12 +220,8 @@ export function typeChange(group: TwoSided, path: string, from: ObjectSource, to
       `diff --git a/${path} b/${path}`,
       "new file mode 120000",
       `index 0000000..${to.blob}`,
-      "--- /dev/null",
-      `+++ b/${path}`,
-      "@@ -0,0 +1 @@",
-      // A link's target is one line and never ends in a newline, which `git` marks.
-      `+${target}`,
-      "\\ No newline at end of file",
+      // A link's target is one line and never ends in a newline, which `additionOf` marks.
+      ...additionOf(path, target),
       "",
     ].join("\n"),
     whole: { old: content },
@@ -225,6 +236,17 @@ export function deletion(group: TwoSided, path: string, from: ObjectSource, cont
     entry: { group, old: sideFile(path, from), new: { state: "absent" } },
     patch: [`diff --git a/${path} b/${path}`, "deleted file mode 100644", `index ${from.blob}..0000000`, ...removalOf(path, content), ""].join("\n"),
     whole: { old: content },
+  };
+}
+
+/** A file added: `git` writes every line of it as an addition. Only the new side exists, so it alone is
+ * counted, from `content`, and a request for the whole bodies answers with that content and an
+ * absent old side, as for a removal. Not an untracked file, which Git has no patch for. */
+export function addition(group: TwoSided, path: string, to: ObjectSource, content: string): FixtureChange {
+  return {
+    entry: { group, old: { state: "absent" }, new: sideFile(path, to) },
+    patch: [`diff --git a/${path} b/${path}`, "new file mode 100644", `index 0000000..${to.blob}`, ...additionOf(path, content), ""].join("\n"),
+    whole: { new: content },
   };
 }
 

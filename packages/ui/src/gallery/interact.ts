@@ -4,7 +4,7 @@ import { DORMANT_STATUSES, LIVE_STATUSES } from "../protocol";
 import { activityLabel, statusLabel } from "../sessionLabel";
 import { ACTIVITIES } from "../sidebar/order";
 import type { Daemon } from "../store";
-import type { StatusKey } from "../viewer/statusMarks";
+import { STATUS_LABELS, type StatusKey } from "../viewer/statusMarks";
 
 /** Everything a pressable thing is looked up among. A hand-built row is a `role="button"`, a tag
  * in a tag group is a `role="row"`, and a checkbox is its (visually hidden) input: pressing the label
@@ -139,6 +139,15 @@ export interface Ui {
    * rail avatar while the hidden sidebar can float in, where the pointer floats the sidebar instead)
    * is not passed over. */
   hoverTitledControl: (matcher: Matcher) => Promise<void>;
+  /** Moves the pointer onto the status letter of the change row named `row` and leaves it there, as
+   * `hoverIndicator` does, for the tooltip that names `status`. The letter is `aria-hidden` and its
+   * tooltip is the anchored shape, which is mounted only while the pointer is on the letter and is
+   * portalled out of the row, so it is found among the tooltips by its `data-anchored-tooltip` mark and
+   * not by the row; the step fails if the one that opens is not `status`'s word, which also catches
+   * a letter drawn without a tooltip (nothing opens) and a row of another status than the one named.
+   * A name that spells the row out in English fails in the other languages, so the row is named
+   * with `changeRow`, which builds it in the window's own. */
+  hoverChangeStatus: (row: Matcher, status: StatusKey) => Promise<void>;
   /** Moves focus onto the first control named `matcher`, waiting for it to appear, with the keyboard
    * as its source, so that the focus ring is drawn as it is for a user who tabbed there, and a key
    * pressed next goes to it: for a row of a list, which a press would open rather than focus. */
@@ -373,6 +382,13 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       const shown = doc.querySelector("[role=tooltip]")?.textContent;
       if (!shown || withoutIsolates(shown).trim() !== nameOf(control)) {
         throw new Error(`The control matching ${String(matcher)} has no tooltip of its name: its last tooltip is ${shown ? `"${shown}"` : "none"}`);
+      }
+    },
+    async hoverChangeStatus(row, status) {
+      await hover(() => find(row)?.querySelector<HTMLElement>("[data-slot=chip]"), `No change row matching ${String(row)} with a status letter to hover`);
+      const shown = doc.querySelector("[data-anchored-tooltip]")?.textContent;
+      if (shown !== t(STATUS_LABELS[status])) {
+        throw new Error(`The row matching ${String(row)} did not open the tooltip for ${status} (${t(STATUS_LABELS[status])}): ${shown ? `"${shown}"` : "none"} is up`);
       }
     },
     async press(matcher) {

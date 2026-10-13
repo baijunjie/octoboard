@@ -121,7 +121,11 @@ are:
 - the creator badge, the ring a branch carries in the Git mode's branch lists, whose tooltip names the session that
   created the branch, says so differently when that session no longer exists and when it is the selected one, and is
   on the ring itself rather than on the row around it (see "The creator badge" in
-  `docs/product/branch-creator.md`).
+  `docs/product/branch-creator.md`);
+- a change's status letter on its row in the Git mode's change list, flat or grouped by folder, whose tooltip names
+  the status in the same word the file viewer's header carries as the tag of an opened change, and is on the letter
+  itself rather than on the row around it, the name and the detail beside it keeping their own tooltips (see "Rows
+  and the keyboard" in `docs/product/project-pane-git-mode.md`).
 
 ## Names too long for their space
 

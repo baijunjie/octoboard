@@ -20,6 +20,12 @@ aggregate assertion passes on behalf of whichever elements it is actually sensit
 assertion can see, or whose payload turns out to be inert against the fixture's own shape, is decoration, and the
 fixture's claim to cover the set is what the next person will trust.
 
+A third shape is this window's tooltips: only one is ever open at a time (react-aria keeps one open tooltip for
+the whole window), so an assertion that counts them — "exactly one `[role=tooltip]` is up" — cannot fail when a
+mark gains a tooltip it should not have, because the new trigger replaces the open one instead of adding a second.
+Every check of a tooltip, in a jsdom test as in a gallery hover step, names whose tooltip is up from its text, and
+where none should open asserts that there is none.
+
 ## Never write a fresh executable per test — share one that has already been exec'd
 
 Applies to any test that needs a script of its own to run as a program: a fake shell, a fake agent

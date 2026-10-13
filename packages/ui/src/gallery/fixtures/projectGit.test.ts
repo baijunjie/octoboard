@@ -206,6 +206,7 @@ describe("the sample repository's changes", () => {
       "main..feature/ranking-experiments src/config.ts: old text 92/3, new text 100/3",
       "main..feature/ranking-experiments src/index.ts: invalid_change",
       "main..feature/ranking-experiments src/pipeline.ts: old text 5304/120, new text 5349/120",
+      "main..feature/ranking-experiments src/cache.ts: old absent, new text 49/1",
       "main..feature/ranking-experiments docs/old-notes.md: old text 53/2, new absent",
       "main..feature/ranking-experiments docs/logo.png: old image/png 507/7, new image/png 516/8",
       "main..feature/ranking-experiments current: unsupported_file_type",
