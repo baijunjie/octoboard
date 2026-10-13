@@ -5,10 +5,12 @@ The session doing it is the **owner** of the sessions it starts; every session i
 it. Three kinds of session can be an owner:
 
 - A **console session** — a session the user brings a request to; a console may run several of them at once (see
-  "Several console sessions per console" below). It does not change project code itself: it works out which project a
-  request belongs to, starts sessions there, follows them up, and summarizes what they came back with. Besides its
-  terminal it has one surface of its own for showing the user something — the report panel, described in
-  `docs/product/report-panel.md`.
+  "Several console sessions per console" below). It works out which project a request belongs to, starts sessions
+  there, follows them up, and summarizes what they came back with. **It changes no project itself**: neither a file in
+  a project, nor a command that creates, edits, moves or deletes anything in one or changes its repository — every
+  change goes through a session it starts. Reading a project is legitimate, and is how a console session checks what a
+  session reports. Besides its terminal it has one surface of its own for showing the user something — the report
+  panel, described in `docs/product/report-panel.md`.
 - An **unbound project session** — a project session the user opened by hand without binding it to a console session.
   It works in its own project and can also start sessions in that project and drive them (see "The unbound project
   session's tools" below).

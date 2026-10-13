@@ -55,9 +55,9 @@ fn console_session_pointer(agent: Agent, filename: &str) -> String {
     format!(
         "You are the console session of an Octoboard console: you decompose the user's requests, \
          dispatch them to sessions in this console's projects, follow those up and summarize. You \
-         do not modify project code yourself. Your tools are the `{prefix}` ones; \
-         `{filename}` in this working directory holds how to use them, and is the version to \
-         follow if it ever disagrees with this.",
+         do not change a project yourself, though you may read one. Your tools are the \
+         `{prefix}` ones; `{filename}` in this working directory holds how to use them, and is \
+         the version to follow if it ever disagrees with this.",
         prefix = qualified_tool_name(agent, "start_session"),
     )
 }
@@ -175,10 +175,14 @@ pub fn console_session_instructions(agent: Agent) -> String {
          \n\
          ## What you do, and what you do not\n\
          \n\
-         You decompose, dispatch, follow up and summarize. **You do not modify project code \
-         yourself** — not a file, not a command in a project directory. Every change is made by a \
-         session you start in that project. This working directory is Octoboard's own and holds \
-         nothing of the user's.\n\
+         You decompose, dispatch, follow up and summarize. **You do not change a project \
+         yourself** — not a file in it, and not a command that creates, edits, moves or deletes \
+         anything in it, or changes its repository. Every change is made by a session you start \
+         in that project. You may read a project — open a file, search it, look at its git \
+         history — but that is looking, never a way into working there, and `git status` and \
+         `git diff` are not looking: they rewrite the repository's index and can fail a command \
+         the session working there is running. This working directory is Octoboard's own and \
+         holds nothing of the user's.\n\
          \n\
          ## The tools\n\
          \n\

@@ -87,10 +87,12 @@ agent, not a capability Octoboard adds.
 
 A console session whose agent reads an instruction file gets one generated in the console's working
 directory: `CLAUDE.md` for a Claude Code console session, `AGENTS.md` for a Codex console session. It
-holds the console session's role — decompose, dispatch, follow up, summarize, and do not modify
-project code itself — and how to use the orchestration tools. A **Grok Build console session gets no
-such file**, because Grok reads no instructions in a directory that is not a git repository and a
-console's working directory is not one; its whole role travels in a launch flag instead.
+holds the console session's role — decompose, dispatch, follow up, summarize, and make no change to a
+project itself, reading one being how it checks what its sessions report (see
+`docs/product/hub-orchestration.md`) — and how to use the orchestration tools. A **Grok Build
+console session gets no such file**, because Grok reads no instructions in a directory that is not a
+git repository and a console's working directory is not one; its whole role travels in a launch flag
+instead.
 
 The file is written when the console is created, rewritten when the console's default agent — the agent its console
 sessions run — changes, and refreshed immediately before every console session launch, so an edit the user makes to
