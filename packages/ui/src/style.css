@@ -413,7 +413,7 @@
   --chip-fg: var(--untracked-foreground);
 }
 
-/* The colours of the status glyphs (`StatusIcon.tsx`: a waiting session's hand, a working one's
+/* The colours of the status glyphs (`statusGlyphs.tsx`: a waiting session's hand, a working one's
    dot; the rail's waiting count), which carry meaning and so need 3:1 on every surface they sit on:
    the panel, the sidebar, a selected row, the chrome, and on the chrome's real material with its
    hover and pressed tints (light #e2e4e5 and its darker variant #d0d2d3, dark #484a4b). HeroUI's
@@ -427,10 +427,11 @@
    floor). The filled ring that marks the selected session's branches in a branch selector's popover
    (`BranchOriginBadge.tsx`) takes it as well: 4.66:1 on `--overlay` and 3.91:1 on a hovered row
    (`--default`) in light, 6.63 and 5.58 in dark. Idle's speech bubble keeps HeroUI's `--success`,
-   below 3:1 (see `StatusIcon.tsx`). The import result's "created" glyph (`ImportResult.tsx`) is an
-   icon on a dialog's `--overlay` and so cannot do that: light takes a deeper green (4.54:1 on
-   white, `--success` being 2.19:1), dark keeps `--success` (8.08:1 on `--overlay`). Its failed
-   glyph is `--danger` (4.83:1 light, 5.63:1 dark), and the skipped one `--muted`. */
+   below 3:1 (see `StatusIcon.tsx`'s idle case). The import result's "created" glyph
+   (`ImportResult.tsx`) is an icon on a dialog's `--overlay` and so cannot do that: light takes a
+   deeper green (4.54:1 on white, `--success` being 2.19:1), dark keeps `--success` (8.08:1 on
+   `--overlay`). Its failed glyph is `--danger` (4.83:1 light, 5.63:1 dark), and the skipped one
+   `--muted`. */
 :root {
   --warning-glyph: oklch(0.5 0.15 55);
   --accent-glyph: var(--accent);
@@ -630,9 +631,10 @@ html.pane-resizing * {
   text-align: match-parent;
 }
 
-/* The raised hand's motion (`StatusIcon.tsx`): it waves now and then (a working session's dot uses
-   Tailwind's own `animate-ping`). Applied through `motion-safe:` only, so both stand still where the
-   system asks for reduced motion. */
+/* The raised hand's motion, wherever one is drawn (`statusGlyphs.tsx`, and the hands the rail's
+   avatar badge and waiting count draw themselves): it waves now and then (a working session's dot
+   uses Tailwind's own `animate-ping`). Applied through `motion-safe:` only, so both stand still
+   where the system asks for reduced motion. */
 @keyframes status-wave {
   0%,
   60%,

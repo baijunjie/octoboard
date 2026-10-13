@@ -1,24 +1,12 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import type { SessionStatus } from "../protocol";
-import type { Activity } from "../sidebar/order";
-import { ActivityMarker, StatusIcon } from "./StatusIcon";
-import { enter, leave, mountForTooltip, openTooltip } from "./tooltipTestSupport";
+import { StatusIcon } from "./StatusIcon";
+import { enter, leave, mountForTooltip, openTooltip, trigger, withFakeTimers } from "./tooltipTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-/** Fake timers, so that the tooltip's delay can be run out and nothing can be left counting down. */
-function withFakeTimers(): () => void {
-  vi.useFakeTimers();
-  onTestFinished(() => {
-    vi.useRealTimers();
-  });
-  return () => act(() => void vi.runOnlyPendingTimers());
-}
-
-const trigger = (container: HTMLElement) => container.firstElementChild as HTMLElement;
 
 const STATUS_TEXT: Array<[SessionStatus, string]> = [
   ["working", "Working"],
@@ -74,37 +62,4 @@ it("carries no tooltip where a visible status label sits beside the glyph", () =
   settle();
   expect(openTooltip()).toBeNull();
   expect(vi.getTimerCount()).toBe(0);
-});
-
-const ACTIVITY_TEXT: Array<[NonNullable<Activity>, string]> = [
-  ["waiting", "A session is waiting for you"],
-  ["working", "A session is working"],
-  ["running", "A session is running"],
-];
-
-it.each(ACTIVITY_TEXT)("tells the %s activity marker apart from the other two, which look alike", (activity, text) => {
-  const settle = withFakeTimers();
-  const container = mountForTooltip(<ActivityMarker activity={activity} />);
-
-  enter(trigger(container));
-  expect(openTooltip()).toBeNull();
-  settle();
-  expect(openTooltip()?.textContent).toBe(text);
-
-  leave(trigger(container));
-  settle();
-  expect(openTooltip()).toBeNull();
-  expect(vi.getTimerCount()).toBe(0);
-});
-
-it("adds nothing to the accessible name of the row or chip the marker sits in", () => {
-  const container = mountForTooltip(<ActivityMarker activity={"waiting"} />);
-  expect(trigger(container).hasAttribute("aria-label")).toBe(false);
-  expect(container.querySelector("[role=img]")).toBeNull();
-  expect(container.querySelector("[aria-hidden=true]")).not.toBeNull();
-});
-
-it("draws no marker, and so no tooltip, where nothing is going on", () => {
-  const container = mountForTooltip(<ActivityMarker activity={undefined} />);
-  expect(container.firstElementChild).toBeNull();
 });

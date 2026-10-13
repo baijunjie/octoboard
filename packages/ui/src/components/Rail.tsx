@@ -12,10 +12,10 @@ import { activityLabelKey } from "../sessionLabel";
 import { consoleMenu } from "../sidebar/menus";
 import { type Activity, consoleActivity } from "../sidebar/order";
 import { ActionMenu } from "./ActionMenu";
+import { ActivityBadge } from "./ActivityMarker";
 import { CHROME_BUTTON_FILLS, CHROME_CURRENT_FILLS, ChromeButton } from "./ChromeButton";
 import { ConsoleAvatar } from "./ConsoleAvatar";
 import { NotificationsBell } from "./NotificationsBell";
-import { ActivityBadge } from "./StatusIcon";
 import { TitledControl } from "./TitledControl";
 
 const NEW_CONSOLE_ID = "rail-new-console";

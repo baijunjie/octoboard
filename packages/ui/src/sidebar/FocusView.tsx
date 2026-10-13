@@ -4,12 +4,13 @@ import React, { useLayoutEffect, useRef } from "react";
 
 import { AGENT_LABEL } from "../agents";
 import { ActionMenu } from "../components/ActionMenu";
+import { ActivityMarker } from "../components/ActivityMarker";
 import { AgentAccountText } from "../components/AgentAccountText";
 import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { RowControls } from "../components/RowControls";
-import { ActivityMarker, StatusIcon } from "../components/StatusIcon";
+import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
 import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";

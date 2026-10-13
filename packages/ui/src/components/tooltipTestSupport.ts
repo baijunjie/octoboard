@@ -1,9 +1,9 @@
 // Shared by the tests of the tooltips an indicator carries: driving the pointer the way react-aria
-// wants it, and mounting a component that has one.
+// wants it, mounting a component that has one, and running its delay out.
 import type React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { onTestFinished } from "vitest";
+import { onTestFinished, vi } from "vitest";
 
 /**
  * A pointer event of a real mouse. React raises `onPointerEnter` / `onPointerLeave` from
@@ -51,4 +51,22 @@ export function mountForTooltip(element: React.ReactElement): HTMLElement {
   });
   act(() => root.render(element));
   return container;
+}
+
+/**
+ * Fake timers for the length of the test, so a tooltip's delay can be run out and nothing can be
+ * left counting down. Returns the call that runs the pending timers out.
+ */
+export function withFakeTimers(): () => void {
+  vi.useFakeTimers();
+  onTestFinished(() => {
+    vi.useRealTimers();
+  });
+  return () => act(() => void vi.runOnlyPendingTimers());
+}
+
+/** The mounted indicator's outermost element — the tooltip's trigger where it has one — which is
+ * what the pointer is put on. */
+export function trigger(container: HTMLElement): HTMLElement {
+  return container.firstElementChild as HTMLElement;
 }

@@ -2,8 +2,9 @@
 import { act } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { ActivityMarker } from "../components/ActivityMarker";
 import { AgentIcon } from "../components/AgentIcon";
-import { ActivityMarker, StatusIcon } from "../components/StatusIcon";
+import { StatusIcon } from "../components/StatusIcon";
 import { leave, mountForTooltip, openTooltip } from "../components/tooltipTestSupport";
 import { createUi } from "./interact";
 

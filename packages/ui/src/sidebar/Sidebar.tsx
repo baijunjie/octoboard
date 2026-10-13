@@ -15,11 +15,12 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { noAgentAvailable } from "../agents";
 import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
+import { ActivityMarker } from "../components/ActivityMarker";
 import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { handFocusOff } from "../components/handFocusOff";
 import { RowControls } from "../components/RowControls";
-import { ActivityMarker, StatusIcon } from "../components/StatusIcon";
+import { StatusIcon } from "../components/StatusIcon";
 import { withGitBadge } from "../gitStatusLabel";
 import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
