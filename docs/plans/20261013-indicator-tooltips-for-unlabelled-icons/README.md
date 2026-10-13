@@ -47,7 +47,7 @@ one piece of wording and one set of placements.
 1. 01 session-status-glyph (closed)
 2. 02 activity-marker (closed)
 3. 03 confirmation-dialog-callout-icons (closed)
-4. [The confirmation callout's agent icon](04-callout-agent-icon.md)
+4. 04 callout-agent-icon (closed)
 5. [The activity badge on a rail avatar](05-rail-activity-badge.md)
 6. [The change row's status chip](06-change-row-status-chip.md)
 7. [The branch badge](07-git-badge.md)

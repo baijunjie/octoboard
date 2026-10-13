@@ -267,8 +267,10 @@ wherever the agent is named in words, the account the session runs under follows
 been removed, the directory it recorded (or the agent's name alone when it recorded none). The agent's icon has that
 account, named the same way, as its tooltip, or the agent's name when there is no account to name; the tooltip shows on
 pointer hover only, and the icon adds no tab stop. The agent's icon carries the same tooltip on a focus mode's session
-cards and archived rows (see `docs/product/focus-mode.md`) and on the archive view's rows (see "The archive view"
-below). Its action menu offers:
+cards and archived rows (see `docs/product/focus-mode.md`), on the archive view's rows (see "The archive view" below)
+and on each session a confirmation lists among the ones it affects, where the agent and that account are also written
+out beside the icon: no row name says them there, so that text, and not the tooltip, is how they reach assistive
+technology. Its action menu offers:
 
 - **Pin** / **Unpin**.
 - **Rename** — see "Renaming a session" in `docs/product/sessions.md`.

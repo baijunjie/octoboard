@@ -17,8 +17,9 @@ afterEach(() => vi.useRealTimers());
  * activity marker's two hosts: a row with a status glyph before the marker, as a project row has its
  * git badge, and a chip with the marker alone. "Docs" is named as a row with an activity but draws no
  * marker, as an expanded project row does, which is what the step's failure case needs. A confirmation
- * dialog's callout lists sessions, one with a tooltip on its glyph and one without; unlike the rows
- * above, that glyph is the named `role="img"` rather than a presentational one. */
+ * dialog's callout lists sessions, one with a tooltip on its glyph and on its agent icon and one
+ * with neither; unlike the rows above, that glyph is the named `role="img"` rather than a
+ * presentational one. */
 function mountWindow(): void {
   mountForTooltip(
     <>
@@ -48,7 +49,7 @@ function mountWindow(): void {
         <ul>
           <li>
             <StatusIcon status="interrupted" withTooltip />
-            <AgentIcon agent="claude" />
+            <AgentIcon agent="claude" tooltip="Work" />
             <span className="sr-only">Claude Code</span>
             <span>Tidy the changelog</span>
           </li>
@@ -188,6 +189,31 @@ it("hoverCalloutStatus fails for a session whose glyph has no tooltip", async ()
 it("hoverCalloutStatus fails for a session that is not listed", async () => {
   mountWindow();
   const done = expect(createUi(document, "en").hoverCalloutStatus("Nothing")).rejects.toThrow(/callout list/);
+  await vi.advanceTimersByTimeAsync(6000);
+  await done;
+  expect(openTooltip()).toBeNull();
+});
+
+it("hoverCalloutAgent puts up the account of the callout's session it names", async () => {
+  mountWindow();
+  await settledLive(createUi(document, "en").hoverCalloutAgent("Tidy the changelog", "Work"));
+  expect(openTooltip()?.textContent).toBe("Work");
+  release(document.querySelector("[role=alertdialog] li")!.children[1]);
+});
+
+it("hoverCalloutAgent fails where the tooltip is not the one it was told", async () => {
+  mountWindow();
+  const done = expect(createUi(document, "en").hoverCalloutAgent("Tidy the changelog", "Home")).rejects.toThrow(
+    /has no tooltip "Home": its last tooltip is "Work"/,
+  );
+  await vi.advanceTimersByTimeAsync(3000);
+  await done;
+  release(document.querySelector("[role=alertdialog] li")!.children[1]);
+});
+
+it("hoverCalloutAgent fails for an agent icon with no tooltip", async () => {
+  mountWindow();
+  const done = expect(createUi(document, "en").hoverCalloutAgent("Bare glyph", "Work")).rejects.toThrow(/with an agent icon to hover/);
   await vi.advanceTimersByTimeAsync(6000);
   await done;
   expect(openTooltip()).toBeNull();

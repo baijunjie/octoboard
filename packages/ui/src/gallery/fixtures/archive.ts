@@ -61,18 +61,26 @@ export const underArchivedLead = Array.from({ length: 2 }, (_, i) =>
   }),
 );
 
-const boundState = snapshotState({
+const boundSessions = [
+  boundConsoleSession,
+  otherConsoleSession,
+  otherOwnerArchived,
+  unboundArchived,
+  ...boundArchived,
+  archivedLead,
+  ...underArchivedLead,
+];
+const boundState = snapshotState({ consoles: [console_], projects: [project], sessions: boundSessions });
+
+// The same sessions, the second of those under the archived lead session now a Codex session on an
+// account that has since been removed and recorded no directory: its agent icon falls back to the
+// agent's own name.
+const deleteState = snapshotState({
   consoles: [console_],
   projects: [project],
-  sessions: [
-    boundConsoleSession,
-    otherConsoleSession,
-    otherOwnerArchived,
-    unboundArchived,
-    ...boundArchived,
-    archivedLead,
-    ...underArchivedLead,
-  ],
+  sessions: boundSessions.map((session) =>
+    session.id === underArchivedLead[1].id ? { ...session, agent: "codex" as const, account_id: "a-removed" } : session,
+  ),
 });
 
 export const archiveScenarios: Scenario[] = [
@@ -134,12 +142,13 @@ export const archiveScenarios: Scenario[] = [
     group: GROUP,
     title: "Deleting an archived lead session takes its archived sessions along",
     description:
-      "The confirmation lists the two sessions archived under the lead session. The pointer rests on the status glyph of the first, whose tooltip reads Archived.",
+      "The confirmation lists the two sessions archived under the lead session. The second is a Codex session on a removed account, whose agent icon's tooltip falls back to the agent's name. The pointer rests on the status glyph of the first, whose tooltip reads Archived.",
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
-    state: boundState,
+    state: deleteState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: boundArchived.length + 1 + underArchivedLead.length })),
       (ui) => ui.press(ui.t("archive.delete", { title: archivedLead.title })),
+      (ui) => ui.hoverCalloutAgent(underArchivedLead[1].title, "Codex"),
       (ui) => ui.hoverCalloutStatus(underArchivedLead[0].title),
     ],
   },

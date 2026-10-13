@@ -109,11 +109,19 @@ export interface Ui {
   hoverRowStatus: (row: Matcher) => Promise<void>;
   /** Moves the pointer onto the status glyph of the session titled `title` in the open confirmation
    * dialog's callout list, and leaves it there, as `hoverIndicator` does. Unlike a sidebar row's,
-   * that glyph is the named `role="img"` and the list row's first element child; the agent icon
-   * beside it has no tooltip. Fails while no dialog lists such a session, and also when the tooltip
-   * that opens is not a status's: a glyph drawn without a tooltip is the same `role="img"` first
-   * child, so the step would otherwise pass over one that opens nothing. */
+   * that glyph is the named `role="img"` and the list row's first element child. Fails while no
+   * dialog lists such a session, and also when the tooltip that opens is not a status's: a glyph
+   * drawn without a tooltip is the same `role="img"` first child, so the step would otherwise pass
+   * over one that opens nothing. */
   hoverCalloutStatus: (title: string) => Promise<void>;
+  /** Moves the pointer onto the agent icon of the session titled `title` in the open confirmation
+   * dialog's callout list, and leaves it there, as `hoverIndicator` does: the list row's second
+   * element child, after the status glyph. Fails while no dialog lists such a session, and also
+   * unless the tooltip open afterwards reads `tooltip`, the account the icon should name: an
+   * icon drawn without a tooltip has no trigger to hover, so it is reported as not found, and a
+   * tooltip left up from the status glyph beside it (hovered earlier, and never left) would
+   * otherwise be taken for this one's. */
+  hoverCalloutAgent: (title: string, tooltip: string) => Promise<void>;
   /** Moves the pointer onto the status glyph at the end of the top bar's breadcrumb and leaves it
    * there, as `hoverIndicator` does. The glyph's tooltip trigger is the one named `role="img"`
    * in the bar; fails while no session is selected. */
@@ -219,6 +227,13 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     await wait(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS);
   };
 
+  /** The row of the confirmation dialog's callout list for the session titled `title`: the title is
+   * its last element child, after the status glyph, the agent icon and the screen-reader-only name. */
+  const calloutRow = (title: string): HTMLElement | undefined =>
+    Array.from(doc.querySelectorAll<HTMLElement>("[role=alertdialog] li, [role=dialog] li")).find(
+      (item) => item.lastElementChild?.textContent?.trim() === title,
+    );
+
   const t: Ui["t"] = (key, ...args) => format(language, key, (args as [Record<string, string | number>?])[0]);
 
   return {
@@ -310,16 +325,24 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     },
     async hoverCalloutStatus(title) {
       await hover(() => {
-        const row = Array.from(doc.querySelectorAll<HTMLElement>("[role=alertdialog] li, [role=dialog] li")).find(
-          (item) => item.lastElementChild?.textContent?.trim() === title,
-        );
-        return row?.firstElementChild?.matches("[role=img]") ? (row.firstElementChild as HTMLElement) : undefined;
+        const glyph = calloutRow(title)?.firstElementChild;
+        return glyph?.matches("[role=img]") ? (glyph as HTMLElement) : undefined;
       }, `No session titled ${title} in a dialog's callout list with a status glyph to hover`);
       // A glyph without `withTooltip` is the same `role="img"` first child, and hovering it opens nothing.
       const shown = doc.querySelector("[role=tooltip]")?.textContent;
       const statuses = [...LIVE_STATUSES, ...DORMANT_STATUSES];
       if (!shown || !statuses.some((status) => statusLabel(t, status) === shown)) {
         throw new Error(`The status glyph of ${title} has no tooltip: its last tooltip is ${shown ? `"${shown}"` : "none"}`);
+      }
+    },
+    async hoverCalloutAgent(title, tooltip) {
+      await hover(() => {
+        const icon = calloutRow(title)?.children[1];
+        return icon?.matches("[role=presentation]") ? (icon as HTMLElement) : undefined;
+      }, `No session titled ${title} in a dialog's callout list with an agent icon to hover`);
+      const shown = withoutIsolates(doc.querySelector("[role=tooltip]")?.textContent ?? "").trim();
+      if (shown !== tooltip) {
+        throw new Error(`The agent icon of ${title} has no tooltip "${tooltip}": its last tooltip is ${shown ? `"${shown}"` : "none"}`);
       }
     },
     async hoverTopBarStatus() {

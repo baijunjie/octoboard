@@ -127,6 +127,21 @@ something special, which makes its presence look like the condition for answerin
 deletion, a binary change and a change past the patch budget with an `invalid_change` the real daemon never sends there.
 A factory parameter likewise carries the content a reply needs, not the right to ask for it.
 
+## A scenario shows only what its last step leaves on screen
+
+Applies when adding a step to a gallery scenario, and when deciding how many scenarios a set of states needs. A
+scenario is captured once, after all of its steps have run (`packages/ui/README.md`, section "The UI state gallery"),
+so a step whose effect is transient shows in the capture only while it is the last such step — a hover above all,
+since only one tooltip in the window is ever open. Extending a scenario with a second hover therefore takes the
+tooltip the first one put up out of every capture, while both steps still pass and nothing in the type check or the
+tests says so: the earlier hover goes on asserting what its tooltip reads, which is worth keeping, but it is no
+longer seen.
+
+So where two such states both have to be seen, rest each on the scenario whose last step it is, and order the steps
+of the scenarios over the same list accordingly: the status glyph's tooltip and the agent icon's tooltip in one
+confirmation's session list are shown by ending one scenario on the glyph and another on the icon. Name in the
+scenario's description which mark the pointer ends on, so the next step appended to it can see what it would displace.
+
 ## Settle what `git` writes against real `git` in a throwaway repository
 
 Applies to `git` output written out by hand rather than taken from a run of `git`: a patch in a gallery change fixture

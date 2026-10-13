@@ -26,18 +26,6 @@ const twoHubsState = snapshotState({
   ],
 });
 
-// A console session whose bound sessions are all interrupted, so archiving it takes them along.
-const cascadeHub = sessionOf("s-hub-4", console_.id, undefined, "Hub 4", "idle", { colour: "azure" });
-const cascadeState = snapshotState({
-  consoles: [console_],
-  projects: [web, api],
-  sessions: [
-    cascadeHub,
-    sessionOf("s-web-3", console_.id, web.id, "Tidy the changelog", "interrupted", { bound_to: cascadeHub.id }),
-    sessionOf("s-api-3", console_.id, api.id, "Rename the index", "interrupted", { bound_to: cascadeHub.id }),
-  ],
-});
-
 // Two accounts of one agent, so the console dialog has something for its account picker to offer.
 const accountsState = snapshotState({
   consoles: [console_],
@@ -51,6 +39,34 @@ const accountsState = snapshotState({
       { id: "a-personal", agent: "claude", name: "Personal", config_dir: "/Users/dev/.claude-personal" },
     ],
   },
+});
+
+// A console session whose bound sessions are all interrupted, so archiving it takes them along.
+const cascadeHub = sessionOf("s-hub-4", console_.id, undefined, "Hub 4", "idle", { colour: "azure" });
+const cascadeState = snapshotState({
+  consoles: [console_],
+  projects: [web, api],
+  sessions: [
+    cascadeHub,
+    sessionOf("s-web-3", console_.id, web.id, "Tidy the changelog", "interrupted", { bound_to: cascadeHub.id }),
+    sessionOf("s-api-3", console_.id, api.id, "Rename the index", "interrupted", { bound_to: cascadeHub.id, account_id: "a-work" }),
+  ],
+  settings: accountsState.settings,
+});
+
+// A project whose running sessions are on the default account, on a stored one, and on one that has
+// since been removed (its sessions keep the directory they recorded).
+const removeState = snapshotState({
+  consoles: [console_],
+  projects: [web, api],
+  sessions: [
+    ...sessions,
+    sessionOf("s-web-4", console_.id, web.id, "Check the release notes", "waiting_user", {
+      account_id: "a-removed",
+      config_dir: "/Users/dev/.claude-removed",
+    }),
+  ].map((session) => (session.id === "s-web-2" ? { ...session, account_id: "a-work" } : session)),
+  settings: accountsState.settings,
 });
 
 // A console that carries a stored model and effort for its default agent: the model is one the
@@ -352,8 +368,16 @@ export const dialogScenarios: Scenario[] = [
     id: "dialog-remove-project-running",
     group: GROUP,
     title: "Remove a project with running sessions",
-    state,
-    steps: [(ui) => projectActions(ui, web.name), (ui) => ui.press(ui.t("sidebar.project.remove"))],
+    description:
+      "The confirmation lists the project's running sessions, each agent icon naming the account its session runs under: a removed account, which falls back to the directory it recorded and where the pointer rests, then the default account, then a stored one.",
+    state: removeState,
+    steps: [
+      (ui) => projectActions(ui, web.name),
+      (ui) => ui.press(ui.t("sidebar.project.remove")),
+      (ui) => ui.hoverCalloutAgent("Fix the summary layout", ui.t("settings.accounts.defaultName")),
+      (ui) => ui.hoverCalloutAgent("Update the dependencies", "Work"),
+      (ui) => ui.hoverCalloutAgent("Check the release notes", "/Users/dev/.claude-removed"),
+    ],
   },
   {
     id: "dialog-archive-session",
@@ -370,12 +394,13 @@ export const dialogScenarios: Scenario[] = [
     group: GROUP,
     title: "Confirm archiving a console session with bound sessions",
     description:
-      "The confirmation lists the interrupted sessions bound to it, which are archived with it. The pointer rests on the status glyph of the first, whose tooltip reads Interrupted.",
+      "The confirmation lists the interrupted sessions bound to it, which are archived with it. The pointer rests on the agent icon of the second, whose tooltip names its account, Work.",
     state: cascadeState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 4" })),
       (ui) => ui.press(ui.t("sidebar.session.archive")),
       (ui) => ui.hoverCalloutStatus("Tidy the changelog"),
+      (ui) => ui.hoverCalloutAgent("Rename the index", "Work"),
     ],
   },
   {

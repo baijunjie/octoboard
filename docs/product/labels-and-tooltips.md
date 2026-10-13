@@ -8,7 +8,9 @@ Every tooltip in the window is the application's own, drawn in its own styling a
 carries it — a control, an indicator or a label too long for its space:
 
 - It opens once the pointer has rested on what carries it for about a second and a half. Within half a second of
-  another tooltip closing it opens at once instead, so moving along a row of controls does not wait again at each one.
+  another tooltip closing it opens at once instead, so moving from one to the next does not wait again at each one,
+  whether along a row of controls or between two marks side by side, such as a session's status glyph and its agent
+  icon.
   On a control it also opens the instant the control takes keyboard focus, with no wait (see "Tooltips on icon-only
   controls" below).
 - **Only one is open at a time**: opening one takes any other away.
@@ -108,8 +110,9 @@ are:
   "The console switcher" in `docs/product/sidebar.md`);
 - the binding badge, the coloured dot on a project session's row bound to a console session, whose tooltip names that
   console session (see "The binding badge" in `docs/product/sidebar.md`);
-- a session's agent icon on its row, on a focus mode's card or archived row and on the archive view's row, whose
-  tooltip names the account the session runs under (see "Session rows" in `docs/product/sidebar.md`);
+- a session's agent icon on its row, on a focus mode's card or archived row, on the archive view's row and on each
+  session a confirmation lists among the ones it affects, whose tooltip names the account the session runs under (see
+  "Session rows" in `docs/product/sidebar.md`);
 - the branch badge's warning triangle, whose tooltip carries the failed check's message (see "The branch badge" in
   `docs/product/project-git-status.md`);
 - the creator badge, the ring a branch carries in the Git mode's branch lists, whose tooltip names the session that

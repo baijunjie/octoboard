@@ -9,7 +9,7 @@ import { ImportConfigurationDialog } from "../configuration/ImportConfigurationD
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { isLive, type Session } from "../protocol";
-import { sessionAgentLabel } from "../sessionLabel";
+import { sessionAccountTooltip, sessionAgentLabel } from "../sessionLabel";
 import { boundArchivedSessions, boundSessionsArchivedWith, compareSessions } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -38,7 +38,7 @@ function SessionCallout({ title, sessions }: { title: string; sessions?: Session
             {sessions.map((session) => (
               <li key={session.id} className="flex min-w-0 items-center gap-2">
                 <StatusIcon status={session.status} withTooltip />
-                <AgentIcon agent={session.agent} />
+                <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
                 {/* The icon is decorative, and nothing else here names the agent. */}
                 <span className="sr-only">{sessionAgentLabel(t, session, accounts)}</span>
                 <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={session.title}>
