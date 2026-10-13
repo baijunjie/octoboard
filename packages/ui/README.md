@@ -46,18 +46,18 @@ without them). A failure of the gallery's own machinery, a step that threw, a fi
 real daemon would answer, or an exit transition that never ends (something that was closing is still on the page once
 the steps have run; a scroll-driven animation on a settings panel did that), is painted over the page as a red
 `[data-gallery-failure]` overlay (`src/gallery/banner.ts`), so a capture taken once the page is ready should be checked
-for it. The fixture daemon (for the Git mode, `src/gallery/fixtureGit.ts`) refuses such a reply rather than sending the
-field unfilled: where the real daemon counts a change side's `lines`, the fixture has to carry the text to count it from
-(`FixtureChange.whole` in `fixtures/changeFixtures.ts`, the text of each side of a two-sided change), or the request
-rejects with `FixtureUnfillableError`. A change fixture is written through the factory for its kind of change
-(`textChange`, `deletion`, `untracked` and the rest in `fixtures/changeFixtures.ts`), never as a literal, so a change
-the fixture daemon could not answer faithfully cannot be written. What no single change can show, a rule over a whole
-repository, is held by a test over the sample repository instead: `objectIdCheck` (`fixtures/invariants.ts`) reports
-where an object id names more than one content or one content is named by more than one id, as Git's names do not, and
-the ids it has no content to hold the rule over; a rule of that kind is added there. A frame URL with `chrome=1` gives
-the page the desktop window's `windowChrome` capability (`src/gallery/frame.tsx`), so what only the desktop app offers,
-such as the window shortcuts, can be driven in a browser. Neither gallery page is part of the bundle `pnpm build`
-writes, but `src/gallery/` is still type-checked by it, so a broken fixture fails the build.
+for it. The fixture daemon (for the Git mode, `src/gallery/fixtureGit.ts`) refuses
+such a reply rather than sending the field unfilled: where the real daemon counts a change side's `lines`, the fixture
+has to carry the text to count it from (`FixtureChange.whole` in `fixtures/changeFixtures.ts`, the text of each side of
+a two-sided change), or the request rejects with `FixtureUnfillableError`. A change fixture is written through the
+factory for its kind of change (`textChange`, `deletion`, `untracked` and the rest in `fixtures/changeFixtures.ts`),
+never as a literal, so a change the fixture daemon could not answer faithfully cannot be written. What no single change
+can show, a rule over a whole repository, is held by a test over the sample repository instead: `objectIdCheck`
+(`fixtures/invariants.ts`) reports where an object id names more than one content or one content is named by more than
+one id, as Git's names do not, and the ids it has no content to hold the rule over; a rule of that kind is added there.
+A frame URL with `chrome=1` gives the page the desktop window's `windowChrome` capability (`src/gallery/frame.tsx`), so
+what only the desktop app offers, such as the window shortcuts, can be driven in a browser. Neither gallery page is part
+of the bundle `pnpm build` writes, but `src/gallery/` is still type-checked by it, so a broken fixture fails the build.
 
 To add a scenario, add an entry to the file for its area in `src/gallery/fixtures/` (or a new file, listed in
 `index.ts`); its `group` is one of the titles in `GROUPS` (`groups.ts`), where a new group gets the icon its heading
