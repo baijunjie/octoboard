@@ -694,3 +694,35 @@ html.pane-resizing * {
     8px 8px;
   background-size: 16px 16px;
 }
+
+/* A vertical fade that also scrolls sideways (`components/scrollFade.tsx` sets the attribute while it
+   does). HeroUI's mask keeps an opaque strip along the right edge for the vertical scrollbar and
+   nothing along the bottom, so a horizontal scrollbar sits inside the fade's band and is dimmed with
+   the content (measured in Safari with always-shown scroll bars: 38% opacity 3px up from the bottom).
+   This gives the bottom the same opaque strip, and shortens the gradient layer by it. It is only for
+   a scroller that has a horizontal scrollbar: reserved everywhere, the bottom strip of every faded
+   surface would stop fading. The library writes each of the three properties as one declaration, so
+   they are restated whole; the gradient still comes from `--scroll-linear-gradient`, which HeroUI
+   sets from the scroll timeline or from the `data-*-scroll` attributes. `mask-repeat` is left to the
+   library, whose single `no-repeat` repeats across all three layers. Unlayered, so it wins over
+   HeroUI's layered rule on both paths. */
+.scroll-shadow--fade.scroll-shadow--vertical[data-scrolls-sideways] {
+  mask-image: linear-gradient(var(--scroll-linear-gradient)), linear-gradient(#000, #000), linear-gradient(#000, #000);
+  mask-position:
+    left top,
+    right top,
+    left bottom;
+  mask-size:
+    calc(100% - var(--scroll-shadow-scrollbar-size)) calc(100% - var(--scroll-shadow-scrollbar-size)),
+    var(--scroll-shadow-scrollbar-size) 100%,
+    100% var(--scroll-shadow-scrollbar-size);
+  -webkit-mask-image: linear-gradient(var(--scroll-linear-gradient)), linear-gradient(#000, #000), linear-gradient(#000, #000);
+  -webkit-mask-position:
+    left top,
+    right top,
+    left bottom;
+  -webkit-mask-size:
+    calc(100% - var(--scroll-shadow-scrollbar-size)) calc(100% - var(--scroll-shadow-scrollbar-size)),
+    var(--scroll-shadow-scrollbar-size) 100%,
+    100% var(--scroll-shadow-scrollbar-size);
+}

@@ -1,6 +1,6 @@
 import { ScrollShadow, scrollShadowVariants, useScrollShadow, type ScrollShadowVisibility } from "@heroui/react";
 import type React from "react";
-import { useState, type CSSProperties, type Ref, type RefObject } from "react";
+import { useEffect, useState, type CSSProperties, type Ref, type RefObject } from "react";
 import { useObjectRef } from "react-aria";
 
 import { useFocusVisibleProps } from "./useFocusVisibleProps";
@@ -15,6 +15,36 @@ type Orientation = "vertical" | "horizontal";
  * that takes focus) clear of the fade rather than under it; it goes on the axis that fades. */
 function scrollPadding(orientation: Orientation): CSSProperties {
   return orientation === "horizontal" ? { scrollPaddingInline: FADE_SIZE } : { scrollPaddingBlock: FADE_SIZE };
+}
+
+/**
+ * Whether the scroller can also scroll sideways, for the fade to leave the horizontal scrollbar
+ * undimmed (see `[data-scrolls-sideways]` in `style.css`). Only a vertical fade needs it: the
+ * library's horizontal one already reserves the strip along the bottom itself.
+ *
+ * It runs on every commit of the caller rather than once, with no dependencies, because what makes
+ * a surface start or stop scrolling sideways often leaves nothing an observer would see: the same
+ * `pre` takes a new file as one text node, and the word-wrap choice changes only a class. Re-running
+ * is also what re-attaches the observer to a scroller React replaced in place, which the viewer's
+ * document does on a new subject. A `ResizeObserver` covers the rest — a lazy render finishing, the
+ * window resizing — and reads back the same answer when nothing moved, which React drops.
+ */
+function useScrollsSideways(ref: RefObject<HTMLElement | null>, orientation: Orientation): { "data-scrolls-sideways"?: true } {
+  const [sideways, setSideways] = useState(false);
+  useEffect(() => {
+    const element = orientation === "vertical" ? ref.current : null;
+    if (!element) {
+      setSideways(false);
+      return;
+    }
+    const measure = () => setSideways(element.scrollWidth > element.clientWidth);
+    const resize = new ResizeObserver(measure);
+    resize.observe(element);
+    for (const child of element.children) resize.observe(child);
+    measure();
+    return () => resize.disconnect();
+  });
+  return sideways ? { "data-scrolls-sideways": true } : {};
 }
 
 function joinClasses(...names: (string | undefined)[]): string {
@@ -90,13 +120,19 @@ type FadedScrollerProps = Omit<React.ComponentProps<typeof ScrollShadow>, "size"
  * It sets no overflow of its own beyond the vertical (or horizontal) one the fade's classes carry,
  * so a surface that scrolls the other axis too asks for it in `className`. What the fade and a
  * `region` set is applied after the caller's own props, so neither can be written over from a site.
+ * While the scroller overflows sideways it carries `data-scrolls-sideways`, which keeps the
+ * horizontal scrollbar clear of the mask (`style.css`).
  */
-export function FadedScroller({ orientation = "vertical", region, style, className, ...props }: FadedScrollerProps): React.ReactElement {
+export function FadedScroller({ orientation = "vertical", region, style, className, ref: forwarded, ...props }: FadedScrollerProps): React.ReactElement {
+  const ref = useObjectRef(forwarded);
+  const sideways = useScrollsSideways(ref, orientation);
   return (
     <ScrollShadow
       orientation={orientation}
       size={FADE_SIZE}
       {...props}
+      {...sideways}
+      ref={ref}
       onVisibilityChange={region?.onVisibilityChange}
       {...region?.props}
       style={{ ...scrollPadding(orientation), ...style }}
@@ -130,7 +166,8 @@ export function FadedScroller({ orientation = "vertical", region, style, classNa
  * single-class rule in the same cascade layer as the library's own, so which wins would depend on the
  * order of the library's imports (`.list-box { overflow: clip }`), and a surface that scrolls
  * sideways too (unwrapped code, a wide table, a tree of long paths) asks for that axis there, since
- * only one edge fades.
+ * only one edge fades. The fade keeps that sideways scrollbar clear of the mask all the same, from
+ * the `data-scrolls-sideways` this sets while the element overflows that way.
  */
 export function useScrollFade<T extends HTMLElement = HTMLDivElement>({
   orientation = "vertical",
@@ -149,6 +186,7 @@ export function useScrollFade<T extends HTMLElement = HTMLDivElement>({
   className: string;
   style: CSSProperties;
   "data-scroll-shadow-mode": "auto";
+  "data-scrolls-sideways"?: true;
 } & RegionProps {
   const ref = useObjectRef(forwarded);
   useScrollShadow({
@@ -159,8 +197,10 @@ export function useScrollFade<T extends HTMLElement = HTMLDivElement>({
     orientation,
     visibility: "auto",
   });
+  const sideways = useScrollsSideways(ref, orientation);
   return {
     ...region?.props,
+    ...sideways,
     ref,
     className: joinClasses(scrollShadowVariants({ orientation }).base(), className, region?.className),
     style: { "--scroll-shadow-size": `${FADE_SIZE}px`, ...scrollPadding(orientation), ...style } as CSSProperties,

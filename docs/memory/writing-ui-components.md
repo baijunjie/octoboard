@@ -194,6 +194,27 @@ scrolling the browser and react-aria do.
 jsdom has no `ResizeObserver`, which the fade needs to mount, so `packages/ui/src/test/setup.ts` installs a stub for
 every test file, and a test that has to measure replaces it with `vi.stubGlobal`.
 
+## A style that follows a measurement is taken again on every commit, not only when an observer fires
+
+Where a component in `packages/ui` styles itself from a measurement of layout — whether a scroller overflows, which
+edge of a line is cut off — take that measurement in an effect with **no dependency array**, so it runs on every commit
+of the component, and keep a `ResizeObserver` alongside it for what moves between commits (a lazy render finishing, the
+window resizing). Use a layout effect where the first paint already has to carry the style, an ordinary one otherwise.
+Measuring that often costs nothing when the answer has not moved: write it back through `useState` and React bails out
+of a set to the value already there.
+
+An observer on its own is not enough, in two ways that each look from the outside like nothing happening:
+
+- A box stays exactly the same size while what it holds changes — a row renamed, a `pre` handed a new file, the
+  word-wrap class swapped — and a `ResizeObserver` reports nothing at all.
+- React puts a new element in the measured one's place while the component stays mounted, which a surface keyed on its
+  subject does on a new subject. An effect keyed on the ref never runs again for it, so the observer is left on the
+  element that went away.
+
+A `MutationObserver` is not the answer either: those changes reach the DOM as a text node's new value or a swapped
+class, which only an observer watching every attribute and character of the subtree reports, and on a virtualized list
+that observation has to be rebuilt as rows come and go. The scroll fade and `FadeOverflow` are both built the way above.
+
 ## A HeroUI `ListBox` or a `Tree`: where its padding goes
 
 For a list rendered inside react-aria's `Virtualizer` with `ListLayout` (a HeroUI `ListBox`, one in a `Select`'s

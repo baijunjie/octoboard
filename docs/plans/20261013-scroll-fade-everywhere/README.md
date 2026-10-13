@@ -24,6 +24,10 @@ Give every remaining scroller the fade; move what builds its own modal onto `Dia
 its fade and its focusable region all come from one place; then make a scroll container with no fade fail a check
 rather than wait to be noticed.
 
+Only the vertical edges fade — that much is settled. What the rule turned out to owe the other axis is not a fade but
+a strip the mask leaves alone where a surface scrolls sideways, so the fade does not wash out the scrollbar sitting
+there; the capability does that itself.
+
 ## Key design decisions
 
 - **Every overflowing surface fades, not only a dialog's.** The goal is the interface over, so the question for a
@@ -45,7 +49,6 @@ Not settled; none of these changes what a milestone is for.
 
 - Whether a reading surface takes the same fade size as a list, given that a fade over code hides characters where a
   fade over a row hides the row's ends.
-- Whether horizontal overflow is in scope anywhere, or the rule stays vertical.
 - What form the check takes — a lint rule, a test over the built styles, or something else.
 
 ## Milestones
@@ -54,4 +57,4 @@ Not settled; none of these changes what a milestone is for.
 1a. 01a One way to take the fade (closed)
 2. [Hand-built modals move onto `Dialog`](02-modals-onto-dialog.md)
 3. [A scroller with no fade fails a check](03-a-check-for-a-missing-fade.md)
-4. [Final confirmation](04-final-confirmation.md)
+4. 04 Final confirmation (closed)

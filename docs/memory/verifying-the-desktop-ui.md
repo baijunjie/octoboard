@@ -168,6 +168,17 @@ such a capture carry the display's own profile, so a contrast ratio measured fro
 give by a few tenths, either way: it is good for confirming which side of a threshold a pair lands on, and never for
 correcting a token-derived ratio recorded in the stylesheet or the accessibility standard.
 
+A scrollbar's own footprint is one layout question that check cannot answer, however much else it settles: Playwright's
+WebKit draws overlay scrollbars only — headless and headed, at `scrollbar-width` `auto` or `thin`, and even with macOS
+set to show scroll bars always — so a scroller over content larger than its box on both axes reports
+`offsetWidth - clientWidth` and `offsetHeight - clientHeight` of 0 there. Anything about something sitting under,
+beside, or dimmed by a scrollbar that takes space therefore shows nothing wrong in that check, and has to be measured
+in real Safari on the gallery page, or in the app. That wants the system set to show scroll bars always
+(`defaults write -g AppleShowScrollBars -string Always`), which is honoured — but only by a browser started
+afterwards: a Safari that was already running when the setting changed keeps drawing overlay scrollbars and reads as
+no defect. Read the old value before writing it and put it back afterwards, it being the user's own machine-wide
+setting.
+
 ## Rule out a locked screen before reading anything off a window capture
 
 A locked screen and a sleeping display look identical from the outside: under either one every application reports

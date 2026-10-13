@@ -17,7 +17,9 @@ alone, are in "The surfaces that fade" below.
 - It is **a mark alone**. It takes no pointer input, and the surface under it scrolls exactly as any other would: by
   the wheel or a trackpad, by dragging its scrollbar where one is drawn, from the keyboard, and when focus moves to
   something out of view. Content under the fade is still there — still selectable, still pressable — and nothing is
-  cut away or made unreachable.
+  cut away or made unreachable. It falls over **the content alone**: a scrollbar the surface draws is left out of the
+  fade and reads at full strength, as it would with no fade at all — the one along the bottom of a surface that
+  scrolls both ways included, which lies inside the fade's band for its whole length.
 - Only the **top and bottom** edges fade, apart from the strips that scroll sideways and fade at their sideways
   edges: focus mode's strip of console session chips (see "The switch strip" in `docs/product/focus-mode.md`) and a
   strip of tabs. The file viewer's long lines, read by scrolling sideways while wrapping is off, fade at neither side
