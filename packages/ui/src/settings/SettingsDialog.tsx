@@ -46,6 +46,11 @@ function SectionPanel({ id, children }: { id: string; children: React.ReactNode 
  * side and the selected one beside it. Below the `docked` breakpoint the modal fills the window
  * and the sections become a row of tabs along the top, scrolling sideways when they overflow. It
  * is a plain modal, so everything under it, the terminal included, stays mounted and sized.
+ *
+ * It is assembled from HeroUI's modal parts rather than built on `Dialog`, deliberately: a `Dialog`
+ * is a titled frame around one scrolling body, where this holds a panel per section, each scrolling
+ * on its own, with the sections beside the selected panel rather than under a title.
+ *
  * Escape, the close button and a click on the backdrop call `onClose`; opening moves focus to the
  * selected section's entry (also where a section's `useSectionRefocus` sends it back to), and
  * `useSettingsDialog` puts it back on the terminal when this closes. It opens on `initialSection`
@@ -89,8 +94,9 @@ export function SettingsDialog({
       {/* HeroUI pads the container 40px from `sm` up; narrow, the dialog fills the window inside a
           16px margin on every side instead, so the padding stays 16px until `docked`. It is a
           `max-docked:` utility because a `docked:` one loses to an `sm:` twin on the same property.
-          The height also gives way to the connection banner's strip, which the container ends above
-          (see the same note in `dialogs/Dialog.tsx`). */}
+          The height also gives way to the connection banner's strip, which the container ends above.
+          Narrow, these are the same rules `dialogs/Dialog.tsx` states for a dialog that fills the
+          window, down to the numbers, so the two move together. */}
       <Modal.Container className="max-docked:p-4">
         <Modal.Dialog
           aria-label={t("settings.title")}

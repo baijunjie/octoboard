@@ -4,15 +4,14 @@
 > noticing it later.
 > Completion criteria: adding a scroll container with no fade to the UI package fails one of the commands the
 > project already runs for quality; the failure names the surface and says what to do about it; the check passes on
-> the tree once milestones 01 and 02 are done, and a surface that is deliberately exempt is exempt in one named
-> place rather than by the check not seeing it.
+> the tree as it stands, and a surface that is deliberately exempt is exempt in one named place rather than by the
+> check not seeing it.
 
 ## Handoff
 
-From 01, which gave the fade to every scroller it owns. What is left over is scrollers this package does
-not make itself, which the check has to either cover or exempt in the one named place it keeps
-exemptions — a scroller the check simply cannot see is not exempt, it is invisible, and the criteria
-require the check to pass on the tree:
+Every scroller this package makes itself already fades. What is left over is scrollers it does not make, which the
+check has to either cover or exempt in the one named place it keeps exemptions — a scroller the check simply cannot
+see is not exempt, it is invisible, and the criteria require the check to pass on the tree:
 
 - **HeroUI's own popovers scroll, and the fade can never go on them.** `.dropdown__popover`
   (`overflow-y-auto`, every menu and submenu `ActionMenu` renders) and `.select__popover`
@@ -50,7 +49,7 @@ require the check to pass on the tree:
 - [ ] The check's subject is a scroll container in the UI package: something that can hold more than it shows and
       scrolls rather than clipping.
 - [ ] Taking the fade from the shared capability, in either of its shapes, satisfies the check; a hand-built mask does
-      not, and nor does HeroUI's `ScrollShadow` reached for directly, since 01a left one module as the only way in.
+      not, and nor does HeroUI's `ScrollShadow` reached for directly, that one module being the only way in.
 - [ ] An exemption is declared, carries its reason, and is listed where the rule is written rather than scattered at
       the sites.
 - [ ] The check runs in a command the project already runs, so nobody has to remember a new one.

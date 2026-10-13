@@ -60,12 +60,22 @@ on `& > [data-slot="description"]` (`packages/ui/node_modules/@heroui/styles/dis
 indents it under the label — and react-aria folds its id into the control's `aria-describedby` on its own. So never
 hand-roll the note as an element of your own with a `useId` and an `aria-describedby` you wire up yourself.
 
+## A modal whose content is one body is a `Dialog`; one made of panels keeps its own frame
+
+`Dialog` (`packages/ui/src/dialogs/Dialog.tsx`) is a titled frame around a single scrolling body, plus an optional
+footer, and every modal in `packages/ui` whose content is one body is built on it. A modal whose content is a set of
+panels that each scroll on their own is the other shape: it keeps a frame of its own, assembled from HeroUI's
+`Modal.*` parts, and takes the fade inside each panel. The settings dialog
+(`packages/ui/src/settings/SettingsDialog.tsx`) is that, deliberately — not a surface left behind waiting to be moved
+onto `Dialog`. Do not widen `Dialog` with an absent header, a mode where the content is panels rather than one body,
+or a size of its own in order to take such a modal in.
+
 ## A dialog's body scrolls inside `Dialog`, and fades where more is hidden
 
 A dialog whose content outgrows the window has to say so: when the body overflows, the edge it can still be scrolled
 towards fades out, so the user sees there is more below (or above) without having to find a scrollbar. Nobody adding a
-dialog thinks to ask for this, so `Dialog` (`packages/ui/src/dialogs/Dialog.tsx`) does it for every dialog, around the
-body's own content.
+dialog thinks to ask for this, so `Dialog` (`packages/ui/src/dialogs/Dialog.tsx`) does it for every dialog built on
+it, around the body's own content.
 
 - Put the content in `Dialog`'s children and nothing else. Do not give the dialog a scroll container of your own
   (`overflow-y-auto` on a wrapper, a `max-h-*` list): its overflow would scroll apart from the body and carry no fade,

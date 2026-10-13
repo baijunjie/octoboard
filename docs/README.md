@@ -266,7 +266,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   field handing its form the trimmed value through `useTrimmedField`, what is wrong with one field
   showing under that field from the first submit on and the two conditions a field built outside `TextInput` has to
   meet to mark itself invalid, a field's note being its `Description` while HeroUI typography inside a field throws,
-  and the dialog body being the one scroller, fading where more is hidden, with nothing reaching above it.
+  which modals are a `Dialog` at all and which keep a frame of their own, and the dialog body being the one scroller,
+  fading where more is hidden, with nothing reaching above it.
 - [Styling the UI](memory/styling-the-ui.md) — getting a style to land in `packages/ui`: styling a HeroUI component
   through its own variants, slots and theme tokens, with the only two reasons an override stands and the
   per-component stylesheet under `@heroui/styles` as the readable source of what the component imposes; why a Tailwind

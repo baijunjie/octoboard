@@ -29,7 +29,10 @@ ARIA region semantics.
   follows the parent, pass none and let the variant pick; where it is a fixed stand-in (`CloseButton`'s cross, a
   `MenuItem`'s submenu chevron), pass children only to put a different one there.
 - The project's existing wrappers over a HeroUI component (`Dialog` over `Modal`, `ActionMenu` over `Dropdown`), and
-  the shared dialogs built on those, are that component; use the wrapper where one exists.
+  the shared dialogs built on those, are that component; use the wrapper where one exists. Where the wrapper's shape
+  cannot hold what is being built, assemble the HeroUI component's own parts instead, rather than widening the wrapper
+  with a switch that only the one case would ever pass, and put a comment at the component saying why it is not built
+  on the wrapper.
 - A hand-built element is acceptable only when HeroUI has no equivalent, or its equivalent cannot meet a stated
   requirement. Then build it on react-aria / react-aria-components hooks, as HeroUI itself is, not on bare DOM event
   handling, and put a comment at the component saying why HeroUI's is not used (a design-intent comment under the

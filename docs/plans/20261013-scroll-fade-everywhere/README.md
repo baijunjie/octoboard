@@ -13,16 +13,13 @@ dialog body — but it was added surface by surface, so the ones nobody thought 
 - Lists inside a popover: the branch list of a branch comparison, and the tag list of the project filter.
 - The rail's console column, the startup screen, and the error boundary's stack block.
 
-Two things keep this from staying fixed once it is. A surface that builds its own modal instead of using `Dialog`
-does not get what `Dialog` gives, and the settings dialog is exactly that: it was given a fade by hand in the round
-that wrote the convention down, and still does not use `Dialog`. And nothing fails when a new scroll container
-arrives without a fade, so the next one will be missed the same way these were.
+What keeps this from staying fixed once it is: nothing fails when a new scroll container arrives without a fade, so
+the next one will be missed the same way these were.
 
 ## Plan outline
 
-Give every remaining scroller the fade; move what builds its own modal onto `Dialog`, so a dialog's body scrolling,
-its fade and its focusable region all come from one place; then make a scroll container with no fade fail a check
-rather than wait to be noticed.
+Give every remaining scroller the fade; then make a scroll container with no fade fail a check rather than wait to be
+noticed.
 
 Only the vertical edges fade — that much is settled. What the rule turned out to owe the other axis is not a fade but
 a strip the mask leaves alone where a surface scrolls sideways, so the fade does not wash out the scrollbar sitting
@@ -34,10 +31,12 @@ there; the capability does that itself.
   new scroller is which fade it takes, never whether it takes one.
 - **It is solved at the component layer, never per site.** A surface that needs a fade reaches for the shared way to
   get one; it does not hand-build a mask, and it does not restate the rule in its own styles.
-- **What can use `Dialog` uses it.** A modal built by hand is a copy of `Dialog` that will drift from it, and it
-  drifts first in exactly the things `Dialog` has learned: the body as the scroller, the fade on it, the scroll
-  padding that keeps focus clear of that fade, the focusable region that lets a keyboard scroll a body whose
-  controls all sit in the footer.
+- **A modal whose content is one body uses `Dialog`; one whose content is a set of panels does not.** `Dialog` is a
+  titled frame around a single scrolling body, with the fade on that body, the scroll padding that keeps focus clear
+  of it and the focusable region for a body whose controls all sit in the footer. The settings dialog is the other
+  shape — a panel per section, each scrolling on its own, the sections beside the selected panel rather than under a
+  title — so it keeps its own frame and takes the fade per panel; widening `Dialog` to cover it would add three
+  switches no other modal would ever pass.
 - **The fade never goes on an element that animates away.** Putting it on one leaves that element on screen for
   good: the fade is driven by a scroll-timeline animation that never ends, and an exit transition waits for the
   animations on its element to finish. This was met on the settings dialog's tab panels, where the panel left behind
@@ -55,6 +54,6 @@ Not settled; none of these changes what a milestone is for.
 
 1. 01 Every remaining scroller fades (closed)
 1a. 01a One way to take the fade (closed)
-2. [Hand-built modals move onto `Dialog`](02-modals-onto-dialog.md)
+2. 02 Hand-built modals move onto `Dialog` (dropped)
 3. [A scroller with no fade fails a check](03-a-check-for-a-missing-fade.md)
 4. 04 Final confirmation (closed)
