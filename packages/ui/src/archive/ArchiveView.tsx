@@ -1,4 +1,4 @@
-import { Button, ScrollShadow, Spinner } from "@heroui/react";
+import { Button, Spinner } from "@heroui/react";
 import { Archive, RotateCcw, Trash2, X } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
@@ -8,6 +8,7 @@ import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
+import { FadedScroller } from "../components/scrollFade";
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen";
 import { isolate } from "../i18n/isolate";
@@ -142,7 +143,7 @@ export function ArchiveView({
         </TitledControl>
       </header>
       {/* Only the empty state is centred; the list of rows starts at the top. */}
-      <ScrollShadow size={24} className={`min-h-0 flex-1${archived.length === 0 ? " flex flex-col justify-center-safe" : ""}`}>
+      <FadedScroller className={`min-h-0 flex-1${archived.length === 0 ? " flex flex-col justify-center-safe" : ""}`}>
         {archived.length === 0 ? (
           <EmptyPanel icon={Archive} message={t("sidebar.archive.empty")} />
         ) : (
@@ -203,7 +204,7 @@ export function ArchiveView({
             )}
           </ul>
         )}
-      </ScrollShadow>
+      </FadedScroller>
     </section>
   );
 }

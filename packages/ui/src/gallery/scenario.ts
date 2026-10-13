@@ -28,8 +28,10 @@ export interface Preferences {
   runInBackground?: boolean;
 }
 
-/** What the window shows in place of the app, for the screens that have no daemon behind them. */
-export type Startup = { kind: "noAddress" } | { kind: "daemonFailed"; error: string } | { kind: "crash" };
+/** What the window shows in place of the app, for the screens that have no daemon behind them. A
+ * crash shows `stack` as the error's stack, which is otherwise the browser's own and so as long as
+ * the engine makes it; it is what gives the stack block a length the scenario chooses. */
+export type Startup = { kind: "noAddress" } | { kind: "daemonFailed"; error: string } | { kind: "crash"; stack?: string };
 
 /** A toast the scenario raises once the app is mounted. With a `code` the text is worded from the
  * catalog as the daemon's own errors and notices are, with `message` as the fallback for a code the

@@ -1,4 +1,4 @@
-import { Button, ScrollShadow } from "@heroui/react";
+import { Button } from "@heroui/react";
 import { ArrowLeft, FolderOpen, FolderPlus, List, MessageSquarePlus, Plus } from "lucide-react";
 import React, { useLayoutEffect, useRef } from "react";
 
@@ -12,6 +12,7 @@ import { FadeOverflow } from "../components/FadeOverflow";
 import { RowControls } from "../components/RowControls";
 import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
+import { FadedScroller } from "../components/scrollFade";
 import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
@@ -140,7 +141,7 @@ export function ProjectFocusView({
           contextTargetRef={headerRef}
         />
       </FocusHeader>
-      <ScrollShadow size={24} className="min-h-0 flex-1 px-2 pb-2">
+      <FadedScroller className="min-h-0 flex-1 px-2 pb-2">
         <SectionHeading>{t("sidebar.focus.sessions", { count: live.length })}</SectionHeading>
         {live.length === 0 ? (
           <EmptyPanel
@@ -154,7 +155,7 @@ export function ProjectFocusView({
         )}
         <ArchivedList handlers={handlers} archived={archivedRows} selectedSessionId={selectedSessionId} onViewAll={viewAll} />
         {elsewhere && <BoundElsewhere handlers={handlers} count={elsewhere.count} owners={elsewhere.owners} />}
-      </ScrollShadow>
+      </FadedScroller>
     </>
   );
 }
@@ -236,7 +237,7 @@ export function ConsoleSessionFocusView({
         />
       </FocusHeader>
       {strip.length > 1 && <SwitchStrip handlers={handlers} entries={strip} currentId={consoleSession.id} />}
-      <ScrollShadow size={24} className="min-h-0 flex-1 px-2 pb-2">
+      <FadedScroller className="min-h-0 flex-1 px-2 pb-2">
         <SectionHeading>{t("sidebar.focus.sessions", { count: liveCount })}</SectionHeading>
         {projects.length === 0 ? (
           // The header's "+" is disabled with no project to open a session in, so say why here.
@@ -265,7 +266,7 @@ export function ConsoleSessionFocusView({
           </div>
         )}
         <ArchivedList handlers={handlers} archived={archived} selectedSessionId={selectedSessionId} onViewAll={viewAll} />
-      </ScrollShadow>
+      </FadedScroller>
     </>
   );
 }
@@ -300,11 +301,10 @@ function SwitchStrip({
     scroller.scrollLeft += box.left + box.width / 2 - (from.left + from.width / 2);
   }, [currentId, currentIndex]);
   return (
-    <ScrollShadow
+    <FadedScroller
       ref={ref}
       orientation="horizontal"
       hideScrollBar
-      size={24}
       role="group"
       aria-label={t("sidebar.focus.switchStrip")}
       className="flex shrink-0 gap-1 px-2 py-2"
@@ -336,7 +336,7 @@ function SwitchStrip({
           </Button>
         );
       })}
-    </ScrollShadow>
+    </FadedScroller>
   );
 }
 

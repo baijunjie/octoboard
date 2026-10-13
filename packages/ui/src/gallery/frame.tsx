@@ -99,8 +99,10 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
   };
 }
 
-function Crash(): never {
-  throw new Error("Gallery: a component threw while rendering.");
+function Crash({ stack }: { stack?: string }): never {
+  const error = new Error("Gallery: a component threw while rendering.");
+  if (stack !== undefined) error.stack = stack;
+  throw error;
 }
 
 // A viewer scenario has one too: the viewer's header copies a path through the daemon's toasts.
@@ -116,7 +118,7 @@ function screen(): React.ReactElement {
     case "daemonFailed":
       return <StartupScreen message={<DaemonFailedMessage error={scenario.startup.error} />} />;
     case "crash":
-      return <Crash />;
+      return <Crash stack={scenario.startup.stack} />;
   }
   if (viewerSubjects && ViewerGallery)
     return (

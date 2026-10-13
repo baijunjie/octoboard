@@ -12,7 +12,7 @@ import React, { useMemo } from "react";
 import { Collection, ListLayout, Tree, TreeItem, TreeItemContent, Virtualizer, type Key } from "react-aria-components";
 
 import { FadeOverflow } from "../components/FadeOverflow";
-import { useScrollFade } from "../components/useScrollFade";
+import { useScrollFade } from "../components/scrollFade";
 import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { BrowseEntry } from "../protocol";
@@ -102,7 +102,7 @@ export function FileTree({
   const t = useT();
   const language = useCurrentLanguage();
   const items = useStableNodes(nodes);
-  const fade = useScrollFade(treeRef);
+  const fade = useScrollFade({ ref: treeRef, className: "min-h-0 flex-1 overflow-auto py-1 outline-none" });
   // react-aria-components 1.21.1 decides whether a row can expand — its `aria-expanded` and Left /
   // Right — from the children it holds, not from `hasChildItems`, which it hands only to the
   // chevron. So a collapsed directory, whose rows are not built, holds one stand-in row that is never
@@ -194,15 +194,13 @@ export function FileTree({
   return (
     <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: ROW_HEIGHT }}>
       <Tree
-        ref={fade.ref}
-        {...fade.props}
+        {...fade}
         aria-label={label}
         items={items}
         expandedKeys={expanded}
         onExpandedChange={onExpandedChange}
         onAction={onAction}
         dependencies={[language]}
-        className={`${fade.className} min-h-0 flex-1 overflow-auto py-1 outline-none`}
       >
         {renderNode}
       </Tree>

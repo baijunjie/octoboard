@@ -308,7 +308,8 @@ has its own light and dark value (see "What follows the choice" in `docs/product
 - A name too long for its row fades out where it ends — the row's right edge, its left under a right-to-left language —
   rather than ending in an ellipsis, the full name is then the row's tooltip, and pointing anywhere on the row runs the
   name as a marquee (see "Names too long for their space" in `docs/product/labels-and-tooltips.md`). When the sidebar's
-  content is taller than the sidebar it scrolls, and fades out at whichever end has more of it beyond.
+  content is taller than the sidebar it scrolls, fading at the end that has more beyond it (see "The edge that hides
+  content fades" in `docs/product/scrolling-surfaces.md`).
 - A row's **+** and action-menu buttons show while the row is hovered, holds keyboard focus, is the selected session,
   or has its menu open; they are still reached with Tab when hidden, and show once one of them has focus. They fade
   and open out as they appear, and fade and close up as they go, briefly — at once where the system asks for reduced

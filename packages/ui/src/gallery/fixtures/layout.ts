@@ -39,6 +39,17 @@ const railState = snapshotState({
   ],
   pages: { [hub.id]: [pageOf("pg-hub", hub.id, "<h1>Report</h1><p>Two sessions need you.</p>", 5)] },
 });
+// More consoles than the rail holds in any window, so its column of them scrolls whatever the
+// window's height: forty tiles are taller than a browser window the gallery is opened in.
+const crowd = Array.from({ length: 40 }, (_, i) => consoleOf(`c-crowd-${i}`, `Console ${i + 1}`));
+const crowdState = snapshotState({
+  consoles: crowd,
+  projects: [projectOf("p-crowd", crowd[0].id, "Website")],
+  sessions: [
+    sessionOf("s-crowd-hub", crowd[0].id, undefined, "Hub", "idle", { colour: "teal" }),
+    sessionOf("s-crowd-1", crowd[0].id, "p-crowd", "Fix the summary layout", "working"),
+  ],
+});
 /** The rail's button for a console: its accessible name starts with the console's name. */
 const consoleButton = (name: string) => (label: string) => label.startsWith(name);
 
@@ -51,6 +62,14 @@ export const layoutScenarios: Scenario[] = [
       "Console avatars on the left rail with their activity marker (a hand, a working dot, a speech bubble, none), the current one on a tile; New console under them. At the bottom: the waiting count, which adds up the raised hands of every console (two in Main, one in the console with the long name, so 3), and Settings. Right-click an avatar for its console's actions.",
     state: railState,
     steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500)],
+  },
+  {
+    id: "layout-rail-crowded",
+    group: GROUP,
+    title: "More consoles than the rail holds",
+    description:
+      "More consoles than the column holds, which scrolls with no scrollbar to say so: the avatars fade at the bottom edge, where more are waiting. Scroll it and both edges fade until the end, where that edge stops. Rail with five consoles shows the same column with everything in view, and no fade.",
+    state: crowdState,
   },
   {
     id: "layout-waiting-overflow",

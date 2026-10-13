@@ -1,4 +1,3 @@
-import { ScrollShadow } from "@heroui/react";
 import {
   ChevronDown,
   ChevronRight,
@@ -20,6 +19,7 @@ import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { handFocusOff } from "../components/handFocusOff";
 import { RowControls } from "../components/RowControls";
+import { FadedScroller } from "../components/scrollFade";
 import { StatusIcon } from "../components/StatusIcon";
 import { withGitBadge } from "../gitStatusLabel";
 import { isolate } from "../i18n/isolate";
@@ -242,7 +242,7 @@ export function Sidebar({
     content = (
       <>
         <ConsoleHeader handlers={handlers} current={shownConsole} />
-        <ScrollShadow size={24} className="min-h-0 flex-1 px-2 pb-2">
+        <FadedScroller className="min-h-0 flex-1 px-2 pb-2">
           <ConsoleBody
             handlers={handlers}
             console={shownConsole}
@@ -269,7 +269,7 @@ export function Sidebar({
               setFilters((prev) => new Map(prev).set(shownConsole.id, update(prev.get(shownConsole.id) ?? NO_FILTER)))
             }
           />
-        </ScrollShadow>
+        </FadedScroller>
       </>
     );
   }

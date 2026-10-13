@@ -7,6 +7,7 @@ import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
 import { useFocusHandoff } from "../components/useFocusHandoff";
+import { useScrollFade } from "../components/scrollFade";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { BranchInfo } from "../protocol";
@@ -227,6 +228,7 @@ export function BranchSelect({
   onChange: (branch: string) => void;
 }): React.ReactElement {
   const t = useT();
+  const branchFade = useScrollFade({ className: "max-h-80 overflow-y-auto px-0" });
   const name = value === undefined ? undefined : displayWirePath(value);
   const shown =
     name === undefined ? t("git.compare.choose") : gone ? <Message id="git.compare.branchGone" params={{ branch: <bdi dir="auto">{name}</bdi> }} /> : name;
@@ -274,7 +276,10 @@ export function BranchSelect({
               padding, so a padded list overflows sideways and clips the rows' focus ring. `pe-7` on
               a row restores the room HeroUI reserves for the check mark, which its Select styles
               override with a narrower padding, so the commit would run under the mark. */}
-          <ListBox items={branches} className="max-h-80 overflow-auto px-0">
+          {/* The fade goes on the list, never on the popover around it: the popover is what animates
+              away, and the fade's scroll-timeline animation never ends, so the popover's exit
+              transition would wait for it forever. */}
+          <ListBox items={branches} {...branchFade}>
             {(branch) => {
               const branchName = displayWirePath(branch.name);
               return (

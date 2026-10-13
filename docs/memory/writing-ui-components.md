@@ -141,19 +141,59 @@ So settle what such an element puts in the DOM on a render — a jsdom test asse
 rather than on the default read off its own file under `packages/ui/node_modules/`, which an ancestor's context may
 have overridden; where the two disagree, the file loses.
 
-## A HeroUI `ListBox` or a `Tree`: where its padding and its fade go
+## Every faded scroller takes the fade from one module, in one of its two shapes
+
+A surface in `packages/ui` that hides content behind its own edge fades that edge, and no site works out how: the fade
+comes from `packages/ui/src/components/scrollFade.tsx`, which supplies the fade's size and the matching scroll padding
+(the "Focus scrolled to the edge of a scroller that fades there" section of `docs/ui-accessibility.md`), so no site
+states either. Never reach for HeroUI's `ScrollShadow` directly and never hand-build a fade: HeroUI's own default size
+is a larger one (40px) that nothing here uses, and a bare `ScrollShadow` carries no scroll padding at all. The library
+fades exactly one thing of its own — a `Tabs` tab strip, over a size nothing outside it can configure — and that one is
+left as it is; every other faded surface here is the project's own and goes through the module.
+
+Which of the two shapes a site takes follows from its scroller:
+
+- `FadedScroller` is an element wrapped around the content, and is the one to reach for wherever the scroller can be
+  that wrapper.
+- `useScrollFade` fades an element that has to **be** the scroll container. Three things make a scroller that, they are
+  not interchangeable, and a site has one of them: the content is virtualized (a list inside react-aria's `Virtualizer`
+  stays the scroll container of its own rows, so a wrapper around it scrolls nothing); the element carries its own role,
+  name and key handling that a wrapper cannot take over (a tree, a list box, a reading surface); or its ancestor
+  animates away — a react-aria element with an exit transition unmounts only once `getAnimations()` **on that element**
+  has settled, and the fade's `animation-timeline: scroll()` animation never finishes, so a fade on a `Popover` or a
+  `Tabs.Panel` leaves it on screen for good. `getAnimations()` does not look at the subtree, so that fade goes on the
+  scrolling list or panel inside, never on the popover or the panel itself.
+
+Either shape applies the fade as a `mask-image` on the scroller, and a mask clips by that element's border box, so:
+
+- Padding that gives a control inside the scroller room — the room its focus ring needs — goes on the scroller itself,
+  inside the clip, never on an element around it.
+- Where the scroller is focusable (`useFadeRegion`, whose own conditions are the "A scroller nothing else on screen
+  scrolls takes focus itself" section of `docs/ui-accessibility.md`), its ring is drawn on the element around it — the
+  project's usual `ring-2 ring-focus`, from the `focused` that hook hands back — because a ring on the scroller itself
+  is cut away and an inset one lands inside the fade band and is eaten by it. That ring paints outside the wrapping
+  element's border box, so the room it needs is clear space *around* that element, which whatever lays it out has to
+  leave; padding inside it gives the ring nothing. Add `ring-inset` where it reaches the window's own edge, there being
+  no space outside to paint into.
+
+The fade is a hint, never the only cue: it is a mask over an ordinary overflow container, so the wheel, the keyboard and
+a control focused out of view scroll as they would anyway. Keep it that way, and do not replace the container with one
+that scrolls by script. Where a site scrolls the container itself to reveal a row, it stops that row the fade's own size
+short of the edge, taken from the module's `FADE_SIZE` rather than written out: scroll padding governs only the
+scrolling the browser and react-aria do.
+
+jsdom has no `ResizeObserver`, which the fade needs to mount, so `packages/ui/src/test/setup.ts` installs a stub for
+every test file, and a test that has to measure replaces it with `vi.stubGlobal`.
+
+## A HeroUI `ListBox` or a `Tree`: where its padding goes
 
 For a list rendered inside react-aria's `Virtualizer` with `ListLayout` (a HeroUI `ListBox`, one in a `Select`'s
-popover included, or a react-aria `Tree` or `GridList`):
-
-- `ListLayout` makes every row as wide as the scroll container's inner width and then places it inside the
-  container's padding, so any side padding on the list — HeroUI's own `p-1` on `ListBox`, `p-1.5` on a `Select`
-  popover's list — makes it overflow sideways (a horizontal scrollbar) and clips the rows' focus rings. Clear it with
-  `px-0` on the list and give the inset to the rows and headings instead (`mx-1` on an item, with `w-auto` where the
-  item's own styles set a width as HeroUI's `ListBox.Item` does, and padding on a `Header`). HeroUI corrects this only
-  inside its `Autocomplete`.
-- The list has to be the element that scrolls, so a HeroUI `ScrollShadow` wrapped around it fades nothing. Put the
-  fade on the list itself through `useScrollFade` (`packages/ui/src/components/useScrollFade.ts`).
+popover included, or a react-aria `Tree` or `GridList`), `ListLayout` makes every row as wide as the scroll container's
+inner width and then places it inside the container's padding, so any side padding on the list — HeroUI's own `p-1` on
+`ListBox`, `p-1.5` on a `Select` popover's list — makes it overflow sideways (a horizontal scrollbar) and clips the
+rows' focus rings. Clear it with `px-0` on the list and give the inset to the rows and headings instead (`mx-1` on an
+item, with `w-auto` where the item's own styles set a width as HeroUI's `ListBox.Item` does, and padding on a
+`Header`). HeroUI corrects this only inside its `Autocomplete`.
 
 Virtualized or not, a `Select` whose items show `ListBox.ItemIndicator` needs `pe-7` on each item: the `Select`
 popover's styles give its items `px-2.5`, which overrides the `pe-7` `ListBox.Item` reserves for the check mark, so a
@@ -163,8 +203,8 @@ long label otherwise runs under the mark.
 
 A dialog whose content outgrows the window has to say so: when the body overflows, the edge it can still be scrolled
 towards fades out, so the user sees there is more below (or above) without having to find a scrollbar. Nobody adding a
-dialog thinks to ask for this, so `Dialog` (`packages/ui/src/dialogs/Dialog.tsx`) does it for every dialog: its body is
-a HeroUI `ScrollShadow`, which shows a fade only while there is something to scroll towards and drops it at either end.
+dialog thinks to ask for this, so `Dialog` (`packages/ui/src/dialogs/Dialog.tsx`) does it for every dialog, around the
+body's own content.
 
 - Put the content in `Dialog`'s children and nothing else. Do not give the dialog a scroll container of your own
   (`overflow-y-auto` on a wrapper, a `max-h-*` list): its overflow would scroll apart from the body and carry no fade,
@@ -174,21 +214,8 @@ a HeroUI `ScrollShadow`, which shows a fade only while there is something to scr
   above its padding box is clipped there with nothing able to scroll to it, because overflow at a scroller's block
   start adds no scrollable area. Such a row still renders right while the strip that is cut holds nothing but space,
   and the first background, border, focus ring, icon or taller text in it loses its top silently.
-- Where something inside a dialog must scroll on its own, apart from the body, it fades itself: `DirectoryPicker`'s list
-  through `useScrollFade` as the previous section says. `SettingsDialog` is the one dialog that does not use `Dialog`
-  (it is a window of its own, with a section list beside the content), so each section's panel holds a `ScrollShadow`
-  of its own. It is a `ScrollShadow` inside the `Tabs.Panel`, never the panel itself and never `useScrollFade` on it:
-  the fade's scroll-timeline animation never ends, and the panel's exit transition waits for it, which leaves the old
-  section on screen after a tab switch.
-- The fade is a hint, never the only cue. It is a mask over an ordinary overflow container, so the wheel, the keyboard
-  and a control focused out of view scroll as they would anyway; keep it that way, and do not replace the container
-  with one that scrolls by script. The container has `scroll-padding-block` of the fade's size (`FADE_SIZE`), so a
-  control scrolled into view stops clear of the fade (see "Focus scrolled to the edge of a scroller that fades there"
-  in `docs/ui-accessibility.md`). While the body scrolls it is also a focusable region named by the dialog's title, so a
-  dialog with every control in the footer can still be scrolled from the keyboard.
-- The body's padding sits on the scroller, because that is where a focus ring needs its room inside the clip.
-- jsdom has no `ResizeObserver`, which `ScrollShadow` needs to mount: `src/test/setup.ts` stubs it for every test file,
-  and a test that has to measure replaces it with `vi.stubGlobal`.
+- Where something inside a dialog must scroll on its own, apart from the body, it carries the project's fade itself, as
+  `DirectoryPicker`'s list does.
 
 ## A `Tabs` panel is mounted only while its own tab is selected
 

@@ -364,6 +364,25 @@ const FIGURES = `# 2024
 | 3 | 4 |
 `;
 
+// A rendered document that scrolls sideways: a table whose cells hold download addresses and a
+// checksum, which have no place to break, so the table is wider than the viewer, and long enough
+// to scroll down as well.
+const releaseRows = () =>
+  Array.from({ length: 30 }, (_, i) => {
+    const version = `1.4.${i}`;
+    const sum = Array.from({ length: 64 }, (_, at) => ((i * 7 + at * 13) % 16).toString(16)).join("");
+    const archive = `https://downloads.example.com/octoboard/releases/${version}/octoboard-${version}-aarch64-apple-darwin.tar.gz`;
+    return `| ${version} | ${archive} | ${archive}.minisig | \`${sum}\` |`;
+  }).join("\n");
+const RELEASES = `# Releases
+
+Every archive is signed; check its SHA-256 before installing.
+
+| Version | Download | Signature | SHA-256 |
+| :--- | :--- | :--- | :--- |
+${releaseRows()}
+`;
+
 const JSON_TEXT = `{
   "name": "octoboard-fixture",
   "version": "1.2.3",
@@ -438,7 +457,14 @@ function present(path: string, body?: ViewerBody, kind: "file" | "symlink" | "su
 function generated(lines: number, line: (index: number) => string): string {
   return Array.from({ length: lines }, (_, index) => line(index)).join("\n") + "\n";
 }
-const largeLog = () => generated(40_000, (i) => `2026-10-08T12:${String(i % 60).padStart(2, "0")}:00Z INFO request ${i} served in ${i % 97} ms`);
+// Most entries are short; every hundredth carries the request that was served as one unbroken line,
+// so the plain text scrolls sideways as well as down.
+const LOG_REQUEST = `GET /api/v1/projects/octoboard/sessions?filter[status]=waiting&filter[agent]=claude&include=console,branch,changes&sort=-lastActivity&page[size]=200 {"user":"anonymous","agent":"octoboard-ui/1.4.2","trace":"3fa85f64-5717-4562-b3fc-2c963f66afa6"}`;
+const largeLog = () =>
+  generated(40_000, (i) => {
+    const entry = `2026-10-08T12:${String(i % 60).padStart(2, "0")}:00Z INFO request ${i} served in ${i % 97} ms`;
+    return i % 100 === 7 ? `${entry} ${LOG_REQUEST}` : entry;
+  });
 const minified = () => `!function(){${generated(1, () => Array.from({ length: 4_000 }, (_, i) => `var a${i}=${i}*2;`).join(""))}}();`;
 const nearBudget = () => generated(9_000, (i) => `export const value${i} = { id: ${i}, label: "Item ${i}", enabled: ${i % 2 === 0} };`);
 // A file renamed into a path below itself (`lib` to `lib/index.ts`): one section, the diff between its two versions.
@@ -483,6 +509,11 @@ const largePatch = () =>
   "diff --git a/data/table.ts b/data/table.ts\nindex 1111111..2222222 100644\n--- a/data/table.ts\n+++ b/data/table.ts\n@@ -1,12000 +1,12000 @@\n" +
   generated(12_000, (i) => `-export const row${i} = ${i};\n+export const row${i} = ${i + 1};`);
 
+// A change within the diff budget that is still far taller than the viewer: every row of a table
+// edited, so the rendered diff scrolls.
+const longPatch = () =>
+  "diff --git a/data/rows.ts b/data/rows.ts\nindex 1111111..2222222 100644\n--- a/data/rows.ts\n+++ b/data/rows.ts\n@@ -1,150 +1,150 @@\n" +
+  generated(150, (i) => `-export const row${i} = ${i};\n+export const row${i} = ${i + 1};`);
 
 /** The files, built when the scenario opens: the large ones take a moment to generate, and the
  * failing grammar is registered with the renderer library, which other scenarios do not load. */
@@ -499,6 +530,7 @@ async function files(): Promise<ViewerSubject[]> {
     file("docs/guide.md", text("docs/guide.md", GUIDE)),
     file("docs/arabic.md", text("docs/arabic.md", ARABIC_GUIDE)),
     file("docs/figures.md", text("docs/figures.md", FIGURES)),
+    file("docs/releases.md", text("docs/releases.md", RELEASES)),
     file("package.json", text("package.json", JSON_TEXT)),
     file("notes/plan.zzplan", text("notes/plan.zzplan", UNKNOWN)),
     file("web/index.html", text("web/index.html", HOSTILE_HTML)),
@@ -538,6 +570,14 @@ async function files(): Promise<ViewerSubject[]> {
       "dist/assets/chunk.3f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c.js",
       text("chunk.js", JSON_TEXT),
     ),
+  ];
+}
+
+/** A document and a file of code, both taller than the viewer. */
+async function focusable(): Promise<ViewerSubject[]> {
+  return [
+    file("docs/guide.md", text("docs/guide.md", GUIDE)),
+    file("src/generated/table.ts", text("src/generated/table.ts", nearBudget())),
   ];
 }
 
@@ -677,6 +717,7 @@ async function changes(): Promise<ViewerSubject[]> {
       content: { state: "change", change: { old: { state: "absent" }, new: present(CJK_PATH, text("设计说明.md", GUIDE)) } },
     },
     change("bin/tool.wasm", present("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAA=" })), present("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAABBAFgAAA=" }))),
+    change("data/rows.ts", present("data/rows.ts"), present("data/rows.ts"), longPatch()),
     change("data/table.ts", present("data/table.ts"), present("data/table.ts"), largePatch()),
     // A hunk header that promises three lines per side and delivers two: the renderer rejects it,
     // and the viewer falls back to the raw patch.
@@ -711,7 +752,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     title: "Files",
     description:
-      "Code in several languages (one file with lines wider than the viewer), Markdown that opens as a document (headings, lists, tables, fenced code, markup that must stay inert, and right-to-left text: in the guide, a list, quote and table that read from the right inside a left-to-right document; in the Arabic document, the same blocks in the other direction, with an English paragraph and an English-first list among them; the figures document has no letters, so with the ar language it reads from the right), every image format, an SVG and HTML whose scripts must not run, unsupported binary, a grammar that fails, files past the budgets, loading and failed reads. Previous / Next walks them in the same mounted viewer. In each header the path is followed by the size as a chip, and no subtitle row sits under the title. The copy button is the first of the controls at the end of the row, ahead of the Markdown view choice and the word wrap choice (a Markdown file switched to source shows all three), and it stays there when a long name pushes the size chip, or in a narrow window the path itself, down to a row of its own.",
+      "Code in several languages (one file with lines wider than the viewer), Markdown that opens as a document (headings, lists, tables, fenced code, markup that must stay inert, and right-to-left text: in the guide, a list, quote and table that read from the right inside a left-to-right document; in the Arabic document, the same blocks in the other direction, with an English paragraph and an English-first list among them; the figures document has no letters, so with the ar language it reads from the right), every image format, an SVG and HTML whose scripts must not run, unsupported binary, a grammar that fails, files past the budgets, loading and failed reads. Previous / Next walks them in the same mounted viewer. In each header the path is followed by the size as a chip, and no subtitle row sits under the title. The copy button is the first of the controls at the end of the row, ahead of the Markdown view choice and the word wrap choice (a Markdown file switched to source shows all three), and it stays there when a long name pushes the size chip, or in a narrow window the path itself, down to a row of its own. Every reading surface (highlighted code, plain text, a rendered document) fades at the edge it hides more behind and not at an edge with nothing past it, and shows no fade at all when its content fits: compare docs/guide.md, src/generated/table.ts and logs/server.log (each taller than the viewer) with README.md, scripts/build.py and src/strange.brokengrammar (each in view). docs/releases.md (a rendered table wider than the viewer) and logs/server.log (plain text, a few lines wider than the viewer) scroll both ways, at the window's own minimum width as well as the default: look at their bottom edge, where the fade meets the horizontal scrollbar, with the system's scrollbars set to show always; the wrap choice, off until chosen, takes the sideways scroll from the log.",
     viewer: { subjects: files },
   },
   {
@@ -722,11 +763,20 @@ export const viewerScenarios: Scenario[] = [
     viewer: { subjects: files, loadDelay: 400 },
   },
   {
+    id: "viewer-focused-surface",
+    group: GROUP,
+    title: "A reading surface with the keyboard on it",
+    description:
+      "A rendered document taller than the viewer, tabbed to: the focus ring is drawn on the frame round the document, whole, above the fade at its bottom edge. Next file shows highlighted code in the same frame; Tab onto it for the same ring.",
+    viewer: { subjects: focusable },
+    steps: [(ui) => ui.tabToRegion((name) => name.includes("guide.md"))],
+  },
+  {
     id: "viewer-changes",
     group: GROUP,
     title: "Changes",
     description:
-      "Modified (one with lines wider than the viewer), added, deleted, renamed, type-changed and renamed-below-itself files, in both directions, from patches, sides outside the project, image changes, a binary change, an untracked symbolic link and repository of its own, a change whose two sides are the same, a patch past the budget, a patch that cannot be read and a change without a patch. In each title the name comes first, then the status chip, then the stage tag; a conflicted, untracked or compared change has no stage tag. A change from the Compare view has its comparison as a subtitle directly under the title, faded where clipped (the long and the Chinese ones), and the neighbouring changes show that a subject without one loses that row. At the end of the path's row the copy button comes first, then the diff layout and word wrap choices (the Markdown diffs show all three); the rename with long branches and a long origin has the most rows once the window is narrow (the width controls above the window).",
+      "Modified (one with lines wider than the viewer), added, deleted, renamed, type-changed and renamed-below-itself files, in both directions, from patches, sides outside the project, image changes, a binary change, an untracked symbolic link and repository of its own, a change whose two sides are the same, a patch past the budget, a patch that cannot be read and a change without a patch. In each title the name comes first, then the status chip, then the stage tag; a conflicted, untracked or compared change has no stage tag. A change from the Compare view has its comparison as a subtitle directly under the title, faded where clipped (the long and the Chinese ones), and the neighbouring changes show that a subject without one loses that row. At the end of the path's row the copy button comes first, then the diff layout and word wrap choices (the Markdown diffs show all three); the rename with long branches and a long origin has the most rows once the window is narrow (the width controls above the window). A diff taller than the viewer (data/rows.ts) and a patch shown as plain text (data/table.ts) fade at the edge they hide more behind, as the diffs that fit (src/badge.ts, and plain, src/garbled.ts) show no fade.",
     viewer: { subjects: changes },
   },
   {

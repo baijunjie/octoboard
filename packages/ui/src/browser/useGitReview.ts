@@ -1,7 +1,7 @@
 import type React from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { FADE_SIZE } from "../components/useScrollFade";
+import { FADE_SIZE } from "../components/scrollFade";
 import type { ComparisonEndpoint } from "../protocol";
 import type { ViewerSubject } from "../viewer/content";
 import type { ViewerNavigation } from "../viewer/FileViewer";

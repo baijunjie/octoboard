@@ -17,6 +17,7 @@ import { CHROME_BUTTON_FILLS, CHROME_CURRENT_FILLS, ChromeButton } from "./Chrom
 import { ConsoleAvatar } from "./ConsoleAvatar";
 import { NotificationsBell } from "./NotificationsBell";
 import { TitledControl } from "./TitledControl";
+import { FadedScroller } from "./scrollFade";
 
 const NEW_CONSOLE_ID = "rail-new-console";
 
@@ -187,8 +188,9 @@ export function Rail({
       className="flex w-(--rail-width) shrink-0 flex-col items-center gap-1 pt-1 pb-2 select-none"
     >
       <div className="flex min-h-0 flex-col items-center gap-1">
-        {/* More consoles than fit scroll here, the scrollbar left out: the rail is too narrow for one. */}
-        <div className="flex min-h-0 flex-col items-center gap-1 overflow-y-auto overscroll-contain py-0.5 [scrollbar-width:none]">
+        {/* More consoles than fit scroll here, the scrollbar left out: the rail is too narrow for
+            one, which leaves the fade as the only thing saying there are more. */}
+        <FadedScroller hideScrollBar className="flex min-h-0 flex-col items-center gap-1 overscroll-contain py-0.5">
           {consoles.map((c) => (
             <ConsoleTile
               key={c.id}
@@ -201,7 +203,7 @@ export function Rail({
               onOpenDialog={onOpenDialog}
             />
           ))}
-        </div>
+        </FadedScroller>
         <ChromeButton id={NEW_CONSOLE_ID} label={t("rail.newConsole")} onPress={() => onOpenDialog({ kind: "new-console" })} tooltipPlacement="end" className="shrink-0">
           <Plus aria-hidden="true" className="size-4" />
         </ChromeButton>

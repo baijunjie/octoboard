@@ -116,6 +116,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   opens, one at a time, what closes it, how it wraps) and the two places that keep the browser's own instead, the
   tooltip every icon-only control of the top bar, the rail and the sidebar carries, the tooltips the indicators carry,
   and how a name too long for its space is faded and offered in full.
+- [Scrolling surfaces](product/scrolling-surfaces.md) — what the window does wherever a surface holds more than it
+  can show: the fade on the edge that hides the content, which edge it sits on and that it is a mark alone, the
+  surfaces it holds for and the scrolling it leaves alone (a document of its own, a menu's list of choices), where no
+  scrollbar is drawn and the fade is the only sign, and which surfaces the keyboard scrolls by becoming a named region
+  of their own.
 - [Appearance](product/appearance.md) — the light, dark and follow-the-system choice and which of them is the default,
   where it is chosen, what follows it (down to the terminal's palette, its 4.5:1 minimum contrast, and the native
   window's own appearance), where the choice is kept, and why a report page stays on a light surface either way.
@@ -247,7 +252,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   one is built on and where its reason is written, that a single-line field hands its form the trimmed value and that
   what is wrong with one field shows under that field from the first submit on, why a state of your own on a
   react-aria-components element needs a `data-*` name it does not write itself, where a HeroUI `ListBox` or `Tree`'s
-  padding and fade go, that a `Tabs` panel is mounted only while its own tab is selected, so nothing a section must not
+  padding goes, that every faded scroller takes the fade from one module in one of its two shapes — a wrapper around
+  the content or the scrolling element itself — with the three reasons it has to be the element and where such a
+  scroller's focus ring goes, that a `Tabs` panel is mounted only while its own tab is selected, so nothing a section
+  must not
   lose is held inside it, why a Tailwind class name has to stand in the source as literal text and why a `docked:`
   utility loses to an `sm:` or `rtl:` twin, dimming a region with a veil rather than `opacity`, why every icon-only
   control also gets a tooltip and the one shape a tooltip takes (the control directly inside HeroUI's `Tooltip` through

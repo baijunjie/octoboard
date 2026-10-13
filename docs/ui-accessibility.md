@@ -121,12 +121,31 @@ shadow root.
 
 ### Focus scrolled to the edge of a scroller that fades there
 
-A scroller whose edges are faded — every dialog body, since `Dialog` owns that — gives the scroller a
-`scroll-padding-block` of at least the fade's own size. A browser scrolls a control only far enough to reach the
-container's edge, which is exactly where the fade sits, so the control the user was sent to arrives underneath it:
-seen here on the first invalid field a submit sends focus to, which the fade covered at the window heights where that
-field was the one scrolled to. The padding is on the scroller rather than on what it holds, so nothing a dialog puts
-inside has to know about it.
+A scroller whose edges are faded gives the scroller a `scroll-padding-block` of at least the fade's own size. A
+browser scrolls a control only far enough to reach the container's edge, which is exactly where the fade sits, so the
+control the user was sent to arrives underneath it: seen here on the first invalid field a submit sends focus to,
+which the fade covered at the window heights where that field was the one scrolled to. The padding is on the scroller
+rather than on what it holds, so nothing put inside has to know about it. Every scroller that takes the fade gets it,
+a dialog's body and a list in a popover alike, and neither shape of the project's own capability leaves it to the
+site: the padding comes with the fade. A fade the library draws for its own component is the one exception, and not
+one to copy — a HeroUI `Tabs.ListContainer` fades its tab strip over 64 px with no padding at all, so a tab the arrow
+keys reach at the strip's edge does land under it.
+
+### A scroller nothing else on screen scrolls takes focus itself
+
+A faded edge says there is more, so the keyboard has to be able to reach it. Where nothing else on the screen would
+scroll *this* scroller, it becomes a focusable `region` with an accessible name, and the arrow keys and Page Down then
+scroll it. The test is that scroller, not what it contains: a stop inside it carries focus only as far as itself, so
+everything past that stop is still content nothing reaches. A dialog whose controls are all in its footer is the case
+`Dialog` owns, named by the dialog's own title; the screen shown before there is anything to show is another, named
+from the catalog, where the buttons sit after the message and the stack trace between them is a scroller in its own
+right, named from the catalog too.
+
+Such a region appears only while the scroller overflows, since a tab stop that scrolls nothing is one the user passes
+for no reason — the crash screen's stack trace and the screen's own column both come and go that way. The exception
+is a region that is for more than scrolling: the file viewer's reading surfaces are tab stops whether or not they
+scroll, because taking focus is also what their Select All and their copy handler hang off. So a region that does
+something of its own stays; one that only scrolls comes and goes with the overflow.
 
 ### A keyboard handler that moves focus itself
 

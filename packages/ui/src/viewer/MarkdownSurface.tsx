@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useCallback } from "react";
 
-import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
+import { useFadeRegion, useScrollFade } from "../components/scrollFade";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
@@ -69,8 +69,13 @@ function DocumentSurface({
 }): React.ReactElement {
   const t = useT();
   const links = usePlatform().links;
-  const focus = useFocusVisibleProps();
   const colours = CODE_THEMES[theme];
+  const region = useFadeRegion({ label: t("viewer.contents", { name: isolate(name) }), always: true });
+  const fade = useScrollFade({
+    region,
+    style: { backgroundColor: colours.background, color: colours.foreground, "--document-link": LINK_COLOURS[theme] } as React.CSSProperties,
+    className: "relative min-h-0 flex-1 overflow-auto rounded-xl p-4 text-sm leading-6",
+  });
   // Stable, so the frame's focus ring changing does not draw the document again.
   const renderCode = useCallback(
     ({ language, text: code, highlight }: { language?: string; text: string; highlight: boolean }) => (
@@ -93,21 +98,14 @@ function DocumentSurface({
   );
   return (
     <RendererBoundary resetKey={resetKey} fallback={fallback}>
-      <FrameSurface>
+      <FrameSurface focused={region.focused}>
         <div
           key={resetKey}
-          tabIndex={0}
-          role="region"
-          aria-label={t("viewer.contents", { name: isolate(name) })}
-          {...focus}
+          {...fade}
           onKeyDown={(event) => {
             if (isSelectAll(event) && selectDocument(event.currentTarget)) event.preventDefault();
           }}
           onCopy={(event) => void copyDocument(event, event.currentTarget, text)}
-          style={
-            { backgroundColor: colours.background, color: colours.foreground, "--document-link": LINK_COLOURS[theme] } as React.CSSProperties
-          }
-          className="relative min-h-0 flex-1 overflow-auto rounded-xl p-4 text-sm leading-6 outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
         >
           <Suspense fallback={<LoadingOverlay />}>
             <MarkdownDocument text={text} renderCode={renderCode} onOpenLink={links && onOpenLink} />

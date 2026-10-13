@@ -4,7 +4,7 @@ import { Collection, GridList, GridListHeader, GridListItem, GridListSection, Li
 
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
-import { useScrollFade } from "../components/useScrollFade";
+import { useScrollFade } from "../components/scrollFade";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { ChangeLayout } from "./changeLayout";
 import type { ChangeViewState } from "./changeView";
@@ -118,7 +118,7 @@ function FlatChangeList({
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
 }): React.ReactElement {
   const language = useCurrentLanguage();
-  const fade = useScrollFade(listRef);
+  const fade = useScrollFade({ ref: listRef, className: "min-h-0 flex-1 overflow-auto py-1 outline-none" });
   // A section's `id` is what the collection keys it by; a change's own `key` keys its row.
   const groups = useMemo(() => sections(items).map((group) => ({ id: group.section, ...group })), [items]);
   const byKey = useMemo(() => new Map(items.map((item) => [item.key, item])), [items]);
@@ -136,15 +136,13 @@ function FlatChangeList({
     <ChangeSectionHeadingStops>
       <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: ROW_HEIGHT, headingHeight: HEADING_HEIGHT }}>
         <GridList
-          ref={fade.ref}
-          {...fade.props}
+          {...fade}
           aria-label={label}
           items={groups}
           onAction={onAction}
           // `collapsed` among the dependencies, or the collection keeps the rows of a section that
           // has just been folded: nothing else about it changed.
           dependencies={[language, selected, collapsed]}
-          className={`${fade.className} min-h-0 flex-1 overflow-auto py-1 outline-none`}
         >
           {(group) => (
             <ChangeSectionView

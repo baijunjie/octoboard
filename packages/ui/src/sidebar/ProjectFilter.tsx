@@ -14,6 +14,7 @@ import { handFocusOff } from "../components/handFocusOff";
 import { PickedTag } from "../components/PickedTag";
 import { TitledControl } from "../components/TitledControl";
 import { usePointerFocusReturn } from "../components/usePointerFocusReturn";
+import { useScrollFade } from "../components/scrollFade";
 import { useTrimmedField } from "../dialogs/useTrimmedField";
 import { useT } from "../i18n/react";
 import { withoutTags, withTag } from "../projectFiltering";
@@ -190,6 +191,7 @@ function TagPicker({
   onChange: (added: string[], removed: string[]) => void;
 }): React.ReactElement {
   const t = useT();
+  const fade = useScrollFade({ className: "max-h-40 overflow-y-auto" });
   // The default heading level: the popover it fills is named by a label rather than by a heading,
   // so there is none above it for the panel's own to sit level with.
   if (vocabulary.length === 0) return <EmptyPanel icon={Tags} message={t("sidebar.filter.noTags")} description={t("sidebar.filter.noTags.description")} />;
@@ -209,7 +211,10 @@ function TagPicker({
         );
       }}
     >
-      <TagGroup.List className="scrollbar max-h-40 overflow-y-auto">
+      {/* The fade goes on the list, never on the popover around it: the popover is what animates
+          away, and the fade's scroll-timeline animation never ends, so the popover's exit transition
+          would wait for it forever. */}
+      <TagGroup.List {...fade}>
         {vocabulary.map((tag) => (
           <Tag key={tag} id={tag} textValue={tag}>
             {({ isSelected }) => (

@@ -50,6 +50,8 @@ Not settled; none of these changes what a milestone is for.
 
 ## Milestones
 
-1. [Every remaining scroller fades](01-remaining-scrollers.md)
+1. 01 Every remaining scroller fades (closed)
+1a. 01a One way to take the fade (closed)
 2. [Hand-built modals move onto `Dialog`](02-modals-onto-dialog.md)
 3. [A scroller with no fade fails a check](03-a-check-for-a-missing-fade.md)
+4. [Final confirmation](04-final-confirmation.md)

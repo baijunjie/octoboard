@@ -1,9 +1,9 @@
-import { Modal, ScrollShadow, Tabs } from "@heroui/react";
+import { Modal, Tabs } from "@heroui/react";
 import { Bell, FileCog, FolderCheck, GitBranch, KeyRound, Settings2, ShieldCheck, type LucideIcon } from "lucide-react";
 import React, { useCallback, useRef, useState } from "react";
 
 import { TitledControl } from "../components/TitledControl";
-import { FADE_SIZE } from "../components/useScrollFade";
+import { FadedScroller } from "../components/scrollFade";
 import { dialogAround } from "../dialogs/dialogElement";
 import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen";
 import type { PlainMessageKey } from "../i18n/catalog";
@@ -31,20 +31,12 @@ const SECTIONS = [
 export type SettingsSectionId = (typeof SECTIONS)[number]["id"];
 
 /** A section's panel. The section scrolls on its own inside the dialog and fades at the edge it can
- * still be scrolled towards, as the body of a `Dialog` does. The scroller is a `ScrollShadow` inside
- * the panel, not the panel: HeroUI's `useScrollFade` classes run a scroll-timeline animation that
- * never ends, which the panel's exit transition waits for, so the section left behind stays on
- * screen. */
+ * still be scrolled towards, as the body of a `Dialog` does. The scroller sits inside the panel, not
+ * on it, because the panel has an exit transition. */
 function SectionPanel({ id, children }: { id: string; children: React.ReactNode }): React.ReactElement {
   return (
     <Tabs.Panel id={id} className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <ScrollShadow
-        size={FADE_SIZE}
-        style={{ scrollPaddingBlock: FADE_SIZE }}
-        className="min-h-0 flex-1 px-4 py-4 docked:px-8 docked:py-6"
-      >
-        {children}
-      </ScrollShadow>
+      <FadedScroller className="min-h-0 flex-1 px-4 py-4 docked:px-8 docked:py-6">{children}</FadedScroller>
     </Tabs.Panel>
   );
 }
@@ -116,7 +108,9 @@ export function SettingsDialog({
           >
             {/* A direct child of `Tabs`, as HeroUI's styling of it expects; it is the section column
                 itself, with no rule between it and the section. Narrow, it is the row along the top
-                instead, clear of the close button at its end and scrolling sideways on its own. */}
+                instead, clear of the close button at its end and scrolling sideways on its own.
+                `self-start` keeps the column at its own height rather than the dialog's, which is
+                what bounds how many sections fit — see `SECTIONS`. */}
             <Tabs.ListContainer className="ms-4 me-12 mt-3 min-w-0 shrink-0 docked:my-6 docked:me-0 docked:w-48 docked:self-start">
               {/* HeroUI sizes a vertical list to its widest tab; it fills the column here, and its
                   tabs read from the start like any list of names rather than centred. */}

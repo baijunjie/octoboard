@@ -3,7 +3,7 @@ import { CornerLeftUp, Folder } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { DaemonRequestError } from "../daemon-client";
-import { useScrollFade } from "../components/useScrollFade";
+import { useScrollFade } from "../components/scrollFade";
 import { useT } from "../i18n/react";
 import type { DirEntry, Event } from "../protocol";
 import { useDaemon } from "../store";
@@ -54,7 +54,7 @@ export function DirectoryPicker({
   const [error, setError] = useState<string>();
   const listRef = useRef<HTMLDivElement>(null);
   // The list scrolls on its own inside the dialog, which `Dialog`'s body fade does not reach.
-  const fade = useScrollFade(listRef);
+  const fade = useScrollFade({ ref: listRef, className: "max-h-72 overflow-y-auto rounded-lg border border-separator p-1" });
 
   const load = async (targetPath: string, fallBackToAncestor = false) => {
     setError(undefined);
@@ -124,14 +124,12 @@ export function DirectoryPicker({
       <DialogError message={error} />
       {entries && (
         <ListBox
-          ref={fade.ref}
-          {...fade.props}
+          {...fade}
           aria-label={t("directoryPicker.subdirectories")}
           // `selectionMode` stays `none`: an entry is only ever entered, never picked. Activating
           // one (click, Enter) calls `onAction`. The padding keeps the scroll container from
           // clipping the items' focus ring.
           onAction={(key) => void load(key === PARENT_KEY ? parentOf(resolvedPath ?? "/") : String(key))}
-          className={`${fade.className} max-h-72 overflow-y-auto rounded-lg border border-separator p-1`}
         >
           {resolvedPath && resolvedPath !== "/" && (
             <ListBox.Item id={PARENT_KEY} textValue={t("directoryPicker.parent")} aria-label={t("directoryPicker.parent")}>

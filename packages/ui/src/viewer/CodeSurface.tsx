@@ -1,7 +1,7 @@
 import React, { Suspense, useCallback, useMemo, useState } from "react";
 
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
-import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
+import { useFadeRegion, useScrollFade, type FadeRegion } from "../components/scrollFade";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
@@ -30,32 +30,31 @@ const EXPANSION_NOTES: Partial<Record<ExpansionStatus["kind"], PlainMessageKey>>
  * past a budget or when the renderer fails, and cheap at any size the daemon sends. It wraps long
  * lines when the user's word wrap choice says so. */
 export function PlainText({ text, label, theme }: { text: string; label: string; theme: "light" | "dark" }): React.ReactElement {
-  const frame = useCodeFrame();
+  const frame = useCodeFrame(label);
   const wrap = wordWrap.useValue();
   const colours = CODE_THEMES[theme];
+  const fade = useScrollFade<HTMLPreElement>({
+    region: frame.region,
+    style: { backgroundColor: colours.background, color: colours.foreground },
+    // `overflow-auto` rather than the fade's own `overflow-y` alone: unwrapped lines scroll
+    // sideways too, and the fade is the vertical one either way.
+    className: `min-h-0 flex-1 overflow-auto rounded-xl p-3 font-mono text-xs leading-5 ${wrap ? "break-words whitespace-pre-wrap" : "whitespace-pre"}`,
+  });
   return (
-    <FrameSurface>
-      <pre
-        dir="ltr"
-        tabIndex={0}
-        role="region"
-        aria-label={label}
-        {...frame}
-        style={{ backgroundColor: colours.background, color: colours.foreground }}
-        className={`min-h-0 flex-1 overflow-auto rounded-xl p-3 font-mono text-xs leading-5 outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus ${wrap ? "break-words whitespace-pre-wrap" : "whitespace-pre"}`}
-      >
+    <FrameSurface focused={frame.region.focused}>
+      <pre dir="ltr" {...fade} onKeyDown={frame.onKeyDown}>
         {text}
       </pre>
     </FrameSurface>
   );
 }
 
-/** What both code frames share as focusable regions: a focus ring (`useFocusVisibleProps`), Select
- * All taking the code alone (`selectCode`), left to the browser's own where that cannot, and Tab
- * entering the controls among a diff's collapsed lines. */
-function useCodeFrame() {
+/** What both code frames share as focusable regions, there whether or not they scroll: the region
+ * itself named `label`, Select All taking the code alone (`selectCode`), left to the browser's own
+ * where that cannot, and Tab entering the controls among a diff's collapsed lines. */
+function useCodeFrame(label: string): { region: FadeRegion; onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => void } {
   return {
-    ...useFocusVisibleProps(),
+    region: useFadeRegion({ label, always: true }),
     onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
       // Tab from the frame itself goes to the first control among its collapsed lines, if it has one;
       // the dialog's own Tab handling, which would go past it, does not see the frame's key.
@@ -90,21 +89,18 @@ function CodeFrame({
   theme: "light" | "dark";
   children: (onDrawn: () => void) => React.ReactNode;
 }): React.ReactElement {
-  const frame = useCodeFrame();
+  const frame = useCodeFrame(label);
+  const fade = useScrollFade({
+    region: frame.region,
+    style: { backgroundColor: CODE_THEMES[theme].background },
+    className: "relative min-h-0 flex-1 overflow-auto rounded-xl",
+  });
   const [drawnFor, setDrawnFor] = useState<string>();
   const onDrawn = useCallback(() => setDrawnFor(resetKey), [resetKey]);
   const drawn = drawnFor === resetKey;
   return (
-    <FrameSurface>
-      <div
-        dir="ltr"
-        tabIndex={0}
-        role="region"
-        aria-label={label}
-        {...frame}
-        style={{ backgroundColor: CODE_THEMES[theme].background }}
-        className="relative min-h-0 flex-1 overflow-auto rounded-xl outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
-      >
+    <FrameSurface focused={frame.region.focused}>
+      <div dir="ltr" {...fade} onKeyDown={frame.onKeyDown}>
         {!drawn && <LoadingOverlay />}
         <Suspense fallback={null}>{children(onDrawn)}</Suspense>
       </div>

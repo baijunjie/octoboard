@@ -36,8 +36,10 @@ export const zhHans: Translation<"other"> = {
   "startup.daemonFailed": "守护进程启动失败：{error}",
   "startup.noAddress":
     "没有已知的守护进程地址。Tauri 外壳通过 {port} 传入端口；若要让 {dev} 连接手动启动的守护进程，请用 {port} 打开页面，设置 {portVar}，或在启动开发服务器时用 {proxyVar} 代理到该进程。",
+  "startup.message": "说明",
   "error.crashed": "{appName} 遇到了无法恢复的错误。",
   "error.tryAgain": "重试",
+  "error.stack": "堆栈跟踪",
 
   "menu.about": "关于 {appName}",
   "menu.settings": "设置…",

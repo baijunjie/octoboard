@@ -259,6 +259,26 @@ const FEATURE_COMPARISON: FixtureChange[] = [
   typeChange("committed", "current", onMain("0d1c2b3"), onFeature("8d2f1a0"), CURRENT_AS_FILE, "releases/2.4"),
 ];
 
+/** The sample repository's branches and a dozen more, past what a selector's list shows without
+ * scrolling (ten rows of its height). None starts with `main`, which `branchOption` finds by prefix. */
+const CROWDED_BRANCHES: BranchInfo[] = [
+  ...BRANCHES,
+  ...[
+    "feature/saved-searches",
+    "feature/query-suggestions",
+    "feature/result-pagination",
+    "fix/stale-index-after-rename",
+    "fix/timeout-on-large-corpus",
+    "chore/bump-toolchain",
+    "chore/remove-unused-flags",
+    "docs/ranking-overview",
+    "refactor/split-pipeline-stages",
+    "release/2.3",
+    "release/2.5",
+    "hotfix/escape-quotes",
+  ].map((name, i): BranchInfo => ({ name, commit: `${(i + 1).toString(16).padStart(2, "0")}${"c0ffee".repeat(6)}ab` })),
+];
+
 const WORKTREES: WorktreeInfo[] = [
   { id: "wt-main", root: "/Users/dev/code/search-api", main: true, head: "4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39", branch: "main", scope_present: true },
   { id: "wt-side", root: "/Users/dev/code/search-api-experiments", main: false, head: "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807", branch: "feature/ranking-experiments", scope_present: true },
@@ -573,6 +593,16 @@ export const projectGitScenarios: Scenario[] = [
       "The Git mode's Compare view: From main To feature/ranking-experiments, the commits compared, and the changed files. Press one to open its diff, read from the two commits.",
     state,
     steps: compare("main", "feature/ranking-experiments"),
+  },
+  {
+    id: "git-compare-many-branches",
+    group: GROUP,
+    title: "More branches than the selector shows",
+    description:
+      "The To selector open over a repository with more branches than its list holds: the list scrolls and its rows fade at the bottom edge, where more are waiting, while the popover around it keeps its edges. The selector in \"Branches marked with the session that created them\" shows the list with every branch in view, and no fade.",
+    state,
+    git: { ...SAMPLE_GIT, branches: CROWDED_BRANCHES },
+    steps: openToSelector,
   },
   {
     id: "git-compare-origins",

@@ -164,7 +164,9 @@ The rail runs from under the top bar to the window's bottom (or the connection b
   `docs/product/consoles-and-projects.md`). Choosing a console, what each avatar's badge says and what a right-click
   on one offers are in "The console switcher" in `docs/product/sidebar.md`. While the docked sidebar is hidden, resting
   the mouse on an avatar floats the sidebar in showing that console (see "A hidden pane floats in on hover" below).
-  When there are more consoles than fit, the avatars scroll, with no scrollbar drawn; New console stays below them.
+  When there are more consoles than fit, the avatars scroll, with no scrollbar drawn — so the fade at the column's
+  edge is the only sign there are more (see "The edge that hides content fades" in
+  `docs/product/scrolling-surfaces.md`); New console stays below them.
 - **At the bottom**, top to bottom:
   - the **waiting count**, a raised hand with the number of sessions waiting for the user in a badge at its top
     right, its top left under a right-to-left language (see "Right-to-left layout" below), shown only while at least

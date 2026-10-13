@@ -6,7 +6,7 @@ import type { Key } from "react-aria-components";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { handFocusOff } from "../components/handFocusOff";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
-import { FADE_SIZE } from "../components/useScrollFade";
+import { FADE_SIZE } from "../components/scrollFade";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
 import { isolate } from "../i18n/isolate";

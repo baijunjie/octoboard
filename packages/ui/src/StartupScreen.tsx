@@ -3,6 +3,7 @@ import React, { useState } from "react";
 
 import { ContentPanel } from "./components/ContentPanel";
 import { BareTitleBar } from "./components/TitleBar";
+import { FadedScroller, useFadeRegion } from "./components/scrollFade";
 import { Message, useT } from "./i18n/react";
 import { useAppExit } from "./lifecycle/useAppExit";
 
@@ -26,24 +27,32 @@ export function StartupScreen({ message, action }: StartupScreenProps): React.Re
   const t = useT();
   const [quitError, setQuitError] = useState<string>();
   const { requestQuit, canQuit } = useAppExit({ toastError: setQuitError });
+  // Reachable from the keyboard while it scrolls, as a dialog's body is: the buttons sit at the end
+  // of the content, so a long message has nothing between them and the top to take focus, and the
+  // window itself never scrolls.
+  const region = useFadeRegion({ label: t("startup.message") });
 
   return (
     <div className="flex h-full flex-col">
       <BareTitleBar />
       <ContentPanel bare>
         {/* The window never scrolls (`style.css`), so content taller than it scrolls here, under the
-            title bar; `m-auto` centres it while it fits, where `justify-center` would clip its top. */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          <div className="m-auto flex flex-col items-center gap-4 p-8 text-center">
-            <div className="max-w-xl">{message}</div>
-            <div className="flex gap-2">
-              {action && <Button onPress={action.onSelect}>{action.label}</Button>}
-              {canQuit && <Button onPress={() => void requestQuit()}>{t("common.quit")}</Button>}
+            title bar; `m-auto` centres it while it fits, where `justify-center` would clip its top.
+            The ring is drawn on the wrapper around the scroller, inset because the scroller spans the
+            window. */}
+        <div className={`flex min-h-0 flex-1 flex-col ${region.focused ? "ring-2 ring-focus ring-inset" : ""}`}>
+          <FadedScroller region={region} className="flex min-h-0 flex-1 flex-col">
+            <div className="m-auto flex flex-col items-center gap-4 p-8 text-center">
+              <div className="max-w-xl">{message}</div>
+              <div className="flex gap-2">
+                {action && <Button onPress={action.onSelect}>{action.label}</Button>}
+                {canQuit && <Button onPress={() => void requestQuit()}>{t("common.quit")}</Button>}
+              </div>
+              {/* Quitting is the only action this screen has, so a quit that fails silently would
+                  leave the user with nothing at all. */}
+              {quitError && <p className="text-danger">{quitError}</p>}
             </div>
-            {/* Quitting is the only action this screen has, so a quit that fails silently would leave
-                the user with nothing at all. */}
-            {quitError && <p className="text-danger">{quitError}</p>}
-          </div>
+          </FadedScroller>
         </div>
       </ContentPanel>
     </div>

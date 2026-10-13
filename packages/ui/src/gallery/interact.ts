@@ -72,9 +72,11 @@ export interface Ui {
    * waited out by its native `disabled` attribute, which HeroUI sets beside `data-disabled`. */
   confirm: () => Promise<void>;
   /** Moves focus onto the scroll region named `name`, with the keyboard as its source, so that the
-   * focus ring is drawn as it is for a user who tabbed there. A dialog's body is one while it
-   * overflows the window, named by the dialog's title; it is not found in a window tall enough to
-   * hold the dialog. A step cannot press Tab itself: a script's key event moves nothing. */
+   * focus ring is drawn as it is for a user who tabbed there. Some regions are always there (the
+   * crash screen's stack, the file viewer's reading surfaces); others only while their content
+   * overflows the window, and are not found in a window tall enough to hold it: a dialog's body,
+   * named by the dialog's title, and the startup screen's message. A step cannot press Tab itself:
+   * a script's key event moves nothing. */
   tabToRegion: (name: Matcher) => Promise<void>;
   /** Moves the pointer onto the indicator inside the first control named `host`, waiting for the
    * control to appear, and leaves it there, for the tooltip that shows only while the pointer is
@@ -234,7 +236,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
         }
         await wait(POLL_MS);
       }
-      throw new Error(`No scroll region named ${String(matcher)}; is the window too tall for its dialog to overflow?`);
+      throw new Error(`No scroll region named ${String(matcher)}: check the name, and for a region that exists only while its content overflows (a dialog's body, the startup screen's message) that the window is short enough for that`);
     },
     async type(text) {
       const field = await waitFor(

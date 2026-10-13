@@ -12,10 +12,22 @@ const projects = [
   projectOf("p-4", console_.id, "Docs Site", { tags: ["frontend", "customer-facing", "docs"] }),
   projectOf("p-5", console_.id, "Build Scripts"),
 ];
-const state = snapshotState({
+const sessions = projects.map((p) => sessionOf(`s-${p.id}`, console_.id, p.id, `Work on ${p.name}`, "idle"));
+const state = snapshotState({ consoles: [console_], projects, sessions });
+
+// A vocabulary too long for the tag picker's list to show at once, spread over the same projects.
+const MANY_TAGS = [
+  "frontend", "backend", "customer-facing", "internal", "payments", "docs", "infrastructure", "mobile", "desktop", "security",
+  "analytics", "search", "billing", "onboarding", "accessibility", "performance", "legacy", "experiments", "tooling", "data",
+  "design-system", "release", "monitoring", "compliance", "localization", "notifications", "integrations", "reporting", "storage", "support",
+];
+const crowdedState = snapshotState({
   consoles: [console_],
-  projects,
-  sessions: projects.map((p) => sessionOf(`s-${p.id}`, console_.id, p.id, `Work on ${p.name}`, "idle")),
+  projects: projects.map((p, projectIndex) => ({
+    ...p,
+    tags: MANY_TAGS.filter((_, tagIndex) => tagIndex % projects.length === projectIndex),
+  })),
+  sessions,
 });
 
 const openFilter = (ui: Ui) => ui.press(ui.t("sidebar.filter.open"));
@@ -73,6 +85,15 @@ export const filterScenarios: Scenario[] = [
       // The rows the filter brings back are still animating into place.
       (ui) => ui.wait(500),
     ],
+  },
+  {
+    id: "filter-many-tags",
+    group: GROUP,
+    title: "More tags than the picker shows",
+    description:
+      "The tag picker scrolls inside the popover, and the tags fade at its bottom edge, where more are waiting; the popover around it keeps its edges. \"Filter popover with tags picked\" shows the same picker with every tag in view, and no fade.",
+    state: crowdedState,
+    steps: [openFilter],
   },
   {
     id: "filter-no-tags",

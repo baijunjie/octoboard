@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { Collection, ListLayout, Tree, TreeHeader, TreeItem, TreeItemContent, TreeSection, Virtualizer, type Key } from "react-aria-components";
 
-import { useScrollFade } from "../components/useScrollFade";
+import { useScrollFade } from "../components/scrollFade";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { ChangeRowBody, changeRowText } from "./changeRow";
 import { changeGroups, sectionKey, type ChangeItem, type ChangeNode } from "./changes";
@@ -45,7 +45,7 @@ export function ChangeTree({
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
 }): React.ReactElement {
   const language = useCurrentLanguage();
-  const fade = useScrollFade(listRef);
+  const fade = useScrollFade({ ref: listRef, className: "min-h-0 flex-1 overflow-auto py-1 outline-none" });
   const groups = useMemo(() => changeGroups(items, "tree").map((group) => ({ id: group.section, ...group })), [items]);
   // Only the directories of the sections on screen: a folded section renders none of its rows, so
   // whether a directory inside one is folded is not this list's to decide. react-aria hands an
@@ -96,8 +96,7 @@ export function ChangeTree({
     <ChangeSectionHeadingStops>
       <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: ROW_HEIGHT, headingHeight: HEADING_HEIGHT }}>
         <Tree
-          ref={fade.ref}
-          {...fade.props}
+          {...fade}
           aria-label={label}
           items={groups}
           expandedKeys={expanded}
@@ -106,7 +105,6 @@ export function ChangeTree({
           // `collapsed` among the dependencies, or the collection keeps the rows of a section that
           // has just been folded: nothing else about it changed.
           dependencies={[language, selected, collapsed]}
-          className={`${fade.className} min-h-0 flex-1 overflow-auto py-1 outline-none`}
         >
           {(group) => (
             <TreeSection id={group.section}>

@@ -48,8 +48,10 @@ export const en = {
   "startup.daemonFailed": "The daemon failed to start: {error}",
   "startup.noAddress":
     "No daemon address is known. The Tauri shell passes a port via {port}; for {dev} against a daemon started by hand, open the page with {port}, set {portVar}, or start the dev server with {proxyVar} to proxy to it.",
+  "startup.message": "Message",
   "error.crashed": "{appName} hit an error it could not recover from.",
   "error.tryAgain": "Try again",
+  "error.stack": "Stack trace",
 
   // The macOS application menu, handed to the shell (see `useNativeMenuLabels`).
   "menu.about": "About {appName}",
