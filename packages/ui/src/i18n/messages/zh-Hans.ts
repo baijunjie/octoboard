@@ -26,6 +26,10 @@ export const zhHans: Translation<"other"> = {
   "agents.noneFound": "在 PATH 中未找到智能体",
   "agents.notInstalled": "{agent}（未安装）",
 
+  "activity.waiting": "有会话在等你",
+  "activity.working": "有会话正在工作",
+  "activity.running": "有会话在运行",
+
   "startup.daemonFailed": "守护进程启动失败：{error}",
   "startup.noAddress":
     "没有已知的守护进程地址。Tauri 外壳通过 {port} 传入端口；若要让 {dev} 连接手动启动的守护进程，请用 {port} 打开页面，设置 {portVar}，或在启动开发服务器时用 {proxyVar} 代理到该进程。",

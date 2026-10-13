@@ -1,4 +1,5 @@
 import type { Scenario } from "../scenario";
+import { activityScenarios } from "./activity";
 import { archiveScenarios } from "./archive";
 import { busyScenarios } from "./busy";
 import { configurationScenarios } from "./configuration";
@@ -26,6 +27,7 @@ export { GROUPS } from "./groups";
 export const SCENARIOS: Scenario[] = [
   ...emptyScenarios,
   ...busyScenarios,
+  ...activityScenarios,
   ...focusScenarios,
   ...consoleSessionsScenarios,
   ...gitScenarios,

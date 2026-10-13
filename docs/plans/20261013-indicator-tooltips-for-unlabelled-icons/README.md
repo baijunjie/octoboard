@@ -30,10 +30,14 @@ one piece of wording and one set of placements.
   technology through the name of the row, chip or badge the graphic sits in, as for the existing indicator
   tooltips; the tooltip is for sighted users and shows on mouse hover only, since the graphic is not a tab stop.
 - **Copy goes through the message catalog in both `en` and `zh-Hans`.**
-- **A graphic's tooltip says exactly what its accessible name says.** Where the name is already a catalog
-  string naming the thing, the tooltip reuses that string rather than a shorter one of its own, so the two
-  cannot drift apart and no second set of keys has to be translated. This is settled for the session status
-  glyph and holds for the graphics still to be done.
+- **A graphic's tooltip says exactly what its accessible name says.** Where a catalog string already names the
+  thing **on its own**, the tooltip reuses that string rather than a shorter one of its own, so the two cannot
+  drift apart and no second set of keys has to be translated — this is how the session status glyph's tooltip is
+  worded. Where the only string naming it folds it into the name of what carries it ("{name}, a session is
+  waiting for you"), the tooltip gets its own key saying the same thing without the name, and the two keys
+  carry a comment pointing at each other: reusing the folded string would make the tooltip repeat the row's
+  visible name, and composing that name out of a fragment is worse to translate. That is how the activity
+  marker's tooltip is worded.
 - **Done includes the product doc.** `docs/product/labels-and-tooltips.md` is a closed list of the indicators that
   carry tooltips; each tooltip added by a milestone is added to it, and the state is shown and checked in the UI
   state gallery (owned by the `gallery-writer` subagent).
@@ -41,7 +45,7 @@ one piece of wording and one set of placements.
 ## Milestones
 
 1. 01 session-status-glyph (closed)
-2. [Activity marker](02-activity-marker.md)
+2. 02 activity-marker (closed)
 3. [Confirmation dialog callout icons](03-confirmation-dialog-callout-icons.md)
 
 ## Not yet written
@@ -59,7 +63,8 @@ goal or completion criteria unclear.
   `aria-label` text) or one per element, which needs the glyph and each count wrapped separately. The branch name
   beside them is a clipped-text tooltip of its own with the normal delay, which a whole-badge tooltip would overlap.
   The two answers give different placements and different completion criteria.
-- **The activity badge on a console avatar in the rail** (the corner disc, the same activity as milestone 2). It
+- **The activity badge on a console avatar in the rail** (the corner disc, which shows the same activity as the
+  marker on a collapsed project row, and whose wording it shares). It
   conflicts with the tile it sits on: the tile is a control whose tooltip names the console and is delayed, and that
   tile tooltip opens on keyboard focus only while the hidden sidebar floats in on hover. A tooltip on the disc would
   therefore appear exactly when the tile's own tooltip is deliberately suppressed. Whether that is

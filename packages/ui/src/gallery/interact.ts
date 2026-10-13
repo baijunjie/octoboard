@@ -1,5 +1,7 @@
 import { format, type MessageArgs, type MessageKey } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
+import { activityLabel } from "../sessionLabel";
+import { ACTIVITIES } from "../sidebar/order";
 import type { Daemon } from "../store";
 
 /** Everything a pressable thing is looked up among. A hand-built row is a `role="button"`, a tag
@@ -90,6 +92,12 @@ export interface Ui {
    * there, as `hoverIndicator` does. The glyph's tooltip trigger is the one named `role="img"`
    * in the bar; fails while no session is selected. */
   hoverTopBarStatus: () => Promise<void>;
+  /** Moves the pointer onto the activity marker of the collapsed project row or the focus mode
+   * switch strip chip named `host`, and leaves it there, as `hoverIndicator` does. The marker is
+   * decorative and the last tooltip trigger in either, so it is taken as that; the step fails if
+   * the tooltip that opens is not one of the three activities' (an expanded row, which draws no
+   * marker, has none to hover), rather than leave whatever else was hovered up. */
+  hoverActivityMarker: (host: Matcher) => Promise<void>;
   /** Presses `key` on the focused control, for what a user closes or confirms with the keyboard. */
   key: (key: string) => Promise<void>;
   /** Focuses the text field labelled `label`, waiting for it to appear, so `type` has one to fill. */
@@ -239,6 +247,17 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     },
     async hoverTopBarStatus() {
       await hover(() => doc.querySelector<HTMLElement>("[data-region=topbar] [role=img]"), "No status glyph in the top bar");
+    },
+    async hoverActivityMarker(host) {
+      await hover(() => {
+        const found = find(host);
+        if (!found) return undefined;
+        return Array.from(found.querySelectorAll<HTMLElement>("[role=presentation]")).at(-1);
+      }, `No row or chip matching ${String(host)} with an activity marker to hover`);
+      const shown = doc.querySelector("[role=tooltip]")?.textContent;
+      if (!shown || !ACTIVITIES.some((activity) => activityLabel(t, activity) === shown)) {
+        throw new Error(`The control matching ${String(host)} has no activity marker: its last tooltip is ${shown ? `"${shown}"` : "none"}`);
+      }
     },
     async press(matcher) {
       await clickWhenFound(() => find(matcher), `Nothing to press matching ${String(matcher)}`);

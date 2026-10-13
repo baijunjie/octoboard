@@ -208,7 +208,9 @@ current branch and how far it is from its upstream, when its directory is a git 
 
 A collapsed project shows an activity marker with the same meanings as a console's badge on the rail (see "The
 console switcher" above), taken from its sessions that are not archived, so a waiting session can be found with its
-project collapsed.
+project collapsed. The three glyphs being alike in size, **the marker carries a tooltip** saying which activity it
+stands for, in the same words the row's own name folds in beside the project's name (see "Tooltips on indicators" in
+`docs/product/labels-and-tooltips.md`).
 
 At the row's end are a **+** button, **New session**, which opens the new-session dialog for that project (see
 "Opening a session" in `docs/product/sessions.md`), and the project's action menu:

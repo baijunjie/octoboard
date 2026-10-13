@@ -34,6 +34,14 @@ export const en = {
   "agents.noneFound": "No agent found on PATH",
   "agents.notInstalled": "{agent} (not installed)",
 
+  // What a session activity marker stands for, in words and on its own, for the tooltip of every
+  // mark that shows one — a collapsed project's row, focus mode's console-switch chip, a console's
+  // avatar in the rail. The `sidebar.activity.*` messages below say the same thing folded into the
+  // name of what it is going on beneath.
+  "activity.waiting": "A session is waiting for you",
+  "activity.working": "A session is working",
+  "activity.running": "A session is running",
+
   "startup.daemonFailed": "The daemon failed to start: {error}",
   "startup.noAddress":
     "No daemon address is known. The Tauri shell passes a port via {port}; for {dev} against a daemon started by hand, open the page with {port}, set {portVar}, or start the dev server with {proxyVar} to proxy to it.",
@@ -280,6 +288,9 @@ export const en = {
   "sidebar.pin": "Pin",
   "sidebar.unpin": "Unpin",
   "sidebar.unpinItem": "Unpin {name}",
+  // What is going on beneath a console or a project, folded into its accessible name. The
+  // `activity.*` messages above say the same thing on its own, for the marker's tooltip, so a
+  // change of wording here belongs there too.
   "sidebar.activity.waiting": "{name}, a session is waiting for you",
   "sidebar.activity.working": "{name}, a session is working",
   "sidebar.activity.running": "{name}, a session is running",

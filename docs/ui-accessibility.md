@@ -175,6 +175,13 @@ the trigger unnamed instead, adding nothing to the name of the row or trail arou
 What is left over is a shortfall kept on purpose, marked at its code: a sighted user who works from the keyboard
 reaches no tooltip, so a name that lives only there is a name they do not get.
 
+One exception to the content model is kept on purpose: the trigger is a `div`, so an indicator inside a real
+`<button>` — focus mode's console-switch chip — nests one where no content model allows it. The library offers no
+element to put there instead, and the anchored shape, the only alternative, would answer a hover anywhere on the
+button rather than on the indicator, which is the whole point of that tooltip. Nothing about the button changes for
+it: the trigger cancels only the focus a mouse press would otherwise give it, and the press itself still reaches the
+button, so pressing the indicator activates the control exactly as pressing its label does.
+
 ## Roles and states
 
 ### Expanded and selected

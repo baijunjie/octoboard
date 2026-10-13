@@ -226,6 +226,14 @@ A Tab walk, on the other hand, needs no change to the system's keyboard-navigati
 this app's WKWebView moves Tab onto buttons whether `AppleKeyboardUIMode` is set or not, so a button that Tab skips
 is not explained by that setting.
 
+A mark inside a row moves as the pointer arrives, so never send the pointer to coordinates measured off a capture of
+that row un-hovered. The rows of the sidebar, of focus mode, of the change list and of the avatar field keep their
+controls (a "+", an actions menu) at zero width until the row is hovered, holds focus or is selected; revealing them
+widens the row's end by some 50 px and shifts every mark before them — an activity marker, a git badge — that far
+towards the start. A pointer aimed at the resting position therefore lands on a revealed control and answers with its
+tooltip, which reads exactly like the mark having no tooltip of its own. Approach through the row and then onto the
+mark, as a user does, or re-measure the target from a capture taken while the pointer already rests in the row.
+
 Two further limits on macOS: driving the real app this way requires Accessibility permission granted to the host
 application of whatever runs the script, and native `<select>` popups cannot be driven through the accessibility tree
 at all — to make a control scriptable, build it from something other than a native `<select>`, or drive it by hand.

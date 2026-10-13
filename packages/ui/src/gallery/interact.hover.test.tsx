@@ -3,7 +3,7 @@ import { act } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { AgentIcon } from "../components/AgentIcon";
-import { StatusIcon } from "../components/StatusIcon";
+import { ActivityMarker, StatusIcon } from "../components/StatusIcon";
 import { leave, mountForTooltip, openTooltip } from "../components/tooltipTestSupport";
 import { createUi } from "./interact";
 
@@ -11,8 +11,11 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 /** The placements the hover steps reach, built from the real glyph: the top bar, a session row with
- * a status glyph and an agent mark that has a tooltip of its own, a row with a status glyph only,
- * and a row like focus mode's card, whose glyph carries no tooltip and whose agent mark does. */
+ * a status glyph and an agent mark that has a tooltip of its own, a row with a status glyph only, a
+ * row like focus mode's card, whose glyph carries no tooltip and whose agent mark does, and the
+ * activity marker's two hosts: a row with a status glyph before the marker, as a project row has its
+ * git badge, and a chip with the marker alone. "Docs" is named as a row with an activity but draws no
+ * marker, as an expanded project row does, which is what the step's failure case needs. */
 function mountWindow(): void {
   mountForTooltip(
     <>
@@ -25,6 +28,18 @@ function mountWindow(): void {
       </div>
       <div role="button" aria-label="Write the migration, Claude Code, Waiting for you">
         <StatusIcon status="waiting_user" decorative withTooltip />
+      </div>
+      <div role="button" aria-label="Website, a session is running">
+        <span>Website</span>
+        <StatusIcon status="idle" decorative withTooltip />
+        <ActivityMarker activity="running" />
+      </div>
+      <div role="button" aria-label="Hub 2, a session is working">
+        <span>Hub 2</span>
+        <ActivityMarker activity="working" />
+      </div>
+      <div role="button" aria-label="Docs, a session is running">
+        <span>Docs</span>
       </div>
       <div role="button" aria-label="Card, Claude Code, Idle">
         <div>
@@ -42,6 +57,18 @@ async function settled(hover: Promise<void>): Promise<void> {
     await vi.advanceTimersByTimeAsync(3000);
     await hover;
   });
+}
+
+/** Runs `hover` to the end without `act`, so that what the pointer opened is on the page while the
+ * step is still running, as in a browser: a step that looks at the tooltip it opened needs that. */
+async function settledLive(hover: Promise<void>): Promise<void> {
+  const done = hover.then(
+    () => undefined,
+    (error: unknown) => error,
+  );
+  await vi.advanceTimersByTimeAsync(3000);
+  const error = await done;
+  if (error) throw error;
 }
 
 /** Takes the pointer off what is hovered and runs out the timers left, as the tests of the glyph do,
@@ -90,4 +117,36 @@ it("hoverRowStatus fails for a row that is not there", async () => {
   const done = expect(createUi(document, "en").hoverRowStatus("Nothing")).rejects.toThrow(/No session row/);
   await vi.advanceTimersByTimeAsync(6000);
   await done;
+});
+
+it("hoverActivityMarker puts up the activity of the chip it names", async () => {
+  mountWindow();
+  await settledLive(createUi(document, "en").hoverActivityMarker((name) => name.startsWith("Hub 2")));
+  expect(openTooltip()?.textContent).toBe("A session is working");
+  release(document.querySelector('[aria-label^="Hub 2"] [role=presentation]')!);
+});
+
+it("hoverActivityMarker takes the marker, not the trigger before it", async () => {
+  mountWindow();
+  await settledLive(createUi(document, "en").hoverActivityMarker((name) => name.startsWith("Website")));
+  expect(openTooltip()?.textContent).toBe("A session is running");
+  release(Array.from(document.querySelectorAll('[aria-label^="Website"] [role=presentation]')).at(-1)!);
+});
+
+it("hoverActivityMarker fails for a control with no marker rather than hover another tooltip", async () => {
+  mountWindow();
+  const done = expect(createUi(document, "en").hoverActivityMarker((name) => name.startsWith("Docs"))).rejects.toThrow(/No row or chip/);
+  await vi.advanceTimersByTimeAsync(6000);
+  await done;
+  expect(openTooltip()).toBeNull();
+});
+
+it("hoverActivityMarker fails where the last tooltip is not an activity's", async () => {
+  mountWindow();
+  const done = expect(createUi(document, "en").hoverActivityMarker((name) => name.startsWith("Write the migration"))).rejects.toThrow(
+    /has no activity marker.*Waiting for you/,
+  );
+  await vi.advanceTimersByTimeAsync(3000);
+  await done;
+  release(glyphOf("Write the migration"));
 });

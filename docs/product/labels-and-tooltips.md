@@ -98,6 +98,13 @@ are:
 - a session's status glyph on its sidebar row and on the top bar's breadcrumb, whose tooltip says the status in the
   same words as everywhere else it is named — the two placements where no status text sits beside the glyph (see
   "Session statuses" in `docs/product/sessions.md`);
+- the activity marker, the mark standing for what is going on beneath a **collapsed project's row** in the sidebar
+  (see "Project rows" in `docs/product/sidebar.md`) and inside focus mode's **console-switch chip** (see "The switch
+  strip" in `docs/product/focus-mode.md`), whose tooltip says which of the three activities it stands for — a session
+  waiting for the user, one working, one merely running — in the same words the name of the row or chip around it
+  folds in beside the project's or console session's own name. The same activity shown as a badge on a console's
+  avatar in the rail adds no tooltip of its own: the avatar is a control, and its tooltip is the console's name (see
+  "The console switcher" in `docs/product/sidebar.md`);
 - the binding badge, the coloured dot on a project session's row bound to a console session, whose tooltip names that
   console session (see "The binding badge" in `docs/product/sidebar.md`);
 - a session's agent icon on its row, on a focus mode's card or archived row and on the archive view's row, whose

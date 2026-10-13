@@ -3,7 +3,7 @@ import React from "react";
 
 import { useT } from "../i18n/react";
 import type { SessionStatus } from "../protocol";
-import { statusLabel } from "../sessionLabel";
+import { activityLabel, statusLabel } from "../sessionLabel";
 import type { Activity } from "../sidebar/order";
 import { IndicatorTooltip } from "./IndicatorTooltip";
 
@@ -96,11 +96,35 @@ export function StatusIcon({
   );
 }
 
-/** The marker a collapsed project row shows for the sessions beneath it (the rail's consoles show
- * the same as an `ActivityBadge`): a waving hand when one is waiting for the user, a ringing dot
- * when one is at work, a speech bubble when one is merely running, awaiting instructions.
- * Decorative: the row's own label carries the words. */
+/** The marker a collapsed project row shows for the sessions beneath it, and focus mode's
+ * console-switch chip for the sessions of that console session (the rail's consoles show the same
+ * as an `ActivityBadge`): a waving hand when one is waiting for the user, a ringing dot when one is
+ * at work, a speech bubble when one is merely running, awaiting instructions.
+ *
+ * It carries the indicator tooltip that puts the activity into words for a sighted user, who has
+ * only three glyphs of a similar size to tell the three apart. The marker and the tooltip's trigger
+ * are both left unnamed: the row's and the chip's own accessible names already say the activity.
+ *
+ * On the chip that puts the trigger's `div` inside a `<button>`, which no content model allows. It
+ * is accepted rather than worked around: the trigger cancels only the focus a mouse press would
+ * otherwise give it, and the press itself still reaches the button, so pressing the marker switches
+ * console session exactly as pressing the chip's title does; the anchored shape, the only
+ * alternative the library offers, would answer a hover anywhere on the chip rather than on the
+ * marker, which is the one thing this tooltip is for.
+ */
 export function ActivityMarker({ activity }: { activity: Activity }): React.ReactElement | null {
+  const t = useT();
+  const marker = activityMarker(activity);
+  const label = activityLabel(t, activity);
+  if (label === undefined) return marker;
+  return (
+    <IndicatorTooltip tooltip={label} className="inline-flex shrink-0">
+      {marker}
+    </IndicatorTooltip>
+  );
+}
+
+function activityMarker(activity: Activity): React.ReactElement | null {
   switch (activity) {
     case "waiting":
       return (

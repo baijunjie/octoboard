@@ -217,8 +217,12 @@ export function focusGroups(
   ).map((project) => ({ project, sessions: liveSessionRows(sessionsOf(project)) }));
 }
 
+/** Every activity there is, most pressing first. The type is derived from the list rather than
+ * written beside it, so whoever covers them all cannot be left behind by a new one. */
+export const ACTIVITIES = ["waiting", "working", "running"] as const;
+
 /** What a console on the rail or a project row shows: the most pressing activity among its sessions. */
-export type Activity = "waiting" | "working" | "running" | undefined;
+export type Activity = (typeof ACTIVITIES)[number] | undefined;
 
 export function consoleActivity(sessions: Session[]): Activity {
   if (sessions.some((s) => s.status === "waiting_user")) return "waiting";

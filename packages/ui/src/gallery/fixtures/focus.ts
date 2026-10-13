@@ -130,11 +130,15 @@ export const focusScenarios: Scenario[] = [
       "under it. Its own archived bound sessions follow the cards, grouped the same way (scroll the sidebar in a short window). Under the header, one chip per " +
       "console session of the console that is not archived, in the order they started: Hub (in focus, outlined) " +
       "is waiting through a bound session, Hub 2 is working, Hub 3 is working through a bound session, and " +
-      "Release notes has nothing going on, so shows nothing. Pressing a chip enters that console session's focus mode and selects it; with " +
+      "Release notes has nothing going on, so shows nothing. The pointer rests on Hub 2's marker, whose tooltip " +
+      "reads A session is working; rest it on Hub's for A session is waiting for you. Pressing a chip enters that console session's focus mode and selects it; with " +
       "`chrome=1` in the URL, ⌃Tab and ⌃⇧Tab do the same going round.",
     preferences: { sidebarWidth: 440, sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
     state,
-    steps: [(ui) => ui.press(ui.session("Add idempotency keys"))],
+    steps: [
+      (ui) => ui.press(ui.session("Add idempotency keys")),
+      (ui) => ui.hoverActivityMarker(ui.t("sidebar.activity.working", { name: hub2.title })),
+    ],
   },
   {
     id: "focus-console-session-strip-overflow",

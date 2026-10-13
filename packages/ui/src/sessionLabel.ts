@@ -101,6 +101,22 @@ export function sessionAriaLabel(
   return owner ? joinPhrases(language, [base, t("sidebar.session.boundTo", { name: isolate(owner.title) })]) : base;
 }
 
+/** What an activity marker stands for, on its own, for the tooltip it carries; `undefined` for a
+ * marker that is not drawn at all. The accessible name of the row or chip around it says the same
+ * thing (see `activityLabelKey`), so the tooltip repeats rather than adds. */
+export function activityLabel(t: Translate, activity: Activity): string | undefined {
+  switch (activity) {
+    case "waiting":
+      return t("activity.waiting");
+    case "working":
+      return t("activity.working");
+    case "running":
+      return t("activity.running");
+    default:
+      return undefined;
+  }
+}
+
 /** The message that names a console or a project together with what is going on beneath it, for its
  * accessible name; `undefined` for one with nothing going on, whose own name says enough. A pinned
  * project's variant says so too. */

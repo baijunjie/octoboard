@@ -231,7 +231,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   where no signature can settle it, and where to take that condition from, settling hand-written `git` output against
   real `git` in a throwaway repository, checking in WebKit with real pointer input and with long and CJK text, ruling
   out a locked screen before trusting a capture, getting an error out of a blank window, bisecting a symptom against the
-  daemon, what a scripted GUI probe can and cannot prove and why its setup goes through the daemon's protocol (raising a
+  daemon, what a scripted GUI probe can and cannot prove — including why a mark inside a row cannot be aimed at from a
+  capture of the un-hovered row — and why its setup goes through the daemon's protocol (raising a
   session's hand with a forged hook event, seeding trusted folders), serving the shipped frontend bundle to a headless
   browser as a real client where a check needs no native window, confirming Octoboard is frontmost before a scripted
   keystroke, freezing the app's WebContent process, where to watch for a report page's blocked navigation, where a
