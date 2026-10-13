@@ -45,6 +45,13 @@ it is not the app's WKWebView. A pointer interaction or a WebKit rendering quest
 page loaded in Playwright's `webkit`, a paint defect still in the real window, and behaviour that depends on the
 daemon, the shell or how the window starts up still in the real app.
 
+Whether every scenario still runs is checked by command, not by eye: run `pnpm gallery:sweep` from `packages/ui/`
+(`packages/ui/README.md`, section "Sweeping the gallery") rather than scripting a browser pass over the scenarios
+yourself. It is the only check that sees a step that no longer finds its control, a fixture that cannot be answered or
+an exit transition that never ends, since neither the type checker nor the unit tests load a scenario. What it reads is
+each page's failure banner, so it settles nothing about how a page looks, and it takes scenario ids, `--group`, `--lang`
+and `--theme`, so a question about one state or one group is asked of those rather than of the whole set.
+
 How the bundle loads what it fetches at run time — lazy chunks, a worker, WebAssembly, assets — and anything a
 build-only Vite plugin changes are not settled there either: the gallery runs Vite's unbundled dev modules from
 `http://localhost`, while the app loads the built `dist/` from `tauri://localhost`. Check those in a packaged build

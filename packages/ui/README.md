@@ -22,6 +22,8 @@ the scripts from this directory.
 - `pnpm dev` — the Vite dev server on port 5174, which is also what `pnpm tauri dev` in `apps/desktop/` starts and
   opens its window on.
 - `pnpm gallery` — the same dev server on port 5175, opening the UI state gallery (below) in the browser.
+- `pnpm gallery:sweep` — loads every gallery scenario in a headless browser and fails on any gallery failure (see
+  "Sweeping the gallery" below).
 - `pnpm typecheck` — `tsc --noEmit`.
 - `pnpm test` — `vitest run`: the unit tests beside the code (`*.test.ts`), for the pure modules, plus jsdom tests for stateful classes and components (`*.test.ts`, `*.test.tsx`).
 - `pnpm build` — typechecks, runs the catalog check (`vitest run src/i18n`), then writes `dist/` with relative asset
@@ -34,26 +36,28 @@ The dev server serves a dev-only gallery of states that are hard to reach agains
 daemon needed): `pnpm gallery` serves it on port 5175 and opens it, and under `pnpm dev` it is at
 `http://localhost:5174/gallery.html`. Pick a scenario from the list; light/dark, any offered language (`ar` is the
 right-to-left one), the window width and the window height are controls above the window, and all of them are in the
-URL, so a link reproduces a view. The window is an iframe, so its width decides the `docked` breakpoint (1148px) for real. The real
-`App` renders over a fixture daemon (`src/gallery/fixtureDaemon.ts`). A scenario's page writes its `octoboard.*` and
-`heroui-theme` entries into `localStorage` on every load; on port 5174 that origin is the dev app's own, so opening the
-gallery there resets the dev app's preferences, which `pnpm gallery`'s port avoids. A scenario's page sets
-`data-gallery-ready` on `<html>` once its steps have run, which is what automation waits on before capturing. A failure
-of the gallery's own machinery, a step that threw, a fixture that cannot be answered as the real daemon would answer, or
-an exit transition that never ends (something that was closing is still on the page once the steps have run; a
-scroll-driven animation on a settings panel did that), is painted over the page as a red `[data-gallery-failure]`
-overlay (`src/gallery/banner.ts`), so a capture taken once the page is ready should be checked for it. The fixture daemon (for the Git mode, `src/gallery/fixtureGit.ts`) refuses
-such a reply rather than sending the field unfilled: where the real daemon counts a change side's `lines`, the fixture
-has to carry the text to count it from (`FixtureChange.whole` in `fixtures/changeFixtures.ts`, the text of each side of
-a two-sided change), or the request rejects with `FixtureUnfillableError`. A change fixture is written through the
-factory for its kind of change (`textChange`, `deletion`, `untracked` and the rest in `fixtures/changeFixtures.ts`),
-never as a literal, so a change the fixture daemon could not answer faithfully cannot be written. What no single change
-can show, a rule over a whole repository, is held by a test over the sample repository instead: `objectIdCheck`
-(`fixtures/invariants.ts`) reports where an object id names more than one content or one content is named by more than
-one id, as Git's names do not, and the ids it has no content to hold the rule over; a rule of that kind is added there.
-A frame URL with `chrome=1` gives the page the desktop window's `windowChrome` capability (`src/gallery/frame.tsx`), so
-what only the desktop app offers, such as the window shortcuts, can be driven in a browser. Neither gallery page is part
-of the bundle `pnpm build` writes, but `src/gallery/` is still type-checked by it, so a broken fixture fails the build.
+URL, so a link reproduces a view. The window is an iframe, so its width decides the `docked` breakpoint (1148px) for
+real. The real `App` renders over a fixture daemon (`src/gallery/fixtureDaemon.ts`). A scenario's page writes its
+`octoboard.*` and `heroui-theme` entries into `localStorage` on every load; on port 5174 that origin is the dev app's
+own, so opening the gallery there resets the dev app's preferences, which `pnpm gallery`'s port avoids. A scenario's
+page sets `data-gallery-ready` on `<html>` once its steps have run and then after two frames or 200ms, whichever comes
+first, which is what automation waits on before capturing (a page too busy to draw two frames in that time claims it
+without them). A failure of the gallery's own machinery, a step that threw, a fixture that cannot be answered as the
+real daemon would answer, or an exit transition that never ends (something that was closing is still on the page once
+the steps have run; a scroll-driven animation on a settings panel did that), is painted over the page as a red
+`[data-gallery-failure]` overlay (`src/gallery/banner.ts`), so a capture taken once the page is ready should be checked
+for it. The fixture daemon (for the Git mode, `src/gallery/fixtureGit.ts`) refuses such a reply rather than sending the
+field unfilled: where the real daemon counts a change side's `lines`, the fixture has to carry the text to count it from
+(`FixtureChange.whole` in `fixtures/changeFixtures.ts`, the text of each side of a two-sided change), or the request
+rejects with `FixtureUnfillableError`. A change fixture is written through the factory for its kind of change
+(`textChange`, `deletion`, `untracked` and the rest in `fixtures/changeFixtures.ts`), never as a literal, so a change
+the fixture daemon could not answer faithfully cannot be written. What no single change can show, a rule over a whole
+repository, is held by a test over the sample repository instead: `objectIdCheck` (`fixtures/invariants.ts`) reports
+where an object id names more than one content or one content is named by more than one id, as Git's names do not, and
+the ids it has no content to hold the rule over; a rule of that kind is added there. A frame URL with `chrome=1` gives
+the page the desktop window's `windowChrome` capability (`src/gallery/frame.tsx`), so what only the desktop app offers,
+such as the window shortcuts, can be driven in a browser. Neither gallery page is part of the bundle `pnpm build`
+writes, but `src/gallery/` is still type-checked by it, so a broken fixture fails the build.
 
 To add a scenario, add an entry to the file for its area in `src/gallery/fixtures/` (or a new file, listed in
 `index.ts`); its `group` is one of the titles in `GROUPS` (`groups.ts`), where a new group gets the icon its heading
@@ -108,6 +112,50 @@ project left out that was given a choice, one placed another way than was chosen
 the checkbox ticked; a console that could not be created is not looked into, its projects being not tried whatever was
 chosen), while `fixtures/configuration.test.ts` holds what is written to the rules the daemon follows (what is offered
 and preselected, fallbacks only for accounts the machine lacks, a result that lines up with its inspection).
+
+#### Sweeping the gallery
+
+`pnpm gallery:sweep` is the check that a scenario still runs: a step that no longer finds its control, a fixture that
+cannot be answered, an exit that never ends, or a page that never becomes ready is seen nowhere else, since neither the
+type checker nor the unit tests load a scenario. It starts this checkout's Vite dev server (the gallery is the dev
+server's unbundled modules, so it is not swept from a build), loads each scenario's frame page, waits for
+`data-gallery-ready`, gives the page another 150 ms for whatever a step did not wait for, and reads the
+`[data-gallery-failure]` overlay. That pause is a fixed one: the sweep does not watch the page's requests, so a
+renderer that takes longer than that to arrive after the steps ended is read before it has had its say. Each failure is
+printed with the language, theme, scenario id and the banner's text, and the exit status is 1 when any scenario failed
+(2 when the sweep could not run at all, 128 plus the signal's number when it was interrupted, which prints nothing about
+the pages it was loading).
+
+```sh
+pnpm gallery:sweep                          # every scenario, en and zh-Hans, light
+pnpm gallery:sweep git-badges               # one scenario; "git-*" is a pattern; several may be given
+pnpm gallery:sweep --group "Project pane: Git" --lang zh-Hans
+pnpm gallery:sweep --theme dark             # or "both"; --list prints the ids a selection names
+```
+
+Languages default to `en` and `zh-Hans`, the two with catalogs (the other 15 render English word for word, so sweeping
+them adds loads and no coverage). `--lang` takes the app's own language tags and refuses any other, since the gallery
+page would render English for it and the sweep would report that as the language it was asked for. The theme defaults to
+light: a scenario's steps do not depend on it, so it settles whether a state still renders, and `--theme dark` is for a
+change to colours. `--url` sweeps a gallery that is already being served (a running `pnpm gallery`) instead of starting
+a server.
+
+Pages are loaded `--jobs` at a time (default: six tenths of the cores, at most 6), each worker with a browser context of
+its own, since a scenario's page rewrites the `octoboard.*` entries of `localStorage` on every load and two pages in one
+context would overwrite each other's starting preferences. A failure seen under load is run again alone, to tell a
+scenario that no longer runs from one that fails only while pages load together. Both fail the sweep: one that passes
+alone is listed apart, as a step that races an animation or a fixture reply that races a render, which a busy machine
+shows and a quiet one hides. `--jobs 1` runs the scenario with nothing else loading. At any `--jobs`, a page that was
+lost rather than slow (a crashed renderer) is reported as such, not as one that never became ready.
+
+Playwright is not a dependency of this repository, and the sweep installs neither it nor a browser. It uses a Playwright
+that is already installed: the directory in `--playwright <dir>` or `OCTOBOARD_PLAYWRIGHT` (one holding
+`node_modules/playwright`, or the package itself), else one the repository resolves. When there is none it says how to
+install one outside the checkout. The browser is Playwright's own Chromium, or, where that revision is not downloaded,
+the newest `chromium_headless_shell` in Playwright's browser cache; `--chromium <path>` / `OCTOBOARD_CHROMIUM` names
+one. Chromium settles the same things the gallery does everywhere (a step that ran, a fixture that answered), not
+WebKit rendering or a pointer interaction: those are checked with the gallery page loaded in Playwright's `webkit`,
+driving the pointer through real input.
 
 ### Pointing it at a daemon
 
@@ -270,6 +318,7 @@ Imports run one way between the feature directories: `src/browser/` imports `src
 |---|---|
 | `index.html` | The window's only Content Security Policy, delivered as a `<meta>` tag, and the inline bootstrap script that resolves and applies the theme class before the first paint; the file's own comment has the reasoning for both |
 | `gallery.html`, `gallery-frame.html`, `src/gallery/` | The dev-only UI state gallery, not part of a build (see "The UI state gallery" above): the shell page (`gallery.html`, `shell.tsx`), the page one scenario renders in (`gallery-frame.html`, `frame.tsx`, which mirrors `main.tsx` over a fixture daemon and gets `index.html`'s Content Security Policy through `vite.config.ts`), the scenario type (`scenario.ts`; its `agentModels` sets what the fixture daemon lists per agent for `list_agent_models`, the default being `SAMPLE_CLAUDE_MODELS` in `fixtures/agentModels.ts`), the steps' helpers (`interact.ts`), how a gallery failure is reported, the overlay it is shown in and the `FixtureUnfillableError` a refused fixture reply is raised as (`banner.ts`), the fake terminal sockets (`fakeTerminal.ts`), the fixture daemon (`fixtureDaemon.ts`: the file browsing, directory and page listings, consoles, the deletion of archived sessions by `delete_archived_sessions`, taking the archived sessions bound to each as the daemon does and held by `fixtureDaemon.test.ts`, toasts and the terminal) with the replies it gives a project pane's Git mode, which have to track the real daemon's own conditions, kept apart in `fixtureGit.ts` (`createGitReplies`), the storage a scenario starts from (`prepare.ts`) and the scenarios (`fixtures/`, with `fixtures/builders.ts` building their state and `fixtures/groups.ts` listing their groups and icons), and the "File viewer" group, whose scenarios set `viewer` and render `viewerGallery.tsx` over the real `FileViewer` in place of the app (`fixtures/viewer.ts`, `viewerImages.ts`), and the "Project pane: files" group, whose scenarios drive a project's browser over the files the fixture daemon serves for `list_project_dir` and `read_project_file` (`fixtures/projectFiles.ts`; a scenario's `files` replaces them), and the "Project pane: Git" group, whose scenarios drive the browser's Git mode over the source, change lists, changes, branches and comparisons the fixture daemon serves, through `fixtureGit.ts`, for `get_project_source`, `list_project_changes`, `read_project_change`, `read_project_change_bodies`, `list_project_branches`, `compare_project_branches`, `read_project_comparison_change` and `read_project_comparison_change_bodies` (`fixtures/projectGit.ts`, the sample repository and the scenarios, whose changes are built by the factories in `fixtures/changeFixtures.ts`, which also holds the `FixtureGit` and `FixtureChange` contract; a scenario's `git` replaces them, `null` for no repository; `fixtures/invariants.ts` holds `objectIdCheck`, the check of a rule over a whole repository, which `projectGit.test.ts` runs over the sample repository) |
+| `scripts/gallery-sweep.mjs` | `pnpm gallery:sweep`: serves this checkout's gallery, loads every scenario in a headless browser, in parallel, and reports each `[data-gallery-failure]` banner (see "Sweeping the gallery" above); not part of the app or its type-check |
 | `src/preferenceKeys.ts` | The `localStorage` key of every persisted preference, apart from the modules that read them so the gallery's storage reset can name a key without loading them |
 | `src/main.tsx` | Startup: picks the platform, locates the daemon, creates the connection, pushes the resolved theme and reveals the native window, installs `contextMenuGuard`, marks the page when the window is translucent behind it (`style.css`), and renders either the app or `StartupScreen` |
 | `src/platform/` | The `PlatformAdapter` interface (optional `exit`, `notifications`, `badge`, `nativeWindow`, `windowChrome` (macOS only: the window has no native titlebar, so the top bar is its titlebar; how much of its left edge the traffic lights cover right now, none in fullscreen; it is also what says the window shortcuts exist), `translucentWindow` (a plain flag, set on macOS only: the shell puts a translucent native material behind a transparent webview) `appMenu` (the native menu's Settings… item, and the labels the UI hands the menu) and `statusItem` (the menu bar icon's menu, which the UI words, and the session chosen in it) `clipboard` (writing text to the system clipboard; `browser.ts` backs it with `navigator.clipboard` where the browser offers one, `tauri.ts` with the clipboard-manager plugin) `backgroundRun` (whether closing the window keeps the app running in the background; `tauri.ts` only, so only the desktop app shows its Settings switch), `macosPermissions` (the macOS Screen Recording and Accessibility grants: reading them, raising the system prompt for one and opening its System Settings pane; `tauri.ts` only, and `status` answers `undefined` where the shell is not on macOS) `configurationFile` (saving the configuration document as a file the user names and opening one the user picks, each through the system's own dialog and JSON only; `browser.ts` backs it with a download, which cannot say what the file was saved as, and a file input, `tauri.ts` with the shell's two commands, which reject with a `ConfigurationFileError` saying whether a file was too large, not text or failed otherwise) and `links` (opening an `http:`, `https:` or `mailto:` address outside the app; `browser.ts` backs it with `window.open` and cannot tell a blocked popup from an opened one, so it never reports a refusal, `tauri.ts` with the shell plugin and does) capabilities; `nativeWindow` also says whether the window is visible and brings it back from the background; an absent one means the feature is absent) and its two implementations, `tauri.ts` and `browser.ts`; `react.tsx` exposes it to components. Only `tauri.ts` may import `@tauri-apps/*`, and only dynamically, so the browser path never loads them |

@@ -157,4 +157,13 @@ try {
 } catch (error) {
   galleryFailure(`Scenario step failed: ${(error as Error).message}`, error);
 }
+// Ready is claimed two frames after the last step, not at its end: what the last step set going (a render, a
+// transition's first frames, a failure line) has usually been drawn by then, which is what a capture or a read of
+// the overlay needs. The wait is capped at 200ms, though, so that a tab drawing no frames (a background one) cannot
+// hold it forever: ready comes at two frames or at 200ms, whichever is first, and a page too busy to draw two
+// frames in that time claims it without them.
+await new Promise<void>((resolve) => {
+  requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  setTimeout(resolve, 200);
+});
 document.documentElement.dataset.galleryReady = "true";
