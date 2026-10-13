@@ -2,10 +2,10 @@ import type React from "react";
 
 import type { ChangeLayout } from "./changeLayout";
 
-/** How a view shows its changes and what it remembers of that: the layout, in the tree the
- * directories folded away (their row keys, `directoryKey`), whether the filter field
- * (`ChangeFilterField`) is on screen (`filterOpen`) and the file name text it narrows the rows by
- * (`filter`, empty for none). */
+/** How a view shows its changes and what it remembers of that: the layout, the rows folded away —
+ * a section's heading (`sectionKey`) and, in the tree, a directory (`directoryKey`) — whether the
+ * filter field (`ChangeFilterField`) is on screen (`filterOpen`) and the file name text it narrows
+ * the rows by (`filter`, empty for none). */
 export interface ChangeViewState {
   layout: ChangeLayout;
   collapsed: ReadonlySet<string>;

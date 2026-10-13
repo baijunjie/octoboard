@@ -5,7 +5,7 @@ import { expect, it, vi } from "vitest";
 import { isolate } from "../i18n/isolate";
 import { ChangeTree } from "./ChangeTree";
 import { change, mountRows } from "./browserTestSupport";
-import { changeItems, directoryKey } from "./changes";
+import { changeItems, directoryKey, sectionKey } from "./changes";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -69,4 +69,14 @@ it("folds a directory on Left, unfolds one on Right and opens a change on Enter,
   expect(onCollapsedChange).toHaveBeenLastCalledWith(new Set([other]));
   press(row(container, items[0].key), "Enter");
   expect(onOpen).toHaveBeenCalledWith(items[0]);
+});
+
+it("folds a section away from its heading, leaving the directories inside it as they were", () => {
+  const onCollapsedChange = vi.fn();
+  const container = render(new Set([sectionKey("staged")]), { onCollapsedChange });
+  expect(labels(container)).toEqual(["Staged2", "Unstaged2", "src", `${isolate("b.ts")}, modified`, `${isolate("top.ts")}, modified`]);
+  // Folding a directory of the section on screen decides that one alone: the folded section's own
+  // directories are no rows of this tree, and keep the state they had.
+  press(row(container, directoryKey("unstaged", "src")), "ArrowLeft");
+  expect(onCollapsedChange).toHaveBeenLastCalledWith(new Set([sectionKey("staged"), directoryKey("unstaged", "src")]));
 });

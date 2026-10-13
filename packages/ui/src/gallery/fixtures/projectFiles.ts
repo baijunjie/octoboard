@@ -92,6 +92,33 @@ export const projectFilesScenarios: Scenario[] = [
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.wait(300)],
   },
   {
+    id: "files-row-actions",
+    group: GROUP,
+    title: "A file row's actions",
+    description:
+      "A file's row carries the actions button at its end: on main.ts's, the current row, and on server.ts's, whose menu is open offering Copy path. A folder's row carries none. Otherwise the button shows on hover, focus or selection.",
+    state,
+    steps: [
+      ...openFiles,
+      (ui) => ui.press("src"),
+      (ui) => ui.press("main.ts"),
+      (ui) => ui.wait(600),
+      (ui) => ui.key("Escape"),
+      (ui) => ui.wait(300),
+      (ui) => ui.press(ui.t("browser.row.actions", { name: "server.ts" })),
+      (ui) => ui.wait(300),
+    ],
+  },
+  {
+    id: "files-row-no-clipboard",
+    group: GROUP,
+    title: "A file row where nothing can be copied",
+    description: "The current row, main.ts, on a platform with no clipboard: no actions button is drawn on it or on any other row.",
+    state,
+    clipboard: "unavailable",
+    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600), (ui) => ui.key("Escape"), (ui) => ui.wait(300)],
+  },
+  {
     id: "files-viewer",
     group: GROUP,
     title: "A file open from the tree, with a toast",

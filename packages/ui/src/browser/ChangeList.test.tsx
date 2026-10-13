@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import React, { act, useState } from "react";
 import { expect, it, vi } from "vitest";
 
 import { isolate } from "../i18n/isolate";
-import { ChangeList } from "./ChangeList";
+import { ChangeList, changeRowOffset } from "./ChangeList";
 import { change, changeViewFixture, mountRows } from "./browserTestSupport";
+import type { ChangeLayout } from "./changeLayout";
 import type { ChangeViewState } from "./changeView";
-import { changeItems } from "./changes";
+import { changeItems, sectionKey } from "./changes";
+import { HEADING_HEIGHT } from "./changeSectionHeading";
+import { ROW_HEIGHT } from "./treeRow";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -20,6 +23,21 @@ function render(view: Partial<ChangeViewState> = {}) {
   return { container };
 }
 const rows = (container: HTMLElement) => [...container.querySelectorAll("[role=row][data-key]")].map((row) => row.getAttribute("aria-label") ?? row.textContent);
+const rowElements = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>("[role=row][data-key]")];
+/** A section's heading, by the name it starts with: the control filling its band. */
+const heading = (container: HTMLElement, name: string) =>
+  [...container.querySelectorAll<HTMLButtonElement>("[data-section-heading]")].find((band) => band.textContent?.startsWith(name))!;
+const press = (element: HTMLElement, key: string) =>
+  act(() => {
+    element.focus();
+    element.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    element.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true, cancelable: true }));
+  });
+/** The same key on whatever holds focus now, for a walk of several steps. */
+const pressOn = (key: string) => press(document.activeElement as HTMLElement, key);
+/** Lets the frames a fold needs to settle pass: the focus react-aria moves and the heading taking
+ * it back both run after the renders that take the rows away (`keepHeadingFocus`). */
+const settle = () => act(async () => void (await new Promise((resolve) => setTimeout(resolve, 60))));
 
 it("shows every row when nothing narrows them", () => {
   const { container } = render();
@@ -68,4 +86,93 @@ it("announces that nothing matches, and only when something is typed", () => {
   } finally {
     vi.useRealTimers();
   }
+});
+
+/** A list that folds its own sections: what the Git mode holds for them is kept here, so a press on
+ * a heading really takes that section's rows away. */
+function renderFolding(layout: ChangeLayout) {
+  const fixture = changeViewFixture();
+  function Harness(): React.ReactElement {
+    const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+    const view: ChangeViewState = { ...fixture, layout, collapsed, onCollapsedChange: setCollapsed };
+    return <ChangeList items={items} selected={undefined} label="Changes" onOpen={() => {}} listRef={() => {}} changeView={view} />;
+  }
+  return mountRows(<Harness />, { clipboard: { writeText: async () => {} } });
+}
+
+// A heading is the same control in both layouts, while the rows under it are not (a grid list and a
+// tree), so what it does runs on both.
+it.each([
+  ["flat", [`${isolate("alpha.md")}, modified, ${isolate("docs")}`, `${isolate("beta.ts")}, modified, ${isolate("src")}`]],
+  ["tree", ["docs", `${isolate("alpha.md")}, modified`, "src", `${isolate("beta.ts")}, modified`]],
+] as const)("%s: folds a section away from its heading and unfolds it from there, the heading keeping its name and count", async (layout, left) => {
+  const container = renderFolding(layout);
+  const unfolded = rows(container);
+  const band = heading(container, "Staged");
+  expect(band.getAttribute("aria-expanded")).toBe("true");
+  act(() => band.click());
+  expect(rows(container)).toEqual(left);
+  expect(band.textContent).toBe("Staged2");
+  expect(band.getAttribute("aria-expanded")).toBe("false");
+  act(() => band.click());
+  expect(rows(container)).toEqual(unfolded);
+
+  // A press takes no focus itself, and a row of the section it folds away hands focus to the
+  // heading, which stands for it.
+  act(() => rowElements(container)[0].focus());
+  act(() => band.click());
+  await settle();
+  expect(document.activeElement).toBe(band);
+});
+
+it.each(["flat", "tree"] as const)("%s: reaches a section's heading with Up and Down, and folds the section from there without losing it", async (layout) => {
+  const container = renderFolding(layout);
+  const unfolded = rows(container);
+  const first = rowElements(container)[0];
+  const band = heading(container, "Staged");
+  act(() => first.focus());
+  press(first, "ArrowUp");
+  expect(document.activeElement).toBe(band);
+  // The walk moves focus itself, so what it lands on has to show its ring. The band says in text
+  // what it holds and what pressing it does, so it carries no tooltip; which state it is in is its
+  // `aria-expanded`.
+  expect(band.dataset.focusVisible).toBe("true");
+  expect(band.getAttribute("aria-expanded")).toBe("true");
+  pressOn("ArrowDown");
+  expect(document.activeElement).toBe(first);
+
+  pressOn("ArrowUp");
+  pressOn("Enter");
+  await settle();
+  // react-aria answers the row that held its focused key going away by moving focus to the nearest
+  // row the list has left; the heading the user pressed takes it back.
+  expect(document.activeElement).toBe(band);
+  expect(rows(container).length).toBeLessThan(unfolded.length);
+  expect(band.getAttribute("aria-expanded")).toBe("false");
+  // Down from the folded heading is the next section's, the folded one having no row between them.
+  pressOn("ArrowDown");
+  expect(document.activeElement).toBe(heading(container, "Unstaged"));
+  pressOn("ArrowUp");
+  expect(document.activeElement).toBe(band);
+  pressOn("Enter");
+  await settle();
+  expect(document.activeElement).toBe(band);
+  expect(rows(container)).toEqual(unfolded);
+});
+
+it("gives a heading no tab stop of its own, react-aria moving focus landing anywhere but a row to the list's first row", () => {
+  const { container } = render();
+  const band = heading(container, "Staged");
+  expect(band.tabIndex).toBe(-1);
+  act(() => band.focus());
+  expect(document.activeElement).toBe(rowElements(container)[0]);
+});
+
+it("places a row by what comes before it, a folded section counting its heading alone", () => {
+  const folded = new Set([sectionKey("staged")]);
+  const [firstStaged, , firstUnstaged] = items;
+  expect(changeRowOffset(items, firstStaged.key, "flat", folded)).toBeUndefined();
+  // Below the two headings alone, the list's own top padding before them.
+  expect(changeRowOffset(items, firstUnstaged.key, "flat", folded)).toBe(4 + 2 * HEADING_HEIGHT);
+  expect(changeRowOffset(items, firstUnstaged.key, "flat", new Set())).toBe(4 + 2 * HEADING_HEIGHT + 2 * ROW_HEIGHT);
 });

@@ -3,8 +3,9 @@ import { Collection, ListLayout, Tree, TreeHeader, TreeItem, TreeItemContent, Tr
 
 import { useScrollFade } from "../components/useScrollFade";
 import { useCurrentLanguage, useT } from "../i18n/react";
-import { ChangeRowBody, changeRowText, HEADING_CLASS, HEADING_HEIGHT, SectionHeadingText } from "./changeRow";
-import { changeGroups, type ChangeItem, type ChangeNode, type ChangeSection } from "./changes";
+import { ChangeRowBody, changeRowText } from "./changeRow";
+import { changeGroups, sectionKey, type ChangeItem, type ChangeNode } from "./changes";
+import { ChangeSectionHeading, ChangeSectionHeadingStops, HEADING_CLASS, HEADING_HEIGHT } from "./changeSectionHeading";
 import { DirectoryRow, ROW_CLASS, ROW_HEIGHT, RowContent } from "./treeRow";
 
 /** The directories of `nodes` and everything under them. */
@@ -19,6 +20,10 @@ function directoryKeys(nodes: readonly ChangeNode[]): string[] {
  * arrows, Home / End, type-ahead, Left / Right to collapse and expand a directory. A directory opens or closes
  * and a change opens in the viewer. Directories start open; the ones the user folded away are `collapsed`, and
  * a change under one has no row, so the viewer's navigation skips it.
+ *
+ * `collapsed` holds the sections the user folded away too (`sectionKey`), which each section's heading does
+ * (`ChangeSectionHeading`, shared with the flat list). A folded section renders none of its rows, so a directory
+ * inside one keeps the state it had, this tree deciding only the directories it shows.
  */
 export function ChangeTree({
   items,
@@ -35,14 +40,19 @@ export function ChangeTree({
   label: string;
   onOpen: (item: ChangeItem) => void;
   listRef: React.Ref<HTMLDivElement>;
-  /** Row keys of the directories folded away. */
+  /** Row keys of the sections and the directories folded away. */
   collapsed: ReadonlySet<string>;
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
 }): React.ReactElement {
   const language = useCurrentLanguage();
   const fade = useScrollFade(listRef);
   const groups = useMemo(() => changeGroups(items, "tree").map((group) => ({ id: group.section, ...group })), [items]);
-  const directories = useMemo(() => groups.flatMap((group) => directoryKeys(group.nodes)), [groups]);
+  // Only the directories of the sections on screen: a folded section renders none of its rows, so
+  // whether a directory inside one is folded is not this list's to decide. react-aria hands an
+  // expanded key it knows nothing of back unchanged, so those keys would survive either way;
+  // leaving them out of what is decided here is what makes that beside the point.
+  const shown = useMemo(() => groups.filter((group) => !collapsed.has(sectionKey(group.section))), [groups, collapsed]);
+  const directories = useMemo(() => shown.flatMap((group) => directoryKeys(group.nodes)), [shown]);
   const byKey = useMemo(() => {
     const map = new Map<Key, ChangeNode>();
     const walk = (nodes: readonly ChangeNode[]) =>
@@ -50,12 +60,13 @@ export function ChangeTree({
         map.set(node.key, node);
         if (node.type === "directory") walk(node.children);
       });
-    groups.forEach((group) => walk(group.nodes));
+    shown.forEach((group) => walk(group.nodes));
     return map;
-  }, [groups]);
+  }, [shown]);
   const expanded = useMemo(() => new Set<Key>(directories.filter((key) => !collapsed.has(key))), [directories, collapsed]);
 
-  // Only this list's directories are decided here; the folded ones of the other view stay as they are.
+  // Only the directories this list shows are decided here: the sections' own keys, the directories
+  // inside a folded section and the other view's folded rows all stay as they are.
   const onExpandedChange = (keys: Set<Key>) => {
     const next = new Set([...collapsed].filter((key) => !directories.includes(key)));
     for (const key of directories) if (!keys.has(key)) next.add(key);
@@ -82,36 +93,35 @@ export function ChangeTree({
   };
 
   return (
-    <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: ROW_HEIGHT, headingHeight: HEADING_HEIGHT }}>
-      <Tree
-        ref={fade.ref}
-        {...fade.props}
-        aria-label={label}
-        items={groups}
-        expandedKeys={expanded}
-        onExpandedChange={onExpandedChange}
-        onAction={onAction}
-        dependencies={[language, selected]}
-        className={`${fade.className} min-h-0 flex-1 overflow-auto py-1 outline-none`}
-      >
-        {(group) => (
-          <TreeSection id={group.section}>
-            <SectionHeading section={group.section} count={group.items.length} />
-            <Collection items={group.nodes} dependencies={[language, selected]}>
-              {renderNode}
-            </Collection>
-          </TreeSection>
-        )}
-      </Tree>
-    </Virtualizer>
-  );
-}
-
-function SectionHeading({ section, count }: { section: ChangeSection; count: number }): React.ReactElement {
-  return (
-    <TreeHeader className={HEADING_CLASS}>
-      <SectionHeadingText section={section} count={count} />
-    </TreeHeader>
+    <ChangeSectionHeadingStops>
+      <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: ROW_HEIGHT, headingHeight: HEADING_HEIGHT }}>
+        <Tree
+          ref={fade.ref}
+          {...fade.props}
+          aria-label={label}
+          items={groups}
+          expandedKeys={expanded}
+          onExpandedChange={onExpandedChange}
+          onAction={onAction}
+          // `collapsed` among the dependencies, or the collection keeps the rows of a section that
+          // has just been folded: nothing else about it changed.
+          dependencies={[language, selected, collapsed]}
+          className={`${fade.className} min-h-0 flex-1 overflow-auto py-1 outline-none`}
+        >
+          {(group) => (
+            <TreeSection id={group.section}>
+              <TreeHeader className={HEADING_CLASS}>
+                <ChangeSectionHeading section={group.section} count={group.items.length} collapsed={collapsed} onCollapsedChange={onCollapsedChange} />
+              </TreeHeader>
+              {/* A folded section is its heading and nothing else, still counting what it holds. */}
+              <Collection items={collapsed.has(sectionKey(group.section)) ? [] : group.nodes} dependencies={[language, selected]}>
+                {renderNode}
+              </Collection>
+            </TreeSection>
+          )}
+        </Tree>
+      </Virtualizer>
+    </ChangeSectionHeadingStops>
   );
 }
 

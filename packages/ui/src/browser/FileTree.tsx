@@ -17,6 +17,7 @@ import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { BrowseEntry } from "../protocol";
 import { wireBaseName } from "../wirePath";
+import { RowActions } from "./RowActions";
 import type { TreeNode } from "./tree";
 import { DirectoryRow, ROW_CLASS, ROW_HEIGHT, RowContent, RowName } from "./treeRow";
 
@@ -72,7 +73,8 @@ function sameNode(before: TreeNode, next: TreeNode): boolean {
  * this is built on the react-aria component HeroUI itself builds on, which brings the treegrid
  * keyboard model (arrows, Home / End, type-ahead, Left / Right to collapse and expand). A row's
  * action is the one thing it does: a directory opens or closes, a file opens in the viewer, an error
- * row tries again. Nothing is selectable in react-aria's sense; the file the viewer last showed is
+ * row tries again; a file's row carries at its end the button of the others (`RowActions`), the same
+ * menu a change's row carries in the Git mode. Nothing is selectable in react-aria's sense; the file the viewer last showed is
  * tinted and named as selected in its row's label instead.
  *
  * A press focuses the row, as a click into a report page focuses the page: the tree is content to
@@ -176,6 +178,7 @@ export function FileTree({
             <Icon aria-hidden="true" className="size-4 shrink-0 text-muted" />
             <RowName name={name} className={missing ? "text-muted line-through" : undefined} />
             {missing && <span className="shrink-0 text-xs text-muted">{missing}</span>}
+            <RowActions path={node.path} name={name} />
           </RowContent>
         </TreeItemContent>
       </TreeItem>

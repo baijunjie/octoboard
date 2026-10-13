@@ -29,8 +29,8 @@ then **Group by folder** (see "Filtering by file name" and "Flat or grouped by f
 Each view reads the repository only while it is on screen: the Uncommitted view as "Keeping the list up to date"
 below says, the Compare view as "The branch selectors" and "When a comparison is made" below say. Switching views
 leaves the other view as it was. "The worktree selector" and "The change list" below are about the Uncommitted view,
-"Comparing two branches" below about the Compare view; "Flat or grouped by folder", "Filtering by file name" and
-"Opening a change" are about both.
+"Comparing two branches" below about the Compare view; "Folding a section", "Flat or grouped by folder", "Filtering by
+file name" and "Opening a change" are about both.
 
 ## The repository and its worktrees
 
@@ -109,7 +109,8 @@ Within a section, changes are in the order the file tree would show their paths 
 Each row shows a status letter, the file's name, and then the folder it is in — or, for a rename, where it came from,
 and for a rename across the project's boundary, where it came from or went, outside the project. Grouped by folder a
 row drops the folder, which its parent row carries instead, and keeps the rest (see "Flat or grouped by folder"
-below). At the row's end is the button of its own actions (see "A row's actions" below). The letters:
+below). At the row's end is the button of its own actions (see "A row's actions" in
+`docs/product/project-pane.md`). The letters:
 
 | Letter | Status |
 |---|---|
@@ -125,42 +126,38 @@ The letter is decoration: assistive technology hears a row as its name, its stat
 name. A name, or what follows it, too long for its row fades out, with its full text as its tooltip (see "Names too
 long for their space" in `docs/product/labels-and-tooltips.md`).
 
-- The arrow keys move through the rows, the section headings skipped, and typing a name's first letters moves to it.
+- **Up** and **Down** move through the rows and the section headings between them (see "Folding a section" below),
+  **Home** and **End** through the rows alone, and typing a name's first letters moves to a row.
 - A click or Enter opens the change in the file viewer (see "Opening a change" below). Nothing in the list is
   selectable otherwise.
 - The change the viewer showed last is the list's **selected change**: its row is tinted, assistive technology hears
   it named as selected, and the list keeps it in view behind the viewer while the viewer moves from change to change.
 
-### A row's actions
+### Folding a section
 
-Every change's row ends with an icon button that opens a **menu of what can be done with that change**, in both the
-Uncommitted and the Compare view and in both forms of the list, flat or grouped by folder. **Copy path** is its only
-action so far. A folder's row in the grouped form has no such button, and neither has the Files mode's tree.
+**Every section heading is a control**: pressing anywhere on its band folds the section away, and pressing it again
+unfolds it. That holds for every section of either view — Staged, Conflicted, Unstaged, Untracked and the
+comparison's Changed files (see "What the view says" below) — and in both forms of the list, flat or grouped by
+folder.
 
-- **Copy path** puts the change's path on the clipboard as the row names it: the path within the project, slash
-  separated, which for a rename is its new path — the old one only where the new side is absent (a deletion) or
-  outside the project. A **toast** then confirms that the path was copied; where the clipboard refuses it, an error
-  toast says it could not be copied (see `docs/product/toasts.md`).
-- **The button shows while its row is hovered, holds keyboard focus, is the selected change, or has its menu open**,
-  fading and opening out as it appears, as the sidebar's row controls do (see "Rows, names and keyboard focus" in
-  `docs/product/sidebar.md`). While hidden it takes up no width, so the file name has the room; it is reachable from
-  the keyboard either way.
-- **The keyboard reaches it along the row, not with Tab.** Tab moves into the change list and out of it again, never
-  along a row's parts; it is the arrow key that runs along the row — Right, Left under a right-to-left language —
-  that moves from the row to its button and back. Grouped by folder, a folder's row keeps those keys for opening and
-  closing it (see "Flat or grouped by folder" below).
-- **The row keeps its own action**: a click or Enter on the row opens the change in the file viewer, and neither on
-  the button does. The button is the only way to the menu — a right-click on a change row opens none, unlike a
-  sidebar row (see "Right-click menus" in `docs/product/window-layout.md`). A menu opened from the keyboard hands
-  keyboard focus back to the button when it closes; one opened with the pointer hands it back to whatever had it
-  before, as a sidebar row's menu does.
-- Its **accessible name names the file** — "Actions for file server.ts" — so each row's button is told apart, while
-  its tooltip is the short one every such button has (see "Tooltips on icon-only controls" in
-  `docs/product/labels-and-tooltips.md`).
-- **Where the platform has no clipboard there is no button on the row at all**, rather than a menu whose only action
-  cannot act: Copy path being the only action, nothing is left to offer. That is the case in a plain browser whose
-  page is not a secure context — served over `http` from anywhere but `localhost`. The packaged desktop app always
-  has a clipboard.
+- **A folded section keeps its heading and its count** — of the changes it holds, those the filter leaves (see
+  "Filtering by file name" below) — and shows none of its rows. Those changes have no row at all, so the viewer moves
+  past them (see "Moving between changes" below), as it moves past the changes under a folded folder.
+- Grouped by folder, **the folders inside a folded section keep the state they were in** and come back as they were
+  when the section is unfolded (see "Flat or grouped by folder" below).
+- The heading shows **the same chevron a folder's row shows**, pointing right while the section is folded and down
+  while it is not; here it is not a control of its own, the whole band being one. Assistive technology is told whether
+  the section is unfolded. The band **carries no tooltip**, saying in text what it holds, and answers a hover with
+  nothing: the chevron is what marks it as a control.
+- **The band is no tab stop of its own.** The change list is one tab stop, as "Rows and the keyboard" above says: a
+  heading is reached by arrowing onto it with Up or Down, and **Enter** or **Space** on it folds and unfolds the
+  section. Home and End pass the headings by.
+- Pressing a heading with the pointer leaves keyboard focus where it was. **Folding a section that holds the row with
+  keyboard focus puts focus on the heading**, which stands for the rows it has taken away.
+- **Everything starts unfolded.** A section folded in one form of the list is folded in the other, and a fold
+  survives switching to the other view and back — the comparison's Changed files being a section of its own, the two
+  views never share one. What is folded is kept per project for as long as the window is open (see "What is
+  remembered" below).
 
 ### Flat or grouped by folder
 
@@ -184,11 +181,11 @@ and Untracked, the comparison's one section — and within each section the chan
   section it was made in, so the same folder under another section stays open.
 
 The rows take the keyboard as the Files mode's tree does (see "Rows and the keyboard" in
-`docs/product/project-pane.md`): the arrow keys, Home and End move through them with the section headings skipped,
-typing a name's first letters moves to one, Right and Left open and close a folder (the other way round under a
-right-to-left language), and Enter opens a change or opens and closes a folder. A folder's row tells assistive
-technology whether it is open, and its chevron is named Expand or Collapse (see "Tooltips on icon-only controls" in
-`docs/product/labels-and-tooltips.md`).
+`docs/product/project-pane.md`): Up and Down move through them and the section headings between them, Home and End
+through the rows alone, typing a name's first letters moves to one, Right and Left open and close a folder (the other
+way round under a right-to-left language), and Enter opens a change or opens and closes a folder. A folder's row tells
+assistive technology whether it is open, and its chevron is named Expand or Collapse (see "Tooltips on icon-only
+controls" in `docs/product/labels-and-tooltips.md`).
 
 A change under a folded folder has no row, and it is the rows that the viewer moves through (see "Moving between
 changes" below).
@@ -353,7 +350,9 @@ until the new one is in.
   comparison found:
   - the changed files, in one section, **Changed files**, headed with how many changes it holds. Its rows, their
     order, their status letters (A, M, D, R or T here), the keyboard, their action button and the selected change are
-    as in the Uncommitted view (see "Rows and the keyboard" and "A row's actions" above), and it is grouped by folder
+    as in the Uncommitted view (see "Rows and the keyboard" above and "A row's actions" in
+    `docs/product/project-pane.md`), its heading folds the section away as the Uncommitted view's do (see "Folding a
+    section" above), and it is grouped by folder
     with it (see "Flat or grouped by folder" above) and narrowed by the same filter (see "Filtering by file name"
     above);
   - **Not every change is shown**, under a list cut short: at most 10,000 changes, or 2 MiB of paths, are listed —
@@ -570,8 +569,8 @@ shows a focus ring, in either appearance; pressing one with the mouse leaves key
 **Previous file** and **Next file**, and the **Left** and **Right** arrow keys, move through the change list the change
 was opened from — the Uncommitted view's or the comparison's — as it is on screen, top to bottom, from one section
 into the next, and stop at either end rather than going round. They follow the rows as shown: a change the filter
-hides is skipped (see "Filtering by file name" above), and so, grouped by folder, are the changes under a folded
-folder. A file in both Staged and Unstaged is two stops. A change with no row of its own — one the list no longer has —
+hides is skipped (see "Filtering by file name" above), and so are the changes in a folded section (see "Folding a
+section" above) and, grouped by folder, those under a folded folder. A file in both Staged and Unstaged is two stops. A change with no row of its own — one the list no longer has —
 keeps its place in the order, and the keys move on to the changes that surround it. When the keys do nothing, and how they mirror under a right-to-left language, is as in "Moving between files" in
 `docs/product/project-pane.md`.
 
@@ -622,9 +621,9 @@ in place of the diff, in the current language. The cases beyond those of a file 
 
 **Per project, for as long as the window is open**: the view shown, Uncommitted or Compare; the chosen worktree and
 the Uncommitted view's selected change; the branches chosen for From and To and the Compare view's selected change;
-and, grouped by folder, the folders folded away. Reloading the window, or restarting the application, starts every
-project on the Uncommitted view and the worktree holding its folder, with no branches chosen, no change selected and
-every folder open. Change lists, branch lists, comparisons and their contents are never stored. Whether the filter
+the sections folded away (see "Folding a section" above); and, grouped by folder, the folders folded away. Reloading
+the window, or restarting the application, starts every project on the Uncommitted view and the worktree holding its
+folder, with no branches chosen, no change selected and every section and folder unfolded. Change lists, branch lists, comparisons and their contents are never stored. Whether the filter
 field is on screen, and the text in it, last only while the project's pane stays in the right pane, and the text only
 until the field is closed (see "Filtering by file name" above).
 

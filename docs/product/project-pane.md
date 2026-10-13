@@ -70,6 +70,8 @@ that read the same are always kept in the same order. The file viewer moves thro
 
 - A folder opens and closes with a click, Enter, its chevron, or Right and Left (the other way round under a
   right-to-left language). A file opens in the file viewer with a click or Enter.
+- At a file's row's end is the button of its own actions, which the same Right and Left reach (see "A row's actions"
+  below).
 - The arrow keys, Home and End move through the rows, and typing a name's first letters moves to it.
 - Pressing a row takes keyboard focus into the tree, unlike a sidebar row: the tree is content to read and move
   through from the keyboard.
@@ -122,6 +124,42 @@ folder being listed again keeps its rows on screen until the new listing is in. 
 to have been replaced by another one at the same path, everything listed from the old one is dropped and listed
 afresh.
 
+## A row's actions
+
+Every file's row in either mode ends with an icon button that opens a **menu of what can be done with that file**:
+the Files mode's tree, and the Git mode's change list in both its views and both forms of the list, flat or grouped
+by folder (see "Rows and the keyboard" in `docs/product/project-pane-git-mode.md`). **Copy path** is its only action
+so far.
+
+- **Copy path** puts the file's path on the clipboard, slash separated, as a path within the project. For a change it
+  is the path the row names, which for a rename is its new path — the old one only where the new side is absent (a
+  deletion) or outside the project (see "What is listed" in `docs/product/project-pane-git-mode.md`). A **toast** then
+  confirms that the path was copied; where the clipboard refuses it, an error toast says it could not be copied (see
+  `docs/product/toasts.md`).
+- **Only a file's row has one.** A directory's row has none — in the Files mode's tree, and in the Git mode's list
+  grouped by folder — and neither has a row that says something about a folder instead of listing a file (loading,
+  empty, unreadable, cut short; see "Rows and the keyboard" above).
+- **The button shows while its row is hovered, holds keyboard focus, is the selected file or change, or has its menu
+  open**, fading and opening out as it appears, as the sidebar's row controls do (see "Rows, names and keyboard
+  focus" in `docs/product/sidebar.md`). While hidden it takes up no width, so the file name has the room; it is
+  reachable from the keyboard either way.
+- **The keyboard reaches it along the row, not with Tab.** Tab moves into the tree or the change list and out of it
+  again, never along a row's parts; it is the arrow key that runs along the row — Right, Left under a right-to-left
+  language — that moves from the row to its button and back. A directory's row keeps those keys for opening and
+  closing it.
+- **The row keeps its own action**: a click or Enter on the row opens the file or the change in the file viewer, and
+  neither on the button does. The button is the only way to the menu — a right-click on a row opens none, unlike a
+  sidebar row (see "Right-click menus" in `docs/product/window-layout.md`). A menu opened from the keyboard hands
+  keyboard focus back to the button when it closes; one opened with the pointer hands it back to whatever had it
+  before, as a sidebar row's menu does.
+- Its **accessible name names the file** — "Actions for file server.ts" — so each row's button is told apart, while
+  its tooltip is the short one every such button has (see "Tooltips on icon-only controls" in
+  `docs/product/labels-and-tooltips.md`).
+- **Where the platform has no clipboard there is no button on the row at all**, rather than a menu whose only action
+  cannot act: Copy path being the only action, nothing is left to offer. That is the case in a plain browser whose
+  page is not a secure context — served over `http` from anywhere but `localhost`. The packaged desktop app always
+  has a clipboard.
+
 ## What is remembered
 
 **Per project, per client**, in that client's own browser storage (as the right pane's width is, see "Resizing the
@@ -131,9 +169,9 @@ project, the earliest expanded dropped first, and the state of at most 50 projec
 dropped first. A removed project's state is dropped.
 
 The selected file is kept only while the window is open: reloading it, or restarting the application, starts every
-project with no file selected. So are the Git mode's view, chosen worktree, chosen branches, selected changes and
-folded folders (see "What is remembered" in `docs/product/project-pane-git-mode.md`). Listings, change lists and file
-contents are never stored.
+project with no file selected. So are the Git mode's view, chosen worktree, chosen branches, selected changes and the
+sections and folders it has folded away (see "What is remembered" in `docs/product/project-pane-git-mode.md`).
+Listings, change lists and file contents are never stored.
 
 ## The file viewer
 

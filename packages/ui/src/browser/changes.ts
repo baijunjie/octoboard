@@ -144,6 +144,12 @@ export type ChangeNode =
  * the two never collide. */
 export const directoryKey = (section: ChangeSection, path: string): string => `dir:${section}:${path}`;
 
+/** The row key of `section`'s own heading, which the same set of folded-away rows holds beside the
+ * directories'. A change's key is JSON and a directory's starts with `dir:`, so no two of the three
+ * can collide; and the worktree view's sections share no key with the comparison's (`committed` is
+ * only ever the comparison's), so one set serves both views. */
+export const sectionKey = (section: ChangeSection): string => `section:${section}`;
+
 /** The changes of one section (already in list order) grouped under their directories, directories
  * before changes at every level as the file tree orders paths, and single-child directory chains
  * compacted into one row. */
@@ -201,12 +207,14 @@ export function changeGroups(
   }));
 }
 
-/** The changes with a row on screen, in the order the rows are: what the viewer moves through. All
- * of them when flat; in the tree, those not under a collapsed directory. */
+/** The changes with a row on screen, in the order the rows are: what the viewer moves through. A
+ * folded-away section keeps its heading alone, so none of its changes are among them, in either
+ * layout; in the tree those under a folded directory are left out as well. */
 export function visibleChanges(items: readonly ChangeItem[], layout: ChangeLayout, collapsed: ReadonlySet<string>): ChangeItem[] {
-  if (layout === "flat") return [...items];
   return changeGroups(items, layout).flatMap((group) =>
-    visibleNodes(group.nodes, collapsed).flatMap((node) => (node.type === "change" ? [node.item] : [])),
+    collapsed.has(sectionKey(group.section))
+      ? []
+      : visibleNodes(group.nodes, collapsed).flatMap((node) => (node.type === "change" ? [node.item] : [])),
   );
 }
 

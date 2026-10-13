@@ -12,8 +12,8 @@ export function useCopyPath(): ((path: string) => void) | undefined {
   if (!clipboard) return undefined;
   return (path) => {
     clipboard.writeText(path).then(
-      () => toastNotice(t("git.row.pathCopied")),
-      () => toastError(t("git.row.copyFailed")),
+      () => toastNotice(t("browser.row.pathCopied")),
+      () => toastError(t("browser.row.copyFailed")),
     );
   };
 }

@@ -467,10 +467,6 @@ export const en = {
   "git.row.from": "from {path}",
   "git.row.fromOutside": "from {path}, outside the project",
   "git.row.toOutside": "to {path}, outside the project",
-  "git.row.actions": "Actions for file {name}",
-  "git.row.copyPath": "Copy path",
-  "git.row.pathCopied": "Path copied",
-  "git.row.copyFailed": "Could not copy the path",
   "git.conflict.bothModified": "In conflict: both modified. The file on disk is shown with its conflict markers.",
   "git.conflict.bothAdded": "In conflict: both added. The file on disk is shown with its conflict markers.",
   "git.conflict.bothDeleted": "In conflict: both deleted.",
@@ -524,6 +520,10 @@ export const en = {
   "browser.tree.row.selected": "{name}, selected",
   "browser.tree.row.removed": "{name}, removed, selected",
   "browser.tree.row.unlisted": "{name}, not in the listing, selected",
+  "browser.row.actions": "Actions for file {name}",
+  "browser.row.copyPath": "Copy path",
+  "browser.row.pathCopied": "Path copied",
+  "browser.row.copyFailed": "Could not copy the path",
 
   // The read-only file viewer (`src/viewer/`).
   "viewer.loading": "Loading…",

@@ -3,19 +3,11 @@ import React from "react";
 import { FadeOverflow } from "../components/FadeOverflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
-import { useCurrentLanguage, useT } from "../i18n/react";
 import { StatusChip } from "../viewer/StatusChip";
 import { STATUS_MARKS, type StatusKey } from "../viewer/statusMarks";
 import { displayWirePath, wireBaseName } from "../wirePath";
-import { SECTION_LABELS, type ChangeItem, type ChangeSection } from "./changes";
-import { ChangeRowActions } from "./ChangeRowActions";
-
-/** Every section heading is one line of this height, which, with the rows' (`ROW_HEIGHT`), is what
- * lets the list be virtualized, flat or as a tree. */
-export const HEADING_HEIGHT = 30;
-/** A section's heading, in both layouts, a band of HeroUI's tertiary surface so a section reads as a
- * step off the panel: 1.15:1 from it in light and 1.10:1 in dark. `h-[30px]` is `HEADING_HEIGHT`. */
-export const HEADING_CLASS = "flex h-[30px] items-center gap-2 bg-surface-tertiary px-3 text-xs font-medium text-muted";
+import type { ChangeItem } from "./changes";
+import { RowActions } from "./RowActions";
 
 const STATUS_WORDS: Record<StatusKey, PlainMessageKey> = {
   added: "git.status.added",
@@ -82,19 +74,7 @@ export function ChangeRowBody({ item, name, detail }: { item: ChangeItem; name: 
           {detail}
         </FadeOverflow>
       )}
-      <ChangeRowActions item={item} name={name} />
-    </>
-  );
-}
-
-/** What a section's heading says: the section's name and how many changes it holds. */
-export function SectionHeadingText({ section, count }: { section: ChangeSection; count: number }): React.ReactElement {
-  const t = useT();
-  const language = useCurrentLanguage();
-  return (
-    <>
-      {t(SECTION_LABELS[section])}
-      <span>{new Intl.NumberFormat(language).format(count)}</span>
+      <RowActions path={item.path} name={name} />
     </>
   );
 }

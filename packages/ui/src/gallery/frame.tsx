@@ -59,9 +59,9 @@ const EMPTY_DOCUMENT = JSON.stringify({ format: "octoboard-configuration", versi
  * between console sessions; it also puts the top bar's drag region on), the macOS privacy grants
  * stubbed from the scenario's `macosPermissions`, there being no other way to look at those rows
  * than to really change a system setting, and `backgroundRun` for a scenario that says so (the
- * Settings switch), and the configuration-file capability stubbed from the scenario's
- * `configuration` (absent where it says the platform has none) so that no download or file picker
- * is raised from a capture. Nothing else native. */
+ * Settings switch), the clipboard taken away for a scenario that says so, and the configuration-file
+ * capability stubbed from the scenario's `configuration` (absent where it says the platform has
+ * none) so that no download or file picker is raised from a capture. Nothing else native. */
 function galleryPlatform(): ReturnType<typeof selectPlatform> {
   const platform = selectPlatform();
   const grants = scenario?.macosPermissions;
@@ -78,6 +78,7 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
       },
     }),
     ...(scenario?.backgroundRun && { backgroundRun: { set: async () => {} } }),
+    ...(scenario?.clipboard === "unavailable" && { clipboard: undefined }),
     configurationFile: configuration?.unavailable
       ? undefined
       : {

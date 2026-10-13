@@ -11,6 +11,7 @@ import {
   directoryKey,
   filterChanges,
   rereadChange,
+  sectionKey,
   visibleChanges,
   visibleNodes,
   type ChangeEvidence,
@@ -117,9 +118,15 @@ it("keeps a directory of one directory and a file as two rows, and keys a compac
   expect(outline(changeTree("unstaged", changeItems(["x/y/z/f.ts"].map(unstaged))))).toEqual(["x/y/z/", "  x/y/z/f.ts"]);
 });
 
-it("walks the changes on screen: all of them flat, and in the tree none under a collapsed directory", () => {
+it("walks the changes on screen: none of a folded section's in either layout, and in the tree none under a collapsed directory", () => {
   const items = changeItems(treeEntries);
   expect(visibleChanges(items, "flat", new Set(["dir:unstaged:src"])).map((item) => item.path)).toEqual(items.map((item) => item.path));
+  // A folded section keeps none of its changes, whichever layout draws it, and leaves the other
+  // sections' alone.
+  const inTwoSections = changeItems([...treeEntries, { group: "staged", old: at("src/a.ts", "head"), new: at("src/a.ts") }]);
+  for (const layout of ["flat", "tree"] as const) {
+    expect(visibleChanges(inTwoSections, layout, new Set([sectionKey("unstaged")])).map((item) => item.section)).toEqual(["staged"]);
+  }
   expect(visibleChanges(items, "tree", new Set()).map((item) => item.path)).toEqual([
     "src/utils/kickback/x.ts",
     "src/utils/kickback/y.ts",

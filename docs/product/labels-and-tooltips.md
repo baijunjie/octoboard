@@ -38,10 +38,10 @@ consoles' avatars, the ⋮ buttons and the pin buttons below. These are:
   count, whose tooltip says how many sessions are waiting and that pressing it goes to the next one, Turn on
   notifications, and Settings;
 - the ⋮ button that opens an action menu — a sidebar row's, the console's in the sidebar's header, the project's in
-  focus mode, and a change row's in the Git mode's change list (see "A row's actions" in
-  `docs/product/project-pane-git-mode.md`). Its tooltip is a short "More actions", while the name announced for it
-  also names what it belongs to ("Actions for session …", "Actions for file …" and the like), so that each ⋮ can
-  be told apart;
+  focus mode, and a file's in the project pane: in the Files mode's tree and in the Git mode's change list (see "A
+  row's actions" in `docs/product/project-pane.md`). Its tooltip is a short "More actions", while the name announced
+  for it also names what it belongs to ("Actions for session …", "Actions for file …" and the like), so that each ⋮
+  can be told apart;
 - the sidebar's other icon buttons — a project's **+** (New session), wherever it appears, the Projects heading's
   Filter projects and its Expand all projects or Collapse all projects button (see "Expanding and collapsing the
   listed projects" in `docs/product/sidebar.md`), the Clear filter under that heading (see "Filtering the project

@@ -2,6 +2,7 @@
 // and the gallery's "Project Git" scenarios over it: the worktree selector, the change list in its
 // sections, a diff of each kind opened from it, and the states a source or a list can end in. Every
 // change here is built by the factory for its kind (`changeFixtures.ts`).
+import { SECTION_LABELS, type ChangeSection } from "../../browser/changes";
 import type { BranchInfo, ContentSource, FileContent, WorktreeInfo } from "../../protocol";
 import type { Matcher, Ui } from "../interact";
 import type { Scenario } from "../scenario";
@@ -294,6 +295,17 @@ const openGitInDrawer = [
   (ui: Ui) => ui.press(ui.t("browser.mode.git")),
   (ui: Ui) => ui.wait(400),
 ];
+/** The heading of `section`, which is one button whose name is the section's name followed by its
+ * count. */
+const sectionHeading =
+  (section: ChangeSection) =>
+  (ui: Ui): Matcher => {
+    const label = ui.t(SECTION_LABELS[section]);
+    return (name) => name.startsWith(label) && /^\p{N}[\p{N},.\s]*$/u.test(name.slice(label.length));
+  };
+/** Presses the heading of `section`, which folds it or unfolds it. */
+const foldSection = (section: ChangeSection) => (ui: Ui) => ui.press(sectionHeading(section)(ui));
+
 /** Opens the Git view's filter field from the tab row's toggle, where it takes focus. */
 const openFilter = [(ui: Ui) => ui.press(ui.t("git.filter.show")), (ui: Ui) => ui.wait(300)];
 /** Types `text` in the Git view's filter field, leaving focus in it. */
@@ -341,6 +353,21 @@ export const projectGitScenarios: Scenario[] = [
       "The Git mode: the worktree selector, then the changes in sections — staged, conflicted, unstaged, untracked. src/server.ts is in both Staged and Unstaged, as two changes. Press one to open its diff; Left and Right move through the list across sections.",
     state,
     steps: openGit,
+  },
+  {
+    id: "git-changes-folded",
+    group: GROUP,
+    title: "A worktree's changes with sections folded",
+    description:
+      "Staged and Untracked are folded to their headings, which keep their count and point right, while Conflicted and Unstaged stay open and point down; each heading is one button across its band. The actions button of fixtures.bin's row is pressed, its menu open, offering Copy path: a change's row carries the same button as a file's in the Files tree.",
+    state,
+    steps: [
+      ...openGit,
+      foldSection("staged"),
+      foldSection("untracked"),
+      (ui) => ui.press(ui.t("browser.row.actions", { name: "fixtures.bin" })),
+      (ui) => ui.wait(300),
+    ],
   },
   { id: "git-rename-outside", group: GROUP, title: "A rename from outside the project", state, steps: openChange(/^index\.ts, renamed/) },
   { id: "git-type-change", group: GROUP, title: "A file that became a symbolic link", state, steps: openChange(/^current, type changed/) },
@@ -492,10 +519,16 @@ export const projectGitScenarios: Scenario[] = [
     group: GROUP,
     title: "A worktree's changes as a tree",
     description:
-      "The same sections with their changes grouped by folder; tools/release is a chain of single-child folders shown as one row. Arrow keys move, Left and Right fold and unfold a folder, and the viewer's Left and Right skip the changes of a folded one.",
+      "The same sections with their changes grouped by folder; tools/release is a chain of single-child folders shown as one row. Staged is folded to its heading, and keyboard focus has stepped up from package.json onto the Conflicted heading, which draws its ring inside the band. Arrow keys move through the rows and the headings, Left and Right fold and unfold a folder, and the viewer's Left and Right skip the changes of a folded folder or section.",
     state,
     preferences: { changeLayout: "tree" },
-    steps: openGit,
+    steps: [
+      ...openGit,
+      foldSection("staged"),
+      (ui) => ui.focusControl(/^package\.json, in conflict/),
+      (ui) => ui.key("ArrowUp"),
+      (ui) => ui.wait(300),
+    ],
   },
   {
     id: "git-changes-filter-open",
@@ -574,6 +607,15 @@ export const projectGitScenarios: Scenario[] = [
     state,
     preferences: { changeLayout: "tree" },
     steps: compare("main", "feature/ranking-experiments"),
+  },
+  {
+    id: "git-compare-folded",
+    group: GROUP,
+    title: "A comparison's changed files folded",
+    description:
+      "The Changed files heading folded to its band, keeping its count, with the commits compared still above it; pressing the band unfolds the list again.",
+    state,
+    steps: [...compare("main", "feature/ranking-experiments"), foldSection("committed"), (ui) => ui.wait(300)],
   },
   {
     id: "git-compare-type-change",

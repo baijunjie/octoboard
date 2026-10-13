@@ -144,3 +144,19 @@ level ends up over the lowest rows of a list where every press is swallowed — 
 press inside the surface, so such a press does not even dismiss what it covers. Having the marking without the
 ordering reads as a contradiction that sends a diagnosis the wrong way: the surface paints undimmed on top of the
 backdrop and still takes no pointer event at all.
+
+## Rows taken out of a react-aria collection take focus with them, and the library re-aims it two renders later
+
+Applies to `packages/ui`, to every list built on a react-aria collection (`GridList`, `Tree`, `ListBox`) whose rows can
+go away while keyboard focus is inside the list: a section folded away, a filter narrowed, a daemon event dropping a
+change. Focus does not simply fall to `<body>` there. `useListState`'s focused-key reset (react-stately 3.50.0)
+notices in an effect that the focused key has gone and re-points it at the nearest surviving row — it walks items
+alone, so a section header is never a candidate — and `useSelectableItem`'s own effect then pulls DOM focus onto that
+row. A hand-off written into the handler that takes the rows away is therefore undone a moment later: focus ends up on
+a row of some other section, and the list scrolls to it.
+
+So a control that has to keep focus across such a change takes it back only once both of those renders have gone by —
+from a `requestAnimationFrame` nested in a `requestAnimationFrame`, guarded on focus still being inside the list so
+that a Tab or a press in between stands, the way `packages/ui/src/browser/focusRow.ts` does it. The library's pull
+runs only while the collection itself holds focus, so a control outside the list, such as a filter field above it,
+needs none of this.

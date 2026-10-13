@@ -58,9 +58,12 @@ export interface Ui {
   /** The sidebar row of the session titled exactly `title` (so "Hub" is not "Hub 2"), not its
    * actions menu — a console session's row included, since it is an ordinary session row. */
   session: (title: string) => Matcher;
-  /** Presses the first control named `matcher`, waiting for it to appear. Mind a name that exists
-   * twice: a tag already picked in the filter is on the sidebar's heading row (earlier in the DOM)
-   * and in the filter picker, so pressing it again to unpick it would hit the sidebar row. */
+  /** Presses the control named `matcher`, waiting for it to appear: the first in document order,
+   * except that a control standing inside another of the same name wins over the one around it (a
+   * section heading is a `role="row"` band holding the button that folds it, and pressing the band
+   * does nothing). Mind a name that exists twice side by side: a tag already picked in the filter is
+   * on the sidebar's heading row (earlier in the DOM) and in the filter picker, so pressing it
+   * again to unpick it would hit the sidebar row. */
   press: (matcher: Matcher) => Promise<void>;
   /** Presses the button that submits the open dialog, waiting for it to appear and be enabled: for a
    * dialog whose confirming button is named as a control behind it, which `press` would find first.
@@ -98,6 +101,10 @@ export interface Ui {
    * the tooltip that opens is not one of the three activities' (an expanded row, which draws no
    * marker, has none to hover), rather than leave whatever else was hovered up. */
   hoverActivityMarker: (host: Matcher) => Promise<void>;
+  /** Moves focus onto the first control named `matcher`, waiting for it to appear, with the keyboard
+   * as its source, so that the focus ring is drawn as it is for a user who tabbed there, and a key
+   * pressed next goes to it: for a row of a list, which a press would open rather than focus. */
+  focusControl: (matcher: Matcher) => Promise<void>;
   /** Presses `key` on the focused control, for what a user closes or confirms with the keyboard. */
   key: (key: string) => Promise<void>;
   /** Focuses the text field labelled `label`, waiting for it to appear, so `type` has one to fill. */
@@ -155,8 +162,12 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     await wait(150);
   };
 
-  const find = (matcher: Matcher): HTMLElement | undefined =>
-    Array.from(doc.querySelectorAll<HTMLElement>(PRESSABLE)).find((element) => isEnabled(element) && matches(matcher, nameOf(element)));
+  const find = (matcher: Matcher): HTMLElement | undefined => {
+    const named = Array.from(doc.querySelectorAll<HTMLElement>(PRESSABLE)).filter((element) => isEnabled(element) && matches(matcher, nameOf(element)));
+    // A control that stands inside another of the same name is the one to press: a section heading
+    // is a `role="row"` band holding the button that folds it, and the band does nothing.
+    return named.find((element) => !named.some((other) => other !== element && element.contains(other)));
+  };
 
   /** Puts the pointer on what `look` finds, waiting for it to appear, and waits for its tooltip. */
   const hover = async (look: () => HTMLElement | null | undefined, missing: string): Promise<void> => {
@@ -191,6 +202,13 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
         target.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true, cancelable: true }));
       }
       await wait(300);
+    },
+    async focusControl(matcher) {
+      const control = await waitFor(() => find(matcher), `Nothing to focus matching ${String(matcher)}`);
+      // react-aria reads what the focus came from off the last key event, so Tab is sent first.
+      (doc.activeElement ?? doc.body).dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+      control.focus();
+      await wait(150);
     },
     async tabToRegion(matcher) {
       for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {

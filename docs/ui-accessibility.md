@@ -23,10 +23,23 @@ settle a choice a checkbox holds.
 Tab is how a control is reached, except for a control inside the row of a react-aria collection that manages focus
 itself (a `GridList`, a `Tree`). There the row is the tab stop and Tab moves past the whole list, while the arrow key
 that runs along the row (`keyboardNavigationBehavior` defaults to `"arrow"`) moves between the row and its controls.
-That is the grid and tree pattern and it meets this rule. Both the change list's row actions and the Files tree's
-chevron rely on it, so do not give such a control a tab stop of its own.
+That is the grid and tree pattern and it meets this rule. The row actions of the change list and of the Files tree,
+and the Files tree's chevron, all rely on it, so do not give such a control a tab stop of its own.
 
 `preventFocusOnPress` only keeps a *mouse* press from taking focus; the control still has to be reachable.
+
+A control inside a collection's **section header** is reached by neither of those: react-aria's keyboard delegate
+walks the collection's items alone, so the arrow keys never land on a header, Tab inside the collection jumps to the
+last tabbable element and leaves, and focus arriving anywhere in the collection that is not a row is moved to its
+first row. The one such control in the window is the change list's section heading, the band that folds the section
+away (`packages/ui/src/browser/changeSectionHeading.tsx`), and it is reached by this application extending the
+collection's own walk: Up and Down step through the rows **and the headings between them**, while Home and End still
+move between rows alone. Such a control takes no tab stop of its own and must not take focus on a press
+(`preventFocusOnPress`), or a mouse press on it sends focus to the list's first row.
+
+The band is react-aria's `rowheader` inside a `role="row"`, not an `<h1>`-`<h6>`, so the rule under "A visual heading
+is a heading element" does not reach it: it is a row of a grid, where that markup is what the grid pattern asks for,
+and a heading element inside the collection would be a second structure over the same text.
 
 ### Buttons
 

@@ -51,3 +51,13 @@ it("tabToRegion fails where no region has the name, as in a window tall enough f
   await vi.advanceTimersByTimeAsync(6000);
   await done;
 });
+
+it("press takes the control inside a band of the same name, not the band", async () => {
+  document.body.innerHTML = `<div role="row" id="band"><button id="fold">Staged15</button></div>`;
+  const pressed: string[] = [];
+  document.addEventListener("click", (event) => pressed.push((event.target as Element).id));
+  const done = createUi(document, "en").press("Staged15");
+  await vi.advanceTimersByTimeAsync(500);
+  await done;
+  expect(pressed).toEqual(["fold"]);
+});

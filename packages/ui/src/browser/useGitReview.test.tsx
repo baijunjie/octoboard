@@ -7,7 +7,7 @@ import type { ChangeEntry, Event, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { useProjectBrowserState } from "./browserState";
 import { changeLayout } from "./changeLayout";
-import { directoryKey } from "./changes";
+import { directoryKey, sectionKey } from "./changes";
 import { useGitReview } from "./useGitReview";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -222,17 +222,23 @@ it("moves the viewer through the change tree's rows on screen, skipping a collap
     expect(latest.git.viewer?.navigation?.onPrevious).toBeDefined();
 
     // Folding `a` takes its changes off the screen, so there is nothing before `z.ts` to move to.
-    act(() => latest.browser.setCollapsedChangeDirs(new Set([directoryKey("unstaged", "a")])));
+    act(() => latest.browser.setCollapsedChangeRows(new Set([directoryKey("unstaged", "a")])));
     expect(latest.git.viewer?.navigation?.onPrevious).toBeUndefined();
     expect(latest.git.viewer?.navigation?.onNext).toBeUndefined();
 
     // The flat list has every change on screen whatever was folded in the tree.
     act(() => changeLayout.set("flat"));
     expect(latest.git.viewer?.navigation?.onPrevious).toBeDefined();
+
+    // A folded section takes its changes off the screen in either layout, this list holding only
+    // unstaged ones.
+    act(() => latest.browser.setCollapsedChangeRows(new Set([sectionKey("unstaged")])));
+    expect(latest.git.viewer?.navigation?.onPrevious).toBeUndefined();
+    expect(latest.git.viewer?.navigation?.onNext).toBeUndefined();
   } finally {
     act(() => {
       changeLayout.set("flat");
-      latest.browser.setCollapsedChangeDirs(new Set());
+      latest.browser.setCollapsedChangeRows(new Set());
     });
   }
 });

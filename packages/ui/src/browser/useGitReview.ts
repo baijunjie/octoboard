@@ -35,12 +35,12 @@ export interface GitReview {
  * is asked for.
  *
  * The viewer moves through the change list's rows on screen, from one section into the next, and
- * stops at either end; the changes a file name filter hides have no row, nor in the tree layout
- * do those under a folded directory, so it skips them. What it shows is the list's selection,
- * kept in view behind it, and closing it puts keyboard focus on that row. While it is open, a
- * worktree's listings decide when it reads its change again (`rereadChange`); a comparison's
- * change is read from the commits the comparison on screen was made at, and follows that
- * comparison when it is made again.
+ * stops at either end; the changes a file name filter hides have no row, nor do those in a folded
+ * section or, in the tree layout, under a folded directory, so it skips them. What it shows is the
+ * list's selection, kept in view behind it, and closing it puts keyboard focus on that row. While
+ * it is open, a worktree's listings decide when it reads its change again (`rereadChange`); a
+ * comparison's change is read from the commits the comparison on screen was made at, and follows
+ * that comparison when it is made again.
  */
 export function useGitReview(project: string, browser: ProjectBrowserState, active: boolean): GitReview {
   const source = useProjectSource(project, active);
@@ -58,7 +58,7 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
   const comparedListRef = useRef<HTMLDivElement>(null);
   const selectorsRef = useRef<HTMLDivElement>(null);
   const layout = changeLayout.useValue();
-  const collapsed = browser.collapsedChangeDirs;
+  const collapsed = browser.collapsedChangeRows;
   // The file name text narrowing both views' lists, and whether the field it is typed in is on
   // screen at all: kept while this project's browser is, shared by the two views, and not stored
   // (they narrow what is on screen now, not a choice to come back to). Closing the field drops the
@@ -203,7 +203,7 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
   const changeView = {
     layout,
     collapsed,
-    onCollapsedChange: browser.setCollapsedChangeDirs,
+    onCollapsedChange: browser.setCollapsedChangeRows,
     filterOpen,
     onFilterOpenChange: openFilter,
     filter,
