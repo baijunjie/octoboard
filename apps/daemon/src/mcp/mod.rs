@@ -153,14 +153,15 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     SEND_MESSAGE,
     ToolDef {
         name: "get_session",
-        description: "The session's status, plus a tail of what it has printed. Use it to follow \
-                      up; a session that is waiting for the user must be left alone until they \
-                      have answered. Any session can be read, but one with `yours: false` is not \
-                      this caller's to act on, whether it is unbound (`owner: null` on a project \
-                      session) or reports to a different session, console or project: leave it \
-                      alone. `owner` says whose it is, `owner_kind` whether that is a console or \
-                      a project session, and `role` whether the session itself is a console \
-                      session.",
+        description: "The session's status, plus a tail of what it has printed (a session that \
+                      has ended keeps its last output; `null` if none was kept). Use it to \
+                      follow up; a session that is waiting for the user must be left alone until \
+                      they have answered. Any session can be read, but one with `yours: false` is \
+                      not this caller's to act on, whether it is unbound (`owner: null` on a \
+                      project session) or reports to a different session, console or project: \
+                      leave it alone. `owner` says whose it is, `owner_kind` whether that is a \
+                      console or a project session, and `role` whether the session itself is a \
+                      console session.",
         schema: || {
             object_schema(
                 json!({
@@ -368,7 +369,8 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     SEND_MESSAGE,
     ToolDef {
         name: "get_session",
-        description: "The session's status, plus a tail of what it has printed. Any session of \
+        description: "The session's status, plus a tail of what it has printed (a session that \
+                      has ended keeps its last output; `null` if none was kept). Any session of \
                       this project can be read, but one with `yours: false` is not yours to \
                       act on, whether it is unbound (`owner: null`) or reports to a different \
                       session: leave it alone. `owner` says whose it is and `owner_kind` \

@@ -49,7 +49,7 @@ pub async fn call(
         "add_project" => add_project(state, &session, arguments).await,
         "start_session" => start_session(state, &session, arguments).await,
         "send_message" => send_message(state, &session, arguments).await,
-        "get_session" => get_session(state, &session, arguments),
+        "get_session" => get_session(state, &session, arguments).await,
         "archive_session" => archive_session(state, &session, arguments),
         "list_archived" => list_archived(state, &session, arguments),
         "reopen_session" => reopen_session(state, &session, arguments).await,
@@ -227,15 +227,13 @@ async fn write_off_runtime(
         .await?
 }
 
-fn get_session(
+async fn get_session(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
     let target = resolve_session(state, caller, required_str(arguments, "session")?)?;
-    let output = state
-        .live_session(&target.id)
-        .map(|live| readable_output(&live.recent_output(OUTPUT_TAIL)));
+    let output = recent_output(state, &target.id).await;
     let mut description = describe_session(state, &target, caller)?;
     description["recent_output"] = json!(output);
     if target.status == SessionStatus::WaitingUser {
@@ -245,6 +243,29 @@ fn get_session(
         );
     }
     Ok(description)
+}
+
+/// The tail of what a session has printed, readable. A running session's comes from its ring
+/// buffer; one whose process has ended has the ring buffer's last contents kept, which is what
+/// `GET /ws/term/:session` replays, so the same path is read here. `None` when nothing was kept —
+/// no process of it has printed anything yet, it ended with the daemon killed outright before the
+/// output could be kept, or a new process took it over and discarded the old output at launch.
+async fn recent_output(state: &Arc<AppState>, id: &str) -> Option<String> {
+    if let Some(live) = state.live_session(id) {
+        return Some(readable_output(&live.recent_output(OUTPUT_TAIL)));
+    }
+    // A file read of up to the whole ring buffer, so not on a runtime worker.
+    let state = state.clone();
+    let id = id.to_string();
+    // A failed read is no output rather than an error: it must not take the session's status and
+    // ownership down with it.
+    let saved = tokio::task::spawn_blocking(move || state.saved_output(&id))
+        .await
+        .unwrap_or(None);
+    saved.map(|output| {
+        let from = output.len().saturating_sub(OUTPUT_TAIL);
+        readable_output(&output[from..])
+    })
 }
 
 fn archive_session(
@@ -947,6 +968,40 @@ mod tests {
         .await
         .unwrap();
         assert!(loose["owner"].is_null());
+    }
+
+    /// A session whose process has ended still has its last output read, through the file the
+    /// terminal socket replays, capped and with escape sequences stripped. One with nothing kept
+    /// has no output to show.
+    #[tokio::test]
+    async fn a_session_whose_process_has_ended_still_shows_its_kept_output() {
+        let (state, dir) = shared_console_state("tool-surface-kept-output");
+        let output_dir = dir.join("output");
+        std::fs::create_dir_all(&output_dir).unwrap();
+        let mut kept = vec![b'a'; 10 * 1024];
+        kept.extend_from_slice(b"\x1b[1mlast words\x1b[0m");
+        std::fs::write(output_dir.join("archived-of-a"), kept).unwrap();
+
+        let read = |session: &'static str| {
+            let state = state.clone();
+            async move {
+                call(
+                    &state,
+                    "a",
+                    "get_session",
+                    &arguments(json!({ "session": session })),
+                )
+                .await
+                .unwrap()
+            }
+        };
+        let archived = read("archived-of-a").await;
+        assert_eq!(archived["status"], "archived");
+        let tail = archived["recent_output"].as_str().expect("kept output");
+        assert!(tail.trim_end().ends_with("last words"), "{tail:?}");
+        assert!(!tail.contains('\x1b'), "{tail:?}");
+        assert!(tail.len() <= 8 * 1024, "{}", tail.len());
+        assert!(read("archived-of-b").await["recent_output"].is_null());
     }
 
     /// The archive of a project is listed whole, owners marked, rather than filtered to the caller.

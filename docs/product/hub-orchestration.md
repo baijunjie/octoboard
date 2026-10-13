@@ -55,7 +55,13 @@ console; an ambiguous name is refused and asks for the id.
 
 `get_session` returns at most 8 KiB of the session's most recent output, with terminal escape
 sequences and cursor-control bytes stripped and runs of blank lines collapsed, so it is readable
-prose rather than a rendered frame. A session that is waiting for the user carries a note saying so.
+prose rather than a rendered frame. For a session whose process has ended, an archived or
+interrupted one, that is the output the daemon kept when the process ended, so the field reads the
+same whether the session is running or not. It is `null` only where the daemon never kept any
+output — no process of the session has printed anything yet, it ended with the daemon killed
+outright before the output was kept, or a new process has since taken the session over and
+discarded it (see "`GET /ws/term/:session` — terminal stream" in `apps/daemon/PROTOCOL.md`). A
+session that is waiting for the user carries a note saying so.
 
 The console session reaches only its own console: a session or project id from another console is
 refused. So is `send_message`, `archive_session` or `reopen_session` aimed at a console session.
