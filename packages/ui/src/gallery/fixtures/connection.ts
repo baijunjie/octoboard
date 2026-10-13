@@ -50,7 +50,7 @@ export const connectionScenarios: Scenario[] = [
     group: STARTUP_AND_CONNECTION,
     title: "Reconnect budget spent with a dialog open",
     description:
-      "The file viewer is opened first and the connection dropped under it, the order a user meets this in. A modal's backdrop covers the whole viewport, the banner's strip included, so a press where Try again is drawn has to reach the button rather than the backdrop, and must not dismiss the viewer. Narrow the window too: below the docked breakpoint the dialog fills the window inside a margin smaller than the strip, so it has to end clear of the strip rather than run under it, with its bottom edge and rounded corners drawn.",
+      "Try again has keyboard focus while the file viewer stays open. F6 returns to the viewer; another F6 reaches the banner again, and Enter retries without dismissing the viewer. After returning, Tab stays inside the viewer and Escape still closes it. A pointer press on Try again also leaves the viewer open. Narrow the window too: the viewer ends above the banner with its bottom edge and rounded corners visible.",
     state: connected("open"),
     steps: [
       (ui) => ui.press(ui.session("Fix the summary layout")),
@@ -59,6 +59,7 @@ export const connectionScenarios: Scenario[] = [
       (ui) => ui.press("main.ts"),
       (ui) => ui.wait(600),
       (ui) => ui.dropConnection(),
+      (ui) => ui.key("F6"),
     ],
   },
   {

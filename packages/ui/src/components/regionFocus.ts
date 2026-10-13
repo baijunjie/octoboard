@@ -15,3 +15,18 @@ export function focusFirstIn(region: string): void {
 export function focusTopBar(): void {
   focusFirstIn("topbar");
 }
+
+/** Returns to the foremost modal instead of an inert window region. A remembered control is
+ * preferred while it still belongs to that dialog; the dialog itself survives replaced content. */
+export function focusOpenDialog(previous?: Element | null): boolean {
+  const dialogs = document.querySelectorAll<HTMLElement>(
+    '[role="dialog"]:not([aria-modal="false"]), [role="alertdialog"]:not([aria-modal="false"])',
+  );
+  const dialog = Array.from(dialogs).reverse().find((element) => !element.closest('[inert], [aria-hidden="true"]'));
+  if (!dialog) return false;
+  const target = previous instanceof HTMLElement && dialog.contains(previous) && !previous.matches(":disabled")
+    ? previous
+    : dialog;
+  target.focus();
+  return dialog.contains(document.activeElement);
+}

@@ -1,7 +1,7 @@
 import { setInteractionModality } from "react-aria";
 import { useEffect, useRef } from "react";
 
-import { FOCUSABLE } from "../components/regionFocus";
+import { FOCUSABLE, focusOpenDialog } from "../components/regionFocus";
 
 /** The window's regions in visual order, each an element (or several) marked `data-region`. The
  * toast stack comes last and is a stop only while a toast is on screen; unlike the others it is not
@@ -14,8 +14,8 @@ type ShownRegion = Exclude<Region, "toast">;
 /** A toast that is on screen, not one fading out. */
 const LIVE_TOAST = '[data-slot="toast"]:not([data-exiting="true"]):not([data-hidden="true"])';
 
-/** A dialog or a menu is open: react-aria keeps focus inside it and Escape closes it, so F6 must
- * not carry focus out from under it. A toast is an `alertdialog` too, but a non-modal one. */
+/** A dialog or a menu is open: ordinary regions stay unavailable. A toast is an `alertdialog`
+ * too, but a non-modal one. */
 export const MODAL_OPEN =
   '[role="dialog"]:not([aria-modal="false"]), [role="alertdialog"]:not([aria-modal="false"]), [role="menu"]';
 
@@ -58,9 +58,10 @@ function focusRegion(region: Region, focusTerminal: () => void): boolean {
  *
  * Registered on the window's capture phase so the key never reaches xterm.js, which would write
  * it to the agent, nor react-aria's own landmark navigation, which would move focus out from under
- * an open dialog or menu: while one is open the key is swallowed and focus stays. Ignored during
- * an input method composition. `cycle` is also what the report page's key relay calls, since a key
- * pressed inside its frame never reaches this window; it does nothing while a dialog or menu is open.
+ * an open dialog or menu. A dialog allows only an excursion to Retry and back; menus allow none.
+ * Ignored during an input method composition. `cycle` is also what the report page's key relay
+ * calls, since a key pressed inside its frame never reaches this window; it follows the same
+ * dialog and menu rules.
  */
 export function useRegionCycle({
   shown,
@@ -71,10 +72,20 @@ export function useRegionCycle({
 }): { cycle: (backward: boolean) => void } {
   const latest = useRef({ shown, focusTerminal });
   latest.current = { shown, focusTerminal };
+  const dialogFocus = useRef<Element | null>(null);
 
   const cycle = useRef((backward: boolean): void => {
-    if (document.querySelector(MODAL_OPEN)) return;
     const { shown, focusTerminal } = latest.current;
+    if (document.querySelector(MODAL_OPEN)) {
+      if (document.querySelector('[role="menu"]') || !shown.banner) return;
+      setInteractionModality("keyboard");
+      if (currentRegion() === "banner") focusOpenDialog(dialogFocus.current);
+      else {
+        dialogFocus.current = document.activeElement;
+        focusRegion("banner", focusTerminal);
+      }
+      return;
+    }
     const from = currentRegion();
     // With focus in no region (on `<body>`, say), forward starts at the first and backward at the last.
     const start = from ? REGIONS.indexOf(from) : backward ? 0 : REGIONS.length - 1;
@@ -95,6 +106,7 @@ export function useRegionCycle({
       // react-aria's landmark navigation acts on F6 whatever the modifiers, so under an open dialog
       // or menu a modified one is swallowed too.
       if (document.querySelector(MODAL_OPEN)) {
+        if (!event.ctrlKey && !event.altKey && !event.metaKey) cycle(event.shiftKey);
         event.preventDefault();
         event.stopPropagation();
         return;

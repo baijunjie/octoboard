@@ -52,13 +52,22 @@ Where focus lands in each region:
 | Connection banner | its Retry button; it has none while the banner only says it is reconnecting, and F6 then skips it |
 | Toasts | the newest toast |
 
-Pressing Retry from the keyboard works as with the mouse, and when the banner goes away while Retry holds focus, focus
-goes to the terminal — or, where the terminal cannot take it, where it goes instead (see "The terminal" in
-`docs/product/sessions.md` and "Keyboard focus" in `docs/product/welcome-screen.md`).
+Pressing Retry from the keyboard works as with the mouse. If Retry holds focus when it goes away — because a retry
+begins or the banner disappears — focus returns to an open modal dialog: to the control it left while that control is
+still available in the dialog, otherwise to the dialog itself. With no modal dialog open, focus goes to the terminal
+— or, where the terminal cannot take it, where it goes instead (see "The terminal" in `docs/product/sessions.md` and
+"Keyboard focus" in `docs/product/welcome-screen.md`). Pressing Retry with the mouse leaves keyboard focus where it
+was.
 
 The control focus lands on shows its focus ring, even when the last input before `F6` was the mouse.
 
-`F6` does nothing while a modal dialog, Settings included, or a menu is open; focus stays where it is. That holds for
-the connection banner too, even though a mouse press does reach its Retry button while a dialog, a menu or a popover
-is open (see "What an open dialog, menu or popover covers" in `docs/product/window-layout.md`): what is open has to be
-dismissed before `F6` reaches the banner.
+**With a modal dialog open**, Settings and the file viewer included, `F6` and `Shift+F6` move focus between the dialog
+and the banner's Retry button, when that button is available. Either key reaches Retry from the dialog; either key
+from Retry returns to the control focus left while it is still available in the dialog, otherwise to the dialog
+itself. The dialog stays open, and once focus is back inside it, Tab stays within it and Escape closes it as usual.
+The rest of the window, toasts included, remains outside this cycle. While the banner only says it is reconnecting,
+or no banner is shown, both keys leave focus where it is.
+
+**With a menu open**, both keys leave focus where it is, even when Retry is available or the menu is inside a dialog.
+The menu has to be dismissed before these keys reach Retry. A mouse press can still reach Retry without dismissing
+what is open (see "What an open dialog, menu or popover covers" in `docs/product/window-layout.md`).

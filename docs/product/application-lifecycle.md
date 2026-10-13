@@ -103,9 +103,9 @@ Each new connection re-reads the whole state, so nothing has to be replayed by h
 **Retry with a dialog or a menu open.** Nothing drawn over the content panel — a dialog, a menu, a popover — covers
 the banner: a press where Retry is drawn retries the connection, and what was open stays open, so a pointer never has
 to close anything first to get back out of a lost connection (see "What an open dialog, menu or popover covers" in
-`docs/product/window-layout.md`). By keyboard it is the other way round — `F6` does not leave an open dialog or menu,
-so it has to be dismissed before `F6` reaches the banner (see "Moving focus between regions with F6" in
-`docs/product/moving-focus-between-regions.md`).
+`docs/product/window-layout.md`). Retry is also reachable by keyboard with a modal dialog open; the focus cycle and
+the restriction while a menu is open are in "Moving focus between regions with F6" in
+`docs/product/moving-focus-between-regions.md`.
 
 **Observed:** after the daemon alone was killed with `SIGTERM` while the application stayed open, the banner read
 "Disconnected from the daemon." with its Retry button up within moments (the two automatic retries fail at once against

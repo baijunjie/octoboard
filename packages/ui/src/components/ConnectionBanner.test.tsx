@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { Dialog } from "../dialogs/Dialog";
+import { useRegionCycle } from "../layout/useRegionCycle";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ConnectionBanner } from "./ConnectionBanner";
 
@@ -77,4 +78,71 @@ it("keeps the banner's Retry out of what an open dialog hides from the rest of t
     expect(hidden(elsewhere)).not.toBe(null);
     expect(hidden(banner.querySelector("button"))).toBe(null);
   });
+});
+
+function KeyboardHost({ state, menu = false }: { state: "open" | "closed" | "reconnecting"; menu?: boolean }) {
+  useRegionCycle({
+    shown: {
+      topbar: true, rail: false, welcome: false, sidebar: false, archive: false,
+      terminal: false, aside: false, banner: state !== "open",
+    },
+    focusTerminal: () => {},
+  });
+  return (
+    <>
+      <div data-region="topbar"><button>Outside</button></div>
+      <ConnectionBanner state={state} onRetry={() => {}} focusTerminal={() => {}} />
+      <section role="dialog" tabIndex={-1}><button>Dialog control</button></section>
+      {menu && <div role="menu" />}
+    </>
+  );
+}
+
+function keyboardBanner(state: "open" | "closed" | "reconnecting", menu = false) {
+  vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  const render = (next: typeof state) => act(() => root.render(<KeyboardHost state={next} menu={menu} />));
+  render(state);
+  const control = container.querySelector<HTMLElement>('[role="dialog"] button')!;
+  act(() => control.focus());
+  const key = (options: KeyboardEventInit = {}) => act(() => control.ownerDocument.activeElement!.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "F6", bubbles: true, cancelable: true, ...options }),
+  ));
+  return { container, control, render, key };
+}
+
+it("cycles only between the open dialog and Retry in either direction", () => {
+  const { container, control, key } = keyboardBanner("closed");
+  const retry = container.querySelector('[data-region="banner"] button');
+  key();
+  expect(document.activeElement).toBe(retry);
+  key();
+  expect(document.activeElement).toBe(control);
+  key({ shiftKey: true });
+  expect(document.activeElement).toBe(retry);
+  key({ shiftKey: true });
+  expect(document.activeElement).toBe(control);
+});
+
+it.each([
+  { state: "open", menu: false, options: {} },
+  { state: "reconnecting", menu: false, options: {} },
+  { state: "closed", menu: true, options: {} },
+  { state: "closed", menu: false, options: { ctrlKey: true } },
+] as const)("keeps modal focus for $state with menu=$menu and modifiers=$options", ({ state, menu, options }) => {
+  const { control, key } = keyboardBanner(state, menu);
+  key(options);
+  expect(document.activeElement).toBe(control);
+});
+
+it.each(["reconnecting", "open"] as const)("returns Retry focus to the dialog when the connection becomes %s", (next) => {
+  const { control, render, key } = keyboardBanner("closed");
+  key();
+  render(next);
+  expect(document.activeElement).toBe(control);
 });

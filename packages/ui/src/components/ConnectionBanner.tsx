@@ -4,6 +4,7 @@ import React, { useLayoutEffect, useRef } from "react";
 
 import type { ConnectionState } from "../daemon-client";
 import { useT } from "../i18n/react";
+import { focusOpenDialog } from "./regionFocus";
 import { useFocusHandoff } from "./useFocusHandoff";
 
 /** The CSS custom property this banner publishes its own height to. `style.css` exposes it as
@@ -29,9 +30,9 @@ const RETRY_CLASS =
  *
  * Retry keeps keyboard focus where it is on a mouse press, but a keyboard user reaches it with
  * F6, and then the banner going away from under focus would drop it to `<body>`, so focus is
- * handed to the terminal instead (`useFocusHandoff`). The banner is a stop of the F6 region cycle
- * (`data-region="banner"`), which is how a keyboard reaches Retry from the terminal, whose Tab
- * belongs to the agent.
+ * handed back to an open dialog, otherwise to the terminal (`useFocusHandoff`). The banner is a
+ * stop of the F6 region cycle (`data-region="banner"`), which is how a keyboard reaches Retry from
+ * the terminal, whose Tab belongs to the agent.
  *
  * Marked as a React Aria top layer, the way HeroUI marks its toast region, so Retry is reachable
  * while a dialog is open: an open modal otherwise sets `inert` on everything outside it (React
@@ -59,7 +60,10 @@ export function ConnectionBanner({
   focusTerminal: () => void;
 }): React.ReactElement {
   const t = useT();
-  const held = useFocusHandoff(focusTerminal);
+  const previousFocus = useRef<Element | null>(null);
+  const held = useFocusHandoff(() => {
+    if (!focusOpenDialog(previousFocus.current)) focusTerminal();
+  });
   const ref = useRef<HTMLDivElement>(null);
   const visible = state === "reconnecting" || state === "closed";
 
@@ -101,6 +105,10 @@ export function ConnectionBanner({
           role="status"
           data-region="banner"
           {...held}
+          onFocus={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) previousFocus.current = event.relatedTarget;
+            held.onFocus(event);
+          }}
           // `min-h-8` is the height the Retry button (h-6) and the padding take, so the strip is as
           // tall while it only says it is reconnecting as once it offers Retry.
           className="flex min-h-8 items-center justify-center gap-3 bg-warning px-3 py-1 text-xs text-warning-foreground"

@@ -88,9 +88,9 @@ to spare, a confirmation say, centres in the space above the strip rather than i
 the strip's height higher than it otherwise would. With the strip gone, every dialog sits exactly where it would with
 no connection banner at all.
 
-Only the pointer reaches the strip there. `F6` does not move keyboard focus out from under an open dialog or menu, so
-a keyboard user has to dismiss it first (see "Moving focus between regions with F6" in
-`docs/product/moving-focus-between-regions.md`).
+The strip's Retry is also reachable by keyboard with a modal dialog open. For how focus moves to Retry and back,
+where it goes when Retry disappears, and the restriction while a menu is open, see "Moving focus between regions with
+F6" in `docs/product/moving-focus-between-regions.md`.
 
 ## The top bar
 
