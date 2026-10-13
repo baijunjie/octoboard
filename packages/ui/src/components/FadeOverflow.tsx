@@ -7,6 +7,8 @@ interface Clipped {
   end: boolean;
   /** Whether the element lays out right to left, which flips the scroll offsets and the mask. */
   rtl: boolean;
+  /** The box width in px. The fade ramps are capped against it, so a resize that keeps both edges clipped still has to be remeasured. */
+  width: number;
 }
 
 /** Sub-pixel layout rounding leaves a fraction of a pixel of phantom overflow on content that
@@ -41,6 +43,7 @@ function measure(element: HTMLElement): Clipped {
     start: scrolled > OVERFLOW_EPSILON,
     end: overflowExtent(element) - scrolled > OVERFLOW_EPSILON,
     rtl: getComputedStyle(element).direction === "rtl",
+    width: element.clientWidth,
   };
 }
 
@@ -79,12 +82,20 @@ function observe(element: Element, update: () => void): () => void {
 }
 
 /** The mask that hides the clipped edges, along the text direction: opaque across the middle, ramping to transparent over
- * `fade` px at each edge that has content beyond it. `undefined` while nothing is clipped. */
-function maskImage(fade: number, { start, end, rtl }: Clipped): string | undefined {
+ * at most `fade` px at each edge that has content beyond it. `undefined` while nothing is clipped.
+ *
+ * The ramps shorten on a narrow box. Each one stays at most a third of the box when both edges are
+ * clipped, and at most half when only one is, so an opaque run always remains. Full-length ramps
+ * meet once the box is under twice the fade — a name at its floor, a branch squeezed beside it, and
+ * either of them while a marquee fades both edges — and the text that still fits then paints as nothing. */
+function maskImage(fade: number, { start, end, rtl, width }: Clipped): string | undefined {
   if (!start && !end) return undefined;
+  const edges = (start ? 1 : 0) + (end ? 1 : 0);
+  const fadePx = width > 0 ? Math.min(fade, Math.floor(width / (edges + 1))) : fade;
+  if (fadePx <= 0) return undefined;
   const stops = [
-    start ? `transparent 0, #000 ${fade}px` : "#000 0",
-    end ? `#000 calc(100% - ${fade}px), transparent 100%` : "#000 100%",
+    start ? `transparent 0, #000 ${fadePx}px` : "#000 0",
+    end ? `#000 calc(100% - ${fadePx}px), transparent 100%` : "#000 100%",
   ];
   return `linear-gradient(to ${rtl ? "left" : "right"}, ${stops.join(", ")})`;
 }
@@ -119,6 +130,11 @@ function marqueeScope(element: HTMLElement): HTMLElement {
  * it is down, so that the label is never left away from where it rests with no one to put it back.
  * A lowered flag therefore means nothing is running and no frame is pending, which is what lets the
  * pointer leaving a label the marquee never took return at once.
+ *
+ * The pointer being over the scope is remembered, not only the moment it entered. A row's hover
+ * chrome grows in after that moment and the two labels trade width while it does, so a label can
+ * start overflowing late, or fit for a frame and overflow again. Forgetting the hover at the first
+ * frame that fits leaves one label running and the other still.
  */
 function useMarquee(
   ref: React.RefObject<HTMLElement | null>,
@@ -132,6 +148,9 @@ function useMarquee(
     const scope = marqueeScope(element);
     let frame: number | undefined;
     let running = false;
+    // The pointer is still over the scope. A label that fits on entry, or for one frame of the
+    // hover chrome's width animation, has to be able to start again without a new entry.
+    let over = false;
     // Kept here rather than read back from `scrollLeft`, which WebKit rounds to whole pixels: a
     // frame's step at reading speed is under a pixel, so reading it back would never advance.
     let position = scrolledFromStart(element);
@@ -169,19 +188,31 @@ function useMarquee(
     const resting = () => restingOffset(element, clip);
     const far = () => (clip === "start" ? 0 : overflowExtent(element));
 
-    const cycle = () => {
-      if (!running) return;
-      // Nothing left to run through, so the position goes back to whoever holds it when the marquee
-      // does not: the text now fits, or the label no longer has the room to show it moving.
-      if (overflowExtent(element) <= OVERFLOW_EPSILON) {
-        running = false;
+    const giveBack = () => {
+      running = false;
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      // Only a position the marquee took is put back: where it never started — the text fits, or
+      // the system asks for no motion — the pin has the label and `position` is stale.
+      if (!holds.current) return;
+      // The hold is given up only once the text is back where it rests, so the return is scrolled
+      // rather than snapped away by the pin. The pointer may still be over the scope; the next
+      // resize starts the run again if the text no longer fits.
+      move(resting(), MARQUEE_RETURN_SPEED, 0, () => {
         holds.current = false;
+      });
+    };
+    const cycle = () => {
+      if (!running || !over) return;
+      // Nothing left to run through. Give the position back, but stay armed: the room can
+      // disappear for a frame while the row's hover chrome grows and come back on the next.
+      if (overflowExtent(element) <= OVERFLOW_EPSILON) {
+        giveBack();
         return;
       }
       move(far(), MARQUEE_SPEED, MARQUEE_PAUSE_FAR, () => move(resting(), MARQUEE_RETURN_SPEED, MARQUEE_PAUSE_REST, cycle));
     };
     const start = () => {
-      if (running || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      if (!over || running || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       if (overflowExtent(element) <= OVERFLOW_EPSILON) return;
       running = true;
       holds.current = true;
@@ -189,27 +220,34 @@ function useMarquee(
       position = scrolledFromStart(element);
       move(resting(), MARQUEE_RETURN_SPEED, MARQUEE_PAUSE_REST, cycle);
     };
-    const stop = () => {
-      // Only a position the marquee took is put back: where it never started — the text fits, or
-      // the system asks for no motion — the pin has the label and `position` is stale.
-      if (!holds.current) return;
-      running = false;
-      if (frame !== undefined) cancelAnimationFrame(frame);
-      // The hold is given up only once the text is back where it rests, so the return is scrolled
-      // rather than snapped away by the pin.
-      move(resting(), MARQUEE_RETURN_SPEED, 0, () => {
-        holds.current = false;
-      });
+    const enter = () => {
+      over = true;
+      start();
     };
+    const leave = () => {
+      over = false;
+      giveBack();
+    };
+    // Fires for the hover chrome's width animation, which happens after `pointerenter` and is
+    // what makes one of the row's labels start or stop overflowing.
+    const onResize: ResizeObserverCallback = () => {
+      if (!over) return;
+      if (overflowExtent(element) <= OVERFLOW_EPSILON) giveBack();
+      else start();
+    };
+    const resizeObserver = new ResizeObserver(onResize);
+    resizeObserver.observe(element);
 
-    scope.addEventListener("pointerenter", start);
-    scope.addEventListener("pointerleave", stop);
+    scope.addEventListener("pointerenter", enter);
+    scope.addEventListener("pointerleave", leave);
     return () => {
+      over = false;
       running = false;
       holds.current = false;
       if (frame !== undefined) cancelAnimationFrame(frame);
-      scope.removeEventListener("pointerenter", start);
-      scope.removeEventListener("pointerleave", stop);
+      resizeObserver.disconnect();
+      scope.removeEventListener("pointerenter", enter);
+      scope.removeEventListener("pointerleave", leave);
     };
   }, [enabled, clip]);
 }
@@ -281,7 +319,7 @@ export function FadeOverflow({
     anchor.current = element?.parentElement ?? element;
   }, []);
   const marqueeHolds = useRef(false);
-  const [clipped, setClipped] = useState<Clipped>({ start: false, end: false, rtl: false });
+  const [clipped, setClipped] = useState<Clipped>({ start: false, end: false, rtl: false, width: 0 });
   const [hovered, setHovered] = useState(false);
 
   useLayoutEffect(() => {
@@ -296,7 +334,9 @@ export function FadeOverflow({
         if (Math.abs(scrolledFromStart(element) - rest) > 0.5) scrollToOffset(element, rest);
       }
       const next = measure(element);
-      setClipped((prev) => (prev.start === next.start && prev.end === next.end && prev.rtl === next.rtl ? prev : next));
+      setClipped((prev) =>
+        prev.start === next.start && prev.end === next.end && prev.rtl === next.rtl && Math.abs(prev.width - next.width) < 0.5 ? prev : next,
+      );
     };
     update();
     const stopObserving = observe(element, update);

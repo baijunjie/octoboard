@@ -1,18 +1,44 @@
 // @vitest-environment jsdom
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { afterAll, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { FadeOverflow } from "./FadeOverflow";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+// Records every observer, including the one the marquee uses to notice a row's hover chrome
+// changing a label's width after the pointer has already entered. A native observer would never
+// fire here: jsdom lays nothing out.
+const observed = new Map<Element, Set<ResizeObserverCallback>>();
 class StubResizeObserver {
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
+  private readonly cb: ResizeObserverCallback;
+  constructor(cb: ResizeObserverCallback) {
+    this.cb = cb;
+  }
+  observe(target: Element): void {
+    let set = observed.get(target);
+    if (!set) observed.set(target, (set = new Set()));
+    set.add(this.cb);
+  }
+  unobserve(target: Element): void {
+    observed.get(target)?.delete(this.cb);
+  }
+  disconnect(): void {
+    for (const set of observed.values()) set.delete(this.cb);
+  }
 }
-globalThis.ResizeObserver ??= StubResizeObserver as unknown as typeof ResizeObserver;
+beforeEach(() => {
+  vi.stubGlobal("ResizeObserver", StubResizeObserver);
+});
+afterAll(() => {
+  vi.unstubAllGlobals();
+});
+
+function fireResize(target: Element): void {
+  const entries = [{ target } as ResizeObserverEntry];
+  for (const cb of [...(observed.get(target) ?? [])]) cb(entries, null as unknown as ResizeObserver);
+}
 // jsdom has no media queries; the marquee asks one whether motion is wanted, and the answer is
 // this, set per test.
 let reducedMotion = false;
@@ -20,34 +46,26 @@ window.matchMedia ??= ((query: string) => ({ matches: reducedMotion, media: quer
 
 const tooltip = () => document.querySelector('[role="tooltip"]');
 
-/**
- * Mounts a label `clipped` or not and returns a way to move the pointer onto it. jsdom lays nothing
- * out, so the overflow the label measures itself by is stubbed; the first measurement is taken
- * before the first paint, so no frame has to be run for it.
- */
-function mount(
-  props: React.ComponentProps<typeof FadeOverflow>,
-  clipped: boolean,
-): {
-  container: HTMLElement;
-  label: Element;
-  written: number[];
-  overflowBy: (width: number) => void;
-  enter: () => void;
-  settle: () => void;
-  finish: () => void;
-} {
-  vi.useFakeTimers();
-  onTestFinished(() => {
-    vi.useRealTimers();
-  });
-  // How much text there is past the box: the box itself is 0 wide, so the whole of it overflows.
-  // The geometry is the `Element` interface's, not `HTMLElement`'s, so that is where it is stubbed
-  // and where it is put back.
-  let overflow = clipped ? 200 : 0;
+/** Stubs the geometry every label measures by. `scrollWidthOf` and `clientWidthOf` are read on each
+ * access, so a test can change them after mount. Restored when the test ends. */
+function stubGeometry(
+  scrollWidthOf: (element: Element) => number,
+  clientWidthOf: (element: Element) => number,
+  onScrollLeft: (value: number) => void,
+): void {
   for (const [name, value] of [
-    ["scrollWidth", () => overflow],
-    ["clientWidth", () => 0],
+    [
+      "scrollWidth",
+      function (this: Element) {
+        return scrollWidthOf(this);
+      },
+    ],
+    [
+      "clientWidth",
+      function (this: Element) {
+        return clientWidthOf(this);
+      },
+    ],
   ] as const) {
     const own = Object.getOwnPropertyDescriptor(Element.prototype, name)!;
     Object.defineProperty(Element.prototype, name, { configurable: true, get: value });
@@ -57,7 +75,6 @@ function mount(
   // field of its own, per element, and every write to it is kept: what moves the label and what
   // would hold it still are both writes, and only the sequence of them tells the two apart.
   const positions = new WeakMap<HTMLElement, number>();
-  const written: number[] = [];
   const ownScrollLeft = Object.getOwnPropertyDescriptor(Element.prototype, "scrollLeft")!;
   Object.defineProperty(Element.prototype, "scrollLeft", {
     configurable: true,
@@ -66,11 +83,73 @@ function mount(
     },
     set(this: HTMLElement, value: number) {
       positions.set(this, value);
-      written.push(value);
+      onScrollLeft(value);
       this.dispatchEvent(new Event("scroll"));
     },
   });
   onTestFinished(() => void Object.defineProperty(Element.prototype, "scrollLeft", ownScrollLeft));
+}
+
+/** jsdom drops `mask-image` on assignment, so the value is taken from the write React makes. */
+function recordMaskWrites(): { masks: string[]; stop: () => void } {
+  const masks: string[] = [];
+  const proto = HTMLElement.prototype;
+  const own = Object.getOwnPropertyDescriptor(proto, "style");
+  if (!own?.get) throw new Error("HTMLElement.style has no getter to wrap");
+  Object.defineProperty(proto, "style", {
+    configurable: true,
+    enumerable: own.enumerable,
+    get() {
+      const style = own.get!.call(this) as CSSStyleDeclaration;
+      return new Proxy(style, {
+        set(target, prop, value) {
+          if (String(prop).toLowerCase().includes("mask")) masks.push(String(value));
+          Reflect.set(target, prop, value);
+          return true;
+        },
+      });
+    },
+  });
+  return {
+    masks,
+    stop: () => Object.defineProperty(proto, "style", own),
+  };
+}
+
+/**
+ * Mounts a label `clipped` or not and returns a way to move the pointer onto it. jsdom lays nothing
+ * out, so the overflow the label measures itself by is stubbed; the first measurement is taken
+ * before the first paint, so no frame has to be run for it.
+ */
+function mount(
+  props: React.ComponentProps<typeof FadeOverflow>,
+  clipped: boolean,
+  clientWidth = 0,
+): {
+  container: HTMLElement;
+  label: Element;
+  written: number[];
+  overflowBy: (width: number) => void;
+  setClientWidth: (width: number) => void;
+  enter: () => void;
+  settle: () => void;
+  finish: () => void;
+} {
+  vi.useFakeTimers();
+  onTestFinished(() => {
+    vi.useRealTimers();
+  });
+  // How much text there is past the box. The box width is mutable: a resize that keeps the text
+  // clipped is what has to shorten the fade, and the first measurement is taken before the first
+  // paint, so no frame has to be run for it.
+  let overflow = clipped ? 200 : 0;
+  let boxWidth = clientWidth;
+  const written: number[] = [];
+  stubGeometry(
+    () => boxWidth + overflow,
+    () => boxWidth,
+    (value) => written.push(value),
+  );
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -86,6 +165,7 @@ function mount(
     written,
     // Changes how much text is past the box, as a rename or a change of width would.
     overflowBy: (width: number) => void (overflow = width),
+    setClientWidth: (width: number) => void (boxWidth = width),
     // React raises `onPointerEnter` from `pointerover`; the marquee listens for the native
     // `pointerenter`, which does not bubble, so both are raised.
     enter: () =>
@@ -217,4 +297,88 @@ it("leaves a start-clipped label alone where the system asks for no motion", () 
   expect(written).toEqual([]);
   expect(label.scrollLeft).toBe(400);
   finish();
+});
+
+it("shortens the fade when a clipped label gets narrower and keeps the full ramp while the box is wide", () => {
+  const { masks, stop } = recordMaskWrites();
+  onTestFinished(stop);
+  const { label, settle, setClientWidth, finish } = mount({ titleWhenClipped: "a-very-long-name", children: "a-very-long-name" }, true, 200);
+  // Wide enough that both edges fading, which is where a marquee spends its run, still uses 24px.
+  expect(masks.at(-1)).toContain("24px");
+  act(() => {
+    label.scrollLeft = 10;
+  });
+  settle();
+  expect(masks.at(-1)).toContain("24px");
+
+  // Narrower, and still clipped at both edges. The ramps have to shorten or they meet and the text paints blank.
+  setClientWidth(40);
+  act(() => void fireResize(label));
+  settle();
+  expect(masks.at(-1)).toContain("13px");
+  expect(masks.at(-1)).not.toContain("24px");
+  finish();
+});
+
+it("runs both labels of a hovered row, including one that overflows only after the hover chrome grows", () => {
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
+  const overflow = new WeakMap<Element, number>();
+  stubGeometry(
+    (element) => 100 + (overflow.get(element) ?? 0),
+    () => 100,
+    () => {},
+  );
+
+  const scope = document.body.appendChild(document.createElement("div"));
+  scope.setAttribute("data-marquee-scope", "");
+  const root = createRoot(scope);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    scope.remove();
+  });
+  // The name fits until the row's controls grow in; the branch does not.
+  const nameText = "a-project-name";
+  const branchText = "feature/a-long-branch";
+  act(() =>
+    root.render(
+      <>
+        <FadeOverflow as="span" titleWhenClipped={nameText}>
+          {nameText}
+        </FadeOverflow>
+        <FadeOverflow as="span" titleWhenClipped={branchText}>
+          {branchText}
+        </FadeOverflow>
+      </>,
+    ),
+  );
+  const [name, branch] = Array.from(scope.children) as HTMLElement[];
+  overflow.set(branch, 200);
+
+  act(() => void scope.dispatchEvent(new MouseEvent("pointerenter")));
+  act(() => void vi.advanceTimersByTime(900));
+  expect(branch.scrollLeft).toBeGreaterThan(5);
+  expect(name.scrollLeft).toBe(0);
+
+  // The hover chrome has taken the name's room. It starts without the pointer having to leave.
+  overflow.set(name, 200);
+  act(() => void fireResize(name));
+  act(() => void vi.advanceTimersByTime(900));
+  expect(name.scrollLeft).toBeGreaterThan(5);
+  expect(branch.scrollLeft).toBeGreaterThan(5);
+
+  // A frame in which the branch happens to fit must not retire it for the rest of the hover.
+  overflow.set(branch, 0);
+  act(() => void fireResize(branch));
+  act(() => void vi.advanceTimersByTime(500));
+  expect(branch.scrollLeft).toBeLessThan(1);
+  overflow.set(branch, 200);
+  act(() => void fireResize(branch));
+  act(() => void vi.advanceTimersByTime(900));
+  expect(branch.scrollLeft).toBeGreaterThan(5);
+
+  act(() => void scope.dispatchEvent(new MouseEvent("pointerleave")));
+  act(() => void vi.advanceTimersByTime(5000));
+  act(() => void vi.runOnlyPendingTimers());
+  expect(vi.getTimerCount()).toBe(0);
 });
