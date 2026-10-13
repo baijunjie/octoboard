@@ -4,7 +4,8 @@
 // change here is built by the factory for its kind (`changeFixtures.ts`).
 import { SECTION_LABELS, type ChangeSection } from "../../browser/changes";
 import type { BranchInfo, ContentSource, FileContent, WorktreeInfo } from "../../protocol";
-import type { Matcher, Ui } from "../interact";
+import type { StatusKey } from "../../viewer/statusMarks";
+import { describing, type Matcher, type Ui } from "../interact";
 import type { Scenario } from "../scenario";
 import type { FixtureChange, FixtureGit, Versions } from "./changeFixtures";
 import type { FixtureError } from "./projectFiles";
@@ -305,7 +306,7 @@ const openGit = [
   (ui: Ui) => ui.press(ui.t("browser.mode.git")),
   (ui: Ui) => ui.wait(400),
 ];
-const openChange = (name: RegExp) => [...openGit, (ui: Ui) => ui.press(name), (ui: Ui) => ui.wait(800)];
+const openChange = (name: string, status: StatusKey) => [...openGit, (ui: Ui) => ui.press(ui.changeRow(name, status)), (ui: Ui) => ui.wait(800)];
 /** Opens Git mode in a narrow window, where the project pane is a drawer. */
 const openGitInDrawer = [
   (ui: Ui) => ui.press(ui.t("titleBar.sidebar.show")),
@@ -321,7 +322,7 @@ const sectionHeading =
   (section: ChangeSection) =>
   (ui: Ui): Matcher => {
     const label = ui.t(SECTION_LABELS[section]);
-    return (name) => name.startsWith(label) && /^\p{N}[\p{N},.\s]*$/u.test(name.slice(label.length));
+    return describing(`sectionHeading(${section})`, (name) => name.startsWith(label) && /^\p{N}[\p{N},.\s]*$/u.test(name.slice(label.length)));
   };
 /** Presses the heading of `section`, which folds it or unfolds it. */
 const foldSection = (section: ChangeSection) => (ui: Ui) => ui.press(sectionHeading(section)(ui));
@@ -333,7 +334,7 @@ const filterBy = (text: string) => [...openFilter, (ui: Ui) => ui.type(text), (u
 
 /** Matches a branch's option in a selector: its name followed by the 7 characters of its short
  * commit id. */
-const branchOption = (name: string): Matcher => (n) => n.startsWith(name) && n.length === name.length + 7;
+const branchOption = (name: string): Matcher => describing(`branchOption(${name})`, (n) => n.startsWith(name) && n.length === name.length + 7);
 
 /** Puts the pointer on the creator ring of branch `name` in an open selector. */
 const ringOf = (name: string) => (ui: Ui) => ui.hoverIndicator(branchOption(name));
@@ -389,10 +390,10 @@ export const projectGitScenarios: Scenario[] = [
       (ui) => ui.wait(300),
     ],
   },
-  { id: "git-rename-outside", group: GROUP, title: "A rename from outside the project", state, steps: openChange(/^index\.ts, renamed/) },
-  { id: "git-type-change", group: GROUP, title: "A file that became a symbolic link", state, steps: openChange(/^current, type changed/) },
-  { id: "git-nested-into", group: GROUP, title: "A file renamed into a path below itself", state, steps: openChange(/^leaf\.ts, renamed/) },
-  { id: "git-nested-out", group: GROUP, title: "A file renamed out of a path below itself", state, steps: openChange(/^nest2, renamed/) },
+  { id: "git-rename-outside", group: GROUP, title: "A rename from outside the project", state, steps: openChange("index.ts", "renamed") },
+  { id: "git-type-change", group: GROUP, title: "A file that became a symbolic link", state, steps: openChange("current", "typeChanged") },
+  { id: "git-nested-into", group: GROUP, title: "A file renamed into a path below itself", state, steps: openChange("leaf.ts", "renamed") },
+  { id: "git-nested-out", group: GROUP, title: "A file renamed out of a path below itself", state, steps: openChange("nest2", "renamed") },
   {
     id: "git-unchanged-content",
     group: GROUP,
@@ -400,7 +401,7 @@ export const projectGitScenarios: Scenario[] = [
     description:
       "src/same.ts has an empty patch, so there is no diff to draw; its content is read as a diff's collapsed lines are and shown whole, under a notice saying nothing changed.",
     state,
-    steps: openChange(/^same\.ts, modified/),
+    steps: openChange("same.ts", "modified"),
   },
   {
     id: "git-unchanged-unreadable",
@@ -408,7 +409,7 @@ export const projectGitScenarios: Scenario[] = [
     title: "A rename with no change whose content cannot be read",
     description: "The read of src/new-name.ts fails, so the viewer falls back to saying the rename changed nothing, with the reason above it.",
     state,
-    steps: openChange(/^new-name\.ts, renamed/),
+    steps: openChange("new-name.ts", "renamed"),
   },
   {
     id: "git-expand",
@@ -417,7 +418,7 @@ export const projectGitScenarios: Scenario[] = [
     description:
       "A staged change's diff as the Git mode opens it, the Staged tag in its header. src/pipeline.ts has three hunks with unmodified lines between them. Each expansion of a separator reveals 20 lines, the third reveals the rest of the gap, and Show whole file opens everything.",
     state,
-    steps: openChange(/^pipeline\.ts, modified/),
+    steps: openChange("pipeline.ts", "modified"),
   },
   {
     id: "git-expand-short-gap",
@@ -426,7 +427,7 @@ export const projectGitScenarios: Scenario[] = [
     description:
       "src/stages.ts has runs of unmodified lines of 6, 3, 9, 27 and 7 lines. The 27-line run between the third and fourth hunks offers the pair of controls; each of the others is no more than one expansion reveals, or lies before the first hunk or after the last, and offers one control, which shows all of it.",
     state,
-    steps: openChange(/^stages\.ts, modified/),
+    steps: openChange("stages.ts", "modified"),
   },
   {
     id: "git-expand-over-budget",
@@ -435,7 +436,7 @@ export const projectGitScenarios: Scenario[] = [
     description:
       "src/huge.ts holds more lines than the viewer renders, though its patch is small: expanding a separator keeps the lines collapsed and says the file is too large to show in full.",
     state,
-    steps: openChange(/^huge\.ts, modified/),
+    steps: openChange("huge.ts", "modified"),
   },
   {
     id: "git-expand-wide",
@@ -445,7 +446,7 @@ export const projectGitScenarios: Scenario[] = [
       "src/wide.ts, unwrapped, has lines far wider than the dialog. Show whole file stays in view at the end of the bar while the diff is at its left edge, as the label and the chevrons do. A last step switches to the split layout, where each side scrolls on its own and the control sits at the inner edge of the left half.",
     width: 760,
     state,
-    steps: [...openGitInDrawer, (ui: Ui) => ui.press(/^wide\.ts, modified/), (ui: Ui) => ui.wait(800), (ui: Ui) => ui.press(ui.t("viewer.layout.split")), (ui: Ui) => ui.wait(400)],
+    steps: [...openGitInDrawer, (ui: Ui) => ui.press(ui.changeRow("wide.ts", "modified")), (ui: Ui) => ui.wait(800), (ui: Ui) => ui.press(ui.t("viewer.layout.split")), (ui: Ui) => ui.wait(400)],
   },
   {
     id: "git-expand-narrow",
@@ -455,7 +456,7 @@ export const projectGitScenarios: Scenario[] = [
       "src/wide.ts, unwrapped and unified, in a window too narrow for the longest separator label beside Show whole file: the label ends in an ellipsis before the control, which stays clear of it and reachable.",
     width: 460,
     state,
-    steps: [...openGitInDrawer, (ui: Ui) => ui.press(/^wide\.ts, modified/), (ui: Ui) => ui.wait(800)],
+    steps: [...openGitInDrawer, (ui: Ui) => ui.press(ui.changeRow("wide.ts", "modified")), (ui: Ui) => ui.wait(800)],
   },
   {
     id: "git-expand-too-large",
@@ -463,7 +464,7 @@ export const projectGitScenarios: Scenario[] = [
     title: "A change whose files are too large to expand",
     description: "Expanding a separator finds the file past the limit: the lines stay collapsed, with a note saying the daemon does not provide the whole file.",
     state,
-    steps: openChange(/^limits\.ts, modified/),
+    steps: openChange("limits.ts", "modified"),
   },
   {
     id: "git-expand-moved",
@@ -471,7 +472,7 @@ export const projectGitScenarios: Scenario[] = [
     title: "A change that moved on before it was expanded",
     description: "Expanding a separator finds the file changed since its patch was read: the patch stays as it is, with a note.",
     state,
-    steps: openChange(/^moved\.ts, modified/),
+    steps: openChange("moved.ts", "modified"),
   },
   {
     id: "git-expand-failed",
@@ -479,11 +480,11 @@ export const projectGitScenarios: Scenario[] = [
     title: "A change whose lines could not be read",
     description: "Expanding a separator fails to read the file; the separator says so and can be tried again.",
     state,
-    steps: openChange(/^flaky\.ts, modified/),
+    steps: openChange("flaky.ts", "modified"),
   },
-  { id: "git-image", group: GROUP, title: "An image change", state, steps: openChange(/^logo\.png, modified/) },
-  { id: "git-too-large", group: GROUP, title: "A change whose patch is too large", state, steps: openChange(/^fixtures\.bin, modified/) },
-  { id: "git-untracked", group: GROUP, title: "An untracked file", state, steps: openChange(/^log\.ts, untracked/) },
+  { id: "git-image", group: GROUP, title: "An image change", state, steps: openChange("logo.png", "modified") },
+  { id: "git-too-large", group: GROUP, title: "A change whose patch is too large", state, steps: openChange("fixtures.bin", "modified") },
+  { id: "git-untracked", group: GROUP, title: "An untracked file", state, steps: openChange("log.ts", "untracked") },
   {
     id: "git-untracked-symlink",
     group: GROUP,
@@ -491,16 +492,16 @@ export const projectGitScenarios: Scenario[] = [
     description: "Nothing to compare and no content to read: the viewer names what it is and says it has nothing to show.",
    
     state,
-    steps: openChange(/^config\.local\.ts, untracked/),
+    steps: openChange("config.local.ts", "untracked"),
   },
-  { id: "git-untracked-repository", group: GROUP, title: "An untracked repository of its own", state, steps: openChange(/^search-client, untracked/) },
-  { id: "git-conflict", group: GROUP, title: "A file in conflict", state, steps: openChange(/^package\.json, in conflict/) },
+  { id: "git-untracked-repository", group: GROUP, title: "An untracked repository of its own", state, steps: openChange("search-client", "untracked") },
+  { id: "git-conflict", group: GROUP, title: "A file in conflict", state, steps: openChange("package.json", "conflicted") },
   {
     id: "git-worktrees",
     group: GROUP,
     title: "Choosing a worktree",
     state,
-    steps: [...openGit, (ui) => ui.press(/^main/), (ui) => ui.wait(400)],
+    steps: [...openGit, (ui) => ui.press((name) => name.startsWith("main")), (ui) => ui.wait(400)],
   },
   {
     id: "git-worktree-gone",
@@ -545,7 +546,7 @@ export const projectGitScenarios: Scenario[] = [
     steps: [
       ...openGit,
       foldSection("staged"),
-      (ui) => ui.focusControl(/^package\.json, in conflict/),
+      (ui) => ui.focusControl(ui.changeRow("package.json", "conflicted")),
       (ui) => ui.key("ArrowUp"),
       (ui) => ui.wait(300),
     ],
@@ -652,7 +653,7 @@ export const projectGitScenarios: Scenario[] = [
     group: GROUP,
     title: "A file that became a symbolic link, between two branches",
     state,
-    steps: [...compare("main", "feature/ranking-experiments"), (ui) => ui.press(/^current, type changed/), (ui) => ui.wait(800)],
+    steps: [...compare("main", "feature/ranking-experiments"), (ui) => ui.press(ui.changeRow("current", "typeChanged")), (ui) => ui.wait(800)],
   },
   {
     id: "git-compare-expand",
@@ -661,7 +662,7 @@ export const projectGitScenarios: Scenario[] = [
     description:
       "A change between two branches, the comparison named in the viewer's header. src/pipeline.ts between the two commits: its collapsed lines are read from the same two commits.",
     state,
-    steps: [...compare("main", "feature/ranking-experiments"), (ui) => ui.press(/^pipeline\.ts, modified/), (ui) => ui.wait(800)],
+    steps: [...compare("main", "feature/ranking-experiments"), (ui) => ui.press(ui.changeRow("pipeline.ts", "modified")), (ui) => ui.wait(800)],
   },
   {
     id: "git-compare-no-branches",
@@ -716,7 +717,7 @@ export const projectGitScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("git.compare.choose")),
       (ui) => ui.press(branchOption("main")),
       (ui) => ui.press(ui.t("git.compare.choose")),
-      (ui) => ui.press((name) => name.startsWith(LONG_BRANCH)),
+      (ui) => ui.press(branchOption(LONG_BRANCH)),
       (ui) => ui.wait(600),
     ],
   },

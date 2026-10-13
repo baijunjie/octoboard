@@ -84,6 +84,18 @@ short for a dialog's body, which then scrolls (`ui.tabToRegion`, which focuses t
 none in a window tall enough to hold the dialog), and a scenario that merely wants to be seen in a short window is
 seen with the Short height control instead.
 
+A step names a control in the language the window is in, so copy is never written out: a control is named through
+`ui.t` (`ui.press(ui.t("rail.settings"))`), a session row through `ui.session` and a change row through `ui.changeRow`.
+A name that is not copy (a branch, a file, a title the fixture itself sets) is a plain string or a test of the name; a
+matcher is never a pattern, since a pattern is written in one human language. `fixtures.test.ts` fails a step that
+names a control with the English text of a message another language's catalog translates, written out bare
+(`"Show whole file"`) or filled (`"new-name.ts, renamed"`); it flags a string that fits a translated message's literal
+frame, whatever fills it, so a data name shaped like one (`"notes, drafts.txt"`) is flagged too. It cannot see through a
+test of the name that closes over such text (`(name) => name.startsWith("new-name.ts, renamed")`): that is checked only
+against the bare messages, so a test of the name that stands for copy is built from the helpers. A test of the name
+that is not from a helper can be given a description with `describing(...)`, which is what a failed step reports in
+place of the test's source; it changes nothing the check sees.
+
 `configuration` is what the platform and the daemon answer to exporting and importing configuration
 (`src/gallery/fixtureConfiguration.ts`). The gallery's platform always stubs the configuration-file capability, so no
 download or file picker is raised from a capture: `file` is what the open dialog hands back (`"dismissed"` and

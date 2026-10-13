@@ -233,7 +233,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   app: why a verification stays as narrow as the change and why a shared component's markup widens that scope to every
   surface already using it, settling a change to the data a fixture answers with on the replies rather than on
   renderings, looking at a UI state in the gallery before staging it through a daemon and what the gallery cannot
-  settle, holding what a reply carries in a fixture factory's signature first and in the fixture daemon's refusal only
+  settle, why a check that rests on translated copy is made in `zh-Hans` since the other 15 languages render English,
+  holding what a reply carries in a fixture factory's signature first and in the fixture daemon's refusal only
   where no signature can settle it, and where to take that condition from, settling hand-written `git` output against
   real `git` in a throwaway repository, checking in WebKit with real pointer input and with long and CJK text, ruling
   out a locked screen before trusting a capture, getting an error out of a blank window, bisecting a symptom against the

@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { CATALOGS, format, splitPlaceholders, type Message, type MessageKey } from "./catalog";
+import { CATALOGS, format, messageText, splitPlaceholders, type Message, type MessageKey } from "./catalog";
 import { appConfig } from "../appConfig";
 import type { Language } from "./languages";
 import { en } from "./messages/en";
@@ -50,6 +50,34 @@ it("keeps every translated message's placeholders those of the English one", () 
           extra: [],
         });
       }
+    }
+  }
+});
+
+// The gallery names a change row by `git.row`'s text and lets whatever follows it be (`Ui.changeRow`),
+// so a language that reorders a placeholder in another form would leave its rows unfindable there.
+// The forms are the other `git.row` messages that carry the status.
+it("begins every form of a change row's name with the plain one", () => {
+  const forms = (Object.keys(en) as MessageKey[]).filter((key) => /^git\.row\./.test(key) && String(en[key]).includes("{status}"));
+  expect(forms.length).toBeGreaterThan(0);
+  for (const language of Object.keys(CATALOGS) as Language[]) {
+    const plain = messageText(language, "git.row");
+    for (const key of forms) {
+      expect(messageText(language, key).slice(0, plain.length), `${language} ${key}`).toBe(plain);
+    }
+  }
+});
+
+// The gallery names a session row by what precedes its agent and status (`Ui.session`), which is the
+// title's own prefix only while `{title}` comes first.
+it("puts a session row's title before its agent and status", () => {
+  for (const language of Object.keys(CATALOGS) as Language[]) {
+    for (const key of ["sidebar.session.ariaLabel", "sidebar.session.ariaLabelPinned"] as const) {
+      const text = messageText(language, key);
+      const title = text.indexOf("{title}");
+      expect(title, `${language} ${key}`).toBeGreaterThanOrEqual(0);
+      expect(title, `${language} ${key}`).toBeLessThan(text.indexOf("{agent}"));
+      expect(title, `${language} ${key}`).toBeLessThan(text.indexOf("{status}"));
     }
   }
 });

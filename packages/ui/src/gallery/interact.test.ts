@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { createUi, stuckExit } from "./interact";
+import { createUi, stuckExit, type Matcher } from "./interact";
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
@@ -60,4 +60,26 @@ it("press takes the control inside a band of the same name, not the band", async
   await vi.advanceTimersByTimeAsync(500);
   await done;
   expect(pressed).toEqual(["fold"]);
+});
+
+it("changeRow names a change row by its file and status in the window's language, whatever follows", () => {
+  const english = createUi(document, "en").changeRow("new-name.ts", "renamed");
+  const chinese = createUi(document, "zh-Hans").changeRow("new-name.ts", "renamed");
+  const matches = (matcher: Matcher, name: string) => (typeof matcher === "string" ? matcher === name : matcher(name));
+  expect(matches(english, "new-name.ts, renamed, from src/old-name.ts")).toBe(true);
+  expect(matches(english, "new-name.ts, renamed")).toBe(true);
+  expect(matches(english, "new-name.ts, renamed, selected")).toBe(true);
+  expect(matches(english, "new-name.ts, renamed, from src/old-name.ts, selected")).toBe(true);
+  expect(matches(english, "new-name.ts, modified")).toBe(false);
+  expect(matches(english, "new-name.ts，已重命名，来自 src/old-name.ts")).toBe(false);
+  expect(matches(chinese, "new-name.ts，已重命名，来自 src/old-name.ts")).toBe(true);
+  expect(matches(chinese, "new-name.ts，已重命名，已选中")).toBe(true);
+  expect(matches(chinese, "new-name.ts，已重命名，来自 src/old-name.ts，已选中")).toBe(true);
+  expect(matches(chinese, "new-name.ts, renamed, from src/old-name.ts")).toBe(false);
+});
+
+it("a matcher from the helpers says what it looks for when a step fails", () => {
+  const ui = createUi(document, "en");
+  expect(String(ui.changeRow("new-name.ts", "renamed"))).toBe("changeRow(new-name.ts, renamed)");
+  expect(String(ui.session("Hub"))).toBe("session(Hub)");
 });

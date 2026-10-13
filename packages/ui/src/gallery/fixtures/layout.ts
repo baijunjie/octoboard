@@ -1,3 +1,4 @@
+import { describing, type Matcher } from "../interact";
 import type { Scenario } from "../scenario";
 import { SAMPLE, consoleOf, pageOf, projectOf, sessionOf, snapshotState } from "./builders";
 
@@ -51,7 +52,7 @@ const crowdState = snapshotState({
   ],
 });
 /** The rail's button for a console: its accessible name starts with the console's name. */
-const consoleButton = (name: string) => (label: string) => label.startsWith(name);
+const consoleButton = (name: string): Matcher => describing(`consoleButton(${name})`, (label) => label.startsWith(name));
 
 export const layoutScenarios: Scenario[] = [
   {

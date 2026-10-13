@@ -4,6 +4,7 @@ import { DORMANT_STATUSES, LIVE_STATUSES } from "../protocol";
 import { activityLabel, statusLabel } from "../sessionLabel";
 import { ACTIVITIES } from "../sidebar/order";
 import type { Daemon } from "../store";
+import type { StatusKey } from "../viewer/statusMarks";
 
 /** Everything a pressable thing is looked up among. A hand-built row is a `role="button"`, a tag
  * in a tag group is a `role="row"`, and a checkbox is its (visually hidden) input: pressing the label
@@ -26,12 +27,18 @@ function withoutIsolates(text: string): string {
   return text.replace(/[\u2066-\u2069]/g, "");
 }
 
-/** An exact name, a pattern, or a test of the name. */
-export type Matcher = string | RegExp | ((name: string) => boolean);
+/** An exact name or a test of the name. There is no pattern: a pattern is written in one human
+ * language and matches nothing in the others, and a name that is not copy (a branch, a file) is a
+ * string or a test of its own. */
+export type Matcher = string | ((name: string) => boolean);
+
+/** A test of the name that says what it looks for, which is what a failed step reports in place of
+ * the test's source. */
+export const describing = (description: string, test: (name: string) => boolean): Matcher =>
+  Object.assign(test, { toString: () => description });
 
 function matches(matcher: Matcher, name: string): boolean {
-  if (typeof matcher === "string") return name === matcher;
-  return typeof matcher === "function" ? matcher(name) : matcher.test(name);
+  return typeof matcher === "string" ? name === matcher : matcher(name);
 }
 
 /** Whether a control can be pressed. */
@@ -59,6 +66,12 @@ export interface Ui {
   /** The sidebar row of the session titled exactly `title` (so "Hub" is not "Hub 2"), not its
    * actions menu — a console session's row included, since it is an ordinary session row. */
   session: (title: string) => Matcher;
+  /** The row of the change to the file `name` in the Git mode's change list, whatever else it says
+   * after its status (where a rename came from, that it is selected). `name` is the file's display
+   * base name (`wireBaseName`, so an escaped `%25` is written `%`) and `status` the kind of change,
+   * which the row says in the window's language. Rows are told apart by name and status only: a file
+   * that is both staged and unstaged has two rows named alike, and this takes the first. */
+  changeRow: (name: string, status: StatusKey) => Matcher;
   /** Presses the control named `matcher`, waiting for it to appear: the first in document order,
    * except that a control standing inside another of the same name wins over the one around it (a
    * section heading is a `role="row"` band holding the button that folds it, and pressing the band
@@ -195,10 +208,17 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
 
   return {
     t,
-    // A session row's name begins with its whole title, so "Hub" does not also match "Hub 2".
+    // A session row's name begins with its whole title, so "Hub" does not also match "Hub 2"; the
+    // title comes before the agent and the status in every catalog, which `catalog.test.ts` holds.
     session: (title) => {
       const prefix = t("sidebar.session.ariaLabel", { title, agent: "\0", status: "\0" }).split("\0")[0];
-      return (name) => name.startsWith(prefix);
+      return describing(`session(${title})`, (name) => name.startsWith(prefix));
+    },
+    // Every form of a change row's name begins with `git.row`'s text, in every catalog, which is why
+    // a prefix and not an equality; `catalog.test.ts` holds each catalog to it.
+    changeRow: (name, status) => {
+      const prefix = t("git.row", { name, status: t(`git.status.${status}`) });
+      return describing(`changeRow(${name}, ${status})`, (label) => label.startsWith(prefix));
     },
     wait,
     async dropConnection() {
