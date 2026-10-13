@@ -57,7 +57,8 @@ export const settingsScenarios: Scenario[] = [
     id: "settings-accounts",
     group: GROUP,
     title: "Agent accounts",
-    description: "Claude Code is available, Codex is not installed and Grok Build is not yet determined.",
+    description:
+      "Claude Code is available, Codex is not installed and Grok Build is not yet determined. In a window shorter than the section it scrolls on its own and fades at the edge it can still be scrolled towards.",
     state: {
       ...state,
       settings: {

@@ -253,3 +253,78 @@ it("closes on Escape once from a control without a tooltip", () => {
     escapeFrom((dialog) => [...dialog.querySelectorAll<HTMLElement>("button")].find((b) => b.textContent === "Cancel")),
   ).toEqual({ closes: 1, tooltip: false });
 });
+
+/** Renders a dialog whose body measures `scrollHeight` tall in a `clientHeight` box (jsdom has no
+ * layout), and hands the body's scroll container to `check`. */
+async function withScroller(sizes: { scrollHeight: number; clientHeight: number }, check: (scroller: HTMLElement) => void): Promise<void> {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  const restore = (["scrollHeight", "clientHeight"] as const).map((key) => {
+    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, key);
+    Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get: () => sizes[key] });
+    return () => (original ? Object.defineProperty(HTMLElement.prototype, key, original) : delete (HTMLElement.prototype as unknown as Record<string, unknown>)[key]);
+  });
+  try {
+    act(() => {
+      root.render(
+        <DaemonProvider value={fakeDaemon()}>
+          <Dialog title="Long" onClose={() => {}} footer={null}>
+            <span>body</span>
+          </Dialog>
+        </DaemonProvider>,
+      );
+    });
+    // HeroUI writes the fade's state on the next frame.
+    await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+    const scroller = document.querySelector<HTMLElement>("[role=dialog] [data-slot=scroll-shadow]");
+    if (!scroller) throw new Error("the dialog's body is not inside a scroll container with a fade");
+    check(scroller);
+  } finally {
+    act(() => root.unmount());
+    container.remove();
+    restore.forEach((undo) => undo());
+  }
+}
+
+// Every dialog's content can outgrow the window, and the fade at the edge is what tells the user there
+// is more: it belongs to the frame so that no dialog has to remember it.
+it("holds every dialog's body in a scroll container that fades at an edge it can still scroll towards", async () => {
+  await withScroller({ scrollHeight: 1000, clientHeight: 100 }, (scroller) => {
+    expect(scroller.textContent).toBe("body");
+    expect(scroller.classList.contains("scroll-shadow--fade")).toBe(true);
+    expect(scroller.getAttribute("data-bottom-scroll")).toBe("true");
+  });
+});
+
+// A focused control is scrolled to the edge of the container and no further, which is under the fade.
+it("keeps a control scrolled into view clear of the fade at the edge", async () => {
+  await withScroller({ scrollHeight: 1000, clientHeight: 100 }, (scroller) => {
+    const fade = Number(scroller.getAttribute("data-scroll-shadow-size"));
+    expect(fade).toBeGreaterThan(0);
+    expect(parseFloat(scroller.style.scrollPaddingBlock)).toBeGreaterThanOrEqual(fade);
+  });
+});
+
+// With every control in the footer, nothing in the body takes focus, so the keys that scroll need the
+// scroller itself to.
+it("makes a scrolling body a named region the keyboard can focus, and a body that fits not one", async () => {
+  await withScroller({ scrollHeight: 1000, clientHeight: 100 }, (scroller) => {
+    expect(scroller.tabIndex).toBe(0);
+    expect(scroller.getAttribute("role")).toBe("region");
+    const dialog = document.querySelector("[role=dialog]");
+    expect(scroller.getAttribute("aria-labelledby")).toBe(dialog?.getAttribute("aria-labelledby"));
+    expect(document.getElementById(scroller.getAttribute("aria-labelledby") ?? "")?.textContent).toBe("Long");
+  });
+  await withScroller({ scrollHeight: 100, clientHeight: 100 }, (scroller) => {
+    expect(scroller.hasAttribute("tabindex")).toBe(false);
+    expect(scroller.hasAttribute("role")).toBe(false);
+  });
+});
+
+it("shows no fade when the body fits", async () => {
+  await withScroller({ scrollHeight: 100, clientHeight: 100 }, (scroller) => {
+    expect(scroller.getAttribute("data-bottom-scroll")).not.toBe("true");
+    expect(scroller.getAttribute("data-top-scroll")).not.toBe("true");
+    expect(scroller.hasAttribute("data-top-bottom-scroll")).toBe(false);
+  });
+});

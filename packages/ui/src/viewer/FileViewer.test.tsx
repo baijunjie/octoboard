@@ -64,13 +64,7 @@ vi.mock("./renderer", async () => {
   };
 });
 
-// jsdom has neither, and the path line (FadeOverflow) and the theme need them.
-class StubResizeObserver {
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
-}
-globalThis.ResizeObserver ??= StubResizeObserver as unknown as typeof ResizeObserver;
+// jsdom has no `matchMedia`, which the theme needs.
 window.matchMedia ??= ((query: string) =>
   ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList);
 

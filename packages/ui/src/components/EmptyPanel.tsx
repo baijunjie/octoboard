@@ -11,15 +11,17 @@ import { TitledControl } from "./TitledControl";
  * being cut.
  *
  * `silent` is for a state another region already announces: it hides this copy from assistive
- * technology so the state is not read twice. It cannot be combined with an `action`: a button
- * inside an `aria-hidden` subtree stays reachable by Tab yet has no name or role. A plain compact
- * row accepts it too, for the API to be complete; only the full panel uses it today. */
+ * technology so the state is not read twice. It cannot be combined with an action, the primary one
+ * or the secondary: a button inside an `aria-hidden` subtree stays reachable by Tab yet has no name
+ * or role. A plain compact row accepts it too, for the API to be complete; only the full panel uses
+ * it today. */
 export function EmptyPanel({
   icon: Icon,
   message,
   headingLevel = 2,
   description,
   action,
+  secondaryAction,
   compact,
   silent,
 }: {
@@ -38,9 +40,11 @@ export function EmptyPanel({
   | {
       /** `icon` shows only on the full panel's button; a compact row already leads with its glyph. */
       action?: { label: string; icon?: LucideIcon; onPress: () => void };
+      /** A second way out under the action, quieter than it, for a full panel only. */
+      secondaryAction?: { label: string; icon?: LucideIcon; onPress: () => void };
       silent?: never;
     }
-  | { action?: never; silent?: true }
+  | { action?: never; secondaryAction?: never; silent?: true }
 )): React.ReactElement {
   const messageId = useId();
   const actionId = useId();
@@ -89,6 +93,7 @@ export function EmptyPanel({
   }
   const ActionIcon = action?.icon;
   const Heading = `h${headingLevel}` as const;
+  const SecondaryIcon = secondaryAction?.icon;
   return (
     <EmptyState aria-hidden={silent} className="flex flex-col items-center gap-3 px-4 py-10 text-center">
       <span className="flex size-12 items-center justify-center rounded-full bg-default text-muted">
@@ -102,6 +107,12 @@ export function EmptyPanel({
         <Button size="sm" variant="secondary" preventFocusOnPress onPress={action.onPress}>
           {ActionIcon && <ActionIcon aria-hidden="true" className="size-4" />}
           {action.label}
+        </Button>
+      )}
+      {secondaryAction && (
+        <Button size="sm" variant="ghost" preventFocusOnPress onPress={secondaryAction.onPress}>
+          {SecondaryIcon && <SecondaryIcon aria-hidden="true" className="size-4" />}
+          {secondaryAction.label}
         </Button>
       )}
     </EmptyState>

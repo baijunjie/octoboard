@@ -57,11 +57,9 @@ export function useToastClearance(inside: RefObject<HTMLElement | null>, hasFoot
     };
     stack.push(entry);
     entry.measure();
-    // Absent only outside a browser (the component tests' jsdom); the window's own resize and the
-    // dialog's animations still remeasure there.
-    const resize = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(entry.measure);
-    resize?.observe(footer);
-    resize?.observe(dialog);
+    const resize = new ResizeObserver(entry.measure);
+    resize.observe(footer);
+    resize.observe(dialog);
     window.addEventListener("resize", entry.measure);
     // The entrance animates the dialog's container, not the dialog, so its end is listened for on
     // the document.
@@ -69,7 +67,7 @@ export function useToastClearance(inside: RefObject<HTMLElement | null>, hasFoot
     document.addEventListener("transitionend", entry.measure, true);
     return () => {
       cancelAnimationFrame(frame);
-      resize?.disconnect();
+      resize.disconnect();
       window.removeEventListener("resize", entry.measure);
       document.removeEventListener("animationend", entry.measure, true);
       document.removeEventListener("transitionend", entry.measure, true);

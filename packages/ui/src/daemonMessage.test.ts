@@ -2,7 +2,9 @@ import { expect, it } from "vitest";
 
 import { appConfig } from "./appConfig";
 import { daemonMessage } from "./daemonMessage";
+import { CATALOGS } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
+import type { Language } from "./i18n/languages";
 import type { Console, Project, Session } from "./protocol";
 
 const records = {
@@ -39,4 +41,24 @@ it("picks the singular or plural wording from a numeric count param", () => {
   const many = daemonMessage("en", "session_has_running_sessions", params("2", "“A”, “B”"), "x", records);
   expect(one).toContain(`1 session under it is running: ${isolate("“A”")}.`);
   expect(many).toContain(`2 sessions under it are running: ${isolate("“A”, “B”")}.`);
+});
+
+// Each code a configuration import can be refused with, or report on a project, is worded by the
+// catalog of every language that has one; a miss would show English, or the daemon's own text.
+it.each([
+  ["configuration_not_recognised", {}],
+  ["configuration_version_unsupported", { version: "3", supported: "1" }],
+  ["configuration_unreadable", { detail: "bad" }],
+  ["import_resolution_invalid", { console: "0", project: "1" }],
+  ["import_choice_unavailable", { choice: "clone" }],
+  ["import_settings_missing", {}],
+] as const)("words the configuration code %s in every catalog, each in its own language", (code, params) => {
+  const english = daemonMessage("en", code, params, "the daemon's text", records);
+  expect(english).not.toBe("the daemon's text");
+  for (const language of Object.keys(CATALOGS).filter((candidate) => candidate !== "en") as Language[]) {
+    // Worded in its own language, not the English a missing message falls back to.
+    const worded = daemonMessage(language, code, params, "the daemon's text", records);
+    expect(worded, language).not.toBe(english);
+    expect(worded, language).not.toBe("the daemon's text");
+  }
 });

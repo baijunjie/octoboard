@@ -17,7 +17,7 @@ export const emptyScenarios: Scenario[] = [
     group: GROUP,
     title: "No consoles",
     description:
-      "A fresh install: the welcome screen fills the content area with New console, and there is no sidebar, terminal hint or top bar sidebar toggle. The rail keeps its New console, bell and Settings. Narrow the window too: the welcome screen still fills the content area, and there is no drawer to open.",
+      "A fresh install: the welcome screen fills the content area with New console and, quieter beneath it, Import configuration, and there is no sidebar, terminal hint or top bar sidebar toggle. The rail keeps its New console, bell and Settings. Narrow the window too: the welcome screen still fills the content area, and there is no drawer to open.",
     state: snapshotState({}),
   },
   {

@@ -225,8 +225,14 @@ text and identifies the version as an early prototype. The section introduction 
 development, that only the first prototype features are in place, and that the details are still being refined.
 The site does not describe the macOS app as finished and does not give an installer date.
 
-Status: not implemented — versions for Linux, Windows, iOS, and Android. Each appears with a platform icon and a
-planned status, without a download or an availability date. The platform answer repeats the same availability status.
+Status: not implemented — the Linux server and the Windows, iOS and Android apps. Each appears with a platform icon
+and a planned status, without a download or an availability date, and the platform answer repeats the same status.
+
+The Linux entry stands for the server form, not for a desktop app: the daemon alone on a server without a display,
+reached by its owner from a browser on another machine (see "Two deployment forms" in `docs/architecture.md`). The
+entry and the platform answer have to say so, so that the site never promises a Linux desktop app. The site's current
+copy does not yet: it lists Linux as one planned "version" beside the others and says nothing of what it is, wording
+that predates this positioning and is to be replaced.
 
 ## Motion and accessibility
 
@@ -291,3 +297,12 @@ website terms page; the software's license is linked separately from the privacy
 
 Status: not implemented. The homepage and the privacy page say that remote host support is planned and do not describe
 a workflow. A decorative illustration sits beside that status.
+
+Remote host support runs in one direction only: the daemon the user is talking to reaching a second machine to run
+sessions there. The server form runs the other way — one daemon, on a server, with the user's browser on another
+machine (see "Two deployment forms" in `docs/architecture.md`) — and is not what this section, the planned-remote
+question or the privacy page's remote-host disclosure describe. Beyond the Linux entry in "Platform availability" the
+site says nothing of the server form today. Its local-data statements describe the machine the daemon runs on, which
+in the server form is the server rather than the machine in front of the user, and a privacy page covering that form
+has to say that the interface then travels over the network between the server and the user's browser. That addition
+has not been written.

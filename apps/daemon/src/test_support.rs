@@ -370,6 +370,45 @@ pub(crate) fn repo_with(label: &str, files: &[(&[u8], &[u8])]) -> ScratchDir {
     dir
 }
 
+/// Two repositories whose `a.txt` differs, `(ours, theirs)`: a command that reads `a.txt` says
+/// which of them it ran against.
+pub(crate) fn repo_pair(label: &str) -> (ScratchDir, ScratchDir) {
+    (
+        repo_with(&format!("{label}-ours"), &[(b"a.txt", b"ours\n")]),
+        repo_with(&format!("{label}-theirs"), &[(b"a.txt", b"theirs\n")]),
+    )
+}
+
+/// The variables a login shell could export that send a `git` to `theirs` instead of the
+/// repository its working directory names: the repository, index and common directory, and a
+/// `remote.origin.url` passed through the environment by both of its channels. The tests that run
+/// a command over these (`git_status`, `git_remote`, `browse`) prove the filter is wired into each
+/// path, each by what its own read can see — a file's content sees the first three, a remote's
+/// URL the last two, and `GIT_WORK_TREE` none. Which names stay kept is pinned by the unit test
+/// in `git_env`, which takes its dropped names from here.
+pub(crate) fn redirecting_overrides(theirs: &Path) -> Vec<(&'static str, String)> {
+    let git_dir = theirs.join(".git");
+    vec![
+        ("GIT_DIR", git_dir.to_string_lossy().into_owned()),
+        ("GIT_WORK_TREE", theirs.to_string_lossy().into_owned()),
+        (
+            "GIT_INDEX_FILE",
+            git_dir.join("index").to_string_lossy().into_owned(),
+        ),
+        ("GIT_COMMON_DIR", git_dir.to_string_lossy().into_owned()),
+        (
+            "GIT_CONFIG_PARAMETERS",
+            "'remote.origin.url'='https://example.com/other.git'".to_string(),
+        ),
+        ("GIT_CONFIG_COUNT", "1".to_string()),
+        ("GIT_CONFIG_KEY_0", "remote.origin.url".to_string()),
+        (
+            "GIT_CONFIG_VALUE_0",
+            "https://example.com/other.git".to_string(),
+        ),
+    ]
+}
+
 /// Every file under `.git`, by path, with its length, a digest of its bytes and its modification
 /// time: what a read that must leave the repository alone is checked against. The modification
 /// time is part of it because an index rewritten with the same stat information it already held

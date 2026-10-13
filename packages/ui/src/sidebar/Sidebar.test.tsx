@@ -16,13 +16,6 @@ import type { FocusTarget, SidebarHandlers } from "./types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-// jsdom has no ResizeObserver, which FadeOverflow and HeroUI's ScrollShadow need to mount.
-class StubResizeObserver {
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
-}
-globalThis.ResizeObserver ??= StubResizeObserver as unknown as typeof ResizeObserver;
 // Reduced motion keeps the view's slide animation, which jsdom has no `animate` for, from playing.
 window.matchMedia = ((query: string) => ({ matches: true, media: query })) as unknown as typeof window.matchMedia;
 
@@ -72,10 +65,12 @@ function mountSidebar(initial: Partial<ComponentProps<typeof Sidebar>>, beside?:
   const render = (props: Partial<ComponentProps<typeof Sidebar>>) =>
     act(() =>
       root.render(
-        <DaemonProvider value={daemon}>
-          {beside}
-          <Sidebar {...handlers} projects={[web]} sessions={sessions} shownConsole={main} open sidebarWidth={sidebarWidth} {...props} />
-        </DaemonProvider>,
+        <PlatformProvider value={{ kind: "browser" }}>
+          <DaemonProvider value={daemon}>
+            {beside}
+            <Sidebar {...handlers} projects={[web]} sessions={sessions} shownConsole={main} open sidebarWidth={sidebarWidth} {...props} />
+          </DaemonProvider>
+        </PlatformProvider>,
       ),
     );
   render(initial);
@@ -198,7 +193,7 @@ function mountPeeking() {
   } satisfies Pick<PanePeek, "active" | "keep" | "leave">;
   // `Rail` reads the platform for its notifications bell, which a browser without the capability omits.
   const beside = (
-    <PlatformProvider value={{ kind: "browser" }}>
+    <>
       <ChromeButton label="Toggle" onPress={() => {}} controls={PANE_ID.sidebar}>
         <svg />
       </ChromeButton>
@@ -216,7 +211,7 @@ function mountPeeking() {
         onOpenSettings={vi.fn()}
         focusTerminal={vi.fn()}
       />
-    </PlatformProvider>
+    </>
   );
   const { container } = mountSidebar({ open: false, peek }, beside);
   const pane = container.querySelector<HTMLElement>("[data-pane=sidebar]")!;

@@ -6,7 +6,7 @@ import ReactDOM from "react-dom/client";
 
 import { LANGUAGES, LANGUAGE_NAMES, isLanguage, type Language } from "../i18n/languages";
 import { GROUPS, SCENARIOS } from "./fixtures";
-import { DEFAULT_WIDTH, type Scenario } from "./scenario";
+import { DEFAULT_WIDTH, MIN_HEIGHT, type Scenario } from "./scenario";
 
 const WIDTHS = [
   { label: "Wide", width: DEFAULT_WIDTH },
@@ -14,6 +14,10 @@ const WIDTHS = [
   { label: "Narrow", width: 800 },
   { label: "Phone", width: 420 },
 ];
+
+/** The window heights offered besides fitting the space the page has: one short enough that a
+ * dialog's body outgrows it, which is what a laptop screen does to the longer ones. */
+const HEIGHTS = [{ label: "Short", height: 480 }];
 
 const MIN_WIDTH = 320;
 
@@ -23,41 +27,62 @@ interface View {
   language: Language;
   /** Set by the user; otherwise the scenario's own width applies. */
   width?: number;
+  /** Likewise; otherwise the scenario's own, and otherwise the window fits the page. */
+  height?: number;
 }
 
 function readView(): View {
   const params = new URLSearchParams(window.location.search);
   const language = params.get("lang");
   const width = Number(params.get("width"));
+  const height = Number(params.get("height"));
   return {
     scenario: params.get("scenario") ?? SCENARIOS[0].id,
     theme: params.get("theme") === "dark" ? "dark" : "light",
     language: isLanguage(language) ? language : "en",
     width: Number.isFinite(width) && width > 0 ? width : undefined,
+    height: Number.isFinite(height) && height > 0 ? height : undefined,
   };
 }
 
 function viewQuery(view: View): string {
   const params = new URLSearchParams({ scenario: view.scenario, theme: view.theme, lang: view.language });
   if (view.width) params.set("width", String(view.width));
+  if (view.height) params.set("height", String(view.height));
   return `?${params}`;
 }
 
-/** The width in pixels as typed: applied on Enter or blur, so clearing the field to type another
- * number does not snap back, and a value under the smallest usable window is ignored. */
-function WidthBox({ width, onCommit }: { width: number; onCommit: (width: number) => void }): React.ReactElement {
-  const [text, setText] = useState(String(width));
-  useEffect(() => setText(String(width)), [width]);
+/** A size in pixels as typed: applied on Enter or blur, so clearing the field to type another
+ * number does not snap back, and a value under the smallest usable window is ignored. With
+ * `emptyMeans` an empty field is a size too, the one that text says. */
+function SizeBox({
+  label,
+  size,
+  min,
+  emptyMeans,
+  onCommit,
+}: {
+  label: string;
+  size: number | undefined;
+  min: number;
+  emptyMeans?: string;
+  onCommit: (size: number | undefined) => void;
+}): React.ReactElement {
+  const text0 = size === undefined ? "" : String(size);
+  const [text, setText] = useState(text0);
+  useEffect(() => setText(text0), [text0]);
   const commit = () => {
     const typed = Number(text);
-    if (typed >= MIN_WIDTH) onCommit(typed);
-    else setText(String(width));
+    if (text.trim() === "" && emptyMeans) onCommit(undefined);
+    else if (typed >= min) onCommit(typed);
+    else setText(text0);
   };
   return (
     <input
       type="number"
-      aria-label="Width in pixels"
-      min={MIN_WIDTH}
+      aria-label={label}
+      placeholder={emptyMeans}
+      min={min}
       value={text}
       onChange={(e) => setText(e.target.value)}
       onBlur={commit}
@@ -66,12 +91,17 @@ function WidthBox({ width, onCommit }: { width: number; onCommit: (width: number
   );
 }
 
-/** The view that picking `scenario` reaches: a scenario carrying its own width opens at it, dropping
- * whatever width was chosen for an earlier one. A width is otherwise sticky across the list, and a
+/** The view that picking `scenario` reaches: a scenario carrying its own width or height opens at it,
+ * dropping whatever was chosen for an earlier one. Each is otherwise sticky across the list, and a
  * scenario whose steps open the drawer that exists only below the breakpoint cannot run in a wide
  * window — the press finds nothing and the page paints its failure overlay. */
 function viewOf(view: View, scenario: Scenario): View {
-  return { ...view, scenario: scenario.id, width: scenario.width ? undefined : view.width };
+  return {
+    ...view,
+    scenario: scenario.id,
+    width: scenario.width ? undefined : view.width,
+    height: scenario.height ? undefined : view.height,
+  };
 }
 
 function Gallery(): React.ReactElement {
@@ -79,6 +109,7 @@ function Gallery(): React.ReactElement {
   const [run, setRun] = useState(0);
   const scenario = SCENARIOS.find((s) => s.id === view.scenario) ?? SCENARIOS[0];
   const width = view.width ?? scenario.width ?? DEFAULT_WIDTH;
+  const height = view.height ?? scenario.height;
   const update = (patch: Partial<View>) => setView((current) => ({ ...current, ...patch }));
 
   useEffect(() => {
@@ -138,7 +169,19 @@ function Gallery(): React.ReactElement {
                 {label} {w}
               </button>
             ))}
-            <WidthBox width={width} onCommit={(w) => update({ width: w })} />
+            <SizeBox label="Width in pixels" size={width} min={MIN_WIDTH} onCommit={(w) => update({ width: w })} />
+          </div>
+          <div className="group">
+            Height
+            <button aria-pressed={height === undefined} onClick={() => update({ height: undefined })}>
+              Fit
+            </button>
+            {HEIGHTS.map(({ label, height: h }) => (
+              <button key={label} aria-pressed={height === h} onClick={() => update({ height: h })}>
+                {label} {h}
+              </button>
+            ))}
+            <SizeBox label="Height in pixels" size={height} min={MIN_HEIGHT} emptyMeans="fit" onCommit={(h) => update({ height: h })} />
           </div>
           <a href={`gallery-frame.html${frameQuery}`} target="_blank" rel="noreferrer">
             Open alone
@@ -151,7 +194,7 @@ function Gallery(): React.ReactElement {
             key={`${run}${frameQuery}`}
             title={scenario.title}
             src={`gallery-frame.html${frameQuery}`}
-            style={{ width }}
+            style={{ width, height }}
           />
         </div>
       </main>

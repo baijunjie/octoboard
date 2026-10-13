@@ -4,7 +4,8 @@
   <img src="assets/branding/logo-brand-h.png" alt="Octoboard — The Programming Terminator" width="640" />
 </p>
 
-Octoboard is a local, open source command center for coding agents.
+Octoboard is a local, open source command center for coding agents: it runs on your own machine, or on a server
+of yours, never as a service someone else hosts.
 
 Octoboard is for large projects inside a company. One product is split across repositories, each
 with its own rules and often its own agent. A change rarely stays in one of them. Agent workspace tools
@@ -22,13 +23,19 @@ The full introduction is on [octoboard.dev](https://octoboard.dev).
 **Status: early development.** The macOS app for Apple Silicon is still in development. Only the first
 prototype features are in place, and the details are still being refined.
 
-| Platform | Status |
+Octoboard comes in two forms. In the desktop app, the window, the daemon and the projects share one machine.
+On a server, the daemon alone runs on a machine without a display, and you reach the same interface from a
+browser on another machine over the network. Linux is the server form: there is no Linux desktop app. The
+server form is the same person reaching their own daemon from elsewhere — one user with a server of their
+own, not a team sharing one; several people on one daemon are outside this design.
+
+| Form | Status |
 |---|---|
-| macOS (Apple Silicon) | Early prototype, still in development |
-| Linux | Planned |
-| Windows | Planned |
-| iOS | Planned |
-| Android | Planned |
+| macOS app (Apple Silicon) | Early prototype, still in development |
+| Linux server — the daemon on a headless server, the interface in a browser on the network | Planned |
+| Windows app | Planned |
+| iOS app | Planned |
+| Android app | Planned |
 
 ## Develop
 

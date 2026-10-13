@@ -1,9 +1,13 @@
 # Application lifecycle
 
-Octoboard is a macOS desktop application. The agent processes are owned by a background daemon that starts and stops
-with it; nothing keeps running once the application is gone. Closing the window quits the application unless the user
-has turned on keeping it running in the background, a setting that is off to begin with (see "Closing the window"
-below).
+Octoboard comes in two forms (see "Two deployment forms" in `docs/architecture.md`). This document describes the
+**desktop form**, the macOS application, in full: the agent processes are owned by a background daemon that starts
+and stops with it; nothing keeps running once the application is gone. Closing the window quits the application
+unless the user has turned on keeping it running in the background, a setting that is off to begin with (see "Closing
+the window" below). What the **server form** — the daemon alone, on a Linux server without a display, reached by its
+owner from a browser on another machine — changes is said where it applies, and in "The daemon on its own" below. That
+form is not built yet, so those passages state what already follows from it and what the daemon does today, not a
+finished behaviour.
 
 ## System requirements and distribution
 
@@ -15,12 +19,17 @@ below).
   Gatekeeper admits it as built: `spctl` reports `Notarized Developer ID` for the `.app` and the `.dmg`, including a
   copy carrying the quarantine attribute, and `codesign --verify --deep --strict` passes on the bundled daemon. That was
   verified on the machine that built it; installing and running it on a clean machine has not been tried yet.
+- The server form has no requirements or distribution settled: the daemon is a single binary meant to be put on the
+  server as it is, and its Linux build is not established yet.
 
 ## Starting up
 
-The daemon is started as part of the application and listens on `127.0.0.1` only, on a port the operating system
-assigns. The application is handed that port by the process that started the daemon; it is never fixed and never
-guessed.
+In the desktop form the daemon is started as part of the application. Whoever starts it, it listens on `127.0.0.1`
+only, on a port the operating system assigns, and prints that address on its standard output: the application reads
+the port from there, and it is never fixed and never guessed. The daemon also writes the port to a file in the
+temporary directory, for a developer attaching to a daemon started by hand (see "Files Octoboard owns" below). Neither
+fits the server form: nothing off the server can reach loopback, and a port that changes on every start cannot be
+bookmarked or written into a tunnel command; the address the daemon listens on there does not exist yet.
 
 Two things happen on every daemon start:
 
@@ -32,7 +41,8 @@ Two things happen on every daemon start:
 processes while sharing one database, so it refuses to start. The application then opens its window anyway, on a
 screen that states why the daemon could not start and offers to quit — a failed start never leaves a window with no
 explanation. With no daemon running there is nothing to keep running, so closing the window quits whatever that
-setting says (see "Closing the window" below).
+setting says (see "Closing the window" below). The lock is per data directory, so on a server it is one daemon per
+Unix user, whose `~/.octoboard` is the daemon's (see "The daemon on its own" below).
 
 If the daemon starts but dies later, the application says so and asks the user to restart Octoboard; it does not
 silently keep showing a stale session list.
@@ -51,13 +61,38 @@ when the daemon failed to start, which never gets a choice to hand over — quit
 
 ## Who can reach the daemon
 
-The daemon has no login or token. **Any program running on this machine can connect to it and do everything the
-application can**: create consoles and sessions, start agents, type into their terminals.
+The daemon has no login or token, and no notion of who is connected: whoever reaches it is let in, and every client
+is the same client. In the desktop form that means **any program running on this machine can connect to it and do
+everything the application can**: create consoles and sessions, start agents, type into their terminals. It is safe
+there only because the daemon listens on loopback, so whoever can reach it already has the machine.
 
-**A web page open in a browser cannot.** When a browser makes a request on behalf of a page, the daemon answers `403`
-unless that page is the application's own window or is served over `http` or `https` from this machine's loopback
-address, on any port. A site that makes its own name resolve to `127.0.0.1` is refused as well. Programs that are not
-browsers, such as scripts, are not subject to this check, and neither is the application's own window.
+In the server form the same sentence reads **anyone who can reach the port can do everything** — start agents and
+type into terminals on the server, as the Unix user the daemon runs as — which is no access model for a machine on a
+network. So the daemon as it is today must not be put beyond loopback, and nothing in it lets it be: it binds to
+loopback and nowhere else, and it refuses any request whose `Host` names it by anything but a loopback address. A
+reverse proxy in front of it does not change that: the daemon also refuses a request whose `Origin` — which a browser
+sends on every WebSocket upgrade — is neither the application's, nor loopback, nor the same as `Host`, so a proxy
+would have to rewrite both headers, and the daemon behind it would be open to whatever the proxy lets through with
+nothing of its own to tell it apart. What the form still lacks is the whole of an access model: a credential checked
+on every route, the UI and the WebSocket upgrades included; one credential per device of the owner's, so that a lost
+or retired device can be revoked without re-issuing the rest; and TLS, which a browser needs before it will show a
+notification or touch the clipboard from a page at a network address at all (see "Two deployment forms" in
+`docs/architecture.md`). None of that exists yet.
+
+The server form is the same user reaching their own daemon from another machine, not a daemon shared by several
+people. The daemon will not tell clients apart even then: whoever holds a credential is taken for the owner and can
+do everything the owner can, so a credential is to be kept like a password. That is this version's design boundary,
+not a gap left open (see "Two deployment forms" in `docs/architecture.md`).
+
+The one way a browser on another machine reaches today's daemon is a tunnel that ends on the server's loopback — an
+SSH port forward. The page is then at `http://localhost:<port>`, a loopback address, which the check below admits and
+which a browser treats as a secure context, so notifications and the clipboard work through it.
+
+**A web page open in a browser cannot, unless it is Octoboard's own.** When a browser makes a request on behalf of a
+page, the daemon answers `403` unless that page is the application's own window or is served over `http` or `https`
+from this machine's loopback address, on any port. A site that makes its own name resolve to `127.0.0.1` is refused as
+well. Programs that are not browsers, such as scripts, are not subject to this check, and neither is the application's
+own window.
 
 ## Losing the daemon connection
 
@@ -93,6 +128,9 @@ which sends nothing while any field is still wanting — and from then on follow
 the field is corrected and comes back if the field is emptied again.
 
 ## Closing the window
+
+This section and "Quitting" below are the desktop form's. A browser tab has no close that Octoboard sees, and nothing
+in a browser quits anything (see "The daemon on its own" below).
 
 **The window's close button, `Cmd+W` and the Window menu's Close Window item are one gesture.** All three do the same
 thing, deliberately, and what they do is the user's choice: the **Keep running in the background when the window is
@@ -254,17 +292,42 @@ Dock icon's Quit was not tried in that state.
 A crash of the application, or killing it outright, leaves **the same state** as a confirmed quit: every session
 interrupted and resumable.
 
-- The daemon exits by itself once the application is gone, whether or not it was asked to.
+- The daemon exits by itself once the application is gone, whether or not it was asked to. That is a watch the
+  application asks for when it starts the daemon; a daemon started on its own has no application to follow (see "The
+  daemon on its own" below).
 - Agent processes do not outlive the daemon: it ends them on its way out, including when it is signalled to stop and
   when it goes down on an internal failure.
 - An agent's tool subprocesses go with the agent.
 - Should a session's process nonetheless survive, the next start still marks every non-archived session interrupted
   (see "Starting up"), so the session list never claims a session is running that this Octoboard does not own.
 
+## The daemon on its own
+
+In the server form there is no application: the daemon is the whole of Octoboard on the server, and its lifetime is
+for whoever runs the server to manage. What follows is what the daemon does today when it is started by hand, with
+nothing that the form will need and does not have yet claimed to exist.
+
+- **Starting and stopping are the administrator's.** Nothing starts the daemon but the person or the service manager
+  told to, and nothing stops it but a termination signal — `SIGTERM`, or `Ctrl+C` in the terminal it was started
+  from. The daemon answers that exactly as the desktop form's quit does once confirmed: every session's process is
+  ended and every one of those sessions is left *interrupted*, never archived, and nobody is asked first. Started
+  without an application to follow, the daemon runs until it is stopped; exiting with the application is a watch the
+  desktop form asks for and the server form never does. A command-line surface for starting it in the background,
+  stopping it and asking where it listens does not exist yet.
+- **A browser is not the application.** Closing a tab, or every tab, ends nothing: the daemon, every session and its
+  agent process run on until the daemon is stopped, and a browser opened later finds them where they were. There is no
+  quit gesture in a browser, no confirmation, and no background switch (see "Closing the window" above).
+- **A restart interrupts every session.** What "Starting up" says of a daemon start holds unchanged, whichever browser
+  or device a session was opened from; each resumes with a click, as after any quit.
+- **One daemon per data directory, and the data directory is the owner's.** The lock in "Starting up" is per
+  `~/.octoboard`, so per Unix user on the server; the daemon's consoles, projects and sessions are that user's, and its
+  agents are launched under that user's own agent accounts, with that user's logins and keys — every client of the
+  daemon acts as that user.
+
 ## Files Octoboard owns
 
-Everything Octoboard writes for itself lives under `~/.octoboard`, with one exception, the window's state, described
-after the table:
+Everything Octoboard writes for itself lives under `~/.octoboard` — on the machine the daemon runs on, which in the
+server form is the server — with two exceptions, the window's state and the port file, described after the table:
 
 | Path | Contents |
 |---|---|
@@ -278,6 +341,11 @@ The macOS application keeps the window's size, position and maximized state in
 `~/Library/Application Support/dev.octoboard.app/window-state.json` (see "The window's size and position across
 launches" in `docs/product/window-size-and-position.md`). It belongs to the application's window rather than to the
 daemon, so it is not under `~/.octoboard`. Deleting it makes the next launch open the window as a first launch does.
+
+The daemon writes the port it listens on to `octoboardd.port` in the temporary directory, for a developer attaching to
+a daemon started by hand (see "Starting up"), and removes it on its way out. On macOS that directory is the user's own
+`$TMPDIR`; on Linux, where `TMPDIR` is usually unset, it is the shared `/tmp`, so two daemons on one server — each a
+different owner's, each single-user — would write the same file.
 
 Nothing is written inside a project directory, and nothing is written into the user's own agent configuration beyond
 two narrow exceptions — see "What Octoboard never modifies" in `docs/product/launching-agents.md`.

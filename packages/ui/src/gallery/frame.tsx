@@ -10,10 +10,11 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 
 import { isLanguage, type Language } from "../i18n/languages";
+import { ConfigurationFileError } from "../platform/configurationFileError";
 import { galleryFailure } from "./banner";
 import { SCENARIOS } from "./fixtures";
 import { installFakeTerminal } from "./fakeTerminal";
-import { createUi } from "./interact";
+import { createUi, stuckExit } from "./interact";
 import { prepareStorage } from "./prepare";
 
 const params = new URLSearchParams(window.location.search);
@@ -49,15 +50,22 @@ const { createFixtureDaemon } = await import("./fixtureDaemon");
 
 const { DaemonFailedMessage, NoAddressMessage, StartupScreen } = startup;
 
+/** What a file the gallery's open dialog hands back holds unless the scenario gives one: a document
+ * of the right format with nothing in it. */
+const EMPTY_DOCUMENT = JSON.stringify({ format: "octoboard-configuration", version: 1, consoles: [] });
+
 /** The browser platform, with what the desktop app alone offers added so it can be driven in the
  * gallery: `windowChrome` while the URL says `chrome=1` (the window shortcuts among it, ⌃Tab
  * between console sessions; it also puts the top bar's drag region on), the macOS privacy grants
  * stubbed from the scenario's `macosPermissions`, there being no other way to look at those rows
  * than to really change a system setting, and `backgroundRun` for a scenario that says so (the
- * Settings switch). Nothing else native. */
+ * Settings switch), and the configuration-file capability stubbed from the scenario's
+ * `configuration` (absent where it says the platform has none) so that no download or file picker
+ * is raised from a capture. Nothing else native. */
 function galleryPlatform(): ReturnType<typeof selectPlatform> {
   const platform = selectPlatform();
   const grants = scenario?.macosPermissions;
+  const configuration = scenario?.configuration;
   return {
     ...platform,
     ...(params.get("chrome") === "1" && { windowChrome: { leftInset: () => 0, subscribe: () => () => {} } }),
@@ -70,6 +78,22 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
       },
     }),
     ...(scenario?.backgroundRun && { backgroundRun: { set: async () => {} } }),
+    configurationFile: configuration?.unavailable
+      ? undefined
+      : {
+          save: async (suggestedName) => {
+            if (configuration?.saveError !== undefined) throw new Error(configuration.saveError);
+            return configuration?.downloads ? { kind: "handedOver" } : { kind: "saved", name: suggestedName };
+          },
+          open: async () => {
+            const readError = configuration?.readError;
+            if (typeof readError === "string") throw new ConfigurationFileError("io", readError);
+            if (readError !== undefined) throw new ConfigurationFileError(readError.kind);
+            if (configuration?.file === "pending") return new Promise<never>(() => {});
+            const file = configuration?.file ?? { name: "octoboard-configuration.json", text: EMPTY_DOCUMENT };
+            return file === "dismissed" ? undefined : file;
+          },
+        },
   };
 }
 
@@ -112,11 +136,13 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 );
 
 // The scenario's interactions, once the app has mounted. A failed one is shown over the page as
-// well as logged, since the scenario then shows less than it says.
+// well as logged, since the scenario then shows less than it says; so is an exit that does not end.
 try {
   const ui = createUi(document, language, daemon);
   await ui.wait(300);
   for (const step of scenario?.steps ?? []) await step(ui);
+  const stuck = await stuckExit(document);
+  if (stuck) galleryFailure(`Something that was closing never left the page: ${stuck} is still marked data-exiting`);
 } catch (error) {
   galleryFailure(`Scenario step failed: ${(error as Error).message}`, error);
 }

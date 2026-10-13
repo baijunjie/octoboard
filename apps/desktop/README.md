@@ -10,9 +10,10 @@ report panel, the project file browser and the exit-flow screens.
 The UI talks to `octoboardd` (see [`../daemon/`](../daemon/README.md)) only over the WebSocket/HTTP protocol in
 [`../daemon/PROTOCOL.md`](../daemon/PROTOCOL.md) — no Tauri IPC command carries daemon traffic, and the shell never asks
 the daemon anything. IPC carries only bare signals, display text or opaque ids that the UI words from what it already
-shows (the Dock badge's count, the menu bar icon's menu), and the macOS privacy grants, which are the system's to answer. This is an architectural rule, not an implementation detail: the already-decided remote-host feature depends on the UI
-never distinguishing a local daemon from a remote one, which only holds if the daemon is reachable exclusively through
-that one protocol.
+shows (the Dock badge's count, the menu bar icon's menu), the macOS privacy grants, which are the system's to answer,
+and the text of a file the user saves or opens through the system's own dialog. This is an architectural rule, not an
+implementation detail: the already-decided remote-host feature depends on the UI never distinguishing a local daemon
+from a remote one, which only holds if the daemon is reachable exclusively through that one protocol.
 
 ## Development
 
@@ -96,8 +97,9 @@ them itself instead of asking the reader to remember.
 
 ## External interfaces
 
-`src-tauri/` (the Rust side) defines exactly nine of its own Tauri IPC commands: three bare signals, one carrying a
-single boolean, two carrying the text of a menu, and three about the macOS privacy permissions:
+`src-tauri/` (the Rust side) defines exactly eleven of its own Tauri IPC commands: three bare signals, one carrying a
+single boolean, two carrying the text of a menu, three about the macOS privacy permissions, and two that save and open
+the configuration file:
 
 - `frontend_exit_heartbeat` — marks the webview as the one handling the exit flow, so a quit is no longer let through
   unconfirmed; also doubles as a liveness ping, re-invoked on every quit gesture
@@ -123,6 +125,17 @@ single boolean, two carrying the text of a menu, and three about the macOS priva
   Screen Recording and Accessibility grants (never prompting), raise the one system prompt for a permission the user
   asked for, and open that permission's System Settings pane. They answer the system, not the daemon, and `status`
   answers nothing off macOS. `packages/ui/src/platform/tauri.ts` exposes them as the `macosPermissions` capability.
+- `save_configuration_file` and `open_configuration_file` (`src-tauri/src/configuration_file.rs`, permitted by
+  `permissions/configuration-file.toml`) — the configuration export and import, which move the document as a file the
+  user names. Each raises the system's save or open dialog, filtered to JSON (through `tauri-plugin-dialog`, which the
+  page is given no command of), and then writes or reads the file the user picked, so the page never holds a path it
+  could write elsewhere; the file name it suggests is cut to its last component, without separators or control
+  characters. `save_configuration_file` takes the suggested file name and the text and answers the name saved under,
+  `open_configuration_file` answers the picked file's name and its UTF-8 text, and both answer nothing when the dialog
+  is dismissed. A failure is a `{ kind, detail? }`: `too_large` (a file over 64 MiB) and `not_text` for the UI to
+  word, and `io` with the operating system's own text. The text is the configuration document the UI has already had
+  from the daemon; the shell reads none of it. `packages/ui/src/platform/tauri.ts` exposes them as the
+  `configurationFile` capability.
 
 Beyond those, the shell emits two events to the webview. `settings-requested` fires when the application menu's
 **Settings…** item (Cmd+,) is chosen; it carries no payload, and `packages/ui/src/platform/tauri.ts` exposes it as the
@@ -220,9 +233,10 @@ any IPC call for it. The system's preferred languages travel the same way (`&lan
 | `src-tauri/src/tray.rs` | The menu bar icon: its menu (rebuilt from the UI's `set_tray_menu`; Open, Quit and the session lines), a left click that shows the window, and the `tray-session-chosen` event |
 | `src-tauri/src/menu.rs` | Builds the native macOS menu bar from the labels the UI sends (`set_menu_labels`), including the Settings… item that `lib.rs` turns into the `settings-requested` event |
 | `src-tauri/src/permissions.rs` | The macOS privacy permissions (Screen Recording, Accessibility): the three IPC commands above over hand-declared CoreGraphics / ApplicationServices calls and an `NSWorkspace` deep link, and `capture_launch_state()`, which records the Screen Recording grant the process started with, the only one it can use, so the UI can tell a grant made since from one it can act on |
+| `src-tauri/src/configuration_file.rs` | The two configuration-file IPC commands above: the system's save and open dialogs, and the write or read of the file the user picked |
 | `src-tauri/src/window_state.rs` | Remembers the window's frame and maximized state: decides the initial frame from the saved one and the connected displays, follows it from window events, saves it on exit |
-| `src-tauri/capabilities/default.json` | Allowlists the IPC commands above (through `permissions/*.toml`) plus the notification, clipboard write-text, shell open, Dock-badge, window-theme, window-reveal and window-drag/zoom commands |
-| `src-tauri/permissions/` | The app-defined permissions the capability names: `exit-lifecycle.toml`, `macos-permissions.toml`, `menu-labels.toml`, `run-in-background.toml` (`set_run_in_background`), and `tray.toml` (`set_tray_menu` and `bring_to_front`) |
+| `src-tauri/capabilities/default.json` | Allowlists the IPC commands above (through `permissions/*.toml`) plus the notification, clipboard write-text, configuration-file, shell open, Dock-badge, window-theme, window-reveal and window-drag/zoom commands |
+| `src-tauri/permissions/` | The app-defined permissions the capability names: `exit-lifecycle.toml`, `macos-permissions.toml`, `menu-labels.toml`, `run-in-background.toml` (`set_run_in_background`), `configuration-file.toml` (`save_configuration_file` and `open_configuration_file`), and `tray.toml` (`set_tray_menu` and `bring_to_front`) |
 | `src-tauri/icons/tray-template.png` | The menu bar icon's monochrome template image, derived by hand from the app icon's silhouette with the eyes cut out; no script regenerates it |
 | `src-tauri/tauri.conf.json` | Where the window's UI comes from (`frontendDist` is `packages/ui/dist`; `devUrl` and `beforeDevCommand` are that package's dev server), the `octoboardd` `externalBin`, the shell plugin's `open` flag, and the bundle targets; its `productName` mirrors `config/app.json`'s `name`, which `build.rs` checks |
 | `src-tauri/Info.plist` | Merged by Tauri into the bundle's generated `Info.plist`; declares the 17 UI languages as `CFBundleLocalizations`, which is what makes VoiceOver speak the controls' roles in the system's language instead of English |

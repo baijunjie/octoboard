@@ -42,7 +42,8 @@ sessions, its console sessions included, so a raised hand in a console that is n
 The name assistive technology announces for an avatar is the console's name together with what its badge means.
 
 **Right-clicking** (or Control-clicking) an avatar opens that console's action menu at the pointer: **Add project**,
-**Edit console** and **Delete console**, as in the sidebar's header below. It does not switch to the console.
+**Edit console**, **Export configuration…** and, after a separator, **Delete console**, as in the sidebar's header
+below. It does not switch to the console.
 
 **The current console is remembered per client**, in that client's own browser storage, as the panes' widths are
 (see "Resizing the sidebar and the right pane" in `docs/product/window-layout.md`). A remembered console that no
@@ -76,9 +77,11 @@ is a **preview**:
 ## The console header
 
 The top of the sidebar names the console being shown, with its action menu beside it: **Add project**, **Edit
-console** and **Delete console** (see "Associating a project", "Editing a console" and "Deleting a console" in
-`docs/product/consoles-and-projects.md`; deleting asks for a typed confirmation first). The console's avatar is not
-repeated here; the rail marks it.
+console**, **Export configuration…** and, after a separator, **Delete console** (see "Associating a project", "Editing
+a console" and "Deleting a console" in `docs/product/consoles-and-projects.md`, and "In the window" in
+`docs/product/configuration-export-and-import.md`; deleting asks for a typed confirmation first). Export
+configuration… is there only where the window can save a file, which the macOS application and a browser both can.
+The console's avatar is not repeated here; the rail marks it.
 
 ## The console sessions section and the project list
 

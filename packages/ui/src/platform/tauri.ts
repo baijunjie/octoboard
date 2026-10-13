@@ -1,14 +1,17 @@
+import { ConfigurationFileError } from "./configurationFileError";
 import type {
   AppMenuCapability,
   BackgroundRunCapability,
   BadgeCapability,
   ClipboardCapability,
+  ConfigurationFileCapability,
   ExitCapability,
   LinkCapability,
   MacosPermissionsCapability,
   MacosPermissionsStatus,
   NativeWindowCapability,
   NotificationCapability,
+  OpenedConfigurationFile,
   PlatformAdapter,
   StatusItemCapability,
   WindowChromeCapability,
@@ -29,6 +32,7 @@ export function tauriPlatform(): PlatformAdapter {
     appMenu: tauriAppMenu(),
     statusItem: tauriStatusItem(),
     clipboard: tauriClipboard(),
+    configurationFile: tauriConfigurationFile(),
     links: tauriLinks(),
     macosPermissions: tauriMacosPermissions(),
     backgroundRun: tauriBackgroundRun(),
@@ -198,6 +202,33 @@ function tauriClipboard(): ClipboardCapability {
     async writeText(text) {
       const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
       await writeText(text);
+    },
+  };
+}
+
+/** Through the shell's own commands (`configuration_file.rs`), which raise the system's dialogs and
+ * read or write the file the user picked: the page is never given a path, so it can touch nothing
+ * else. The shell answers `null` for a dismissed dialog and rejects with `{ kind, detail? }`. */
+function tauriConfigurationFile(): ConfigurationFileCapability {
+  const failure = (err: unknown): ConfigurationFileError => {
+    const { kind, detail } = (typeof err === "object" && err !== null ? err : {}) as { kind?: string; detail?: string };
+    if (kind === "too_large" || kind === "not_text") return new ConfigurationFileError(kind);
+    return new ConfigurationFileError("io", detail ?? String(err));
+  };
+  return {
+    async save(suggestedName, text) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const name = await invoke<string | null>("save_configuration_file", { suggestedName, text }).catch((err) => {
+        throw failure(err);
+      });
+      return name === null ? undefined : { kind: "saved", name };
+    },
+    async open() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const opened = await invoke<OpenedConfigurationFile | null>("open_configuration_file").catch((err) => {
+        throw failure(err);
+      });
+      return opened ?? undefined;
     },
   };
 }

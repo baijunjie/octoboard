@@ -11,13 +11,6 @@ import type { SidebarHandlers } from "./types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-// jsdom has no ResizeObserver; FadeOverflow and HeroUI's ScrollShadow each need one to mount.
-class StubResizeObserver {
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
-}
-globalThis.ResizeObserver ??= StubResizeObserver as unknown as typeof ResizeObserver;
 // Nor `matchMedia`, which `useFlip` asks about reduced motion.
 window.matchMedia ??= ((query: string) => ({ matches: false, media: query })) as unknown as typeof window.matchMedia;
 

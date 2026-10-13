@@ -4,8 +4,8 @@ Settings is a large dialog over the whole window. A list of sections runs down i
 section's settings fill the right, one row per setting: its name and a line saying what it does on the left, its
 control on the right; under a right-to-left language the sides swap (see "Right-to-left layout" in
 `docs/product/window-layout.md`). The sections, in order, are **General**, **Git**, **Agent accounts**, **Trusted
-folders**, **Permissions** and **Notifications**; the dialog opens on General unless it was asked to open on another
-section.
+folders**, **Permissions**, **Notifications** and **Configuration**; the dialog opens on General unless it was asked to
+open on another section.
 
 ## In a narrow window
 
@@ -229,3 +229,11 @@ undecided (see "The rail" in `docs/product/window-layout.md`). It cannot be dism
 browser. Once the browser has answered, whichever the answer, the bell is gone, and answering from either place
 updates the other. The macOS application never shows the bell, since it asks nothing. A browser's state is read
 again whenever the window regains focus, since it can be changed in the browser's own settings meanwhile.
+
+## Configuration
+
+Two rows, each opening its own dialog: **Export configuration**, which saves a console, or every console with the
+application settings, as a file, and **Import configuration**, which creates consoles and projects from such a file
+(see `docs/product/configuration-export-and-import.md`). A console is exported from the one the sidebar shows, which is
+the first while none is chosen. Both rows need the window to be able to save and open files, and where it cannot the
+section holds a line saying that exporting and importing configuration files is not available here.

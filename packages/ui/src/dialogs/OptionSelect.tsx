@@ -25,6 +25,9 @@ export type Option<T extends string> = {
  * its neighbour at are squared and the two triggers meet with nothing between them: each half's own
  * chevron and hover fill are what say there are two controls.
  *
+ * With `hideLabel` the field is full width like any other but `label` is its accessible name alone,
+ * for a select repeated down a list whose rows already show what each one is about.
+ *
  * With `placeholder` the choice is optional: `value` may be `null`, which shows the placeholder
  * instead of an option and stands for "nothing chosen", and once something is chosen a clear
  * button (and Backspace or Delete on the focused control) puts it back to `null`, passed to
@@ -37,6 +40,7 @@ export function OptionSelect<T extends string>({
   placeholder,
   inline,
   joined,
+  hideLabel,
   isDisabled,
   description,
 }: {
@@ -45,6 +49,7 @@ export function OptionSelect<T extends string>({
   inline?: boolean;
   /** Which end of an input group this one sits at. */
   joined?: "start" | "end";
+  hideLabel?: boolean;
   isDisabled?: boolean;
   /** Extra explanation shown under the field. */
   description?: string;
@@ -61,7 +66,7 @@ export function OptionSelect<T extends string>({
       // trigger and the later half would otherwise paint over it along the shared edge. The raise
       // is on the flex item, the root, which a trigger's own `z-index` would not be.
       className={inline ? "w-48" : joined ? "min-w-0 flex-1 has-[[data-focus-visible=true]]:z-10" : undefined}
-      aria-label={inline || joined ? label : undefined}
+      aria-label={inline || joined || hideLabel ? label : undefined}
       isDisabled={isDisabled}
       value={value}
       placeholder={placeholder}
@@ -81,7 +86,7 @@ export function OptionSelect<T extends string>({
       // `useListState`, which reads it — hence the cast.
       {...({ disabledBehavior: "selection" } as React.ComponentProps<typeof Select>)}
     >
-      {!inline && !joined && <Label>{label}</Label>}
+      {!inline && !joined && !hideLabel && <Label>{label}</Label>}
       {/* Joined: the two parts square the corners they meet at and touch. Nothing is drawn between
           them: a gap shows the dialog's surface through at about 1.3:1 in the light theme, and a
           border would sit close to this variant's fill in the dark one, and HeroUI's own input

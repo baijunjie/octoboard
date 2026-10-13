@@ -1,7 +1,9 @@
-import { AlertDialog, Button, Modal } from "@heroui/react";
+import { AlertDialog, Button, Modal, ScrollShadow } from "@heroui/react";
 import React, { useEffect, useId, useRef, useState } from "react";
 
 import { takeMenuFocusToRestore } from "../components/ActionMenu";
+import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
+import { FADE_SIZE } from "../components/useScrollFade";
 import { TitledControl } from "../components/TitledControl";
 import { useT } from "../i18n/react";
 import { dialogAround } from "./dialogElement";
@@ -127,9 +129,10 @@ export function Dialog({
   title: string | React.ReactElement;
   onClose: () => void;
   children: BodyChildren;
-  /** `viewer` is a frame for content rather than a form: it fills the window inside a margin, up to
-   * a width that still reads as a dialog over the app. */
-  size?: "sm" | "md" | "lg" | "viewer";
+  /** `wide` is `lg` with room for a list of rows that each carry a path; `viewer` is a frame for
+   * content rather than a form: it fills the window inside a margin, up to a width that still
+   * reads as a dialog over the app. */
+  size?: "sm" | "md" | "lg" | "wide" | "viewer";
   /** A confirmation that interrupts the user: HeroUI's `AlertDialog`, announced as an alert dialog. */
   alert?: boolean;
   /** Names what a dialog reused across subjects currently asks about; when it changes and focus
@@ -173,11 +176,43 @@ export function Dialog({
   // together with the title; react-aria only wires up a `slot="description"` Text, which this body
   // is not.
   const bodyId = useId();
+  // The body's scroll container is reachable from the keyboard while it scrolls: a dialog whose
+  // controls are all in the footer (a long message, a page of text) has nothing in the body to
+  // take focus, and the arrow keys and Page Down would otherwise move nothing. It is named by the
+  // dialog's own title, which react-aria has already tied to the dialog.
+  const [scrolls, setScrolls] = useState(false);
+  const [titleId, setTitleId] = useState<string>();
+  useEffect(() => setTitleId(dialogAround(markerRef)?.getAttribute("aria-labelledby") ?? undefined), []);
+  const scrollerFocus = useFocusVisibleProps();
 
   const body = (
     <>
-      <Frame.Body id={bodyId} className="flex flex-col gap-4 p-1">
-        {children}
+      {/* The body is not the scroller itself: HeroUI's `ScrollShadow` inside it is, so that every
+          dialog whose content outgrows the window fades at the edge it can still be scrolled
+          towards, with no caller building a scroll container of its own. The fade is a mask that
+          shows only while there is more to scroll and takes no pointer events, and it is a hint
+          alone: the scroller is an ordinary overflow container, so the keyboard, the wheel and
+          focus moving into view scroll it as they would any other. The padding is the room a focus
+          ring needs inside the clip. */}
+      {/* The ring of the focusable scroller is drawn on its parent: the fade is a mask on the scroller
+            and clips by its border box, so a ring on the scroller itself, which sits outside that box, is
+            cut off. The ring is the project's usual one (2px `--focus`), from the scroller's own state. */}
+      <Frame.Body
+        id={bodyId}
+        className={`flex flex-col overflow-y-visible rounded-lg ${scrolls && scrollerFocus["data-focus-visible"] ? "ring-2 ring-focus" : ""}`}
+      >
+        {/* The scroll padding is at least the fade's own size: a control scrolled into view (an
+            invalid field the submit moves focus to) is otherwise put against the edge, which is
+            where the fade covers it. */}
+        <ScrollShadow
+          size={FADE_SIZE}
+          style={{ scrollPaddingBlock: FADE_SIZE }}
+          onVisibilityChange={(visibility) => setScrolls(visibility !== "none")}
+          {...(scrolls ? { ...scrollerFocus, tabIndex: 0, role: "region", "aria-labelledby": titleId } : {})}
+          className={`flex min-h-0 flex-1 flex-col gap-4 p-1 ${scrolls ? "outline-none" : ""}`}
+        >
+          {children}
+        </ScrollShadow>
       </Frame.Body>
       {footer !== null && (
         <Frame.Footer className="flex-wrap">
@@ -209,13 +244,15 @@ export function Dialog({
           (`style.css`): without that the strip, stacked above the dialog as well as above the
           backdrop, would cross the dialog's own bottom edge and swallow the presses landing
           there. */}
-      <Frame.Container size={size === "viewer" ? "lg" : size} className={size === "viewer" ? "max-docked:p-4" : undefined}>
+      <Frame.Container size={size === "viewer" || size === "wide" ? "lg" : size} className={size === "viewer" ? "max-docked:p-4" : undefined}>
         <Frame.Dialog
           aria-describedby={alert ? bodyId : undefined}
           className={
             size === "viewer"
               ? "control-fills h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none docked:h-[calc(100dvh-80px-var(--bottom-chrome-height))] docked:w-[min(1440px,calc(100vw-80px))]"
-              : "control-fills"
+              : size === "wide"
+                ? "control-fills max-w-3xl"
+                : "control-fills"
           }
         >
           <span ref={markerRef} hidden />

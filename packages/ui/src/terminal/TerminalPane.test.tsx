@@ -10,12 +10,6 @@ import { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-class StubResizeObserver {
-  observe(): void {}
-  disconnect(): void {}
-}
-globalThis.ResizeObserver ??= StubResizeObserver as unknown as typeof ResizeObserver;
-
 /** A controller whose socket the test settles by hand: `attach` leaves it `connecting`. */
 const { FakeController } = vi.hoisted(() => {
   class FakeController {

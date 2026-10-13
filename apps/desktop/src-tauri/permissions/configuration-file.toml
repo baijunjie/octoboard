@@ -1,0 +1,9 @@
+# A custom permission for the app's own commands that save and open the configuration document
+# through the system's dialogs; see `exit-lifecycle.toml` for why an app-defined command needs a file
+# like this.
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-configuration-file"
+description = "Allows the frontend to ask the user for the configuration file in the system's save or open dialog, and to have it written to or read from the place the user picked."
+commands.allow = ["save_configuration_file", "open_configuration_file"]

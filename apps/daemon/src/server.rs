@@ -16,7 +16,7 @@ use crate::browse::git::GitEnv;
 use crate::browse::lane::{Frame, Lane};
 use crate::hooks;
 use crate::protocol::{
-    Agent, BrowseBody, BrowseRequest, CodedError, Event, Request, SessionStatus, TermControl,
+    Agent, BrowseBody, BrowseRequest, Event, Request, SessionStatus, TermControl,
     BROWSE_REQUEST_TYPES,
 };
 use crate::reporting;
@@ -312,12 +312,7 @@ async fn handle_request(state: &Arc<AppState>, text: &str) -> Event {
     match crate::coordinator::handle(state, request.id, request.body).await {
         Ok(Some(event)) => event,
         Ok(None) => Event::Ack { id },
-        Err(err) => match err.downcast_ref::<CodedError>() {
-            Some(coded) => coded.reply(id),
-            // The message is the user's only account of what went wrong, so the whole context
-            // chain goes through rather than just the outermost error.
-            None => Event::internal_error(id, format!("{err:#}")),
-        },
+        Err(err) => Event::from_error(id, &err),
     }
 }
 

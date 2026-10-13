@@ -6,6 +6,12 @@ The user has objected to drawn-out testing. Verify in the app only the behaviour
 targeted run — the states, languages or screens the change actually touches, not a tour of the rest or a matrix of
 every combination — and leave what a unit test or the type checker already covers to them.
 
+A fallback written for an environment this machine does not have is settled by reading the code, not by finding that
+environment: a browser too old for an event the code works around, a platform the build does not target. The user has
+said as much — a compatibility detail of that kind wants its logic confirmed, not a device. What a real run is for is
+what only the real thing can answer: the shell's own dialogs, a volume that is really unmounted, how long something
+really takes, whether a window really paints.
+
 Changing a shared component's markup, layout or timing widens what the change touches to every surface already
 using it, so those surfaces are inside this narrow scope rather than outside it: making `MarkedPath`'s root a `span`
 for one new caller collapsed the path boxes in the Settings rows, and neither the type checker, the unit tests nor a

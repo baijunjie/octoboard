@@ -1,0 +1,27 @@
+import { daemonMessage } from "../daemonMessage";
+import type { Translate } from "../i18n/catalog";
+import { useCurrentLanguage } from "../i18n/react";
+import { ConfigurationFileError } from "../platform";
+import type { ImportFailure } from "../protocol";
+import { useDaemon } from "../store";
+
+/** Words a failure the daemon reported inside a result, as one it answered a request with is
+ * worded: in the current language, a record shown by its name. */
+export function useFailureText(): (failure: ImportFailure) => string {
+  const language = useCurrentLanguage();
+  const { store } = useDaemon();
+  return (failure) => daemonMessage(language, failure.code, failure.params, failure.message, store.getState());
+}
+
+/** What went wrong saving or opening the configuration file, worded in the current language: a file
+ * too large or not text by its kind, anything else as `failed` with the system's own text, which
+ * cannot be localized. */
+export function fileFailureText(
+  t: Translate,
+  err: unknown,
+  failed: "configuration.export.failed" | "configuration.import.readFailed",
+): string {
+  if (err instanceof ConfigurationFileError && err.kind === "too_large") return t("configuration.file.tooLarge");
+  if (err instanceof ConfigurationFileError && err.kind === "not_text") return t("configuration.file.notText");
+  return t(failed, { detail: err instanceof Error ? err.message : String(err) });
+}

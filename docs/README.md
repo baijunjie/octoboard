@@ -5,8 +5,19 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 ## Product
 
 - [Consoles and projects](product/consoles-and-projects.md) — consoles, their working directory, agent defaults and
-  per-agent config directories; the three ways a project is associated, what is editable afterwards, and what deleting
-  either one does.
+  per-agent config directories; the three ways a project is associated, what is editable afterwards, how the
+  project's git remote URL is recorded and kept current, and what deleting either one does.
+- [Configuration export and import](product/configuration-export-and-import.md) — carrying configuration to another
+  machine as a versioned JSON document: where the window offers it (a console menu's Export configuration…, Settings'
+  Configuration section and the welcome screen's Import configuration…, all through the window's own file dialogs),
+  the export dialog's scope choice and its warning about the paths the file carries, the import dialog's three steps
+  (the file, the review of every project with where it stands on the daemon's host and where it goes, the result by
+  outcome); then the two export scopes, what a console and a project carry and what is deliberately left out, the
+  project path as the one machine-local path in it; the import's two steps — the four directories a project can be
+  placed in and which is the default, the stricter rule on a URL a clone may be made from, account references rebound
+  by name — and what applying does: always a new console, projects through the ordinary association and untrusted
+  like any other, the opt-in application setting, and what is refused before anything is created against what is
+  reported as failed afterwards.
 - [Model and reasoning effort](product/model-and-reasoning-effort.md) — the model and reasoning effort a console's
   console sessions and a project's sessions launch with: where they are set, what unset means, how the model list is
   asked of the agent itself for the account in question, how the effort levels follow the chosen model, and what the
@@ -36,9 +47,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Project git status](product/project-git-status.md) — the branch badge on a project's row and in focus mode's header:
   its glyphs for a branch, a detached `HEAD`, a check in flight and a fast-forward in flight, the ahead and behind
   counts, the marker a failed check leaves and what it tells assistive technology; when and how often the current
-  console's projects are checked against their remotes and what one check runs; and the Automatically sync
-  repositories switch — what it fast-forwards, what it never does, where it is kept, and the immediate
-  fast-forward pass turning it on runs.
+  console's projects are checked against their remotes, what one check runs and the remote URL it records for the
+  project; which of the user's own git settings a check's `git` is given and which are filtered out; and the
+  Automatically sync repositories switch — what it fast-forwards, what it never does, where it is kept, and the
+  immediate fast-forward pass turning it on runs.
 - [Orchestration](product/hub-orchestration.md) — how an owner (a console session, or an unbound project session in
   its own project) starts and drives sessions: each one's tools and a bound session's `report`, lead sessions (a
   project session bound to a console session that keeps its own sessions, two levels deep), the brief a task is
@@ -55,10 +67,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   inside a page, the window shortcuts (⌘[ / ⌘], ⌃Tab) a page passes on to the window, the light surface a page renders
   on whatever the window's appearance is, and right-clicking inside a page.
 - [Welcome screen](product/welcome-screen.md) — what the window shows with no console at all: the screen that fills the
-  content panel and its New console button, the install prompt it carries once every agent is known to be missing and
-  why New console stays enabled anyway, what is not on screen in that state (the sidebar, the right pane, the
-  terminal's empty state, the top bar's sidebar toggle), the pane visibility and widths that are kept rather than
-  reset, and where keyboard focus goes as the first console is made and as the last one goes away.
+  content panel, its New console button and the quieter Import configuration… under it where the window can open a file,
+  the install prompt it carries once every agent is known to be missing and why New console stays enabled anyway, what
+  is not on screen in that state (the sidebar, the right pane, the terminal's empty state, the top bar's sidebar
+  toggle), the pane visibility and widths that are kept rather than reset, and where keyboard focus goes as the first
+  console is made and as the last one goes away.
 - [Window layout](product/window-layout.md) — the window chrome (the top bar and the left rail, over the translucent
   macOS material or an opaque colour in a browser) and the opaque content panel it frames, what the top bar holds and
   how it doubles as the macOS titlebar, what an open dialog, menu or popover puts out of reach and the connection
@@ -108,7 +121,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Settings](product/settings.md) — the Settings dialog: how it opens (the rail, and the macOS menu's Settings… /
   ⌘, and when that is ignored), how it closes and where focus goes, its General (Appearance, Language, the default
   clone directory and, in the macOS application alone, keeping Octoboard running in the background), Git, Agent
-  accounts, Trusted folders, Permissions and Notifications sections.
+  accounts, Trusted folders, Permissions, Notifications and Configuration (exporting and importing the configuration
+  document, where the window can save and open files) sections.
 - [Language](product/language.md) — the 17 offered languages and why they are ordered by tag, English as the fallback,
   the default picked from the system's languages on the first launch and kept from then on, the language chosen in
   Settings, how the system's languages map onto the list, what follows the current language and what does not (report
@@ -122,27 +136,38 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   the one auto-trust permission Claude Code, Codex and Grok Build share (a project or a trusted folder), the trust
   dialog, how Octoboard presses each agent's confirmation, carrying Grok Build's trust entry into the user's store, and
   the trusted-folders rules.
-- [Application lifecycle](product/application-lifecycle.md) — what Octoboard runs on and how it is distributed, startup
-  and the single-instance rule, who can reach the daemon (any local program, but no web page in a browser), losing the
+- [Application lifecycle](product/application-lifecycle.md) — the desktop form in full and what the server form changes:
+  what Octoboard runs on and how it is distributed, startup and the single-instance rule, who can reach the daemon (any
+  local program, but no web page in a browser; in the server form anyone who can reach the port, which is why today's
+  daemon must stay on loopback, what a reverse proxy would have to rewrite, the SSH port forward as the one way in
+  today, the access model the form still lacks, and that whoever holds a credential is taken for the owner), losing the
   daemon connection, what closing the window does — a quit unless the Settings switch for running in the background is
   on, which is off to begin with, and then a hidden window out of the Dock with everything kept running — and every way
   the window comes back, the quit confirmation and which gestures it covers, how to quit a window that has stopped
-  responding, crash behaviour, and the files Octoboard keeps under `~/.octoboard` (and the one it keeps outside it),
-  including the database that also holds the settings the daemon stores.
+  responding, crash behaviour, the daemon on its own (who starts and stops it, a browser tab closing ending nothing, a
+  restart interrupting every session, the data directory being the owner's), and the files Octoboard keeps under
+  `~/.octoboard` (and the two it keeps outside it), including the database that also holds the settings the daemon
+  stores.
 - [Menu bar icon](product/menu-bar-icon.md) — the macOS menu bar icon: what a left and a right click do, its menu
   (running sessions grouped by status in sidebar order, at most 10 per group with an "N more…" line, "No sessions
   running", Open, Quit), choosing a session from it, and its Quit.
 
 - [Website](product/website.md) — the localized homepage, privacy and error pages, keyboard navigation, motion,
-  illustrative workflow, release download links, platform roadmap, privacy disclosures, planned remote host support,
-  search indexing, and the agent-readable Markdown copies.
+  illustrative workflow, release download links, platform roadmap (the Linux entry standing for the server form, and
+  the site copy that still has to say so), privacy disclosures, planned remote host support and how the server form
+  differs from it, search indexing, and the agent-readable Markdown copies.
 
 ## Reference
 
-- [Architecture](architecture.md) — what Octoboard is and its core concepts, the layers and why the daemon is split from
-  the application, the technology choices, the orchestration design decisions (the MCP server as a child process,
-  structured arguments, why reporting is not forced, why a project session asks for a console session rather than being
-  given more reach), the known pitfalls of the Tauri / Rust approach, and the reasoning behind the data model.
+- [Architecture](architecture.md) — what Octoboard is, its two deployment forms (the desktop form and the server form:
+  the daemon alone on a headless Linux server, reached by its owner from a browser on another machine — one user's
+  either way, a credential standing for the owner, and why that form is not a "remote host") and its core concepts,
+  the layers and why the daemon is split from the application, the constraints the server form puts on the browser as
+  a client (a secure context for notifications and the clipboard, hence TLS) and on access (a credential per device,
+  not reachability — none of it built yet) and the known boundary that several users on one daemon are outside the
+  design, the technology choices, the orchestration design decisions (the MCP server as a child process, structured
+  arguments, why reporting is not forced, why a project session asks for a console session rather than being given
+  more reach), the known pitfalls of the Tauri / Rust approach, and the reasoning behind the data model.
 - [Agent CLI reference](agent-cli-reference.md) — what the three agent CLIs themselves do, against the versions the
   facts were established on: each one's hook events, the payload fields and the keys a turn can be correlated on, what a
   failing hook costs, how a project's own configuration layers around an injected one, how Octoboard is injected into

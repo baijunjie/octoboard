@@ -343,10 +343,7 @@ impl Lane {
                 superseded(id)
             }
             Err(err) if err.downcast_ref::<Cancelled>().is_some() => superseded(id),
-            Err(err) => match err.downcast_ref::<CodedError>() {
-                Some(coded) => coded.reply(id),
-                None => Event::internal_error(id, format!("{err:#}")),
-            },
+            Err(err) => Event::from_error(id, &err),
         };
         if closed() {
             return;

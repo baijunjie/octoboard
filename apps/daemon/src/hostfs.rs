@@ -293,7 +293,7 @@ pub fn probe_remote_agent(
 
 /// The repository name from a clone URL, for both `https://host/owner/repo(.git)` and
 /// `git@host:owner/repo(.git)`.
-fn repo_name(remote_url: &str) -> Option<String> {
+pub(crate) fn repo_name(remote_url: &str) -> Option<String> {
     let trimmed = remote_url.trim().trim_end_matches('/');
     let last = trimmed.rsplit(['/', ':']).next()?;
     let name = last.strip_suffix(".git").unwrap_or(last);

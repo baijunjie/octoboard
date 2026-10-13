@@ -3,7 +3,8 @@ import { fileURLToPath } from "node:url";
 
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig, type Plugin } from "vite";
+import type { Plugin } from "vite";
+import { defineConfig } from "vitest/config";
 
 import appConfig from "../../config/app.json" with { type: "json" };
 import { loadEnv } from "../../scripts/env.mjs";
@@ -76,6 +77,7 @@ export default defineConfig(({ command }) => {
     plugins: [react(), tailwindcss(), appName, galleryFrameCsp, viewerThemes],
     define: { __OCTOBOARD_DEV_PROXY__: JSON.stringify(Boolean(daemonPort)) },
     clearScreen: false,
+    test: { setupFiles: ["./src/test/setup.ts"] },
     server: {
       port: 5174,
       strictPort: true,

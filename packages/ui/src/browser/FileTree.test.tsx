@@ -9,14 +9,6 @@ import { rowKey, type TreeNode } from "./tree";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-// jsdom has no ResizeObserver, which the rows' names (FadeOverflow) need.
-class StubResizeObserver {
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
-}
-globalThis.ResizeObserver ??= StubResizeObserver as unknown as typeof ResizeObserver;
-
 afterEach(() => document.body.replaceChildren());
 
 const fileNode = (path: string, selected: boolean): TreeNode => ({

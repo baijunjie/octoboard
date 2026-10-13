@@ -2,16 +2,19 @@ import { format, type MessageArgs, type MessageKey } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
 import type { Daemon } from "../store";
 
-/** Everything a pressable thing is looked up among. A hand-built row is a `role="button"`, and a tag
- * in a tag group is a `role="row"`. */
+/** Everything a pressable thing is looked up among. A hand-built row is a `role="button"`, a tag
+ * in a tag group is a `role="row"`, and a checkbox is its (visually hidden) input: pressing the label
+ * HeroUI draws it in does not toggle it. */
 const PRESSABLE =
-  "button, [role=button], [role=menuitem], [role=menuitemradio], [role=tab], [role=option], [role=row], a[href]";
+  "button, [role=button], [role=menuitem], [role=menuitemradio], [role=tab], [role=option], [role=row], a[href], input[type=checkbox]";
 
-/** The name a control is found by: its `aria-label`, otherwise its text. Deliberately not the
- * browser's accessible-name computation, which folds in the label of a `role="img"` child — such a
- * child inside a control does not enter the name a `Matcher` is handed. */
+/** The name a control is found by: its `aria-label`, otherwise its text, and for a checkbox the text
+ * of its label. Deliberately not the browser's accessible-name computation, which folds in the label
+ * of a `role="img"` child — such a child inside a control does not enter the name a `Matcher` is
+ * handed. */
 function nameOf(element: Element): string {
-  return withoutIsolates(element.getAttribute("aria-label") ?? element.textContent ?? "").trim();
+  const label = element instanceof HTMLInputElement ? element.labels?.[0]?.textContent : undefined;
+  return withoutIsolates(element.getAttribute("aria-label") ?? label ?? element.textContent ?? "").trim();
 }
 
 /** A name without its bidi isolate characters (U+2066 to U+2069). The app puts them round a value
@@ -62,6 +65,11 @@ export interface Ui {
    * A disabled button (`isDisabled`, such as Confirm before a `typeToConfirm` word is typed) is
    * waited out by its native `disabled` attribute, which HeroUI sets beside `data-disabled`. */
   confirm: () => Promise<void>;
+  /** Moves focus onto the scroll region named `name`, with the keyboard as its source, so that the
+   * focus ring is drawn as it is for a user who tabbed there. A dialog's body is one while it
+   * overflows the window, named by the dialog's title; it is not found in a window tall enough to
+   * hold the dialog. A step cannot press Tab itself: a script's key event moves nothing. */
+  tabToRegion: (name: Matcher) => Promise<void>;
   /** Moves the pointer onto the indicator inside the first control named `host`, waiting for the
    * control to appear, and leaves it there, for the tooltip that shows only while the pointer is
    * on it. It returns once the app's tooltip delay has passed and the tooltip is up. The indicator
@@ -84,6 +92,27 @@ export interface Ui {
    * starts at `closed` answers no request, so nothing a step would open over it, the file viewer
    * among them, ever lists. */
   dropConnection: () => Promise<void>;
+}
+
+/** What react-aria marks `data-exiting` while it plays an element's exit transition, and removes the
+ * element when that ends. */
+const EXITING = "[data-exiting]";
+
+/**
+ * Waits for what is closing to be gone, and says what stays if something does. An exit transition
+ * that never ends leaves the thing it was removing on screen for good (a settings section left
+ * behind by the one picked after it, because a scroll-driven animation on the panel never finishes),
+ * and a capture taken afterwards looks like any other, so the page reports it instead.
+ */
+export async function stuckExit(doc: Document): Promise<string | undefined> {
+  for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {
+    if (!doc.querySelector(EXITING)) return undefined;
+    await new Promise<void>((resolve) => setTimeout(resolve, POLL_MS));
+  }
+  const stuck = doc.querySelector(EXITING);
+  if (!stuck) return undefined;
+  const text = (stuck.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 40);
+  return `<${stuck.tagName.toLowerCase()}> beginning “${text}”`;
 }
 
 export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui {
@@ -131,6 +160,24 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
         target.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true, cancelable: true }));
       }
       await wait(300);
+    },
+    async tabToRegion(matcher) {
+      for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {
+        const region = Array.from(doc.querySelectorAll<HTMLElement>("[role=region][tabindex]")).find((element) => {
+          const label = element.getAttribute("aria-labelledby");
+          const name = label ? doc.getElementById(label)?.textContent : element.getAttribute("aria-label");
+          return name != null && matches(matcher, name.trim());
+        });
+        if (region) {
+          // react-aria reads what the focus came from off the last key event, so Tab is sent first.
+          (doc.activeElement ?? doc.body).dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+          region.focus();
+          await wait(150);
+          return;
+        }
+        await wait(POLL_MS);
+      }
+      throw new Error(`No scroll region named ${String(matcher)}; is the window too tall for its dialog to overflow?`);
     },
     async type(text) {
       const field = await waitFor(

@@ -1,6 +1,7 @@
 import type { Scenario } from "../scenario";
 import { archiveScenarios } from "./archive";
 import { busyScenarios } from "./busy";
+import { configurationScenarios } from "./configuration";
 import { connectionScenarios } from "./connection";
 import { consoleSessionsScenarios } from "./consoleSessions";
 import { dialogScenarios } from "./dialogs";
@@ -38,6 +39,7 @@ export const SCENARIOS: Scenario[] = [
   ...projectGitScenarios,
   ...settingsScenarios,
   ...dialogScenarios,
+  ...configurationScenarios,
   ...viewerScenarios,
   ...layoutScenarios,
 ];

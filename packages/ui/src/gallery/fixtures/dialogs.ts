@@ -107,6 +107,24 @@ const editTaggedProject = [
 
 const addProject = [consoleActions, (ui: Ui) => ui.press(ui.t("sidebar.console.addProject"))];
 
+/** A home directory with more subdirectories than the picker's list is tall, some of them repositories. */
+const HOME_LISTING = [
+  "Applications",
+  "code",
+  "Desktop",
+  "Documents",
+  "Downloads",
+  "dotfiles",
+  "Library",
+  "Movies",
+  "Music",
+  "Pictures",
+  "Projects",
+  "repos",
+  "scratch",
+  "work",
+].map((name) => ({ name, path: `/Users/dev/${name}`, is_git_repo: ["code", "dotfiles", "repos", "scratch"].includes(name) }));
+
 export const dialogScenarios: Scenario[] = [
   {
     id: "dialog-new-console",
@@ -300,8 +318,10 @@ export const dialogScenarios: Scenario[] = [
     id: "dialog-directory-picker",
     group: GROUP,
     title: "Directory picker",
-    description: "Browse from the add-project dialog; the fixture lists generic directories.",
+    description:
+      "Browse from the add-project dialog. The list is longer than its box, so it scrolls on its own and fades at the edge it can still be scrolled towards.",
     state,
+    directories: { "/Users/dev": HOME_LISTING },
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),

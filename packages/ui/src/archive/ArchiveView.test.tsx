@@ -20,15 +20,6 @@ import { ArchiveView } from "./ArchiveView";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-// jsdom has no ResizeObserver; FadeOverflow and HeroUI's ScrollShadow, both in ArchiveView's rows,
-// each need one to mount at all.
-class StubResizeObserver {
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
-}
-globalThis.ResizeObserver ??= StubResizeObserver as unknown as typeof ResizeObserver;
-
 // Everything the fixture knows about besides `boundConsoleSession`'s own bound, archived sessions:
 // its own (idle, not archived) row, a second owner, a session bound to that second owner, and an
 // unbound one. Passed in full so the view's own filtering, not the fixture, is what narrows it down.

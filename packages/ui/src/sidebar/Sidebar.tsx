@@ -27,6 +27,7 @@ import { drawerClass, PANE_ID, RailClip, usePanePeekPointer } from "../layout/pa
 import type { PaneWidth } from "../layout/paneWidth";
 import { columnClipClass, type DockPhase, useSidebarDockMotion } from "../layout/sidebarDockMotion";
 import type { PanePeek } from "../layout/usePaneToggles";
+import { usePlatform } from "../platform/react";
 import { effectiveTags, matchesFilter, tagVocabulary, withoutTags } from "../projectFiltering";
 import type { Console, Project, Session } from "../protocol";
 import { activityLabelKey, sessionAccountTooltip, sessionAriaLabel } from "../sessionLabel";
@@ -337,6 +338,7 @@ export function Sidebar({
  * switches consoles and carries what is going on in every console. */
 function ConsoleHeader({ handlers, current }: { handlers: SidebarHandlers; current: Console }): React.ReactElement {
   const t = useT();
+  const { configurationFile } = usePlatform();
   const headerRef = useRef<HTMLDivElement>(null);
   return (
     // The list under this header is inset twice — the scroll area, then each heading and row — so
@@ -347,7 +349,7 @@ function ConsoleHeader({ handlers, current }: { handlers: SidebarHandlers; curre
       </RowLabel>
       <ActionMenu
         label={t("sidebar.console.actions", { name: isolate(current.name) })}
-        items={consoleMenu(t, current, handlers.onOpenDialog)}
+        items={consoleMenu(t, current, handlers.onOpenDialog, configurationFile !== undefined)}
         contextTargetRef={headerRef}
       />
     </div>

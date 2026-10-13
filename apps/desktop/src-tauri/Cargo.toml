@@ -31,6 +31,9 @@ tauri = { version = "=2.11.6", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-shell = "=2.3.3"
 tauri-plugin-notification = "=2.4.0"
 tauri-plugin-clipboard-manager = "=2.3.3"
+# The system's save and open dialogs, raised from `configuration_file.rs` for the configuration export and import.
+# The last release whose rust-version is within the floor (2.8 on needs rustc 1.90).
+tauri-plugin-dialog = "=2.7.3"
 anyhow = "1"
 # For the saved window state in `window_state.rs`. Pinned to the versions already resolved
 # transitively through `tauri`, so promoting them to direct dependencies shifts nothing else.

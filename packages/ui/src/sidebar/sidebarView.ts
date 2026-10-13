@@ -1,8 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 import { createPersistedPreference } from "../persistedPreference";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 import type { Console, Project, Session } from "../protocol";
+import { useDaemonStore } from "../store";
 import { focusKey, resolveFocus } from "./focus";
 import type { FocusTarget } from "./types";
 
@@ -21,6 +22,19 @@ const focusPreference = createPersistedPreference<string | undefined>(
   (value) => value ?? null,
 );
 
+/** The console shown: the chosen one while it exists, otherwise the first. */
+function currentConsoleOf(consoles: Console[], chosenId: string | undefined): Console | undefined {
+  return consoles.find((c) => c.id === chosenId) ?? consoles[0];
+}
+
+/** The console the sidebar shows, for what acts on "the console in hand" from outside it. The
+ * daemon's consoles in the order the store holds them, which is the order the sidebar is given. */
+export function useCurrentConsole(): Console | undefined {
+  const consoles = useDaemonStore((s) => s.consoles);
+  const chosenId = consolePreference.useValue();
+  return useMemo(() => currentConsoleOf(Array.from(consoles.values()), chosenId), [consoles, chosenId]);
+}
+
 export interface SidebarView {
   /** The console shown: the chosen one while it exists, otherwise the first. */
   currentConsole?: Console;
@@ -37,7 +51,7 @@ export function useSidebarView(
 ): SidebarView {
   const consoleId = consolePreference.useValue();
   const focusId = focusPreference.useValue();
-  const currentConsole = consoles.find((c) => c.id === consoleId) ?? consoles[0];
+  const currentConsole = currentConsoleOf(consoles, consoleId);
   const focus = resolveFocus(focusId, currentConsole?.id, projects, sessions);
   // A console session archived while in focus is left for good: were the memory kept, reopening it
   // later would put the sidebar straight back into its focus mode. A record that is merely not

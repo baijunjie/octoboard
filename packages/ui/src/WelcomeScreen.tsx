@@ -1,10 +1,11 @@
-import { LayoutDashboard, Plus } from "lucide-react";
+import { FileUp, LayoutDashboard, Plus } from "lucide-react";
 import React, { useImperativeHandle, useRef } from "react";
 
 import { noAgentAvailable } from "./agents";
 import { EmptyPanel } from "./components/EmptyPanel";
 import type { DialogRequest } from "./dialogs/dialogRequest";
 import { useT } from "./i18n/react";
+import { usePlatform } from "./platform/react";
 import { useDaemonStore } from "./store";
 
 export interface WelcomeScreenHandle {
@@ -19,7 +20,9 @@ interface WelcomeScreenProps {
 /**
  * What the content area shows while the daemon has no console: the one thing to do is make one, so
  * the sidebar, the terminal and the aside are not rendered and this fills the area alone. The action
- * opens the same new-console dialog the rail's does. With no agent on the machine's `PATH` the
+ * opens the same new-console dialog the rail's does. Where the platform can open a file, a quieter
+ * action beside it imports a configuration exported elsewhere, which is where a computer with
+ * nothing on it starts when it is set up from another one. With no agent on the machine's `PATH` the
  * install prompt is shown beside it — the fuller of the two wordings, the sidebar's row having room
  * only to say that none was found — but the button stays enabled: a console's agent fields are only
  * defaults.
@@ -32,6 +35,7 @@ interface WelcomeScreenProps {
  */
 export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.ReactElement {
   const t = useT();
+  const { configurationFile } = usePlatform();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const rootRef = useRef<HTMLElement>(null);
 
@@ -57,6 +61,9 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
         message={t("welcome.heading")}
         description={t("welcome.description")}
         action={{ label: t("welcome.newConsole"), icon: Plus, onPress: () => onOpenDialog({ kind: "new-console" }) }}
+        secondaryAction={
+          configurationFile && { label: t("welcome.importConfiguration"), icon: FileUp, onPress: () => onOpenDialog({ kind: "import-configuration" }) }
+        }
       />
       {noAgentAvailable(agentAvailability) && (
         <p className="max-w-sm px-4 text-center text-sm text-muted">{t("agents.installPrompt")}</p>

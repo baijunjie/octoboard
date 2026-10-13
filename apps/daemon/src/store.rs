@@ -548,6 +548,18 @@ impl Store {
         Ok(())
     }
 
+    /// Records the git remote URL read from the project's repository, or clears it. Its own
+    /// statement rather than a field of `update_project`, which is the user's edit of the project:
+    /// the URL is read off the repository by the daemon, never entered by the user, and an edit
+    /// must not overwrite a value the git status sweep has just corrected.
+    pub fn set_project_remote_url(&self, id: &str, remote_url: Option<&str>) -> Result<()> {
+        self.lock().execute(
+            "UPDATE projects SET remote_url = ?2 WHERE id = ?1",
+            params![id, remote_url],
+        )?;
+        Ok(())
+    }
+
     pub fn update_project(&self, project: &Project) -> Result<()> {
         self.lock().execute(
             "UPDATE projects SET name = ?2, default_agent = ?3, claude_account_id = ?4,
@@ -662,16 +674,19 @@ impl Store {
     // -- settings --------------------------------------------------------------
 
     pub fn get_settings(&self) -> Result<Settings> {
-        let auto_sync_repositories = self.lock().query_row(
-            "SELECT auto_sync_repositories FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| row.get(0),
-        )?;
         Ok(Settings {
-            auto_sync_repositories,
+            auto_sync_repositories: self.auto_sync_repositories()?,
             default_clone_dir: self.default_clone_dir()?,
             accounts: self.list_accounts()?,
         })
+    }
+
+    pub fn auto_sync_repositories(&self) -> Result<bool> {
+        Ok(self.lock().query_row(
+            "SELECT auto_sync_repositories FROM settings WHERE id = ?1",
+            params![SETTINGS_ID],
+            |row| row.get(0),
+        )?)
     }
 
     /// Whether the setting actually changed.
@@ -2057,6 +2072,41 @@ mod tests {
         put(&store);
         store.delete_project("project-1").expect("project deleted");
         assert_eq!(store.branch_origins("/r/.git").unwrap(), [origin]);
+    }
+
+    /// The remote URL is written and cleared on its own, and an edit of the project leaves it be.
+    #[test]
+    fn a_projects_remote_url_is_set_and_cleared_apart_from_its_edits() {
+        let path = temp_db("remote-url");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        store.insert_project(&project(false)).expect("project");
+
+        store
+            .set_project_remote_url("project-1", Some("git@example.com:o/r.git"))
+            .unwrap();
+        let mut edited = store.get_project("project-1").unwrap().unwrap();
+        assert_eq!(
+            edited.remote_url.as_deref(),
+            Some("git@example.com:o/r.git")
+        );
+        edited.name = "Renamed".to_string();
+        edited.remote_url = None;
+        store.update_project(&edited).unwrap();
+        let stored = store.get_project("project-1").unwrap().unwrap();
+        assert_eq!(stored.name, "Renamed");
+        assert_eq!(
+            stored.remote_url.as_deref(),
+            Some("git@example.com:o/r.git")
+        );
+
+        store.set_project_remote_url("project-1", None).unwrap();
+        assert_eq!(
+            store.get_project("project-1").unwrap().unwrap().remote_url,
+            None
+        );
     }
 
     /// A project's pinned flag starts unset and round-trips through an update.

@@ -2,17 +2,21 @@
 
 With **no console at all** — a fresh install, or the last console deleted, by this client or another — the window's
 content panel holds a single **welcome screen** in place of its panes, filling the whole area (the panes it replaces
-are in `docs/product/window-layout.md`). The one thing to do in this state is make a console, and that is all the
-screen offers.
+are in `docs/product/window-layout.md`). The thing to do in this state is make a console — by hand, or from a
+configuration exported on another machine — and that is all the screen offers.
 
 ## What the welcome screen shows
 
 - A glyph and a heading saying there are no consoles yet, in the shape every empty state takes (see "The full panel" in
   `docs/product/empty-states.md`).
 - A line explaining what a console is: that it holds the projects the user works in and the sessions they run in them.
-- One button, **New console**, which opens the same new-console dialog the rail's New console opens (see "Consoles" in
+- A button, **New console**, which opens the same new-console dialog the rail's New console opens (see "Consoles" in
   `docs/product/consoles-and-projects.md`). A console created here becomes the current one as soon as it appears, as
   one created from the rail does (see "The console switcher" in `docs/product/sidebar.md`).
+- Under it, quieter, **Import configuration…**, which opens the import dialog for a configuration document exported on
+  another machine (see "In the window" in `docs/product/configuration-export-and-import.md`) — the way a machine with
+  nothing on it is set up from one that has. It is there only where the window can open a file, which the macOS
+  application and a browser both can; where it cannot, New console stands alone.
 
 **Once every agent has been determined unavailable** on the machine, the screen also carries, under the panel, the
 fuller of the two wordings Octoboard has for that: which agents it supports and that one of them has to be on the user's
@@ -54,14 +58,15 @@ exactly as the user had left them — a sidebar the user had hidden is still hid
   rather than pulling it onto a control.
 - It is **a region of its own** in the `F6` cycle, between the rail and where the sidebar would be, and focus lands on
   its New console button (see "Moving focus between regions with F6" in
-  `docs/product/moving-focus-between-regions.md`).
+  `docs/product/moving-focus-between-regions.md`); Import configuration…, where shown, is the next Tab stop.
 - Wherever the window would hand keyboard focus to the terminal — the connection banner's Retry going away, a toast
   being dealt with — it hands focus to the New console button instead, and leaves focus on nothing when it is already
   on nothing. This is the rule the terminal itself follows with no session selected and nothing to offer in its place,
   which hands focus to the top bar (see "The terminal" in `docs/product/sessions.md`); here the top bar has no enabled
   control to take it.
-- **When the first console is created** from the welcome screen, focus moves to the first control in the top bar a
-  keyboard can reach.
+- **When the first console is created** from the welcome screen's New console, focus moves to the first control in the
+  top bar a keyboard can reach. The hand-off is New console's alone: consoles arriving through Import configuration…
+  appear while its dialog is still open on the import's result, and get no such hand-off.
 - **When the last console goes away** while keyboard focus is inside the sidebar, the archive view, the terminal or
   the right pane — all of which go with it — focus is handed to the rail's New console button. Focus that was already
   on nothing stays on nothing.

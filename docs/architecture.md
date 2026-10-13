@@ -7,8 +7,8 @@ reasoning and the constraints, not a restatement of the code.
 
 ## Positioning
 
-Octoboard is a desktop control board for orchestrating agents across several projects. In a **console** the user gives
-a request to a console session; the console session decides which project it belongs to, starts a dedicated agent
+Octoboard is a control board for orchestrating agents across several projects. In a **console** the user gives a
+request to a console session; the console session decides which project it belongs to, starts a dedicated agent
 session in that project's directory and hands it the task; the session reports back to the console session, and the
 console session reports to the user. The user can step into any session at any time to watch it or take over.
 
@@ -16,12 +16,41 @@ It is neither a new agent nor a new terminal. Every session is a native agent CL
 Build), and Octoboard only adds organization, orchestration and observation on top. It is not tied to any vendor, and
 the retention and cleanup of session data follows each agent's own rules.
 
+### Two deployment forms
+
+Octoboard is deployed in one of two forms, and the other documents name them as here:
+
+- **The desktop form**: the macOS application. The window, the daemon and the projects are on one machine, used by
+  one person, and the daemon starts and stops with the application.
+- **The server form**: the daemon alone, on a machine without a display — a Linux server, Ubuntu say — started and
+  kept running there, listening on a port, and reached by its owner from a browser on another machine over the
+  network. The machine showing the window and the machine holding the daemon and the projects are two different ones.
+  This is what Linux is for: there is no Linux desktop application, and in this form the browser is not a development
+  convenience but the only client there is.
+
+Both forms are **one user's**. The server form is the same user reaching their own daemon from elsewhere, not a group
+sharing one daemon: the daemon does not tell clients apart, whoever holds a credential for it is taken for its owner,
+and a credential lets its holder do everything the owner can — so a credential is to be kept like a password. That is
+this version's design boundary, not a gap left for later; what several users would take is in "Why the daemon is
+split out".
+
+The server form is **not built yet**. Today the daemon binds to loopback on a port the operating system assigns, has
+no credential of any kind, does not serve the UI, and the Linux build is not established. What the form asks of the
+design is stated below, where each constraint comes up.
+
+"Server" names where the daemon lives: a machine kept running for others to reach over the network, with nobody
+sitting at it. The word *host* is not free for it. A host is any machine that runs sessions — the server is one, and
+so is the desktop — and a *remote host* is a different arrangement again: a second host, reached by the daemon the
+user is talking to, so that sessions run on a machine other than the daemon's (see "Why the daemon is split out"). The
+server form is the reverse: one host, and what is remote is the clients.
+
 ## Core concepts
 
 | Concept | Description |
 |---|---|
 | Console | A management unit for a group of projects, independent of other consoles. It has its own working directory and its own default agent, which its console sessions run and the sessions under its projects fall back to. |
-| Host | A machine that runs sessions. Only the local machine exists today; every project and session still carries a `host_id`. |
+| Host | A machine that runs sessions: the user's own machine in the desktop form, the server in the server form. Only the daemon's own machine exists today; every project and session still carries a `host_id`. |
+| Client | A window or browser tab the user operates the daemon through: the desktop application's window, or a browser on any machine that can reach the daemon. Any number of them may be connected at once — the desktop window and a browser tab on a laptop, say — and the daemon does not tell them apart: every client is the same user, sees the same consoles, projects and sessions, and may do everything. |
 | Project | A directory on some host, associated with a console. |
 | Session | An agent CLI process running in a project directory, created by the user, a console session or an unbound project session. |
 | Console session | The agent process running in the console's working directory, given the orchestration tools. |
@@ -33,15 +62,18 @@ agent without hook support would degrade to an ordinary terminal session with no
 ## Layers
 
 ```
-┌───────────────── Desktop application (Tauri) ─────────────────┐
-│ Menu tree · terminal rendering · report panel · notifications │
-└───────────────────────────┬───────────────────────────────────┘
-                            │ WebSocket
-                 ┌──────────▼──────────┐
-                 │ Local daemon        │
-                 │ coordinator + host  │
-                 └──────────┬──────────┘
-                       agent processes
+   The desktop form                            The server form
+┌──── Desktop application (Tauri) ────┐   ┌──── Browser on another machine ──┐
+│ menu tree · terminal · report panel │   │ the same UI, for the same user   │
+└──────────────────┬──────────────────┘   └────────────────┬─────────────────┘
+          on the same machine                       over the network
+                   └───────────────┬───────────────────────┘
+                                   │ WebSocket
+                        ┌──────────▼──────────┐
+                        │ Daemon              │
+                        │ coordinator + host  │
+                        └──────────┬──────────┘
+                              agent processes
 ```
 
 `octoboardd` is a headless, long-running Rust process with two roles:
@@ -49,36 +81,66 @@ agent without hook support would degrade to an ordinary terminal session with no
 - **Host role**, present on every machine that runs sessions: manages PTYs and agent processes, receives hook reports,
   serves MCP for local sessions, lists directories, clones repositories, and probes remotes and directories for the
   agent a project is set up for.
-- **Coordinator role**, on the user's own machine: stores console, project, session and report-page data, executes the
-  console session's orchestration requests and routes them to the right host, and handles report delivery and
-  synthesis.
+- **Coordinator role**, on the machine the clients connect to — the user's own in the desktop form, the server in the
+  server form: stores console, project, session and report-page data, executes the console session's orchestration
+  requests and routes them to the right host, and handles report delivery and synthesis.
 
-The desktop application is only a client of the daemon: it renders terminals, shows status and forwards input.
+A client — the desktop application's window, or a browser — is only that: it renders terminals, shows status and
+forwards input.
 
 The UI is not part of the desktop shell. It is its own package, built once, which the macOS shell bundles and loads and
-which also runs in a plain browser; that is what lets a machine without the shell, such as a Linux host, offer the same
-UI. To keep one build working in both places, the UI reaches native capabilities (the quit flow and exit heartbeat,
-system notifications, the Dock badge, the native window's own appearance and visibility, the window chrome the top bar
-must keep clear, the app menu's items and the menu bar icon's menu) only through a platform adapter chosen at startup,
-with a Tauri implementation and a browser one; in a browser a capability that is not there means the feature is absent,
-not an error. It finds the daemon without Tauri as well: by an address handed to it, or at the origin it was loaded
-from. Its state is one store fed by the daemon client's events, readable outside React too. The phone's browser is not a
-design target — the native mobile apps have their own UI.
+which also runs in a plain browser; that is what the server form rests on — a Linux server has no shell and offers the
+same UI to a browser. To keep one build working in both places, the UI reaches native capabilities (the quit flow and
+exit heartbeat, system notifications, the Dock badge, the native window's own appearance and visibility, the window
+chrome the top bar must keep clear, the app menu's items and the menu bar icon's menu) only through a platform adapter
+chosen at startup, with a Tauri implementation and a browser one; in a browser a capability that is not there means
+the feature is absent, not an error. It finds the daemon without Tauri as well: by an address handed to it, or at the
+origin it was loaded from. Its state is one store fed by the daemon client's events, readable outside React too. The
+phone's browser is not a design target — the native mobile apps have their own UI.
+
+**A browser is a client Octoboard does not control, and it grants two of the capabilities the UI is built on only to a
+secure context**: the Notifications API, which the raised hand's notification goes through, and the async Clipboard
+API. A page over plain `http` is a secure context only at a loopback address (`localhost`, `127.0.0.1`); at any other
+address it is not, so a browser reaching a server over bare `http` never tells anyone that an agent is waiting — and
+the whole point of the orchestration is that an agent raises its hand and a person answers. The UI also opens `wss:`
+only from an `https:` page, and an `https:` page may not open `ws:` at all. In the server form, then, TLS is a
+requirement of the browser before it is anything else, and the UI has to be served from the same `https` origin as the
+daemon's WebSocket endpoints.
 
 ## Why the daemon is split out
 
-Session processes are owned by the daemon rather than by the window. That is what would let the daemon outlive the
-application (background operation; today it exits with the application). Remote hosts are **not built yet**, and no
-workflow for them is settled.
+Session processes are owned by the daemon rather than by the window. That is what lets the daemon run with no window
+at all — the server form, where there is no application to start or stop it — and, in the desktop form, what would
+let it outlive the application (background operation; today it exits with the application there). **Remote hosts** —
+a daemon reaching a second host to run sessions there — are **not built yet**, and no workflow for them is settled.
+They are not the server form: the server is a single host, and what is remote in that form is the clients.
 
 **Constraint: the UI and the daemon interact only over the network protocol (`apps/daemon/PROTOCOL.md`) — no Tauri
-IPC, no shared state.** Hooks and the MCP server of a session point at the daemon on the host the session runs on.
+IPC, no shared state.** Hooks and the MCP server of a session point at the daemon on the host the session runs on. The
+server form is what makes this a hard constraint rather than a tidy one: a browser on another machine has nothing but
+the network.
+
+**Constraint: in the server form, access has to be a credential, not reachability.** Today it is reachability: the
+daemon trusts whatever connects and is safe only because it binds to loopback — the access guard (`access.rs`) keeps a
+web page on another site out, and does nothing more. That holds in the desktop form, where whoever can connect already
+has the machine. In the server form anyone who can reach the port can start agents and type into their terminals as
+the server's own user, so the daemon as it stands must not be exposed beyond loopback. What the form needs is
+authentication on every route, the UI and the WebSocket upgrades included; a credential per device, so that a device
+the owner loses or retires can be revoked without re-issuing the rest; and TLS, for the browser's own reasons above.
+None of it exists. A credential identifies a device of the owner's, never a person: the daemon stays one user's, and
+every client is that user.
+
+**Known boundary: several users on one daemon are outside this design**, and authentication per person would be the
+smallest part of it: every session runs as the daemon's own Unix user, with that user's agent logins, quotas and SSH
+keys, and a project is one checkout that two agents would overwrite each other in, so each user would need a working
+tree and an operating-system identity of their own; a shared terminal would need an owner of its input; and trust
+confirmations, settings and sessions would each need an owner and an authorization. None of it is planned.
 
 ## Technology choices
 
 | Layer | Choice | Why |
 |---|---|---|
-| Daemon | Rust + `tokio` | A single binary that can be deployed straight to a Linux host. |
+| Daemon | Rust + `tokio` | A single binary that can be deployed straight to a Linux server, which is the whole server form. |
 | PTY | `portable-pty` | From the WezTerm project, cross-platform. |
 | MCP server | `rmcp` | A stdio child process per session, bridging to the daemon over loopback HTTP; see below. |
 | Desktop application | Tauri 2 | The daemon ships as a sidecar; native macOS APIs are callable from the Rust side. |
@@ -189,8 +251,9 @@ Each has an established solution unless noted; any outstanding manual verificati
   overriding the application delegate. That selector is also how a logout, restart or shutdown arrives, with nothing to
   tell them apart, so holding a confirmation up in front of a logout is the unavoidable price of asking before the
   Dock's Quit.
-- **WebView differences.** Tauri uses the system WebView (WKWebView on macOS). A Linux client would need WebKitGTK's
-  support for `xterm.js` WebGL rendering verified, falling back to canvas rendering.
+- **WebView differences.** Tauri uses the system WebView (WKWebView on macOS). There is no Linux shell to pick one:
+  Linux is the server form, reached from whichever browser the user has, which the UI treats as a plain browser like
+  any other.
 - **End-to-end terminal latency was never measured.** Only the daemon-to-WebSocket path was (well under a
   millisecond); the time from key press to glyph on screen was not.
 - **PTY output backpressure.** Under heavy output the daemon's PTY reader must take backpressure from the broadcast

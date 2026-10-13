@@ -10,14 +10,6 @@ import type { ChangeEntry } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import type { ChangeViewState } from "./changeView";
 
-/** jsdom has no ResizeObserver, which the rows' names (`FadeOverflow`) need. */
-class StubResizeObserver {
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
-}
-globalThis.ResizeObserver ??= StubResizeObserver as unknown as typeof ResizeObserver;
-
 /** A modified file, in the staged or the unstaged section. */
 export const change = (group: "staged" | "unstaged", path: string): ChangeEntry => ({
   group,

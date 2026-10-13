@@ -1,14 +1,16 @@
-import { Modal, Tabs } from "@heroui/react";
-import { Bell, FolderCheck, GitBranch, KeyRound, Settings2, ShieldCheck, type LucideIcon } from "lucide-react";
+import { Modal, ScrollShadow, Tabs } from "@heroui/react";
+import { Bell, FileCog, FolderCheck, GitBranch, KeyRound, Settings2, ShieldCheck, type LucideIcon } from "lucide-react";
 import React, { useCallback, useRef, useState } from "react";
 
 import { TitledControl } from "../components/TitledControl";
+import { FADE_SIZE } from "../components/useScrollFade";
 import { dialogAround } from "../dialogs/dialogElement";
 import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
 import { useIsNarrow } from "../layout/breakpoint";
 import { AgentAccountsSection } from "./AgentAccountsSection";
+import { ConfigurationSection } from "./ConfigurationSection";
 import { GeneralSection } from "./GeneralSection";
 import { GitSection } from "./GitSection";
 import { NotificationsSection } from "./NotificationsSection";
@@ -23,9 +25,29 @@ const SECTIONS = [
   { id: "trusted-folders", label: "settings.section.trustedFolders", Icon: FolderCheck, Content: TrustedFoldersSection },
   { id: "permissions", label: "settings.section.permissions", Icon: ShieldCheck, Content: PermissionsSection },
   { id: "notifications", label: "settings.section.notifications", Icon: Bell, Content: NotificationsSection },
+  { id: "configuration", label: "settings.section.configuration", Icon: FileCog, Content: ConfigurationSection },
 ] as const satisfies readonly { id: string; label: PlainMessageKey; Icon: LucideIcon; Content: () => React.ReactElement }[];
 
 export type SettingsSectionId = (typeof SECTIONS)[number]["id"];
+
+/** A section's panel. The section scrolls on its own inside the dialog and fades at the edge it can
+ * still be scrolled towards, as the body of a `Dialog` does. The scroller is a `ScrollShadow` inside
+ * the panel, not the panel: HeroUI's `useScrollFade` classes run a scroll-timeline animation that
+ * never ends, which the panel's exit transition waits for, so the section left behind stays on
+ * screen. */
+function SectionPanel({ id, children }: { id: string; children: React.ReactNode }): React.ReactElement {
+  return (
+    <Tabs.Panel id={id} className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <ScrollShadow
+        size={FADE_SIZE}
+        style={{ scrollPaddingBlock: FADE_SIZE }}
+        className="min-h-0 flex-1 px-4 py-4 docked:px-8 docked:py-6"
+      >
+        {children}
+      </ScrollShadow>
+    </Tabs.Panel>
+  );
+}
 
 /**
  * The settings: a large modal over the whole window, the sections as vertical tabs on the start
@@ -116,12 +138,12 @@ export function SettingsDialog({
               </Tabs.List>
             </Tabs.ListContainer>
             {SECTIONS.map(({ id, label, Content }) => (
-              <Tabs.Panel key={id} id={id} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-4 docked:px-8 docked:py-6">
+              <SectionPanel key={id} id={id}>
                 <h2 className="pb-2 text-xl font-semibold">{t(label)}</h2>
                 <SettingsFocusContext.Provider value={focusTarget}>
                   <Content />
                 </SettingsFocusContext.Provider>
-              </Tabs.Panel>
+              </SectionPanel>
             ))}
           </Tabs>
         </Modal.Dialog>

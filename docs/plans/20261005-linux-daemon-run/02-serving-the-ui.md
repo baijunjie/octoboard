@@ -1,8 +1,9 @@
 # 02 Serving the UI
 
-> Goal: opening the daemon's address in a local browser shows the full UI.
-> Completion criteria: on Linux, a user can run a hub and project sessions entirely through a browser on the same
-> machine; the daemon binary contains the UI.
+> Goal: opening the daemon's address in a browser shows the full UI.
+> Completion criteria: on a Linux server without a display, the owner, on another machine, through an SSH port forward
+> to the server's loopback, runs a console session and project sessions entirely through a browser, the raised hand's
+> notification reaching them; the daemon binary contains the UI.
 
 ## Technical design
 
@@ -23,5 +24,7 @@
 
 ## Notes for the developer
 
-- **Development notes**: requires the UI to run outside the Tauri shell through the adapter.
+- **Development notes**: requires the UI to run outside the Tauri shell through the adapter. A browser grants the
+  Notifications and Clipboard APIs only to a secure context, which over plain `http` is a loopback address alone: the
+  tunnel gives the page one, a network address would not, and the TLS that would is a separate plan's, not this one's.
 - **Reference docs**: `apps/daemon/README.md`, `apps/daemon/PROTOCOL.md`.

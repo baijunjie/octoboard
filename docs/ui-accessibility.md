@@ -98,6 +98,15 @@ once the daemon's reply says that hunk reaches the end of the file, and the hand
 modality itself. `handFocusOff` cannot be used there, since it looks at `document.activeElement` and cannot see into a
 shadow root.
 
+### Focus scrolled to the edge of a scroller that fades there
+
+A scroller whose edges are faded — every dialog body, since `Dialog` owns that — gives the scroller a
+`scroll-padding-block` of at least the fade's own size. A browser scrolls a control only far enough to reach the
+container's edge, which is exactly where the fade sits, so the control the user was sent to arrives underneath it:
+seen here on the first invalid field a submit sends focus to, which the fade covered at the window heights where that
+field was the one scrolled to. The padding is on the scroller rather than on what it holds, so nothing a dialog puts
+inside has to know about it.
+
 ### A keyboard handler that moves focus itself
 
 Such a handler calls react-aria's `setInteractionModality("keyboard")` first when the handler sits on the window's
@@ -183,9 +192,10 @@ the sidebar's `SectionHeading` is an `<h3>`, so the panels inside one of those s
 
 Every place that has nothing to show takes one shape, through `EmptyPanel`
 (`packages/ui/src/components/EmptyPanel.tsx`): a glyph, a heading naming what is missing, optionally a line under it,
-and optionally the action that fills it (the whole shape, and which state takes which part, is
-`docs/product/empty-states.md`). Nothing builds a second one out of centred text, and a state with no glyph is
-not one of these — HeroUI's bare `EmptyState` is reached only through this component.
+optionally the action that fills it and, under that action, optionally a quieter second way out of the state (the
+whole shape, and which state takes which part, is `docs/product/empty-states.md`). Nothing builds a second one out of
+centred text, and a state with no glyph is not one of these — HeroUI's bare `EmptyState` is reached only through this
+component.
 
 - The heading is a short phrase carrying **no punctuation at all**, a comma inside it included: a title that needs one
   is a sentence, and the part after the comma belongs in the line under it. "No sessions yet", not "No sessions yet,

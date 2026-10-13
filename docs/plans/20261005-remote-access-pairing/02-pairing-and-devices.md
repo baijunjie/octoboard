@@ -1,8 +1,8 @@
 # 02 Pairing and devices
 
-> Goal: a device can be paired with a one-time code and then holds its own revocable credential.
+> Goal: a device of the owner's can be paired with a one-time code and then holds its own revocable credential.
 > Completion criteria: a code works once and expires; a paired device authenticates with its credential; a revoked
-> device is refused from then on, including on connections already open.
+> device is refused from then on, including on connections already open, while the owner's other devices stay paired.
 
 ## Technical design
 

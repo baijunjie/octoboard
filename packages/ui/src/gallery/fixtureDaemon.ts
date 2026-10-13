@@ -5,6 +5,7 @@ import type { BrowseEntry, DirEntry, Event, Session } from "../protocol";
 import { createStateStore, type Daemon, type ToastRequest } from "../store";
 import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
+import { createConfigurationReplies } from "./fixtureConfiguration";
 import { createGitReplies } from "./fixtureGit";
 import { SAMPLE_MODELS } from "./fixtures/agentModels";
 import { SAMPLE_FILES, type FixtureError, type FixtureFile, type FixtureFiles } from "./fixtures/projectFiles";
@@ -50,8 +51,9 @@ function entriesUnder(files: FixtureFiles, dir: string): BrowseEntry[] {
  * archived sessions, which removes them), and the scenario's toasts are raised once the app is
  * listening.
  *
- * A project pane's Git-mode requests are answered by `fixtureGit.ts` instead, which is asked before
- * anything here and says with `undefined` that a request is not one of its own.
+ * A project pane's Git-mode requests are answered by `fixtureGit.ts` instead, and the export and import
+ * of configuration by `fixtureConfiguration.ts`; each is asked before anything here and says with
+ * `undefined` that a request is not one of its own.
  */
 export function createFixtureDaemon(scenario: Scenario): Daemon {
   const store = createStateStore(scenario.state);
@@ -76,6 +78,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
     throw new DaemonRequestError(daemonMessage(currentLanguage(), code, params, message, store.getState()), code, params);
   };
   const gitReply = createGitReplies(git, fail);
+  const configurationReply = createConfigurationReplies(scenario.configuration, store.getState, fail);
   /** A browse request's path, or the daemon error it is answered with, worded as the store words one. */
   const browsed = (path: string): FixtureFile => {
     const file = files[path];
@@ -95,6 +98,8 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
     request: async (body): Promise<Event> => {
       const fromGit = gitReply(body);
       if (fromGit !== undefined) return fromGit;
+      const fromConfiguration = configurationReply(body);
+      if (fromConfiguration !== undefined) return fromConfiguration;
       switch (body.type) {
         case "list_project_dir": {
           const dir = browsed(body.path);
@@ -113,8 +118,11 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           return { type: "project_file", project: body.project, worktree: null, path: body.path, source, file: content };
         }
         case "list_dir": {
-          const listed = scenario.directories?.[body.path];
-          return { type: "dir_listing", ...(listed ? { path: body.path, entries: listed } : genericListing(body.path)) };
+          // `~` is answered with the home directory it resolves to, as the real daemon does, so a
+          // scenario names the listing it gives by that path.
+          const path = body.path === "~" ? HOME : body.path;
+          const listed = scenario.directories?.[path];
+          return { type: "dir_listing", ...(listed ? { path, entries: listed } : genericListing(path)) };
         }
         case "detect_directory_agent":
         case "probe_git_remote": {

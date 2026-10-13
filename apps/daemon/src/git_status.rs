@@ -20,6 +20,7 @@ use std::time::{Duration, Instant};
 use anyhow::Context;
 
 use crate::env_shell;
+use crate::git_remote::{self, Remote};
 use crate::hostfs;
 use crate::protocol::{GitActivity, GitStatus, Project};
 use crate::state::AppState;
@@ -133,6 +134,7 @@ fn check_project(state: &AppState, project: &Project, force_sync: bool) {
     // discovering the directory is not a repository would have every plain project blink through
     // an in-flight icon it can never actually earn, twice a sweep.
     if !hostfs::is_git_repo(&path) {
+        git_remote::record_for_non_repository(state, &project.id, &path);
         // Recorded before the publish below, not after: if the project was removed mid-check,
         // that publish takes `remove_git_status`'s path and clears this same entry — recording it
         // afterwards would resurrect a completion timestamp for a project that no longer exists,
@@ -178,10 +180,16 @@ fn check_project(state: &AppState, project: &Project, force_sync: bool) {
     };
     state.publish_git_status(in_flight);
 
-    let remotes = list_remotes(&path);
+    // The remotes are read with their URLs by the same call that tells which one to fetch, so
+    // keeping the recorded URL current costs the check no `git` of its own.
+    let run = git_remote::runner(&path);
+    let inspection = git_remote::inspect(&run);
+    git_remote::record_inspected(state, &project.id, inspection.as_ref());
+    let remotes = inspection
+        .as_ref()
+        .map_or(&[][..], |i| i.remotes.as_slice());
     if !remotes.is_empty() {
-        let upstream_remote = upstream_remote(&path);
-        let remote = fetch_remote(&remotes, upstream_remote.as_deref());
+        let remote = fetch_remote(remotes, inspection.as_ref().and_then(|i| i.upstream()));
         let mut args = vec!["fetch", "--quiet"];
         if let Some(remote) = &remote {
             args.push(remote);
@@ -311,46 +319,6 @@ fn fast_forward(state: &AppState, path: &Path, status: &mut GitStatus) {
     read_branch_header(path, status);
 }
 
-/// The repository's configured remotes, in the order `git remote` prints them, or empty when it
-/// has none at all — not one of the steps whose failure is reported on `GitStatus`: a repository
-/// with no remote is the ordinary case this exists to tell apart from one the fetch below should
-/// actually attempt, not a failure of its own.
-fn list_remotes(path: &Path) -> Vec<String> {
-    run_git_read(path, &["remote"])
-        .map(|output| {
-            output
-                .lines()
-                .map(str::trim)
-                .filter(|line| !line.is_empty())
-                .map(str::to_string)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-/// The branch's upstream remote, e.g. `origin` for an upstream of `origin/main` — `None` when the
-/// branch has no upstream, which is the ordinary case for a fresh branch and not reported as a
-/// failure.
-fn upstream_remote(path: &Path) -> Option<String> {
-    let output = run_git_read(
-        path,
-        &[
-            "rev-parse",
-            "--abbrev-ref",
-            "--symbolic-full-name",
-            "@{upstream}",
-        ],
-    )
-    .ok()?;
-    remote_from_upstream_ref(&output).map(str::to_string)
-}
-
-/// The remote name from an `@{upstream}` ref such as `origin/main` — a pure function over the text
-/// so the split is unit-tested with literal strings rather than a real repository.
-fn remote_from_upstream_ref(ref_text: &str) -> Option<&str> {
-    ref_text.trim().split_once('/').map(|(remote, _)| remote)
-}
-
 /// Which remote name, if any, to pass to `git fetch` — a pure function over the repository's
 /// remotes and its upstream's remote (when it has one), so the derivation is unit-tested with
 /// literal strings. `None` means a bare `git fetch`, which lets `git` fall back to the current
@@ -358,12 +326,12 @@ fn remote_from_upstream_ref(ref_text: &str) -> Option<&str> {
 /// exactly one remote to begin with — a bare fetch on a repository with several and no upstream can
 /// fail against a remote named something other than `origin` (a fork workflow's `upstream`) even
 /// though fetching is in no way actually broken.
-fn fetch_remote(remotes: &[String], upstream_remote: Option<&str>) -> Option<String> {
+fn fetch_remote(remotes: &[Remote], upstream_remote: Option<&str>) -> Option<String> {
     if let Some(remote) = upstream_remote {
         return Some(remote.to_string());
     }
     if let [only] = remotes {
-        return Some(only.clone());
+        return Some(only.name.clone());
     }
     None
 }
@@ -458,8 +426,14 @@ fn git_command(
     access: GitAccess,
 ) -> std::process::Command {
     // `git` runs with the user's shell environment, the same one agents are launched with, rather
-    // than the daemon's own minimal one.
-    let mut command = crate::git_env::non_interactive(git, env);
+    // than the daemon's own minimal one — but only the `GIT_*` variables that say which of the
+    // user's own material to use are kept: their configuration, and the certificates and TLS
+    // settings a fetch needs (see `git_env::user_configuration_only`). A `GIT_DIR` or
+    // `GIT_WORK_TREE` exported in the login shell would otherwise send the branch read, the fetch
+    // and the fast-forward alike to another repository, and the remote name picked from this
+    // project's repository would be fetched there.
+    let mut command =
+        crate::git_env::non_interactive(git, crate::git_env::user_configuration_only(env));
     if matches!(access, GitAccess::Read) {
         crate::git_env::read_only(&mut command);
     }
@@ -575,8 +549,8 @@ fn parse_ab(text: &str) -> (u32, u32) {
 mod tests {
     use super::*;
     use crate::test_support::{
-        git, git_dir_state, isolated_git_env, move_modification_time_back, repo_with, ScratchDir,
-        SYSTEM_GIT,
+        git, git_dir_state, isolated_git_env, move_modification_time_back, redirecting_overrides,
+        repo_pair, repo_with, ScratchDir, SYSTEM_GIT,
     };
 
     #[test]
@@ -664,21 +638,19 @@ mod tests {
         assert!(!syncable(&status(None, 0, 2)));
     }
 
-    #[test]
-    fn the_remote_name_splits_off_the_first_path_segment_of_an_upstream_ref() {
-        assert_eq!(remote_from_upstream_ref("origin/main"), Some("origin"));
-        // A branch name containing a slash of its own still yields the remote alone: a remote
-        // name never contains one.
-        assert_eq!(
-            remote_from_upstream_ref("upstream/feature/thing"),
-            Some("upstream")
-        );
-        assert_eq!(remote_from_upstream_ref("origin"), None);
+    fn remotes(names: &[&str]) -> Vec<Remote> {
+        names
+            .iter()
+            .map(|name| Remote {
+                name: name.to_string(),
+                url: format!("u-{name}"),
+            })
+            .collect()
     }
 
     #[test]
     fn fetch_remote_prefers_the_upstreams_remote() {
-        let remotes = vec!["origin".to_string(), "upstream".to_string()];
+        let remotes = remotes(&["origin", "upstream"]);
         assert_eq!(
             fetch_remote(&remotes, Some("upstream")),
             Some("upstream".to_string())
@@ -687,13 +659,13 @@ mod tests {
 
     #[test]
     fn fetch_remote_falls_back_to_the_lone_remote_with_no_upstream() {
-        let remotes = vec!["upstream".to_string()];
+        let remotes = remotes(&["upstream"]);
         assert_eq!(fetch_remote(&remotes, None), Some("upstream".to_string()));
     }
 
     #[test]
     fn fetch_remote_is_bare_with_several_remotes_and_no_upstream() {
-        let remotes = vec!["origin".to_string(), "upstream".to_string()];
+        let remotes = remotes(&["origin", "upstream"]);
         assert_eq!(fetch_remote(&remotes, None), None);
     }
 
@@ -777,6 +749,38 @@ mod tests {
         );
         let output = run_git_command(&mut command).expect("the branch header is read");
         parse_branch_header(&output)
+    }
+
+    #[test]
+    fn environment_overrides_cannot_redirect_a_command_to_another_repository() {
+        let (ours, theirs) = repo_pair("git-status");
+        let mut env = isolated_git_env();
+        env.extend(
+            redirecting_overrides(&theirs)
+                .into_iter()
+                .map(|(key, value)| (key.to_string(), value)),
+        );
+        // A read of the file's content, which says whose index and object store it came from; the
+        // branch name would follow `GIT_DIR` alone. The worktree and the inline configuration are
+        // not seen by it: the unit tests in `git_env` pin them by name.
+        let args = ["cat-file", "blob", ":a.txt"];
+
+        // The positive control: the same command without the filter, over the whole environment,
+        // reads the other repository.
+        let mut unfiltered = crate::git_env::non_interactive(Path::new(SYSTEM_GIT), &env);
+        unfiltered.current_dir(&*ours).args(args);
+        assert_eq!(
+            run_git_command(&mut unfiltered).expect("the unfiltered read runs"),
+            "theirs\n"
+        );
+
+        // One access is enough: the filter is applied before `git_command` tells a read from a
+        // write, so a write goes through the very same line.
+        let mut command = git_command(Path::new(SYSTEM_GIT), &env, &ours, &args, GitAccess::Read);
+        assert_eq!(
+            run_git_command(&mut command).expect("the read runs"),
+            "ours\n"
+        );
     }
 
     #[test]

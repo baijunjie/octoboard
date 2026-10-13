@@ -52,6 +52,20 @@ A claim like that is a guard released on `Drop`, never a `begin`/`end` pair: the
 can panic, and an entity whose claim is never released is excluded from every later refresh for the rest of the
 daemon's life.
 
+## Cap how many blocking threads a per-entity pass starts at once
+
+Applies to daemon work that runs one blocking task per project, per directory or per session — a sweep over a console's
+projects, a reconciliation at daemon start, a read of every directory under a parent being associated. One
+`tokio::task::spawn_blocking` per item is wrong however cheap the item looks: that pool is one pool for the whole
+daemon, and every user-visible path shares it — opening a session, answering a trust prompt, a browse read — so
+associating a parent directory that holds a few hundred repositories fills it and the user's next action waits behind
+the slowest item. Such a task usually also waits on `env_shell::cached_snapshot()`'s single lock, held for a whole
+login-shell fork while the cache is cold, so the threads past the first few are not even doing work in parallel.
+
+So run the items through a bounded runner instead — a `JoinSet` held at a fixed width, starting the next item as soon
+as any one finishes — and give each item a deadline of its own, so one that stalls holds a single place rather than
+the pass. Four at a time is this daemon's figure everywhere it does this.
+
 ## Build every `git` the daemon spawns from `git_env.rs`, and give it a deadline
 
 `apps/daemon/src/git_env.rs` assembles every `git` command the daemon runs: `non_interactive` is the base, and a
@@ -59,6 +73,17 @@ command that only reads a repository adds `read_only` on top of it, before the s
 contributes a `-c` argument. Start from there rather than from `Command::new`, and set none of those variables at a
 call site; the module header carries the reason for each one, and a call site that assembles its own takes some of
 them and misses the rest.
+
+The environment is part of that, for a command that writes as much as for one that reads: `non_interactive` takes it
+whole, so a snapshot of the user's login shell is passed through `git_env::user_configuration_only` on the way in. That
+filter keeps what says which of the user's own material to use and how to reach a remote, and drops anything that can
+change which repository a command looks at, set an arbitrary configuration item, or weaken verification — and both
+sides of that line fail where the user can see it. Too wide, and a `GIT_DIR` out of the user's rc file points the
+command at another repository: what a read returns lands as persistent wrong data wherever it is stored and broadcast
+rather than shown for a moment, and a fast-forward merge writes files into a worktree that is not the project's. Too
+narrow, and a command that works from the user's own shell fails here for good — a fetch missing a certificate or
+proxy setting the user exported leaves its error in the project's status on every later check, with nothing in the
+interface pointing at the cause.
 
 Two of those reasons are worth having in advance, because the symptom turns up nowhere near the call. A `git` child
 that can prompt hangs the daemon with nothing on screen to say which call is stuck: `git` and `ssh` read a missing

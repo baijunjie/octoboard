@@ -1061,6 +1061,41 @@ pub enum RequestBody {
         #[serde(default)]
         account: Option<String>,
     },
+    /// The configuration document of the console `console`, or, when it is absent, of every
+    /// console and the application settings, answered with `configuration_exported`. A console
+    /// that does not exist is refused with `unknown_console`. Reads what is stored; touches no
+    /// session, runs no `git`.
+    ExportConfiguration {
+        #[serde(default)]
+        console: Option<String>,
+    },
+    /// Reads a configuration document and answers with `configuration_inspected`: for each project
+    /// which directories it could be placed in on this machine, and for each account reference
+    /// whether it falls back to a default account. Changes nothing. `document` is the JSON a
+    /// client read from a file and is checked here, not trusted: a `format` that is not a
+    /// configuration document, a `version` newer than this daemon reads, or a body that cannot be
+    /// read is refused with `configuration_not_recognised`, `configuration_version_unsupported`
+    /// or `configuration_unreadable`.
+    InspectConfiguration {
+        document: serde_json::Value,
+    },
+    /// Applies a configuration document and answers with `configuration_imported`: creates a new
+    /// console for each console in it, and associates each project with the directory its
+    /// `resolutions` entry chooses. A project with no entry is left out. The document is refused
+    /// as `inspect_configuration` refuses it, and a resolution naming a console or project the
+    /// document does not have, naming one twice, or choosing a `directory` that is neither an
+    /// absolute path nor starts with `~/`, is refused with `import_resolution_invalid`; all of
+    /// that before anything is created.
+    ImportConfiguration {
+        document: serde_json::Value,
+        #[serde(default)]
+        resolutions: Vec<crate::config_import::ProjectResolution>,
+        /// Whether to apply the document's application settings to this machine; absent means
+        /// false. Asking for them of a document that carries none is refused with
+        /// `import_settings_missing`.
+        #[serde(default)]
+        apply_settings: bool,
+    },
     OpenSession {
         console_id: String,
         project_id: Option<String>,
@@ -1347,6 +1382,27 @@ pub enum Event {
         models: Vec<AgentModel>,
         unavailable: Option<ModelsUnavailable>,
     },
+    /// The reply to `export_configuration`: the configuration document, which a client saves as
+    /// the file the user keeps (see "Configuration export" in `apps/daemon/PROTOCOL.md`).
+    ConfigurationExported {
+        id: Option<String>,
+        document: crate::config_export::ConfigurationDocument,
+    },
+    /// The reply to `inspect_configuration` (see "Configuration import" in
+    /// `apps/daemon/PROTOCOL.md`): one entry per console of the document, in its order.
+    ConfigurationInspected {
+        id: Option<String>,
+        settings: Option<crate::config_import::InspectedSettings>,
+        consoles: Vec<crate::config_import::InspectedConsole>,
+    },
+    /// The reply to `import_configuration`: one entry per console of the document, in its order,
+    /// each naming the console created for it.
+    ConfigurationImported {
+        id: Option<String>,
+        settings_applied: Option<crate::config_export::DocumentSettings>,
+        settings_error: Option<crate::config_import::ImportFailure>,
+        consoles: Vec<crate::config_import::ImportedConsole>,
+    },
     /// The reply to `list_pages`, oldest first. Pages are not in `snapshot`: a page carries a whole
     /// HTML document, and only the console session the user is looking at needs its pages, so the
     /// panel asks for them instead — and asks again after every `snapshot`, which is what keeps it
@@ -1486,13 +1542,14 @@ impl Event {
         }
     }
 
-    /// The reply to a failure that has no code of its own: it is not meant to be read in detail,
-    /// so its text is carried whole under one generic code.
-    pub fn internal_error(id: Option<String>, message: String) -> Self {
+    /// The reply to the failure `err`: its own code and params when it is a [`CodedError`], and
+    /// otherwise [`error_code::INTERNAL_ERROR`] carrying the whole context chain.
+    pub fn from_error(id: Option<String>, err: &anyhow::Error) -> Self {
+        let (code, params, message) = error_parts(err);
         Self::Error {
             id,
-            code: error_code::INTERNAL_ERROR.to_string(),
-            params: params(&[("detail", &message)]),
+            code,
+            params,
             message,
         }
     }
@@ -1668,6 +1725,27 @@ impl CodedError {
     }
 }
 
+/// The `code`, `params` and `message` an `error` reply carries for `err`: a [`CodedError`]'s own,
+/// or, for any other failure, [`error_code::INTERNAL_ERROR`] with the whole context chain as the
+/// message and as the `detail` param.
+pub fn error_parts(err: &anyhow::Error) -> (String, Params, String) {
+    match err.downcast_ref::<CodedError>() {
+        Some(coded) => (
+            coded.code.to_string(),
+            coded.params.clone(),
+            coded.message.clone(),
+        ),
+        None => {
+            let message = format!("{err:#}");
+            (
+                error_code::INTERNAL_ERROR.to_string(),
+                params(&[("detail", &message)]),
+                message,
+            )
+        }
+    }
+}
+
 impl std::fmt::Display for CodedError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(&self.message)
@@ -1758,6 +1836,24 @@ pub mod error_code {
     /// it carries no login and no session history for the per-session home to link. `params` names
     /// `path`.
     pub const GROK_HOME_NOT_INITIALIZED: &str = "grok_home_not_initialized";
+    /// The `format` of a configuration document is absent or names something else, so the file is
+    /// not one.
+    pub const CONFIGURATION_NOT_RECOGNISED: &str = "configuration_not_recognised";
+    /// A configuration document is of a `version` this daemon does not read. `params` names the
+    /// `version` and the newest it `supported`.
+    pub const CONFIGURATION_VERSION_UNSUPPORTED: &str = "configuration_version_unsupported";
+    /// A configuration document could not be read. `params` names the `detail`.
+    pub const CONFIGURATION_UNREADABLE: &str = "configuration_unreadable";
+    /// A resolution of `import_configuration` is not one the document can take. `params` names the
+    /// `console` and `project` it gave, as indexes.
+    pub const IMPORT_RESOLUTION_INVALID: &str = "import_resolution_invalid";
+    /// `import_configuration` was asked to apply a document's application settings and the
+    /// document carries none, as a single console's export does not.
+    pub const IMPORT_SETTINGS_MISSING: &str = "import_settings_missing";
+    /// A project of an import was left uncreated because the directory choice made for it cannot be
+    /// used: the document gives it no usable path or remote URL for that choice. `params` names the
+    /// `choice`.
+    pub const IMPORT_CHOICE_UNAVAILABLE: &str = "import_choice_unavailable";
     pub const ICON_NOT_AN_IMAGE: &str = "icon_not_an_image";
     pub const ICON_TOO_LARGE: &str = "icon_too_large";
     pub const SESSION_NOT_RUNNING: &str = "session_not_running";
@@ -2395,7 +2491,7 @@ mod tests {
         assert_eq!(event["message"], "unknown console console-7");
 
         let event =
-            serde_json::to_value(super::Event::internal_error(None, "boom".to_string())).unwrap();
+            serde_json::to_value(super::Event::from_error(None, &anyhow::anyhow!("boom"))).unwrap();
         assert_eq!(event["code"], "internal_error");
         assert_eq!(event["params"]["detail"], "boom");
         assert_eq!(event["message"], "boom");

@@ -159,6 +159,32 @@ Virtualized or not, a `Select` whose items show `ListBox.ItemIndicator` needs `p
 popover's styles give its items `px-2.5`, which overrides the `pe-7` `ListBox.Item` reserves for the check mark, so a
 long label otherwise runs under the mark.
 
+## A dialog's body scrolls inside `Dialog`, and fades where more is hidden
+
+A dialog whose content outgrows the window has to say so: when the body overflows, the edge it can still be scrolled
+towards fades out, so the user sees there is more below (or above) without having to find a scrollbar. Nobody adding a
+dialog thinks to ask for this, so `Dialog` (`packages/ui/src/dialogs/Dialog.tsx`) does it for every dialog: its body is
+a HeroUI `ScrollShadow`, which shows a fade only while there is something to scroll towards and drops it at either end.
+
+- Put the content in `Dialog`'s children and nothing else. Do not give the dialog a scroll container of your own
+  (`overflow-y-auto` on a wrapper, a `max-h-*` list): its overflow would scroll apart from the body and carry no fade,
+  and the body would be fading nothing.
+- Where something inside a dialog must scroll on its own, apart from the body, it fades itself: `DirectoryPicker`'s list
+  through `useScrollFade` as the previous section says. `SettingsDialog` is the one dialog that does not use `Dialog`
+  (it is a window of its own, with a section list beside the content), so each section's panel holds a `ScrollShadow`
+  of its own. It is a `ScrollShadow` inside the `Tabs.Panel`, never the panel itself and never `useScrollFade` on it:
+  the fade's scroll-timeline animation never ends, and the panel's exit transition waits for it, which leaves the old
+  section on screen after a tab switch.
+- The fade is a hint, never the only cue. It is a mask over an ordinary overflow container, so the wheel, the keyboard
+  and a control focused out of view scroll as they would anyway; keep it that way, and do not replace the container
+  with one that scrolls by script. The container has `scroll-padding-block` of the fade's size (`FADE_SIZE`), so a
+  control scrolled into view stops clear of the fade (see "Focus scrolled to the edge of a scroller that fades there"
+  in `docs/ui-accessibility.md`). While the body scrolls it is also a focusable region named by the dialog's title, so a
+  dialog with every control in the footer can still be scrolled from the keyboard.
+- The body's padding sits on the scroller, because that is where a focus ring needs its room inside the clip.
+- jsdom has no `ResizeObserver`, which `ScrollShadow` needs to mount: `src/test/setup.ts` stubs it for every test file,
+  and a test that has to measure replaces it with `vi.stubGlobal`.
+
 ## A `Tabs` panel is mounted only while its own tab is selected
 
 A tab panel in `packages/ui` exists only while its tab is the selected one: react-aria-components' `TabPanel`

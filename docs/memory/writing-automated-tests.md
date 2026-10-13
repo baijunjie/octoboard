@@ -6,6 +6,20 @@ The user wants tests lean and has had over-written ones trimmed. Test a module's
 one representative case per rule, in a table (`it.each`) when several rules share one shape, rather than a
 `describe` block per behaviour with a handful of near-duplicate cases each.
 
+## Check a new test by breaking the rule it is named for
+
+Before calling a test done, make the rule its name claims fail — empty the constant the production path reads, feed it
+the input the name says is ignored, delete the guard — and confirm that this test, not some other, reports it. Two
+shapes pass otherwise and both get written here: a case whose input never contains the thing the name says is ignored,
+which asserts nothing about ignoring it; and a list or allowlist a production path depends on that no test pins, so
+emptying it leaves the whole suite green.
+
+Run that check per element where the input is a shared fixture standing for a set — a table of variables, of payloads,
+of flags — rather than once over the fixture as a whole: drop each element in turn and watch the assertion fail. An
+aggregate assertion passes on behalf of whichever elements it is actually sensitive to, so one element that no
+assertion can see, or whose payload turns out to be inert against the fixture's own shape, is decoration, and the
+fixture's claim to cover the set is what the next person will trust.
+
 ## Never write a fresh executable per test — share one that has already been exec'd
 
 Applies to any test that needs a script of its own to run as a program: a fake shell, a fake agent

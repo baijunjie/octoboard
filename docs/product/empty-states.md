@@ -20,8 +20,12 @@ The form an empty state takes wherever it fills an area of its own, centred in i
   the heading leaves out — where what is missing comes from, or what to do about it — or a bare fact about the subject
   itself, such as the size of a file that cannot be drawn, or the size before and after for a change between two of
   them, which is not a sentence at all. A state whose title says all there is to say carries no such line.
-- **one button**, where there is a single thing to do about the state, named by that action and sometimes carrying a
-  glyph of its own.
+- **a button**, where there is something to do about the state, named by that action and sometimes carrying a glyph of
+  its own.
+- **a quieter second action under the button**, where there is another way out of the state worth offering beside the
+  first. It stands below the button rather than beside it and is drawn without a fill of its own, so the panel still
+  leads with the first action and the second reads as the alternative: the welcome screen's Import configuration…
+  under New console (see "What the welcome screen shows" in `docs/product/welcome-screen.md`).
 
 The heading is a heading for assistive technology as well, so the panel shows in the outline of the view it fills, at
 the level of the heading naming whatever the panel stands in for: the two then read as one thing rather than the panel
@@ -53,7 +57,9 @@ A row with nothing to do about it is not a button and carries no tooltip.
 
 Where the region around an empty state already tells assistive technology what the state is, the panel itself is
 hidden from assistive technology, so the state is not read twice; it is then on screen for the eye alone. Such a state
-never carries a button, which would be left reachable by Tab with nothing to name it.
+carries **neither action**, the button nor the quieter one under it: a button inside a subtree hidden from assistive
+technology is still reachable by Tab, yet arrives there with no name and no role, so it would be a stop nothing
+accounts for. A state with something to do about it is therefore never one of these.
 
 ## The same state said in one sentence
 

@@ -2,13 +2,14 @@
 //! the port it printed (`sidecar.rs`), the native menu bar (`menu.rs`), the window's remembered
 //! size and position (`window_state.rs`), the exit-confirmation flow (`exit.rs`), running in the
 //! background once the window is closed (`background.rs`) behind a menu bar icon (`tray.rs`), the
-//! macOS privacy permissions the agents in its terminals can need (`permissions.rs`), and the
+//! macOS privacy permissions the agents in its terminals can need (`permissions.rs`), the system's
+//! save and open dialogs for the configuration document (`configuration_file.rs`), and the
 //! webview's content rule list that keeps report pages off the web (`page_isolation.rs`, macOS).
-//! Everything after the window loads talks to the daemon over WebSocket only, per the
-//! architectural rule in "Why the daemon is split out" in `docs/architecture.md` — no Tauri IPC
-//! command carries daemon traffic, so this process reads the sidecar's stdout itself and bakes the
-//! port into the window's URL as a `?port=` query parameter *before* creating the window, instead
-//! of exposing an `invoke`-able command for it.
+//! Everything after the window loads talks to the daemon over WebSocket only, per the architectural
+//! rule in "Why the daemon is split out" in `docs/architecture.md` — no Tauri IPC command carries
+//! daemon traffic, so this process reads the sidecar's stdout itself and bakes the port into the
+//! window's URL as a `?port=` query parameter *before* creating the window, instead of exposing an
+//! `invoke`-able command for it.
 //!
 //! The IPC commands this crate does expose carry no daemon traffic either:
 //! `frontend_exit_heartbeat` and `confirm_quit` (both in `exit.rs`), `bring_to_front` and
@@ -18,9 +19,12 @@
 //! lists, which `tray-session-chosen` hands back. That is display text the UI words from the
 //! sessions it already shows, as it does the Dock badge's count; the shell never asks the daemon
 //! anything. The three in `permissions.rs` ask the system instead: a read of this process's own
-//! privacy grants, the one prompt that asks the user for one, and a System Settings deep link.
+//! privacy grants, the one prompt that asks the user for one, and a System Settings deep link. The
+//! two in `configuration_file.rs` raise the system's save and open dialogs for the configuration
+//! document and write or read the file the user picked; the page names no path of its own.
 
 mod background;
+mod configuration_file;
 mod exit;
 mod menu;
 #[cfg(target_os = "macos")]
@@ -64,6 +68,9 @@ pub fn run() {
         // The frontend writes text to the clipboard through it (the webview's own clipboard API is
         // refused outside a secure context, which the custom scheme may not count as).
         .plugin(tauri_plugin_clipboard_manager::init())
+        // The system's save and open dialogs, which `configuration_file.rs` raises itself for the
+        // configuration export and import; the page is given none of the plugin's own commands.
+        .plugin(tauri_plugin_dialog::init())
         .manage(ExitState::default())
         .manage(BackgroundState::default())
         .manage(DaemonState::default())
@@ -76,7 +83,9 @@ pub fn run() {
             background::set_run_in_background,
             permissions::macos_permissions_status,
             permissions::macos_request_permission,
-            permissions::macos_open_privacy_settings
+            permissions::macos_open_privacy_settings,
+            configuration_file::save_configuration_file,
+            configuration_file::open_configuration_file
         ])
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();

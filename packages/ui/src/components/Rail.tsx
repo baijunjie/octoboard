@@ -6,6 +6,7 @@ import type { DialogRequest } from "../dialogs/dialogRequest";
 import { isolate } from "../i18n/isolate";
 import { textDirection } from "../i18n/languages";
 import { useCurrentLanguage, useT } from "../i18n/react";
+import { usePlatform } from "../platform/react";
 import type { Console, Session } from "../protocol";
 import { activityLabelKey } from "../sessionLabel";
 import { consoleMenu } from "../sidebar/menus";
@@ -84,6 +85,7 @@ function ConsoleTile({
   onOpenDialog: (dialog: DialogRequest) => void;
 }): React.ReactElement {
   const t = useT();
+  const { configurationFile } = usePlatform();
   const tileRef = useRef<HTMLDivElement>(null);
   const activityKey = activityLabelKey(activity);
   return (
@@ -115,7 +117,7 @@ function ConsoleTile({
         className="hidden"
         label={t("sidebar.console.actions", { name: isolate(thisConsole.name) })}
         tooltip={false}
-        items={consoleMenu(t, thisConsole, onOpenDialog)}
+        items={consoleMenu(t, thisConsole, onOpenDialog, configurationFile !== undefined)}
         contextTargetRef={tileRef}
       />
     </div>

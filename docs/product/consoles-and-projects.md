@@ -2,8 +2,9 @@
 
 A **console** groups a set of projects and owns a working directory of its own. A **project** is a directory on a
 host, associated with one console. A console is created and managed by the user; a project is associated either by
-the user or by its console session. Sessions that run inside them are described in
-`docs/product/sessions.md`.
+the user or by its console session. Sessions that run inside them are described in `docs/product/sessions.md`, and
+carrying consoles and the projects under them to another machine in
+`docs/product/configuration-export-and-import.md`.
 
 ## Consoles
 
@@ -171,10 +172,10 @@ Deleting the **last** console leaves the window with none, which it shows as the
 ## Projects
 
 A project carries a name, the directory it points at, an optional default agent, how it was associated, the remote
-URL it was cloned from (for a git association), whether the user has pinned it (see "Order of projects and
-sessions" in `docs/product/sidebar.md`), any number of tags, and — one set per agent — what it says about the account
-its sessions run under and an optional model and reasoning effort for them (see "The project's account, model and
-reasoning effort" below). Every project is bound to a host (see "Hosts" below).
+URL of the repository it points at (see "The project's remote URL" below), whether the user has pinned it (see "Order
+of projects and sessions" in `docs/product/sidebar.md`), any number of tags, and — one set per agent — what it says
+about the account its sessions run under and an optional model and reasoning effort for them (see "The project's
+account, model and reasoning effort" below). Every project is bound to a host (see "Hosts" below).
 
 A project also carries whether the user has given Octoboard permission to press any agent's trust confirmation for
 its directory without asking. A project starts without that permission, including one the console session associates;
@@ -344,6 +345,42 @@ form was filled in with.
 A changed account applies to sessions opened afterwards; a changed model or effort is taken by the next session of the
 project opened or resumed. Sessions already running are unaffected by any of the three.
 
+### The project's remote URL
+
+A project records the git remote URL of the repository its directory holds, for **every** source, not only for one
+associated from a URL. It is Octoboard's own record of where that repository came from; the user types it only as the
+input of a git association, it appears in no project form, and it is not among the fields a project's settings can
+change.
+
+**What is recorded.** The URL as the repository's own configuration writes it, before any rewrite the machine's git
+configuration would apply to it, since such a rewrite is a setting of the machine and not of the repository. The
+remotes are read across git's whole configuration — system, global, local and worktree — the same set `git remote`
+and `git fetch` see, so a remote that only the user's global configuration defines is found here as well.
+
+**Which remote.** `origin`'s URL; failing that, the URL of the remote the current branch's upstream belongs to;
+failing that, the first remote the configuration lists (system before global before local before worktree).
+`origin` comes first so that the recorded value says where the working tree came from and does not move as the user
+switches branches. The last fallback has a
+rare consequence: a repository with no `origin`, whose current branch has no upstream, and which has a remote of its
+own while the user's global configuration also defines one, records the global one's URL.
+
+**No URL is a normal state.** A directory that is not a git repository, and a repository with no remote configured,
+have no recorded URL, and neither is an error — the project is associated and its git status checked the same way. A
+read that cannot be made at all leaves whatever is recorded alone, and never refuses an association.
+
+**When it is read.** Associating a project reads it from the directory — for a single directory, and for each
+repository a parent directory yields. A git association instead keeps the URL the request was given to clone from, and
+takes the configured one at the next read. Afterwards Octoboard maintains the value itself: every project's directory
+is re-read once when the daemon starts, and each git status check of a project records what it reads (see "What one
+check does" in `docs/product/project-git-status.md`). So a repository whose remote the user changes outside Octoboard
+— `git remote set-url`, a renamed or moved repository — is followed, and a corrected value reaches every open window
+at once, as any other change to a project does.
+
+**When it is kept and when it is cleared.** A directory that cannot be seen — missing, on a volume that is not
+mounted, or replaced by something that is not a directory — keeps the recorded URL, since none of that says the
+repository stopped being one. It is cleared only when the directory is there and is no longer a git repository, or is
+a repository with no remote left.
+
 ### Editing a project
 
 Only the name, the default agent, the account, the model and the reasoning effort, and the tags can be changed,
@@ -357,9 +394,10 @@ onto more lines as they grow, the field growing with them. Each is a picked tag 
 removing one, with its remove button or with Backspace or Delete while it has focus, puts the focus in the text input.
 Backspace in the empty text input removes the last tag, one per key press (holding it down does not keep removing).
 Clicking the field's empty area puts the focus in the text input. The same field is in the dialog that associates a
-project, and the tags chosen there go on every project that association creates. The association itself — the source,
-the directory, the remote URL — is fixed once the project exists; a project that should point somewhere else is
-removed and associated again.
+project, and the tags chosen there go on every project that association creates. The association itself — the source
+and the directory — is fixed once the project exists; a project that should point somewhere else is removed and
+associated again. The remote URL is not editable either, and saving an edit never overwrites it: Octoboard keeps that
+value in step with the repository itself (see "The project's remote URL" above).
 
 The name cannot be cleared: saving an empty name is rejected. The default agent can be cleared, which puts the project
 back to inheriting the console's default; the account can be put on any of its three states, inheriting the console's

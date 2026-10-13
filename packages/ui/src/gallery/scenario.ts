@@ -1,3 +1,5 @@
+import type { Imported } from "../configuration/ImportResult";
+import type { Inspection } from "../configuration/ImportReview";
 import type { MacosPermissionsStatus } from "../platform";
 import type { Agent, AgentModel, DirEntry, MessageParams, ModelsUnavailable } from "../protocol";
 import type { FixtureError, FixtureFiles } from "./fixtures/projectFiles";
@@ -48,6 +50,39 @@ export type Step = (ui: Ui) => Promise<void>;
  * chosen above the window. */
 export const DEFAULT_WIDTH = 1440;
 
+/** The shortest window the gallery page's iframe takes (its `min-height` in `gallery.html`); a
+ * scenario's `height` below it would not be the height it is shown at. */
+export const MIN_HEIGHT = 400;
+
+/** What the platform and the daemon answer to exporting and importing configuration. Exporting needs
+ * nothing from a scenario: the document is built from its state, as the daemon builds one. What an
+ * inspection or an import answers is the scenario's to give, and has to agree with the scenario's
+ * state and steps (`fixtureConfiguration.ts` and the test beside `fixtures/configuration.ts` hold it
+ * to that). */
+export interface ConfigurationFixture {
+  /** The file the platform's open dialog hands back, `"dismissed"` for a dialog the user closes, or
+   * `"pending"` for one that is never answered (a browser too old to report a dismissed picker).
+   * Without it, an empty document of the right format. */
+  file?: { name: string; text: string } | "dismissed" | "pending";
+  /** What the open dialog fails with, for a file that could not be read: the system's own text, or
+   * the kind of failure the desktop shell names. */
+  readError?: string | { kind: "too_large" | "not_text" };
+  /** What the save dialog fails with, for a file that could not be written. */
+  saveError?: string;
+  /** For a platform that hands the file to a browser's download rather than saving it where the
+   * user chose. */
+  downloads?: boolean;
+  /** For a platform that can neither save nor open a file, so that nothing offers to. */
+  unavailable?: boolean;
+  /** What `inspect_configuration` answers: the inspection, or the daemon error refusing the
+   * document. A scenario that opens a file gives it. */
+  inspection?: Omit<Inspection, "type"> | FixtureError;
+  /** What `import_configuration` answers: the result, a daemon error refusing the request, or
+   * `"pending"` for an import that is never answered (a long clone). A scenario that applies an
+   * import gives it. */
+  imported?: Omit<Imported, "type"> | FixtureError | "pending";
+}
+
 export interface Scenario {
   id: string;
   /** The heading it is listed under. */
@@ -59,6 +94,10 @@ export interface Scenario {
    * `docked` breakpoint is 1148. Left out for `DEFAULT_WIDTH`; see "The UI state gallery" in
    * `packages/ui/README.md` for when a scenario earns a width of its own. */
   width?: number;
+  /** The window height the gallery page opens it at, as `width` is for the width; left out for a
+   * window that fits the page. For a scenario that rests on a window too short for its dialog,
+   * whose body then scrolls: that cannot be left to the height of whatever browser opens it. */
+  height?: number;
   /** Shown in place of the app; without it the real `App` is rendered over `state`. */
   startup?: Startup;
   state?: Partial<State>;
@@ -70,7 +109,8 @@ export interface Scenario {
   /** The terminal's automatic reconnect attempts follow one another at once, so a `refuse`d
    * terminal reaches its disconnected state without the backoff's wait. */
   terminalRetriesImmediate?: boolean;
-  /** What `list_dir` answers per path; a path not listed gets a generic listing. */
+  /** What `list_dir` answers per path, `~` being asked as the home directory `/Users/dev`; a path not
+   * listed gets a generic listing of five directories. */
   directories?: Record<string, DirEntry[]>;
   /** What `detect_directory_agent` and `probe_git_remote` answer per path or URL: an agent (or null
    * for none), a daemon error, or `"pending"` for a request that is never answered. One not listed
@@ -95,6 +135,7 @@ export interface Scenario {
   /** The platform offers the desktop app's run-in-background capability, so the Settings switch for
    * it is shown; the browser platform has none. */
   backgroundRun?: boolean;
+  configuration?: ConfigurationFixture;
   steps?: Step[];
   /** Renders the file viewer over the subjects `subjects` builds, in place of the app; built only
    * when the scenario opens. `loadDelay` shows each one's loading state for that many milliseconds

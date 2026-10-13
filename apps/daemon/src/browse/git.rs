@@ -4,7 +4,10 @@
 //!
 //! The environment starts from the user's own shell environment (so it is their `git`, their
 //! global configuration and their `safe.directory` list), but with every `GIT_*` variable removed
-//! apart from the three that only say where the user's own configuration files are. That takes out
+//! apart from the few that say which of the user's own material to use (see
+//! [`crate::git_env::KEPT_GIT_VARIABLES`]): their configuration files, and the certificates and
+//! proxy helper a connection to a remote uses. Those reach `git` but do nothing here, since a
+//! browse read never connects to a remote. That takes out
 //! `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`, `GIT_COMMON_DIR`,
 //! `GIT_CONFIG_PARAMETERS` and the rest of what git(1)'s "Environment Variables" lists as
 //! redirecting a repository, wholesale rather than by a list that a later `git` release would
@@ -46,14 +49,6 @@ use anyhow::Result;
 use crate::browse::budget;
 use crate::env_shell;
 use crate::subprocess::{self, BoundedFailure, Bounds};
-
-/// The `GIT_*` variables kept from the user's environment: they only say where the user's own
-/// configuration lives, and dropping them would read some other configuration instead.
-const KEPT_GIT_VARIABLES: &[&str] = &[
-    "GIT_CONFIG_GLOBAL",
-    "GIT_CONFIG_SYSTEM",
-    "GIT_CONFIG_NOSYSTEM",
-];
 
 /// Pathspecs that match each of `paths` exactly: the path itself, literally, and nothing below
 /// it (`<path>/**` excluded, the path's own glob characters escaped). A plain path would also match
@@ -174,10 +169,10 @@ impl GitEnv {
     pub fn command(&self, dir: &Path, subcommand: &str, args: &[&[u8]]) -> Command {
         use std::os::unix::ffi::OsStrExt;
 
-        let kept = self.env.iter().filter(|(key, _)| {
-            !key.starts_with("GIT_") || KEPT_GIT_VARIABLES.contains(&key.as_str())
-        });
-        let mut command = crate::git_env::non_interactive(&self.git, kept);
+        let mut command = crate::git_env::non_interactive(
+            &self.git,
+            crate::git_env::user_configuration_only(&self.env),
+        );
         command.env("GIT_LITERAL_PATHSPECS", "1");
         command.env("GIT_NO_REPLACE_OBJECTS", "1");
         command.env("GIT_NO_LAZY_FETCH", "1");
@@ -279,14 +274,16 @@ impl GitEnv {
 #[cfg(test)]
 pub(super) mod tests {
     use super::*;
-    use crate::test_support::{git, isolated_git_env, repo_with, SYSTEM_GIT};
+    use crate::test_support::{
+        git, isolated_git_env, redirecting_overrides, repo_pair, repo_with, SYSTEM_GIT,
+    };
 
     /// A `GitEnv` over [`isolated_git_env`] plus `extra`, running [`SYSTEM_GIT`].
     ///
     /// The two variables that keep the developer's own configuration out reach `git` only because
-    /// [`KEPT_GIT_VARIABLES`] holds them; every other `GIT_*` of theirs is dropped on the way, so
-    /// taking either off that list would quietly put their configuration back into every read a
-    /// test makes.
+    /// [`crate::git_env::KEPT_GIT_VARIABLES`] holds them; every other `GIT_*` of theirs is dropped
+    /// on the way, so taking either off that list would quietly put their configuration back into
+    /// every read a test makes.
     pub(in crate::browse) fn test_env(extra: &[(&str, &str)]) -> GitEnv {
         let mut env = isolated_git_env();
         for (key, value) in extra {
@@ -301,22 +298,16 @@ pub(super) mod tests {
 
     #[test]
     fn environment_overrides_cannot_redirect_a_read_to_another_repository() {
-        let ours = repo_with("git-ours", &[(b"a.txt", b"ours\n")]);
-        let theirs = repo_with("git-theirs", &[(b"a.txt", b"theirs\n")]);
-        let theirs_git = theirs.join(".git");
-        let theirs_git = theirs_git.to_str().unwrap();
-        let theirs_index = theirs.join(".git/index");
-        let overrides = [
-            ("GIT_DIR", theirs_git),
-            ("GIT_WORK_TREE", theirs.to_str().unwrap()),
-            ("GIT_INDEX_FILE", theirs_index.to_str().unwrap()),
-            ("GIT_COMMON_DIR", theirs_git),
-            ("GIT_CONFIG_PARAMETERS", "'core.worktree'='/'"),
-        ];
+        let (ours, theirs) = repo_pair("git");
+        let overrides = redirecting_overrides(&theirs);
+        let overrides: Vec<(&str, &str)> = overrides
+            .iter()
+            .map(|(key, value)| (*key, value.as_str()))
+            .collect();
         // The positive control: plain `git` with these variables reads the other repository.
         let redirected = Command::new(SYSTEM_GIT)
             .current_dir(&*ours)
-            .envs(overrides)
+            .envs(overrides.iter().copied())
             .args(["cat-file", "blob", ":a.txt"])
             .output()
             .unwrap();

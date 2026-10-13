@@ -9,11 +9,14 @@ mod agent_models;
 mod availability;
 mod branch_origin;
 mod browse;
+mod config_export;
+mod config_import;
 mod console_request;
 mod coordinator;
 mod crash_cleanup;
 mod env_shell;
 mod git_env;
+mod git_remote;
 mod git_status;
 mod hook_mode;
 mod hooks;
@@ -221,6 +224,8 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
     // put that cost on every application launch, and clients are served before it lands either way
     // (see `apps/daemon/src/availability.rs`).
     availability::spawn_determine(state.clone());
+    // Likewise off the runtime: it runs `git` in every project's directory, a few at a time.
+    git_remote::reconcile_remote_urls(&state);
 
     let serve = axum::serve(listener, server::router(state.clone()));
     tokio::select! {

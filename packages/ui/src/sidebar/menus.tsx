@@ -1,4 +1,4 @@
-import { Archive, ArrowLeftRight, Focus, FolderOpen, FolderPlus, KeyRound, List, Pencil, Pin, PinOff, RefreshCw, Settings2, Trash2 } from "lucide-react";
+import { Archive, ArrowLeftRight, FileDown, Focus, FolderOpen, FolderPlus, KeyRound, List, Pencil, Pin, PinOff, RefreshCw, Settings2, Trash2 } from "lucide-react";
 
 import { switchEntries } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuSubmenu } from "../components/ActionMenu";
@@ -43,11 +43,20 @@ function pinItem(t: Translate, pinned: boolean, onToggle: () => void): ActionMen
     : { label: t("sidebar.pin"), icon: Pin, onClick: onToggle };
 }
 
-/** A console's actions, in the sidebar's header and on the console's avatar in the rail. */
-export function consoleMenu(t: Translate, console: Console, onOpenDialog: (dialog: DialogRequest) => void): ActionMenuEntry[] {
+/** A console's actions, in the sidebar's header and on the console's avatar in the rail. "Export
+ * configuration" is offered only where the platform can save a file (`canExport`). */
+export function consoleMenu(
+  t: Translate,
+  console: Console,
+  onOpenDialog: (dialog: DialogRequest) => void,
+  canExport: boolean,
+): ActionMenuEntry[] {
   return [
     { label: t("sidebar.console.addProject"), icon: FolderPlus, onClick: () => onOpenDialog({ kind: "new-project", console }) },
     { label: t("sidebar.console.edit"), icon: Pencil, onClick: () => onOpenDialog({ kind: "edit-console", console }) },
+    ...(canExport
+      ? [{ label: t("sidebar.console.exportConfiguration"), icon: FileDown, onClick: () => onOpenDialog({ kind: "export-configuration", console }) }]
+      : []),
     "separator",
     { label: t("sidebar.console.delete"), icon: Trash2, onClick: () => onOpenDialog({ kind: "delete-console", console }), destructive: true },
   ];

@@ -47,8 +47,8 @@ Per-package commands are in that package's doc.
 - [`apps/daemon/`](../apps/daemon/README.md) — `octoboardd`, the Rust daemon and the core of the system rather than one
   of its clients: the one process that owns every agent process and all of Octoboard's data. Host role (PTYs, agent
   processes, directories, repositories) and coordinator role (console/project/session/page and agent account data in
-  SQLite). Every client reaches it only through the WebSocket/HTTP protocol in
-  [`apps/daemon/PROTOCOL.md`](../apps/daemon/PROTOCOL.md).
+  SQLite, and the configuration document exported from it and read back into it). Every client reaches it only
+  through the WebSocket/HTTP protocol in [`apps/daemon/PROTOCOL.md`](../apps/daemon/PROTOCOL.md).
 - [`apps/desktop/`](../apps/desktop/README.md) — `@octoboard/desktop`, the Tauri 2 shell of the macOS desktop
   application: window (with its overlay titlebar, translucent native material and remembered frame), native menu
   (labelled in the UI's language), `octoboardd` sidecar, exit flow, optional background running behind a menu bar icon

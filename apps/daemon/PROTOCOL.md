@@ -1,7 +1,9 @@
 # octoboardd protocol
 
-The only interface between the desktop application and the daemon. There is no Tauri IPC channel and no shared state
-between them (see "Why the daemon is split out" in `docs/architecture.md`), so everything the UI can do is in here.
+The only interface between a client and the daemon — the desktop application today, and in the server form the
+owner's browser on another machine (see "Two deployment forms" in `docs/architecture.md`). There is no Tauri IPC
+channel and no shared state between them (see "Why the daemon is split out" there), so everything the UI can do is in
+here.
 
 The daemon binds to `127.0.0.1` on an ephemeral port and prints `octoboardd listening on 127.0.0.1:<port>` on stdout as
 its first line; it also writes the port to `$TMPDIR/octoboardd.port`. The application reads the stdout line.
@@ -46,13 +48,16 @@ the request id as if it were a record id.
 | `create_console` | `name`, `default_agent`, `claude_account_id?`, `codex_account_id?`, `grok_account_id?`, `claude_console_session_model?`, `claude_console_session_effort?`, `codex_console_session_model?`, `codex_console_session_effort?`, `grok_console_session_model?`, `grok_console_session_effort?`, `icon?` | The daemon creates the console's working directory under `~/.octoboard/consoles/<id>/`. `icon` is validated first, as in the "Records" notes below: a failure is answered with `icon_not_an_image` or `icon_too_large`, and a blank value means unset. Each account field names the account this console should reference for that agent, by id; absent means the agent's default account. An id that names no account, or an account of another agent, is answered with `unknown_account`, and nothing is created. Console sessions always run the console's `default_agent`. The model and effort fields are the model and reasoning effort a console session is launched with, one pair per agent in that agent's own spelling; they are trimmed, and absent or blank means the agent's own default |
 | `update_console` | `console`, `name?`, `default_agent?`, `claude_account_id?`, `codex_account_id?`, `grok_account_id?`, `claude_console_session_model?`, `claude_console_session_effort?`, `codex_console_session_model?`, `codex_console_session_effort?`, `grok_console_session_model?`, `grok_console_session_effort?`, `icon?` | For each account field independently: absent leaves the console's reference alone; an explicit `null` clears it, back to the agent's default account; an id is validated as in `create_console` and replaces the reference. A reference left alone is not checked again. `icon` follows the same absent / `null` / blank rule, clearing back to the default glyph. Only sessions opened afterwards take a changed reference (see `Session.account_id`). Each model and effort field follows the same absent / `null` / blank rule, clearing back to the agent's own default; a console session that is opened or resumed afterwards launches with the console's current values, and one already running keeps what it started with. Project sessions never read them. A save also keeps the console session's agent equal to `default_agent` |
 | `delete_console` | `console` | Takes its projects and all their session records with it. Refused while any of them is still running |
-| `add_project` | `console_id`, `source` (`local`\|`parent`\|`git`), `path?`, `remote_url?`, `name?`, `default_agent?`, `claude_account_id?`, `codex_account_id?`, `grok_account_id?`, `claude_session_model?`, `claude_session_effort?`, `codex_session_model?`, `codex_session_effort?`, `grok_session_model?`, `grok_session_effort?`, `detect_default_agent?`, `tags?` | `local` associates one directory; `parent` associates every git repository directly beneath `path`; `git` clones `remote_url`, any git remote, into `path` (used as the parent directory) and associates the clone; `path` is required for `local` and `parent` only, and a `git` request without one clones into `default_clone_dir` of the settings. `github`, this source's former name, is still accepted in a request and in a stored project, and is always emitted as `git`. A `path` must be absolute or start with `~/`, and is stored lexically normalised (`.` and `..` folded, no trailing slash); a relative one is refused, because the trusted directories compare project paths and a relative path means nothing to them. Absent `default_agent` lets the daemon store one detected from each directory's marker files, or none (rules in `docs/product/consoles-and-projects.md`, "The project's default agent"); an absent `detect_default_agent` is true, and false stores none, for a client that has already shown the user the detection (`detect_directory_agent`, `probe_git_remote`) and sends what it showed. Absent `tags` means none, and each added project takes the same list, normalised as in the "Records" notes below. Each account field is a `ProjectAccount` (see the "Records" notes below) saying which account the project's sessions of that agent should read; absent or `null` means inheriting the console's reference for that agent, and `{"kind":"default"}` the agent's default account. An `account` kind that names no account, or an account of another agent, is answered with `unknown_account`, and nothing is cloned or stored. The model and effort fields are the model and reasoning effort the project's sessions are launched with, one pair per agent in that agent's own spelling; they are trimmed, and absent or blank means the agent's own default. Each added project takes the same values |
+| `add_project` | `console_id`, `source` (`local`\|`parent`\|`git`), `path?`, `remote_url?`, `name?`, `default_agent?`, `claude_account_id?`, `codex_account_id?`, `grok_account_id?`, `claude_session_model?`, `claude_session_effort?`, `codex_session_model?`, `codex_session_effort?`, `grok_session_model?`, `grok_session_effort?`, `detect_default_agent?`, `tags?` | `local` associates one directory; `parent` associates every git repository directly beneath `path`; `git` clones `remote_url`, any git remote, into `path` (used as the parent directory) and associates the clone; every added project records its repository's remote URL (`remote_url`, see the "Records" notes below): a clone keeps the URL it was given, and a `local` or `parent` project takes the one read from its directory, or none when the directory is not a repository or has no remote, which is not an error; `path` is required for `local` and `parent` only, and a `git` request without one clones into `default_clone_dir` of the settings. `github`, this source's former name, is still accepted in a request and in a stored project, and is always emitted as `git`. A `path` must be absolute or start with `~/`, and is stored lexically normalised (`.` and `..` folded, no trailing slash); a relative one is refused, because the trusted directories compare project paths and a relative path means nothing to them. Absent `default_agent` lets the daemon store one detected from each directory's marker files, or none (rules in `docs/product/consoles-and-projects.md`, "The project's default agent"); an absent `detect_default_agent` is true, and false stores none, for a client that has already shown the user the detection (`detect_directory_agent`, `probe_git_remote`) and sends what it showed. Absent `tags` means none, and each added project takes the same list, normalised as in the "Records" notes below. Each account field is a `ProjectAccount` (see the "Records" notes below) saying which account the project's sessions of that agent should read; absent or `null` means inheriting the console's reference for that agent, and `{"kind":"default"}` the agent's default account. An `account` kind that names no account, or an account of another agent, is answered with `unknown_account`, and nothing is cloned or stored. The model and effort fields are the model and reasoning effort the project's sessions are launched with, one pair per agent in that agent's own spelling; they are trimmed, and absent or blank means the agent's own default. Each added project takes the same values |
 | `update_project` | `project`, `name?`, `default_agent?`, `claude_account_id?`, `codex_account_id?`, `grok_account_id?`, `claude_session_model?`, `claude_session_effort?`, `codex_session_model?`, `codex_session_effort?`, `grok_session_model?`, `grok_session_effort?`, `pinned?`, `tags?` | An absent `default_agent` leaves it alone; an explicit `null` clears it, so the project inherits the console's default again. For each account field independently: absent leaves the project's reference alone; an explicit `null` (or `{"kind":"inherit"}`) puts it back to inheriting the console's reference for that agent; `{"kind":"default"}` makes it the agent's default account; an `account` kind is validated as in `add_project` and replaces the reference, and a reference left alone is not checked again. Each model and effort field follows the absent / `null` / blank rule, clearing back to the agent's own default. Only sessions opened afterwards take a changed reference (see `Session.account_id`); a session that is opened or resumed afterwards launches with the project's current model and effort, and one already running keeps what it started with. An absent `pinned` leaves the pin alone. An absent `tags` leaves the tags alone; a present array, even an empty one, replaces them wholesale; an explicit `null` is the same as absent |
 | `delete_project` | `project`, `stop_sessions?` | Removes the association and the project's session records, archived ones included; never touches the directory. Refused with `project_has_running_sessions` while the project has live sessions, unless `stop_sessions` (absent means false) is true: the running ones are then ended first, exactly as `archive_session` ends one (the deepest level of binding first — the sessions bound to a lead session, then that lead session, then the unbound ones — so an owner is never refused over them; a console session belongs to no project and is left running, and a lead session's binding to one goes with the lead session's record), and the project goes with them. A session being launched or resumed at that moment is not stoppable, so it refuses either way |
 | `list_dir` | `path` | Answered with `dir_listing` on the asking socket |
 | `detect_directory_agent` | `path` | Answered with `agent_detected`: the agent the directory at `path` is set up for (marker rules as for `add_project`), or null for none, several, or one known not to be installed. A `path` that is not absolute, does not exist or is not a directory is refused with `path_not_absolute`, `path_not_found` or `path_not_a_directory`, as for `add_project` |
 | `probe_git_remote` | `remote_url` | Answered with `agent_detected` for the remote's top-level names, or refused with `git_remote_unreachable`. Does a shallow, blobless, checkout-less `git clone` into a scratch directory and lists its top level, so it proves the remote can be read with the user's credentials. Runs in the same non-interactive environment as a clone; the fetch is bounded by a 60 second deadline and the scratch directory is removed when the probe ends. An empty repository is reachable and answers null |
 | `list_agent_models` | `agent`, `account?` | Answered with `agent_models`: the models `agent` currently offers, read from the catalogue of the account `account` names (an account id; absent is the default account). An `account` that does not exist or belongs to another agent is refused with `unknown_account`. Nothing else is a refusal: a missing binary, no network, a non-zero exit or output past 8 MiB, output that cannot be read or a command that runs past 15 seconds are an empty list with a reason (see "Agent models" below). Never touches a session or the stored accounts |
+| `export_configuration` | `console?` | Answered with `configuration_exported`: the configuration document (see "Configuration export" below) of the console `console` names, or, when it is absent, of every console and the application settings. A `console` that does not exist is refused with `unknown_console` rather than answered with an empty document. A read of what is stored: it runs no `git` and touches no session |
+| `inspect_configuration` | `document` | Answered with `configuration_inspected`: for each project of the configuration document `document` (see "Configuration import" below) the directories it could be placed in on this machine, and for each account reference whether it falls back to a default account. Changes nothing and runs no `git`. Its existence checks of paths together have a 15 second deadline; a project whose check did not come back in that time is offered nothing. A document that is not a configuration document, is of a version this daemon does not read, or cannot be read is refused with `configuration_not_recognised`, `configuration_version_unsupported` or `configuration_unreadable` |
+| `import_configuration` | `document`, `resolutions?`, `apply_settings?` | Answered with `configuration_imported`: creates a new console for each console of `document` and associates each project with the directory its entry in `resolutions` chooses (see "Configuration import" below). A project with no entry is left out. The document is refused as `inspect_configuration` refuses it, and a resolution that names a console or project the document does not have, names one twice, or chooses a `directory` that is neither an absolute path nor starts with `~/`, is refused with `import_resolution_invalid`; all of that before anything is created, as is anything `create_console` would refuse of a console of the document (an avatar that is not an image, say). `apply_settings` (absent means false) also applies the document's application settings; asking for them of a document that carries none is refused with `import_settings_missing`, before anything is created. A project that cannot be placed after that is not an error of the request (see "Configuration import") |
 | `get_project_source` | `project`, `slot?` | Where the project's files are read from: its resolved directory and, when it is inside a Git repository, the repository, the worktree holding it, its place in that worktree and every worktree of the repository, that one included. Answered with `project_source`. A browse request: see "Browsing a project" below for the rules every browse request shares (`slot`, budgets, its own outbound queue) |
 | `list_project_dir` | `project`, `path`, `worktree?`, `slot?` | Lists one directory of the project's files on disk, `path` being a wire path relative to the project's directory (empty for the directory itself). With `worktree`, the same place in that worktree of the project's repository is listed instead. Answered with `project_dir`. A browse request |
 | `read_project_file` | `project`, `path`, `worktree?`, `from?`, `slot?` | Reads one file of the project, `path` being a wire path relative to the project's directory. `from` picks the content: `{"kind":"live"}` (the default) the file on disk, `{"kind":"index"}` the blob staged for it, `{"kind":"branch","branch":…}` the blob at a local branch's tip, `{"kind":"commit","commit":…}` the blob in a commit given by its full id. With `worktree`, the disk and the index read are that worktree's. Answered with `project_file`. A browse request |
@@ -114,6 +119,9 @@ the request id as if it were a record id.
 | `project_comparison_change` | `id`, `project`, `left`, `right`, `old`, `new`, `patch` — the reply to `read_project_comparison_change`. `left` and `right` echo the request, and are the commits both sides and the patch were read from; `old`, `new` and `patch` are as in `project_change` |
 | `project_change_bodies` | `id`, `project`, `worktree`, `group`, `old`, `new` — the reply to `read_project_change_bodies`. `project`, `worktree` and `group` echo the request; `old` and `new` are `SideRead` records, each `present` with its whole body in `file` or `absent`, never `out_of_scope` |
 | `project_comparison_change_bodies` | `id`, `project`, `left`, `right`, `old`, `new` — the reply to `read_project_comparison_change_bodies`. `left` and `right` echo the request; `old` and `new` are as in `project_change_bodies` |
+| `configuration_exported` | `id`, `document` — the reply to `export_configuration`; `document` is a configuration document (see "Configuration export") |
+| `configuration_inspected` | `id`, `settings?`, `consoles` — the reply to `inspect_configuration`; `settings` is what the document's application settings are and what they are on this machine now; one `InspectedConsole` per console of the document, in its order (see "Configuration import") |
+| `configuration_imported` | `id`, `settings_applied?`, `settings_error?`, `consoles` — the reply to `import_configuration`; `settings_applied` holds the settings that were applied, and is absent when they were not asked for or could not be applied, in which case `settings_error` says why; one `ImportedConsole` per console of the document, in its order (see "Configuration import") |
 | `page_list` | `id`, `console_session_id`, `pages` — oldest first. Pages are not in `snapshot`: one carries a whole HTML document, and only the console session on screen needs its pages, so the panel asks. Asking again after every `snapshot` is what keeps it correct across a `page_created` a lagging client never received: such a client is sent a fresh snapshot in place of the events it missed, on the socket it already has |
 | `page_created` | `page` — the whole record. The console session pushed a page with `show_page` |
 | `ack` | `id` |
@@ -175,6 +183,12 @@ A client also branches on some codes, instead of only showing them:
 | `grok_home_not_initialized` | `path` | A Grok Build session's pinned source home exists but Grok has never been run against it, so it carries no login and no session history for the per-session home to link; refused at launch on the same path as `config_dir_unreachable` |
 | `unknown_account` | `account` | No account has this id, or the account belongs to another agent than the field naming it (a console's or project's per-agent reference, `open_session`'s `account`) |
 | `account_name_taken` | `agent`, `name` | A requested account name collides with an existing one of the same agent (trimmed, case-insensitive) — including the default account's own name; `name` is the name of the account it collides with |
+| `configuration_not_recognised` | — | The `format` of a configuration document is absent or is not `octoboard-configuration` |
+| `configuration_version_unsupported` | `version`, `supported` | A configuration document's `version` is newer than the newest this daemon reads, `supported`, or is 0 |
+| `configuration_unreadable` | `detail` | A configuration document is not a JSON object, has a `version` that is not a whole number, or cannot be read as a document of its version |
+| `import_resolution_invalid` | `console`, `project` | A resolution of `import_configuration` names a project the document does not have, resolves one twice, or chooses a `directory` that is neither an absolute path nor starts with `~/`; `console` and `project` are the indexes it gave |
+| `import_settings_missing` | — | `import_configuration` asked for the document's application settings and it carries none (a single console's export has none) |
+| `import_choice_unavailable` | `choice` | Reported on a project of `configuration_imported`, not as a reply: the choice made for it cannot be used because the document gives it nothing to use for it (a path that is not absolute, a remote URL that may not be cloned, or none) |
 | `icon_not_an_image` | — | A console's icon is not a `data:image/` URL |
 | `icon_too_large` | `limit_kib` | A console's icon is longer than the limit, 256 KiB |
 | `session_already_running` | `session` | The session is running already, or is not interrupted or archived |
@@ -283,6 +297,16 @@ GitStatus { project, repository, branch?, detached, upstream?, ahead, behind,
             activity: "idle"|"checking"|"syncing", error? }
 AgentAvailability { agent, availability: "not_determined"|"available"|"unavailable", default_account_dir? }
 ```
+
+`Project.remote_url` is the git remote URL of the project's repository, recorded for every source and absent when
+the directory is not a repository or has no remote. It is the URL as written in the configuration, before any
+`url.<base>.insteadOf` rewrite, which is a setting of the machine and not of the repository; a clone starts from the
+URL the request gave it and converges on the configured one at the next read. Of the remotes, `origin`'s is
+recorded, else the branch's upstream remote's, else the first one listed (by configuration scope: system, global,
+local, worktree): `origin` comes first so that the value says where the working tree came from and does not move
+with the checked-out branch. It is written when the project is associated, re-read for every project once at daemon
+start, and kept current by the git status check (step 3 of "Daemon behaviour, per project"); a change reaches
+clients as `project_upserted`.
 
 `Session.origin` is `console` for a session started by a session's `start_session` tool (a console session, or a
 project session that is unbound or a lead session) and `user` for one the user opened.
@@ -449,6 +473,162 @@ stays usable. A client shows the reason and falls back to the agent's own defaul
 | `models_command_failed` | `agent`, `detail` | The command could not be run, exited non-zero, or printed more than 8 MiB; `detail` is the exit status and the last line of the first 4 KiB it wrote to stderr (which can end mid-line), or the reason it could not be run or kept running, such as `produced more than … bytes of output` |
 | `models_unreadable_output` | `agent` | The command succeeded but printed no model that could be read |
 
+### Configuration export
+
+`export_configuration` produces the document a user carries to another machine. The reply, `configuration_exported`,
+holds it under `document`; a client saves it as a file and does not build or alter it. The document is JSON and is the
+input of the import as much as a file the user keeps, so its shape is part of this contract.
+
+```
+Document { format: "octoboard-configuration", version: 1,
+           settings?: { auto_sync_repositories },     // present in a full export only
+           consoles: DocumentConsole[] }
+DocumentConsole { name, icon?, default_agent,
+                  claude_account?, codex_account?, grok_account?,   // each an AccountName
+                  claude_console_session_model?, claude_console_session_effort?,
+                  codex_console_session_model?, codex_console_session_effort?,
+                  grok_console_session_model?, grok_console_session_effort?,
+                  projects: DocumentProject[] }
+DocumentProject { name, path, source: "local"|"parent"|"git", remote_url?, default_agent?, pinned, tags: string[],
+                  claude_account, codex_account, grok_account,       // each a ProjectAccountRef
+                  claude_session_model?, claude_session_effort?,
+                  codex_session_model?, codex_session_effort?,
+                  grok_session_model?, grok_session_effort? }
+AccountName       { name }
+ProjectAccountRef { kind: "inherit" } | { kind: "default" } | { kind: "account", name }
+```
+
+- **Scope.** With `console`, the document holds that console alone and no `settings`; without it, it holds every
+  console and `settings`. The shape is the same either way: a full export is a list of consoles that happens to hold
+  all of them. Consoles are ordered by creation time and a console's `projects` by name, with the stored id breaking
+  a tie, so the order is the same on every export; the id itself is not in the document. `projects` is all of a
+  console's projects, whether or not a project is a git repository.
+- **Nothing is an id.** No console, project or account carries an `id`. A console's `workdir` is not in the document
+  either: the daemon derives it from the console's id when it creates the console, so it would carry that id and the
+  daemon's own layout, and an import creates its console, and so its directory, itself. A console's `*_account` is
+  an `AccountName`, or `null` for the agent's default account. A project's is a `ProjectAccountRef`, which keeps the
+  three states of `Project.*_account_id`: `inherit` the console's reference, `default` to pin the agent's default
+  account even where the console names another, or the named account. A reference holds the account's name alone:
+  its agent is the one whose field it sits in (`claude_account` is a Claude Code account), so the document has no
+  second statement of it to contradict. An import matches the name without regard to case, since account names are
+  unique within an agent only compared that way (`Work` and `work` are one name); matching exactly would send a
+  reference to the default account for no better reason than how the name was typed.
+- **Not exported.** An account's `config_dir`, and so the accounts themselves: the importing machine's own accounts
+  are what a reference is rebound to. A reference whose account no longer exists, or belongs to another agent than
+  its field, is dropped as deleting the account would have left it: `null` on a console, `inherit` on a project.
+  Sessions, pages, transcripts, trust state (a project's `trust_consent`, the trusted directories) and
+  `Settings.default_clone_dir` are not configuration and are not in the document; the last is the importing
+  machine's own to choose, and an import places projects under it.
+- **Machine-local paths.** `Project.path` is an absolute path of the exporting machine, as stored, and is only a
+  starting point for an import to resolve against its own filesystem. It is the one machine-local path in the
+  document.
+- **`remote_url`** is what is recorded for the project (see "Records"); the export reads it from the stored record
+  and runs no `git`. It is absent for a directory that is not a repository and for one with no remote.
+- **Models and efforts** are exported as stored. They are free text read only when a session is launched, so a value
+  the importing machine's agent does not offer is not an error here.
+- **Version.** `format` tells a configuration document from any other JSON; `version` is an integer, 1 today. It is
+  raised when a change would make a reader written for the older version misread a document: a field removed, or
+  given another meaning. A field added is not such a change, and a reader ignores one it does not know. An import
+  refuses a `format` it does not know, or a `version` newer than it supports, before creating anything.
+
+### Configuration import
+
+An import is two requests. `inspect_configuration` reads a document and answers what an import of it would meet on this
+machine, changing nothing; `import_configuration` takes the document again, together with the choice made for each
+project, and creates. A client sends the same `document` to both and does not alter it between them. The document is
+untrusted input: its paths and URLs are data this machine checks, and nothing in it is acted on as it stands.
+
+```
+configuration_inspected { settings?: { auto_sync_repositories, current_auto_sync_repositories },
+                          consoles: InspectedConsole[] }
+InspectedConsole  { name, account_fallbacks: AccountFallback[], projects: InspectedProject[] }
+InspectedProject  { name, path, remote_url?,            // as the document records them
+                    offers: { exported_path?, default_clone_dir?, clone? },   // each the directory it would use
+                    default?: "exported_path" | "default_clone_dir" | "clone",
+                    account_fallbacks: AccountFallback[] }
+AccountFallback   { agent, name }
+
+import_configuration { document, resolutions?: ProjectResolution[], apply_settings?: bool }
+ProjectResolution { console, project,                   // indexes into the document
+                    choice: { kind: "exported_path" } | { kind: "default_clone_dir" } | { kind: "clone" }
+                          | { kind: "directory", path } }
+
+configuration_imported { settings_applied?: { auto_sync_repositories },
+                         settings_error?: Failure,   // the settings asked for could not be applied
+                         consoles: ImportedConsole[] }
+ImportedConsole   { name, status: "created" | "failed",
+                    console?,                           // the id of a created console
+                    error?: Failure,                    // of a failed one
+                    account_fallbacks: AccountFallback[],    // empty unless the console was created
+                    projects: ImportedProject[] }       // all "not_attempted" for a failed console
+ImportedProject   { name, status: "created" | "left_out" | "failed" | "not_attempted",
+                    via?,                               // the choice that placed a created project
+                    project?,                           // the id of a created project
+                    error?: Failure,                    // of a failed one
+                    account_fallbacks: AccountFallback[] }   // empty unless the project was created
+Failure           { code, params, message }             // as an `error` reply carries them
+```
+
+- **Refused before anything is created.** The document is refused when it is not a configuration document
+  (`configuration_not_recognised`), when its `version` is 0 or newer than this daemon reads
+  (`configuration_version_unsupported`; checked before the rest of the body is read, since a newer version may be shaped
+  in ways this one cannot read), or when it cannot be read (`configuration_unreadable`). Applying also refuses an
+  impossible resolution (`import_resolution_invalid`), a request for settings the document does not carry
+  (`import_settings_missing`), and whatever `create_console` would refuse of any console of the document
+  (`icon_not_an_image`, `icon_too_large`). Past that point nothing is refused and nothing is undone: what goes wrong is
+  reported in the result (below), because by then earlier consoles and projects exist and have been broadcast, and a
+  rollback would contradict that an import always creates and goes through the ordinary association.
+- **Four directories.** A project is placed in one of: the path the document records (`exported_path`); the last
+  segment of that path under this machine's default clone directory (`default_clone_dir`; Settings, `~/Projects`
+  unless set), the usual case of the same layout under another root; a fresh clone of the recorded `remote_url` into
+  the default clone directory (`clone`); or a directory the caller names (`directory`, never offered). Inspecting
+  offers only the choices the project's state allows, and each offer is the directory it would use. The recorded path
+  is offered when it is absolute and is an existing directory; the derived path when it is an existing directory; the
+  clone when the URL may be cloned from (below) and the directory the clone would create does not exist yet. The
+  `default` is the first offered of the recorded path, the derived path and the clone, and absent when nothing is
+  offered. A project with no offer is left out unless the caller points at a directory.
+- **What may be cloned from.** `remote_url` is checked as data: an `http`, `https`, `ssh`, `git+ssh`, `ssh+git` or `git`
+  URL, or the `host:path` form, with no whitespace or control character in it and a host that does not begin with `-`,
+  nor does the part before it. A local path, a `file:` URL, `ftp` and the helper transports (`ext::`, `fd::`) are not
+  offered and are refused when chosen (`import_choice_unavailable`), so a document cannot make the daemon run a command
+  or read a path of this machine. This is stricter than `add_project`, which leaves the choice to git: a few transports
+  git supports are not accepted here. The recorded path is likewise taken only if it is absolute (not relative, not
+  starting with `~`), and the derived path is built from the last segment of the path after its `.` and `..` are
+  resolved.
+- **Accounts.** A reference is rebound to the account of the agent whose field holds it with the same name, compared
+  without regard to case. One that matches no account is bound to that agent's default account (`null` on a console,
+  `default` on a project, pinned rather than inheriting) and is listed in `account_fallbacks`: on the console for its
+  own references, on the project for the project's. Inspecting lists what would fall back; the result lists what did,
+  and a project's list is empty unless the project was created.
+- **Applying.** Every console of the document is created new, with its own working directory, whether or not one of its
+  name exists: console names are not unique. The projects of a console go through the ordinary association
+  (`add_project`), so each is checked and broadcast exactly as one added by hand: the directory must exist, the tags and
+  launch settings are normalised, and a directory already associated with that console is refused
+  (`all_projects_already_added`, reported on the project). A project's pin, tags, default agent (none stays none and is
+  not detected from the directory), account references, models and efforts come from the document; its `source` is `git`
+  for a clone and `local` otherwise, and its `remote_url` is the one it was cloned from or the one read from its
+  directory. Folder trust is not in the document: an imported project is untrusted like any other and goes through the
+  trust flow when its first session opens.
+- **Application settings.** A full export carries `settings`; a single console's does not. `settings` of the inspection
+  is present when the document has them, with the document's value and the value this machine has now, so a client can
+  show what applying would change. They are applied only when `import_configuration` is sent `apply_settings: true`,
+  because `auto_sync_repositories` makes the daemon fast-forward the user's repositories on its own, which changes how
+  this machine behaves. They are applied last, through the same path as `update_settings` (so they are normalised and
+  `settings_updated` is broadcast when the value changes), and `settings_applied` in the result reports what was
+  applied. Asking for them of a document that has none is refused (`import_settings_missing`) rather than ignored, so a
+  request never silently does less than it was told to. Settings that could not be applied are `settings_error`, and the
+  import is reported all the same.
+- **In the result.** A project with no resolution is `left_out`. One whose directory cannot be obtained (the path is
+  gone, a clone fails or its target exists, the choice has nothing to use) is `failed` with its `error`, and the rest
+  carry on; its console is still created. A console that cannot be created (the disk is full, the data directory cannot
+  be written) is `failed` with its `error` and no `console` id, its projects are `not_attempted`, and the next console
+  is tried. The reply is `configuration_imported` in every one of these cases, with whatever was created before and
+  after it, so a client never has to piece the outcome together from the broadcasts.
+- **How long it takes.** Projects are placed one at a time, in document order, so a clone, which may run for minutes,
+  holds one blocking thread and no document holds more. The reply therefore comes after the last clone has finished,
+  which can be as long as all of them together (each is cut off after 30 minutes), and every console and project created
+  meanwhile has already been broadcast. There is no request to cancel an import in progress.
+
 ### Daemon behaviour, per project
 
 What `refresh_git_status` does for each of a console's projects, concurrently, and what `sync_project_git` does for
@@ -456,14 +636,26 @@ the one project it names; the daemon has no timer of its own for this, so nothin
 project already checked within the last minute is skipped entirely, except for `sync_project_git`, to which that
 one-minute floor does not apply (see `refresh_git_status` above):
 
-1. If the directory is not a git repository, broadcast `repository: false`, `activity: idle`, and stop.
+1. If the directory is not a git repository, broadcast `repository: false`, `activity: idle`, and stop. Such a
+   directory also has its recorded `remote_url` cleared (broadcasting `project_upserted` if it was set) — but only
+   when the directory itself can be seen: one that is missing or unreachable, such as on an unmounted volume, keeps
+   the value, since it says nothing about the remote.
 2. Set `activity` to `checking` and broadcast `project_git_status`. That broadcast carries the branch, upstream,
    counts and error of the project's previous status (none before its first check), so the badge keeps showing them
    while the check runs; the check itself starts from a blank status, which the steps below fill in.
-3. If the repository has no remote at all (`git remote` prints nothing), skip the fetch — that is not an error.
-   Otherwise run `git fetch --quiet` in the project's directory; a failure (offline, authentication, no upstream
-   remote) records `error` and the check continues to the next step regardless, so the branch name and the last
-   known numbers still show.
+3. Read the repository's remotes with the URL each is configured with, `git config --get-regexp
+   '^remote\..*\.url$'` (all of `git`'s configuration, the same set `git remote` and `git fetch` read), and make
+   the project's recorded `remote_url` the one that read gives (see "Records" above): when it differs from the
+   stored value, write it and broadcast `project_upserted`. A read that fails, or an upstream that could not be
+   read when it was needed to choose between remotes, leaves the stored value as it is. This is the same call that
+   tells which remote to fetch, not an extra one (a repository the call finds no remote in is asked once more, `git
+   rev-parse --git-dir`, to tell it from a damaged `.git`; that confirmation covers only an empty result, since
+   both commands search the parent directories, and what a damaged `.git` makes them read may come from the global
+   configuration or an enclosing repository until it is repaired). Then, if the repository has no remote at all,
+   skip the fetch — that is not an error. Otherwise run `git fetch --quiet` in the project's directory, in the
+   environment "Git environment" describes (as is every `git` of these steps); a failure (offline, authentication, no
+   upstream remote) records `error` and the check continues to the next step regardless, so the branch name and the
+   last known numbers still show.
 4. Read the local state in one call, `git status --porcelain=v2 --branch --untracked-files=no`, taking `branch`,
    `detached`, `upstream`, `ahead` and `behind` from its `# branch.*` header lines; `--untracked-files=no` skips
    enumerating the worktree's files, which this step never reads anyway.
@@ -502,6 +694,31 @@ broadcasts.
 
 Because a status is dropped only when its project or console is deleted, an `error` this pass records for a project
 of a console no client is showing stays in the daemon's status for it until that console is refreshed again.
+
+### Git environment
+
+Every `git` the daemon runs in a project's repository or against its remote — the status check's fetch, `git status`
+and fast-forward, the reads of a project's remote URL, and every browse request — starts from the user's own shell
+environment, so that it is their `git`, with their configuration and credentials, and is built the same way:
+
+- It cannot prompt: `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND=ssh -oBatchMode=yes` turn a missing credential, an
+  unknown host key or a passphrase-protected key with no agent into an immediate failure, and the askpass helpers are
+  removed.
+- Every `GIT_*` variable of the shell is removed except those that say which of the user's own material to use and how
+  to reach a remote with it: `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM` and `GIT_CONFIG_NOSYSTEM` for their
+  configuration, and `GIT_SSL_CAINFO`, `GIT_SSL_CAPATH`, `GIT_SSL_CERT`, `GIT_SSL_KEY`, `GIT_SSL_CERT_TYPE`,
+  `GIT_SSL_KEY_TYPE`, `GIT_SSL_VERSION`, `GIT_SSL_CIPHER_LIST`, `GIT_PROXY_COMMAND`, `GIT_HTTP_PROXY_AUTHMETHOD`,
+  `GIT_PROXY_SSL_CAINFO`, `GIT_PROXY_SSL_CERT` and `GIT_PROXY_SSL_KEY` for the certificates, keys, TLS settings and
+  proxy helper of a connection. That takes out everything that could point `git` at another repository, worktree,
+  index, object store or ref namespace, configuration passed through the environment, and `GIT_SSL_NO_VERIFY`. Without
+  it, a `GIT_DIR` exported in the shell would send a project's check to another repository and its fetch to that
+  repository's remotes; with too little kept, a fetch that works from the user's shell fails here, and its message
+  stays in the project's `error` for every later check.
+- A command that only reads also gets `GIT_OPTIONAL_LOCKS=0` and `-c diff.autoRefreshIndex=false`, so it never
+  rewrites the index of a repository an agent is working in.
+
+Cloning a project and probing a remote (`probe_git_remote`) are the exception: they are started by the user on the spot,
+run non-interactively, and pass the whole shell environment.
 
 ### Browsing a project
 
@@ -868,12 +1085,8 @@ like a `read_project_file` of a commit, a read is held only to the project's sco
 
 #### Git invocation
 
-Every `git` a browse request runs gets the same controlled environment, starting from the user's own shell environment
-as every other `git` the daemon runs does:
+Every `git` a browse request runs gets the daemon's shared git environment ("Git environment" above), and on top of it:
 
-- Every `GIT_*` variable is removed except `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM` and `GIT_CONFIG_NOSYSTEM`, which
-  only say where the user's own configuration is. That takes out everything that could point `git` at another
-  repository, worktree, index or object store, and configuration passed through the environment.
 - `GIT_LITERAL_PATHSPECS=1`, so a file name is never a pattern — except where a change is read: its index lookups and
   its diff match each path exactly and nothing below it with `:(literal)<path>` and `:(exclude,glob)<path>/**` (the
   path's glob characters escaped) (see "Changes and comparisons" for a change whose paths nest), and so run without it.
@@ -881,8 +1094,7 @@ as every other `git` the daemon runs does:
   keep the setting;
   `GIT_NO_REPLACE_OBJECTS=1`, so an object id names the object stored under it; `GIT_NO_LAZY_FETCH=1`, so a partial
   clone's missing object fails the read instead of going to the network; `GIT_OPTIONAL_LOCKS=0`, so `git status` never
-  takes the index lock to write back what it refreshed; the non-interactive settings every daemon `git` has; and
-  discovery capped at the home directory as above.
+  takes the index lock to write back what it refreshed; and discovery capped at the home directory as above.
 - Every command runs with `--no-pager -c core.fsmonitor=false -c diff.autoRefreshIndex=false`, and every diff-family
   command with `--no-ext-diff --no-textconv --no-color`: a configured external diff, textconv filter or file-system
   monitor is a program that would run during the read and, for the first two, rewrite what is returned; and `git diff`,

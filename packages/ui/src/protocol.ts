@@ -282,6 +282,154 @@ export interface Settings {
   accounts: Account[];
 }
 
+/** An account reference of a configuration document: the account's name alone, since the agent is
+ * the one whose field holds it. */
+export interface AccountName {
+  name: string;
+}
+
+/** A project's account reference in a configuration document; keeps the three states of
+ * `ProjectAccount`, naming the account instead of carrying its id. */
+export type DocumentProjectAccount = { kind: "inherit" } | { kind: "default" } | { kind: "account"; name: string };
+
+export interface DocumentProject {
+  name: string;
+  /** An absolute path of the exporting machine: the one machine-local path in the document. */
+  path: string;
+  source: ProjectSource;
+  remote_url?: string | null;
+  default_agent?: Agent | null;
+  pinned: boolean;
+  tags: string[];
+  claude_account: DocumentProjectAccount;
+  codex_account: DocumentProjectAccount;
+  grok_account: DocumentProjectAccount;
+  claude_session_model?: string | null;
+  claude_session_effort?: string | null;
+  codex_session_model?: string | null;
+  codex_session_effort?: string | null;
+  grok_session_model?: string | null;
+  grok_session_effort?: string | null;
+}
+
+export interface DocumentConsole {
+  name: string;
+  icon?: string | null;
+  default_agent: Agent;
+  /** Each agent's account by name; `null` or absent is that agent's default account. */
+  claude_account?: AccountName | null;
+  codex_account?: AccountName | null;
+  grok_account?: AccountName | null;
+  claude_console_session_model?: string | null;
+  claude_console_session_effort?: string | null;
+  codex_console_session_model?: string | null;
+  codex_console_session_effort?: string | null;
+  grok_console_session_model?: string | null;
+  grok_console_session_effort?: string | null;
+  projects: DocumentProject[];
+}
+
+/** The application settings a full export carries. */
+export interface DocumentSettings {
+  auto_sync_repositories: boolean;
+}
+
+/** What `export_configuration` answers and a user keeps as a file. The client saves it as it is
+ * and sends it back unchanged to `inspect_configuration` and `import_configuration`; it is built
+ * by the daemon alone. */
+export interface ConfigurationDocument {
+  format: "octoboard-configuration";
+  version: number;
+  /** Present in a full export only. */
+  settings?: DocumentSettings | null;
+  consoles: DocumentConsole[];
+}
+
+/** The directory a project of an imported document can be placed in. */
+export type ImportChoiceKind = "exported_path" | "default_clone_dir" | "clone" | "directory";
+
+/** The choice made for one project when applying; `directory` names the directory the user
+ * pointed at, absolute or starting with `~/`. */
+export type ImportChoice =
+  | { kind: "exported_path" }
+  | { kind: "default_clone_dir" }
+  | { kind: "clone" }
+  | { kind: "directory"; path: string };
+
+/** The choice for the project at index `project` of the document's console at index `console`. */
+export interface ProjectResolution {
+  console: number;
+  project: number;
+  choice: ImportChoice;
+}
+
+/** An account reference of the document that names no account of its agent on this machine, and
+ * so is bound to that agent's default account. */
+export interface AccountFallback {
+  agent: Agent;
+  name: string;
+}
+
+/** The directory each choice would use for a project, present only for the choices its state
+ * allows; `directory` is never offered, any project can be placed that way. */
+export interface ImportOffers {
+  exported_path: string | null;
+  default_clone_dir: string | null;
+  clone: string | null;
+}
+
+export interface InspectedProject {
+  name: string;
+  /** As the document records it. */
+  path: string;
+  remote_url: string | null;
+  offers: ImportOffers;
+  /** The choice that is preselected; none when nothing is offered. */
+  default: Exclude<ImportChoiceKind, "directory"> | null;
+  account_fallbacks: AccountFallback[];
+}
+
+export interface InspectedConsole {
+  name: string;
+  account_fallbacks: AccountFallback[];
+  projects: InspectedProject[];
+}
+
+/** The application settings a document carries beside what this machine has now. */
+export interface InspectedSettings {
+  auto_sync_repositories: boolean;
+  current_auto_sync_repositories: boolean;
+}
+
+/** An `error` reply's `code`, `params` and `message`, for something an import could not do. */
+export interface ImportFailure {
+  code: string;
+  params: MessageParams;
+  message: string;
+}
+
+export type ImportStatus = "created" | "left_out" | "failed" | "not_attempted";
+
+export interface ImportedProject {
+  name: string;
+  status: ImportStatus;
+  /** How the directory of a created project was obtained. */
+  via: ImportChoiceKind | null;
+  project: string | null;
+  error: ImportFailure | null;
+  account_fallbacks: AccountFallback[];
+}
+
+export interface ImportedConsole {
+  name: string;
+  /** `created` or `failed`. */
+  status: "created" | "failed";
+  console: string | null;
+  error: ImportFailure | null;
+  account_fallbacks: AccountFallback[];
+  projects: ImportedProject[];
+}
+
 /** Where a project's files are read from — the reply to `get_project_source`. Every path-like
  * string here is a wire path (see "Wire paths" in `apps/daemon/PROTOCOL.md`): canonical text that
  * is the name's identity, shown by decoding it to bytes and reading those as UTF-8. */
@@ -553,6 +701,19 @@ export type RequestBody =
    * account; one that does not exist or belongs to another agent is refused with
    * `unknown_account`. Anything else that goes wrong is an empty list with a reason, not an error. */
   | { type: "list_agent_models"; agent: Agent; account?: string }
+  /** Answered with `configuration_exported`: the document of the console `console` names, or, with
+   * none, of every console and the application settings. Refused with `unknown_console` for a
+   * console that does not exist. */
+  | { type: "export_configuration"; console?: string }
+  /** Answered with `configuration_inspected`: what importing `document` would meet on this machine.
+   * Changes nothing. The document is untrusted input; refused with `configuration_not_recognised`,
+   * `configuration_version_unsupported` or `configuration_unreadable`. */
+  | { type: "inspect_configuration"; document: unknown }
+  /** Answered with `configuration_imported` once the last project is placed, which can take as
+   * long as every clone together. `document` is the one that was inspected, unchanged. A project
+   * with no resolution is left out. Refused before anything is created with the codes of
+   * `inspect_configuration`, `import_resolution_invalid` and `import_settings_missing`. */
+  | { type: "import_configuration"; document: unknown; resolutions?: ProjectResolution[]; apply_settings?: boolean }
   | {
       type: "open_session";
       console_id: string;
@@ -795,6 +956,20 @@ export type Event =
       account: string | null;
       models: AgentModel[];
       unavailable: ModelsUnavailable | null;
+    }
+  /** The reply to `export_configuration`: the document to save as a file. */
+  | { type: "configuration_exported"; id?: string; document: ConfigurationDocument }
+  /** The reply to `inspect_configuration`: one entry per console of the document, in its order,
+   * and `settings` when the document carries any. */
+  | { type: "configuration_inspected"; id?: string; settings?: InspectedSettings | null; consoles: InspectedConsole[] }
+  /** The reply to `import_configuration`: one entry per console of the document, in its order.
+   * A console or project that went wrong is reported in it rather than failing the request. */
+  | {
+      type: "configuration_imported";
+      id?: string;
+      settings_applied?: DocumentSettings | null;
+      settings_error?: ImportFailure | null;
+      consoles: ImportedConsole[];
     }
   /** The reply to `list_pages`, oldest first. Pages are not in `snapshot` — a page carries a whole
    * HTML document — so the panel asks for them, and asks again after every `snapshot`: a client

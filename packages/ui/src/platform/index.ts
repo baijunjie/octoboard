@@ -1,6 +1,8 @@
 import { browserPlatform } from "./browser";
 import { tauriPlatform } from "./tauri";
 
+export { ConfigurationFileError } from "./configurationFileError";
+
 /**
  * The only route from the UI to anything native. Every capability is optional: a member that is
  * absent means the environment has no such thing, and the feature built on it is absent too — not
@@ -37,6 +39,10 @@ export interface PlatformAdapter {
   readonly statusItem?: StatusItemCapability;
   /** The system clipboard, for text the UI puts there on the user's say-so. */
   readonly clipboard?: ClipboardCapability;
+  /** Saving the configuration document as a file the user names and opening one the user picks,
+   * each through the system's own dialog. Present wherever the environment offers a way to
+   * do both. */
+  readonly configurationFile?: ConfigurationFileCapability;
   /** Opening an address in the user's own browser (or mail client), for a link the UI shows but
    * must not navigate its own window to. */
   readonly links?: LinkCapability;
@@ -168,6 +174,34 @@ export interface BackgroundRunCapability {
    * confirmation as any quit gesture). The shell starts from `false`, so the UI sends its choice at
    * startup. */
   set(enabled: boolean): Promise<void>;
+}
+
+/** The configuration file the user picked. */
+export interface OpenedConfigurationFile {
+  /** The file's name, without its directory. */
+  name: string;
+  text: string;
+}
+
+/** What became of a file given to `save`: written where the user chose, under the name they
+ * gave it, or handed to an environment that files it by itself (a browser's download), which
+ * neither says where it went nor whether it was kept. */
+export type SavedConfigurationFile = { kind: "saved"; name: string } | { kind: "handedOver" };
+
+/** The configuration document is JSON, and both dialogs offer only JSON files: this is not a way to
+ * save or open anything else. */
+export interface ConfigurationFileCapability {
+  /** Asks the user where to save `text` in the system's save dialog, which offers `suggestedName`,
+   * and writes it there. Resolves with `{ kind: "saved" }` and the name the file was saved under,
+   * or `undefined` when the user dismissed the dialog; rejects with a `ConfigurationFileError` when
+   * the file could not be written. Where the environment has no dialog of its own (a browser that
+   * downloads instead) it resolves with `{ kind: "handedOver" }`, since the name and place are the
+   * browser's to choose and it does not report a download that was blocked or dismissed. */
+  save(suggestedName: string, text: string): Promise<SavedConfigurationFile | undefined>;
+  /** Asks the user for a file in the system's open dialog and reads it as text. Resolves with
+   * `undefined` when the user dismissed the dialog; rejects with a `ConfigurationFileError` when
+   * the file could not be read. */
+  open(): Promise<OpenedConfigurationFile | undefined>;
 }
 
 export interface LinkCapability {

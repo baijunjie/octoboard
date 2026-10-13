@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { sessionOf } from "../gallery/fixtures/builders";
+import { consoleOf, sessionOf } from "../gallery/fixtures/builders";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
 import type { Account, Project, Session } from "../protocol";
-import { type MenuPlacement, projectMenu, sessionMenu } from "./menus";
+import { consoleMenu, type MenuPlacement, projectMenu, sessionMenu } from "./menus";
 import type { SidebarHandlers } from "./types";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
@@ -96,5 +96,24 @@ describe("a console session's Pin entry", () => {
     const pin = (placement: MenuPlacement) =>
       sessionMenu(t, {} as SidebarHandlers, hub, [], { placement }).some((entry) => typeof entry === "object" && (entry.label === "Pin" || entry.label === "Unpin"));
     expect([pin("list"), pin("focused")]).toEqual([true, false]);
+  });
+});
+
+describe("the Export configuration entry", () => {
+  const entries = (canExport: boolean, onOpenDialog = vi.fn()) =>
+    consoleMenu(t, consoleOf("c", "Main"), onOpenDialog, canExport).filter(
+      (entry): entry is Exclude<typeof entry, "separator"> => entry !== "separator",
+    );
+
+  it("is offered only where the platform can save a file", () => {
+    expect(entries(true).map((entry) => entry.label)).toContain("Export configuration…");
+    expect(entries(false).map((entry) => entry.label)).not.toContain("Export configuration…");
+  });
+
+  it("opens the export of this console", () => {
+    const onOpenDialog = vi.fn();
+    const exportItem = entries(true, onOpenDialog).find((entry) => entry.label === "Export configuration…") as { onClick: () => void };
+    exportItem.onClick();
+    expect(onOpenDialog).toHaveBeenCalledExactlyOnceWith({ kind: "export-configuration", console: consoleOf("c", "Main") });
   });
 });

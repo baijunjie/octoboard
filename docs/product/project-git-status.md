@@ -78,8 +78,14 @@ again until its next check.
 
 ### What one check does
 
-- A directory that is not a git repository is reported as such, and the badge shows nothing for it.
-- Otherwise the remote is fetched — **remote refs only**: nothing in the working tree moves and no branch changes.
+- A directory that is not a git repository is reported as such, and the badge shows nothing for it. The project's
+  recorded remote URL is cleared, unless the directory cannot be seen at all (see "The project's remote URL" in
+  `docs/product/consoles-and-projects.md`).
+- Otherwise the repository's remotes are read, and the project's recorded remote URL is made the one that read gives,
+  which is how that value is kept true to a repository whose remote changed outside Octoboard (same section). A read
+  that could not be made leaves the recorded value alone. A changed value reaches the open windows at once; nothing
+  about the badge changes with it.
+- The remote is then fetched — **remote refs only**: nothing in the working tree moves and no branch changes.
   The remote fetched is the current branch's upstream remote; with no upstream and exactly one remote configured, that
   one; with no upstream and several, `git`'s own default. A repository with no remote at all is not fetched, and that
   is not an error.
@@ -89,11 +95,34 @@ again until its next check.
 - Finally the branch may be fast-forwarded; see "Automatically syncing repositories" and "Syncing one project by
   hand" below.
 
-`git` runs with the user's own shell environment, so it is the `git` on the user's `PATH` and their git credentials
-that are used, as for a git association's clone (see "Associating a project" in
-`docs/product/consoles-and-projects.md`). It is run so that it can never stop to ask for a credential, a passphrase or
-an unknown host key — each of those fails immediately instead — and every `git` call is given at most two minutes, so
-a check cannot hang; a call that runs out reports only that it did not finish in time.
+## The environment a check runs `git` in
+
+Every `git` run for a project's git status — the remotes read, the fetch, the branch read, and a fast-forward, whether
+it comes from a check, from Sync repository or from the pass that turning the switch on starts — is the `git` on the
+user's `PATH`, started from the user's own login shell environment, but with that environment **filtered**. Their git
+configuration files and their credential helpers are used as they stand.
+
+What the filter takes out are the `GIT_*` variables the user exports in their own shell configuration. Kept are only
+those that say which of the user's own material to use and how to reach a remote with it: where git's configuration
+files live, the TLS certificates and keys a connection uses along with their formats, the TLS version and cipher list,
+and the git protocol proxy. Everything else is dropped — in particular anything that would point a command at another
+repository, worktree or index, anything that sets configuration items outright, and the variable that turns TLS
+certificate verification off.
+
+Two consequences are worth knowing:
+
+- Certificates and keys an enterprise network needs still reach the fetch when they are given through those variables
+  alone rather than through a configuration file.
+- A setting only a dropped variable carries does not apply. The check then fails, rather than quietly reporting the
+  branch and counts of whatever repository such a variable names, and its reason reaches the badge's warning triangle
+  like any other failure (see "The branch badge" above).
+
+A git association's clone, and the check the association form makes of a git URL, are **not** filtered this way: they
+run with the whole shell environment (see "Associating a project" in `docs/product/consoles-and-projects.md`).
+
+`git` is run so that it can never stop to ask for a credential, a passphrase or an unknown host key — each of those
+fails immediately instead — and every `git` call is given at most two minutes, so a check cannot hang; a call that
+runs out reports only that it did not finish in time.
 
 ## Automatically syncing repositories
 

@@ -15,7 +15,10 @@ use anyhow::{Context, Result};
 use uuid::Uuid;
 
 use crate::adapter;
+use crate::config_export;
+use crate::config_import;
 use crate::env_shell;
+use crate::git_remote;
 use crate::git_status;
 use crate::hostfs;
 use crate::mcp;
@@ -53,50 +56,23 @@ pub async fn handle(
             grok_console_session_effort,
             icon,
         } => {
-            // Every field checked first, so a refusal on a later one leaves no working directory
-            // behind.
-            let icon = normalize_icon(icon.as_deref())?;
-            let claude_account_id =
-                checked_account_reference(state, Agent::Claude, claude_account_id)?;
-            let codex_account_id =
-                checked_account_reference(state, Agent::Codex, codex_account_id)?;
-            let grok_account_id = checked_account_reference(state, Agent::Grok, grok_account_id)?;
-            let id = Uuid::new_v4().to_string();
-            let workdir = state.console_workdir(&id);
-            std::fs::create_dir_all(&workdir)?;
-            let console = Console {
-                id,
-                name,
-                workdir: workdir.to_string_lossy().into_owned(),
-                console_session_agent: default_agent,
-                default_agent,
-                claude_account_id,
-                codex_account_id,
-                grok_account_id,
-                claude_console_session_model: normalize_launch_setting(
-                    claude_console_session_model.as_deref(),
-                ),
-                claude_console_session_effort: normalize_launch_setting(
-                    claude_console_session_effort.as_deref(),
-                ),
-                codex_console_session_model: normalize_launch_setting(
-                    codex_console_session_model.as_deref(),
-                ),
-                codex_console_session_effort: normalize_launch_setting(
-                    codex_console_session_effort.as_deref(),
-                ),
-                grok_console_session_model: normalize_launch_setting(
-                    grok_console_session_model.as_deref(),
-                ),
-                grok_console_session_effort: normalize_launch_setting(
-                    grok_console_session_effort.as_deref(),
-                ),
-                icon,
-                created_at: now_millis(),
-            };
-            mcp::role::write_console_session_instructions(&console)?;
-            state.store.insert_console(&console)?;
-            state.broadcast(Event::ConsoleUpserted { console });
+            create_console(
+                state,
+                NewConsole {
+                    name,
+                    default_agent,
+                    claude_account_id,
+                    codex_account_id,
+                    grok_account_id,
+                    claude_console_session_model,
+                    claude_console_session_effort,
+                    codex_console_session_model,
+                    codex_console_session_effort,
+                    grok_console_session_model,
+                    grok_console_session_effort,
+                    icon,
+                },
+            )?;
             Ok(None)
         }
 
@@ -269,6 +245,7 @@ pub async fn handle(
                     name,
                     default_agent,
                     settings: NewProjectSettings {
+                        pinned: false,
                         claude_account_id: claude_account_id.unwrap_or_default(),
                         codex_account_id: codex_account_id.unwrap_or_default(),
                         grok_account_id: grok_account_id.unwrap_or_default(),
@@ -484,6 +461,35 @@ pub async fn handle(
             }))
         }
 
+        RequestBody::ExportConfiguration { console } => Ok(Some(Event::ConfigurationExported {
+            id: request_id,
+            document: config_export::build(&state.store, console.as_deref())?,
+        })),
+
+        RequestBody::InspectConfiguration { document } => {
+            let inspection = config_import::inspect(state, &document).await?;
+            Ok(Some(Event::ConfigurationInspected {
+                id: request_id,
+                settings: inspection.settings,
+                consoles: inspection.consoles,
+            }))
+        }
+
+        RequestBody::ImportConfiguration {
+            document,
+            resolutions,
+            apply_settings,
+        } => {
+            let imported =
+                config_import::apply(state, &document, resolutions, apply_settings).await?;
+            Ok(Some(Event::ConfigurationImported {
+                id: request_id,
+                settings_applied: imported.settings_applied,
+                settings_error: imported.settings_error,
+                consoles: imported.consoles,
+            }))
+        }
+
         RequestBody::OpenSession {
             console_id,
             project_id,
@@ -667,6 +673,79 @@ pub async fn handle(
     }
 }
 
+/// A console to create, as the request carries it: account references by id, models and efforts
+/// as typed.
+pub struct NewConsole {
+    pub name: String,
+    pub default_agent: Agent,
+    pub claude_account_id: Option<String>,
+    pub codex_account_id: Option<String>,
+    pub grok_account_id: Option<String>,
+    pub claude_console_session_model: Option<String>,
+    pub claude_console_session_effort: Option<String>,
+    pub codex_console_session_model: Option<String>,
+    pub codex_console_session_effort: Option<String>,
+    pub grok_console_session_model: Option<String>,
+    pub grok_console_session_effort: Option<String>,
+    pub icon: Option<String>,
+}
+
+/// Every refusal `create_console` can make of `new`, with nothing written. The one place that
+/// list lives: a caller that has to know a console will not be refused before it creates anything
+/// asks here rather than repeating the checks. Returns the avatar as it is stored.
+pub fn check_new_console(state: &Arc<AppState>, new: &NewConsole) -> Result<Option<String>> {
+    let icon = normalize_icon(new.icon.as_deref())?;
+    checked_account_reference(state, Agent::Claude, new.claude_account_id.clone())?;
+    checked_account_reference(state, Agent::Codex, new.codex_account_id.clone())?;
+    checked_account_reference(state, Agent::Grok, new.grok_account_id.clone())?;
+    Ok(icon)
+}
+
+/// Creates and broadcasts a console with its working directory. Every field is checked first, so
+/// a refusal leaves no working directory behind.
+pub fn create_console(state: &Arc<AppState>, new: NewConsole) -> Result<Console> {
+    let icon = check_new_console(state, &new)?;
+    let id = Uuid::new_v4().to_string();
+    let workdir = state.console_workdir(&id);
+    std::fs::create_dir_all(&workdir)?;
+    let console = Console {
+        id,
+        name: new.name,
+        workdir: workdir.to_string_lossy().into_owned(),
+        console_session_agent: new.default_agent,
+        default_agent: new.default_agent,
+        claude_account_id: new.claude_account_id,
+        codex_account_id: new.codex_account_id,
+        grok_account_id: new.grok_account_id,
+        claude_console_session_model: normalize_launch_setting(
+            new.claude_console_session_model.as_deref(),
+        ),
+        claude_console_session_effort: normalize_launch_setting(
+            new.claude_console_session_effort.as_deref(),
+        ),
+        codex_console_session_model: normalize_launch_setting(
+            new.codex_console_session_model.as_deref(),
+        ),
+        codex_console_session_effort: normalize_launch_setting(
+            new.codex_console_session_effort.as_deref(),
+        ),
+        grok_console_session_model: normalize_launch_setting(
+            new.grok_console_session_model.as_deref(),
+        ),
+        grok_console_session_effort: normalize_launch_setting(
+            new.grok_console_session_effort.as_deref(),
+        ),
+        icon,
+        created_at: now_millis(),
+    };
+    mcp::role::write_console_session_instructions(&console)?;
+    state.store.insert_console(&console)?;
+    state.broadcast(Event::ConsoleUpserted {
+        console: console.clone(),
+    });
+    Ok(console)
+}
+
 /// A request that lacks a field its kind needs. `field` is the wire name, passed as is.
 fn field_required(field: &str) -> anyhow::Error {
     CodedError::raised(
@@ -680,7 +759,7 @@ fn field_required(field: &str) -> anyhow::Error {
 /// stored. A relative path is refused: it would mean a different directory whenever the daemon's own
 /// working directory differed, and nothing that compares project paths — the trusted directories
 /// among them — could read it.
-fn absolute_path(text: &str) -> Result<PathBuf> {
+pub(crate) fn absolute_path(text: &str) -> Result<PathBuf> {
     let path = hostfs::expand(text);
     if !path.is_absolute() {
         return Err(CodedError::raised(
@@ -719,12 +798,12 @@ pub struct AddProjectRequest {
     pub tags: Option<Vec<String>>,
 }
 
-/// The per-agent account, model and reasoning effort a project is associated with, as the request
-/// carries them: an account reference is checked, and a model or effort trimmed with blank read as
-/// unset, before anything is stored. Every field absent is the default, and what the console
-/// session's tool call sends.
+/// What a project is associated with beyond where it is, as the request carries it: an account
+/// reference is checked, and a model or effort trimmed with blank read as unset, before anything
+/// is stored. Every field absent is the default, and what the console session's tool call sends.
 #[derive(Default)]
 pub struct NewProjectSettings {
+    pub pinned: bool,
     pub claude_account_id: ProjectAccount,
     pub codex_account_id: ProjectAccount,
     pub grok_account_id: ProjectAccount,
@@ -802,12 +881,26 @@ pub async fn add_project(
 
     let tags = normalise_tags(tags.unwrap_or_default());
 
+    let remote_urls = directory_remote_urls(
+        state,
+        &console_id,
+        source,
+        &directories,
+        git_remote::read_remote_url,
+    )
+    .await?;
+
     let mut added = Vec::new();
     for directory in directories {
         let path_text = directory.to_string_lossy().into_owned();
         if state.store.project_exists_at(&console_id, &path_text)? {
             continue;
         }
+        // A clone keeps the URL it was given; the other sources take the one read above.
+        let project_remote_url = match source {
+            ProjectSource::Git => remote_url.clone(),
+            ProjectSource::Local | ProjectSource::Parent => remote_urls.get(&directory).cloned(),
+        };
         let project_name = explicit_name.clone().unwrap_or_else(|| {
             directory
                 .file_name()
@@ -826,7 +919,7 @@ pub async fn add_project(
                     .flatten()
             }),
             source,
-            remote_url: remote_url.clone(),
+            remote_url: project_remote_url,
             claude_account_id: claude_account_id.clone(),
             codex_account_id: codex_account_id.clone(),
             grok_account_id: grok_account_id.clone(),
@@ -843,7 +936,7 @@ pub async fn add_project(
             grok_session_model: normalize_launch_setting(settings.grok_session_model.as_deref()),
             grok_session_effort: normalize_launch_setting(settings.grok_session_effort.as_deref()),
             trust_consent: false,
-            pinned: false,
+            pinned: settings.pinned,
             tags: tags.clone(),
         };
         state.store.insert_project(&project)?;
@@ -860,6 +953,46 @@ pub async fn add_project(
         ));
     }
     Ok(added)
+}
+
+/// The remote URL `read` finds for each of `directories` that has one, for the sources whose
+/// projects take it from their directory; a clone has the URL it was given and reads nothing.
+///
+/// Read only for the directories that are not already associated, so a parent directory whose
+/// repositories mostly are does not pay a `git` read for each one it then skips; the check in
+/// `add_project`'s loop stays the authority, this one only saves the reads. They run a few at a
+/// time on blocking threads (see `git_remote::read_bounded`), so a directory on a stalled mount
+/// holds up its own read and no other, and a parent directory holding hundreds of repositories
+/// does not take over the blocking pool. A directory whose read did not come back, because its
+/// thread panicked, is simply absent: a project stored without a URL, not a failed association.
+async fn directory_remote_urls(
+    state: &AppState,
+    console_id: &str,
+    source: ProjectSource,
+    directories: &[PathBuf],
+    read: impl Fn(&Path) -> Option<String> + Send + Sync + 'static,
+) -> Result<HashMap<PathBuf, String>> {
+    if source == ProjectSource::Git {
+        return Ok(HashMap::new());
+    }
+    let mut unassociated = Vec::new();
+    for directory in directories {
+        if !state
+            .store
+            .project_exists_at(console_id, &directory.to_string_lossy())?
+        {
+            unassociated.push(directory.clone());
+        }
+    }
+    let urls = git_remote::read_bounded(unassociated, move |directory| {
+        let url = read(&directory);
+        (directory, url)
+    })
+    .await;
+    Ok(urls
+        .into_iter()
+        .filter_map(|(directory, url)| Some((directory, url?)))
+        .collect())
 }
 
 /// The agent to store for a project associated with no default agent chosen: the one its
@@ -2048,7 +2181,7 @@ fn normalize_account_dir(agent: Agent, text: &str) -> Result<String> {
 
 /// The comparison key for an account name collision: trimmed and lower-cased, so "Work" and
 /// " work " read as the same name.
-fn account_name_key(name: &str) -> String {
+pub(crate) fn account_name_key(name: &str) -> String {
     name.trim().to_lowercase()
 }
 
@@ -2281,7 +2414,7 @@ fn normalize_icon(text: Option<&str>) -> Result<Option<String>> {
 /// Applies the settable fields of `update_settings`: absent means "leave it alone", as in
 /// `update_project`. Broadcasts `settings_updated` only when something actually changed, the
 /// trusted-directories pattern.
-fn update_settings(
+pub(crate) fn update_settings(
     state: &Arc<AppState>,
     auto_sync_repositories: Option<bool>,
     default_clone_dir: Option<String>,
@@ -2744,6 +2877,59 @@ mod tests {
             handle(&state, None, request).await.unwrap();
             assert!(state.store.get_session("s").unwrap().is_none(), "{label}");
             assert!(!saved.exists(), "{label}");
+        }
+    }
+
+    /// A clone reads nothing, and a directory source reads only the directories not yet
+    /// associated, keeping the URLs the reader finds.
+    #[tokio::test]
+    async fn remote_urls_are_read_for_unassociated_directories_of_the_directory_sources_only() {
+        let (state, dir) = crate::test_support::app_state("coordinator-directory-remote-urls");
+        let workdir = console_workdir(&dir);
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &workdir))
+            .unwrap();
+        let (taken, fresh, bare) = (dir.join("taken"), dir.join("fresh"), dir.join("bare"));
+        let mut associated = project_of("console-1", "taken");
+        associated.path = taken.to_string_lossy().into_owned();
+        state.store.insert_project(&associated).unwrap();
+        let directories = vec![taken.clone(), fresh.clone(), bare.clone()];
+
+        let reads = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let reader = |reads: &std::sync::Arc<std::sync::Mutex<Vec<PathBuf>>>| {
+            let reads = reads.clone();
+            move |path: &Path| {
+                reads.lock().unwrap().push(path.to_path_buf());
+                path.ends_with("fresh")
+                    .then(|| "https://example.com/f.git".to_string())
+            }
+        };
+
+        let urls = directory_remote_urls(
+            &state,
+            "console-1",
+            ProjectSource::Git,
+            &directories,
+            reader(&reads),
+        )
+        .await
+        .unwrap();
+        assert!(urls.is_empty() && reads.lock().unwrap().is_empty());
+
+        for source in [ProjectSource::Local, ProjectSource::Parent] {
+            reads.lock().unwrap().clear();
+            let urls =
+                directory_remote_urls(&state, "console-1", source, &directories, reader(&reads))
+                    .await
+                    .unwrap();
+            let mut read = reads.lock().unwrap().clone();
+            read.sort();
+            assert_eq!(read, vec![bare.clone(), fresh.clone()]);
+            assert_eq!(
+                urls,
+                HashMap::from([(fresh.clone(), "https://example.com/f.git".to_string())])
+            );
         }
     }
 

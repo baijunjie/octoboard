@@ -1,6 +1,7 @@
 import {
   AppWindow,
   Archive,
+  FileCog,
   FileText,
   Focus,
   FolderTree,
@@ -38,6 +39,7 @@ export const GROUPS = [
   { title: "File viewer", icon: FileText },
   { title: "Trust prompts and toasts", icon: MessageSquareWarning },
   { title: "Dialogs", icon: AppWindow },
+  { title: "Configuration", icon: FileCog },
   { title: "Settings", icon: Settings },
   { title: "Window layout", icon: PanelsTopLeft },
 ] as const satisfies readonly { title: string; icon: LucideIcon }[];

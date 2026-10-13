@@ -31,12 +31,6 @@ vi.mock("./renderer", () => ({
   endRendererPool: () => {},
 }));
 
-class StubResizeObserver {
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
-}
-globalThis.ResizeObserver ??= StubResizeObserver as unknown as typeof ResizeObserver;
 window.matchMedia ??= (query: string) =>
   ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList;
 
