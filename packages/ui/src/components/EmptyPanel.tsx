@@ -4,26 +4,44 @@ import React, { useId } from "react";
 
 import { TitledControl } from "./TitledControl";
 
-/** HeroUI's `EmptyState` with the shape every empty list in the app takes: a glyph, a line
+/** HeroUI's `EmptyState` with the shape every empty list in the app takes: a glyph, a heading
  * saying what is missing, an optional line explaining it and the action that fills it when there is
  * one. `compact` is a row, for a list nested inside another (a project with no sessions); with an
  * action the whole row is the button that runs it. A message too long for the row wraps rather than
- * being cut, since some (the install prompt) are instructions to act on. */
+ * being cut.
+ *
+ * `silent` is for a state another region already announces: it hides this copy from assistive
+ * technology so the state is not read twice. It cannot be combined with an `action`: a button
+ * inside an `aria-hidden` subtree stays reachable by Tab yet has no name or role. A plain compact
+ * row accepts it too, for the API to be complete; only the full panel uses it today. */
 export function EmptyPanel({
   icon: Icon,
   message,
+  headingLevel = 2,
   description,
   action,
   compact,
+  silent,
 }: {
   icon: LucideIcon;
   message: string;
-  /** The full panel's line under `message`, which then makes `message` a heading; a compact row has no room for one. */
-  description?: string;
-  /** `icon` shows only on the full panel's button; a compact row already leads with its glyph. */
-  action?: { label: string; icon?: LucideIcon; onPress: () => void };
+  /** The full panel's heading level: the level of the heading naming whatever the panel stands in
+   * for, so the two read as one thing rather than the panel opening a section of its own. The
+   * default suits a pane's own title and a dialog's, both `h2`; the sidebar's `SectionHeading` is
+   * an `h3`, so a panel inside one of those sections passes 3. A compact row has no heading. */
+  headingLevel?: 2 | 3;
+  /** The full panel's line under the heading, explaining what the heading leaves out; a compact
+   * row has no room for one. It sits in a `p`, so it takes phrasing content only. */
+  description?: React.ReactNode;
   compact?: boolean;
-}): React.ReactElement {
+} & (
+  | {
+      /** `icon` shows only on the full panel's button; a compact row already leads with its glyph. */
+      action?: { label: string; icon?: LucideIcon; onPress: () => void };
+      silent?: never;
+    }
+  | { action?: never; silent?: true }
+)): React.ReactElement {
   const messageId = useId();
   const actionId = useId();
   if (compact) {
@@ -36,7 +54,7 @@ export function EmptyPanel({
         </span>
       </>
     );
-    if (!action) return <EmptyState className="flex items-center gap-2 py-1 ps-2 pe-1">{row}</EmptyState>;
+    if (!action) return <EmptyState aria-hidden={silent} className="flex items-center gap-2 py-1 ps-2 pe-1">{row}</EmptyState>;
     // Named by its visible message and then by what a press does: the message has to be inside the
     // name verbatim (WCAG 2.2 A 2.5.3), and the action says what the row is, which the message
     // alone does not. Two referenced elements rather than one joined string, so neither half is a
@@ -70,13 +88,14 @@ export function EmptyPanel({
     );
   }
   const ActionIcon = action?.icon;
+  const Heading = `h${headingLevel}` as const;
   return (
-    <EmptyState className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+    <EmptyState aria-hidden={silent} className="flex flex-col items-center gap-3 px-4 py-10 text-center">
       <span className="flex size-12 items-center justify-center rounded-full bg-default text-muted">
         <Icon aria-hidden="true" className="size-6" />
       </span>
-      {description ? <h2 className="text-sm font-semibold">{message}</h2> : <p>{message}</p>}
-      {description && <p className="max-w-sm text-sm text-muted">{description}</p>}
+      <Heading className="text-sm font-semibold">{message}</Heading>
+      {description && <p className="max-w-sm text-sm break-words text-muted">{description}</p>}
       {action && (
         // A press never takes focus: it would drop to `<body>` when the panel goes away, and
         // whatever the action opens or starts places focus itself.
@@ -86,5 +105,19 @@ export function EmptyPanel({
         </Button>
       )}
     </EmptyState>
+  );
+}
+
+/** An `EmptyPanel` centred in the column it fills, for a view whose content starts at the top when
+ * there is any: only the empty branch takes the centring, so a list's rows still begin where the
+ * column does. The column itself stays the parent's, so nothing it holds while it is not empty
+ * moves. Safe centring, here and at every other surface that centres a panel: plain `center` pushes
+ * the overflow of a panel taller than its column past the start edge, where a scrolling column
+ * cannot reach it and a plain one draws it over whatever sits above. */
+export function CenteredEmptyPanel(props: React.ComponentProps<typeof EmptyPanel>): React.ReactElement {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col justify-center-safe">
+      <EmptyPanel {...props} />
+    </div>
   );
 }

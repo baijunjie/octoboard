@@ -308,10 +308,10 @@ view in place of the Uncommitted view: every 10 seconds while it is on screen an
 back more than 5 seconds after the last reading, on Refresh, and after the connection to the daemon comes back. A
 branch created, moved or deleted in the meantime shows in the selectors then.
 
-When the branches cannot be read, the view says so with the reason: in place of the line asking to choose a branch,
-with **Try again**, while a branch is missing on either side and no list of branches has been read yet; otherwise in a
-line under the selectors, announced to assistive technology, the branches already offered staying on offer, until the
-branches are read again.
+When the branches cannot be read, the view says so with the reason: in place of the empty state asking for a branch on
+each side, with **Try again**, while a branch is missing on either side and no list of branches has been read yet;
+otherwise in a line under the selectors, announced to assistive technology, the branches already offered staying on
+offer, until the branches are read again.
 
 ### What is compared
 
@@ -468,17 +468,18 @@ commit and its new side from To's, and is shown as a staged change is below; it 
 two — there is nothing to compare, so the whole content is read instead, the read a diff's collapsed lines use (see
 "Expanding the collapsed lines" below), once as the change opens; while it is in flight the viewer shows its usual
 loading, announced as a file's read is (see "What it shows" in `docs/product/project-pane.md`). It is then shown whole
-as a file rather than as a diff — so a Markdown file is offered as a document with its source a choice away, exactly
-as an untracked file is — under a neutral notice saying which of the two cases the change is. Where the content cannot
-be had after all, the change falls back to saying the same sentence in the centred stand-in and shows none of the
-file: with a reason to give — the read itself failed, a lost connection to the daemon among the reasons — a failure
-notice above it says the file's content could not be read and gives that reason; where the content simply cannot be
-had — a side the daemon will not deliver whole, by the same rule as a diff's collapsed lines, or the change having
-moved on since it was read, or the two sides turning out to differ from what the change says they are — a neutral
-notice above it says which of those it was. Only a change with nothing to read the content from leaves the stand-in
-alone: one whose two sides are not both files whose content can be read, a rename between two symbolic links among
-them. Every one of these notices and the stand-in are as "Notices and stand-ins" in
-`docs/product/project-pane.md` describes them.
+as a file rather than as a diff — so a Markdown file is offered as a document with its source a choice away, exactly as
+an untracked file is — under a neutral notice saying which of the two cases the change is, in one sentence. Where the
+content cannot be had after all, the change falls back to the centred stand-in and shows none of the file, saying there
+the same state the notice would have: as a heading, with the line under it where it has one, rather than as that one
+sentence (see "The same state said in one sentence" in `docs/product/empty-states.md`). With a reason to give — the read
+itself failed, a lost connection to the daemon among the reasons — a failure notice above it says the file's content
+could not be read and gives that reason; where the content simply cannot be had — a side the daemon will not deliver
+whole, by the same rule as a diff's collapsed lines, or the change having moved on since it was read, or the two sides
+turning out to differ from what the change says they are — a neutral notice above it says which of those it was. Only a
+change with nothing to read the content from leaves the stand-in alone: one whose two sides are not both files whose
+content can be read, a rename between two symbolic links among them. Every one of these notices and the stand-in are as
+"Notices and stand-ins" in `docs/product/project-pane.md` describes them.
 
 A whole file body shown here instead of a diff — an untracked file, one added with no patch, the version inside the
 project of a rename across the boundary, or a change with no lines to draw whose content was read — is a Markdown

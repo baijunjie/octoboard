@@ -199,6 +199,8 @@ describe("the sample repository's changes", () => {
       // An untracked file has no patch, so it has no collapsed lines to expand either.
       "wt-main untracked src/log.ts: invalid_change",
       "wt-main untracked tools/release/notes.md: invalid_change",
+      "wt-main untracked src/config.local.ts: invalid_change",
+      "wt-main untracked search-client: invalid_change",
       "wt-side unstaged README.md: old text 13/1, new text 35/1",
       "main..feature/ranking-experiments src/ranking.ts: old text 114/3, new text 180/4",
       "main..feature/ranking-experiments src/config.ts: old text 92/3, new text 100/3",

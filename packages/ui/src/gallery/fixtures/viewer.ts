@@ -570,6 +570,11 @@ function untracked(path: string, body: ViewerBody): ViewerSubject {
   return { key: `Untracked:${path}`, path, status: "untracked", content: { state: "change", change: { old: { state: "absent" }, new: present(path, body) } } };
 }
 
+// An untracked symbolic link, or a repository of its own, is shown alone with nothing to read on its side.
+function untrackedNotFile(path: string, kind: "symlink" | "submodule"): ViewerSubject {
+  return { key: `Untracked:${path}`, path, status: "untracked", content: { state: "change", change: { old: { state: "absent" }, new: present(path, undefined, kind) } } };
+}
+
 async function changes(): Promise<ViewerSubject[]> {
   return [
     change("src/session.ts", present("src/session.ts", oldSession), present("src/session.ts", newSession), MODIFIED_PATCH),
@@ -586,6 +591,8 @@ async function changes(): Promise<ViewerSubject[]> {
     untracked("assets/new.png", after),
     untracked("src/scratch.ts", text("src/scratch.ts", NEW_SESSION)),
     untracked("docs/draft.md", text("docs/draft.md", MARKDOWN)),
+    untrackedNotFile("src/config.local.ts", "symlink"),
+    untrackedNotFile("vendor/search-client", "submodule"),
     {
       key: "Conflicted:docs/merge.md",
       path: "docs/merge.md",
@@ -699,6 +706,9 @@ async function changes(): Promise<ViewerSubject[]> {
     { key: "Unstaged:src/offline.ts", path: "src/offline.ts", stage: "Unstaged", status: "modified", content: { state: "disconnected", what: "change" } },
     // A rename whose two versions are equal: git's diff of them is empty.
     change("src/kept.ts", present("src/previous.ts", oldSession), present("src/kept.ts", oldSession), "", "Staged"),
+    // Two versions that are the same file: git's diff of them is empty, and with no way to read the
+    // whole file the viewer can only say nothing differs.
+    change("src/unchanged.ts", present("src/unchanged.ts", oldSession), present("src/unchanged.ts", oldSession), "", "Staged"),
     // A change that arrived without a patch, which has no diff to draw.
     change("src/session.ts", present("src/session.ts", oldSession), present("src/session.ts", newSession), undefined, "Staged"),
   ];
@@ -725,7 +735,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     title: "Changes",
     description:
-      "Modified (one with lines wider than the viewer), added, deleted, renamed, type-changed and renamed-below-itself files, in both directions, from patches, sides outside the project, image changes, a binary change, a patch past the budget, a patch that cannot be read and a change without a patch.",
+      "Modified (one with lines wider than the viewer), added, deleted, renamed, type-changed and renamed-below-itself files, in both directions, from patches, sides outside the project, image changes, a binary change, an untracked symbolic link and repository of its own, a change whose two sides are the same, a patch past the budget, a patch that cannot be read and a change without a patch.",
     viewer: { subjects: changes },
   },
 ];

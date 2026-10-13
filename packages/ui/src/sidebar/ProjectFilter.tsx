@@ -5,10 +5,11 @@ import {
   Tag,
   TagGroup,
 } from "@heroui/react";
-import { BrushCleaning, Check, ListFilter } from "lucide-react";
+import { BrushCleaning, Check, ListFilter, Tags } from "lucide-react";
 import type { Key } from "react-aria";
 import React, { type RefObject, useRef, useState } from "react";
 
+import { EmptyPanel } from "../components/EmptyPanel";
 import { handFocusOff } from "../components/handFocusOff";
 import { PickedTag } from "../components/PickedTag";
 import { TitledControl } from "../components/TitledControl";
@@ -178,7 +179,7 @@ export function ProjectFilterClear({
 }
 
 /** The tags in use, each a toggle: the tags picked are the ones a project must all carry. With
- * none in use, a line says where tags come from. */
+ * none in use, an empty panel says where tags are added. */
 function TagPicker({
   vocabulary,
   selected,
@@ -189,8 +190,9 @@ function TagPicker({
   onChange: (added: string[], removed: string[]) => void;
 }): React.ReactElement {
   const t = useT();
-  if (vocabulary.length === 0)
-    return <p className="text-xs text-muted">{t("sidebar.filter.noTags")}</p>;
+  // The default heading level: the popover it fills is named by a label rather than by a heading,
+  // so there is none above it for the panel's own to sit level with.
+  if (vocabulary.length === 0) return <EmptyPanel icon={Tags} message={t("sidebar.filter.noTags")} description={t("sidebar.filter.noTags.description")} />;
   return (
     <TagGroup
       aria-label={t("sidebar.filter.tags")}

@@ -121,10 +121,12 @@ to lose, so Claude Code creates the directory itself and Octoboard creates it fo
 **With every agent determined unavailable, opening a session is refused outright, before any of that**: the dialog
 cannot be submitted, the console sessions section's own new-session action is disabled, and a console session's
 `start_session` tool is refused with a reason it can report (see "The console session's tools" in
-`docs/product/hub-orchestration.md`). In every one of those places Octoboard says which agents it supports and that
-one of them has to be on the user's `PATH`, without saying how to install one. This refusal only ever fires once
-availability has actually been determined and found none; while that determination is still pending, nothing is
-refused on its account and a session opens or fails exactly as described above.
+`docs/product/hub-orchestration.md`). The dialog and the tool's refusal say which agents Octoboard supports and that one
+of them has to be on the user's `PATH`, without saying how to install one; the console sessions section, with room for
+less, says only that no agent was found on the user's `PATH` (see "The console sessions section and the project list" in
+`docs/product/sidebar.md`). This refusal only ever fires once availability has actually been determined and found none;
+while that determination is still pending, nothing is refused on its account and a session opens or fails exactly as
+described above.
 
 ### Which agent a session uses
 
@@ -537,12 +539,13 @@ A session's title can be changed at any time, archived sessions included. An emp
 
 ## The terminal
 
-With no session selected, the terminal's area says so and asks for a session to be selected, and the terminal cannot
-take keyboard focus: whatever would hand focus to it (hiding a pane that holds focus, or the session going away while
-the terminal holds it) puts focus on the top bar's first enabled control instead, and leaves it on nothing when it is
-already on nothing. That empty state is what a console with no session selected shows; with **no console at all** there
-is no terminal in the window and the welcome screen fills the content panel instead (see
-`docs/product/welcome-screen.md`). **The one exception to that line and to those focus rules is a console with nothing
+With no session selected, the terminal's area shows an empty panel — a terminal glyph, a heading saying no session is
+selected, and a line asking for a session to be selected (see "The full panel" in `docs/product/empty-states.md`) — and
+the terminal cannot take keyboard focus: whatever would hand focus to it (hiding a pane that holds focus, or the session
+going away while the terminal holds it) puts focus on the top bar's first enabled control instead, and leaves it on
+nothing when it is already on nothing. That empty state is what a console with no session selected shows; with **no
+console at all** there is no terminal in the window and the welcome screen fills the content panel instead (see
+`docs/product/welcome-screen.md`). **The one exception to that panel and to those focus rules is a console with nothing
 in it at all**, whose area offers a project instead — see "A console with nothing in it" below. The selected session's
 terminal is live: keystrokes go straight to the agent, exactly as in a system terminal. Mouse reporting works, so an
 agent's own mouse-driven TUI is usable. `Ctrl+C` reaches the agent, and so do `Tab` and `Shift+Tab`. `F6` and `Shift+F6`
@@ -567,11 +570,12 @@ never do: they move keyboard focus to another region of the window (see "Moving 
 - A client that stops draining output for more than a few seconds is dropped by the daemon rather than letting output
   buffer without bound. The application then reconnects by itself, with a backoff, up to five times. **While those
   attempts are under way the terminal is covered by a spinner and a line saying it is reconnecting**, over whatever
-  output was on screen. **Once the attempts are spent the cover becomes a disconnected panel**: a muted unplugged-cord
-  icon, a line saying the terminal is disconnected, and a **Reconnect** button. The top bar shows nothing about the
-  terminal's connection in either state. Assistive technology is told each of these states as it begins, by the
-  terminal's area alone; the disconnected panel's message and button can also be reached when browsing, while the
-  spinner covers cannot. A reconnect in the background never steals keyboard focus.
+  output was on screen. **Once the attempts are spent the cover becomes a disconnected panel**, in the shape every empty
+  state takes (see "The full panel" in `docs/product/empty-states.md`): an unplugged-cord glyph, a heading saying the
+  terminal is disconnected, and a **Reconnect** button. The top bar shows nothing about the terminal's connection in
+  either state. Assistive technology is told each of these states as it begins, by the terminal's area alone; the
+  disconnected panel's message and button can also be reached when browsing, while the spinner covers cannot. A
+  reconnect in the background never steals keyboard focus.
 - **The Reconnect button is offered only while the connection to the daemon is open.** While it is not, the
   disconnected panel shows its message without the button, and the connection banner and its Retry are the way back
   (see "Losing the daemon connection" in `docs/product/application-lifecycle.md`).
@@ -624,14 +628,14 @@ never do: they move keyboard focus to another region of the window (see "Moving 
 
 ### A console with nothing in it
 
-While the **current** console holds neither a project nor a session that is not archived, the terminal's area shows a
-full empty panel in place of the line asking for a session to be selected: a folder glyph, a heading saying there are
-no projects yet, a line saying a project is a directory the user works in and runs sessions in, and an **Add project**
-button, which opens the same new-project dialog the console's action menu does (see "The console header" in
-`docs/product/sidebar.md` and "Associating a project" in `docs/product/consoles-and-projects.md`). The sidebar's
-Projects section carries the same offer as a row (see "Empty rows" in `docs/product/sidebar.md`).
+While the **current** console holds neither a project nor a session that is not archived, the terminal's area offers a
+project in place of asking for a session to be selected: a folder glyph, a heading saying there are no projects yet, a
+line saying a project is a directory the user works in and runs sessions in, and an **Add project** button, which opens
+the same new-project dialog the console's action menu does (see "The console header" in `docs/product/sidebar.md` and
+"Associating a project" in `docs/product/consoles-and-projects.md`). The sidebar's Projects section carries the same
+offer as a row (see "Empty rows" in `docs/product/sidebar.md`).
 
-- It is shown only while **nothing is selected**, as the line it stands in for is. The selection survives a console
+- It is shown only while **nothing is selected**, as the panel it stands in for is. The selection survives a console
   switch, so right after switching to such a console, or creating one, the terminal still shows the session selected
   in the console before it and no panel; the sidebar's row carries the offer then.
 - The console read is the **current** one, not the one the sidebar is previewing while the pointer rests on another
@@ -639,12 +643,12 @@ Projects section carries the same offer as a row (see "Empty rows" in `docs/prod
 - An **archived** session does not count, so a console whose sessions are all archived shows the panel. A console
   session that is not archived does count, and a console can hold one with no project at all; the area then asks for a
   session to be selected as usual.
-- **The archive view covering the terminal suppresses the panel**: while it is open the area shows the line instead
-  (see "The archive view" in `docs/product/sidebar.md`).
-- **Keyboard**: with the panel up the terminal's area is a stop in the `F6` cycle, which it is not while it only shows
-  the line, and whatever hands keyboard focus to the terminal puts it on the **Add project** button rather than on the
-  top bar, exactly as it does on the cover's Reconnect button (see "Moving focus between regions with F6" in
-  `docs/product/moving-focus-between-regions.md`). Focus that is on nothing is left on nothing, so launching the
-  application pulls it onto no control and `Shift+F6` pressed with focus nowhere passes the area over for the region
-  before it. When the button goes away because a project has been added, from this window or another client, while it
-  holds focus, focus goes to the top bar's first enabled control.
+- **The archive view covering the terminal suppresses the offer**: while it is open the area shows the no-session panel
+  instead (see "The archive view" in `docs/product/sidebar.md`).
+- **Keyboard**: with this panel up the terminal's area is a stop in the `F6` cycle, which it is not while it shows the
+  no-session panel, which has no button, and whatever hands keyboard focus to the terminal puts it on the **Add
+  project** button rather than on the top bar, exactly as it does on the cover's Reconnect button (see "Moving focus
+  between regions with F6" in `docs/product/moving-focus-between-regions.md`). Focus that is on nothing is left on
+  nothing, so launching the application pulls it onto no control and `Shift+F6` pressed with focus nowhere passes the
+  area over for the region before it. When the button goes away because a project has been added, from this window or
+  another client, while it holds focus, focus goes to the top bar's first enabled control.

@@ -1,8 +1,15 @@
 import type { Agent, AgentAvailability } from "../../protocol";
 import type { Scenario } from "../scenario";
-import { consoleOf, projectOf, snapshotState } from "./builders";
+import { consoleOf, projectOf, sessionOf, snapshotState } from "./builders";
 
 const GROUP = "Empty";
+
+/** Nothing on the machine's PATH to run a session with. */
+const NO_AGENTS = new Map<Agent, AgentAvailability>([
+  ["claude", { agent: "claude", availability: "unavailable" }],
+  ["codex", { agent: "codex", availability: "unavailable" }],
+  ["grok", { agent: "grok", availability: "unavailable" }],
+]);
 
 export const emptyScenarios: Scenario[] = [
   {
@@ -36,11 +43,22 @@ export const emptyScenarios: Scenario[] = [
     description: "The welcome screen also carries the install prompt, and New console stays enabled.",
     state: {
       ...snapshotState({}),
-      agentAvailability: new Map<Agent, AgentAvailability>([
-        ["claude", { agent: "claude", availability: "unavailable" }],
-        ["codex", { agent: "codex", availability: "unavailable" }],
-        ["grok", { agent: "grok", availability: "unavailable" }],
-      ]),
+      agentAvailability: NO_AGENTS,
+    },
+  },
+  {
+    id: "empty-console-no-agent",
+    group: GROUP,
+    title: "A console, no agent installed",
+    description:
+      "Under Console sessions the row says no agent was found on PATH and the section's New console session is disabled; the console session left over from before still shows beneath it. The project below keeps its own empty row.",
+    state: {
+      ...snapshotState({
+        consoles: [consoleOf("c-1", "Main")],
+        projects: [projectOf("p-1", "c-1", "Website")],
+        sessions: [sessionOf("s-hub", "c-1", undefined, "Hub", "interrupted")],
+      }),
+      agentAvailability: NO_AGENTS,
     },
   },
   {

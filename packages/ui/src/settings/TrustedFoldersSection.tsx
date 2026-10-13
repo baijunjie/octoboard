@@ -1,6 +1,8 @@
-import { Button, EmptyState } from "@heroui/react";
+import { Button } from "@heroui/react";
+import { FolderOpen } from "lucide-react";
 import React from "react";
 
+import { EmptyPanel } from "../components/EmptyPanel";
 import { MarkedPath } from "../components/MarkedPath";
 import { TitledControl } from "../components/TitledControl";
 import { isolate } from "../i18n/isolate";
@@ -26,9 +28,14 @@ export function TrustedFoldersSection(): React.ReactElement {
         {t("settings.trusted.description")}
       </p>
       {directories.length === 0 ? (
-        <EmptyState className="border-t border-separator px-0 py-4">
-          {t("settings.trusted.empty")}
-        </EmptyState>
+        <div className="border-t border-separator py-2">
+          {/* `-ms-2` cancels the `ps-2` that `EmptyPanel`'s compact row carries for the sidebar rows
+              it was built for, which here would stand its glyph 8px in from the section's own
+              content edge. Change the two together. */}
+          <div className="-ms-2">
+            <EmptyPanel compact icon={FolderOpen} message={t("settings.trusted.empty")} />
+          </div>
+        </div>
       ) : (
         <div className="border-t border-separator">
           {directories.map((path) => (

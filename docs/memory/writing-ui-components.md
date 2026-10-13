@@ -127,6 +127,20 @@ on a state attribute, check in that same file that the hook setting it is not di
 it is, use the CSS pseudo-class through Tailwind (`hover:`, `group-hover/<name>:`). The jsdom tests never hover, so
 only a real pointer in the running page shows the miss.
 
+## An ancestor's context decides a react-aria element's props, so the default in its own file is not what renders
+
+A react-aria-components element merges a context value over the props it was given (`useContextProps`), and a parent
+that treats one as a known part supplies that value per slot, so a default written in the element's own file can be
+replaced from above with nothing at the call site to show it: react-aria's `Heading` defaults to `level = 3`, but a
+`Dialog` sets its `title` slot to `level: 2`, so HeroUI's `Modal.Heading` and `AlertDialog.Heading` — each a `Heading
+slot="title"`, and rendered in this project as `Frame.Heading` (`packages/ui/src/dialogs/Dialog.tsx`, where `Frame` is
+one of those two) — render `h2`, and a heading inside a panel that can appear in a dialog is pitched against that
+rather than against `h3`.
+
+So settle what such an element puts in the DOM on a render — a jsdom test asserting the tag, or the running page —
+rather than on the default read off its own file under `packages/ui/node_modules/`, which an ancestor's context may
+have overridden; where the two disagree, the file loses.
+
 ## A HeroUI `ListBox` or a `Tree`: where its padding and its fade go
 
 For a list rendered inside react-aria's `Virtualizer` with `ListLayout` (a HeroUI `ListBox`, one in a `Select`'s
@@ -240,6 +254,13 @@ labels — is a message in `packages/ui/src/i18n/messages/en.ts` and in every tr
   visible text, read its file for a hardcoded string, following through to whatever part that file renders in turn, and
   pass your own message over it: `SearchField.ClearButton`'s own file carries no string, and the `aria-label="Close"` it
   showed in every language comes from the `CloseButton` it delegates to.
+
+Shortening or replacing an existing message drops whatever that message alone said, and the diff shows only that the
+string got shorter. So before cutting a clause, grep the catalog for the fact it carries and read the product doc for
+that surface: a clause saying where something is made or changed is often the UI's only statement of it, and the
+product doc records that line as the guidance — shortening the tag filter's empty state cut the one place naming a
+project's settings as where tags are added. Keep such a clause, or move it into copy the surface shows anyway (a
+section's description, the line under an empty state's heading); never simply drop it.
 
 Only what the user reads in Octoboard's own UI is translated; text aimed at an agent stays English (see "What follows
 the language" in `docs/product/language.md`).

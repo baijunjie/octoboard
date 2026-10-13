@@ -96,11 +96,12 @@ This is the one entry a console session's own row never carries: archived consol
 not from a row. With no console session at all, the section shows an empty row saying so; the whole row is a button that
 does what the heading's **+** button does (see "Empty rows" below).
 
-With no agent available on the machine at all, the section instead carries a line saying which agents Octoboard
-supports and that one of them has to be on the user's `PATH`, without saying how to install one, and the **+** button
-is disabled, since starting one would only be refused. The line wraps onto as many lines as the sidebar's width needs
-rather than being cut, since it is an instruction to act on. It shows whatever the section lists — a console session
-left interrupted from before an agent went off the `PATH` still has its row — and it takes the place of the "no
+With no agent available on the machine at all, the section instead carries an empty row saying that no agent was found
+on the user's `PATH`, and the **+** button is disabled, since starting one would only be refused. The row says that much
+and no more: the fuller wording — which agents Octoboard supports, and that one of them has to be on the user's `PATH` —
+is kept for the places with room for it, the new-session dialog and the welcome screen (see "Opening a session" in
+`docs/product/sessions.md` and `docs/product/welcome-screen.md`). The row shows whatever the section lists — a console
+session left interrupted from before an agent went off the `PATH` still has its row — and it takes the place of the "no
 console session" row.
 
 Below it, a **Projects** heading and the console's projects (see "Order of projects and sessions" below). With no
@@ -111,16 +112,17 @@ nothing in it" in `docs/product/sessions.md`).
 
 ### Filtering the project list
 
-While the console has projects, a filter button, **Filter projects**, sits among the controls at the end of the
-Projects heading (see "Expanding and collapsing the listed projects" below for the order they run in). It opens
-a small popover with two controls. A search field filters the project list as it is typed: a project stays listed when
-its name contains the keyword, ignoring case and the keyword's surrounding spaces. Below it, the tags in use (see "Tags"
-in `docs/product/consoles-and-projects.md`) are shown as toggles, and picking one narrows the list to the projects
-carrying it; with several picked, a project must carry all of them, and it must match the keyword too. With no project
-carrying a tag yet, a line in place of the toggles says tags are added in a project's settings. `Escape`, from
-anywhere in the popover, and Enter in the search field close it and keep the filter; on a tag, Enter or Space picks or
-drops that tag and the popover stays open. A picked tag also shows a check mark, so it is not told apart by colour
-alone. Opening and closing it with the mouse leaves keyboard focus where it was.
+While the console has projects, a filter button, **Filter projects**, sits among the controls at the end of the Projects
+heading (see "Expanding and collapsing the listed projects" below for the order they run in). It opens a small popover
+with two controls. A search field filters the project list as it is typed: a project stays listed when its name contains
+the keyword, ignoring case and the keyword's surrounding spaces. Below it, the tags in use (see "Tags" in
+`docs/product/consoles-and-projects.md`) are shown as toggles, and picking one narrows the list to the projects carrying
+it; with several picked, a project must carry all of them, and it must match the keyword too. With no project carrying a
+tag yet, a full empty panel in place of the toggles says there are no tags yet, with a line saying tags are added in a
+project's settings (see "The full panel" in `docs/product/empty-states.md`). `Escape`, from anywhere in the popover, and
+Enter in the search field close it and keep the filter; on a tag, Enter or Space picks or drops that tag and the popover
+stays open. A picked tag also shows a check mark, so it is not told apart by colour alone. Opening and closing it with
+the mouse leaves keyboard focus where it was.
 
 - While a filter is in force, a row under the Projects heading, across the sidebar's whole width, shows it; with no
   filter the row is not there. The keyword, if there is one, comes first, as a tag in a neutral grey which otherwise
@@ -138,7 +140,7 @@ alone. Opening and closing it with the mouse leaves keyboard focus where it was.
   carries any more disappears from the choices, and from the filter if it was picked, without emptying the list. The
   pick is only hidden, not forgotten: if a project carries that tag again, it filters again.
 - The filtered list keeps the order and the dimming of "Order of projects and sessions" below.
-- With no project matching, a single line says so; the Clear filter button under the heading clears the filter.
+- With no project matching, a single empty row says so; the Clear filter button under the heading clears the filter.
 - Each console has its own filter: switching to another console shows that console's own, and switching back, or
   entering and leaving focus mode, keeps it. Filters are not stored, so reloading the window shows every list
   unfiltered.
@@ -176,19 +178,16 @@ followed by this button.
 
 ## Empty rows
 
-A list with nothing to show puts a single **empty row** in its rows' place: a glyph and a short message on one line, in
-the padding of the rows it stands among. Where there is one thing to do about the list being empty the whole row is a
-button, and a press anywhere in it does that one thing — the console sessions section's row, the Projects section's and
-an expanded project's, each described where its list is. Such a row:
+A list in the sidebar with nothing to show puts a single **empty row** in its rows' place — the console sessions
+section's, the Projects section's and an expanded project's, each described where its list is — in the shape of "The
+compact row" in `docs/product/empty-states.md`: where there is one thing to do about the list being empty the whole row
+is the button that does it, and the row takes its accessible name and its tooltip from that action.
 
-- is **named by its visible message followed by its action** for assistive technology — "No projects yet", then "Add
-  project" — so that saying the words on screen reaches it by voice;
-- carries the action's name alone as its **tooltip**, on mouse hover and on keyboard focus.
-
-The rows with nothing to do about them carry no tooltip: the one saying no project matches the filter (see "Filtering
-the project list" above) and the one saying no agent is installed (see "The console sessions section and the project
-list" above). A focus mode's own empty states are full panels with a separate button rather than rows (see
-`docs/product/focus-mode.md`), as is the terminal's offer of a project (see "A console with nothing in it" in
+The rows with nothing to do about them are not buttons and carry no tooltip: the one saying no project matches the
+filter (see "Filtering the project list" above) and the one saying no agent was found on the user's `PATH` (see "The
+console sessions section and the project list" above). A focus mode's own empty states are full panels with a separate
+button rather than rows (see "What both views show" in `docs/product/focus-mode.md` and "The full panel" in
+`docs/product/empty-states.md`), as is the terminal's offer of a project (see "A console with nothing in it" in
 `docs/product/sessions.md`).
 
 ## Project rows
@@ -403,10 +402,10 @@ open. A session that appears any other way, such as one the console session star
 daemon opened, is listed unselected and is put on screen by the user selecting it.
 
 When the selected session stops existing — deleted from the archive, by this client or another, for instance — nothing
-is selected in its place, and the terminal's area shows its empty state: the line asking for a session to be selected,
-or the offer of a project where the console is left with nothing in it (see "The terminal" in
-`docs/product/sessions.md`). The one exception is the session going with the last console: there is then no terminal at
-all, and the content panel shows the welcome screen (see `docs/product/welcome-screen.md`).
+is selected in its place, and the terminal's area shows its empty state: the panel saying no session is selected, or the
+offer of a project where the console is left with nothing in it (see "The terminal" in `docs/product/sessions.md`). The
+one exception is the session going with the last console: there is then no terminal at all, and the content panel shows
+the welcome screen (see `docs/product/welcome-screen.md`).
 
 ## How the sidebar's view changes
 

@@ -2,7 +2,7 @@ import { SearchX } from "lucide-react";
 import React, { useMemo } from "react";
 import { Collection, GridList, GridListHeader, GridListItem, GridListSection, ListLayout, Virtualizer, type Key } from "react-aria-components";
 
-import { EmptyPanel } from "../components/EmptyPanel";
+import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useScrollFade } from "../components/useScrollFade";
 import { useCurrentLanguage, useT } from "../i18n/react";
@@ -62,10 +62,10 @@ export function ChangeList({
   const noMatch = shown.length === 0 && changeView.filter.trim() !== "" ? t("git.filter.noMatch") : undefined;
   return (
     <>
-      {/* The visible line has no role of its own, so the announcer says it once. */}
+      {/* The visible heading is not a status, so the announcer says it once. */}
       <StatusAnnouncer text={noMatch} />
       {noMatch ? (
-        <EmptyPanel icon={SearchX} message={noMatch} />
+        <CenteredEmptyPanel icon={SearchX} message={noMatch} />
       ) : changeView.layout === "tree" ? (
         <ChangeTree
           items={shown}

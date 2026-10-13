@@ -141,7 +141,8 @@ export function ArchiveView({
           </Button>
         </TitledControl>
       </header>
-      <ScrollShadow size={24} className="min-h-0 flex-1">
+      {/* Only the empty state is centred; the list of rows starts at the top. */}
+      <ScrollShadow size={24} className={`min-h-0 flex-1${archived.length === 0 ? " flex flex-col justify-center-safe" : ""}`}>
         {archived.length === 0 ? (
           <EmptyPanel icon={Archive} message={t("sidebar.archive.empty")} />
         ) : (

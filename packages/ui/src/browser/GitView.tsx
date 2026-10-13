@@ -2,7 +2,7 @@ import { Label, ListBox, Select, Tabs } from "@heroui/react";
 import { FileCheck, FolderTree, FunnelX, GitBranch, GitFork, List, ListFilter, TriangleAlert } from "lucide-react";
 import React, { useRef } from "react";
 
-import { EmptyPanel } from "../components/EmptyPanel";
+import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { IconToggle } from "../components/IconToggle";
 import { PathText } from "../components/PathText";
@@ -111,9 +111,15 @@ function GitContent({
   const git = source.source.git;
   if (!git) {
     return source.source.git_error !== null ? (
-      <EmptyPanel icon={TriangleAlert} message={t("git.unavailable", { reason: isolate(source.source.git_error) })} />
+      // Git's own message is the line under the heading, and keeps its own direction there: it is
+      // rendered as children, so `<bdi>` rather than `isolate`.
+      <CenteredEmptyPanel
+        icon={TriangleAlert}
+        message={t("git.unavailable")}
+        description={<bdi dir="auto">{source.source.git_error}</bdi>}
+      />
     ) : (
-      <EmptyPanel icon={GitFork} message={t("git.notARepository")} />
+      <CenteredEmptyPanel icon={GitFork} message={t("git.notARepository")} />
     );
   }
   return (
@@ -198,13 +204,13 @@ function WorktreeChanges({
       <div className="flex min-h-0 flex-1 flex-col" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
         {shown && !gone && !shown.scope_present && <p className="shrink-0 px-3 py-2 text-xs text-muted">{t("git.worktree.scopeMissing")}</p>}
         {gone ? (
-          <EmptyPanel icon={TriangleAlert} message={t("git.worktree.gone")} />
+          <CenteredEmptyPanel icon={TriangleAlert} message={t("git.worktree.gone")} description={t("git.worktree.gone.description")} />
         ) : list.state === "loading" ? (
           <GitLoading label={t("git.loading")} />
         ) : list.state === "error" ? (
           <GitFailure title={t("git.error.list")} message={list.message} onRetry={onRetry} />
         ) : list.items.length === 0 && list.complete ? (
-          <EmptyPanel icon={FileCheck} message={t("git.empty")} />
+          <CenteredEmptyPanel icon={FileCheck} message={t("git.empty")} />
         ) : (
           <>
             <ChangeList items={list.items} selected={selectedChange} label={t("git.list.label")} onOpen={onOpen} listRef={listRef} changeView={changeView} />

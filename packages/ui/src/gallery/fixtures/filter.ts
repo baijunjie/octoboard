@@ -50,6 +50,14 @@ export const filterScenarios: Scenario[] = [
     ],
   },
   {
+    id: "filter-no-match",
+    group: GROUP,
+    title: "A filter no project matches",
+    description: "The Projects section says no project matches, beside the keyword that is still in force.",
+    state,
+    steps: [openFilter, (ui) => ui.type("no-such-project"), (ui) => ui.key("Escape")],
+  },
+  {
     id: "filter-collapse-all",
     group: GROUP,
     title: "Collapse all, with a filter in force",
@@ -70,7 +78,7 @@ export const filterScenarios: Scenario[] = [
     id: "filter-no-tags",
     group: GROUP,
     title: "No tags in use",
-    description: "No project carries a tag, so the filter's tag picker says where tags come from.",
+    description: "No project carries a tag, so the tag picker is the empty panel saying where tags are added; the popover is much taller than with tags in it.",
     state: snapshotState({
       consoles: [console_],
       projects: [projectOf("p-1", console_.id, "Website"), projectOf("p-2", console_.id, "Search API")],

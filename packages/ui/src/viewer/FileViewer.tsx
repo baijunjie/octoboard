@@ -9,7 +9,7 @@ import { TitledControl } from "../components/TitledControl";
 import { Dialog, useRefocusIfLost } from "../dialogs/Dialog";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
-import type { PlainMessageKey, Translate } from "../i18n/catalog";
+import type { PlainMessageKey } from "../i18n/catalog";
 import { useOctoboardTheme } from "../theme";
 import { displayWirePath, wireBaseName } from "../wirePath";
 import { arrowNavigation } from "./arrowKeys";
@@ -37,6 +37,7 @@ import { StatusChip } from "./StatusChip";
 import type { StatusKey } from "./statusMarks";
 import {
   Disconnected,
+  DISCONNECTED,
   Failure,
   FIRST_ANNOUNCEMENT_DELAY_MS,
   Loading,
@@ -326,7 +327,12 @@ function isWaiting(content: ViewerContent): boolean {
 function ViewerContentView(props: React.ComponentProps<typeof ViewerContentBody>): React.ReactElement {
   const t = useT();
   const { content } = props.subject;
-  const announcement = isWaiting(content) ? t("viewer.loading") : content.state === "disconnected" ? disconnectedMessage(t, content.what) : undefined;
+  const announcement =
+    isWaiting(content)
+      ? t("viewer.loading")
+      : content.state === "disconnected"
+        ? t(DISCONNECTED[content.what].sentence)
+        : undefined;
   // Outside the body, which swaps its whole tree as the content arrives, so the region is there
   // before its text is.
   return (
@@ -357,7 +363,7 @@ function ViewerContentBody({
     case "error":
       return <Failure title={t("viewer.error")} message={content.message} />;
     case "disconnected":
-      return <Disconnected message={disconnectedMessage(t, content.what)} />;
+      return <Disconnected what={content.what} />;
     case "file":
       return <BodyView resetKey={key} name={name} body={content.body} theme={theme} asDocument />;
     case "conflict":
@@ -385,10 +391,6 @@ function ViewerContentBody({
         />
       );
   }
-}
-
-function disconnectedMessage(t: Translate, what: "file" | "change"): string {
-  return t(what === "file" ? "viewer.disconnected.file" : "viewer.disconnected.change");
 }
 
 /** One file body, whichever kind it is. A Markdown file's text is offered as a document when
@@ -593,8 +595,10 @@ function UnchangedView({
       current = false;
     };
   }, [resetKey, loadBodies]);
-  const said = t(kind === "identical" ? "viewer.change.identical" : "viewer.change.renamedUnchanged");
   if (!loadBodies) return <Unchanged kind={kind} />;
+  // The body is shown all the same from here on, so the state is a notice over it rather than a
+  // stand-in panel: it is said in one sentence, not as a heading with a line under it.
+  const said = t(kind === "identical" ? "viewer.change.identical.sentence" : "viewer.change.renamedUnchanged.sentence");
   // Keyed on the subject alone, so a re-read of the same one keeps what is on screen until it answers.
   const done = read?.key === resetKey ? read : undefined;
   const reason =

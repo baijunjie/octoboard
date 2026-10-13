@@ -66,12 +66,32 @@ export const archiveScenarios: Scenario[] = [
     id: "archive-many",
     group: GROUP,
     title: "A project's archive, many entries",
-    description: "Seventy archived sessions, listed thirty at a time as the end scrolls into view. The empty view is not reachable: the menu only offers View all when something is archived.",
+    description: "Seventy archived sessions, listed thirty at a time as the end scrolls into view.",
     state,
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
       (ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: archived.length })),
+    ],
+  },
+  {
+    id: "archive-emptied",
+    group: GROUP,
+    title: "A project's archive, emptied while open",
+    description:
+      "Delete all, confirmed, removes the last archived sessions with the view open: the list gives way to the empty view and Delete all leaves the header.",
+    state: snapshotState({
+      consoles: [console_],
+      projects: [project],
+      sessions: [sessionOf("s-live", console_.id, project.id, "Live session", "idle"), ...archived.slice(0, 2)],
+    }),
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
+      (ui) => ui.press(ui.t("sidebar.project.archive")),
+      (ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: 2 })),
+      (ui) => ui.press(ui.t("archive.deleteAll")),
+      (ui) => ui.confirm(),
+      (ui) => ui.wait(400),
     ],
   },
   {

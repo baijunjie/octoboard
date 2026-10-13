@@ -28,6 +28,9 @@ function matches(matcher: Matcher, name: string): boolean {
   return typeof matcher === "function" ? matcher(name) : matcher.test(name);
 }
 
+/** Whether a control can be pressed. */
+const isEnabled = (element: Element): boolean => !element.hasAttribute("disabled") && element.getAttribute("aria-disabled") !== "true";
+
 const POLL_MS = 50;
 const TIMEOUT_MS = 5000;
 
@@ -48,6 +51,11 @@ export interface Ui {
    * twice: a tag already picked in the filter is on the sidebar's heading row (earlier in the DOM)
    * and in the filter picker, so pressing it again to unpick it would hit the sidebar row. */
   press: (matcher: Matcher) => Promise<void>;
+  /** Presses the button that submits the open dialog, waiting for it to appear and be enabled: for a
+   * dialog whose confirming button is named as a control behind it, which `press` would find first.
+   * A disabled button (`isDisabled`, such as Confirm before a `typeToConfirm` word is typed) is
+   * waited out by its native `disabled` attribute, which HeroUI sets beside `data-disabled`. */
+  confirm: () => Promise<void>;
   /** Presses `key` on the focused control, for what a user closes or confirms with the keyboard. */
   key: (key: string) => Promise<void>;
   /** Focuses the text field labelled `label`, waiting for it to appear, so `type` has one to fill. */
@@ -66,10 +74,26 @@ export interface Ui {
 export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui {
   const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+  /** Polls for what `look` finds, up to the timeout, so a step can name something a press or a
+   * render has not yet brought into the page. */
+  const waitFor = async <T>(look: () => T | undefined, missing: string): Promise<T> => {
+    for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {
+      const found = look();
+      if (found !== undefined) return found;
+      await wait(POLL_MS);
+    }
+    throw new Error(missing);
+  };
+
+  /** Clicks what `look` finds once it is there. */
+  const clickWhenFound = async (look: () => HTMLElement | undefined, missing: string): Promise<void> => {
+    (await waitFor(look, missing)).click();
+    // The press's own effects (a menu opening, a dialog mounting) land on the next frames.
+    await wait(150);
+  };
+
   const find = (matcher: Matcher): HTMLElement | undefined =>
-    Array.from(doc.querySelectorAll<HTMLElement>(PRESSABLE)).find(
-      (element) => !element.hasAttribute("disabled") && element.getAttribute("aria-disabled") !== "true" && matches(matcher, nameOf(element)),
-    );
+    Array.from(doc.querySelectorAll<HTMLElement>(PRESSABLE)).find((element) => isEnabled(element) && matches(matcher, nameOf(element)));
 
   const t: Ui["t"] = (key, ...args) => format(language, key, (args as [Record<string, string | number>?])[0]);
 
@@ -94,42 +118,36 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       await wait(300);
     },
     async type(text) {
-      let field = doc.activeElement;
-      for (let waited = 0; !(field instanceof HTMLInputElement) && waited < TIMEOUT_MS; waited += POLL_MS) {
-        await wait(POLL_MS);
-        field = doc.activeElement;
-      }
-      if (!(field instanceof HTMLInputElement)) throw new Error("No text field took focus to type into");
+      const field = await waitFor(
+        () => (doc.activeElement instanceof HTMLInputElement ? doc.activeElement : undefined),
+        "No text field took focus to type into",
+      );
       // React tracks the value through the element's own setter, so it is set through the prototype's.
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, text);
       field.dispatchEvent(new Event("input", { bubbles: true }));
       await wait(150);
     },
     async focus(label) {
-      for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {
-        const field = Array.from(doc.querySelectorAll("input")).find(
-          (input) => withoutIsolates(input.labels?.[0]?.textContent ?? input.getAttribute("aria-label") ?? "") === label,
-        );
-        if (field) {
-          field.focus();
-          return;
-        }
-        await wait(POLL_MS);
-      }
-      throw new Error(`No text field labelled ${label}`);
+      const field = await waitFor(
+        () =>
+          Array.from(doc.querySelectorAll("input")).find(
+            (input) => withoutIsolates(input.labels?.[0]?.textContent ?? input.getAttribute("aria-label") ?? "") === label,
+          ),
+        `No text field labelled ${label}`,
+      );
+      field.focus();
     },
     async press(matcher) {
-      for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {
-        const element = find(matcher);
-        if (element) {
-          element.click();
-          // The press's own effects (a menu opening, a dialog mounting) land on the next frames.
-          await wait(150);
-          return;
-        }
-        await wait(POLL_MS);
-      }
-      throw new Error(`Nothing to press matching ${String(matcher)}`);
+      await clickWhenFound(() => find(matcher), `Nothing to press matching ${String(matcher)}`);
+    },
+    async confirm() {
+      await clickWhenFound(
+        () =>
+          Array.from(
+            doc.querySelectorAll<HTMLElement>('[role="dialog"] button[type="submit"], [role="alertdialog"] button[type="submit"]'),
+          ).find(isEnabled),
+        "No dialog has a button to confirm it with",
+      );
     },
   };
 }

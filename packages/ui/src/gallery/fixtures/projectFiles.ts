@@ -130,6 +130,14 @@ export const projectFilesScenarios: Scenario[] = [
     steps: [...openFiles, (ui) => ui.press("empty"), (ui) => ui.press("locked"), (ui) => ui.press("many"), (ui) => ui.wait(300)],
   },
   {
+    id: "files-empty",
+    group: GROUP,
+    title: "A project folder with nothing in it",
+    state,
+    files: { "": { dir: true } },
+    steps: openFiles,
+  },
+  {
     id: "files-root-error",
     group: GROUP,
     title: "A project folder that cannot be read",

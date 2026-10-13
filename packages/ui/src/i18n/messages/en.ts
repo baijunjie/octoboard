@@ -26,10 +26,12 @@ export const en = {
   "common.removeTag": "Remove tag",
   "common.save": "Save",
 
-  // Shared across the session dialog, the console dialog's agent rows and the sidebar's empty
-  // states — anywhere availability (`AgentAvailability`) is shown or acted on.
+  // Shared across the session dialog, the welcome screen and the console dialog's agent rows —
+  // anywhere availability (`AgentAvailability`) is shown or acted on.
   "agents.installPrompt":
     "{appName} supports Claude Code, Codex and Grok Build. Make sure one of them is on your PATH to open a session.",
+  // The sidebar's row for the same state, which has room for a title and nothing else.
+  "agents.noneFound": "No agent found on PATH",
   "agents.notInstalled": "{agent} (not installed)",
 
   "startup.daemonFailed": "The daemon failed to start: {error}",
@@ -258,7 +260,8 @@ export const en = {
   "sidebar.filter.clear": "Clear filter",
   "sidebar.filter.tags": "Tags",
   "sidebar.filter.picked": "Selected tags",
-  "sidebar.filter.noTags": "No project has a tag yet. Add tags in a project's settings.",
+  "sidebar.filter.noTags": "No tags yet",
+  "sidebar.filter.noTags.description": "Add tags in a project's settings.",
   "sidebar.filter.removeTag": "Remove tag {tag}",
   "sidebar.filter.keyword": "Filter keyword",
   "sidebar.filter.removeKeyword": "Remove keyword {keyword}",
@@ -310,7 +313,7 @@ export const en = {
   "sidebar.focus.exit": "Leave focus mode",
   "sidebar.focus.newSession": "New session",
   "sidebar.focus.newSessionIn": "New session in {name}",
-  "sidebar.focus.noBoundSessions": "No sessions are bound to this console session",
+  "sidebar.focus.noBoundSessions": "No bound sessions",
   // "Under" rather than "bound to": the count covers a lead session's own sessions too, and those
   // are bound to the lead session, not to the console session above it.
   "sidebar.focus.enterConsoleSession": {
@@ -366,7 +369,8 @@ export const en = {
   "welcome.description": "A console holds the projects you work in and the sessions you run in them.",
   "welcome.newConsole": "New console",
 
-  "terminal.empty": "Select a session to view its terminal.",
+  "terminal.empty": "No session selected",
+  "terminal.empty.description": "Select a session to view its terminal.",
   // Under `sidebar.noProjects` as the heading: what the terminal's area says in place of asking
   // for a session to be selected, while the console has neither a project nor a session.
   "terminal.noProjects.description": "A project is a directory you work in and run sessions in.",
@@ -407,16 +411,19 @@ export const en = {
   "git.error.list": "Could not list the changes in this worktree",
   "git.error.changing": "The changes kept moving while they were being listed. Refresh to try again.",
   "git.error.changeChanging": "This change kept moving while it was being read. It is read again at the next refresh.",
-  "git.unavailable": "Git review is unavailable: {reason}",
-  "git.notARepository": "This project is not in a Git repository.",
-  "git.empty": "No uncommitted changes in this worktree.",
+  "git.unavailable": "Git review unavailable",
+  "git.notARepository": "No Git repository",
+  // `git.empty` has no description: the worktree selector above already names the worktree, so one
+  // would only repeat the title.
+  "git.empty": "No uncommitted changes",
   "git.partial": "Not every change is shown.",
   "git.list.label": "Uncommitted changes",
   "git.worktree.label": "Worktree",
   "git.worktree.own": "{name} (project folder)",
   "git.worktree.detached": "Detached at {commit}",
   "git.worktree.unborn": "No commits yet",
-  "git.worktree.gone": "This worktree is no longer available. Choose another one.",
+  "git.worktree.gone": "Worktree unavailable",
+  "git.worktree.gone.description": "Choose another worktree.",
   "git.worktree.goneName": "Unavailable worktree",
   "git.worktree.scopeMissing": "The project's folder is not in this worktree.",
   "git.group.staged": "Staged",
@@ -465,14 +472,16 @@ export const en = {
   "git.compare.branchGone": "{branch} (no longer exists)",
   "git.compare.branchOrigin": "Created by session {title}",
   "git.compare.swap": "Swap branches",
-  "git.compare.prompt": "Choose a branch on each side to compare them.",
+  "git.compare.prompt": "Two branches needed",
+  "git.compare.prompt.description": "Choose a branch on each side to compare them.",
   "git.compare.loading": "Comparing branches…",
-  "git.compare.noBranches": "This repository has no branches yet.",
+  "git.compare.noBranches": "No branches yet",
   "git.compare.branchesError": "The branches could not be listed: {message}",
   "git.compare.branchesFailed": "Could not list this repository's branches",
   "git.compare.error": "Could not compare these branches",
-  "git.compare.same": "Both branches are at the same commit, so there are no differences.",
-  "git.compare.empty": "No differences in this project's folder between these branches.",
+  "git.compare.noDifferences": "No differences",
+  "git.compare.same.description": "Both branches are at the same commit.",
+  "git.compare.empty.description": "Nothing in this project's folder differs between these branches.",
   "git.compare.list.label": "Changes between branches",
   "git.compare.commits": "Changes from commit {from} to commit {to}",
   "git.compare.source": "{from} at {fromCommit} to {to} at {toCommit}",
@@ -494,8 +503,17 @@ export const en = {
   // The read-only file viewer (`src/viewer/`).
   "viewer.loading": "Loading…",
   "viewer.error": "Could not open this file",
-  "viewer.disconnected.file": "The connection to the daemon was lost. This file is read again when the connection is back.",
-  "viewer.disconnected.change": "The connection to the daemon was lost. This change is read again when the connection is back.",
+  "viewer.disconnected": "Daemon connection lost",
+  "viewer.disconnected.file.description": "This file is read again when the connection is back.",
+  "viewer.disconnected.change.description": "This change is read again when the connection is back.",
+  // A `.sentence` is the same state said in one breath, for where it is not a stand-in panel: a
+  // notice above a body that is shown anyway, or a live region speaking for a panel hidden from
+  // screen readers. It is a message of its own rather than the heading and the line under it joined
+  // in code, since the two run together differently from language to language.
+  "viewer.disconnected.file.sentence":
+    "The connection to the daemon was lost. This file is read again when the connection is back.",
+  "viewer.disconnected.change.sentence":
+    "The connection to the daemon was lost. This change is read again when the connection is back.",
   "viewer.previous": "Previous file",
   "viewer.next": "Next file",
   "viewer.contents": "Contents of {name}",
@@ -533,8 +551,8 @@ export const en = {
   "viewer.plain.large": "Shown without syntax highlighting because the file is large.",
   "viewer.plain.failed": "Shown without syntax highlighting because this file's grammar could not be loaded.",
   "viewer.plain.unrenderable": "Shown without syntax highlighting because the code could not be drawn.",
-  "viewer.binary": "This file cannot be displayed.",
-  "viewer.image.failed": "This image cannot be displayed.",
+  "viewer.binary": "This file cannot be displayed",
+  "viewer.image.failed": "This image cannot be displayed",
   "viewer.image.asText": "This image cannot be displayed, so its text is shown instead.",
   "viewer.change.added": "Added",
   "viewer.change.untracked": "Untracked",
@@ -550,20 +568,27 @@ export const en = {
   "viewer.change.after": "After",
   "viewer.change.absent": "No file on this side.",
   "viewer.change.noContent": "Nothing to show for this side.",
-  "viewer.change.binary": "This change cannot be shown as a diff because the file is binary.",
+  "viewer.change.binary": "No diff for a binary file",
   "viewer.change.contentFailed": "Could not read this file's content. {reason}",
   "viewer.change.contentUnavailable": "The whole file is not to be had here, so its content is not shown.",
   "viewer.change.contentChanged": "This change has moved on since it was read, so its content cannot be shown.",
-  "viewer.change.unreadable": "This change has no diff to show.",
+  "viewer.change.unreadable": "No diff to show",
   "viewer.change.patchLarge": "Shown as a plain patch because the change is large.",
   "viewer.change.patchFailed": "Shown as a plain patch because the diff could not be rendered.",
   "viewer.change.noNewlineOld": "The old version has no newline at its end.",
   "viewer.change.noNewlineNew": "The new version has no newline at its end.",
   "viewer.change.noNewlineBoth": "Neither version has a newline at its end.",
-  "viewer.change.identical": "No differences: both sides now hold the same content.",
-  "viewer.change.renamedUnchanged": "Renamed with no changes to its content.",
-  "viewer.change.symlink": "This is a symbolic link, so it has no content to show here.",
-  "viewer.change.submodule": "This is a repository of its own, so its content is not shown here.",
+  "viewer.change.identical": "No differences",
+  "viewer.change.identical.description": "Both sides now hold the same content.",
+  "viewer.change.identical.sentence": "No differences: both sides now hold the same content.",
+  // `viewer.change.renamedUnchanged` has no description: the rename is the whole state, so one
+  // would only repeat the title.
+  "viewer.change.renamedUnchanged": "Renamed without changes",
+  "viewer.change.renamedUnchanged.sentence": "Renamed without changes to its content.",
+  "viewer.change.symlink": "Symbolic link",
+  "viewer.change.symlink.description": "A symbolic link has no content to show here.",
+  "viewer.change.submodule": "Separate repository",
+  "viewer.change.submodule.description": "The content of a separate repository is not shown here.",
 
   "dialog.nameRequired": "Name is required.",
   "dialog.chooseDirectory": "Choose a directory",
@@ -736,8 +761,8 @@ export const en = {
   "settings.git.autoSync.description":
     "Fast-forwards a project's branch when it is behind its upstream and can be. It never pushes, and it leaves a branch that has commits of its own alone. The remote is checked every few minutes whichever way this is set, so the branch always shows how far ahead or behind it is.",
   "settings.trusted.description":
-    "Under these folders, {appName} presses every agent's trust confirmation without asking, for every project, including projects added later. Each agent then records the trust in its own configuration and applies the project's own permission rules and hooks, so trust a folder only if you trust everything that ends up inside it.",
-  "settings.trusted.empty": "No folders are trusted. Trust a folder from a session's trust dialog.",
+    "Under these folders, {appName} presses every agent's trust confirmation without asking, for every project, including projects added later. Each agent then records the trust in its own configuration and applies the project's own permission rules and hooks. A folder is trusted from a session's trust dialog. Trust a folder only if you trust everything that ends up inside it.",
+  "settings.trusted.empty": "No trusted folders yet",
   "settings.trusted.rowDescription":
     "Every agent's trust confirmation is pressed without asking for projects under this folder.",
   "settings.trusted.removeTooltip":

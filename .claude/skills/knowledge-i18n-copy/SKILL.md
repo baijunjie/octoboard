@@ -466,3 +466,8 @@ Title Case words per language:
   menu's items follow Apple's Title Case (Hide Others, Select All). (`packages/ui/src/i18n/messages/en.ts`)
 - **en contractions**: the en catalog uses no contractions — could not, is not, does not — overriding the default
   register above; keep new strings consistent with it. (`packages/ui/src/i18n/messages/en.ts`)
+- **Empty-state copy**: an empty state's title carries no punctuation at all, a comma inside it included, which is
+  stricter than the "Empty-state titles" rule above; what the title cannot hold goes in the line under it, and a
+  state said in one breath somewhere else — a notice over content shown anyway, a live region speaking for a panel
+  hidden from screen readers — is a `.sentence` message of its own rather than the two joined in code. (the "An empty
+  state is a glyph, a heading, and what fills it" section of `docs/ui-accessibility.md`)

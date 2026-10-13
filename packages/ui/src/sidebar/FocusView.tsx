@@ -65,16 +65,20 @@ function FocusHeader({
   );
 }
 
-/** What a focus view's header names, under the console's name. */
+/** What a focus view's header names, under the console's name. The name is the view's own heading,
+ * so what the view holds reads as sections of it: the sections below are a level under it, and the
+ * project groups inside those a level under them again. */
 function FocusTitle({ consoleName, title }: { consoleName: string; title: string }): React.ReactElement {
   return (
     <>
       <div className="truncate text-xs text-muted" dir="auto">
         {consoleName}
       </div>
-      <RowLabel title={title} className="block min-w-0">
-        <span className="text-sm font-semibold">{title}</span>
-      </RowLabel>
+      <h2 className="min-w-0">
+        <RowLabel title={title} className="block min-w-0">
+          <span className="text-sm font-semibold">{title}</span>
+        </RowLabel>
+      </h2>
     </>
   );
 }
@@ -140,6 +144,7 @@ export function ProjectFocusView({
         {live.length === 0 ? (
           <EmptyPanel
             icon={MessageSquarePlus}
+            headingLevel={3}
             message={t("sidebar.noSessions")}
             action={{ label: t("sidebar.project.openSession"), icon: Plus, onPress: openSession }}
           />
@@ -236,11 +241,12 @@ export function ConsoleSessionFocusView({
           // The header's "+" is disabled with no project to open a session in, so say why here.
           <EmptyPanel
             icon={FolderOpen}
+            headingLevel={3}
             message={t("sidebar.noProjects")}
             action={{ label: t("sidebar.console.addProject"), icon: FolderPlus, onPress: () => handlers.onOpenDialog({ kind: "new-project", console: parentConsole }) }}
           />
         ) : groups.length === 0 ? (
-          <EmptyPanel icon={MessageSquarePlus} message={t("sidebar.focus.noBoundSessions")} />
+          <EmptyPanel icon={MessageSquarePlus} headingLevel={3} message={t("sidebar.focus.noBoundSessions")} />
         ) : (
           <div ref={groupsRef} className="relative flex flex-col gap-2">
             {groups.map(({ project, sessions: boundHere }) => (

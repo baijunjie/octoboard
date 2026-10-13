@@ -26,6 +26,7 @@ import {
   typeChange,
   unchanged,
   untracked,
+  untrackedNotFile,
 } from "./changeFixtures";
 import { IMAGES } from "./viewerImages";
 
@@ -200,9 +201,21 @@ const MAIN_CHANGES: FixtureChange[] = [
   untracked("src/log.ts", live("v5"), "export const logRequests = () => {};\n"),
   // Two directories that each hold only the next: the tree shows them as one row, `tools/release`.
   untracked("tools/release/notes.md", live("v7"), "# Release notes\n"),
+  // Neither has a body to read nor a patch to make: a link's target and a nested repository's
+  // content are not Git's to show here.
+  untrackedNotFile("src/config.local.ts", "symlink", live("v8")),
+  untrackedNotFile("search-client", "submodule", live("v9")),
 ];
 
 const SIDE_CHANGES: FixtureChange[] = [textChange("unstaged", "README.md", index("aa11bb2"), live("v6"), README_EDIT)];
+
+/** A repository `git init` just made: no commit, so no branch and nothing to compare, and nothing
+ * changed in its worktree. */
+const FRESH_GIT: FixtureGit = {
+  worktrees: [{ id: "wt-fresh", root: "/Users/dev/code/search-api", main: true, head: null, branch: null, scope_present: true }],
+  changes: { "wt-fresh": [] },
+  branches: [],
+};
 
 const MAIN_TIP = "4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39";
 const FEATURE_TIP = "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807";
@@ -250,7 +263,11 @@ export const SAMPLE_GIT: FixtureGit = {
   worktrees: WORKTREES,
   changes: { "wt-main": MAIN_CHANGES, "wt-side": SIDE_CHANGES, "wt-detached": [] },
   branches: BRANCHES,
-  comparisons: { "main..feature/ranking-experiments": FEATURE_COMPARISON },
+  comparisons: {
+    "main..feature/ranking-experiments": FEATURE_COMPARISON,
+    // Two branches at different commits whose difference lies wholly outside the project's folder.
+    "release/2.4..feature/ranking-experiments": [],
+  },
 };
 
 const { console: console_, web, api, sessions } = SAMPLE;
@@ -399,6 +416,16 @@ export const projectGitScenarios: Scenario[] = [
   { id: "git-image", group: GROUP, title: "An image change", state, steps: openChange(/^logo\.png, modified/) },
   { id: "git-too-large", group: GROUP, title: "A change whose patch is too large", state, steps: openChange(/^fixtures\.bin, modified/) },
   { id: "git-untracked", group: GROUP, title: "An untracked file", state, steps: openChange(/^log\.ts, untracked/) },
+  {
+    id: "git-untracked-symlink",
+    group: GROUP,
+    title: "An untracked symbolic link",
+    description: "Nothing to compare and no content to read: the viewer names what it is and says it has nothing to show.",
+   
+    state,
+    steps: openChange(/^config\.local\.ts, untracked/),
+  },
+  { id: "git-untracked-repository", group: GROUP, title: "An untracked repository of its own", state, steps: openChange(/^search-client, untracked/) },
   { id: "git-conflict", group: GROUP, title: "A file in conflict", state, steps: openChange(/^package\.json, in conflict/) },
   {
     id: "git-worktrees",
@@ -419,6 +446,15 @@ export const projectGitScenarios: Scenario[] = [
         "wt-main": { code: "worktree_unavailable", params: { worktree: "wt-main" }, message: "worktree wt-main is not a worktree of this repository any more" },
       },
     },
+    steps: openGit,
+  },
+  {
+    id: "git-clean",
+    group: GROUP,
+    title: "A worktree with no uncommitted changes",
+   
+    state,
+    git: { ...SAMPLE_GIT, changes: { ...SAMPLE_GIT.changes, "wt-main": [] } },
     steps: openGit,
   },
   { id: "git-not-a-repository", group: GROUP, title: "A project in no repository", state, git: null, steps: openGit },
@@ -527,11 +563,28 @@ export const projectGitScenarios: Scenario[] = [
     steps: [...compare("main", "feature/ranking-experiments"), (ui) => ui.press(/^pipeline\.ts, modified/), (ui) => ui.wait(800)],
   },
   {
+    id: "git-compare-no-branches",
+    group: GROUP,
+    title: "Comparing in a repository with no branches",
+    description: "A repository with no commit yet has no branch to choose, so the Compare view says so instead of asking for two.",
+    state,
+    git: FRESH_GIT,
+    steps: [...openGit, (ui: Ui) => ui.press(ui.t("git.view.compare")), (ui: Ui) => ui.wait(400)],
+  },
+  {
     id: "git-compare-same",
     group: GROUP,
     title: "Two branches at the same commit",
     state,
     steps: compare("main", "release/2.4"),
+  },
+  {
+    id: "git-compare-empty",
+    group: GROUP,
+    title: "Two branches that differ only outside the project's folder",
+    description: "The commits differ, so the view cannot say the branches are the same; it says nothing in this project's folder differs.",
+    state,
+    steps: compare("release/2.4", "feature/ranking-experiments"),
   },
   {
     id: "git-compare-moved",

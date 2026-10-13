@@ -84,11 +84,12 @@ A folder that is not simply listed says so in a row of its own under it:
 - **cut short** — "not every entry is shown" — after the entries read before a limit stopped the listing: at most
   10,000 entries of one folder, or 2 MiB of names, are listed. These are the entries read first, not a chosen subset.
 
-For the project's own directory the same states take the whole pane: a loading line while it is first read, announced
-to assistive technology, a line saying the project folder is empty, a line under the tree when it is cut short, and,
-when it cannot be read at all, an error naming the reason (with the folder shown as its path, `~` standing for the home
-directory) and **Try again** in place of the tree. Try again pressed from the keyboard hands keyboard focus to the
-header's Refresh, which stays while the error and its button go.
+For the project's own directory the same states take the whole pane: a loading line while it is first read, announced to
+assistive technology, an empty panel saying the project folder is empty (see "The full panel" in
+`docs/product/empty-states.md`), a line under the tree when it is cut short, and, when it cannot be read at all, an
+error naming the reason (with the folder shown as its path, `~` standing for the home directory) and **Try again** in
+place of the tree. Try again pressed from the keyboard hands keyboard focus to the header's Refresh, which stays while
+the error and its button go.
 
 ## The selected file
 
@@ -210,8 +211,10 @@ a diff says about its collapsed lines (see "Expanding the collapsed lines" in
 `docs/product/project-pane-git-mode.md`). A notice that arrives with the content it describes is not announced on its
 own; it is read with the rest of the dialog.
 
-**A stand-in** fills the body when there is nothing to draw at all: one centred glyph and one sentence, the glyph
-saying what kind of nothing it is. It is what the viewer shows for
+**A stand-in** fills the body when there is nothing to draw at all: the empty state's own panel, centred in the body — a
+glyph saying what kind of nothing this is, a heading naming it, and, where there is more to say than the heading
+carries, a line under it, which is where a size goes (see "The full panel" in `docs/product/empty-states.md`). It is
+what the viewer shows for
 
 - nothing it can show at all: a body it cannot display, with its size — or, for a change between two such bodies, the
   size before and after — and a change with no diff at all, which take the same glyph;
@@ -220,7 +223,9 @@ saying what kind of nothing it is. It is what the viewer shows for
   neutral notice instead (see "What it shows" in `docs/product/project-pane-git-mode.md`);
 - a side that is not a file: a symbolic link, or a repository of its own;
 - a subject nothing has been read of yet while the connection to the daemon is lost, which is deliberately this same
-  neutral stand-in rather than an error, the read resuming on its own (see "When the open file changes" below).
+  neutral stand-in rather than an error, the read resuming on its own (see "When the open file changes" below). This one
+  stand-in is hidden from assistive technology, which hears the state as one sentence from the viewer itself instead
+  (see "A state another region already announces" in `docs/product/empty-states.md`).
 
 **An error** fills the body when the file or change cannot be opened at all: a red block, in the same red and with the
 same glyph as a failure notice so that neither is louder than the other, headed that it could not be opened, with the

@@ -3,7 +3,7 @@ import { FolderOpen, FolderX, RefreshCw, TriangleAlert } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Key } from "react-aria-components";
 
-import { EmptyPanel } from "../components/EmptyPanel";
+import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { handFocusOff } from "../components/handFocusOff";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { FADE_SIZE } from "../components/useScrollFade";
@@ -194,7 +194,7 @@ export function ProjectBrowser({
           }}
         />
       ) : tree.nodes.length === 0 && root.complete ? (
-        <EmptyPanel icon={FolderX} message={t("browser.empty")} />
+        <CenteredEmptyPanel icon={FolderX} message={t("browser.empty")} />
       ) : (
         <>
           <FileTree

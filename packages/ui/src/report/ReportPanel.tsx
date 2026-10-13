@@ -1,7 +1,8 @@
 import { Button, Chip } from "@heroui/react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
 import { useCurrentLanguage, useT } from "../i18n/react";
@@ -107,8 +108,8 @@ export function ReportPanel({
 
   if (sessionPages.length === 0) {
     return (
-      <AsidePane layout={layout} className="items-center justify-center text-sm text-muted">
-        {t("report.empty")}
+      <AsidePane layout={layout} className="justify-center-safe">
+        <EmptyPanel icon={FileText} message={t("report.empty")} />
       </AsidePane>
     );
   }

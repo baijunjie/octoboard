@@ -235,6 +235,15 @@ export function untracked(path: string, source: ContentSource, content: string):
   return { entry: { group: "untracked", old: { state: "absent" }, new: sideFile(path, source) }, bodies: { new: text(content) } };
 }
 
+/** A symbolic link, or a repository of its own inside the project, that Git neither tracks nor
+ * ignores. Like an untracked file it has nothing to compare with, so the reply carries no patch;
+ * unlike one it carries no body either, the daemon reading no content for a link or a nested
+ * repository, and counts none of its lines. A request for its whole bodies is refused as an untracked
+ * file's is. */
+export function untrackedNotFile(path: string, kind: "symlink" | "submodule", source: ContentSource): FixtureChange {
+  return { entry: { group: "untracked", old: { state: "absent" }, new: { state: "present", path, kind, source } } };
+}
+
 /** A change one side of which lies outside the project's scope: the daemon delivers neither that
  * side nor a patch across the boundary, so the reply carries the in-scope side's body alone. Only a
  * staged or a committed change can have such a side; unstaged, the daemon refuses the read. With no

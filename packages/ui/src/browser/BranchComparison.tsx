@@ -3,7 +3,7 @@ import { ArrowUpDown, GitBranch, GitCompareArrows, GitFork, TriangleAlert } from
 import type React from "react";
 import { ListLayout, Virtualizer } from "react-aria-components";
 
-import { EmptyPanel } from "../components/EmptyPanel";
+import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
 import { useFocusHandoff } from "../components/useFocusHandoff";
@@ -62,9 +62,15 @@ export function BranchComparisonView({
 }): React.ReactElement {
   const t = useT();
   // When what holds focus below the selectors goes — the list replaced by a failure or an empty
-  // state — focus goes to the first selector rather than falling to `<body>`.
-  const handoff = useFocusHandoff(() => selectorsRef.current?.querySelector<HTMLElement>("button")?.focus());
+  // state — focus goes to the first selector that can take it rather than falling to `<body>`;
+  // with nothing chosen in a repository that has no branches every control in the strip is
+  // disabled, and focus leaves for the top bar as it does from any pane with nothing to hold it.
+  const handoff = useFocusHandoff(() => selectorsRef.current?.querySelector<HTMLElement>("button:not([disabled])")?.focus());
   const listed = branches.state === "loaded" ? branches.branches : [];
+  // Nothing chosen in a repository that has no branches: the selectors have nothing to offer, and
+  // the panel below says so. Keyed on the same state as that panel, so a comparison already made
+  // keeps its selectors even if the branches it names go.
+  const noBranches = comparison.state === "idle" && branches.state === "loaded" && listed.length === 0;
   const known = (name: string | undefined) => name === undefined || branches.state !== "loaded" || !branches.complete || listed.some((b) => b.name === name);
   // A list that failed to refresh stays, and says why; one that never came says so in its place.
   const branchesError = branches.state === "error" ? branches.message : branches.state === "loaded" ? branches.error : undefined;
@@ -74,8 +80,22 @@ export function BranchComparisonView({
         {/* One grid for both selectors, each a subgrid of it, so the label column is as wide as
             the widest label in the current language. */}
         <div className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
-          <BranchSelect label={t("git.compare.from")} branches={listed} value={left} gone={!known(left)} onChange={(name) => onBranchesChange(name, right)} />
-          <BranchSelect label={t("git.compare.to")} branches={listed} value={right} gone={!known(right)} onChange={(name) => onBranchesChange(left, name)} />
+          <BranchSelect
+            label={t("git.compare.from")}
+            branches={listed}
+            value={left}
+            gone={!known(left)}
+            isDisabled={noBranches}
+            onChange={(name) => onBranchesChange(name, right)}
+          />
+          <BranchSelect
+            label={t("git.compare.to")}
+            branches={listed}
+            value={right}
+            gone={!known(right)}
+            isDisabled={noBranches}
+            onChange={(name) => onBranchesChange(left, name)}
+          />
         </div>
         <TitledControl title={t("git.compare.swap")}>
           <Button
@@ -99,6 +119,7 @@ export function BranchComparisonView({
       )}
       <div className="flex min-h-0 flex-1 flex-col" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
         <ComparisonContent
+          noBranches={noBranches}
           branches={branches}
           comparison={comparison}
           selectedChange={selectedChange}
@@ -113,6 +134,7 @@ export function BranchComparisonView({
 }
 
 function ComparisonContent({
+  noBranches,
   branches,
   comparison,
   selectedChange,
@@ -121,6 +143,8 @@ function ComparisonContent({
   listRef,
   changeView,
 }: {
+  /** Set where the selectors are disabled, so the panel explaining them cannot drift from them. */
+  noBranches: boolean;
   branches: BranchList;
   comparison: Comparison;
   selectedChange: string | undefined;
@@ -132,8 +156,8 @@ function ComparisonContent({
   const t = useT();
   if (comparison.state === "idle") {
     if (branches.state === "error") return <GitFailure title={t("git.compare.branchesFailed")} message={branches.message} onRetry={onRetry} />;
-    if (branches.state === "loaded" && branches.branches.length === 0) return <EmptyPanel icon={GitFork} message={t("git.compare.noBranches")} />;
-    return <EmptyPanel icon={GitCompareArrows} message={t("git.compare.prompt")} />;
+    if (noBranches) return <CenteredEmptyPanel icon={GitFork} message={t("git.compare.noBranches")} />;
+    return <CenteredEmptyPanel icon={GitCompareArrows} message={t("git.compare.prompt")} description={t("git.compare.prompt.description")} />;
   }
   if (comparison.state === "loading") return <GitLoading label={t("git.compare.loading")} />;
   if (comparison.state === "error") return <GitFailure title={t("git.compare.error")} message={comparison.message} onRetry={onRetry} />;
@@ -163,9 +187,9 @@ function ComparisonContent({
         ))}
       </div>
       {left.commit === right.commit ? (
-        <EmptyPanel icon={GitCompareArrows} message={t("git.compare.same")} />
+        <CenteredEmptyPanel icon={GitCompareArrows} message={t("git.compare.noDifferences")} description={t("git.compare.same.description")} />
       ) : items.length === 0 && complete ? (
-        <EmptyPanel icon={GitCompareArrows} message={t("git.compare.empty")} />
+        <CenteredEmptyPanel icon={GitCompareArrows} message={t("git.compare.noDifferences")} description={t("git.compare.empty.description")} />
       ) : (
         <>
           <ChangeList items={items} selected={selectedChange} label={t("git.compare.list.label")} onOpen={onOpen} listRef={listRef} changeView={changeView} />
@@ -183,12 +207,16 @@ export function BranchSelect({
   branches,
   value,
   gone,
+  isDisabled,
   onChange,
 }: {
   label: string;
   branches: BranchInfo[];
   value: string | undefined;
   gone: boolean;
+  /** For a repository that has no branches to offer: a selector that could only open on an empty
+   * list is a control with nothing behind it. */
+  isDisabled?: boolean;
   onChange: (branch: string) => void;
 }): React.ReactElement {
   const t = useT();
@@ -203,6 +231,7 @@ export function BranchSelect({
     <Select
       fullWidth
       variant="secondary"
+      isDisabled={isDisabled}
       value={value ?? null}
       onChange={(key) => key !== null && onChange(String(key))}
       className="col-span-2 grid grid-cols-subgrid items-center gap-x-3"

@@ -151,8 +151,40 @@ bare verb with no placeholder, or the row's own text is announced twice.
 ### A visual heading is a heading element
 
 Text drawn to read as a heading is `<h1>`-`<h6>`, never a `<p>` carrying a heavier weight: the structure a screen
-reader navigates by is the element, not the look. `EmptyPanel` renders its message as a heading once it is given a
-description under it, and as a paragraph when it stands alone.
+reader navigates by is the element, not the look.
+
+A heading also never outranks the one above it. `EmptyPanel` takes `headingLevel` for that: its heading stands at the
+level of the heading naming whatever it fills, so the two read as one thing. The default `<h2>` is the level of a
+pane's own title (`ArchiveView`, `ProjectBrowser`) and of a dialog's, which react-aria sets for every `Frame.Heading`;
+the sidebar's `SectionHeading` is an `<h3>`, so the panels inside one of those sections (`FocusView`) pass 3.
+
+### An empty state is a glyph, a heading, and what fills it
+
+Every place that has nothing to show takes one shape, through `EmptyPanel`
+(`packages/ui/src/components/EmptyPanel.tsx`): a glyph, a heading naming what is missing, optionally a line under it,
+and optionally the action that fills it (the whole shape, and which state takes which part, is
+`docs/product/empty-states.md`). Nothing builds a second one out of centred text, and a state with no glyph is
+not one of these — HeroUI's bare `EmptyState` is reached only through this component.
+
+- The heading is a short phrase carrying **no punctuation at all**, a comma inside it included: a title that needs one
+  is a sentence, and the part after the comma belongs in the line under it. "No sessions yet", not "No sessions yet,
+  start one from the project row".
+- The line under it says only what the heading cannot: why it is empty, where the thing is made, or a bare fact about
+  the subject (the size of a body that cannot be drawn). It never restates the heading, and a state that has nothing
+  more to say carries no line at all.
+- The `compact` row, for a list nested in another, has no room for that line. What a row would have said there has to
+  hold as a heading on its own, or move to copy the surface already shows.
+- A load failure is not an empty state; it keeps the error shape, with its own way out (see the "Errors" section of
+  `.claude/skills/knowledge-i18n-copy/SKILL.md`). What the subject *is* is a state of the subject, not a failed load,
+  even when the panel warns about it: a project that is in no repository, a worktree that is gone, a repository Git
+  itself refuses, are all empty states, since no retry would change the answer.
+
+Where a region elsewhere already speaks the state, the panel takes `silent` and is hidden from screen readers so it is
+not read twice. What that region says is then the only way to hear it, so it says the whole state as one sentence, from
+a message of its own — a `.sentence` beside the heading and its line, never the two joined in code, which runs together
+differently from language to language. The same message serves a state shown as a notice over content that is
+displayed anyway, rather than as a panel standing in for it. `silent` cannot be combined with an action: a focusable
+element inside an `aria-hidden` subtree keeps its tab stop and loses its name.
 
 ### Landmarks
 

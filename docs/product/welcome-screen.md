@@ -7,18 +7,20 @@ screen offers.
 
 ## What the welcome screen shows
 
-- A glyph and a heading saying there are no consoles yet.
+- A glyph and a heading saying there are no consoles yet, in the shape every empty state takes (see "The full panel" in
+  `docs/product/empty-states.md`).
 - A line explaining what a console is: that it holds the projects the user works in and the sessions they run in them.
 - One button, **New console**, which opens the same new-console dialog the rail's New console opens (see "Consoles" in
   `docs/product/consoles-and-projects.md`). A console created here becomes the current one as soon as it appears, as
   one created from the rail does (see "The console switcher" in `docs/product/sidebar.md`).
 
-**Once every agent has been determined unavailable** on the machine, the screen also carries the line Octoboard shows
-wherever an agent is needed and none is installed — which agents it supports and that one of them has to be on the
-user's `PATH`, without saying how to install one (see "Opening a session" in `docs/product/sessions.md`). **New console
-stays enabled even so**, unlike the console sessions section's new-session action (see "The console sessions section
-and the project list" in `docs/product/sidebar.md`): a console's two agent fields are only the defaults its sessions
-start from, so creating a console starts no agent and nothing about it would be refused.
+**Once every agent has been determined unavailable** on the machine, the screen also carries, under the panel, the
+fuller of the two wordings Octoboard has for that: which agents it supports and that one of them has to be on the user's
+`PATH`, without saying how to install one, rather than the short row the sidebar's console sessions section has room
+for, which says only that no agent was found (see "Opening a session" in `docs/product/sessions.md` and "The console
+sessions section and the project list" in `docs/product/sidebar.md`). **New console stays enabled even so**, unlike the
+console sessions section's new-session action: a console's two agent fields are only the defaults its sessions start
+from, so creating a console starts no agent and nothing about it would be refused.
 
 ## What is not on screen with no console
 
@@ -26,9 +28,9 @@ start from, so creating a console starts no agent and nothing about it would be 
   `docs/product/sidebar.md`) and nothing to own the right pane (see "What the right pane shows" in
   `docs/product/window-layout.md`). So there is no sidebar to float in on hover either, and no drawer to open below
   1148 px.
-- **No terminal.** Neither of the terminal's empty states appears here: the line asking for a session to be selected,
-  which is what a console with no session selected shows, nor the panel offering **Add project**, which a console with
-  nothing in it shows (see "The terminal" and "A console with nothing in it" in `docs/product/sessions.md`).
+- **No terminal.** Neither of the terminal's empty states appears here: the panel saying no session is selected, which
+  is what a console with no session selected shows, nor the panel offering **Add project**, which a console with nothing
+  in it shows (see "The terminal" and "A console with nothing in it" in `docs/product/sessions.md`).
 - **Neither pane toggle in the top bar**: there is no sidebar for the sidebar toggle to control, and the right pane's
   toggle, at the bar's end, is there only while the right pane has an owner (see "The two pane toggles" in
   `docs/product/window-layout.md`). The top bar keeps **Back** and **Forward**, and **both are disabled**: every place

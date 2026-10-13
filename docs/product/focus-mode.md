@@ -36,6 +36,12 @@ can end between an owner and the sessions under it but never shows an inset row 
 
 Relative times ("5 minutes ago") are worded in the current language, and anything under a minute reads as now.
 
+**Where either view has nothing to list**, a **full empty panel** takes the place of the list, under the heading of the
+section it belongs to, rather than the single row the sidebar's own lists use (see "The full panel" in
+`docs/product/empty-states.md` and "Empty rows" in `docs/product/sidebar.md`): a glyph, a heading naming what is
+missing, and the one button that fills it where there is one, which sits in the panel rather than being the whole panel.
+None of these panels carries a line under its heading.
+
 ## A project's focus mode
 
 From the top:
@@ -43,8 +49,9 @@ From the top:
 - **Sessions (n)**: the project's sessions that are not archived and have **no console session above them** (see "Lead
   sessions" in `docs/product/hub-orchestration.md`) — the unbound ones, each with the sessions bound to it inset under
   it. A **lead session and the sessions under it** are left out of the list together, as is any session bound to a
-  console session: they belong to that console session's focus mode, and are summed up below instead. The count is
-  every card listed, the inset ones included. With none, a message and a **New session** button take their place.
+  console session: they belong to that console session's focus mode, and are summed up below instead. The count is every
+  card listed, the inset ones included. With none, a panel saying there are no sessions yet, with a **New session**
+  button, takes their place.
 - **Archived (n)** is the project's archived sessions with the bound ones included — those of a lead session that is
   still live among them. The archive is not filtered by binding; only the list of live sessions is.
 - **The sessions elsewhere**, last, below the archive, present only while the project has sessions that are not
@@ -57,29 +64,29 @@ From the top:
   focus mode. Pressing a chip enters that console session's focus mode; assistive technology hears it as entering that
   focus mode, with the count.
 
-**New session** (the header's **+** and the empty message's button) opens the new-session dialog with no "Report to"
+**New session** (the header's **+** and the empty panel's button) opens the new-session dialog with no "Report to"
 choice: the session is always unbound.
 
 ## A console session's focus mode
 
 - **The switch strip**, right under the header, while the console has more than one console session that is not
   archived: see "The switch strip" below.
-- **Sessions (n)**: the projects of the console that have a session bound to this console session which is not
-  archived, in the order of the project list, and under each project's name the sessions bound to this console session
-  as cards, each **lead session** among them carrying the sessions bound to it inset under it — they run in the lead
-  session's own project, so they fall under the same project's name. The count includes them, so it covers sessions
-  this console session sees but cannot drive (see "Lead sessions" in `docs/product/hub-orchestration.md`). A session
-  bound to another console session, to a project session that is not under this one, or to none, is not shown, and
-  neither is a project with nothing under this console session. With none, a message says so. Each project's name
-  carries its pin button while it is pinned (see "Pinning" in `docs/product/sidebar.md`), its own **+**, which opens a
-  new session in that project, and its action menu, which is the project row's without its Focus mode item — a project
-  has no focus mode to be entered from here — and keeps **Pin** / **Unpin**. The project list's filter is not part of
-  this view.
+- **Sessions (n)**: the projects of the console that have a session bound to this console session which is not archived,
+  in the order of the project list, and under each project's name the sessions bound to this console session as cards,
+  each **lead session** among them carrying the sessions bound to it inset under it — they run in the lead session's own
+  project, so they fall under the same project's name. The count includes them, so it covers sessions this console
+  session sees but cannot drive (see "Lead sessions" in `docs/product/hub-orchestration.md`). A session bound to another
+  console session, to a project session that is not under this one, or to none, is not shown, and neither is a project
+  with nothing under this console session. With none, a panel saying there are no bound sessions takes their place,
+  carrying no button of its own — the header's **+** below is the way to open one. Each project's name carries its pin
+  button while it is pinned (see "Pinning" in `docs/product/sidebar.md`), its own **+**, which opens a new session in
+  that project, and its action menu, which is the project row's without its Focus mode item — a project has no focus
+  mode to be entered from here — and keeps **Pin** / **Unpin**. The project list's filter is not part of this view.
 - **New session**: the header's **+** opens a menu of the console's projects, so that a project with nothing bound yet
   can be reached; choosing one opens the new-session dialog for it. The dialog has no "Report to" field, and shows a
   line saying the session reports to this console session, which it will be bound to.
 - **With no project in the console at all** there is nothing to open a session in: the header's **+** is disabled, and
-  in place of the sessions a message says the console has no projects yet, with an **Add project** button.
+  in place of the sessions a panel says the console has no projects yet, with an **Add project** button.
 - **Archived (n)** is the archived sessions under this console session — bound to it, or bound to an archived lead
   session that is bound to it (see "Lead sessions" in `docs/product/hub-orchestration.md`), each of those inset under
   that lead session — and **View all** opens the archive view scoped to them (see "The archive view" in

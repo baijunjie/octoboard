@@ -130,7 +130,7 @@ it("replaces one subject's content with the next in the same dialog", () => {
   show(binary);
   expect(dialog()).toBe(first);
   expect(dialog()?.textContent).not.toContain("is gone");
-  expect(dialog()?.textContent).toContain("This file cannot be displayed.");
+  expect(dialog()?.textContent).toContain("This file cannot be displayed");
 });
 
 it("shows only the side inside the project, naming where the other one is", () => {
@@ -146,7 +146,7 @@ it("shows only the side inside the project, naming where the other one is", () =
     },
   });
   expect(dialog()?.textContent).toContain("The previous version is outside this project, at lib/moved.ts.");
-  expect(dialog()?.textContent).toContain("This file cannot be displayed.");
+  expect(dialog()?.textContent).toContain("This file cannot be displayed");
   expect(dialog()?.textContent).not.toContain("No file on this side.");
 });
 
@@ -296,7 +296,7 @@ it("shows the content of a change with no lines to draw", async () => {
   const patch = "diff --git a/f b/g\nsimilarity index 100%\nrename from f\nrename to g\n";
   show({ key: "r", path: "g", content: { state: "change", change: { old: side("f"), new: side("g"), patch, loadBodies } } });
   await settled();
-  expect(dialog()?.textContent).toContain("Renamed with no changes to its content.");
+  expect(dialog()?.textContent).toContain("Renamed without changes to its content.");
   expect(dialog()?.textContent).toContain("kept");
 });
 
@@ -351,8 +351,9 @@ it.each([
 ])("says a renamed change with unchanged content is just that (%s)", (_, patch) => {
   const file = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
   show({ key: `renamed-${patch.length}`, path: "g", content: { state: "change", change: { old: file("f"), new: file("g"), patch } } });
-  expect(dialog()?.textContent).toContain("Renamed with no changes to its content.");
-  expect(dialog()?.textContent).not.toContain("no diff to show");
+  expect(dialog()?.textContent).toContain("Renamed without changes");
+  expect(dialog()?.textContent).not.toContain("to its content");
+  expect(dialog()?.textContent).not.toContain("No diff to show");
   expect(dialog()?.querySelector("[data-renderer]")).toBeNull();
 });
 
@@ -364,8 +365,8 @@ it.each([
 ])("does not call a rename with %s unchanged", (_, patch) => {
   const file = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
   show({ key: `renamed-other-${patch.length}`, path: "g", content: { state: "change", change: { old: file("f"), new: file("g"), patch } } });
-  expect(dialog()?.textContent).not.toContain("Renamed with no changes");
-  expect(dialog()?.textContent).toContain("This change has no diff to show.");
+  expect(dialog()?.textContent).not.toContain("Renamed without changes");
+  expect(dialog()?.textContent).toContain("No diff to show");
 });
 
 // The layout the viewer remembers is for diffs with two sides; one without is drawn unified, with
@@ -475,9 +476,15 @@ it("says a lost connection in neutral text, not as a failure", () => {
   act(() => void vi.advanceTimersByTime(1600));
   expect(document.querySelector("[role=alert]")).toBeNull();
   expect(dialog()?.textContent).not.toContain("Could not open this file");
+  // The stand-in is hidden from screen readers, so the status region says the whole state, not
+  // only the heading the stand-in shows.
   expect(dialog()?.querySelector("[role=status]:not([aria-hidden])")?.textContent).toBe(
     "The connection to the daemon was lost. This file is read again when the connection is back.",
   );
+  expect(dialog()?.textContent).toContain("Daemon connection lost");
+  // A stand-in left visible would be read a second time beside the region.
+  expect(dialog()?.querySelector('[aria-hidden="true"] h2')?.textContent).toBe("Daemon connection lost");
+  expect(dialog()?.textContent).toContain("This file is read again when the connection is back.");
 });
 
 // A patch with no hunk (an empty file added, a mode change) gives the renderer no line to draw, so
@@ -489,7 +496,7 @@ it("says a change whose patch has no lines has no diff, rather than loading for 
     path: "e",
     content: { state: "change", change: { old: { state: "absent" }, new: { state: "present", path: "e", kind: "file" }, patch } },
   });
-  expect(dialog()?.textContent).toContain("This change has no diff to show.");
+  expect(dialog()?.textContent).toContain("No diff to show");
   expect(dialog()?.querySelector("[data-renderer]")).toBeNull();
   expect(layoutToggles()).toHaveLength(0);
   expect(dialog()?.querySelector("[role=status]:not([aria-hidden])")?.textContent).toBe("");
@@ -653,7 +660,7 @@ it("says loading and a lost connection from one status region that stays mounted
 
   show({ key: "d", path: "src/l.ts", content: { state: "disconnected", what: "file" } });
   expect(dialog()!.querySelector("[role=status]:not([aria-hidden])")).toBe(region);
-  expect(region.textContent).toContain("The connection to the daemon was lost");
+  expect(region.textContent).toContain("The connection to the daemon was lost.");
 
   show({ key: "f", path: "src/l.ts", content: { state: "file", body: { kind: "text", text: "a\n", size: 2 } } });
   expect(dialog()!.querySelector("[role=status]:not([aria-hidden])")).toBe(region);

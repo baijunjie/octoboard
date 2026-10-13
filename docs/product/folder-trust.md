@@ -220,12 +220,14 @@ confirmations of projects outside it stay as they were and are still asked about
 same checks, and reported the same way when a check fails, as any other confirmation Octoboard presses.
 
 **The list in Settings.** The Trusted folders section of Settings (see `docs/product/settings.md`) explains that under
-these folders Octoboard presses every agent's trust confirmation without asking, for every project including ones
-added later, and that each agent then records the trust in its own configuration and applies the project's own
-permission rules and hooks. It lists every trusted folder, sorted by path, each path shown as in "How paths are shown"
-in `docs/product/settings.md`. Each folder has a Remove button, whose accessible name gives the folder's full path, that
-stops trusting it at once, without a confirmation. With no folder trusted, the section says so and that a folder is
-trusted from a session's trust dialog. Removing a folder leaves every project's own permission as it is, leaves running
-sessions alone, a confirmation already pressed included, and does not undo the trust an agent has already recorded; a
-trust confirmation that comes up afterwards in a project under it, without a permission of its own and not under
-another trusted folder, is asked about again.
+these folders Octoboard presses every agent's trust confirmation without asking, for every project including ones added
+later, that each agent then records the trust in its own configuration and applies the project's own permission rules
+and hooks, where a folder is trusted from — a session's trust dialog — and, last, that a folder should be trusted only
+if everything that ends up inside it is trusted. It lists every trusted folder, sorted by path, each path shown as in
+"How paths are shown" in `docs/product/settings.md`. Each folder has a Remove button, whose accessible name gives the
+folder's full path, that stops trusting it at once, without a confirmation. With no folder trusted, an empty row in the
+list's place says there are none yet (see "The compact row" in `docs/product/empty-states.md`); where a folder is
+trusted from is in the explanation above it, not in that row. Removing a folder leaves every project's own permission as
+it is, leaves running sessions alone, a confirmation already pressed included, and does not undo the trust an agent has
+already recorded; a trust confirmation that comes up afterwards in a project under it, without a permission of its own
+and not under another trusted folder, is asked about again.

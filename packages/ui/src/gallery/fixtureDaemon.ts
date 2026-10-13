@@ -1,7 +1,7 @@
 import { DaemonRequestError } from "../daemon-client";
 import { daemonMessage } from "../daemonMessage";
 import { currentLanguage } from "../i18n/language";
-import type { BrowseEntry, DirEntry, Event } from "../protocol";
+import type { BrowseEntry, DirEntry, Event, Session } from "../protocol";
 import { createStateStore, type Daemon, type ToastRequest } from "../store";
 import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
@@ -45,8 +45,10 @@ function entriesUnder(files: FixtureFiles, dir: string): BrowseEntry[] {
 
 /**
  * A `Daemon` with no connection behind it, for the gallery: the store holds the scenario's state as
- * it is, requests are answered from the scenario (`list_dir`, `list_pages`, the browse requests) or accepted and
- * ignored (a new console excepted, which is added), and the scenario's toasts are raised once the app is listening.
+ * it is, requests are answered from the scenario (`list_dir`, `list_pages`, the browse requests) or
+ * accepted and ignored (a new console excepted, which is added, and the deletion of a scope's
+ * archived sessions, which removes them), and the scenario's toasts are raised once the app is
+ * listening.
  *
  * A project pane's Git-mode requests are answered by `fixtureGit.ts` instead, which is asked before
  * anything here and says with `undefined` that a request is not one of its own.
@@ -152,6 +154,42 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
               icon,
               created_at: Date.now(),
             }),
+          }));
+          return { type: "ack" };
+        }
+        case "delete_archived_sessions": {
+          // What the sessions' deletion comes to, written to the store directly (the reducer that
+          // answers `session_deleted` by dropping the session and its pages is not reachable from
+          // here) by the time the request is answered, as the daemon's deletes are, so the archive
+          // view a scenario has open empties as it would.
+          const all = Array.from(store.getState().sessions.values());
+          const doomed = new Set<string>();
+          // As `delete_archived_group` of `coordinator.rs`: an archived session goes, and with it
+          // the archived sessions bound to it, each with its own; one that is not archived stays
+          // and keeps what is bound to it. The daemon's own rule is repeated here and not taken
+          // from the sidebar's `boundArchivedSessions`, so that a change to what the sidebar lists
+          // does not change what a deletion removes.
+          const deleteGroup = (session: Session) => {
+            if (doomed.has(session.id) || session.status !== "archived") return;
+            doomed.add(session.id);
+            all.filter((s) => s.bound_to === session.id).forEach(deleteGroup);
+          };
+          // The scope is the project's, the console session's, or with neither the console's
+          // console sessions.
+          all
+            .filter(
+              (s) =>
+                s.console_id === body.console &&
+                (body.project !== undefined
+                  ? s.project_id === body.project
+                  : body.console_session !== undefined
+                    ? s.bound_to === body.console_session
+                    : s.role === "console"),
+            )
+            .forEach(deleteGroup);
+          store.setState((state) => ({
+            sessions: new Map(Array.from(state.sessions).filter(([id]) => !doomed.has(id))),
+            pages: new Map(Array.from(state.pages).filter(([id]) => !doomed.has(id))),
           }));
           return { type: "ack" };
         }

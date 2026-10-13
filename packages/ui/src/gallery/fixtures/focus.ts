@@ -108,6 +108,19 @@ export const focusScenarios: Scenario[] = [
     steps: [(ui) => ui.press(ui.t("sidebar.project.openSession"))],
   },
   {
+    id: "focus-project-no-sessions",
+    group: GROUP,
+    title: "Focus mode on a project with no live session",
+    description: "The Sessions section offers New session in place of the cards; what was archived is still listed below it.",
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
+    state: snapshotState({
+      consoles: [console_],
+      projects: [project],
+      sessions: [sessionOf("s-old", console_.id, project.id, "Older investigation", "archived", { ended_at: minutesAgo(60 * 5) })],
+      settings,
+    }),
+  },
+  {
     id: "focus-console-session",
     group: GROUP,
     title: "Focus mode on a console session, with the switch strip",

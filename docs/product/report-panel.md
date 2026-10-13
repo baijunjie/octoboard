@@ -46,7 +46,8 @@ started over from its markup, with anything typed into its form and not submitte
   they paged to, and only the total grows.
 - Paging away from a page discards it: paging back to it starts the page over from its markup, and whatever had
   been typed into its form is gone.
-- A console session that has never pushed a page reads "No pages yet."
+- A console session that has never pushed a page shows an empty panel filling the pane, saying there are no pages yet
+  (see "The full panel" in `docs/product/empty-states.md`).
 
 ## History pages are read-only
 

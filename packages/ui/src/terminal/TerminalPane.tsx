@@ -380,7 +380,7 @@ export function TerminalPane({
         <div
           ref={coverRef}
           {...held}
-          className="absolute inset-0 flex flex-col items-center justify-center text-sm text-muted"
+          className="absolute inset-0 flex flex-col items-center justify-center-safe text-sm text-muted"
           style={{ backgroundColor: XTERM_THEMES[colorTheme].background }}
         >
           {trouble === "disconnected" ? (
@@ -410,7 +410,7 @@ export function TerminalPane({
         // `held`: the Add project button goes away the moment a project arrives, from this window
         // or another, and a focused element that is removed leaves focus on `<body>`. It is the
         // same hand-off the cover's button uses, which can never be on screen at the same time.
-        <div ref={emptyRef} {...held} className="absolute inset-0 flex items-center justify-center bg-panel">
+        <div ref={emptyRef} {...held} className="absolute inset-0 flex items-center justify-center-safe bg-panel">
           {onAddProject ? (
             <EmptyPanel
               icon={FolderOpen}
@@ -419,7 +419,7 @@ export function TerminalPane({
               action={{ label: t("sidebar.console.addProject"), icon: FolderPlus, onPress: onAddProject }}
             />
           ) : (
-            <EmptyPanel icon={SquareTerminal} message={t("terminal.empty")} />
+            <EmptyPanel icon={SquareTerminal} message={t("terminal.empty")} description={t("terminal.empty.description")} />
           )}
         </div>
       )}

@@ -91,6 +91,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   From and To lists: what it answers and what it never does, the snapshot title it names a session by, when a branch
   gets a creator and when it carries none, how a record is scoped to a repository and when it goes, the caps on how
   many branches carry one, that nothing is written to the repository, and where a record can be missing or wrong.
+- [Empty states](product/empty-states.md) — the two shapes a view, list or panel with nothing to show takes: the full
+  panel's glyph, title, explaining line and action, the compact row for a list nested in another, what each part says,
+  and how each is announced.
 - [Toasts](product/toasts.md) — failures and notices that need no answer: where they appear, how one about a session
   is titled, when they dismiss themselves, how an identical one replaces rather than stacks, copying their text
   without taking focus off the terminal, and reaching them with F6.

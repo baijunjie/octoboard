@@ -17,10 +17,14 @@ judging the new rendering on its own.
 Where what the change alters is the data a fixture answers with rather than any markup, settle it on the replies instead
 of on renderings: dump every scenario's reply for the affected requests to JSON at the merge base and on the branch and
 diff the two dumps. That names which field of which reply moved, which no screenshot comparison can, and it costs one
-scripted run rather than two servers and a capture pass. Where renderings do have to be compared, an unchanged scenario
-is one whose pixel diff looks like that of a scenario the change cannot touch, not one that is byte-identical: some
-scenarios animate (the session-status glyph), so a few dozen pixels in one small region always differ. So capture such
-an untouched scenario as the control in the same run.
+scripted run rather than two servers and a capture pass. Where renderings do have to be compared, no scenario is
+byte-identical between two runs, and how far from identical is a property of that scenario rather than of the capture
+pass: an animation moves a few dozen pixels in one small region (the session-status glyph), while a floating HeroUI
+overlay lands a couple of dozen CSS pixels away from one render to the next, and a lazily loaded renderer may not have
+painted at all when the capture is taken — either of those moves tens of thousands of pixels, more than a real change to
+the same scenario does. So measure that floor before reading any diff as a regression: capture the whole set twice at
+the same commit, and count a scenario as changed only where its branch-against-base diff stands above its own
+same-commit diff.
 
 ## Look at a UI state in the gallery before staging it through a daemon
 
@@ -62,10 +66,12 @@ no fixture change carried both sides' whole text for the new line count to be ta
 So a reply that gains such a field is taught to the fixture together with the condition the real daemon fills it under,
 and every scenario's fixture is given what that condition needs — the scenarios whose fixture answers with an error
 included, since they answer the reply as well, and an unfilled field there is a state the real daemon never sends. Take
-that condition from the daemon's own code and tests, not from an enumeration of cases in a doc or a plan: an enumeration
-can lag the rule it enumerates, and the first implementation of the refusal below, built on one, was wrong for the case
-the rule covers and the list did not (a binary change, whose patch has no hunk and whose two sides are nonetheless both
-counted, from the bodies the reply carries).
+that condition from the daemon's own code and tests — never from an enumeration of cases in a doc or a plan, and never
+by importing a helper out of the UI's own source that happens to compute the same thing: the fixture stands on the
+daemon's side of the protocol, so it repeats the rule inside `packages/ui/src/gallery/` rather than depending on UI code
+that is free to change for the UI's reasons. An enumeration can lag the rule it enumerates, and the first implementation
+of the refusal below, built on one, was wrong for the case the rule covers and the list did not (a binary change, whose
+patch has no hunk and whose two sides are nonetheless both counted, from the bodies the reply carries).
 
 Hold that condition in a signature before holding it at run time. A repository's change fixtures are written through a
 factory per kind of change rather than as literals (`packages/ui/README.md`, section "The UI state gallery"), so a field
@@ -82,7 +88,10 @@ scenarios answer requests with a daemon error on purpose and those are legitimat
 gallery's own data must never be dressed as one. Extend that refusal to each new field of this kind, and have the guard
 test over the fixture daemon's replies read every scenario's reply — including the ones that carry no such field — so a
 refusal fails the test run too and not only the scenario someone opens by hand. And before reading a scenario as a fix
-that did not work, check that its fixture can produce the input the fix reads at all.
+that did not work, check that its fixture can produce the input the fix reads at all. A handler for a request no
+scenario ever sends falls outside all of this — no scenario renders it and no guard test reads it — so write one only
+once a scenario makes that request, and delete one left unused rather than keeping it for completeness; until then it
+is an unfaithful reply nothing can catch, waiting for whoever adds that scenario first.
 
 A fixture field says what a reply costs, never whether it is given. Whether the daemon answers a request at all follows
 from the change's own data — its group, its sides, whether making its patch already failed — so the fixture daemon reads

@@ -3,10 +3,12 @@
 // for a subject that cannot be opened at all, and the spinner while any of it is on its way. They
 // are all here so the four stay one family.
 import { Alert, Spinner } from "@heroui/react";
-import { Equal, FileQuestion, FolderGit2, Link, Unplug, type LucideIcon } from "lucide-react";
+import { Equal, FileQuestion, FolderGit2, Link, Unplug } from "lucide-react";
 import React from "react";
 
+import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
+import type { PlainMessageKey } from "../i18n/catalog";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { formatFileSize, formatSideSize } from "./format";
 
@@ -87,58 +89,58 @@ export function Notice({
   );
 }
 
-/**
- * What fills the body when the viewer has nothing to draw: a change whose two sides are the same, a
- * side that is not a file at all, a body it cannot present, a connection that is not there. One
- * centred glyph and sentence, never a line left at the top of an empty dialog.
- *
- * `silent` is for a state spoken from a region elsewhere, which hides this copy of it so it is not
- * read twice. `children` is for whatever the state adds under the sentence, such as a size.
- */
-export function NothingToShow({
-  icon: Icon,
-  message,
-  silent,
-  children,
-}: {
-  icon: LucideIcon;
-  message: string;
-  silent?: boolean;
-  children?: React.ReactNode;
-}): React.ReactElement {
-  return (
-    <div
-      aria-hidden={silent}
-      className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-center text-sm text-muted"
-    >
-      <Icon aria-hidden="true" className="size-8" />
-      <p className="text-foreground">{message}</p>
-      {children}
-    </div>
-  );
-}
+/* What fills the body when the viewer has nothing to draw — a change whose two sides are the same,
+ * a side that is not a file at all, a body it cannot present, a connection that is not there — is
+ * the app's empty-state panel centred in the body, never a line left at the top of an empty dialog
+ * ("The full panel" in `docs/product/empty-states.md`). */
 
 /** The glyphs the stand-ins are drawn with, so the same kind of nothing looks the same wherever it
  * is reached from: nothing that can be shown at all, two sides that hold the same thing, and a side
  * that is not a file. */
 const GLYPHS = { unshowable: FileQuestion, unchanged: Equal, symlink: Link, submodule: FolderGit2 } as const;
 
+/** The messages of a side that is not a file, by kind. */
+const NOT_FILE: Record<"symlink" | "submodule", { message: PlainMessageKey; description: PlainMessageKey }> = {
+  symlink: { message: "viewer.change.symlink", description: "viewer.change.symlink.description" },
+  submodule: { message: "viewer.change.submodule", description: "viewer.change.submodule.description" },
+};
+
+/** The messages of a lost connection, by what was being read: the line under the heading, and the
+ * sentence the surface above speaks (and a notice would show) for the whole state. */
+export const DISCONNECTED: Record<"file" | "change", { description: PlainMessageKey; sentence: PlainMessageKey }> = {
+  file: { description: "viewer.disconnected.file.description", sentence: "viewer.disconnected.file.sentence" },
+  change: { description: "viewer.disconnected.change.description", sentence: "viewer.disconnected.change.sentence" },
+};
+
 /** The stand-in for a change with nothing to draw: no patch, or a patch with no lines. */
 export function Unreadable(): React.ReactElement {
   const t = useT();
-  return <NothingToShow icon={GLYPHS.unshowable} message={t("viewer.change.unreadable")} />;
+  return <CenteredEmptyPanel icon={GLYPHS.unshowable} message={t("viewer.change.unreadable")} />;
 }
 
 /** The stand-in for a change whose two sides hold the same content, renamed or not. */
 export function Unchanged({ kind }: { kind: "identical" | "renamedUnchanged" }): React.ReactElement {
   const t = useT();
-  return <NothingToShow icon={GLYPHS.unchanged} message={t(kind === "identical" ? "viewer.change.identical" : "viewer.change.renamedUnchanged")} />;
+  // A rename has no description: the rename is the whole state, and one would only repeat the title.
+  return (
+    <CenteredEmptyPanel
+      icon={GLYPHS.unchanged}
+      message={t(kind === "identical" ? "viewer.change.identical" : "viewer.change.renamedUnchanged")}
+      description={kind === "identical" ? t("viewer.change.identical.description") : undefined}
+    />
+  );
 }
 
 /** The stand-in for a side that is not a file: a symbolic link, or a repository of its own. */
 export function NotFile({ kind }: { kind: "symlink" | "submodule" }): React.ReactElement {
   const t = useT();
-  return <NothingToShow icon={GLYPHS[kind]} message={t(kind === "symlink" ? "viewer.change.symlink" : "viewer.change.submodule")} />;
+  return (
+    <CenteredEmptyPanel
+      icon={GLYPHS[kind]}
+      message={t(NOT_FILE[kind].message)}
+      description={t(NOT_FILE[kind].description)}
+    />
+  );
 }
 
 /**
@@ -148,17 +150,21 @@ export function NotFile({ kind }: { kind: "symlink" | "submodule" }): React.Reac
 export function Unsupported({ message, sizes }: { message: string; sizes: (number | null)[] }): React.ReactElement {
   const language = useCurrentLanguage();
   return (
-    <NothingToShow icon={GLYPHS.unshowable} message={message}>
-      {sizes.length === 1 ? (
-        <p>{formatFileSize(language, sizes[0] ?? 0)}</p>
-      ) : (
-        // Old to new runs left to right whatever the language, each size isolated in its own
-        // direction, so a right-to-left language reorders neither the sizes nor the arrow.
-        <p dir="ltr">
-          <bdi>{formatSideSize(language, sizes[0])}</bdi> → <bdi>{formatSideSize(language, sizes[1])}</bdi>
-        </p>
-      )}
-    </NothingToShow>
+    <CenteredEmptyPanel
+      icon={GLYPHS.unshowable}
+      message={message}
+      description={
+        sizes.length === 1 ? (
+          formatFileSize(language, sizes[0] ?? 0)
+        ) : (
+          // Old to new runs left to right whatever the language, each size isolated in its own
+          // direction, so a right-to-left language reorders neither the sizes nor the arrow.
+          <span dir="ltr">
+            <bdi>{formatSideSize(language, sizes[0])}</bdi> → <bdi>{formatSideSize(language, sizes[1])}</bdi>
+          </span>
+        )
+      }
+    />
   );
 }
 
@@ -168,8 +174,16 @@ export function Unsupported({ message, sizes }: { message: string; sizes: (numbe
  * status by the surface above, rather than as an error. Hidden from screen readers here so it is
  * not read twice. The subject is read again once the connection is back.
  */
-export function Disconnected({ message }: { message: string }): React.ReactElement {
-  return <NothingToShow icon={Unplug} message={message} silent />;
+export function Disconnected({ what }: { what: "file" | "change" }): React.ReactElement {
+  const t = useT();
+  return (
+    <CenteredEmptyPanel
+      icon={Unplug}
+      message={t("viewer.disconnected")}
+      description={t(DISCONNECTED[what].description)}
+      silent
+    />
+  );
 }
 
 /**
