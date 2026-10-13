@@ -47,34 +47,36 @@ one piece of wording and one set of placements.
 1. 01 session-status-glyph (closed)
 2. 02 activity-marker (closed)
 3. 03 confirmation-dialog-callout-icons (closed)
+4. [The confirmation callout's agent icon](04-callout-agent-icon.md)
+5. [The activity badge on a rail avatar](05-rail-activity-badge.md)
+6. [The change row's status chip](06-change-row-status-chip.md)
+7. [The branch badge](07-git-badge.md)
 
-## Not yet written
+## Decisions the later milestones rest on
 
-Three further graphics are left out until the design questions below are answered; each would leave its milestone's
-goal or completion criteria unclear.
+The four graphics left over from the audit were held back until these were settled. They are settled now, and each
+milestone above is written to them.
 
-- **The change row's single-letter status chip** (M, A, D, R and the rest, in the change list and the change tree).
-  It sits inside a pressable react-aria collection item (`GridListItem` / `TreeItem`), so an `AnchoredTooltip`
-  anchored to an ancestor is the fitting shape. The unanswered question is whether a tooltip on a
-  roughly 20 px letter inside a pressable row is acceptable at all, or whether this target needs rethinking. If the
-  target changes, the milestone's goal changes with it.
-- **The git badge** (its state glyph: checking, syncing, detached HEAD or a branch; and its ahead and behind counts).
-  The unanswered question is one tooltip for the whole badge (a branch-state sentence, probably the existing
-  `aria-label` text) or one per element, which needs the glyph and each count wrapped separately. The branch name
-  beside them is a clipped-text tooltip of its own with the normal delay, which a whole-badge tooltip would overlap.
-  The two answers give different placements and different completion criteria.
-- **The activity badge on a console avatar in the rail** (the corner disc, which shows the same activity as the
-  marker on a collapsed project row, and whose wording it shares). It
-  conflicts with the tile it sits on: the tile is a control whose tooltip names the console and is delayed, and that
-  tile tooltip opens on keyboard focus only while the hidden sidebar floats in on hover. A tooltip on the disc would
-  therefore appear exactly when the tile's own tooltip is deliberately suppressed. Whether that is
-  acceptable, and what the disc should do instead, is undecided.
+- **A tooltip on a small mark inside a pressable row is acceptable**, which is what the change row's roughly 20 px
+  letter needed answering. The binding badge on a session row and the creator badge in a branch list are smaller
+  still and already carry one, and a tooltip is not a control, so a control's minimum pointer target does not apply.
+- **The change row's letter takes the anchored shape, and the indicator shape is not available there.** A change row
+  is a react-aria collection item whose left and right arrow keys walk every focusable descendant without filtering
+  for tab stops, so the indicator shape's trigger would become a new arrow-key stop ahead of the row's ⋮ button and
+  would open on keyboard focus — which these marks never do.
+- **The branch badge gets one tooltip for the whole badge, not one per element.** Its accessible name is already one
+  sentence about the glyph, the branch and both counts, so the tooltip is literally that name, with no new copy; the
+  whole badge is then the hover target, and the branch name can still be read once the badge is squeezed down to its
+  glyph and counts, which per-element tooltips could not offer. It replaces the two tooltips the badge carries today
+  — the error's and the clipped branch name's — whose text that sentence contains.
+- **The rail's activity badge says its meaning through the avatar's own tooltip**, not through one of its own. A
+  tooltip on the disc would open exactly while the avatar's own tooltip is deliberately suppressed, beside the
+  sidebar floating in, and would put a tooltip trigger inside a real button for the second time; folding the
+  activity into the avatar's tooltip costs one expression and removes an exception from the product doc instead of
+  adding one.
+- **The agent icon in a confirmation's callout keeps the meaning it has elsewhere**, the account the session runs
+  under, rather than repeating its screen-reader-only text. That icon's tooltip already has one settled meaning in
+  the product, and the premise about a tooltip saying exactly what the accessible name says was written for marks
+  whose tooltip is new, not to overturn an existing one.
 
-## Open
-
-Questions the work so far did not have to answer. Each belongs to a milestone still to be written.
-
-- **What the confirmation dialog's agent icon says.** The status icon beside it now carries its tooltip, while the
-  agent icon still has only an `sr-only` name; whether it also gets a tooltip, and with what text (for instance the
-  same account wording the agent icon on a session row uses), is not settled. A milestone for it has to be written
-  before it can be built.
+None of the four depends on another, so they can be built in any order.
