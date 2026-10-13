@@ -8,18 +8,26 @@ not a failure.
 ## The creator badge
 
 In the **Compare** view of the project pane's Git mode, each branch's row in the From and To lists carries a small
-hollow ring in a neutral colour when the branch has a recorded creator — the **creator badge** (see "The branch
-selectors" in `docs/product/project-pane-git-mode.md`).
+ring when the branch has a recorded creator — the **creator badge** (see "The branch selectors" in
+`docs/product/project-pane-git-mode.md`).
 
-- The name assistive technology announces for the badge, and its tooltip, both say the branch was created by that
-  session and name it by its title. The badge is no tab stop, so the tooltip shows on pointer hover only (see
-  "Tooltips on indicators" in `docs/product/labels-and-tooltips.md`).
-- The title is the one the session had **when the attribution was made**, cut to its first 80 characters. It does not
-  follow a later rename, and the session it names may no longer exist: deleting an archived session, or removing a
+- The name assistive technology announces for the badge, and its tooltip, are the same words: they say the branch was
+  created by that session and name it by its title, **in quotation marks**, so that where a long title ends can be
+  seen. The badge is no tab stop, so the tooltip shows on pointer hover only, and only while the pointer is on the
+  ring itself rather than anywhere on the row; it opens after the same wait as every other tooltip in the window (see
+  "Tooltips on indicators" and "How a tooltip behaves" in `docs/product/labels-and-tooltips.md`).
+- **A session that still exists is named by the title it carries now** — the one the sidebar shows — so that the
+  session named can be found there. An archived session still exists and is named the same way.
+- **A session that no longer exists** is named instead by the title recorded when the attribution was made, cut to its
+  first 80 characters, and the wording says that it no longer exists. Deleting an archived session, or removing a
   project that shares its repository with another project, takes the session's record while the branch's attribution
-  stands.
-- The badge carries nothing beyond its presence and that name: its presence says a session created the branch, the
-  name says which. Nothing is said in colour.
+  stands. Until the window has its first answer from the daemon no session is called gone.
+- **A branch created by the selected session** is marked apart from the rest: its ring is filled and in the accent
+  colour where every other badge is a hollow ring in a neutral one, and its wording says the creator is the selected
+  session as well as naming it. The fill, not the colour, is what tells the two rings apart, so the state does not
+  rest on colour. A selected session that no longer exists is named as gone instead, like any other.
+- Beyond that the badge carries nothing its name does not: its presence says a session created the branch, the name
+  says which.
 - **A chosen branch carries no badge**: the mark is on the rows of the two lists only, never on a selector once a
   branch is chosen.
 - A branch with no recorded creator carries no mark of any kind, and nothing says why.

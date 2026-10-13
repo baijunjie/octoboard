@@ -2,6 +2,28 @@
 
 How the window's controls and names are labelled where their text does not fit or is not shown.
 
+## How a tooltip behaves
+
+Every tooltip in the window is the application's own, drawn in its own styling and under one set of rules, whatever
+carries it — a control, an indicator or a label too long for its space:
+
+- It opens once the pointer has rested on what carries it for about a second and a half. Within half a second of
+  another tooltip closing it opens at once instead, so moving along a row of controls does not wait again at each one.
+  On a control it also opens the instant the control takes keyboard focus, with no wait (see "Tooltips on icon-only
+  controls" below).
+- **Only one is open at a time**: opening one takes any other away.
+- It goes the moment the pointer leaves what carries it, with no lingering, and it goes when what it sits over is
+  scrolled. It takes no pointer input of its own, so a press lands on whatever is under it.
+- Text too long for the tooltip's width **wraps at word boundaries**. A single run with no boundary in it — a path, a
+  long branch name — is broken within rather than widening the tooltip. A script written without spaces wraps between
+  its characters, which is its word boundary.
+
+Two places show the operating system's own tooltip instead, which follows the system's styling and timing: a link
+inside a Markdown document in the file viewer, where the address it leads to is also what assistive technology is
+given as the link's description (see "A Markdown file as a document" in `docs/product/project-pane.md`), and the
+separators standing for the lines a diff leaves out (see "Expanding the collapsed lines" in
+`docs/product/project-pane-git-mode.md`).
+
 ## Tooltips on icon-only controls
 
 A control shown only as an icon has a tooltip naming it, shown both when the mouse rests on it and when it receives
@@ -79,7 +101,9 @@ badge they sit in, or the text beside them. These are:
 - the branch badge's warning triangle, whose tooltip carries the failed check's message (see "The branch badge" in
   `docs/product/project-git-status.md`);
 - the creator badge, the ring a branch carries in the Git mode's branch lists, whose tooltip names the session that
-  created the branch (see "The creator badge" in `docs/product/branch-creator.md`).
+  created the branch, says so differently when that session no longer exists and when it is the selected one, and is
+  on the ring itself rather than on the row around it (see "The creator badge" in
+  `docs/product/branch-creator.md`).
 
 ## Names too long for their space
 
@@ -88,7 +112,9 @@ in a confirmation, the report panel's page timestamp, a name in a project pane's
 what follows it in the Git mode's change list, a worktree's name or path in its worktree selector, a branch's name in
 its branch selectors, a picked tag's label and the sidebar filter's keyword (see "Picked tags" in
 `docs/product/consoles-and-projects.md`) — fades out where it is cut off rather than ending in an ellipsis. A name,
-unlike the timestamp, then has its full text as its tooltip.
+unlike the timestamp, then has its full text as its tooltip, shown while the pointer is on the label and not on
+keyboard focus; the label's whole text is in the document whether or not it is cut, so assistive technology is given
+it either way.
 
 **While the pointer is over it, such a label runs as a marquee**, so all of it can be read:
 

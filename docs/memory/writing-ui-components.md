@@ -219,18 +219,35 @@ does nothing: its react-aria base filters `title` out of the DOM props without a
 
 Any tooltip on a control takes this shape — the control directly inside HeroUI's `Tooltip`, as `TitledControl` does —
 never `Tooltip.Trigger`, which renders a focusable `role="button"` `div` around the control: an extra tab stop that
-also takes focus on a mouse press, undoing `preventFocusOnPress`. The shape works only when the child is itself a
-react-aria-components control (any HeroUI button or trigger), which picks the tooltip's hover and focus handling up
-from context; any other child — a plain element, a `span` around the control — gets no tooltip, with no warning.
+also takes focus on a mouse press, undoing `preventFocusOnPress`. The shape works only when the child itself consumes
+react-aria's `FocusableContext` (through `useFocusable` or `Focusable`), which is where HeroUI's `Tooltip` leaves the
+trigger props and the trigger ref; every HeroUI button and trigger does. Any other child gets no tooltip at all and
+nothing warns — a plain element or a `span` around the control, and a react-aria collection item as well
+(`ListBox.Item`, built on `useOption` / `useSelectableItem`), which reads as a react-aria-components control and is
+not one for this purpose.
 
-The one sanctioned exception is a tooltip on a non-control indicator (a badge, a status mark), which has no
-react-aria-components control to hang the shape on: `IndicatorTooltip` in
-`packages/ui/src/components/IndicatorTooltip.tsx`. It is hover-only by design and fixes what a bare `Tooltip.Trigger`
-gets wrong: the trigger hardcodes `role="button"` (so one left without a `role` exposes an unnamed button) and is
-focusable, so it always sets `tabIndex={-1}`, cancels `mousedown` so a press does not take focus off the terminal, and
-takes either a `label` (`role="img"` and `aria-label`) or `role="presentation"` (browsers ignore that role on a
-focusable element, so it only keeps the unnamed button role off). A deliberately focusable indicator would use
-`Tooltip.Trigger` itself.
+`TitledControl` is one of **three** tooltip shapes and there is no fourth; which one to use follows what carries the
+tooltip:
+
+- A control: `TitledControl`, as above.
+- A non-control indicator that can be its own trigger — a badge, a status mark: `IndicatorTooltip` in
+  `packages/ui/src/components/IndicatorTooltip.tsx`. It is hover-only by design and fixes what a bare
+  `Tooltip.Trigger` gets wrong: the trigger hardcodes `role="button"` (so one left without a `role` exposes an
+  unnamed button) and is focusable, so it always sets `tabIndex={-1}`, cancels `mousedown` so a press does not take
+  focus off the terminal, and takes either a `label` (`role="img"` and `aria-label`) or `role="presentation"`
+  (browsers ignore that role on a focusable element, so it only keeps the unnamed button role off). A deliberately
+  focusable indicator would use `Tooltip.Trigger` itself.
+- Text or a mark that cannot be wrapped in a trigger where it sits — a run of running text, or anything inside a
+  react-aria collection item, which cannot be wrapped at all without leaving the collection: `AnchoredTooltip` in
+  `packages/ui/src/components/AnchoredTooltip.tsx`. The caller reports the hover itself and names the element the
+  tooltip is placed against, which may be an ancestor of what the tooltip belongs to. Never name as that anchor an
+  element the UI itself scrolls: react-aria closes a tooltip as soon as anything containing its anchor scrolls, so a
+  label that runs as a marquee and anchors to itself loses its tooltip to its own marquee.
+
+Only the first two open on keyboard focus, and only they are linked to what they belong to for assistive technology.
+An `AnchoredTooltip` adds no element of its own, so what it says has to reach a screen reader another way — the text
+itself, which is in the document whether or not it is clipped, or the name of the row it sits in. Do not reach for
+this shape where no such route exists.
 
 ## Every string the user reads goes through the catalog, in a shape a translation can follow
 

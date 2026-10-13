@@ -6,13 +6,13 @@ The user has objected to drawn-out testing. Verify in the app only the behaviour
 targeted run — the states, languages or screens the change actually touches, not a tour of the rest or a matrix of
 every combination — and leave what a unit test or the type checker already covers to them.
 
-Changing a shared component's markup or layout widens what the change touches to every surface already using it, so
-those surfaces are inside this narrow scope rather than outside it: making `MarkedPath`'s root a `span` for one new
-caller collapsed the path boxes in the Settings rows, and neither the type checker, the unit tests nor a gallery pass
-over the new caller's own surface showed it. Settle such a change by putting each existing call site side by side
-against the merge base — a second gallery server run from a branchless temporary worktree at that commit (the
-`git worktree add --detach` case in the "Creating" section of `.claude/skills/git-worktree/SKILL.md`) — rather than
-judging the new rendering on its own.
+Changing a shared component's markup, layout or timing widens what the change touches to every surface already
+using it, so those surfaces are inside this narrow scope rather than outside it: making `MarkedPath`'s root a `span`
+for one new caller collapsed the path boxes in the Settings rows, and neither the type checker, the unit tests nor a
+gallery pass over the new caller's own surface showed it. Settle such a change by putting each existing call site
+side by side against the merge base — a second gallery server run from a branchless temporary worktree at that
+commit (the `git worktree add --detach` case in the "Creating" section of
+`.claude/skills/git-worktree/SKILL.md`) — rather than judging the new rendering on its own.
 
 Where what the change alters is the data a fixture answers with rather than any markup, settle it on the replies instead
 of on renderings: dump every scenario's reply for the affected requests to JSON at the merge base and on the branch and
@@ -211,8 +211,11 @@ clear, as the correction rather than as a defect in the field.
 The page's HeroUI controls depend on input modality and timing in ways scripted input easily misses, in the app and
 in a plain browser alike. A tooltip opens on focus only after a real Tab key press (`element.focus()` or a click
 leaves it closed), and on hover only once HeroUI's `--tooltip-delay` (1500 ms in its default theme) has passed with
-the pointer resting on the control; a toast's close button takes pointer events only while the toast is hovered. So a
-tooltip that did not appear, or a control a script could not press, is not a finding until real input reproduces it.
+the pointer resting on the control — unless another tooltip closed less than 500 ms ago, react-aria's warm-up being
+one flag shared by every tooltip in the window, in which case it opens at once, so a tooltip that came up instantly
+by hand says nothing about its own delay and a check of what one waits starts from a window where none has been
+shown. A toast's close button takes pointer events only while the toast is hovered. So a tooltip that did not
+appear, or a control a script could not press, is not a finding until real input reproduces it.
 A Tab walk, on the other hand, needs no change to the system's keyboard-navigation setting: unlike Safari by default,
 this app's WKWebView moves Tab onto buttons whether `AppleKeyboardUIMode` is set or not, so a button that Tab skips
 is not explained by that setting.

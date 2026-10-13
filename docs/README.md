@@ -88,17 +88,20 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   differs from the branch badge, opening a change in the file viewer and expanding the lines its diff collapses,
   errors, and what is kept for the window's lifetime.
 - [Which session created a branch](product/branch-creator.md) — the creator badge on a branch's row in the Git mode's
-  From and To lists: what it answers and what it never does, the snapshot title it names a session by, when a branch
-  gets a creator and when it carries none, how a record is scoped to a repository and when it goes, the caps on how
-  many branches carry one, that nothing is written to the repository, and where a record can be missing or wrong.
+  From and To lists: what it answers and what it never does, the title it names a session by (the session's own while
+  it exists, the recorded one once it is gone) and the filled ring a branch of the selected session takes, when a
+  branch gets a creator and when it carries none, how a record is scoped to a repository and when it goes, the caps on
+  how many branches carry one, that nothing is written to the repository, and where a record can be missing or wrong.
 - [Empty states](product/empty-states.md) — the two shapes a view, list or panel with nothing to show takes: the full
   panel's glyph, title, explaining line and action, the compact row for a list nested in another, what each part says,
   and how each is announced.
 - [Toasts](product/toasts.md) — failures and notices that need no answer: where they appear, how one about a session
   is titled, when they dismiss themselves, how an identical one replaces rather than stacks, copying their text
   without taking focus off the terminal, and reaching them with F6.
-- [Labels and tooltips](product/labels-and-tooltips.md) — the tooltip every icon-only control of the top bar, the rail
-  and the sidebar carries, and how a name too long for its space is faded and offered in full.
+- [Labels and tooltips](product/labels-and-tooltips.md) — how every tooltip in the window behaves (the wait before one
+  opens, one at a time, what closes it, how it wraps) and the two places that keep the browser's own instead, the
+  tooltip every icon-only control of the top bar, the rail and the sidebar carries, the tooltips the indicators carry,
+  and how a name too long for its space is faded and offered in full.
 - [Appearance](product/appearance.md) — the light, dark and follow-the-system choice and which of them is the default,
   where it is chosen, what follows it (down to the terminal's palette, its 4.5:1 minimum contrast, and the native
   window's own appearance), where the choice is kept, and why a report page stays on a light surface either way.

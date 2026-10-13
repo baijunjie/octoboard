@@ -140,6 +140,27 @@ The exception is a control inside a react-aria collection row, such as a tag's r
 composes its accessible name from the button and the row through `aria-labelledby`, so there the `aria-label` is the
 bare verb with no placeholder, or the row's own text is announced twice.
 
+### A tooltip is the application's own, never the browser's `title`
+
+Nothing in the window uses the native `title` attribute to show a tooltip. The browser's own draws outside the
+application's control — its own timing, its own styling, and a second floating layer wherever the application already
+has one. Two places keep it, and both are a case where nothing else can serve:
+
+- The diff viewer's separators of collapsed lines, for the reason in "A control inside a rendering library's shadow
+  root" above: no React tree reaches that markup, so no tooltip of the application's can be rendered there.
+- A link inside a Markdown document in the file viewer. A `title` on an `<a>` is also the accessible description
+  assistive technology reads, which a tooltip that only answers the pointer cannot supply.
+
+That second reason is the rule the replacement has to be read against: **the application's tooltip answers the pointer
+and nothing else**. It is no tab stop, and the anchored shape (`AnchoredTooltip`, which a run of text or a mark inside
+a collection item takes, since neither can be a trigger of its own) is not associated with what it describes for
+assistive technology at all. So whatever a tooltip says must reach a screen reader by another route: a clipped label's
+full text is in the document whether it fits or not, a row carries its own accessible name, and an indicator that
+means something on its own is a named `role="img"`.
+
+What is left over is a shortfall kept on purpose, marked at its code: a sighted user who works from the keyboard
+reaches no tooltip, so a name that lives only there is a name they do not get.
+
 ## Roles and states
 
 ### Expanded and selected

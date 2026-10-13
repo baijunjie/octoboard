@@ -97,15 +97,18 @@ this. Check it where it shows: the listener is installed only while an overlay i
 below the layout breakpoint, with the pane as a drawer, or with a docked pane hidden and floated in on hover. A
 gallery scenario at a normal width, both panes docked, never reaches it.
 
-The second is react-aria's, and it is unconditional: while any tooltip is open, `useTooltipTrigger` holds a
+The second is react-aria's: while a tooltip **that has a trigger element** is open, `useTooltipTrigger` holds a
 capture-phase listener on `document` that calls `stopPropagation()` on every Escape, whatever else was waiting for the
-key (react-aria 3.52.1, unchanged in 3.53.1). Every icon-only control here carries a tooltip through `TitledControl`,
-and a tooltip opens on keyboard focus as much as on hover, so one Tab inside any dialog or view reaches that state —
-when Escape does nothing somewhere, what predicts it is "a tooltip is open", not which control holds focus. A surface
-that dismisses itself from a React `onKeyDown` loses the key, and a `window` capture-phase listener is the only way
-out — which is what `useEscapeWhileTooltipOpen` (`packages/ui/src/dialogs/`) is: it closes whatever surface it is
-handed, dialog or not, and only while a tooltip is open. Call it rather than writing your own, and add nothing of your
-own to a surface that already calls it, every dialog included. Such a handler can only choose whether to act, never
+key (react-aria 3.52.1, unchanged in 3.53.1). The listener is installed for every open tooltip, but its whole body is
+guarded on the trigger's ref, which only the trigger element's provider ever sets — so a tooltip hung on a control or
+on an indicator swallows the key and one anchored to an element that is not its trigger does not. Every icon-only
+control here carries a tooltip through `TitledControl`, and such a tooltip opens on keyboard focus as much as on
+hover, so one Tab inside any dialog or view reaches that state — when Escape does nothing somewhere, what predicts it
+is "a tooltip with a trigger is open", not which control holds focus. A surface that dismisses itself from a React
+`onKeyDown` loses the key, and a `window` capture-phase listener is the only way out — which is what
+`useEscapeWhileTooltipOpen` (`packages/ui/src/dialogs/`) is: it closes whatever surface it is handed, dialog or not,
+and only while such a tooltip is open. Call it rather than writing your own, and add nothing of your own to a
+surface that already calls it, every dialog included. Such a handler can only choose whether to act, never
 route the key onwards: once react-aria has swallowed it nothing can hand it back to the control that wanted it, which
 is why a combo box's suggestion list inside a dialog does not withdraw on Escape while a tooltip is open.
 
