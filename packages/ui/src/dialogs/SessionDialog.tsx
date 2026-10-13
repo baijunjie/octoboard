@@ -112,7 +112,12 @@ export function SessionDialog({
     >
       {blocked && <p className="text-sm text-danger">{t("agents.installPrompt")}</p>}
       <AccountSelect label={t("dialog.session.agentAccount")} groups={groups} value={choice} onChange={setPicked} />
-      <TextInput label={t("dialog.session.titleOptional")} value={title} onChange={setTitle} />
+      <TextInput
+        label={t("dialog.session.titleField")}
+        value={title}
+        onChange={setTitle}
+        description={t("dialog.session.titleHint")}
+      />
       {fixedOwner && (
         <div className="flex items-center gap-2 text-sm">
           <BindingBadge owner={fixedOwner} decorative />

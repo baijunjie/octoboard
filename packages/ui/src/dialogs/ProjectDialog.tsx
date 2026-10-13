@@ -243,7 +243,7 @@ export function ProjectDialog({
           />
         )}
         <TextInput
-          label={editing ? t("common.name") : t("common.nameOptional")}
+          label={t("common.name")}
           value={name}
           onChange={setName}
           placeholder={editing ? undefined : t("dialog.project.nameExample")}

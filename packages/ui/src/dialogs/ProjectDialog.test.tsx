@@ -96,11 +96,11 @@ it("keeps the form locked while the answer for the path as it stands is out", as
   const pending = render();
   type(input("Directory"), "~/code/a");
   // Locked from the keystroke on: the wait before the ask is part of the check.
-  expect(input("Name (optional)").disabled).toBe(true);
+  expect(input("Name").disabled).toBe(true);
   await settle(500);
-  expect(input("Name (optional)").disabled).toBe(true);
+  expect(input("Name").disabled).toBe(true);
   await answer(pending[0], null);
-  expect(input("Name (optional)").disabled).toBe(false);
+  expect(input("Name").disabled).toBe(false);
 });
 
 it("keeps the git form locked until the probe succeeds", async () => {
