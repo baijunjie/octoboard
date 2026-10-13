@@ -1240,6 +1240,20 @@ pub enum RequestBody {
     SyncProjectGit {
         project: String,
     },
+    /// Opens the system terminal at the project's directory, on the daemon's host. Answered with
+    /// `ack` once the terminal has been asked to open, not when its window closes. Refused with
+    /// `terminal_unavailable` when the directory is missing, the operating system has none, or the
+    /// launch fails.
+    OpenProjectTerminal {
+        project: String,
+    },
+    /// Pushes the project's current branch, and only that branch, never with `--force`. Answered
+    /// with `ack` once `git push` has exited; a success is followed by `project_git_status` from a
+    /// local re-read, with no fetch. Refused with `not_a_git_repository`, `not_on_a_branch`,
+    /// `no_commits_to_push`, `no_push_remote`, `upstream_not_a_remote` or `git_push_failed`.
+    PushProjectBranch {
+        project: String,
+    },
     Shutdown,
 }
 
@@ -1927,6 +1941,20 @@ pub mod error_code {
     pub const INVALID_COMMIT: &str = "invalid_commit";
     pub const UNKNOWN_COMMIT: &str = "unknown_commit";
     pub const GIT_FAILED: &str = "git_failed";
+    /// The system terminal could not be opened at a project's directory. `params` names `detail`.
+    pub const TERMINAL_UNAVAILABLE: &str = "terminal_unavailable";
+    /// A push was asked for while `HEAD` is detached. Nothing was pushed.
+    pub const NOT_ON_A_BRANCH: &str = "not_on_a_branch";
+    /// A push was asked for on a branch that has no commit yet. Nothing was pushed.
+    pub const NO_COMMITS_TO_PUSH: &str = "no_commits_to_push";
+    /// A branch with no upstream, and neither `origin` nor exactly one remote to send it to.
+    /// Nothing was pushed.
+    pub const NO_PUSH_REMOTE: &str = "no_push_remote";
+    /// The branch's upstream does not name a remote of this repository. Nothing was pushed.
+    pub const UPSTREAM_NOT_A_REMOTE: &str = "upstream_not_a_remote";
+    /// `git push` failed, or the branch name cannot be placed in a refspec. `params` names
+    /// `detail`, `git`'s own message when it ran.
+    pub const GIT_PUSH_FAILED: &str = "git_push_failed";
     /// A `read_project_change` whose change names no side its group can read.
     pub const INVALID_CHANGE: &str = "invalid_change";
     /// A body asked of a side on the disk whose path has a clean filter in effect: the patch was
@@ -2115,6 +2143,20 @@ mod tests {
                 r#"{"type":"sync_project_git","id":"request-1","project":"project-7"}"#,
                 |body| match body {
                     RequestBody::SyncProjectGit { project } => Some(project),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"open_project_terminal","id":"request-1","project":"project-7"}"#,
+                |body| match body {
+                    RequestBody::OpenProjectTerminal { project } => Some(project),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"push_project_branch","id":"request-1","project":"project-7"}"#,
+                |body| match body {
+                    RequestBody::PushProjectBranch { project } => Some(project),
                     _ => None,
                 },
             ),

@@ -50,7 +50,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   console's projects are checked against their remotes, what one check runs and the remote URL it records for the
   project; which of the user's own git settings a check's `git` is given and which are filtered out; and the
   Automatically sync repositories switch — what it fast-forwards, what it never does, where it is kept, and the
-  immediate fast-forward pass turning it on runs.
+  immediate fast-forward pass turning it on runs — and Push current branch: which branch is published, when an
+  upstream is recorded, and what is refused.
+- [Opening a project terminal](product/project-terminal.md) — Open terminal in a project's action menu: the system
+  terminal at the project's directory on the machine the daemon runs on, Terminal.app on macOS and the first installed
+  emulator on Linux, when the request finishes, and when it is refused.
 - [Orchestration](product/hub-orchestration.md) — how an owner (a console session, or an unbound project session in
   its own project) starts and drives sessions: each one's tools and a bound session's `report`, lead sessions (a
   project session bound to a console session that keeps its own sessions, two levels deep), the brief a task is
@@ -135,9 +139,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   pages, text aimed at agents), where the choice is kept, and what is translated so far.
 - [Launching agents](product/launching-agents.md) — the guarantee that Octoboard installs nothing into a project and
   never writes the user's agent configuration (the two narrow exceptions being the conversation record a switch of a
-  session's account copies and the Grok Build trust entry carried to the user's own store), and the one thing it
-  touches a project directory for, once the user turns it on; the three things injected per launch and the console
-  session's generated instruction file, the launch environment, and the per-agent specifics.
+  session's account copies and the Grok Build trust entry carried to the user's own store), and that a fast-forward
+  and a push are the ways it changes a project repository, both only at the user's word; the three things injected
+  per launch and the console session's generated instruction file, the launch environment, and the per-agent specifics.
 - [Folder trust](product/folder-trust.md) — each agent's own folder-trust confirmation and where it records the trust,
   the one auto-trust permission Claude Code, Codex and Grok Build share (a project or a trusted folder), the trust
   dialog, how Octoboard presses each agent's confirmation, carrying Grok Build's trust entry into the user's store, and

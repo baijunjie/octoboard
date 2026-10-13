@@ -9,11 +9,17 @@ This is the guarantee the whole design rests on:
 
 - **Octoboard installs nothing into a project.** It writes no instruction file, no settings file and no hook of its
   own, and changes none of the project's. What the session's agent itself writes while it works is the point of the
-  whole thing and is not Octoboard's doing. Removing a project removes an association, never a directory. The one
-  thing Octoboard does to a project directory on its own account happens only at the user's word: a project's branch
-  is fast-forwarded when it is behind its upstream, which moves its working tree — on its own once **Automatically
-  sync repositories** has been turned on, or for one project when the user chooses its **Sync repository** (see
-  "Automatically syncing repositories" and "Syncing one project by hand" in `docs/product/project-git-status.md`).
+  whole thing and is not Octoboard's doing. Removing a project removes an association, never a directory.
+  Octoboard does not move a project's working tree, and does not push, except at the user's word. A branch that is
+  behind its upstream and has no commits of its own is fast-forwarded, which moves its working tree — on its own
+  once **Automatically sync repositories** has been turned on, or for one project when the user chooses **Sync
+  repository** (see "Automatically syncing repositories" and "Syncing one project by hand" in
+  `docs/product/project-git-status.md`). Separately, **Push current branch** pushes that one branch. That updates
+  the remote and, in the repository, the remote-tracking refs `git` updates for that push; when the branch had no
+  upstream, it records one. It does not edit the project's files and does not move the working tree (see "Pushing
+  the current branch" in `docs/product/project-git-status.md`). A check's fetch of remote refs is neither of these:
+  it does not move the working tree and it does not push (see "What one check does" in
+  `docs/product/project-git-status.md`).
 - **The user's own agent configuration is never written to, with two narrow exceptions.** Octoboard does not edit
   `~/.claude.json`, `~/.codex/`, `~/.grok/`, an account's config directory, or anything else the agent reads as the
   user's global setup, and it never makes a trust decision of its own in any of them. The first exception is switching

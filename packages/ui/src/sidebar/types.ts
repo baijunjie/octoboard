@@ -33,9 +33,13 @@ export interface SidebarHandlers {
   onOpenArchive: (scope: ArchiveScope) => void;
   /** Opens the project's browser in the aside, starting nothing. */
   onBrowseProject: (project: Project) => void;
+  /** Opens the system terminal at the project's directory. */
+  onOpenProjectTerminal: (project: Project) => void;
   /** Checks the project against its remote and fast-forwards it now, whatever the automatic sync
    * setting says. */
   onSyncProjectGit: (project: Project) => void;
+  /** Pushes the project's current branch. */
+  onPushProjectBranch: (project: Project) => void;
   onSetPinned: (target: { project: Project } | { session: Session }, pinned: boolean) => void;
   /** Opens Settings at a section. */
   onOpenSettings: (section: SettingsSectionId) => void;

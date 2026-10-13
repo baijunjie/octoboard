@@ -781,6 +781,12 @@ export type RequestBody =
    * one-minute floor and the `auto_sync_repositories` setting. Answered with `ack`; the status
    * follows as `project_git_status` broadcasts. */
   | { type: "sync_project_git"; project: string }
+  /** Opens the system terminal at the project's directory, on the daemon's host. Answered with
+   * `ack` once the terminal has been asked to open. */
+  | { type: "open_project_terminal"; project: string }
+  /** Pushes the project's current branch and only that branch. Answered with `ack` once `git push`
+   * has exited; a success is followed by `project_git_status` from a local re-read. */
+  | { type: "push_project_branch"; project: string }
   /** Both fields are required: an account always has a name and a directory. Broadcasts
    * `settings_updated`. */
   | { type: "create_account"; agent: Agent; name: string; config_dir: string }

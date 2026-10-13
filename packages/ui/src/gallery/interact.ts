@@ -180,7 +180,22 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
 
   /** Clicks what `look` finds once it is there. */
   const clickWhenFound = async (look: () => HTMLElement | undefined, missing: string): Promise<void> => {
-    (await waitFor(look, missing)).click();
+    const element = await waitFor(look, missing);
+    element.click();
+    // A submenu a click opens closes again shortly unless the pointer is on its trigger, which a
+    // click never places. Put it there afterwards — before the click, the same events do not hold
+    // it open — so the submenu stays to be seen or pressed, as it does for a pointer.
+    if (element.getAttribute("aria-haspopup") === "menu") {
+      const box = element.getBoundingClientRect();
+      const init: PointerEventInit = {
+        bubbles: true,
+        cancelable: true,
+        pointerType: "mouse",
+        clientX: box.x + box.width / 2,
+        clientY: box.y + box.height / 2,
+      };
+      for (const type of ["pointermove", "pointerover", "pointerenter"]) element.dispatchEvent(new PointerEvent(type, init));
+    }
     // The press's own effects (a menu opening, a dialog mounting) land on the next frames.
     await wait(150);
   };

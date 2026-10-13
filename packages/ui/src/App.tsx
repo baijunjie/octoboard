@@ -51,7 +51,7 @@ import { WelcomeScreen, type WelcomeScreenHandle } from "./WelcomeScreen";
 
 export function App(): React.ReactElement {
   const t = useT();
-  const { request, toastError, reconnect, store } = useDaemon();
+  const { request, toastError, toastNotice, reconnect, store } = useDaemon();
   const connectionState = useDaemonStore((s) => s.connectionState);
   const hosts = useDaemonStore((s) => s.hosts);
   const consoles = useDaemonStore((s) => s.consoles);
@@ -371,6 +371,16 @@ export function App(): React.ReactElement {
     request({ type: "sync_project_git", project: project.id }).catch((err: unknown) => toastError((err as Error).message));
   };
 
+  const openProjectTerminal = (project: Project) => {
+    request({ type: "open_project_terminal", project: project.id }).catch((err: unknown) => toastError((err as Error).message));
+  };
+
+  const pushProjectBranch = (project: Project) => {
+    request({ type: "push_project_branch", project: project.id })
+      .then(() => toastNotice(t("sidebar.project.pushed")))
+      .catch((err: unknown) => toastError((err as Error).message));
+  };
+
   const openArchive = (scope: ArchiveScope) => {
     setArchiveScope(scope);
     // Below the `docked` breakpoint the sidebar is a drawer over the terminal, and would keep
@@ -579,7 +589,9 @@ export function App(): React.ReactElement {
                 onFocus={sidebarView.setFocus}
                 onOpenArchive={openArchive}
                 onBrowseProject={browseProject}
+                onOpenProjectTerminal={openProjectTerminal}
                 onSyncProjectGit={syncProjectGit}
+                onPushProjectBranch={pushProjectBranch}
                 onSetPinned={setPinned}
                 onOpenSettings={openSettingsAt}
                 open={panes.sidebarOpen}

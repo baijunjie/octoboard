@@ -222,8 +222,8 @@ fn check_project(state: &AppState, project: &Project, force_sync: bool) {
 /// itself; a project with no status yet has never been checked, so nothing is known to
 /// fast-forward it to. Fire-and-forget, like `refresh`.
 ///
-/// Only the caller has established that the setting is on — this is the one thing the daemon does
-/// inside a project's directory, so a caller that has not must not call it.
+/// Only the caller has established that the setting is on. The fast-forward writes to the
+/// repository, so a caller that has not must not call it.
 pub fn sync_behind_projects(state: &Arc<AppState>) {
     for status in state.git_statuses() {
         if !syncable(&status) {
@@ -286,8 +286,8 @@ fn sync_project(state: &AppState, project: &Project, mut status: GitStatus) {
 }
 
 /// Whether the **Automatically sync repositories** setting is on; a store that cannot be read
-/// counts as off, the same as the default — the fast-forward below is the one thing the daemon
-/// does inside a project's directory, so it never happens on a guess.
+/// counts as off, the same as the default. The fast-forward writes to the repository, so it
+/// never happens on a guess.
 fn auto_sync_enabled(state: &AppState) -> bool {
     state
         .store
@@ -340,7 +340,7 @@ fn fetch_remote(remotes: &[Remote], upstream_remote: Option<&str>) -> Option<Str
 /// `# branch.*` lines [`parse_branch_header`] takes. One constant rather than a literal at its one
 /// call site, so the test that proves this read leaves the repository's index alone runs the very
 /// command the check runs.
-const BRANCH_HEADER_ARGS: &[&str] = &[
+pub(crate) const BRANCH_HEADER_ARGS: &[&str] = &[
     "status",
     "--porcelain=v2",
     "--branch",
@@ -394,13 +394,13 @@ enum GitAccess {
 
 /// Runs `git` with `args` in `path` and returns its stdout as UTF-8, reading the repository and
 /// nothing more.
-fn run_git_read(path: &Path, args: &[&str]) -> Result<String, String> {
+pub(crate) fn run_git_read(path: &Path, args: &[&str]) -> Result<String, String> {
     run_git_access(path, args, GitAccess::Read)
 }
 
-/// Runs `git` with `args` in `path` and discards its stdout, for one of the two steps that write
-/// to the repository.
-fn run_git_write(path: &Path, args: &[&str]) -> Result<(), String> {
+/// Runs `git` with `args` in `path` and discards its stdout, for a step that writes to the
+/// repository: a fetch, a fast-forward, or a push.
+pub(crate) fn run_git_write(path: &Path, args: &[&str]) -> Result<(), String> {
     run_git_access(path, args, GitAccess::Write).map(|_| ())
 }
 
@@ -461,19 +461,19 @@ fn run_git_command(command: &mut std::process::Command) -> Result<String, String
 /// about the local branch and its upstream — everything `GitStatus` needs beyond `repository`,
 /// `activity` and `error`, which the caller fills in around this.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct BranchHeader {
-    branch: Option<String>,
-    detached: bool,
-    upstream: Option<String>,
-    ahead: u32,
-    behind: u32,
+pub(crate) struct BranchHeader {
+    pub(crate) branch: Option<String>,
+    pub(crate) detached: bool,
+    pub(crate) upstream: Option<String>,
+    pub(crate) ahead: u32,
+    pub(crate) behind: u32,
 }
 
 /// Parses the `# branch.*` header lines of `git status --porcelain=v2 --branch --untracked-files=no`'s
 /// output; every other line (the file-status entries this command also prints) is ignored, which is also what
 /// makes an unrecognised `# branch.*` line harmless. A pure function over the text, so it is
 /// unit-tested with literal strings rather than a real repository fixture.
-fn parse_branch_header(output: &str) -> BranchHeader {
+pub(crate) fn parse_branch_header(output: &str) -> BranchHeader {
     let mut oid = None;
     let mut initial = false;
     let mut head = None;
@@ -528,6 +528,31 @@ fn parse_branch_header(output: &str) -> BranchHeader {
         ahead,
         behind,
     }
+}
+
+/// Re-reads the local branch header and publishes it. A push moves the ahead count without a
+/// fetch, and this is what the badge shows afterwards; nothing here goes to the remote. An
+/// `error` already on the status stays unless this read itself fails, which records its own.
+pub(crate) fn publish_reread(state: &AppState, project: &Project) {
+    let path = PathBuf::from(&project.path);
+    let mut status = state
+        .git_status(&project.id)
+        .filter(|status| status.repository)
+        .unwrap_or(GitStatus {
+            project: project.id.clone(),
+            repository: true,
+            branch: None,
+            detached: false,
+            upstream: None,
+            ahead: 0,
+            behind: 0,
+            activity: GitActivity::Idle,
+            error: None,
+        });
+    status.repository = true;
+    status.activity = GitActivity::Idle;
+    read_branch_header(&path, &mut status);
+    state.publish_git_status(status);
 }
 
 /// Parses `+<ahead> -<behind>` as printed after `# branch.ab `; a part that does not match reads

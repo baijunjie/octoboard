@@ -1,4 +1,4 @@
-import { Archive, ArrowLeftRight, FileDown, Focus, FolderOpen, FolderPlus, KeyRound, List, Pencil, Pin, PinOff, RefreshCw, Settings2, Trash2 } from "lucide-react";
+import { Archive, ArrowLeftRight, FileDown, Focus, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Pencil, Pin, PinOff, RefreshCw, Settings2, Terminal, Trash2, Upload } from "lucide-react";
 
 import { switchEntries } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuSubmenu } from "../components/ActionMenu";
@@ -71,8 +71,8 @@ export type MenuPlacement = "list" | "focused" | "nested";
 
 /** The project's actions, opening its files first, in the project row and in a focus mode (the
  * project's own header, and a console session's project headings); `placement` says which.
- * "Sync repository" is offered only while the project is known to be a git repository
- * (`gitRepository`, from its git status). */
+ * Git is a submenu, offered only while the project is known to be a git repository
+ * (`gitRepository`, from its git status): sync the repository, and push the current branch. */
 export function projectMenu(
   t: Translate,
   handlers: SidebarHandlers,
@@ -82,7 +82,19 @@ export function projectMenu(
 ): ActionMenuEntry[] {
   return [
     { label: t("sidebar.project.browse"), icon: FolderOpen, onClick: () => handlers.onBrowseProject(project) },
-    ...(gitRepository ? [{ label: t("sidebar.project.syncGit"), icon: RefreshCw, onClick: () => handlers.onSyncProjectGit(project) }] : []),
+    { label: t("sidebar.project.openTerminal"), icon: Terminal, onClick: () => handlers.onOpenProjectTerminal(project) },
+    ...(gitRepository
+      ? [
+          {
+            label: t("sidebar.project.git"),
+            icon: GitBranch,
+            items: [
+              { label: t("sidebar.project.syncGit"), icon: RefreshCw, onClick: () => handlers.onSyncProjectGit(project) },
+              { label: t("sidebar.project.pushBranch"), icon: Upload, onClick: () => handlers.onPushProjectBranch(project) },
+            ],
+          },
+        ]
+      : []),
     "separator",
     ...(placement === "focused" ? [] : [pinItem(t, project.pinned, () => handlers.onSetPinned({ project }, !project.pinned))]),
     { label: t("sidebar.project.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-project", project }) },

@@ -213,13 +213,25 @@ stands for, in the same words the row's own name folds in beside the project's n
 `docs/product/labels-and-tooltips.md`).
 
 At the row's end are a **+** button, **New session**, which opens the new-session dialog for that project (see
-"Opening a session" in `docs/product/sessions.md`), and the project's action menu:
+"Opening a session" in `docs/product/sessions.md`), and the project's action menu. The same menu is the focused
+project's, and a project's heading in a console session's focus mode, apart from the items those views leave out
+(see "What both views show" and "A console session's focus mode" in `docs/product/focus-mode.md`). Choosing an item
+closes the menu at once. The first items, set apart from the rest, are **Browse files**, **Open terminal** and,
+while the project's status says the directory is a git repository, **Git**.
 
 - **Browse files** — shows the project's files in the right pane, selecting, starting and resuming no session (see
   `docs/product/project-pane.md`).
-- **Sync repository** — only while the project's directory is known to be a git repository: checks the project
-  against its remote and fast-forwards it right now (see "Syncing one project by hand" in
-  `docs/product/project-git-status.md`). It and Browse files come first, set apart from the items below them.
+- **Open terminal** — every project, including one that is not a git repository and one whose git status has not
+  arrived. Opens the system terminal at the project's directory (see "Opening a project terminal" in
+  `docs/product/project-terminal.md`). Opening it toasts nothing; a failure is an error toast.
+- **Git** — a submenu, only while the project's status says its directory is a git repository, so not before the
+  first status and not when the directory is not one (see "What one check does" in
+  `docs/product/project-git-status.md`). It holds **Sync repository**, then **Push current branch**. Sync repository
+  checks the project against its remote and fast-forwards it right now, is not waited on, and toasts nothing when it
+  succeeds (see "Syncing one project by hand" in `docs/product/project-git-status.md`). Push current branch pushes
+  that branch and is waited on until the push finishes; the window then shows a notice that the current branch was
+  pushed, or an error toast if the push was refused (see "Pushing the current branch" in
+  `docs/product/project-git-status.md`).
 - **Pin** / **Unpin** — see "Pinning" below.
 - **Rename** — a dialog with the name alone; an empty name is rejected.
 - **Project settings** — the project dialog, see "Editing a project" in `docs/product/consoles-and-projects.md`.

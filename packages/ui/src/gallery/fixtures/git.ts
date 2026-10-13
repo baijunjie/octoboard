@@ -1,3 +1,4 @@
+import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
 import { consoleOf, gitStatusOf, projectOf, sessionOf, snapshotState } from "./builders";
 
@@ -71,6 +72,24 @@ const squeezeSessions = [
 ];
 const squeezeStatuses = [squeezeStatus, cjkStatus, countsStatus];
 
+/** One project, so the open menu is the subject rather than one row of the badge list. */
+function projectMenuState(project: ReturnType<typeof projectOf>, status: ReturnType<typeof gitStatusOf>) {
+  return snapshotState({
+    consoles: [console_],
+    projects: [project],
+    sessions: [sessionOf(`s-menu-${project.id}`, console_.id, project.id, "Working on it", "idle")],
+    gitStatuses: [status],
+  });
+}
+
+const openProjectMenu = (name: string) => (ui: Ui) => ui.press(ui.t("sidebar.project.actions", { name }));
+
+const openGitSubmenu = (name: string) => [
+  openProjectMenu(name),
+  (ui: Ui) => ui.press(ui.t("sidebar.project.git")),
+  (ui: Ui) => ui.wait(300),
+];
+
 export const gitScenarios: Scenario[] = [
   {
     id: "git-badges",
@@ -112,5 +131,30 @@ export const gitScenarios: Scenario[] = [
       sessions: squeezeSessions,
       gitStatuses: squeezeStatuses,
     }),
+  },
+  {
+    id: "git-project-menu",
+    group: GROUP,
+    title: "Project menu on a git repository",
+    description: "Open terminal, then Git, which opens onto Sync repository and Push current branch.",
+    state: projectMenuState(evenProject, gitStatusOf(evenProject.id)),
+    steps: openGitSubmenu(evenProject.name),
+  },
+  {
+    id: "git-project-menu-not-repository",
+    group: GROUP,
+    title: "Project menu where the project is not a repository",
+    description:
+      "Open terminal is offered and Git is not. A project that has not reported a status yet, and one that is a subdirectory of a repository, show this same menu.",
+    state: projectMenuState(noRepoProject, gitStatusOf(noRepoProject.id, { repository: false, branch: null, upstream: null })),
+    steps: [openProjectMenu(noRepoProject.name), (ui) => ui.wait(300)],
+  },
+  {
+    id: "git-push-accepted",
+    group: GROUP,
+    title: "Push of the current branch accepted",
+    description: "The notice the push raises once it is accepted: Pushed the current branch.",
+    state: projectMenuState(evenProject, gitStatusOf(evenProject.id)),
+    steps: [...openGitSubmenu(evenProject.name), (ui) => ui.press(ui.t("sidebar.project.pushBranch")), (ui) => ui.wait(300)],
   },
 ];

@@ -79,9 +79,33 @@ describe("a project's menu", () => {
     expect(labels("nested")).not.toContain("Focus mode");
   });
 
-  it("offers Sync repository only for a git repository", () => {
-    expect(labels("list", true)).toContain("Sync repository");
-    expect(labels("list")).not.toContain("Sync repository");
+  it("offers Open terminal for every project", () => {
+    expect(labels("list")).toContain("Open terminal");
+    expect(labels("focused")).toContain("Open terminal");
+  });
+
+  it("puts sync and push under Git only for a git repository", () => {
+    const git = (repository: boolean) => {
+      const entry = projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, [], { gitRepository: repository }).find(
+        (candidate) => typeof candidate === "object" && candidate.label === "Git",
+      );
+      return entry && typeof entry === "object" && "items" in entry ? entry.items.flatMap((item) => (typeof item === "object" ? [item.label] : [])) : undefined;
+    };
+    expect(git(true)).toEqual(["Sync repository", "Push current branch"]);
+    expect(git(false)).toBeUndefined();
+  });
+
+  it("opens a terminal and pushes the current branch", () => {
+    const handlers = { onOpenProjectTerminal: vi.fn(), onPushProjectBranch: vi.fn() } as unknown as SidebarHandlers;
+    const project = { id: "p" } as Project;
+    const menu = projectMenu(t, handlers, project, [], { gitRepository: true });
+    const terminal = menu.find((entry) => typeof entry === "object" && entry.label === "Open terminal");
+    (terminal as { onClick: () => void }).onClick();
+    expect(handlers.onOpenProjectTerminal).toHaveBeenCalledWith(project);
+    const git = menu.find((entry) => typeof entry === "object" && "items" in entry && entry.label === "Git");
+    const push = (git as { items: { label: string; onClick: () => void }[] }).items.find((item) => item.label === "Push current branch");
+    push?.onClick();
+    expect(handlers.onPushProjectBranch).toHaveBeenCalledWith(project);
   });
 
   it("leaves Pin out of the focused project's own menu only", () => {

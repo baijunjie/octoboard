@@ -360,7 +360,7 @@ function FocusProjectGroup({
   selectedSessionId?: string;
 }): React.ReactElement {
   const t = useT();
-  // Read as `ProjectFocusView` does, for the "Sync repository" item.
+  // Read as `ProjectFocusView` does, for the Git submenu.
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
   const headerRef = useRef<HTMLDivElement>(null);
   // Where focus goes when the pin button, ahead of it, is unpinned away.

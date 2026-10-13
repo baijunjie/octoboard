@@ -347,5 +347,5 @@ a daemon started by hand (see "Starting up"), and removes it on its way out. On 
 `$TMPDIR`; on Linux, where `TMPDIR` is usually unset, it is the shared `/tmp`, so two daemons on one server — each a
 different owner's, each single-user — would write the same file.
 
-Nothing is written inside a project directory, and nothing is written into the user's own agent configuration beyond
-two narrow exceptions — see "What Octoboard never modifies" in `docs/product/launching-agents.md`.
+What Octoboard writes inside a project's repository, and what it writes into the user's own agent configuration, is
+in "What Octoboard never modifies" in `docs/product/launching-agents.md`.

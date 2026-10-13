@@ -3,8 +3,9 @@
 A project whose directory is a git repository carries its **current branch and how far that branch is from its
 upstream** in the sidebar. Octoboard checks those projects against their remotes by itself, on an interval, for the
 current console, and checks one project at once when asked to with **Sync repository**. What a check does beyond
-reporting depends on one setting, **Automatically sync repositories**, described last, and on whether the check was
-asked for by hand.
+reporting depends on one setting, **Automatically sync repositories**, described in "Automatically syncing
+repositories" below, and on whether the check was asked for by hand. Pushing the current branch is not a check
+(see "Pushing the current branch" below).
 
 A project's uncommitted changes are not part of this: they are in the project pane's Git mode (see
 `docs/product/project-pane-git-mode.md`), which only reads the repository and has no part in these checks.
@@ -83,9 +84,12 @@ again until its next check.
 
 ### What one check does
 
-- A directory that is not a git repository is reported as such, and the badge shows nothing for it. The project's
-  recorded remote URL is cleared, unless the directory cannot be seen at all (see "The project's remote URL" in
-  `docs/product/consoles-and-projects.md`).
+- A directory that is not a git repository is reported as such, and the badge shows nothing for it. For this badge,
+  for **Sync repository** and for **Push current branch**, a directory is a git repository only when it has a `.git`
+  entry of its own; a subdirectory of a repository is not one. The project pane's Git mode looks further up the
+  folders (see "The repository and its worktrees" in `docs/product/project-pane-git-mode.md`); the badge does not.
+  The project's recorded remote URL is cleared, unless the directory cannot be seen at all (see "The project's remote
+  URL" in `docs/product/consoles-and-projects.md`).
 - Otherwise the repository's remotes are read, and the project's recorded remote URL is made the one that read gives,
   which is how that value is kept true to a repository whose remote changed outside Octoboard (same section). A read
   that could not be made leaves the recorded value alone. A changed value reaches the open windows at once; nothing
@@ -116,18 +120,20 @@ certificate verification off.
 
 Two consequences are worth knowing:
 
-- Certificates and keys an enterprise network needs still reach the fetch when they are given through those variables
-  alone rather than through a configuration file.
+- Certificates and keys an enterprise network needs still reach the fetch, and a push, when they are given through
+  those variables alone rather than through a configuration file.
 - A setting only a dropped variable carries does not apply. The check then fails, rather than quietly reporting the
   branch and counts of whatever repository such a variable names, and its reason reaches the badge's warning triangle
-  like any other failure (see "The branch badge" above).
+  like any other failure (see "The branch badge" above). A push fails the same way, as an error toast, rather than
+  publishing some other repository (see "Pushing the current branch" below).
 
 A git association's clone, and the check the association form makes of a git URL, are **not** filtered this way: they
 run with the whole shell environment (see "Associating a project" in `docs/product/consoles-and-projects.md`).
 
 `git` is run so that it can never stop to ask for a credential, a passphrase or an unknown host key — each of those
-fails immediately instead — and every `git` call is given at most two minutes, so a check cannot hang; a call that
-runs out reports only that it did not finish in time.
+fails immediately instead — and every `git` call of a check is given at most two minutes, so a check cannot hang; a
+call that runs out reports only that it did not finish in time. A push's own bounds are in "Pushing the current
+branch" below.
 
 ## Automatically syncing repositories
 
@@ -141,24 +147,30 @@ fast-forwarded — at the end of each check, and once immediately when the switc
 on" below) — and the badge shows the fast-forward in flight. With it off, only Sync repository fast-forwards (see
 "Syncing one project by hand" below), under the same rules:
 
-- It **never pushes**, and never merges anything that is not a fast-forward.
+- It **never pushes**, and never merges anything that is not a fast-forward. A push happens only when the user
+  chooses **Push current branch**, and it is never part of this fast-forward (see "Pushing the current branch"
+  below).
 - A branch that is ahead of its upstream, whether or not it is also behind, is left alone. So are a branch with no
   upstream and a detached `HEAD`.
 - Whether the project has a running agent session makes no difference: the working tree can move under an agent that
   is working in that project.
 - A fast-forward `git` refuses records its message for the warning triangle, as a failed fetch does.
 
-Fast-forwarding a branch — with the switch on, or by Sync repository — is the one way Octoboard changes anything
-inside a project's directory; the guarantee it qualifies is in "What Octoboard never modifies" in
-`docs/product/launching-agents.md`.
+Fast-forwarding a branch — with the switch on, or by Sync repository — moves that branch's working tree. Pushing
+the current branch does not: it updates the remote and, in the repository, the remote-tracking refs `git` updates
+for that push, and when the branch had no upstream it records one. It does not edit the project's files (see
+"Pushing the current branch" below). A check's fetch still updates remote refs only and still does not move the
+working tree or push (see "What one check does" above). The guarantee these qualify is in "What Octoboard never
+modifies" in `docs/product/launching-agents.md`.
 
 ### Syncing one project by hand
 
-A project's action menu offers **Sync repository** while the project's status says its directory is a git repository
-— so not before its first status has arrived (see "Project rows" in `docs/product/sidebar.md` for where the menu
-is). It runs that project's check right away and then fast-forwards the branch under exactly the rules above, whether
-or not **Automatically sync repositories** is on; choosing it is the consent the switch would otherwise give. The
-one-minute floor does not apply.
+A project's action menu offers **Sync repository** under **Git** while the project's status says its directory is a
+git repository — so not before its first status has arrived (see "What one check does" above, and "Project rows" in
+`docs/product/sidebar.md` for where the menu is). It does not push. Choosing it closes the menu and starts the check
+without waiting; a success is not toasted. It runs that project's check right away and then fast-forwards the branch
+under exactly the rules above, whether or not **Automatically sync repositories** is on; choosing it is the consent
+the switch would otherwise give. The one-minute floor does not apply.
 
 If a check of the project is already running, nothing starts alongside it: as soon as it ends, one more check runs,
 with the fast-forward, so the request ends in a fast-forward attempt. However many requests arrive meanwhile, they
@@ -199,3 +211,70 @@ console that is current in no window therefore stays on it until that console is
 checked, since a status is dropped only when the project or its console is deleted.
 
 Turning the switch **off** undoes nothing and triggers nothing: branches already fast-forwarded stay where they are.
+
+## Pushing the current branch
+
+**Push current branch**, under **Git** in the project's action menu, pushes that project's current branch and only
+that branch. It is offered only while the project's status says the directory is a git repository (see "Project
+rows" in `docs/product/sidebar.md`). Choosing it closes the menu at once. The push is waited on until `git push` has
+exited. When the push is accepted, the window that asked shows a notice toast saying the current branch was pushed.
+A refusal is an error toast worded from the code below. Pushing does not fetch and does not fast-forward, and a
+fast-forward never pushes (see "Automatically syncing repositories" above). A local branch that is behind its
+upstream stays behind; if the remote rejects the update, the push fails and the branch stays where it was.
+
+The push never uses `--force`, and it is never a bare `git push`, which would follow `push.default` and can publish
+every branch whose name exists on the remote. The one branch is named explicitly, so only that branch is published.
+The user's git configuration and credential helpers are used as they stand. `git` cannot stop to ask for a
+credential, a passphrase or a host key — the same refusal as a fetch (see "The environment a check runs `git` in"
+above) — and the push itself is given at most two minutes.
+
+Once the directory is a repository, the branch is read, then the repository's remotes. That remotes read is
+filtered and non-interactive in the same way, and is given at most 30 seconds. If either read fails, the push
+fails and `git push` is not run, so a detached `HEAD` whose remotes cannot be read is reported as that failed read
+rather than as not being on a branch.
+
+What is pushed, when both reads succeed:
+
+- A branch that has an upstream is pushed to that upstream's remote and remote branch. The remote is the longest
+  configured remote name that is a prefix of the upstream followed by `/`, and the rest of the upstream — which
+  must be non-empty — is the remote branch. A remote named `fork/origin` wins over `fork` for an upstream
+  `fork/origin/main`; a remote named `origin` does not match an upstream `origin-fork/main`. The remote branch
+  need not have the same name as the local branch. This push does not change the upstream.
+- A branch with no upstream is pushed to `origin` when the repository has that remote, otherwise to its only
+  remote, and that push records the upstream under the local branch's own name.
+
+Nothing is pushed when the push is refused. A refused push publishes no status of its own:
+
+- The project directory is not a git repository when the push runs: `not_a_git_repository`. The rule is the badge's
+  (see "What one check does" above): `.git` must be in the project directory itself. A subdirectory of a repository
+  is not one.
+- `HEAD` is detached: `not_on_a_branch`.
+- The branch has no commit yet: `no_commits_to_push`.
+- The upstream names no configured remote of this repository: `upstream_not_a_remote`.
+- There is no upstream, and the repository has neither an `origin` nor exactly one remote: `no_push_remote`. No
+  remotes at all, and several remotes with no `origin`, are both this refusal.
+- A branch or remote name is empty, starts with `-`, or contains `:`, a NUL or a newline: `git_push_failed`. `git`
+  is not run. The reason says the name cannot be used in a refspec. The local branch's name is judged before the
+  upstream. A remote or remote-branch name is judged only after the upstream has matched a remote, so an upstream
+  that matches none is `upstream_not_a_remote` even when its text would not be a usable name.
+- The branch cannot be read, or the remotes cannot be read: `git_push_failed`. The branch's reason is `git`'s own
+  message, or that the read did not finish in time. The remotes' reason says they could not be read.
+- `git push` itself fails, including a remote that rejects the update, a missing credential, or a push that does
+  not finish within two minutes: `git_push_failed`, with `git`'s own message, or that it did not finish in time.
+
+A project that no longer exists is `unknown_project`.
+
+The push does not take the claim a check uses, so the two are not ordered. **Sync repository**, or a scheduled
+check, that arrives during a push is handled as it would be with no push in flight: it is not queued behind the
+push. A push that finishes while a check is in flight publishes an idle status, which can replace the check's
+in-flight badge until the check publishes again. A second push of the same project is not refused while one is
+still running.
+
+A successful push does not edit the project's files and does not move the working tree. It updates the remote, and
+in the repository it updates the remote-tracking refs `git` updates for that push. When the branch had no upstream,
+it also records one. The daemon then re-reads the local branch header and publishes the project's git status, with
+no fetch, so the badge's ahead count can drop. Every window showing the project sees that status. The badge does
+not show a check or a fast-forward in flight for the push itself. An error the last check left on the badge stays,
+unless that re-read fails, in which case the warning becomes the re-read's message and the branch and the counts
+stay as they were. A re-read that fails does not turn the notice into an error toast: the push was accepted.
+Turning **Automatically sync repositories** on never pushes.
