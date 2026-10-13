@@ -12,9 +12,12 @@ Build 1.0.46**. What "Folder-trust confirmations" says about Codex and Grok Buil
 **Grok Build 1.0.50**. What "A long MCP tool call is moved to the background" and "A pasted prompt reaches
 `UserPromptSubmit` wrapped" say was observed on **Claude Code 2.1.295**. Each agent's "Model and reasoning effort" note
 was measured on **Claude Code 2.1.296**, **Codex 0.160.0** and **Grok Build 1.0.50**; the Codex facts were not
-re-checked on **0.161.0**, which the folder-trust facts above were measured on. All three rewrite their hook surface,
-their payload fields, their configuration layering and their on-disk layout on upgrade, so check a detail here against
-the installed version before relying on it.
+re-checked on **0.161.0**, which the folder-trust facts above were measured on. What the Grok Build section's "What the
+model itself is handed, and what it calls" says was re-confirmed on **Grok Build 1.0.52** with a real account, as was
+the timeout paragraph's `tool_timeout_sec = 660`; "The id a turn records is not one of the ids `grok models` prints"
+was first measured on that build.
+All three rewrite their hook surface, their payload fields, their configuration layering and their on-disk layout on
+upgrade, so check a detail here against the installed version before relying on it.
 
 How Octoboard's status mapping handles these traps is encoded in `apps/daemon/src/hooks.rs`; the product behavior
 built on them is in the product docs.
@@ -378,30 +381,35 @@ byte-identical handlers are deduplicated across them.
 `mcp_servers.<key>`, sets the limit; Grok's own user guide (`~/.grok/docs/user-guide/07-mcp-servers.md`) documents the
 default as 6000 seconds, and a measurement bounds it from below: a call left unanswered was still outstanding at 310 s,
 so the `default: 60` that another string inside the executable suggests is not what this build does. The exact default
-was not measured. When the limit does pass, Grok sends the server a `notifications/cancelled` carrying
-`{"requestId": <id>, "reason": "request timeout"}` — unlike Codex, which sends nothing at all — and leaves the
-connection open: no stdin EOF followed the cancellation, nor a normal exit of the same session. Its own model is told
-`Tool \`<server>__<tool>\` failed via \`use_tool\`: MCP tool '<tool>' timed out after <n> seconds`, and the turn carries
-on. Measured on 1.0.50 against a recording stdio server that never answered `tools/call`, with the limit at 20 s (the
+was not measured. When the limit does pass, Grok sends the server a `notifications/cancelled` carrying `{"requestId":
+<id>, "reason": "request timeout"}` — unlike Codex, which sends nothing at all — and leaves the connection open: no
+stdin EOF followed the cancellation, nor a normal exit of the same session. Its own model is told `Tool
+\`<server>__<tool>\` failed via \`use_tool\`: MCP tool '<tool>' timed out after <n> seconds`, and the turn carries on.
+Measured on 1.0.50 against a recording stdio server that never answered `tools/call`, with the limit at 20 s (the
 cancellation arrived at 20.65 s) and a tool that did answer in the same run as the control; the key is honoured in the
 block Octoboard appends to the `config.toml` copy, which is where the 20 s came from. Octoboard sets it to 660 there,
 its own 600 s forwarding limit plus a minute, so that its limit is the one that ends a call: a cancellation withdraws a
 waiting request for a console session, which would end the user's 8 minutes to answer early (see "The call" in
-`docs/product/requesting-a-console-session.md`).
+`docs/product/requesting-a-console-session.md`). On 1.0.52 with a real account, the appended `[mcp_servers.octoboard]`
+block was read off a live farm carrying `tool_timeout_sec = 660`.
 
 **The model is held silent while an MCP call is outstanding**, the opposite of Codex. Through a
 `request_console_session` call that Octoboard kept waiting the full 8 minutes, Grok sent its endpoint nothing between
 the turn's own request and the one carrying the tool's error: no turn of its own, no token spent (measured on 1.0.50
 against a stub inference endpoint).
 
-**What the model itself is handed, and what it calls** (1.0.50, read off the requests Grok sent to a stand-in
-endpoint): an MCP tool is **not** among the tools offered to the model. They are reached through Grok's own `use_tool`,
-whose `tool_name` is the qualified `<server key>__<tool>` and whose `tool_input` holds the arguments — the wrapper the
-`PreToolUse` payload shows — and a `search_tool` call first is not required. Every chat request sets `stream: true`, so
-anything standing in for the endpoint has to answer as a stream. A turn is also followed by requests that offer no
-tools at all and belong to the TUI rather than the agent: the dashboard summary line, the session title, and a
-prediction of the user's next line. Inference for one model can be routed on its own through a `[model.<name>]` entry
-carrying its own `base_url` (and `api_key`), without the `endpoints.models_base_url` that moves every model's.
+**What the model itself is handed, and what it calls** (1.0.50 against a stand-in endpoint, re-confirmed on 1.0.52
+against a real account): an MCP tool is **not** among the tools offered to the model. They are reached through Grok's
+own `use_tool`, whose `tool_name` is the qualified `<server key>__<tool>` and whose `tool_input` holds the arguments —
+the wrapper the `PreToolUse` payload shows — and a `search_tool` call first is not required, though 1.0.52 injects a
+system reminder of its own telling the model to call `search_tool` for a tool's input schema before `use_tool`. In four
+real Grok Build 1.0.52 sessions driven through `request_console_session` end to end, every one called `search_tool` at
+least once, and what a real model called was the `use_tool` wrapper with the qualified `octoboard__<tool>` name. Every
+chat request sets `stream: true`, so anything standing in for the endpoint has to answer as a stream. A turn is also
+followed by requests that offer no tools at all and belong to the TUI rather than the agent: the dashboard summary line,
+the session title, and a prediction of the user's next line. Inference for one model can be routed on its own through a
+`[model.<name>]` entry carrying its own `base_url` (and `api_key`), without the `endpoints.models_base_url` that moves
+every model's.
 
 **Model and reasoning effort**: `--model <id>` and `--reasoning-effort <level>`, placed after the `--rules` pair and
 before the positional task. Grok persists some session settings back into `config.toml`; the per-session `GROK_HOME`
@@ -419,6 +427,11 @@ from the text, which is the one Grok itself shows, and the names, efforts and `h
 alone would do for the data but only exists after Grok has run in that home, and the text is what refreshes it. The
 cache is per account (its `identity` differs). **An unknown id is refused loudly at launch** with `Couldn't set model
 '<id>'.`, the opposite of Codex's silent deferred failure.
+
+**The id a turn records is not one of the ids `grok models` prints** (1.0.52). With nothing set, a session runs the
+`config.toml` default — `grok-4.7` on the account measured — while its own session record and usage file name the
+served model `grok-4.7-build`. So the id to match a turn against the list Octoboard offers is the configured one, not
+the one the records carry.
 
 ## Across the three agents
 
