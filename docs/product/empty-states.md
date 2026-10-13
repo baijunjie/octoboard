@@ -15,7 +15,9 @@ The form an empty state takes wherever it fills an area of its own, centred in i
 
 - **a glyph** on a round muted field, saying what kind of nothing this is.
 - **a heading** naming what is missing, worded as a short title carrying no punctuation at all, a comma inside it
-  included: a title that needs one is a sentence, and what follows the comma belongs in the line under it.
+  included: a title that needs one is a sentence, and what follows the comma belongs in the line under it. It is drawn
+  a step larger than the line under it and in the full-strength text colour, where that line is smaller and muted, so
+  the panel leads with the title and the line under it reads as secondary.
 - **a line under the heading**, where there is more to say than the title. It is either a whole sentence saying what
   the heading leaves out — where what is missing comes from, or what to do about it — or a bare fact about the subject
   itself, such as the size of a file that cannot be drawn, or the size before and after for a change between two of

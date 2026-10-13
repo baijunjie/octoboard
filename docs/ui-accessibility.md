@@ -240,6 +240,11 @@ button, so pressing the indicator activates the control exactly as pressing its 
 Text drawn to read as a heading is `<h1>`-`<h6>`, never a `<p>` carrying a heavier weight: the structure a screen
 reader navigates by is the element, not the look.
 
+The converse holds as well: a heading element still has to be drawn as one. A heading inside a container whose base
+style sets the secondary text size and colour inherits both, and weight alone is too little to read as a heading — so
+it carries its own size and colour instead. `EmptyPanel`'s full panel is the case: HeroUI's `.empty-state` puts
+`text-sm text-muted` on the whole panel, and the heading overrides both so it leads the line under it.
+
 A heading also never outranks the one above it. `EmptyPanel` takes `headingLevel` for that: its heading stands at the
 level of the heading naming whatever it fills, so the two read as one thing. The default `<h2>` is the level of a
 pane's own title (`ArchiveView`, `ProjectBrowser`) and of a dialog's, which react-aria sets for every `Frame.Heading`;

@@ -28,9 +28,10 @@ export function EmptyPanel({
   icon: LucideIcon;
   message: string;
   /** The full panel's heading level: the level of the heading naming whatever the panel stands in
-   * for, so the two read as one thing rather than the panel opening a section of its own. The
-   * default suits a pane's own title and a dialog's, both `h2`; the sidebar's `SectionHeading` is
-   * an `h3`, so a panel inside one of those sections passes 3. A compact row has no heading. */
+   * for, so the two read as one thing in the view's outline rather than the panel opening a section
+   * of its own. The default suits a pane's own title and a dialog's, both `h2`; the sidebar's
+   * `SectionHeading` is an `h3`, so a panel inside one of those sections passes 3. A compact row
+   * has no heading. */
   headingLevel?: 2 | 3;
   /** The full panel's line under the heading, explaining what the heading leaves out; a compact
    * row has no room for one. It sits in a `p`, so it takes phrasing content only. */
@@ -99,7 +100,11 @@ export function EmptyPanel({
       <span className="flex size-12 items-center justify-center rounded-full bg-default text-muted">
         <Icon aria-hidden="true" className="size-6" />
       </span>
-      <Heading className="text-sm font-semibold">{message}</Heading>
+      {/* The heading carries its own size and colour: HeroUI's `.empty-state` base sets `text-sm
+          text-muted` on the whole panel, so a heading left to inherit would come out at the
+          explaining line's size and colour both, leaving the weight as the only thing telling the
+          two apart — too little to read as a heading. */}
+      <Heading className="text-base font-semibold text-foreground">{message}</Heading>
       {description && <p className="max-w-sm text-sm break-words text-muted">{description}</p>}
       {action && (
         // A press never takes focus: it would drop to `<body>` when the panel goes away, and

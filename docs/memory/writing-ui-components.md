@@ -19,6 +19,15 @@ ARIA region semantics.
   border, frame or outline HeroUI does not draw itself (the "Do not change how a HeroUI component looks" section of
   `docs/ui-accessibility.md`). So when asked to strip custom styling, sort each override by that reason rather than
   removing them wholesale: dropping a sizing override with the look ones broke the layout.
+- What the component imposes visually lives in a stylesheet of its own,
+  `packages/ui/node_modules/@heroui/styles/dist/components/<name>.css` — the readable source of what ends up in
+  `heroui.min.css` — and the JavaScript shows none of it: a component's variants can be nothing but
+  `tv({ base: "<name>" })`, with every size, colour and spacing left to that file. So read it, rather than the
+  component's own file, when styling anything the project renders inside a HeroUI component, or when working out why
+  such a child looks unlike its own classes suggest. A base rule there covers the whole component, so where it sets
+  text size or colour (`.empty-state` is `@apply p-2 text-sm text-muted`) every child inherits both; HeroUI's own
+  rules correct only the parts it styles by slot, never a child of the project's. Giving that child its own size or
+  colour is a correction of what it inherited rather than a change of look, so it stands as an override.
 - Give a compound component's layout classes to its parts themselves and never put an element of your own between
   two parts: some of HeroUI's variant styles use direct-child selectors (`.tabs--secondary > .tabs__list-container`,
   the `switch--sm` / `switch--lg` sizes), so a wrapper `div` silently switches the variant off. A parent may also pick
@@ -31,9 +40,9 @@ ARIA region semantics.
   writes the value's own text. Children of your own replace that, putting one fixed thing where the variant's choice
   was, so a distinction the component was drawing is quietly gone with nothing wrong to see in the source or the
   result. Before passing children to a part, search its component's file under
-  `packages/ui/node_modules/@heroui/react/dist/components/` for `children ??`: where the default follows the parent,
-  pass none and let the variant pick; where it is a fixed stand-in (`CloseButton`'s cross, a `MenuItem`'s submenu
-  chevron), pass children only to put a different one there.
+  `packages/ui/node_modules/@heroui/react/dist/components/` for `children ??` or `children ||`: where the default
+  follows the parent, pass none and let the variant pick; where it is a fixed stand-in (`CloseButton`'s cross, a
+  `MenuItem`'s submenu chevron), pass children only to put a different one there.
 - The project's existing wrappers over a HeroUI component (`Dialog` over `Modal`, `ActionMenu` over `Dropdown`) are
   that component; use the wrapper where one exists. The same goes for the shared dialogs built on them: a
   confirmation, including one where the user types a word to confirm a deletion, is `ConfirmDialog`
