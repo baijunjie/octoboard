@@ -468,6 +468,7 @@ export const zhHans: Translation<"other"> = {
   "browser.tree.row.removed": "{name}，已移除，已选中",
   "browser.tree.row.unlisted": "{name}，未列出，已选中",
   "browser.row.actions": "文件 {name} 的操作",
+  "browser.directory.actions": "文件夹 {name} 的操作",
 
   "viewer.loading": "加载中…",
   "viewer.error": "无法打开此文件",

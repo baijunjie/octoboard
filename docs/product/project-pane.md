@@ -70,8 +70,8 @@ that read the same are always kept in the same order. The file viewer moves thro
 
 - A folder opens and closes with a click, Enter, its chevron, or Right and Left (the other way round under a
   right-to-left language). A file opens in the file viewer with a click or Enter.
-- At a file's row's end is the button of its own actions, which the same Right and Left reach (see "A row's actions"
-  below).
+- At a file or folder row's end is the button of its own actions, reached with the same Right and Left; a collapsed
+  folder is expanded first (see "A row's actions" below).
 - The arrow keys, Home and End move through the rows, and typing a name's first letters moves to it.
 - Pressing a row takes keyboard focus into the tree, unlike a sidebar row: the tree is content to read and move
   through from the keyboard.
@@ -126,41 +126,42 @@ afresh.
 
 ## A row's actions
 
-Every file's row in either mode ends with an icon button that opens a **menu of what can be done with that file**:
-the Files mode's tree, and the Git mode's change list in both its views and both forms of the list, flat or grouped
-by folder (see "Rows and the keyboard" in `docs/product/project-pane-git-mode.md`). **Copy path** is its only action
-so far.
+Every file and folder row in the Files mode's tree ends with an icon button that opens a **menu of what can be done with
+that entry**, whether the folder is collapsed or expanded. Every file's row in the Git mode's change list has the same
+button in both its views and both forms of the list, flat or grouped by folder (see "Rows and the keyboard" in
+`docs/product/project-pane-git-mode.md`). **Copy path** is its only action so far.
 
-- **Copy path** puts the file's path on the clipboard, slash separated, as a path within the project. For a change it
-  is the path the row names, which for a rename is its new path — the old one only where the new side is absent (a
-  deletion) or outside the project (see "What is listed" in `docs/product/project-pane-git-mode.md`). The path is
-  copied **as the window shows it**, for a human to paste: a byte of a name that is not valid UTF-8 is copied as the
+- **Copy path** puts the file or folder's path on the clipboard, slash separated, as a path within the project. For a
+  change it is the path the row names, which for a rename is its new path — the old one only where the new side is
+  absent (a deletion) or outside the project (see "What is listed" in `docs/product/project-pane-git-mode.md`). The path
+  is copied **as the window shows it**, for a human to paste: a byte of a name that is not valid UTF-8 is copied as the
   replacement character U+FFFD, the character the name is displayed with. A **toast** then confirms that the path was
-  copied; where the clipboard refuses it, an error toast says it could not be copied (see `docs/product/toasts.md`).
-  The file viewer's header offers the same action (see "The file viewer" below).
-- **Only a file's row has one.** A directory's row has none — in the Files mode's tree, and in the Git mode's list
-  grouped by folder — and neither has a row that says something about a folder instead of listing a file (loading,
-  empty, unreadable, cut short; see "Rows and the keyboard" above).
+  copied; where the clipboard refuses it, an error toast says it could not be copied (see `docs/product/toasts.md`). The
+  file viewer's header offers the same action (see "The file viewer" below).
+- **The Git mode's grouping folders have no button**, and neither does a row that says something about a folder instead
+  of listing an entry (loading, empty, unreadable, cut short; see "Rows and the keyboard" above).
 - **The button shows while its row is hovered, holds keyboard focus, is the selected file or change, or has its menu
-  open**, fading and opening out as it appears, as the sidebar's row controls do (see "Rows, names and keyboard
-  focus" in `docs/product/sidebar.md`). While hidden it takes up no width, so the file name has the room; it is
-  reachable from the keyboard either way.
+  open**, fading and opening out as it appears, as the sidebar's row controls do (see "Rows, names and keyboard focus"
+  in `docs/product/sidebar.md`). While hidden it takes up no width, so the entry's name has the room; it is reachable
+  from the keyboard either way.
 - **The keyboard reaches it along the row, not with Tab.** Tab moves into the tree or the change list and out of it
   again, never along a row's parts; it is the arrow key that runs along the row — Right, Left under a right-to-left
-  language — that moves from the row to its button and back. A directory's row keeps those keys for opening and
-  closing it.
-- **The row keeps its own action**: a click or Enter on the row opens the file or the change in the file viewer, and
-  neither on the button does. The button is the only way to the menu — a right-click on a row opens none, unlike a
-  sidebar row (see "Right-click menus" in `docs/product/window-layout.md`). A menu opened from the keyboard hands
-  keyboard focus back to the button when it closes; one opened with the pointer hands it back to whatever had it
-  before, as a sidebar row's menu does.
-- Its **accessible name names the file** — "Actions for file server.ts" — so each row's button is told apart, while
-  its tooltip is the short one every such button has (see "Tooltips on icon-only controls" in
-  `docs/product/labels-and-tooltips.md`).
+  language — that moves from the row to its button; the opposite key moves back to the row. On a collapsed folder that
+  first key expands it, and a second press reaches the button. On an expanded folder the opposite key still collapses it
+  while focus is on the row.
+- **The row keeps its own action**: a click or Enter on the row opens the file or the change in the file viewer, or
+  opens or closes a folder. Pressing the button or copying a path does none of those. The button is the only way to the
+  menu — a right-click on a row opens none, unlike a sidebar row (see "Right-click menus" in
+  `docs/product/window-layout.md`). A menu opened from the keyboard hands keyboard focus back to the button when it
+  closes; one opened with the pointer hands it back to whatever had it before, as a sidebar row's menu does.
+- Its **accessible name names the file or folder** — "Actions for file server.ts" or "Actions for folder src" — so each
+  row's button is told apart, while its tooltip is the short one every such button has (see "Tooltips on icon-only
+  controls" in `docs/product/labels-and-tooltips.md`).
 - **Where the platform has no clipboard there is no button on the row at all**, rather than a menu whose only action
-  cannot act: Copy path being the only action, nothing is left to offer. That is the case in a plain browser whose
-  page is not a secure context — served over `http` from anywhere but `localhost`. The packaged desktop app always
-  has a clipboard.
+  cannot act: Copy path being the only action, nothing is left to offer. That is the case in a plain browser whose page
+  is not a secure context — served over `http` from anywhere but `localhost`. The packaged desktop app always has a
+  clipboard.
+
 
 ## What is remembered
 

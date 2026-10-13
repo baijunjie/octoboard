@@ -11,8 +11,8 @@ import { useT } from "../i18n/react";
  * position alone. `RowContent`'s `h-7` is this height, whichever shape of row it lays out. */
 export const ROW_HEIGHT = 28;
 
-/** The content of a directory's row: a chevron, a folder icon and the name. */
-export function DirectoryRow({ name, isExpanded, link = false }: { name: string; isExpanded: boolean; link?: boolean }): React.ReactElement {
+/** The content of a directory's row: a chevron, a folder icon, the name and optional actions. */
+export function DirectoryRow({ name, isExpanded, link = false, children }: { name: string; isExpanded: boolean; link?: boolean; children?: React.ReactNode }): React.ReactElement {
   const t = useT();
   const chevronTitle = isExpanded ? t("browser.tree.collapse") : t("browser.tree.expand");
   const Icon = link ? FolderSymlink : isExpanded ? FolderOpen : Folder;
@@ -30,6 +30,7 @@ export function DirectoryRow({ name, isExpanded, link = false }: { name: string;
       </TitledControl>
       <Icon aria-hidden="true" className="size-4 shrink-0 text-muted" />
       <RowName name={name} />
+      {children}
     </RowContent>
   );
 }

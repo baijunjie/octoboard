@@ -38,7 +38,7 @@ consoles' avatars, the ⋮ buttons and the pin buttons below. These are:
   count, whose tooltip says how many sessions are waiting and that pressing it goes to the next one, Turn on
   notifications, and Settings;
 - the ⋮ button that opens an action menu — a sidebar row's, the console's in the sidebar's header, the project's in
-  focus mode, and a file's in the project pane: in the Files mode's tree and in the Git mode's change list (see "A
+  focus mode, and a file or folder's in the Files mode's tree or a file's in the Git mode's change list (see "A
   row's actions" in `docs/product/project-pane.md`). Its tooltip is a short "More actions", while the name announced
   for it also names what it belongs to ("Actions for session …", "Actions for file …" and the like), so that each ⋮
   can be told apart;

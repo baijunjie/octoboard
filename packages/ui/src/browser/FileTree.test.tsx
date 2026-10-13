@@ -20,10 +20,15 @@ const fileNode = (path: string, selected: boolean): TreeNode => ({
 
 function render(
   nodes: TreeNode[],
-  { expanded = new Set<string>(), clipboard, onOpenFile = () => {} }: { expanded?: Set<string>; clipboard?: PlatformAdapter["clipboard"]; onOpenFile?: (path: string) => void } = {},
+  { expanded = new Set<string>(), clipboard, onOpenFile = () => {}, onExpandedChange = () => {} }: {
+    expanded?: Set<string>;
+    clipboard?: PlatformAdapter["clipboard"];
+    onOpenFile?: (path: string) => void;
+    onExpandedChange?: (keys: Set<string | number>) => void;
+  } = {},
 ) {
   return mountRows(
-    <FileTree nodes={nodes} expanded={expanded} label="Files" onExpandedChange={() => {}} onOpenFile={onOpenFile} onRetry={() => {}} treeRef={() => {}} />,
+    <FileTree nodes={nodes} expanded={expanded} label="Files" onExpandedChange={onExpandedChange} onOpenFile={onOpenFile} onRetry={() => {}} treeRef={() => {}} />,
     { clipboard },
   );
 }
@@ -76,7 +81,7 @@ it("gives each file row an actions button, named for its file, that the row's ar
 
 // What the menu does with the path is `RowActions`' own, pinned in `RowActions.test.tsx`; what the
 // tree has to answer for is that reaching the menu is not reaching the file.
-it("opens the menu without opening the file, and gives a directory or a status row none", () => {
+it("opens the menu without opening the file, and gives directories actions while status rows have none", () => {
   const onOpenFile = vi.fn();
   const container = render(
     [
@@ -93,8 +98,46 @@ it("opens the menu without opening the file, and gives a directory or a status r
   );
   const rows = [...container.querySelectorAll<HTMLElement>("[role=row]")];
   const withButton = rows.filter((row) => row.querySelector("button[aria-haspopup]"));
-  expect(withButton).toEqual([rows.find((row) => row.dataset.key === rowKey("a.ts"))]);
+  expect(withButton).toEqual(rows.filter((row) => row.dataset.key !== "status:src"));
   act(() => withButton[0].querySelector<HTMLButtonElement>("button[aria-haspopup]")!.click());
   expect(document.querySelector<HTMLElement>("[role=menuitem]")!.textContent).toBe("Copy path");
+  expect(onOpenFile).not.toHaveBeenCalled();
+});
+
+it.each([false, true])("copies a directory path without toggling it (expanded: %s)", async (expanded) => {
+  const writeText = vi.fn(async () => {});
+  const onExpandedChange = vi.fn();
+  const onOpenFile = vi.fn();
+  const directory: TreeNode = {
+    type: "directory",
+    key: rowKey("src/caf%C3%A9"),
+    path: "src/caf%C3%A9",
+    entry: { name: "caf%C3%A9", kind: "directory", size: 0, version: "v1", target: null },
+    children: [],
+  };
+  const container = render([directory], {
+    clipboard: { writeText },
+    expanded: new Set(expanded ? [directory.key] : []),
+    onExpandedChange,
+    onOpenFile,
+  });
+  const row = container.querySelector<HTMLElement>("[role=row]")!;
+  const actions = row.querySelector<HTMLButtonElement>("button[aria-haspopup]")!;
+  expect(actions.getAttribute("aria-label")).toBe(`Actions for folder ${isolate("café")}`);
+  act(() => row.focus());
+  press(row, "ArrowRight");
+  if (expanded) {
+    expect(document.activeElement).toBe(actions);
+    press(actions, "ArrowLeft");
+    expect(document.activeElement).toBe(row);
+  } else {
+    expect(onExpandedChange).toHaveBeenCalledWith(new Set([directory.key]));
+    onExpandedChange.mockClear();
+  }
+  act(() => actions.click());
+  act(() => document.querySelector<HTMLElement>("[role=menuitem]")!.click());
+  await act(async () => {});
+  expect(writeText).toHaveBeenCalledWith("src/café");
+  expect(onExpandedChange).not.toHaveBeenCalled();
   expect(onOpenFile).not.toHaveBeenCalled();
 });

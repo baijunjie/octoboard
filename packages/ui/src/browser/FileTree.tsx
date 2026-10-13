@@ -73,7 +73,7 @@ function sameNode(before: TreeNode, next: TreeNode): boolean {
  * this is built on the react-aria component HeroUI itself builds on, which brings the treegrid
  * keyboard model (arrows, Home / End, type-ahead, Left / Right to collapse and expand). A row's
  * action is the one thing it does: a directory opens or closes, a file opens in the viewer, an error
- * row tries again; a file's row carries at its end the button of the others (`RowActions`), the same
+ * row tries again; each file or directory row carries at its end the button of the others (`RowActions`), the same
  * menu a change's row carries in the Git mode. Nothing is selectable in react-aria's sense; the file the viewer last showed is
  * tinted and named as selected in its row's label instead.
  *
@@ -150,7 +150,13 @@ export function FileTree({
       const link = node.entry.kind === "symlink";
       return (
         <TreeItem id={node.key} textValue={name} hasChildItems className={ROW_CLASS}>
-          <TreeItemContent>{({ isExpanded }) => <DirectoryRow name={name} isExpanded={isExpanded} link={link} />}</TreeItemContent>
+          <TreeItemContent>
+            {({ isExpanded }) => (
+              <DirectoryRow name={name} isExpanded={isExpanded} link={link}>
+                <RowActions path={node.path} name={name} directory />
+              </DirectoryRow>
+            )}
+          </TreeItemContent>
           <Collection items={childrenOf(node)} dependencies={[language]}>
             {renderNode}
           </Collection>

@@ -524,6 +524,7 @@ export const en = {
   "browser.tree.row.removed": "{name}, removed, selected",
   "browser.tree.row.unlisted": "{name}, not in the listing, selected",
   "browser.row.actions": "Actions for file {name}",
+  "browser.directory.actions": "Actions for folder {name}",
 
   // The read-only file viewer (`src/viewer/`).
   "viewer.loading": "Loading…",
