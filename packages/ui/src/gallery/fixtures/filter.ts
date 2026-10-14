@@ -81,6 +81,7 @@ export const filterScenarios: Scenario[] = [
     id:"filter-many-tags",
     group:GROUP,
     title:"Scrollable tag picker",
+    description:"The tag list scrolls at the popover edge while its tags keep the search field's inset.",
     state:state,
     preferences:{sidebarConsole:crowdedConsole.id},
     steps: [

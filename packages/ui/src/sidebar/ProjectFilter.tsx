@@ -191,13 +191,14 @@ function TagPicker({
   onChange: (added: string[], removed: string[]) => void;
 }): React.ReactElement {
   const t = useT();
-  const fade = useScrollFade({ className: "max-h-40 overflow-y-auto" });
+  const fade = useScrollFade({ className: "max-h-40 overflow-y-auto px-4 py-1" });
   // The default heading level: the popover it fills is named by a label rather than by a heading,
   // so there is none above it for the panel's own to sit level with.
   if (vocabulary.length === 0) return <EmptyPanel icon={Tags} message={t("sidebar.filter.noTags")} description={t("sidebar.filter.noTags.description")} />;
   return (
     <TagGroup
       aria-label={t("sidebar.filter.tags")}
+      className="-mx-4"
       size="sm"
       selectionMode="multiple"
       selectedKeys={selected}
