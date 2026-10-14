@@ -260,3 +260,24 @@ it("offers Add project in place of the select-a-session line while the console i
   expect(container.textContent).toContain("Select a session");
   expect(document.activeElement).toBe(topBarButton);
 });
+
+it("offers the contextual session action and hands focus on when it disappears", () => {
+  const onPress = vi.fn();
+  const { container, handle, topBarButton, elsewhere, show } = mountEmpty({ newSession: { label: "New session", onPress } });
+  expect(container.textContent).not.toContain("Select a session");
+  const button = container.querySelector("button")!;
+  elsewhere.focus();
+  act(() => handle.current?.focus());
+  expect(document.activeElement).toBe(button);
+  act(() => button.click());
+  expect(onPress).toHaveBeenCalledOnce();
+  show({});
+  expect(document.activeElement).toBe(topBarButton);
+});
+
+it("shows the installation step without a creation control when no agent is available", () => {
+  const { container } = mountEmpty({ noAgents: true });
+  expect(container.textContent).toContain("install at least one tool");
+  expect(container.textContent).not.toContain("Select a session");
+  expect(container.querySelector("button")).toBeNull();
+});

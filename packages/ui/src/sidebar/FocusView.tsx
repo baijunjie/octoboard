@@ -1,5 +1,5 @@
 import { Button } from "@heroui/react";
-import { ArrowLeft, FolderOpen, FolderPlus, List, MessageSquarePlus, Plus } from "lucide-react";
+import { ArrowLeft, FolderOpen, List, MessageSquarePlus, Plus } from "lucide-react";
 import React, { useLayoutEffect, useRef } from "react";
 
 import { AGENT_LABEL } from "../agents";
@@ -145,10 +145,10 @@ export function ProjectFocusView({
         <SectionHeading>{t("sidebar.focus.sessions", { count: live.length })}</SectionHeading>
         {live.length === 0 ? (
           <EmptyPanel
+            compact
             icon={MessageSquarePlus}
-            headingLevel={3}
             message={t("sidebar.noSessions")}
-            action={{ label: t("sidebar.project.openSession"), icon: Plus, onPress: openSession }}
+            action={{ label: t("sidebar.project.openSession"), onPress: openSession }}
           />
         ) : (
           <SessionCards handlers={handlers} sessions={live} selectedSessionId={selectedSessionId} />
@@ -242,13 +242,13 @@ export function ConsoleSessionFocusView({
         {projects.length === 0 ? (
           // The header's "+" is disabled with no project to open a session in, so say why here.
           <EmptyPanel
+            compact
             icon={FolderOpen}
-            headingLevel={3}
             message={t("sidebar.noProjects")}
-            action={{ label: t("sidebar.console.addProject"), icon: FolderPlus, onPress: () => handlers.onOpenDialog({ kind: "new-project", console: parentConsole }) }}
+            action={{ label: t("sidebar.console.addProject"), onPress: () => handlers.onOpenDialog({ kind: "new-project", console: parentConsole }) }}
           />
         ) : groups.length === 0 ? (
-          <EmptyPanel icon={MessageSquarePlus} headingLevel={3} message={t("sidebar.focus.noBoundSessions")} />
+          <EmptyPanel compact icon={MessageSquarePlus} message={t("sidebar.focus.noBoundSessions")} />
         ) : (
           <div ref={groupsRef} className="relative flex flex-col gap-2">
             {groups.map(({ project, sessions: boundHere }) => (

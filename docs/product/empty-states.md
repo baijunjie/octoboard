@@ -31,9 +31,8 @@ The form an empty state takes wherever it fills an area of its own, centred in i
 
 The heading is a heading for assistive technology as well, so the panel shows in the outline of the view it fills, at
 the level of the heading naming whatever the panel stands in for: the two then read as one thing rather than the panel
-opening a section of its own. A panel filling a pane or a dialog is at the level of that pane's or dialog's own title;
-a panel inside one of the sidebar's sections, whose heading is a level below those, is a level below them too. Text
-too long for the panel's width wraps; nothing is cut.
+opening a section of its own. A panel filling a pane or a dialog is at the level of that pane's or dialog's own title.
+Text too long for the panel's width wraps; nothing is cut.
 
 Pressing the button with the mouse never takes keyboard focus of itself: whatever the action opens or starts is what
 places focus. Where a region decides keyboard focus or its place in the `F6` cycle by whether the panel it holds has a
@@ -41,9 +40,9 @@ button to put focus on, that is said where the region is described (see "The ter
 
 ## The compact row
 
-A list nested inside another — the sidebar's sections, the sessions under an expanded project, the trusted folders in
-Settings — puts a single **empty row** in its rows' place instead: a glyph and the message on one line, in the padding
-of the rows it stands among, with no explaining line under it. A message too long for the row wraps rather than being
+A list nested inside another — the sidebar's sections in either normal or focus mode, the sessions under an expanded
+project, the trusted folders in Settings — puts a single **empty row** in its rows' place instead: a glyph and the
+message on one line, in the padding of the rows it stands among, with no explaining line under it. A message too long for the row wraps rather than being
 cut. The message is not a heading, so a row adds nothing to the outline of the view it sits in, unlike a full panel.
 
 Where there is one thing to do about the list being empty, **the whole row is the button** that does it, and a press
@@ -54,6 +53,10 @@ anywhere in the row does that one thing. Such a row:
 - carries the action's name alone as its **tooltip**, on mouse hover and on keyboard focus.
 
 A row with nothing to do about it is not a button and carries no tooltip.
+
+Where an empty sidebar list and the main pane are both visible, the sidebar keeps this compact form and the main
+pane carries the full panel with the next action for its current scope. A list inside the sidebar does not become a
+second full panel merely because focus mode gives it more room.
 
 ## A state another region already announces
 

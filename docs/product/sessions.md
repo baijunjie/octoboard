@@ -95,8 +95,8 @@ A session is opened under a project with:
   is not archived shows no choice at all, and the session is unbound. A binding, once set, is never changed or undone.
   A session the console session itself starts is always bound to it, and one an unbound project session
   starts is bound to that project session; see "Which sessions an owner drives" in
-  `docs/product/hub-orchestration.md`. The choice is offered only from the project list. Opened from a project's focus
-  mode the dialog has no such field and the session is always unbound; opened from a console session's focus mode it
+  `docs/product/hub-orchestration.md`. The choice is offered from the project list and the terminal's **New session** offer outside focus
+  mode. Opened from a project's focus mode the dialog has no such field and the session is always unbound; opened from a console session's focus mode it
   has none either, and shows a line saying the session reports to that console session instead, which is the binding
   it gets (see `docs/product/focus-mode.md`).
 
@@ -550,14 +550,14 @@ A session's title can be changed at any time, archived sessions included. An emp
 
 ## The terminal
 
-With no session selected, the terminal's area shows an empty panel — a terminal glyph, a heading saying no session is
-selected, and a line asking for a session to be selected (see "The full panel" in `docs/product/empty-states.md`) — and
-the terminal cannot take keyboard focus: whatever would hand focus to it (hiding a pane that holds focus, or the session
-going away while the terminal holds it) puts focus on the top bar's first enabled control instead, and leaves it on
-nothing when it is already on nothing. That empty state is what a console with no session selected shows; with **no
-console at all** there is no terminal in the window and the welcome screen fills the content panel instead (see
-`docs/product/welcome-screen.md`). **The one exception to that panel and to those focus rules is a console with nothing
-in it at all**, whose area offers a project instead — see "A console with nothing in it" below. The selected session's
+With no session selected, the terminal's area shows a full empty panel (see "The full panel" in
+`docs/product/empty-states.md`). It offers the next creation action when the current scope has no sessions to select
+(see "A console with nothing in it" below); otherwise a terminal glyph, a heading saying no session is selected and a
+line asking for a session to be selected. With no button in that panel, the terminal cannot take keyboard focus:
+whatever would hand focus to it (hiding a pane that holds focus, or the session going away while the terminal holds
+it) puts focus on the top bar's first enabled control instead, and leaves it on nothing when it is already on
+nothing. With **no console at all** there is no terminal in the window and the welcome screen fills the content panel
+instead (see `docs/product/welcome-screen.md`). The selected session's
 terminal is live: keystrokes go straight to the agent, exactly as in a system terminal. Mouse reporting works, so an
 agent's own mouse-driven TUI is usable. `Ctrl+C` reaches the agent, and so do `Tab` and `Shift+Tab`. `F6` and `Shift+F6`
 never do: they move keyboard focus to another region of the window (see "Moving focus between regions with F6" in
@@ -639,27 +639,36 @@ never do: they move keyboard focus to another region of the window (see "Moving 
 
 ### A console with nothing in it
 
-While the **current** console holds neither a project nor a session that is not archived, the terminal's area offers a
-project in place of asking for a session to be selected: a folder glyph, a heading saying there are no projects yet, a
-line saying a project is a directory the user works in and runs sessions in, and an **Add project** button, which opens
-the same new-project dialog the console's action menu does (see "The console header" in `docs/product/sidebar.md` and
-"Associating a project" in `docs/product/consoles-and-projects.md`). The sidebar's Projects section carries the same
-offer as a row (see "Empty rows" in `docs/product/sidebar.md`).
+With nothing selected, the terminal's full empty panel offers the next action for the **current** console and focus
+scope:
 
-- It is shown only while **nothing is selected**, as the panel it stands in for is. The selection survives a console
-  switch, so right after switching to such a console, or creating one, the terminal still shows the session selected
-  in the console before it and no panel; the sidebar's row carries the offer then.
+- **In a project's focus mode**, when its live session list is empty, it offers **New session** for that project. The
+  dialog has no "Report to" choice and creates an unbound session, just as the focus view's header and compact empty
+  row do. Archived sessions and live sessions under console sessions do not fill this list, so neither prevents the
+  offer (see "A project's focus mode" in `docs/product/focus-mode.md`).
+- **Outside focus mode**, when the console has no session that is not archived, it offers **Add project** with no
+  projects, **New session** for its sole project with one, or **New console session** with more than one. Add project
+  opens the ordinary new-project dialog; New session opens the ordinary new-session dialog with its usual binding
+  choice; New console session follows the ordinary console-session action. The panel's glyph, heading and explaining
+  line say what is needed: a project or a session.
+- **When all supported agents are known to be unavailable** for session creation, the panel explains that no agent
+  was found and how to make one available, with no creation button. Availability that has not yet been determined does not prevent the offer.
+- With a session that is not archived in the applicable list, or in a console session's focus mode, the panel asks
+  for a session to be selected instead. A console session in focus is itself selectable even with no bound sessions.
+
+The sidebar's empty lists stay compact alongside this panel (see "Empty rows" in `docs/product/sidebar.md`).
+
+- An **archived** session does not count as a live session, including when every session in the console is archived.
+- A selected session suppresses the panel. The selection survives a console switch, so immediately after switching
+  to an empty console, or creating one, the terminal may still show the previous console's selected session; the
+  sidebar's compact row carries the offer then.
 - The console read is the **current** one, not the one the sidebar is previewing while the pointer rests on another
   console's avatar on the rail (see "Previewing a console from the rail" in `docs/product/sidebar.md`).
-- An **archived** session does not count, so a console whose sessions are all archived shows the panel. A console
-  session that is not archived does count, and a console can hold one with no project at all; the area then asks for a
-  session to be selected as usual.
-- **The archive view covering the terminal suppresses the offer**: while it is open the area shows the no-session panel
-  instead (see "The archive view" in `docs/product/sidebar.md`).
-- **Keyboard**: with this panel up the terminal's area is a stop in the `F6` cycle, which it is not while it shows the
-  no-session panel, which has no button, and whatever hands keyboard focus to the terminal puts it on the **Add
-  project** button rather than on the top bar, exactly as it does on the cover's Reconnect button (see "Moving focus
-  between regions with F6" in `docs/product/moving-focus-between-regions.md`). Focus that is on nothing is left on
-  nothing, so launching the application pulls it onto no control and `Shift+F6` pressed with focus nowhere passes the
-  area over for the region before it. When the button goes away because a project has been added, from this window or
-  another client, while it holds focus, focus goes to the top bar's first enabled control.
+- **The archive view covering the terminal suppresses the creation offer**: while it is open, the underlying area
+  shows the no-session panel instead (see "The archive view" in `docs/product/sidebar.md`).
+- **Keyboard**: while the panel offers a creation button, the terminal's area is a stop in the `F6` cycle, and whatever
+  hands keyboard focus to the terminal puts it on that button, just as with the cover's Reconnect button (see "Moving
+  focus between regions with F6" in `docs/product/moving-focus-between-regions.md`). A panel with no button is skipped.
+  Focus that is on nothing is left on nothing. When the creation button goes away while holding focus, because a
+  session is selected or the list gains content from this window or another client, focus goes to the terminal when
+  it can take it, otherwise to the top bar's first enabled control.

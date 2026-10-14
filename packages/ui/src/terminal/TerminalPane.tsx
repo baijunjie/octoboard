@@ -1,5 +1,5 @@
 import { Button, Spinner, Surface } from "@heroui/react";
-import { FolderOpen, FolderPlus, SquareTerminal, Unplug } from "lucide-react";
+import { FolderOpen, FolderPlus, MessageSquarePlus, Plus, SquareTerminal, TriangleAlert, Unplug } from "lucide-react";
 import React, { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 
 import "@xterm/xterm/css/xterm.css";
@@ -27,12 +27,16 @@ interface TerminalPaneProps {
    * console has neither a project nor a session to select, since asking for a session to be
    * selected says nothing then. */
   onAddProject?: () => void;
+  /** Starts a session in the current scope when there is no live session to select. */
+  newSession?: { label: string; onPress: () => void };
+  /** No supported agent is installed, so creating a session cannot be offered. */
+  noAgents?: boolean;
   ref?: React.Ref<TerminalPaneHandle>;
 }
 
 export interface TerminalPaneHandle {
   /** Puts keyboard focus on the terminal, or on the button the pane offers in its place — the
-   * cover's Reconnect, or the empty state's Add project — since the terminal's Tab belongs to the
+   * cover's Reconnect, or the empty state's creation action — since the terminal's Tab belongs to the
    * agent and this is how the keyboard reaches either. With nothing to focus it goes to the top
    * bar, except from `<body>`, which is left alone (`focusTerminal`). */
   focus: () => void;
@@ -61,6 +65,8 @@ export function TerminalPane({
   onResume,
   resuming = false,
   onAddProject,
+  newSession,
+  noAgents,
   ref,
 }: TerminalPaneProps): React.ReactElement {
   const t = useT();
@@ -116,13 +122,13 @@ export function TerminalPane({
           button.focus();
           return;
         }
-        // The empty state's Add project button is this region's only control while it is offered,
+        // The empty state's action button is this region's only control while it is offered,
         // so focus asked for the terminal goes there rather than out to the top bar — it is what
         // F6 lands on, which `App` makes the region a stop for. Not from `<body>`, as
         // `focusTerminal` has it: `refocusIfLost` asks at mount, and launching must not pull focus
         // onto a control.
-        const add = emptyRef.current?.querySelector("button");
-        if (add && document.activeElement !== document.body) add.focus();
+        const action = emptyRef.current?.querySelector("button");
+        if (action && document.activeElement !== document.body) action.focus();
         else focusTerminal();
       },
     }),
@@ -407,11 +413,20 @@ export function TerminalPane({
         {cover?.text}
       </div>
       {!session && (
-        // `held`: the Add project button goes away the moment a project arrives, from this window
+        // `held`: a creation button goes away when its list gains content, from this window
         // or another, and a focused element that is removed leaves focus on `<body>`. It is the
         // same hand-off the cover's button uses, which can never be on screen at the same time.
         <div ref={emptyRef} {...held} className="absolute inset-0 flex items-center justify-center-safe bg-panel">
-          {onAddProject ? (
+          {noAgents ? (
+            <EmptyPanel icon={TriangleAlert} message={t("agents.noneFound")} description={t("welcome.toolsHint")} />
+          ) : newSession ? (
+            <EmptyPanel
+              icon={MessageSquarePlus}
+              message={t("sidebar.noSessions")}
+              description={t("terminal.noSessions.description")}
+              action={{ ...newSession, icon: Plus }}
+            />
+          ) : onAddProject ? (
             <EmptyPanel
               icon={FolderOpen}
               message={t("sidebar.noProjects")}

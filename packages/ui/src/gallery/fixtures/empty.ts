@@ -71,9 +71,31 @@ export const emptyScenarios: Scenario[] = [
     id: "empty-project-no-sessions",
     group: GROUP,
     title: "A project with no sessions",
+    description: "The project and Console sessions keep compact creation rows. The main area offers New session while no live session can be selected.",
     state: snapshotState({
       consoles: [consoleOf("c-1", "Main")],
       projects: [projectOf("p-1", "c-1", "Website")],
+    }),
+  },
+  {
+    id: "empty-projects-no-sessions",
+    group: GROUP,
+    title: "Several projects with no live sessions",
+    description: "Both projects keep compact creation rows. The main area offers New console session, without choosing a project on the user's behalf.",
+    state: snapshotState({
+      consoles: [consoleOf("c-1", "Main")],
+      projects: [projectOf("p-1", "c-1", "Website"), projectOf("p-2", "c-1", "Search API")],
+    }),
+  },
+  {
+    id: "empty-project-archived-only",
+    group: GROUP,
+    title: "A project with archived sessions only",
+    description: "The compact project creation row and archive remain visible together. The main area offers New session because archived sessions are not live selection targets.",
+    state: snapshotState({
+      consoles: [consoleOf("c-1", "Main")],
+      projects: [projectOf("p-1", "c-1", "Website")],
+      sessions: [sessionOf("s-old", "c-1", "p-1", "Older investigation", "archived")],
     }),
   },
 ];

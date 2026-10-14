@@ -45,6 +45,7 @@ import { useSidebarView } from "./sidebar/sidebarView";
 import { useSwitchShortcut } from "./sidebar/switchShortcut";
 import type { ArchiveScope } from "./sidebar/types";
 import { useDaemon, useDaemonStore } from "./store";
+import { terminalEmptyState } from "./terminal/emptyState";
 import { TerminalPane, type TerminalPaneHandle } from "./terminal/TerminalPane";
 import { nextWaitingSession, waitingSessionsInTreeOrder } from "./waiting";
 import { WelcomeScreen, type WelcomeScreenHandle } from "./WelcomeScreen";
@@ -57,6 +58,7 @@ export function App(): React.ReactElement {
   const consoles = useDaemonStore((s) => s.consoles);
   const projects = useDaemonStore((s) => s.projects);
   const sessions = useDaemonStore((s) => s.sessions);
+  const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const accounts = useDaemonStore((s) => s.settings.accounts);
   // Keeps Settings out of the way of the question's dialog.
   const questionPending = usePendingQuestion();
@@ -120,18 +122,12 @@ export function App(): React.ReactElement {
 
   useFirstConsoleHandoff(hosts !== undefined && noConsoles, dialogRequest?.kind === "new-console");
 
-  // The current console holds no project to open a session in and nothing to select, so the
-  // terminal's area offers Add project wherever it would otherwise ask for a session to be
-  // selected (`TerminalPane` renders that only while nothing is selected, which a console switch
-  // leaves it short of — the selection stays on the console it was made in). That makes the region
-  // one holding a control, and so an F6 stop. An archived session is not something to select; a
-  // console session is, and a console can hold those with no project at all, which is why asking
-  // for a session to be selected still says something then. The previewed console is not
-  // consulted: the terminal belongs to the current console whatever the sidebar is showing.
-  const consoleIsBare =
-    currentConsole !== undefined &&
-    !projectList.some((p) => p.console_id === currentConsole.id) &&
-    !sessionList.some((s) => s.console_id === currentConsole.id && s.status !== "archived");
+  // The terminal offers the next action for the current console and focus scope, even while the
+  // sidebar previews another console. A selected session or an archive keeps that offer hidden.
+  const emptyState = selectedSession === undefined && !archiveOpen
+    ? terminalEmptyState(hosts !== undefined, currentConsole, sidebarView.focus, projectList, sessionList, agentAvailability)
+    : undefined;
+  const emptyHasAction = emptyState !== undefined && emptyState.kind !== "no-agents";
   // A region off screen is skipped by F6: a hidden docked pane, a closed drawer, and a floating pane
   // too, which is only a hover away rather than shown. The top bar and the rail are always there.
   const regionCycle = useRegionCycle({
@@ -141,7 +137,7 @@ export function App(): React.ReactElement {
       welcome: noConsoles,
       sidebar: !noConsoles && panes.sidebarShown,
       archive: archiveOpen,
-      terminal: (selectedSession !== undefined || consoleIsBare) && !archiveOpen,
+      terminal: (selectedSession !== undefined || emptyHasAction) && !archiveOpen,
       aside: hasAside && panes.asideShown,
       banner: connectionState === "reconnecting" || connectionState === "closed",
     },
@@ -644,13 +640,18 @@ export function App(): React.ReactElement {
                     session={selectedSession}
                     onResume={resumeSession}
                     resuming={selectedSessionId !== undefined && resumingIds.has(selectedSessionId)}
-                    onAddProject={
-                      // Not while the archive covers the terminal: its button would be a tab stop
-                      // behind a surface that hides it.
-                      consoleIsBare && !archiveOpen && currentConsole
-                        ? () => openDialog({ kind: "new-project", console: currentConsole })
-                        : undefined
-                    }
+                    onAddProject={emptyState?.kind === "add-project" && currentConsole
+                      ? () => openDialog({ kind: "new-project", console: currentConsole })
+                      : undefined}
+                    noAgents={emptyState?.kind === "no-agents"}
+                    newSession={emptyState && currentConsole && (emptyState.kind === "new-session" || emptyState.kind === "new-console-session")
+                      ? {
+                          label: t(emptyState.kind === "new-session" ? "sidebar.project.openSession" : "sidebar.consoleSessions.new"),
+                          onPress: () => emptyState.kind === "new-session"
+                            ? openDialog({ kind: "new-session", console: currentConsole, project: emptyState.project, binding: emptyState.binding })
+                            : openConsoleSession(currentConsole),
+                        }
+                      : undefined}
                   />
                 </div>
                 {/* Keyed on what owns the aside, so a new owner mounts a fresh instance: a report does not

@@ -190,10 +190,9 @@ is the button that does it, and the row takes its accessible name and its toolti
 
 The rows with nothing to do about them are not buttons and carry no tooltip: the one saying no project matches the
 filter (see "Filtering the project list" above) and the one saying no agent was found on the user's `PATH` (see "The
-console sessions section and the project list" above). A focus mode's own empty states are full panels with a separate
-button rather than rows (see "What both views show" in `docs/product/focus-mode.md` and "The full panel" in
-`docs/product/empty-states.md`), as is the terminal's offer of a project (see "A console with nothing in it" in
-`docs/product/sessions.md`).
+console sessions section and the project list" above). Focus mode's empty lists use the same compact rows (see "What
+both views show" in `docs/product/focus-mode.md`). The terminal's empty state is a full panel carrying the next action
+for the current scope (see "The terminal" in `docs/product/sessions.md`).
 
 ## Project rows
 
@@ -425,9 +424,8 @@ open. A session that appears any other way, such as one the console session star
 daemon opened, is listed unselected and is put on screen by the user selecting it.
 
 When the selected session stops existing — deleted from the archive, by this client or another, for instance — nothing
-is selected in its place, and the terminal's area shows its empty state: the panel saying no session is selected, or the
-offer of a project where the console is left with nothing in it (see "The terminal" in `docs/product/sessions.md`). The
-one exception is the session going with the last console: there is then no terminal at all, and the content panel shows
+is selected in its place, and the terminal's area shows its empty state: the panel asking for a session to be selected,
+or the next creation action for the current scope (see "The terminal" in `docs/product/sessions.md`). The one exception is the session going with the last console: there is then no terminal at all, and the content panel shows
 the welcome screen (see `docs/product/welcome-screen.md`).
 
 ## How the sidebar's view changes

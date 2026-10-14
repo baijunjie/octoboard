@@ -417,6 +417,7 @@ export const en = {
   // Under `sidebar.noProjects` as the heading: what the terminal's area says in place of asking
   // for a session to be selected, while the console has neither a project nor a session.
   "terminal.noProjects.description": "A project is a directory you work in and run sessions in.",
+  "terminal.noSessions.description": "Start a session to work here.",
   "terminal.input": "Terminal input",
   "terminal.loading": "Loading terminal…",
   "terminal.resuming": "Resuming session…",

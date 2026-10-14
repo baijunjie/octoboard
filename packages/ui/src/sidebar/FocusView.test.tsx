@@ -183,3 +183,29 @@ it("a console session's focus mode nests a lead session's own sessions under it"
   expect(text()).toContain("Sessions (4)");
   unmount();
 });
+
+it("project focus uses a clickable empty row beside its archive instead of a second empty heading", () => {
+  const { container, handlers, unmount } = mount((h) => (
+    <ProjectFocusView handlers={h} console={main} project={web} sessions={inProject(web.id).filter((s) => s.status === "archived")} owners={owners} />
+  ));
+  expect(Array.from(container.querySelectorAll("h2,h3")).some((heading) => heading.textContent === "No sessions yet")).toBe(false);
+  const row = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("No sessions yet"));
+  expect(row).toBeDefined();
+  act(() => row?.click());
+  expect(handlers.onOpenDialog).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: { kind: "unbound" } });
+  unmount();
+});
+
+it.each([false, true])("console focus keeps its empty nested list compact (projects present: %s)", (hasProjects) => {
+  const { container, handlers, unmount } = mount((h) => (
+    <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={hasProjects ? [web] : []} sessions={[hub1]} />
+  ));
+  expect(Array.from(container.querySelectorAll("h2,h3")).map((heading) => heading.textContent)).toEqual(["Hub", "Sessions (0)"]);
+  if (!hasProjects) {
+    const row = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("No projects yet"));
+    expect(row).toBeDefined();
+    act(() => row?.click());
+    expect(handlers.onOpenDialog).toHaveBeenCalledWith({ kind: "new-project", console: main });
+  }
+  unmount();
+});

@@ -89,10 +89,11 @@ const projectlessConsole = consoleOf("c-projectless", "No projects");
 const crowdedConsole = consoleOf("c-crowded", "Many console sessions");
 const fittingConsole = consoleOf("c-fitting", "Two short hubs");
 const emptyProject = projectOf("p-empty", console_.id, "Archived only");
+const freshProject = projectOf("p-fresh", console_.id, "No sessions yet");
 const longProject = projectOf("p-long", console_.id, "A project whose name is far too long for one row");
 const state = snapshotState({
   consoles: [{ ...console_, name: "A console with a rather long name indeed" }, loneConsole, projectlessConsole, crowdedConsole, fittingConsole],
-  projects: [project, other, third, cjkProject, longProject, emptyProject, projectOf("p-lone", loneConsole.id, "No bound sessions"), projectOf("p-fitting", fittingConsole.id, "Short strip")],
+  projects: [project, other, third, cjkProject, longProject, emptyProject, freshProject, projectOf("p-lone", loneConsole.id, "No bound sessions"), projectOf("p-fitting", fittingConsole.id, "Short strip")],
   sessions: [
     ...sessions, longHub, cjkHub,
     sessionOf("s-long-latin", console_.id, longProject.id, "Check the build", "working", { bound_to: longHub.id }),
@@ -154,6 +155,15 @@ export const focusScenarios: Scenario[] = [
     title: "Project with archived sessions only",
     state: state,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}` },
+    description: "The sidebar offers creation through a compact empty session row above the archive. The main area carries the prominent New session action for this project.",
+  },
+  {
+    id: "focus-project-empty",
+    group: GROUP,
+    title: "Project with no sessions yet",
+    state,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${freshProject.id}` },
+    description: "With no archive either, the sidebar keeps one compact clickable empty row and the main area offers New session for the focused project.",
   },
   {
     id: "focus-console-session-empty",
@@ -161,6 +171,7 @@ export const focusScenarios: Scenario[] = [
     title: "No bound sessions or switch strip",
     state: state,
     preferences: { sidebarConsole: loneConsole.id, sidebarFocus: "consoleSession:s-lone" },
+    description: "No bound sessions appears as a quiet row. The header's plus button opens a project chooser to create a bound session. The main area asks for selection; the focused console session remains selectable in the header.",
   },
   {
     id: "focus-console-session-no-projects",
@@ -168,7 +179,7 @@ export const focusScenarios: Scenario[] = [
     title: "Console session with no projects",
     state: state,
     preferences: { sidebarConsole: projectlessConsole.id, sidebarFocus: "consoleSession:s-projectless" },
-    description: "New session is disabled because the console has no project.",
+    description: "The sidebar offers Add project as a compact row and keeps New session disabled. The main area asks for selection; the focused console session remains selectable in the header.",
   },
   {
     id: "focus-console-session-overflow",

@@ -76,8 +76,8 @@ The terminal keeps Tab and Shift+Tab for the agent, so F6 / Shift+F6 region cycl
 holds controls — a pane, a panel, an overlay — is marked `data-region` and added to that hook's `REGIONS` and `shown`,
 or F6 skips it and a keyboard user in the terminal has no way to reach it. `shown` follows whether a region holds a
 control, not whether its element is in the document: the terminal counts while a session is selected, and also while
-its empty state offers Add project to a console that has neither a project nor a session to select, since that button
-is then the one thing to do there; with only its empty line it is skipped. A region whose focus goes through a method
+its empty state offers a creation action for the current context, since that button is then the one thing to do
+there; with only its empty line it is skipped. A region whose focus goes through a method
 of its own rather than its first control (the terminal's) is only a stop when that method actually leaves focus inside
 it, which is how the cycle tells the two apart.
 
@@ -292,8 +292,8 @@ it carries its own size and colour instead. `EmptyPanel`'s full panel is the cas
 
 A heading also never outranks the one above it. `EmptyPanel` takes `headingLevel` for that: its heading stands at the
 level of the heading naming whatever it fills, so the two read as one thing. The default `<h2>` is the level of a
-pane's own title (`ArchiveView`, `ProjectBrowser`) and of a dialog's, which react-aria sets for every `Frame.Heading`;
-the sidebar's `SectionHeading` is an `<h3>`, so the panels inside one of those sections (`FocusView`) pass 3.
+pane's own title (`ArchiveView`, `ProjectBrowser`) and of a dialog's, which react-aria sets for every `Frame.Heading`.
+The sidebar's empty lists use compact rows instead, which add no heading to the outline.
 
 ### An empty state is a glyph, a heading, and what fills it
 
@@ -310,8 +310,9 @@ component.
 - The line under it says only what the heading cannot: why it is empty, where the thing is made, or a bare fact about
   the subject (the size of a body that cannot be drawn). It never restates the heading, and a state that has nothing
   more to say carries no line at all.
-- The `compact` row, for a list nested in another, has no room for that line. What a row would have said there has to
-  hold as a heading on its own, or move to copy the surface already shows.
+- The `compact` row, for a sidebar list in either normal or focus mode and for other nested lists, has no room for
+  that line. Its message is plain text rather than a heading; where the list has one creation action, the whole row
+  performs it. The main content's full panel carries the current action without a competing full panel in the sidebar.
 - A load failure is not an empty state; it keeps the error shape, with its own way out (see the "Errors" section of
   `.claude/skills/knowledge-i18n-copy/SKILL.md`). What the subject *is* is a state of the subject, not a failed load,
   even when the panel warns about it: a project that is in no repository, a worktree that is gone, a repository Git
