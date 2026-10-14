@@ -1,8 +1,11 @@
-import { FileUp, LayoutDashboard, Plus } from "lucide-react";
-import React, { useImperativeHandle, useRef } from "react";
+import { Card, Chip } from "@heroui/react";
+import { Check, CircleDashed, FileUp, LayoutDashboard, Minus, Plus } from "lucide-react";
+import React, { useId, useImperativeHandle, useRef } from "react";
 
-import { noAgentAvailable } from "./agents";
+import { AGENT_OPTIONS } from "./agents";
+import { AgentIcon } from "./components/AgentIcon";
 import { EmptyPanel } from "./components/EmptyPanel";
+import { useFadeRegion, useScrollFade } from "./components/scrollFade";
 import type { DialogRequest } from "./dialogs/dialogRequest";
 import { useT } from "./i18n/react";
 import { usePlatform } from "./platform/react";
@@ -22,10 +25,9 @@ interface WelcomeScreenProps {
  * the sidebar, the terminal and the aside are not rendered and this fills the area alone. The action
  * opens the same new-console dialog the rail's does. Where the platform can open a file, a quieter
  * action beside it imports a configuration exported elsewhere, which is where a computer with
- * nothing on it starts when it is set up from another one. With no agent on the machine's `PATH` the
- * install prompt is shown beside it — the fuller of the two wordings, the sidebar's row having room
- * only to say that none was found — but the button stays enabled: a console's agent fields are only
- * defaults.
+ * nothing on it starts when it is set up from another one. The supported CLI list stays visible
+ * with each tool's availability, including while detection is pending. Creating a console stays
+ * enabled regardless of availability because its agent fields are only defaults.
  *
  * Its `focus` stands in for the terminal's where `App` hands focus to "the terminal" (`Toasts`, the
  * banner, a pane that hides): with no session the terminal's own hands focus to the top bar, which
@@ -38,6 +40,14 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
   const { configurationFile } = usePlatform();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const rootRef = useRef<HTMLElement>(null);
+  const toolsHeadingId = useId();
+  const scrollRegion = useFadeRegion({ label: t("welcome.label") });
+  // The welcome region owns its landmark and focus target, so the fade stays on the main element.
+  const scrollProps = useScrollFade<HTMLElement>({
+    ref: rootRef,
+    region: scrollRegion,
+    className: "flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center-safe overflow-y-auto px-4 pb-8",
+  });
 
   useImperativeHandle(
     ref,
@@ -50,24 +60,55 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
   );
 
   return (
-    <main
-      ref={rootRef}
-      data-region="welcome"
-      aria-label={t("welcome.label")}
-      className="flex min-w-0 flex-1 flex-col items-center justify-center-safe"
-    >
-      <EmptyPanel
-        icon={LayoutDashboard}
-        message={t("welcome.heading")}
-        description={t("welcome.description")}
-        action={{ label: t("welcome.newConsole"), icon: Plus, onPress: () => onOpenDialog({ kind: "new-console" }) }}
-        secondaryAction={
-          configurationFile && { label: t("welcome.importConfiguration"), icon: FileUp, onPress: () => onOpenDialog({ kind: "import-configuration" }) }
-        }
-      />
-      {noAgentAvailable(agentAvailability) && (
-        <p className="max-w-sm px-4 text-center text-sm text-muted">{t("agents.installPrompt")}</p>
-      )}
-    </main>
+    <div className={`flex min-h-0 min-w-0 flex-1 ${scrollRegion.focused ? "ring-2 ring-inset ring-focus" : ""}`}>
+      <main
+        {...scrollProps}
+        role="main"
+        data-region="welcome"
+        aria-label={t("welcome.label")}
+      >
+        <EmptyPanel
+          icon={LayoutDashboard}
+          message={t("welcome.heading")}
+          description={t("welcome.description")}
+          action={{ label: t("welcome.newConsole"), icon: Plus, onPress: () => onOpenDialog({ kind: "new-console" }) }}
+          secondaryAction={
+            configurationFile && { label: t("welcome.importConfiguration"), icon: FileUp, onPress: () => onOpenDialog({ kind: "import-configuration" }) }
+          }
+        />
+        <section aria-labelledby={toolsHeadingId} className="w-full max-w-sm shrink-0">
+          <h2 id={toolsHeadingId} className="mb-3 text-center text-sm font-medium text-muted">
+            {t("welcome.supportedTools")}
+          </h2>
+          <Card>
+            <Card.Content>
+              <ul>
+                {AGENT_OPTIONS.map(({ value, label }) => {
+                  const availability = agentAvailability.get(value)?.availability;
+                  const available = availability === "available";
+                  const unavailable = availability === "unavailable";
+                  const StatusIcon = available ? Check : unavailable ? Minus : CircleDashed;
+                  return (
+                    <li key={value} className="border-b border-separator py-3 first:pt-0 last:border-b-0 last:pb-0">
+                      <div role="status" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                        <span className="flex min-w-0 items-center gap-3 text-sm font-medium">
+                          <AgentIcon agent={value} className="size-5 shrink-0" />
+                          <bdi className="break-words">{label}</bdi>
+                        </span>
+                        <Chip size="sm" variant="soft" color={available ? "success" : "default"}>
+                          <StatusIcon aria-hidden="true" className="size-3.5 shrink-0" />
+                          <Chip.Label>{t(available ? "welcome.toolInstalled" : unavailable ? "welcome.toolNotFound" : "welcome.toolChecking")}</Chip.Label>
+                        </Chip>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card.Content>
+          </Card>
+          <p className="mt-3 text-center text-xs text-muted">{t("welcome.toolsHint")}</p>
+        </section>
+      </main>
+    </div>
   );
 }

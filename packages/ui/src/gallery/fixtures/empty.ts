@@ -4,31 +4,45 @@ import { consoleOf, projectOf, sessionOf, snapshotState } from "./builders";
 
 const GROUP = "Empty";
 
+/** Detection has resolved; supported tools can differ in availability. */
+const DETECTED_AGENTS = new Map<Agent, AgentAvailability>([
+  ["claude", { agent: "claude", availability: "available", default_account_dir: "/Users/dev/.claude" }],
+  ["codex", { agent: "codex", availability: "unavailable", default_account_dir: "/Users/dev/.codex" }],
+  ["grok", { agent: "grok", availability: "available", default_account_dir: "/Users/dev/.grok" }],
+]);
+
 /** Nothing on the machine's PATH to run a session with. */
 const NO_AGENTS = new Map<Agent, AgentAvailability>([
-  ["claude", { agent: "claude", availability: "unavailable" }],
-  ["codex", { agent: "codex", availability: "unavailable" }],
-  ["grok", { agent: "grok", availability: "unavailable" }],
+  ["claude", { agent: "claude", availability: "unavailable", default_account_dir: "/Users/dev/.claude" }],
+  ["codex", { agent: "codex", availability: "unavailable", default_account_dir: "/Users/dev/.codex" }],
+  ["grok", { agent: "grok", availability: "unavailable", default_account_dir: "/Users/dev/.grok" }],
 ]);
 
 export const emptyScenarios: Scenario[] = [
   {
     id: "empty-no-consoles",
     group: GROUP,
-    title: "Fresh install and first console",
+    title: "Fresh install, detected supported tools",
     description:
-      "A fresh install: the welcome screen fills the content area with New console and, quieter beneath it, Import configuration, and there is no sidebar, terminal hint or top bar sidebar toggle. New console opens its dialog over this welcome screen. Enter Work as its name and Create: the real fixture reply adds the first console, replacing welcome with the sidebar and terminal. The rail keeps its New console, bell and Settings. Narrow the window too: the welcome screen still fills the content area, and there is no drawer to open.",
-    state: snapshotState({}),
+      "The welcome screen keeps all three supported CLI tools visible with their brand icons: Claude Code and Grok Build are Installed, while Codex is Not detected. New console and Import configuration remain available. Narrow or shorten the window to inspect wrapping and scrolling. New console still opens its dialog; creating the first console replaces the welcome screen with the sidebar and terminal.",
+    state: { ...snapshotState({}), agentAvailability: DETECTED_AGENTS },
   },
   {
     id: "empty-no-consoles-no-agent",
     group: GROUP,
     title: "No consoles, no agent installed",
-    description: "The welcome screen also carries the install prompt, and New console stays enabled.",
+    description: "Every supported tool remains listed with its brand icon and Not detected badge. The PATH hint explains how to make a tool available, while New console and Import configuration stay enabled.",
     state: {
       ...snapshotState({}),
       agentAvailability: NO_AGENTS,
     },
+  },
+  {
+    id: "empty-no-consoles-checking-agents",
+    group: GROUP,
+    title: "Fresh install, checking supported tools",
+    description: "Before PATH detection completes, every supported tool is already visible with its brand icon and a Checking badge. New console and Import configuration remain available while detection is pending.",
+    state: snapshotState({}),
   },
   {
     id: "empty-console-no-agent",

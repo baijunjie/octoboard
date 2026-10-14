@@ -406,6 +406,11 @@ export const en = {
   "welcome.description": "A console holds the projects you work in and the sessions you run in them.",
   "welcome.newConsole": "New console",
   "welcome.importConfiguration": "Import configuration…",
+  "welcome.supportedTools": "Supported CLI tools",
+  "welcome.toolInstalled": "Installed",
+  "welcome.toolNotFound": "Not detected",
+  "welcome.toolChecking": "Checking…",
+  "welcome.toolsHint": "To open a session, install at least one tool and make sure it is on your PATH.",
 
   "terminal.empty": "No session selected",
   "terminal.empty.description": "Select a session to view its terminal.",

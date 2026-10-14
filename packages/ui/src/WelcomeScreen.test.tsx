@@ -55,16 +55,33 @@ it("is a named region of the window", () => {
   expect(region?.getAttribute("aria-label")).toBeTruthy();
 });
 
-it("shows the install prompt when no agent is on PATH, and keeps the action enabled", () => {
+it("always lists supported tools and keeps the action enabled when none is detected", () => {
   const unavailable = new Map<Agent, AgentAvailability>(
     (["claude", "codex", "grok"] as const).map((agent) => [agent, { agent, availability: "unavailable" }]),
   );
-  // "Grok Build" is in the install prompt, in every language, and nowhere else on the screen.
-  expect(mount().textContent).not.toContain("Grok Build");
+  const pending = mount();
+  expect(pending.querySelectorAll("li")).toHaveLength(3);
+  expect(pending.textContent).toContain("Grok Build");
+  expect(pending.textContent).toContain("Checking…");
   const container = mount(vi.fn(), { agentAvailability: unavailable });
-  expect(container.textContent).toContain("Grok Build");
+  expect(container.querySelectorAll("li")).toHaveLength(3);
+  expect(container.textContent).toContain("Not detected");
   // Unlike the sidebar's, the button is not disabled: a console's agents are only defaults.
   expect(container.querySelector("button")!.disabled).toBe(false);
+});
+
+it("shows each tool's own detection status when an installed tool is available", () => {
+  const agentAvailability = new Map<Agent, AgentAvailability>([
+    ["claude", { agent: "claude", availability: "available" }],
+    ["codex", { agent: "codex", availability: "unavailable" }],
+    ["grok", { agent: "grok", availability: "available" }],
+  ]);
+  const rows = Array.from(mount(vi.fn(), { agentAvailability }).querySelectorAll("li"));
+  expect(rows.map((row) => row.textContent)).toEqual([
+    "Claude CodeInstalled", "CodexNot detected", "Grok BuildInstalled",
+  ]);
+  expect(rows.every((row) => row.querySelector("svg[aria-hidden=true]"))).toBe(true);
+  expect(rows.map((row) => row.querySelector("[role=status]")?.textContent)).toEqual(rows.map((row) => row.textContent));
 });
 
 it("offers importing a configuration only where the platform can open a file", () => {

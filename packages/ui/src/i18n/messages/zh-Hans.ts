@@ -353,6 +353,11 @@ export const zhHans: Translation<"other"> = {
   "welcome.description": "控制台包含你的项目，以及在项目中运行的会话。",
   "welcome.newConsole": "新建控制台",
   "welcome.importConfiguration": "导入配置…",
+  "welcome.supportedTools": "支持的 CLI 工具",
+  "welcome.toolInstalled": "已安装",
+  "welcome.toolNotFound": "未检测到",
+  "welcome.toolChecking": "检测中…",
+  "welcome.toolsHint": "安装至少一种工具并配置到 PATH 中，即可打开会话。",
 
   "terminal.empty": "未选择会话",
   "terminal.empty.description": "选择一个会话以查看其终端。",

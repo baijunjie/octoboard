@@ -103,9 +103,9 @@ does what the heading's **+** button does (see "Empty rows" below).
 
 With no agent available on the machine at all, the section instead carries an empty row saying that no agent was found
 on the user's `PATH`, and the **+** button is disabled, since starting one would only be refused. The row says that much
-and no more: the fuller wording — which agents Octoboard supports, and that one of them has to be on the user's `PATH` —
-is kept for the places with room for it, the new-session dialog and the welcome screen (see "Opening a session" in
-`docs/product/sessions.md` and `docs/product/welcome-screen.md`). The row shows whatever the section lists — a console
+and no more: the new-session dialog explains which agents Octoboard supports and the `PATH` requirement (see "Opening
+a session" in `docs/product/sessions.md`); the welcome screen's supported-tool list and hint are described in "What
+the welcome screen shows" in `docs/product/welcome-screen.md`. The row shows whatever the section lists — a console
 session left interrupted from before an agent went off the `PATH` still has its row — and it takes the place of the "no
 console session" row.
 

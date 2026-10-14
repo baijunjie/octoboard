@@ -37,6 +37,7 @@ Once it holds more than it can show, each of these fades at its edge:
 - the **sidebar's** list of console sessions and projects, a **focus mode's** cards and archived rows, and the
   **archive view's** rows (see `docs/product/sidebar.md` and `docs/product/focus-mode.md`);
 - the **rail's** column of console avatars;
+- the **welcome screen's** content (see "What the welcome screen shows" in `docs/product/welcome-screen.md`);
 - **every dialog's body**, and in Settings the panel holding the section on screen (see `docs/product/settings.md`);
 - the **project pane's** file tree (see "The file tree" in `docs/product/project-pane.md`), and the Git mode's change
   list and change tree (see "The change list" in `docs/product/project-pane-git-mode.md`);
@@ -82,6 +83,7 @@ covers. These are:
 
 - **a dialog's body**, named by the dialog's own title. A dialog whose controls are all in its footer — a long
   message, a page of text — has nothing in its body to take focus otherwise.
+- **the welcome screen's content area** (see "Keyboard focus" in `docs/product/welcome-screen.md`).
 - **the column of content of a screen shown before there is anything to show**, named as the screen's message. Its
   buttons sit at the end of that content and the window itself never scrolls, so a long message — the reasons a
   daemon could not start, say — would otherwise leave nothing between those buttons and the top of the screen to take
