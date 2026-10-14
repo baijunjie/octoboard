@@ -170,10 +170,10 @@ export function FileViewer({
   // need (short items that all miss the space beside the controls share one): two rows when a long
   // path drops, three when a rename's long origin drops too, each taking 32 px of the code area
   // from the dialog. That is accepted, because the milestone asks that a long detail take a row of
-  // its own rather than be squeezed, and capping it would squeeze one. The subtitle is a 32 px row
+  // its own rather than be squeezed, and capping it would squeeze one. The subtitle is a single line
   // in the dialog's header, directly under the heading (`Dialog`'s `subtitle`), for a compared
-  // change and nothing for any other subject. It costs those 32 px and no more, and since the
-  // header is not the scroller it is not clipped by it.
+  // change and nothing for any other subject. Its height follows its text, and since the header
+  // is not the scroller it is not clipped by it.
   // The header also gives up what it held before, each row one line that is never wrapped, so that
   // moving between files could not move the code below; the code now moves when the rows needed
   // differ from one file to the next, and between a compared change and a worktree one.
@@ -223,7 +223,7 @@ export function FileViewer({
           // Rendered only while there is a source, so a subject without one loses no height. The muted
           // colour is set here rather than inherited: the dialog's header carries none of its own, and
           // this line is the subject's metadata, not a second title.
-          <div data-viewer-subtitle="" className="flex h-8 min-w-0 items-center text-xs text-muted">
+          <div data-viewer-subtitle="" className="flex min-w-0 items-center text-xs text-muted">
             <FadeOverflow
               as="span"
               className="min-w-0"
