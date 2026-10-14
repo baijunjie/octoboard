@@ -112,8 +112,29 @@ const state = snapshotState({
   settings,
 });
 
+// The existing focus views share enough cards to scroll even with the console-bound cards
+// hidden. Keep the hierarchy and empty-state scenarios on their smaller original workspace.
+const scrollingFocusState = {
+  ...state,
+  sessions: new Map([
+    ...state.sessions!,
+    ...Array.from({ length: 6 }, (_, i) => {
+      const session = sessionOf(`s-scroll-unbound-${i}`, console_.id, project.id, `Review search improvement ${i + 1}`, "idle");
+      return [session.id, session] as const;
+    }),
+    ...Array.from({ length: 6 }, (_, i) => {
+      const session = sessionOf(`s-scroll-bound-${i}`, console_.id, project.id, `Investigate ranking result ${i + 1}`, "idle", { bound_to: hub1.id });
+      return [session.id, session] as const;
+    }),
+    ...Array.from({ length: 3 }, (_, i) => {
+      const session = sessionOf(`s-scroll-archive-${i}`, console_.id, project.id, `Completed search investigation ${i + 1}`, "archived", { bound_to: hub1.id, ended_at: minutesAgo(400 + i * 10) });
+      return [session.id, session] as const;
+    }),
+  ]),
+};
+
 // Archive-only views keep the preview boundary and heading counts visible together. The
-// archived lead contributes three display rows, including its two nested children.
+// five-root boundary has no hidden children; the six-root overflow also has two hidden children.
 const previewHub = sessionOf("s-preview-hub", console_.id, undefined, "Hub", "idle", { colour: "teal" });
 const previewLead = sessionOf("s-preview-lead", console_.id, emptyProject.id, "Archived lead session", "archived", { bound_to: previewHub.id, ended_at: minutesAgo(8) });
 function archivePreviewState(count: 5 | 6) {
@@ -123,8 +144,8 @@ function archivePreviewState(count: 5 | 6) {
     sessions: [
       previewHub,
       previewLead,
-      ...Array.from({ length: 2 }, (_, i) => sessionOf(`s-preview-child-${i}`, console_.id, emptyProject.id, `Session ${i + 1} of the archived lead`, "archived", { bound_to: previewLead.id, agent: i === 1 ? "codex" : "claude", ended_at: minutesAgo(2 + i * 3) })),
-      ...Array.from({ length: count - 3 }, (_, i) => sessionOf(`s-preview-${i}`, console_.id, emptyProject.id, `Bound archived session ${i + 1}`, "archived", { bound_to: previewHub.id, ended_at: minutesAgo(10 + i * 5) })),
+      ...Array.from({ length: count === 6 ? 2 : 0 }, (_, i) => sessionOf(`s-preview-child-${i}`, console_.id, emptyProject.id, `Session ${i + 1} of the archived lead`, "archived", { bound_to: previewLead.id, agent: i === 1 ? "codex" : "claude", ended_at: minutesAgo(2 + i * 3) })),
+      ...Array.from({ length: count - 1 }, (_, i) => sessionOf(`s-preview-${i}`, console_.id, emptyProject.id, `Bound archived session ${i + 1}`, "archived", { bound_to: previewHub.id, ended_at: minutesAgo(10 + i * 5) })),
     ],
   });
 }
@@ -133,8 +154,8 @@ const archivePreviewSix = archivePreviewState(6);
 
 // Long bound titles exercise the single-line fade and full-title hover without displacing the owner badge.
 const combinedState = {
-  ...state,
-  sessions: new Map([...state.sessions!].map(([id, session]) => [id, {
+  ...scrollingFocusState,
+  sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, {
     ...session,
     terminal_title: id === "s-2"
       ? "Fix the rounding of partial search results and preserve precision across every supported currency"
@@ -163,9 +184,9 @@ export const focusScenarios: Scenario[] = [
     id: "focus-project",
     group: GROUP,
     title: "Project focus",
-    state: state,
+    state: scrollingFocusState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    description: "Live console-bound sessions make the switch available to the right of the Sessions count; it starts off. Hover or focus the switch for its Show all project sessions tooltip. Colored summary chips with contrasting gray count badges sit above archives, including bound sessions and an archived child of an active lead.",
+    description: "The switch beside the Sessions count starts off; hover or focus it for its Show all project sessions tooltip. Colored summary chips and gray count badges sit above archives. Scroll to confirm Sessions stays clear above the fade. At a 200px window height, Archived pushes it away at the top; the preview hides child sessions and retains View all.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Plan the database migration", name: "Write the migration" }))),
     ],
@@ -176,7 +197,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project focus including console sessions",
     state: combinedState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The switch beside the Sessions count is on; hover or focus it for its Show all project sessions tooltip. Bound and unbound sessions share subtly distinct cards. Owner badges precede single-line titles following the reading direction; long Latin and CJK names fade at the edge, with marquee and the full title available on hover. Status glyphs, owner badges and agent marks share one leading column; all three text lines start together, including unbound cards with an empty owner slot. Pin/menu spacing matches the header's plus/menu spacing. Bound nested cards inherit the owner's color. Hover a badge to read its owner. Pinned cards stay first; other siblings sort Waiting for you, Awaiting instructions, Working, Interrupted, with children kept under their parent. Archives remain available below the cards.",
+    description: "The switch beside Sessions is on; hover or focus it for its tooltip. Bound and unbound cards differ subtly; owner badges precede single-line Latin and CJK titles, which fade and reveal their full text on hover. Status, owner and agent marks share a column; text lines align even with empty owner slots. Pin/menu spacing matches the header controls. Nested cards inherit owner colors; hover badges for owner names. Pinned cards come first, then Waiting for you, Awaiting instructions, Working and Interrupted; children stay under parents. Scroll to confirm Sessions stays above the fade and Archived pushes it away at a 200px window height.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Compare ranking strategies", name: "Rework the result ranking" }))),
     ],
@@ -185,9 +206,9 @@ export const focusScenarios: Scenario[] = [
     id: "focus-console-session",
     group: GROUP,
     title: "Console session focus",
-    state: state,
+    state: scrollingFocusState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    description: "Bound cards and archives stay under their owners. The switch strip includes waiting, working and inactive sessions; hover markers for details.",
+    description: "Bound cards and archives stay under their owners. Scroll the long list to confirm Sessions stays clear above the fade and, at a 200px window height, Archived replaces it at the top. The switch strip includes waiting, working and inactive sessions; hover markers for details.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Prevent duplicate API requests", name: "Add idempotency keys" }))),
     ],
@@ -203,34 +224,34 @@ export const focusScenarios: Scenario[] = [
   {
     id: "focus-project-no-sessions",
     group: GROUP,
-    title: "Project archive preview, exactly five rows",
+    title: "Project archive preview, exactly five parents",
     state: archivePreviewFive,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The headings show zero live sessions and five archived sessions in parentheses. The entire archive fits, so there is no View all row; archived children stay under their lead. The Show all project sessions switch is absent even when its saved preference is on.",
+    description: "The headings count zero live sessions and five archived parents. All five parents appear without View all. The Show all project sessions switch is absent even when its saved preference is on.",
   },
   {
     id: "focus-project-archive-overflow",
     group: GROUP,
-    title: "Project archive preview, six rows",
+    title: "Project archive preview, six parents with children",
     state: archivePreviewSix,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}` },
-    description: "The archive heading counts all six sessions in parentheses. Five rows precede View all, which aligns with the session rows and repeats no count.",
+    description: "The heading counts eight archived sessions: six parents and two hidden children. Five parent rows precede View all; children of the archived lead appear only in the full archive.",
   },
   {
     id: "focus-console-archive-five",
     group: GROUP,
-    title: "Console archive preview, exactly five rows",
+    title: "Console archive preview, exactly five parents",
     state: archivePreviewFive,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The headings show zero live sessions and five archived sessions in parentheses. All five rows fit, including the lead's nested children, so View all is absent.",
+    description: "The headings count zero live sessions and five directly bound archived parents. All five appear without View all.",
   },
   {
     id: "focus-console-archive-overflow",
     group: GROUP,
-    title: "Console archive preview, six rows",
+    title: "Console archive preview, six parents with children",
     state: archivePreviewSix,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The archive heading counts all six bound sessions in parentheses. View all follows the five-row preview with the same row spacing and no repeated count.",
+    description: "The heading counts eight bound archived sessions, including two hidden children. Only five of six parent rows appear before View all; the full archive keeps children under their archived lead.",
   },
   {
     id: "focus-project-empty",

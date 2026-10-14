@@ -243,7 +243,7 @@ while the project's status says the directory is a git repository, **Git**.
 - **Rename** — a dialog with the name alone; an empty name is rejected.
 - **Project settings** — the project dialog, see "Editing a project" in `docs/product/consoles-and-projects.md`.
 - **Focus mode** — see `docs/product/focus-mode.md`.
-- **View archive** — a submenu of the project's newest five archived sessions (most recently archived first), each
+- **View archive** — a submenu of the project's archived parent-session preview (see "The archive view" below), each
   with its agent's icon and its title; choosing one selects it (see "Selecting a session" below). After them,
   **View all**, without a count, opens the archive view whenever the project has an archived session, including
   when all of them fit in the submenu. A project with no archived session shows only a disabled item saying so.
@@ -452,8 +452,16 @@ every archived session under that console session (bound to it, or bound to an a
 it), or every archived console session of that console. A lead session's own archived sessions are in that console
 session's archive only while the lead session is archived too; while the lead session is still live they are in its
 project's archive alone. The submenus offer View all whenever their archive is nonempty, so the archive's
-reopen and deletion controls remain reachable even when every session fits in the submenu. Focus mode's preview
-offers it only with more than five archived rows (see "What both views show" in `docs/product/focus-mode.md`).
+reopen and deletion controls remain reachable even when every session fits in the submenu. An archive containing
+only children shows View all alone in its submenu; the disabled empty item is shown only when the archive itself
+is empty. Focus mode's preview offers View all whenever it omits any archived session (see "What both views show"
+in `docs/product/focus-mode.md`).
+
+**Archive previews**, in those submenus and both focus modes, show at most five archived parent sessions, most
+recently archived first. A session bound to a project session is a child and is omitted, whether its owner is
+live or archived. Unbound sessions and sessions bound directly to a console session are parent sessions; a session
+whose owner is no longer known is included as well. Children remain available in the full archive view, whose
+scope and nesting are described below.
 
 - It **covers the terminal's area only**: the sidebar and the right pane stay as they are.
   The terminal goes on running beneath it and is not resized.

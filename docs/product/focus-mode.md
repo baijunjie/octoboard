@@ -16,6 +16,13 @@ badge (see "The branch badge" in `docs/product/project-git-status.md`). A consol
 beside its name, and pressing the name selects the console session, whose terminal and report panel the view has no
 other row for.
 
+**The list's section headings**, in both: **Sessions (n)** stays at the top of the scrolling list while its
+cards move underneath; as **Archived (n)** approaches the top, it pushes the Sessions heading upward out of view
+and takes its place. The headings have an
+opaque background and stay clear of the edge fade, which begins below the heading. Keyboard focus scrolled into
+view stays below both the heading and the fade. The other scrolling rules are in "The edge that hides content
+fades" and "Scrolling a surface from the keyboard" in `docs/product/scrolling-surfaces.md`.
+
 **Session cards**, in both: the status glyph with the status in words, the pin button when pinned (see "Pinning" in
 `docs/product/sidebar.md`), the session's action menu (always shown), its title on one line, its agent's icon
 and name with its account, and how long ago it was started at the trailing end of the agent line. The status, title
@@ -35,15 +42,14 @@ console session above them (see "A project's focus mode" below and "The binding 
 `docs/product/sidebar.md`).
 
 **Archived (n)**, in both, only while the view has archived sessions — with none, the section is not shown at all:
-the five most recent rows of the view's archive, each showing its agent's icon, its title and how long ago it
-was archived. Clicking one selects it. Its action menu offers **Rename** and **Delete** (which asks for
-confirmation; see "Deleting archived sessions" in `docs/product/sessions.md`). With more than five archived
-rows, **View all** follows them as a row with the same alignment, hover feedback and keyboard focus treatment
-as the session rows; it opens the archive view and carries no count. With five or fewer, there is no View all
-row. An archived session whose owner is a project session the list holds too is inset under it, with rounded
-connectors, as in the archive view (see "The archive view" in `docs/product/sidebar.md`); the five are counted
-as rows, so the preview can end between an owner and the sessions under it but never shows an inset row
-without the row it is inset under.
+the parent-session preview described in "The archive view" in `docs/product/sidebar.md`, each row showing its
+agent's icon, its title and how long ago it was archived. The heading counts every archived session in the view's
+scope, including children omitted from the preview. Clicking a row selects it. Its action menu offers **Rename**
+and **Delete** (which asks for confirmation; see "Deleting archived sessions" in `docs/product/sessions.md`).
+Whenever any archived session is omitted — a child or a parent beyond the first five — **View all** follows the
+preview as a row with the same alignment, hover feedback and keyboard focus treatment as the session rows; it
+opens the archive view and carries no count. With only archived children, the section shows its count and View all
+without any preview rows. When every archived session fits in the preview, there is no View all row.
 
 Relative times ("5 minutes ago") are worded in the current language, and anything under a minute reads as now.
 
@@ -84,9 +90,9 @@ From the top, below the header:
   across all chips. Both the total and each chip's count include a lead session **and** the sessions under it, since
   the lead session's team is listed with it in that console session's focus mode. Pressing a chip enters that console
   session's focus mode; assistive technology hears it as entering that focus mode, with the count.
-- **Archived (n)** is the project's archived sessions with the bound ones included — those of a lead session that is
-  still live among them. The archive is not filtered by binding, regardless of the switch; only the list of live
-  sessions changes.
+- **Archived (n)** counts all of the project's archived sessions, including those under a lead session that is
+  still live. The switch changes only the live list; the archive's count, parent-session preview and View all
+  scope stay the same.
 
 **New session** (the header's **+** and the empty row) opens the new-session dialog with no "Report to"
 choice: the session is always unbound.
@@ -111,9 +117,9 @@ choice: the session is always unbound.
   line saying the session reports to this console session, which it will be bound to.
 - **With no project in the console at all** there is nothing to open a session in: the header's **+** is disabled, and
   in place of the sessions a compact row says the console has no projects yet; clicking it opens **Add project**.
-- **Archived (n)** is the archived sessions under this console session — bound to it, or bound to an archived lead
-  session that is bound to it (see "Lead sessions" in `docs/product/hub-orchestration.md`), each of those inset under
-  that lead session — and **View all** opens the archive view scoped to them (see "The archive view" in
+- **Archived (n)** counts the archived sessions under this console session — bound to it, or bound to an archived lead
+  session that is bound to it (see "Lead sessions" in `docs/product/hub-orchestration.md`) — and **View all** opens
+  the archive view scoped to them, including the children omitted from the preview (see "The archive view" in
   `docs/product/sidebar.md`). An archived session of a lead session that is still live is not here: it is in the lead
   session's project's archive alone.
 

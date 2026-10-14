@@ -24,14 +24,22 @@ import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
 import { GitBadge } from "./GitBadge";
 import { projectMenu, sessionMenu } from "./menus";
-import { archivedSessionRows, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroups, liveSessionRows, type NestedSession, notUnderConsoleSession, sortProjects, switchStrip, type SwitchStripEntry } from "./order";
+import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroups, liveSessionRows, type NestedSession, notUnderConsoleSession, sortProjects, switchStrip, type SwitchStripEntry } from "./order";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
-import { NESTED_INSET_CLASS, NESTED_ROW_CLASS, PinButton, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
+import { NESTED_INSET_CLASS, PinButton, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
 import type { SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
 
-/** How many archived sessions focus mode lists before "View all". */
-const ARCHIVE_PREVIEW = 5;
+const FOCUS_HEADING_HEIGHT = 38;
+
+/** Kept inside its own section so the next heading pushes it away without covering its text. */
+function FocusSectionHeading({ children, action }: { children: React.ReactNode; action?: React.ReactNode }): React.ReactElement {
+  return (
+    <div className="sticky top-0 z-3 flow-root bg-panel-sidebar">
+      <SectionHeading action={action}>{children}</SectionHeading>
+    </div>
+  );
+}
 
 /** The top of either focus view: the back button that leaves focus mode, then whatever the view
  * puts after it. Both views are built from this header, the session cards and the archived list
@@ -91,7 +99,7 @@ function FocusTitle({ consoleName, title }: { consoleName: string; title: string
 /** A project's focus mode: the sidebar given over to one project, its sessions not bound to a
  * console session as cards, each with the sessions bound to it under it, then the console sessions
  * that hold the rest and its recent archive. The optional combined view lists every live session
- * with its console session colour instead of the summary chips; the archive is never filtered. */
+ * with its console session colour instead of the summary chips; its archive scope stays the same. */
 export function ProjectFocusView({
   handlers,
   console: parentConsole,
@@ -118,10 +126,8 @@ export function ProjectFocusView({
   const live = liveSessionRows(includeConsoleSessions ? sessions : notUnderConsoleSession(sessions, owners));
   const byId = new Map(sessions.map((session) => [session.id, session]));
   const consoleOwner = (session: Session) => consoleSessionAbove(session, (id) => byId.get(id) ?? owners.get(id));
-  // The rows nest an archived session under its archived owner; the project menu's "View archive"
-  // submenu lists the newest few flat, so it is given the plain list.
   const archived = archivedSessions(sessions);
-  const archivedRows = archivedSessionRows(sessions);
+  const archiveContext = [...sessions, ...owners.values()];
   const elsewhere = boundElsewhere(sessions, owners);
   const openSession = () =>
     handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project, binding: { kind: "unbound" } });
@@ -143,51 +149,53 @@ export function ProjectFocusView({
           <RowIconButton icon={Plus} label={t("sidebar.project.openSession")} onPress={openSession} />
           <ActionMenu
             label={t("sidebar.project.actions", { name: isolate(project.name) })}
-            items={projectMenu(t, handlers, project, archived, { placement: "focused", gitRepository: gitStatus?.repository })}
+            items={projectMenu(t, handlers, project, archived, archiveContext, { placement: "focused", gitRepository: gitStatus?.repository })}
             contextTargetRef={headerRef}
           />
         </RowIconGroup>
       </FocusHeader>
-      <FadedScroller className="min-h-0 flex-1 px-2 pb-2">
-        <SectionHeading
-          action={elsewhere && (
-            <span className="contents" {...switchFocus}>
-              <Tooltip>
-                {/* Switch sends hover props to its hidden input; this trigger covers the visible control without adding a tab stop. */}
-                <Tooltip.Trigger role="presentation" tabIndex={-1}>
-                  <Switch
-                    size="sm"
-                    aria-label={t("sidebar.focus.includeConsoleSessions")}
-                    aria-describedby=""
-                    isSelected={includeConsoleSessions}
-                    onChange={(value) => projectFocusIncludeConsoleSessions.set(value)}
-                  >
-                    <Switch.Content>
-                      <Switch.Control>
-                        <Switch.Thumb />
-                      </Switch.Control>
-                    </Switch.Content>
-                  </Switch>
-                </Tooltip.Trigger>
-                <Tooltip.Content className="pointer-events-none">{t("sidebar.focus.includeConsoleSessions")}</Tooltip.Content>
-              </Tooltip>
-            </span>
+      <FadedScroller stickyHeadingHeight={FOCUS_HEADING_HEIGHT} className="min-h-0 flex-1 px-2 pb-2">
+        <section>
+          <FocusSectionHeading
+            action={elsewhere && (
+              <span className="contents" {...switchFocus}>
+                <Tooltip>
+                  {/* Switch sends hover props to its hidden input; this trigger covers the visible control without adding a tab stop. */}
+                  <Tooltip.Trigger role="presentation" tabIndex={-1}>
+                    <Switch
+                      size="sm"
+                      aria-label={t("sidebar.focus.includeConsoleSessions")}
+                      aria-describedby=""
+                      isSelected={includeConsoleSessions}
+                      onChange={(value) => projectFocusIncludeConsoleSessions.set(value)}
+                    >
+                      <Switch.Content>
+                        <Switch.Control>
+                          <Switch.Thumb />
+                        </Switch.Control>
+                      </Switch.Content>
+                    </Switch>
+                  </Tooltip.Trigger>
+                  <Tooltip.Content className="pointer-events-none">{t("sidebar.focus.includeConsoleSessions")}</Tooltip.Content>
+                </Tooltip>
+              </span>
+            )}
+          >
+            {t("sidebar.focus.sessions", { count: live.length })}
+          </FocusSectionHeading>
+          {live.length === 0 ? (
+            <EmptyPanel
+              compact
+              icon={MessageSquarePlus}
+              message={t("sidebar.noSessions")}
+              action={{ label: t("sidebar.project.openSession"), onPress: openSession }}
+            />
+          ) : (
+            <SessionCards handlers={handlers} sessions={live} selectedSessionId={selectedSessionId} consoleOwner={includeConsoleSessions ? consoleOwner : undefined} />
           )}
-        >
-          {t("sidebar.focus.sessions", { count: live.length })}
-        </SectionHeading>
-        {live.length === 0 ? (
-          <EmptyPanel
-            compact
-            icon={MessageSquarePlus}
-            message={t("sidebar.noSessions")}
-            action={{ label: t("sidebar.project.openSession"), onPress: openSession }}
-          />
-        ) : (
-          <SessionCards handlers={handlers} sessions={live} selectedSessionId={selectedSessionId} consoleOwner={includeConsoleSessions ? consoleOwner : undefined} />
-        )}
-        {!includeConsoleSessions && elsewhere && <BoundElsewhere handlers={handlers} count={elsewhere.count} owners={elsewhere.owners} />}
-        <ArchivedList handlers={handlers} archived={archivedRows} selectedSessionId={selectedSessionId} onViewAll={viewAll} />
+          {!includeConsoleSessions && elsewhere && <BoundElsewhere handlers={handlers} count={elsewhere.count} owners={elsewhere.owners} />}
+        </section>
+        <ArchivedList handlers={handlers} archived={archived} sessions={archiveContext} selectedSessionId={selectedSessionId} onViewAll={viewAll} />
       </FadedScroller>
     </>
   );
@@ -221,7 +229,7 @@ export function ConsoleSessionFocusView({
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const groups = focusGroups(projects, sessions, consoleSession.id);
   const liveCount = groups.reduce((sum, group) => sum + group.sessions.length, 0);
-  const archived = archivedSessionRows(boundArchivedSessions(sessions, consoleSession.id));
+  const archived = boundArchivedSessions(sessions, consoleSession.id);
   const openSession = (project: Project) =>
     handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project, binding: { kind: "bound", to: consoleSession } });
   const viewAll = () => handlers.onOpenArchive({ console: parentConsole.id, consoleSession: consoleSession.id });
@@ -272,35 +280,38 @@ export function ConsoleSessionFocusView({
         </RowIconGroup>
       </FocusHeader>
       {strip.length > 1 && <SwitchStrip handlers={handlers} entries={strip} currentId={consoleSession.id} />}
-      <FadedScroller className="min-h-0 flex-1 px-2 pb-2">
-        <SectionHeading>{t("sidebar.focus.sessions", { count: liveCount })}</SectionHeading>
-        {projects.length === 0 ? (
-          // The header's "+" is disabled with no project to open a session in, so say why here.
-          <EmptyPanel
-            compact
-            icon={FolderPlus}
-            message={t("sidebar.noProjects")}
-            action={{ label: t("sidebar.console.addProject"), onPress: () => handlers.onOpenDialog({ kind: "new-project", console: parentConsole }) }}
-          />
-        ) : groups.length === 0 ? (
-          <EmptyPanel compact icon={MessageSquarePlus} message={t("sidebar.focus.noBoundSessions")} />
-        ) : (
-          <div ref={groupsRef} className="relative flex flex-col gap-2">
-            {groups.map(({ project, sessions: boundHere }) => (
-              <div key={project.id} data-flip={project.id}>
-                <FocusProjectGroup
-                  handlers={handlers}
-                  project={project}
-                  boundHere={boundHere}
-                  archived={archivedSessions(sessions.filter((s) => s.project_id === project.id))}
-                  onOpenSession={() => openSession(project)}
-                  selectedSessionId={selectedSessionId}
-                />
-              </div>
-            ))}
-          </div>
-        )}
-        <ArchivedList handlers={handlers} archived={archived} selectedSessionId={selectedSessionId} onViewAll={viewAll} />
+      <FadedScroller stickyHeadingHeight={FOCUS_HEADING_HEIGHT} className="min-h-0 flex-1 px-2 pb-2">
+        <section>
+          <FocusSectionHeading>{t("sidebar.focus.sessions", { count: liveCount })}</FocusSectionHeading>
+          {projects.length === 0 ? (
+            // The header's "+" is disabled with no project to open a session in, so say why here.
+            <EmptyPanel
+              compact
+              icon={FolderPlus}
+              message={t("sidebar.noProjects")}
+              action={{ label: t("sidebar.console.addProject"), onPress: () => handlers.onOpenDialog({ kind: "new-project", console: parentConsole }) }}
+            />
+          ) : groups.length === 0 ? (
+            <EmptyPanel compact icon={MessageSquarePlus} message={t("sidebar.focus.noBoundSessions")} />
+          ) : (
+            <div ref={groupsRef} className="relative flex flex-col gap-2">
+              {groups.map(({ project, sessions: boundHere }) => (
+                <div key={project.id} data-flip={project.id}>
+                  <FocusProjectGroup
+                    handlers={handlers}
+                    project={project}
+                    boundHere={boundHere}
+                    archived={archivedSessions(sessions.filter((s) => s.project_id === project.id))}
+                    sessions={sessions}
+                    onOpenSession={() => openSession(project)}
+                    selectedSessionId={selectedSessionId}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+        <ArchivedList handlers={handlers} archived={archived} sessions={sessions} selectedSessionId={selectedSessionId} onViewAll={viewAll} />
       </FadedScroller>
     </>
   );
@@ -384,6 +395,7 @@ function FocusProjectGroup({
   project,
   boundHere,
   archived,
+  sessions,
   onOpenSession,
   selectedSessionId,
 }: {
@@ -391,6 +403,7 @@ function FocusProjectGroup({
   project: Project;
   boundHere: NestedSession[];
   archived: Session[];
+  sessions: Session[];
   onOpenSession: () => void;
   selectedSessionId?: string;
 }): React.ReactElement {
@@ -414,7 +427,7 @@ function FocusProjectGroup({
           <RowIconButton ref={openSessionHolder} icon={Plus} label={t("sidebar.focus.newSessionIn", { name: isolate(project.name) })} onPress={onOpenSession} />
           <ActionMenu
             label={t("sidebar.project.actions", { name: isolate(project.name) })}
-            items={projectMenu(t, handlers, project, archived, { placement: "nested", gitRepository: gitStatus?.repository })}
+            items={projectMenu(t, handlers, project, archived, sessions, { placement: "nested", gitRepository: gitStatus?.repository })}
             contextTargetRef={headerRef}
           />
         </RowIconGroup>
@@ -511,34 +524,32 @@ function SessionCards({
   );
 }
 
-/** A focus mode's archive: its five most recent rows, with "View all" to the archive view, an
- * archived session bound to an archived project session inset under it. The rows are already flat
- * and in display order, so the five are counted as rows: the preview can end between an owner and
- * its team, but never shows an inset row without the row it is inset under. Not drawn while there
- * is none. */
+/** A focus mode's archive: the five newest archived parent sessions. The heading counts the full
+ * archive, and "View all" keeps every omitted session reachable, including hidden children. */
 function ArchivedList({
   handlers,
   archived,
+  sessions,
   selectedSessionId,
   onViewAll,
 }: {
   handlers: SidebarHandlers;
-  archived: NestedSession[];
+  archived: Session[];
+  sessions: Session[];
   selectedSessionId?: string;
   onViewAll: () => void;
 }): React.ReactElement | null {
   const t = useT();
   if (archived.length === 0) return null;
+  const preview = archivePreviewSessions(archived, sessions);
   return (
-    <>
-      <SectionHeading>{t("sidebar.focus.archived", { count: archived.length })}</SectionHeading>
+    <section>
+      <FocusSectionHeading>{t("sidebar.focus.archived", { count: archived.length })}</FocusSectionHeading>
       <div className="flex flex-col gap-0.5">
-        {archived.slice(0, ARCHIVE_PREVIEW).map(({ session, under }) => (
-          <div key={session.id} className={under ? NESTED_ROW_CLASS : undefined}>
-            <ArchivedRow handlers={handlers} session={session} under={under} selected={session.id === selectedSessionId} />
-          </div>
+        {preview.map((session) => (
+          <ArchivedRow key={session.id} handlers={handlers} session={session} selected={session.id === selectedSessionId} />
         ))}
-        {archived.length > ARCHIVE_PREVIEW && (
+        {archived.length > preview.length && (
           <TreeRow ariaLabel={t("sidebar.archive.viewAll")} onActivate={onViewAll}>
             <List aria-hidden="true" className="size-4 shrink-0 text-muted rtl:-scale-x-100" />
             <RowLabel>
@@ -547,7 +558,7 @@ function ArchivedList({
           </TreeRow>
         )}
       </div>
-    </>
+    </section>
   );
 }
 
@@ -610,17 +621,14 @@ function SessionCard({
   );
 }
 
-/** One row of a focus mode's archive. `under`, the archived project session this one is bound to
- * and is inset below, goes into the row's accessible name, as on a session card. */
+/** One parent session in a focus mode's archive preview. */
 function ArchivedRow({
   handlers,
   session,
-  under,
   selected,
 }: {
   handlers: SidebarHandlers;
   session: Session;
-  under?: Session;
   selected: boolean;
 }): React.ReactElement {
   const t = useT();
@@ -630,7 +638,7 @@ function ArchivedRow({
   return (
     <TreeRow
       ref={rowRef}
-      ariaLabel={sessionAriaLabel(t, language, session, accounts, under)}
+      ariaLabel={sessionAriaLabel(t, language, session, accounts)}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
     >

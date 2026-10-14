@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Project, Session, SessionStatus } from "../protocol";
-import { archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, sortProjects, switchStrip } from "./order";
+import { archivePreviewSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, sortProjects, switchStrip } from "./order";
 
 const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to?: string): Session => ({
   id,
@@ -46,6 +46,23 @@ describe("liveSessions", () => {
       session("pinned", "interrupted", 0, true),
     ]);
     expect(ordered.map((s) => s.id)).toEqual(["pinned", "waiting", "new-idle", "old-idle", "working", "interrupted"]);
+  });
+});
+
+describe("archivePreviewSessions", () => {
+  it("keeps five newest parents, including console-bound and unknown-owner roots, but no project children", () => {
+    const consoleOwner = { ...session("hub", "idle", 0), role: "console" as const, project_id: undefined };
+    const parents = Array.from({ length: 6 }, (_, index) => ({
+      ...session(`parent-${index}`, "archived", 100 - index, index === 0, index === 4 ? "hub" : index === 5 ? "unknown" : undefined),
+      ended_at: index,
+    }));
+    const liveOwner = session("live-owner", "idle", 0);
+    const children = [
+      session("archived-owner-child", "archived", 200, false, "parent-5"),
+      session("live-owner-child", "archived", 300, false, liveOwner.id),
+    ];
+    expect(archivePreviewSessions([...children, ...parents], [...parents, ...children, liveOwner, consoleOwner]).map((s) => s.id))
+      .toEqual(["parent-5", "parent-4", "parent-3", "parent-2", "parent-1"]);
   });
 });
 

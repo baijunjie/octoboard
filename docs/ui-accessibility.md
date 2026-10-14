@@ -147,6 +147,9 @@ site: the padding comes with the fade. A fade the library draws for its own comp
 one to copy — a HeroUI `Tabs.ListContainer` fades its tab strip over 64 px with no padding at all, so a tab the arrow
 keys reach at the strip's edge does land under it.
 
+Where a sticky heading occupies the top of a faded list, the top scroll padding includes both the heading's height
+and the fade's size, so a focused row is visible below them. The heading itself stays clear of the fade.
+
 ### A scroller nothing else on screen scrolls takes focus itself
 
 A faded edge says there is more, so the keyboard has to be able to reach it. Where nothing else on the screen would

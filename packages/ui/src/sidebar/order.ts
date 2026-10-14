@@ -60,6 +60,16 @@ export function archivedSessions(sessions: Session[]): Session[] {
     .sort((a, b) => (b.ended_at ?? b.started_at) - (a.ended_at ?? a.started_at));
 }
 
+/** The archive previews show parent sessions only. Resolve bindings against every status so a
+ * child whose project owner is still live stays in the full archive alone. An unknown owner is
+ * not enough to classify a session as a child; direct console bindings remain parent rows. */
+export function archivePreviewSessions(archived: Session[], sessions: Session[]): Session[] {
+  const byId = new Map(sessions.map((session) => [session.id, session]));
+  return archivedSessions(archived)
+    .filter((session) => !session.bound_to || byId.get(session.bound_to)?.role !== "project")
+    .slice(0, 5);
+}
+
 /** A session as a list nests it. The lists are flat and in display order — an owner immediately
  * followed by the sessions bound to it — so a renderer indents the ones that carry `under` and a
  * list shown a page at a time still slices rows without separating a team from its owner. */

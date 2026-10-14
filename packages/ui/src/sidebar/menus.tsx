@@ -9,26 +9,25 @@ import type { DialogRequest } from "../dialogs/dialogRequest";
 import type { Account, Console, Project, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { FocusShortcutKbd } from "./focusShortcut";
+import { archivePreviewSessions } from "./order";
 import type { SidebarHandlers } from "./types";
 
-/** How many archived sessions a "View archive" submenu lists before "View all". */
-const ARCHIVE_SUBMENU_COUNT = 5;
-
-/** "View archive": the newest `ARCHIVE_SUBMENU_COUNT` archived sessions, each reopening its
- * session, then "View all", which opens the archive view. `archived` is newest first. */
+/** "View archive": the five newest archived parent sessions, each selecting its session, then
+ * "View all", which opens the full archive including children. `sessions` includes live owners. */
 export function archiveSubmenu(
   t: Translate,
   label: string,
   archived: Session[],
+  sessions: Session[],
   onSelect: (session: Session) => void,
   onViewAll: () => void,
 ): ActionMenuSubmenu {
-  const items: ActionMenuItem[] = archived.slice(0, ARCHIVE_SUBMENU_COUNT).map((session) => ({
+  const items: ActionMenuItem[] = archivePreviewSessions(archived, sessions).map((session) => ({
     label: sessionDisplayTitle(t, session),
     icon: <AgentIcon agent={session.agent} />,
     onClick: () => onSelect(session),
   }));
-  if (items.length === 0) {
+  if (archived.length === 0) {
     items.push({ label: t("sidebar.archive.empty"), icon: Archive, onClick: () => {}, disabled: true });
   }
   return {
@@ -79,6 +78,7 @@ export function projectMenu(
   handlers: SidebarHandlers,
   project: Project,
   archived: Session[],
+  sessions: Session[],
   { placement = "list", gitRepository = false }: { placement?: MenuPlacement; gitRepository?: boolean } = {},
 ): ActionMenuEntry[] {
   return [
@@ -101,7 +101,7 @@ export function projectMenu(
     { label: t("sidebar.project.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-project", project }) },
     { label: t("sidebar.project.edit"), icon: Settings2, onClick: () => handlers.onOpenDialog({ kind: "edit-project", project }) },
     ...(placement === "list" ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ project }) }] : []),
-    archiveSubmenu(t, t("sidebar.project.archive"), archived, handlers.onSelectSession, () =>
+    archiveSubmenu(t, t("sidebar.project.archive"), archived, sessions, handlers.onSelectSession, () =>
       handlers.onOpenArchive({ console: project.console_id, project: project.id }),
     ),
     "separator",

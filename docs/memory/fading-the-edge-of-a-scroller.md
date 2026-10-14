@@ -31,7 +31,9 @@ Which of the two shapes a site takes follows from its scroller:
   `Tabs.Panel` leaves it on screen for good. `getAnimations()` does not look at the subtree, so that fade goes on the
   scrolling list or panel inside, never on the popover or the panel itself.
 
-Either shape applies the fade as a `mask-image` on the scroller, and a mask clips by that element's border box, so:
+Except for focus mode's sticky section headings (the "What both views show" section of
+`docs/product/focus-mode.md`), either shape applies the fade as a `mask-image` on the scroller. For a masked scroller,
+the mask clips by that element's border box, so:
 
 - Padding that gives a control inside the scroller room — the room its focus ring needs — goes on the scroller itself,
   inside the clip, never on an element around it.
@@ -43,7 +45,7 @@ Either shape applies the fade as a `mask-image` on the scroller, and a mask clip
   leave; padding inside it gives the ring nothing. Add `ring-inset` where it reaches the window's own edge, there being
   no space outside to paint into.
 
-The fade is a hint, never the only cue: it is a mask over an ordinary overflow container, so the wheel, the keyboard and
+The fade is a hint, never the only cue: it covers an ordinary overflow container, so the wheel, the keyboard and
 a control focused out of view scroll as they would anyway. Keep it that way, and do not replace the container with one
 that scrolls by script. Where a site scrolls the container itself to reveal a row, it stops that row the fade's own size
 short of the edge, taken from the module's `FADE_SIZE` rather than written out: scroll padding governs only the

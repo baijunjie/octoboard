@@ -68,7 +68,7 @@ const inProject = (id: string) => sessions.filter((s) => s.project_id === id);
 const sessionLabels = (container: HTMLElement) =>
   Array.from(container.querySelectorAll("[role=button][data-marquee-scope]")).map((row) => row.getAttribute("aria-label") ?? "");
 
-it("a project's focus mode lists only its unbound sessions, its archive in full, and one line for the rest", () => {
+it("a project's focus mode lists only its unbound sessions, its archived parent sessions, and one line for the rest", () => {
   const { container, text, handlers, unmount } = mount((h) => (
     <ProjectFocusView handlers={h} console={main} project={web} sessions={inProject(web.id)} owners={owners} />
   ));
@@ -251,7 +251,7 @@ it("combining project sessions replaces the console summary with cards carrying 
   ));
   const toggle = container.querySelector<HTMLInputElement>('input[role="switch"]')!;
   expect(toggle.checked).toBe(false);
-  expect(text()).toContain(archivedChild.title);
+  expect(text()).not.toContain(archivedChild.title);
   act(() => toggle.click());
   expect(toggle.checked).toBe(true);
   expect(localStorage.getItem(PREFERENCE_KEYS.projectFocusIncludeConsoleSessions)).toBe("true");
@@ -266,11 +266,54 @@ it("combining project sessions replaces the console summary with cards carrying 
   expect(card(underLead.title).parentElement!.className).toContain("ms-[17px]");
   expect(card("Tidy the changelog").querySelector('[style*="--console-session-"]')).toBeNull();
   expect(text()).toContain("An old bound spike");
-  expect(text()).toContain(archivedChild.title);
+  expect(text()).not.toContain(archivedChild.title);
   act(() => card(underLead.title).click());
   expect(handlers.onSelectSession).toHaveBeenCalledWith(underLead);
   act(() => toggle.click());
   expect(text()).toContain("4 sessions in this project are under console sessions");
-  expect(text()).toContain(archivedChild.title);
+  expect(text()).not.toContain(archivedChild.title);
   expect(localStorage.getItem(PREFERENCE_KEYS.projectFocusIncludeConsoleSessions)).toBe("false");
+});
+
+it.each(["project", "console"] as const)("%s focus previews five archived parents, counts children and opens the full archive", (view) => {
+  const parents = Array.from({ length: 5 }, (_, index) => sessionOf(`root-${index}`, main.id, web.id, `Archived parent ${index}`, "archived", { ended_at: index, bound_to: hub1.id }));
+  const child = sessionOf("child", main.id, web.id, "Hidden archived child", "archived", { ended_at: 10, bound_to: parents[4].id });
+  const context = [hub1, ...parents, child];
+  const { container, text, handlers } = mount((h) => view === "project" ? (
+    <ProjectFocusView handlers={h} console={main} project={web} sessions={context.filter((s) => s.project_id === web.id)} owners={owners} />
+  ) : (
+    <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web]} sessions={context} />
+  ));
+  expect(text()).toContain("Archived (6)");
+  const rows = Array.from(container.querySelectorAll<HTMLElement>('[role="button"][data-marquee-scope]'))
+    .filter((row) => row.getAttribute("aria-label")?.includes("Archived parent"));
+  expect(rows.map((row) => row.textContent?.match(/Archived parent \d/)?.[0])).toEqual(["Archived parent 4", "Archived parent 3", "Archived parent 2", "Archived parent 1", "Archived parent 0"]);
+  expect(text()).not.toContain(child.title);
+  act(() => rows[0].click());
+  expect(handlers.onSelectSession).toHaveBeenCalledWith(parents[4]);
+  const viewAll = container.querySelector<HTMLElement>('[role="button"][aria-label="View all"]')!;
+  act(() => viewAll.click());
+  expect(handlers.onOpenArchive).toHaveBeenCalledWith(view === "project" ? { console: main.id, project: web.id } : { console: main.id, consoleSession: hub1.id });
+});
+
+it.each(["idle", "archived"] as const)("project focus hides a child and keeps its archive reachable while its parent is %s", (status) => {
+  const parent = sessionOf("parent", main.id, web.id, "Parent", status);
+  const child = sessionOf("child", main.id, web.id, "Hidden child", "archived", { bound_to: parent.id });
+  const { container, text, handlers } = mount((h) => (
+    <ProjectFocusView handlers={h} console={main} project={web} sessions={[parent, child]} owners={owners} />
+  ));
+  expect(text()).toContain(`Archived (${status === "archived" ? 2 : 1})`);
+  expect(text()).not.toContain(child.title);
+  expect(text()).not.toContain("No archived sessions");
+  const viewAll = container.querySelector<HTMLElement>('[role="button"][aria-label="View all"]')!;
+  act(() => viewAll.click());
+  expect(handlers.onOpenArchive).toHaveBeenCalledWith({ console: main.id, project: web.id });
+});
+
+it.each([5, 6])("project focus offers View all for an archive of %s parents exactly when the preview omits one", (count) => {
+  const archived = Array.from({ length: count }, (_, index) => sessionOf(`root-${index}`, main.id, web.id, `Parent ${index}`, "archived"));
+  const { container } = mount((h) => (
+    <ProjectFocusView handlers={h} console={main} project={web} sessions={archived} owners={owners} />
+  ));
+  expect(container.querySelector('[role="button"][aria-label="View all"]') !== null).toBe(count > 5);
 });

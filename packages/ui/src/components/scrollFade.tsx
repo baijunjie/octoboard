@@ -109,6 +109,8 @@ export function useFadeRegion(
 
 type FadedScrollerProps = Omit<React.ComponentProps<typeof ScrollShadow>, "size" | "offset" | "visibility" | "isEnabled" | "variant" | "onVisibilityChange"> & {
   region?: FadeRegion;
+  /** Sticky headings paint above overlay fades; a mask would dim every descendant regardless of z-index. */
+  stickyHeadingHeight?: number;
 };
 
 /**
@@ -122,22 +124,57 @@ type FadedScrollerProps = Omit<React.ComponentProps<typeof ScrollShadow>, "size"
  * `region` set is applied after the caller's own props, so neither can be written over from a site.
  * While the scroller overflows sideways it carries `data-scrolls-sideways`, which keeps the
  * horizontal scrollbar clear of the mask (`style.css`).
+ *
+ * A sidebar list with `stickyHeadingHeight` uses overlays instead: its headings paint at z-3
+ * above the z-2 fades, and the top fade and scroll padding start below the heading. The wrapper
+ * supplies their shared stacking context; the measured gutter keeps the scrollbar uncovered.
  */
-export function FadedScroller({ orientation = "vertical", region, style, className, ref: forwarded, ...props }: FadedScrollerProps): React.ReactElement {
+export function FadedScroller({ orientation = "vertical", region, style, className, ref: forwarded, stickyHeadingHeight, ...props }: FadedScrollerProps): React.ReactElement {
   const ref = useObjectRef(forwarded);
   const sideways = useScrollsSideways(ref, orientation);
-  return (
+  const [visibility, setVisibility] = useState<ScrollShadowVisibility>("none");
+  const [gutter, setGutter] = useState(0);
+  useEffect(() => {
+    const element = ref.current;
+    if (stickyHeadingHeight === undefined || !element) return;
+    const measure = () => setGutter(element.offsetWidth - element.clientWidth);
+    const resize = new ResizeObserver(measure);
+    resize.observe(element);
+    measure();
+    return () => resize.disconnect();
+  });
+  const scroller = (
     <ScrollShadow
       orientation={orientation}
       size={FADE_SIZE}
       {...props}
       {...sideways}
       ref={ref}
-      onVisibilityChange={region?.onVisibilityChange}
+      onVisibilityChange={(value) => {
+        if (stickyHeadingHeight !== undefined) setVisibility(value);
+        region?.onVisibilityChange?.(value);
+      }}
       {...region?.props}
-      style={{ ...scrollPadding(orientation), ...style }}
+      style={{ ...scrollPadding(orientation), ...style, ...(stickyHeadingHeight === undefined ? {} : {
+        maskImage: "none", WebkitMaskImage: "none", animation: "none",
+        scrollPaddingTop: stickyHeadingHeight + FADE_SIZE,
+      }) }}
       className={joinClasses(className, region?.className)}
     />
+  );
+  if (stickyHeadingHeight === undefined) return scroller;
+  return (
+    <div className="relative isolate flex min-h-0 flex-1 flex-col">
+      {scroller}
+      {(visibility === "top" || visibility === "both") && (
+        <div aria-hidden="true" className="pointer-events-none absolute start-0 z-2 bg-linear-to-b from-panel-sidebar to-transparent"
+          style={{ top: stickyHeadingHeight, height: FADE_SIZE, insetInlineEnd: gutter }} />
+      )}
+      {(visibility === "bottom" || visibility === "both") && (
+        <div aria-hidden="true" className="pointer-events-none absolute bottom-0 start-0 z-2 bg-linear-to-t from-panel-sidebar to-transparent"
+          style={{ height: FADE_SIZE, insetInlineEnd: gutter }} />
+      )}
+    </div>
   );
 }
 

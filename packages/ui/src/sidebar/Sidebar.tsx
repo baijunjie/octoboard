@@ -570,7 +570,7 @@ function ConsoleSessionsSection({
   const listRef = useFlip<HTMLDivElement>();
 
   const menu: ActionMenuEntry[] = [
-    archiveSubmenu(t, t("sidebar.archive.consoleSessions"), archivedConsoleSessions, handlers.onSelectSession, () =>
+    archiveSubmenu(t, t("sidebar.archive.consoleSessions"), archivedConsoleSessions, sessions, handlers.onSelectSession, () =>
       handlers.onOpenArchive({ console: thisConsole.id }),
     ),
   ];
@@ -688,7 +688,7 @@ function ProjectNode({
         {isCollapsed && <ActivityMarker activity={activity} />}
         <RowControls>
           <RowIconButton icon={Plus} label={t("sidebar.project.openSession")} onPress={openSession} />
-          <ActionMenu label={t("sidebar.project.actions", { name: isolate(project.name) })} items={projectMenu(t, handlers, project, archived, { gitRepository: gitStatus?.repository })} contextTargetRef={rowRef} />
+          <ActionMenu label={t("sidebar.project.actions", { name: isolate(project.name) })} items={projectMenu(t, handlers, project, archived, [...sessions, ...owners.values()], { gitRepository: gitStatus?.repository })} contextTargetRef={rowRef} />
         </RowControls>
       </TreeRow>
       {!isCollapsed && (

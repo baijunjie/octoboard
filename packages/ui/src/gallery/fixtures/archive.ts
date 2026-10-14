@@ -62,7 +62,12 @@ export const underArchivedLead = Array.from({ length: 2 }, (_, i) =>
   }),
 );
 
+const liveLead = sessionOf("s-live-lead", console_.id, project.id, "Active lead session", "idle", { bound_to: boundConsoleSession.id });
+const underLiveLead = sessionOf("s-under-live-lead", console_.id, project.id, "Archived child of active lead", "archived", { bound_to: liveLead.id, ended_at: minutesAgo(1) });
+
 const boundSessions = [
+  liveLead,
+  underLiveLead,
   boundConsoleSession,
   otherConsoleSession,
   otherOwnerArchived,
@@ -96,6 +101,29 @@ const archiveState = {
 
 export const archiveScenarios: Scenario[] = [
   {
+    id: "archive-project-preview",
+    group: GROUP,
+    title: "Project archive menu, parents only",
+    state: archiveState,
+    description: "The menu lists archived parents, including directly console-bound sessions, and View all. Children of live and archived leads stay out of this preview.",
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
+      (ui) => ui.press(ui.t("sidebar.project.archive")),
+    ],
+  },
+  {
+    id: "archive-project-family",
+    group: GROUP,
+    title: "Project archive with live and archived owners",
+    state: archiveState,
+    description: "The full project archive includes children omitted from the preview. Children of the archived lead nest under it; the archived child of the active lead appears as a standalone row.",
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
+      (ui) => ui.press(ui.t("sidebar.project.archive")),
+      (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
+    ],
+  },
+  {
     id: "archive-many",
     group: GROUP,
     title: "Project archive, many entries",
@@ -123,6 +151,7 @@ export const archiveScenarios: Scenario[] = [
     id: "archive-bound-sessions",
     group: GROUP,
     title: "Bound archive with nested lead sessions",
+    description: "The full console-session archive retains the archived lead and its nested children. The archived child of the active project lead belongs to that project's archive.",
     state: archiveState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
     steps: [
