@@ -9,7 +9,7 @@ import { AgentAccountText } from "../components/AgentAccountText";
 import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
-import { RowControls } from "../components/RowControls";
+import { RowControls, RowIconGroup, RowIconLine } from "../components/RowControls";
 import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
 import { useFocusHandoff } from "../components/useFocusHandoff";
@@ -139,12 +139,14 @@ export function ProjectFocusView({
           <FocusTitle consoleName={parentConsole.name} title={project.name} />
         </div>
         <GitBadge status={gitStatus} />
-        <RowIconButton icon={Plus} label={t("sidebar.project.openSession")} onPress={openSession} />
-        <ActionMenu
-          label={t("sidebar.project.actions", { name: isolate(project.name) })}
-          items={projectMenu(t, handlers, project, archived, { placement: "focused", gitRepository: gitStatus?.repository })}
-          contextTargetRef={headerRef}
-        />
+        <RowIconGroup>
+          <RowIconButton icon={Plus} label={t("sidebar.project.openSession")} onPress={openSession} />
+          <ActionMenu
+            label={t("sidebar.project.actions", { name: isolate(project.name) })}
+            items={projectMenu(t, handlers, project, archived, { placement: "focused", gitRepository: gitStatus?.repository })}
+            contextTargetRef={headerRef}
+          />
+        </RowIconGroup>
       </FocusHeader>
       {elsewhere && (
         <span className="contents" {...switchFocus}>
@@ -236,27 +238,29 @@ export function ConsoleSessionFocusView({
             <FocusTitle consoleName={parentConsole.name} title={sessionDisplayTitle(t, consoleSession)} />
           </div>
         </TreeRow>
-        {projects.length === 0 ? (
-          <RowIconButton icon={Plus} label={newSessionLabel} onPress={() => {}} isDisabled />
-        ) : (
-          // A session needs a project, and a console session with nothing bound yet has no group
-          // to open one from, so the header offers every project.
+        <RowIconGroup>
+          {projects.length === 0 ? (
+            <RowIconButton icon={Plus} label={newSessionLabel} onPress={() => {}} isDisabled />
+          ) : (
+            // A session needs a project, and a console session with nothing bound yet has no group
+            // to open one from, so the header offers every project.
+            <ActionMenu
+              label={newSessionLabel}
+              tooltip={newSessionLabel}
+              trigger={<Plus aria-hidden="true" className="size-4" />}
+              items={sortProjects(projects, () => []).map((project) => ({
+                label: project.name,
+                icon: FolderOpen,
+                onClick: () => openSession(project),
+              }))}
+            />
+          )}
           <ActionMenu
-            label={newSessionLabel}
-            tooltip={newSessionLabel}
-            trigger={<Plus aria-hidden="true" className="size-4" />}
-            items={sortProjects(projects, () => []).map((project) => ({
-              label: project.name,
-              icon: FolderOpen,
-              onClick: () => openSession(project),
-            }))}
+            label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, consoleSession)) })}
+            items={sessionMenu(t, handlers, consoleSession, accounts, { placement: "focused" })}
+            contextTargetRef={headerRef}
           />
-        )}
-        <ActionMenu
-          label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, consoleSession)) })}
-          items={sessionMenu(t, handlers, consoleSession, accounts, { placement: "focused" })}
-          contextTargetRef={headerRef}
-        />
+        </RowIconGroup>
       </FocusHeader>
       {strip.length > 1 && <SwitchStrip handlers={handlers} entries={strip} currentId={consoleSession.id} />}
       <FadedScroller className="min-h-0 flex-1 px-2 pb-2">
@@ -395,14 +399,16 @@ function FocusProjectGroup({
             <span className="text-sm font-medium">{project.name}</span>
           </RowLabel>
         </h4>
-        {project.pinned && <PinButton name={project.name} onUnpin={() => handlers.onSetPinned({ project }, false)} returnFocusTo={openSessionHolder} />}
-        {/* Named for its project: the header's "+" is beside it in the same view. */}
-        <RowIconButton ref={openSessionHolder} icon={Plus} label={t("sidebar.focus.newSessionIn", { name: isolate(project.name) })} onPress={onOpenSession} />
-        <ActionMenu
-          label={t("sidebar.project.actions", { name: isolate(project.name) })}
-          items={projectMenu(t, handlers, project, archived, { placement: "nested", gitRepository: gitStatus?.repository })}
-          contextTargetRef={headerRef}
-        />
+        <RowIconGroup>
+          {project.pinned && <PinButton name={project.name} onUnpin={() => handlers.onSetPinned({ project }, false)} returnFocusTo={openSessionHolder} />}
+          {/* Named for its project: the header's "+" is beside it in the same view. */}
+          <RowIconButton ref={openSessionHolder} icon={Plus} label={t("sidebar.focus.newSessionIn", { name: isolate(project.name) })} onPress={onOpenSession} />
+          <ActionMenu
+            label={t("sidebar.project.actions", { name: isolate(project.name) })}
+            items={projectMenu(t, handlers, project, archived, { placement: "nested", gitRepository: gitStatus?.repository })}
+            contextTargetRef={headerRef}
+          />
+        </RowIconGroup>
       </div>
       <SessionCards handlers={handlers} sessions={boundHere} selectedSessionId={selectedSessionId} />
     </>
@@ -488,7 +494,7 @@ function SessionCards({
   return (
     <div ref={listRef} className="relative z-1 flex flex-col gap-2">
       {sessions.map(({ session, under }) => (
-        <div key={session.id} data-flip={session.id} className={`rounded-lg bg-panel-sidebar ${under ? NESTED_INSET_CLASS : ""}`}>
+        <div key={session.id} data-flip={session.id} className={`rounded-lg bg-panel ${under ? NESTED_INSET_CLASS : ""}`}>
           <SessionCard handlers={handlers} session={session} under={under} selected={session.id === selectedSessionId} consoleOwner={consoleOwner?.(session)} />
         </div>
       ))}
@@ -536,8 +542,8 @@ function ArchivedList({
   );
 }
 
-/** A session in focus mode: its status put into words, its agent and account, its title over two
- * lines, and when it started. The combined project view also names and marks its console owner.
+/** A session in focus mode: its status put into words, its agent and account, its title on one
+ * fading line, and when it started. The combined project view also names and marks its console owner.
  * `under`, the project session this one is bound to and is inset below, goes into its accessible name,
  * which is what carries that nesting to assistive technology. */
 function SessionCard({
@@ -566,31 +572,31 @@ function SessionCard({
       onActivate={() => handlers.onSelectSession(session)}
       className="min-h-8 flex-col gap-1 border border-separator p-[7px] data-selected:border-accent-glyph"
     >
-      <div className="flex items-center gap-2">
-        {consoleOwner && <BindingBadge owner={consoleOwner} />}
-        <StatusIcon status={session.status} decorative />
+      <RowIconLine icon={<StatusIcon status={session.status} decorative />}>
         <span className="text-xs font-medium text-muted">{statusLabel(t, session.status)}</span>
         <span className="flex-1" />
-        {session.pinned && <PinButton name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}
-        <RowControls always>
+        <RowControls always fixed={session.pinned ? <PinButton name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} /> : undefined}>
           <ActionMenu label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, session)) })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
         </RowControls>
-      </div>
-      <div dir="auto" className="line-clamp-2 text-sm font-medium break-words">
-        {sessionDisplayTitle(t, session)}
-      </div>
-      <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
-        <AgentIcon agent={session.agent} className="size-3.5" tooltip={sessionAccountTooltip(t, session, accounts)} />
+      </RowIconLine>
+      <RowIconLine icon={consoleOwner && <BindingBadge owner={consoleOwner} />}>
+        <FadeOverflow as="span" titleWhenClipped={sessionDisplayTitle(t, session)} className="min-w-0 flex-1 text-sm font-medium">
+          <bdi>{sessionDisplayTitle(t, session)}</bdi>
+        </FadeOverflow>
+      </RowIconLine>
+      <RowIconLine
+        icon={<AgentIcon agent={session.agent} className="size-3.5" tooltip={sessionAccountTooltip(t, session, accounts)} />}
+        className="text-xs text-muted"
+      >
         <FadeOverflow
           as="span"
-          className="min-w-0"
+          className="min-w-0 flex-1"
           titleWhenClipped={sessionAgentLabel(t, session, accounts)}
         >
           <AgentAccountText agent={AGENT_LABEL[session.agent]} account={sessionAccountName(t, session, accounts)} />
         </FadeOverflow>
-        <span aria-hidden="true">·</span>
         <span className="shrink-0">{formatRelativeTime(language, session.started_at)}</span>
-      </div>
+      </RowIconLine>
     </TreeRow>
   );
 }

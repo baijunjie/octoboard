@@ -1,12 +1,12 @@
 import { isLive, type Console, type Project, type Session, type SessionStatus } from "../protocol";
 
-/** How urgently a status asks for the user's attention: a raised hand first, then a session at
- * work, then one sitting at its prompt, then one with no process. Archived sessions are listed
+/** How urgently a status asks for the user's attention: a raised hand first, then one sitting
+ * at its prompt, then a session at work, then one with no process. Archived sessions are listed
  * apart and never ranked against the others. */
 const STATUS_RANK: Record<SessionStatus, number> = {
   waiting_user: 0,
-  working: 1,
-  idle: 2,
+  idle: 1,
+  working: 2,
   interrupted: 3,
   archived: 4,
 };

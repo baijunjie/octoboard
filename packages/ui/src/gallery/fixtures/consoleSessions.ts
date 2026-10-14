@@ -7,11 +7,12 @@ const console_ = consoleOf("c-1", "Main");
 const web = projectOf("p-web", console_.id, "Website");
 const api = projectOf("p-api", console_.id, "Search API");
 
-// Three console sessions, each its own colour from the palette (`style.css`), one of each status a
+// Four console sessions, each its own colour from the palette (`style.css`), one of each status a
 // console session can be in while live.
 const hub1 = sessionOf("s-hub-1", console_.id, undefined, "Hub", "idle", { colour: "olive", terminal_title: "Review the release plan" });
 const hub2 = sessionOf("s-hub-2", console_.id, undefined, "Hub 2", "working", { colour: "jade" });
 const hub3 = sessionOf("s-hub-3", console_.id, undefined, "Hub 3", "waiting_user", { colour: "teal" });
+const hub4 = sessionOf("s-hub-4", console_.id, undefined, "Hub 4", "interrupted", { colour: "violet" });
 
 // A lead session: an unbound project session later bound to a console session, which kept the
 // sessions it had started. Besides it, `s-api-free` in the other project is unbound and has a session
@@ -22,8 +23,11 @@ const sessions = [
   hub1,
   hub2,
   hub3,
+  hub4,
   sessionOf("s-web-1", console_.id, web.id, "Fix the summary layout", "working", { bound_to: hub1.id, terminal_title: "Explain the differences between the three galleries" }),
   sessionOf("s-web-2", console_.id, web.id, "Update the dependencies", "idle"),
+  sessionOf("s-web-3", console_.id, web.id, "Asks which region to use", "waiting_user"),
+  sessionOf("s-web-4", console_.id, web.id, "Old layout draft", "interrupted"),
   sessionOf("s-api-1", console_.id, api.id, "Add idempotency keys", "waiting_user", { bound_to: hub2.id }),
   sessionOf("s-api-2", console_.id, api.id, "Write the migration", "idle", { bound_to: hub3.id }),
   lead,
@@ -42,7 +46,9 @@ export const consoleSessionsScenarios: Scenario[] = [
     title: "Console sessions, and project sessions bound, unbound and nested",
     description:
       "Agent task titles appear before the original session names, with untitled sessions keeping their names. " +
-      "The section above the project list lists every console session, each in its own colour. A bound project " +
+      "Console sessions and each project's sibling sessions put Waiting for you first, then Awaiting instructions, " +
+      "Working and Interrupted. Above the projects, Hub 3, the release-plan task under Hub, Hub 2 and Hub 4 show that order, each in its own " +
+      "colour; Website shows the same status order. A bound project " +
       "session carries that colour as a binding badge in its sidebar row; an unbound one carries none. The sessions " +
       "bound to a project session are listed under it, a level below: the lead session keeps the binding badge of " +
       "the console session it reports to, and the sessions under either owner carry none. The pointer rests " +

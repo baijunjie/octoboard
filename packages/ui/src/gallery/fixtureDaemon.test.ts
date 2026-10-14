@@ -4,6 +4,21 @@ import { describe, expect, it } from "vitest";
 import { createFixtureDaemon } from "./fixtureDaemon";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 
+describe("the fixture daemon's session pins", () => {
+  it("updates only the requested session and refuses an unknown session", async () => {
+    const first = sessionOf("first", "c-1", "p-1", "Pinned work", "working", { pinned: true, bound_to: "hub" });
+    const second = sessionOf("second", "c-1", "p-1", "Other work", "idle");
+    const daemon = createFixtureDaemon({ id: "pins", group: "Sidebar sessions", title: "", state: snapshotState({ sessions: [first, second] }) });
+    await expect(daemon.request({ type: "set_session_pinned", session: first.id, pinned: false })).resolves.toEqual({ type: "ack" });
+    expect(daemon.store.getState().sessions.get(first.id)).toEqual({ ...first, pinned: false });
+    expect(daemon.store.getState().sessions.get(second.id)).toEqual(second);
+    await daemon.request({ type: "set_session_pinned", session: first.id, pinned: true });
+    expect(daemon.store.getState().sessions.get(first.id)).toEqual(first);
+    await expect(daemon.request({ type: "set_session_pinned", session: "missing", pinned: true })).rejects.toMatchObject({ code: "unknown_session", params: { session: "missing" } });
+    expect(daemon.store.getState().sessions.size).toBe(2);
+  });
+});
+
 describe("the fixture daemon's deletion of archived sessions", () => {
   const console_ = consoleOf("c-1", "Main");
   const project = projectOf("p-1", console_.id, "Search API");

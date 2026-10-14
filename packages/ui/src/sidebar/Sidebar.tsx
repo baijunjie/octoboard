@@ -18,7 +18,7 @@ import { ActivityMarker } from "../components/ActivityMarker";
 import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { handFocusOff } from "../components/handFocusOff";
-import { RowControls } from "../components/RowControls";
+import { RowControls, RowIconSlot } from "../components/RowControls";
 import { FadedScroller } from "../components/scrollFade";
 import { StatusIcon } from "../components/StatusIcon";
 import { withGitBadge } from "../gitStatusLabel";
@@ -743,6 +743,7 @@ function SessionRow({
   const language = useCurrentLanguage();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const rowRef = useRef<HTMLDivElement>(null);
+  const badgeOwner = session.role === "console" ? session : owner?.role === "console" ? owner : undefined;
   return (
     <TreeRow
       ref={rowRef}
@@ -753,16 +754,15 @@ function SessionRow({
       <StatusIcon status={session.status} decorative withTooltip />
       <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
       <RowLabel title={sessionDisplayTitle(t, session)}>{sessionDisplayTitle(t, session)}</RowLabel>
-      {/* A console session shows its own colour, decorative here since the row's own label already
-          names it; a session bound to one shows that console session's, naming its owner in the
-          tooltip. A session bound to a project session shows none: it is listed under its owner. */}
-      {session.role === "console" && session.colour ? (
-        <BindingBadge owner={session} decorative />
-      ) : (
-        owner?.role === "console" && <BindingBadge owner={owner} />
-      )}
-      {session.pinned && <PinButton name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}
-      <RowControls>
+      <RowControls
+        fixed={badgeOwner?.colour || session.pinned ? (
+          <>
+            {/* A console session shows its own colour; a bound session shows its owner's. */}
+            {badgeOwner?.colour && <RowIconSlot><BindingBadge owner={badgeOwner} decorative={session.role === "console"} /></RowIconSlot>}
+            {session.pinned && <PinButton name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}
+          </>
+        ) : undefined}
+      >
         <ActionMenu label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, session)) })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
       </RowControls>
     </TreeRow>

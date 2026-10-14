@@ -131,14 +131,33 @@ function archivePreviewState(count: 5 | 6) {
 const archivePreviewFive = archivePreviewState(5);
 const archivePreviewSix = archivePreviewState(6);
 
+// Long bound titles exercise the single-line fade and full-title hover without displacing the owner badge.
+const combinedState = {
+  ...state,
+  sessions: new Map([...state.sessions!].map(([id, session]) => [id, {
+    ...session,
+    terminal_title: id === "s-2"
+      ? "Fix the rounding of partial search results and preserve precision across every supported currency"
+      : id === "s-lead-2"
+        ? "检查搜索结果首次绘制时间并确认所有地区的长标题和控制台绑定标记仍然清晰可见"
+        : session.terminal_title,
+  }])),
+};
+
+const hierarchyState = {
+  ...state,
+  projects: new Map([...state.projects!].map(([id, item]) => [id, id === project.id ? { ...item, pinned: true } : item])),
+  sessions: new Map([...state.sessions!].map(([id, session]) => [id, id === "s-3" ? { ...session, pinned: true } : session])),
+};
+
 export const focusScenarios: Scenario[] = [
   {
     id: "sidebar-session-hierarchy",
     group: "Sidebar sessions",
     title: "Project session hierarchy",
-    state,
+    state: hierarchyState,
     preferences: { sidebarConsole: console_.id },
-    description: "Rounded branches connect each project session and its nested sessions; the final branch ends at the last child. Agent task titles and fallback session names appear together.",
+    description: "Rounded branches connect each project session and its nested sessions; the final branch ends at the last child. Agent task titles and fallback session names appear together. Search API and its bound Add idempotency keys and unbound Write the migration are pinned. Binding dots and pins remain visible while action menus hide; hover or focus a row to compare the evenly spaced controls, then unpin either session to see the remaining controls close together.",
   },
   {
     id: "focus-project",
@@ -155,9 +174,9 @@ export const focusScenarios: Scenario[] = [
     id: "focus-project-console-sessions",
     group: GROUP,
     title: "Project focus including console sessions",
-    state,
+    state: combinedState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The switch is on: bound and unbound sessions share the card list, with the owner hub's color on bound cards and their nested sessions. Archives remain available below the cards.",
+    description: "The switch is on: bound and unbound sessions share subtly distinct cards. Owner badges precede single-line titles following the reading direction; long Latin and CJK names fade at the edge, with marquee and the full title available on hover. Status glyphs, owner badges and agent marks share one leading column; all three text lines start together, including unbound cards with an empty owner slot. Pin/menu spacing matches the header's plus/menu spacing. Bound nested cards inherit the owner's color. Hover a badge to read its owner. Pinned cards stay first; other siblings sort Waiting for you, Awaiting instructions, Working, Interrupted, with children kept under their parent. Archives remain available below the cards.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Compare ranking strategies", name: "Rework the result ranking" }))),
     ],

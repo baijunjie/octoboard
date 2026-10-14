@@ -288,7 +288,7 @@ export function ActionMenu({
             preventFocusOnPress
             className={
               triggerClassName ??
-              "inline-flex size-6 min-w-0 items-center justify-center rounded-md p-0 text-muted hover:bg-default hover:text-foreground aria-expanded:bg-default aria-expanded:text-foreground"
+              "inline-flex row-icon-control items-center justify-center rounded-md p-0 text-muted hover:bg-default hover:text-foreground aria-expanded:bg-default aria-expanded:text-foreground"
             }
           >
             {trigger ?? <EllipsisVertical aria-hidden="true" className="size-4" />}

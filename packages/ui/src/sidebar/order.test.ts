@@ -35,7 +35,7 @@ const project = (id: string, name: string, pinned = false): Project => ({
 });
 
 describe("liveSessions", () => {
-  it("puts pinned first, then a raised hand, work, idle and interrupted, newest first within a status", () => {
+  it("puts pinned first, then a raised hand, idle, work and interrupted, newest first within a status", () => {
     const ordered = liveSessions([
       session("old-idle", "idle", 1),
       session("interrupted", "interrupted", 9),
@@ -45,7 +45,7 @@ describe("liveSessions", () => {
       session("waiting", "waiting_user", 3),
       session("pinned", "interrupted", 0, true),
     ]);
-    expect(ordered.map((s) => s.id)).toEqual(["pinned", "waiting", "working", "new-idle", "old-idle", "interrupted"]);
+    expect(ordered.map((s) => s.id)).toEqual(["pinned", "waiting", "new-idle", "old-idle", "working", "interrupted"]);
   });
 });
 

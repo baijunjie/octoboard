@@ -432,6 +432,10 @@ A hand-built row or card that its content already identifies takes HeroUI's sepa
 (`border-separator`, as the focus-mode session cards do), even though that is under 3:1. Its selected state still has to
 reach 3:1 (`border-accent`).
 
+Focus-mode session cards use the opaque `--panel` surface over the sidebar's `--panel-sidebar`, with the existing
+hover and selected tints on top. Their titles use the shared single-line fading label, including its full-name
+tooltip and hover marquee, rather than an ellipsis or a line clamp.
+
 ### HeroUI's own text colours
 
 HeroUI's text colours do need checking.
@@ -517,6 +521,17 @@ dark material is a grey far lighter than dark `--chrome`.
 
 A control's pointer target is at least 24 by 24 CSS pixels (WCAG 2.2 AA 2.5.8). HeroUI's own sizes already clear it —
 its smallest icon-only button is 32 — so this only bites where a control is drawn smaller than HeroUI would draw it.
+
+Trailing icon buttons in sidebar rows, cards and headers share a 24-by-24-pixel target and a 4-pixel gap, defined by
+`--row-control-size` and `--row-control-gap` in `packages/ui/src/style.css`. Use the shared `RowIconGroup` for adjacent
+icons and `RowIconSlot` for a marker's matching horizontal column; the marker keeps its own glyph size and does not
+increase the text line's height. Leading glyphs use the 16-pixel `--row-leading-icon-size` column through
+`RowIconSlot`'s leading placement. In a focus card, the binding dot precedes the title in reading order and shares
+its horizontal centre with the status and agent glyphs. All three lines use `RowIconLine` with the same 8-pixel
+`--row-leading-icon-gap`, so their text starts in one column; an unbound title keeps the empty leading slot.
+`RowControls` keeps persistent pins and markers outside the hidden actions' clip and collapses
+the actions' leading gap with them. Do not space individual trailing icons with the text row's gap or add local
+offsets. Verify the shared columns with actions hidden, hovered, focused and open, including right-to-left layout.
 
 The criterion is about controls, so a mark that only opens a tooltip is not held to it: a tooltip is not an action,
 and a mark too small to aim at reliably costs a hover that can be tried again, not an activation. Several such marks

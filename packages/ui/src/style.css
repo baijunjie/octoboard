@@ -33,7 +33,21 @@
   initial-value: 0px;
 }
 
+@utility row-icon-control {
+  width: var(--row-control-size);
+  height: var(--row-control-size);
+  min-width: 0;
+  flex-shrink: 0;
+}
+
 :root {
+  /* Shared icon columns for sidebar rows, cards and headers. */
+  --row-control-size: 24px;
+  --row-leading-icon-size: 16px;
+  --row-leading-icon-gap: 8px;
+  --row-control-gap: 4px;
+  --row-controls-max-width: calc(2 * var(--row-control-size) + 2 * var(--row-control-gap));
+
   /* A tooltip is a label: it closes the instant the pointer leaves its trigger, where HeroUI's
      default (0.5s) lingers and keeps it hoverable. `Tooltip` reads this as its default close
      delay, so it holds for every tooltip, those added later included. HeroUI reads the token once,

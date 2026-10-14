@@ -2,6 +2,7 @@ import { Button } from "@heroui/react";
 import { Pin, PinOff, type LucideIcon } from "lucide-react";
 import React, { type RefObject, useRef } from "react";
 
+import { RowIconGroup } from "../components/RowControls";
 import { handFocusOff } from "../components/handFocusOff";
 import { TitledControl } from "../components/TitledControl";
 import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
@@ -136,7 +137,7 @@ export function RowIconButton({
           preventFocusOnPress
           onPress={onPress}
           isDisabled={isDisabled}
-          className="size-6 min-w-0 rounded-md text-muted hover:text-foreground"
+          className="row-icon-control rounded-md text-muted hover:text-foreground"
         >
           <Icon aria-hidden="true" className={iconClassName ? `size-4 ${iconClassName}` : "size-4"} />
         </Button>
@@ -179,7 +180,7 @@ export function PinButton({
           aria-label={t("sidebar.unpinItem", { name: isolate(name) })}
           preventFocusOnPress
           onPress={unpin}
-          className="group/pin size-6 min-w-0 rounded-md text-muted hover:text-foreground"
+          className="group/pin row-icon-control rounded-md text-muted hover:text-foreground"
         >
           <Pin aria-hidden="true" className="size-3 group-hover/pin:hidden group-data-[focus-visible=true]/pin:hidden" />
           <PinOff aria-hidden="true" className="hidden size-3 group-hover/pin:block group-data-[focus-visible=true]/pin:block" />
@@ -209,13 +210,13 @@ export function SectionHeading({
     <div className="mt-2 mb-0.5 px-2">
       <div className="flex items-center gap-2">
         <h3 className="flex h-7 min-w-0 flex-1 items-center text-xs font-medium text-muted">{children}</h3>
-        {action && <div className="flex h-7 shrink-0 items-center gap-0.5">{action}</div>}
+        {action && <RowIconGroup className="h-7">{action}</RowIconGroup>}
       </div>
       {below && (
         // Top-aligned, the action a line high, so it stays on the first line when the row wraps.
         <div className="flex items-start gap-2">
           <div className="flex min-h-7 min-w-0 flex-1 flex-wrap items-center gap-1.5 py-1">{below}</div>
-          {belowAction && <div className="flex h-7 shrink-0 items-center gap-0.5">{belowAction}</div>}
+          {belowAction && <RowIconGroup className="h-7">{belowAction}</RowIconGroup>}
         </div>
       )}
     </div>

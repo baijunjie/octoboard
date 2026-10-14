@@ -208,9 +208,9 @@ it("a console session's focus mode nests a lead session's own sessions under it"
     card.className.includes("flex-col"),
   );
   expect(cards.map((card) => [card.getAttribute("aria-label")?.split(" session,")[0], card.parentElement!.className.includes("ms-[17px]")])).toEqual([
-    [isolate("Fix the layout"), false],
     [isolate("Rework the gallery"), false],
     [isolate("Chase the flaky test"), true],
+    [isolate("Fix the layout"), false],
     [isolate("Add idempotency keys"), false],
   ]);
   expect(text()).toContain("Sessions (4)");

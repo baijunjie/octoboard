@@ -17,11 +17,15 @@ beside its name, and pressing the name selects the console session, whose termin
 other row for.
 
 **Session cards**, in both: the status glyph with the status in words, the pin button when pinned (see "Pinning" in
-`docs/product/sidebar.md`), the session's action menu (always shown), its title over up to two lines, its agent's icon
-and name with its account, and how long ago it was started. The agent's icon has a tooltip, as on a session row (see
+`docs/product/sidebar.md`), the session's action menu (always shown), its title on one line, its agent's icon
+and name with its account, and how long ago it was started at the trailing end of the agent line. The status, title
+and agent lines share aligned leading icons and text starts; a title with no binding badge keeps the empty icon space.
+Long titles follow "Names too long
+for their space" in `docs/product/labels-and-tooltips.md`. The agent's icon has a tooltip, as on a session row (see
 "Session rows" in `docs/product/sidebar.md`). Clicking a card selects the session. They are in the order of "Order of
-projects and sessions" in `docs/product/sidebar.md`. While cards move, their backgrounds stay opaque, so text from
-other cards, the console-session summary or the archive does not show through them.
+projects and sessions" in `docs/product/sidebar.md`. Cards have an opaque background distinct from the sidebar's,
+which stays opaque while they move, so text from other cards, the console-session summary or the archive does not
+show through them.
 
 A card for a session **bound to a project session the same view lists** is **inset under that session's card** and
 follows it, as a session row is under its owner's row (see "Project rows" in `docs/product/sidebar.md`); the cards sit
@@ -65,8 +69,9 @@ From the top, below the switch:
   bound to it inset under it. A **lead session and the sessions under it** are left out of the list together, as is
   any session bound to a console session. With the switch on, every live session of the project is listed, with the
   same order and nesting. Each card under a console session, directly or through a lead session, carries that console
-  session's colour dot and a tooltip naming it; its accessible name names that console session as well as its
-  immediate project-session owner, where it has one. The count is every card listed, the inset ones included. With
+  session's colour dot before its title in reading order, staying visible when the title is too long for its space,
+  and a tooltip naming it; its accessible name names that console session as well as its immediate project-session
+  owner, where it has one. The count is every card listed, the inset ones included. With
   none, a compact row saying there are no sessions yet takes their place; clicking the row opens a **New session**.
 - **The sessions elsewhere**, between the live cards and the archive, present only with the switch off and while
   the project has live sessions under a console session that is not archived: one sentence for the whole project

@@ -163,11 +163,11 @@ it("lists a project session's own sessions under it, and the binding badge only 
   const { container, root } = mountSidebar({ sessions: [hub1, hub2, lead, ...team, unbound] });
   const rows = Array.from(container.querySelectorAll<HTMLElement>("[data-sessions] [role=button][data-marquee-scope]"));
   // The lead session is ranked against the unbound session as ever (idle before interrupted) and
-  // its own sessions follow it, ranked among themselves (working before idle).
+  // its own sessions follow it, ranked among themselves (idle before working).
   expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual([
     `${isolate("Rework the gallery")} session, Claude Code (${isolate("Default")}), Awaiting instructions, Bound to ${isolate("Hub")}`,
-    `${isolate("Measure the first paint")} session, Claude Code (${isolate("Default")}), Working, Bound to ${isolate("Rework the gallery")}`,
     `${isolate("Chase the flaky test")} session, Claude Code (${isolate("Default")}), Awaiting instructions, Bound to ${isolate("Rework the gallery")}`,
+    `${isolate("Measure the first paint")} session, Claude Code (${isolate("Default")}), Working, Bound to ${isolate("Rework the gallery")}`,
     `${isolate("Tidy the changelog")} session, Claude Code (${isolate("Default")}), Interrupted`,
   ]);
   const badges = rows.map((row) => row.querySelector('[style*="--console-session"]') !== null);

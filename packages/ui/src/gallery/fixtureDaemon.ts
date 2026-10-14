@@ -103,6 +103,13 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
       const fromConfiguration = configurationReply(body);
       if (fromConfiguration !== undefined) return fromConfiguration;
       switch (body.type) {
+        case "set_session_pinned": {
+          const session = store.getState().sessions.get(body.session);
+          if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
+          const updated = { ...session, pinned: body.pinned };
+          store.setState((state) => ({ sessions: new Map(state.sessions).set(body.session, updated) }));
+          return { type: "ack" };
+        }
         case "open_session":
           if (scenario.sessionOpenError) return fail(scenario.sessionOpenError);
           return { type: "ack" };

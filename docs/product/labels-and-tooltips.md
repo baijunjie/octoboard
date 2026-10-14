@@ -143,8 +143,9 @@ These are:
 
 ## Names too long for their space
 
-A single-line name or label too long for its space — a sidebar row's name, the top bar's breadcrumb, a session listed
-in a confirmation, the report panel's page timestamp, a name in a project pane's file tree or its header, a name or
+A single-line name or label too long for its space — a sidebar row's name, a focus mode session card's title, the top
+bar's breadcrumb, a session listed in a confirmation, the report panel's page timestamp, a name in a project pane's
+file tree or its header, a name or
 what follows it in the Git mode's change list, a worktree's name or path in its worktree selector, a branch's name in
 its branch selectors, a picked tag's label and the sidebar filter's keyword (see "Picked tags" in
 `docs/product/consoles-and-projects.md`) — fades out where it is cut off rather than ending in an ellipsis. A name,

@@ -372,7 +372,7 @@ one, or an open menu in one brings the whole group back to full strength while i
 **Sessions** within a project are listed, by the same scheme:
 
 1. pinned sessions first;
-2. then by status: waiting for the user, working, awaiting instructions, interrupted;
+2. then by status: waiting for the user, awaiting instructions, working, interrupted;
 3. then the most recently started first.
 
 The console sessions section lists its console sessions by that same session scheme.

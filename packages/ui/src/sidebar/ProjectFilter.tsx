@@ -102,7 +102,7 @@ export function ProjectFilterButton({
             variant="ghost"
             aria-label={t("sidebar.filter.open")}
             preventFocusOnPress
-            className="size-6 min-w-0 rounded-md text-muted hover:text-foreground"
+            className="row-icon-control rounded-md text-muted hover:text-foreground"
           >
             <ListFilter aria-hidden="true" className="size-4" />
           </Button>
