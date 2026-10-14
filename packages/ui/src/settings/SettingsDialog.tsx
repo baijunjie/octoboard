@@ -106,7 +106,8 @@ export function SettingsDialog({
         >
           <span ref={markerRef} hidden />
           <TitledControl title={t("common.close")}>
-            <Modal.CloseTrigger aria-label={t("common.close")} />
+            {/* The panels' positioned scrollers overlap this corner. Keep the close button above them. */}
+            <Modal.CloseTrigger aria-label={t("common.close")} className="z-10" />
           </TitledControl>
           <Tabs
             orientation={isNarrow ? "horizontal" : "vertical"}
