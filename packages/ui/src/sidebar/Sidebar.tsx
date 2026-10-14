@@ -1,7 +1,7 @@
 import {
   ChevronDown,
   ChevronRight,
-  FolderOpen,
+  FolderPlus,
   ListChevronsDownUp,
   ListChevronsUpDown,
   MessageSquarePlus,
@@ -486,7 +486,7 @@ function ConsoleBody({
         // too rather than falling back to the console header's menu alone.
         <EmptyPanel
           compact
-          icon={FolderOpen}
+          icon={FolderPlus}
           message={t("sidebar.noProjects")}
           action={{ label: t("sidebar.console.addProject"), onPress: () => handlers.onOpenDialog({ kind: "new-project", console: thisConsole }) }}
         />
