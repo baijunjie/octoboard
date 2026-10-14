@@ -10,10 +10,15 @@ export const SAMPLE_CLAUDE_MODELS: AgentModel[] = [
   { id: "haiku", name: "Haiku", efforts: [] },
 ];
 
-/** The same for Codex, whose models are named by identifier rather than by alias. */
+/** The same for Codex, whose model names and effort levels come from `codex debug models`. */
 export const SAMPLE_CODEX_MODELS: AgentModel[] = [
-  { id: "gpt-5.1-codex-max", name: "gpt-5.1-codex-max", efforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.1-codex-mini", name: "gpt-5.1-codex-mini", efforts: ["medium", "high"] },
+  { id: "gpt-6.1-sol", name: "GPT-6.1-Sol", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"] },
+  { id: "gpt-6-astra", name: "GPT-6-Astra", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"] },
+  { id: "gpt-6-sol", name: "GPT-6-Sol", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"] },
+  { id: "gpt-6-luna", name: "GPT-6-Luna", efforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "gpt-5.6-sol", name: "GPT-5.6-Sol", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"] },
+  { id: "gpt-5.6-terra", name: "GPT-5.6-Terra", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"] },
+  { id: "gpt-5.6-luna", name: "GPT-5.6-Luna", efforts: ["low", "medium", "high", "xhigh", "max"] },
 ];
 
 /** The same for Grok Build. */
