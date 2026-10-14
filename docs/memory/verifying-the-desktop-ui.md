@@ -134,13 +134,12 @@ A factory parameter likewise carries the content a reply needs, not the right to
 
 ## A final capture does not verify earlier transient states
 
-Applies when visually verifying gallery interactions. A capture taken after the scenario's steps shows only the state
-they leave on screen: a second hover displaces the first tooltip, even when both steps' text assertions pass. Keep those
-assertions, but do not count an earlier transient state as visually checked from the final capture.
+Applies when visually verifying gallery interactions. A capture taken after setup shows only the view it leaves on
+screen; it does not visually verify earlier states, even when their assertions passed. Display initialization is not
+a regression sequence: keep necessary behavioral assertions in tests or separate verification runs.
 
-Where several such states need visual inspection, reach and capture each on the retained page during verification.
-Scenario selection follows `packages/ui/README.md`, section "The UI state gallery"; needing several captures does not
-require several navigation entries.
+For distinct confirmation views, follow `packages/ui/README.md`, section "The UI state gallery", when deciding which
+scenarios to show; shared mock data does not require them to share a scenario.
 
 ## A scenario's steps run in every language, so no matcher spells out the catalog's own punctuation
 

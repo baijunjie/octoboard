@@ -271,7 +271,10 @@ export const configurationScenarios: Scenario[] = [
     description: "The section only says it is not available here. Close Settings and open the console menu: Export configuration is absent there too.",
     state,
     configuration: { unavailable: true },
-    steps: [openSettings, configurationSection],
+    steps: [
+      openSettings,
+      configurationSection,
+    ],
   },
   {
     id: "configuration-welcome-unavailable",
@@ -295,7 +298,11 @@ export const configurationScenarios: Scenario[] = [
     title: "Export, with no console to export on its own",
     description: "Reached from Settings, since there is no console menu: only everything is offered.",
     state: noConsoleState,
-    steps: [openSettings, configurationSection, (ui) => ui.press(ui.t("settings.configuration.export.button"))],
+    steps: [
+      openSettings,
+      configurationSection,
+      (ui) => ui.press(ui.t("settings.configuration.export.button")),
+    ],
   },
   {
     id: "configuration-export-downloaded",
@@ -304,7 +311,10 @@ export const configurationScenarios: Scenario[] = [
     description: "A browser files the download itself and does not say as what, so the toast names no file.",
     state,
     configuration: { downloads: true },
-    steps: [...exportFromMenu, (ui) => ui.press(ui.t("configuration.export.submit"))],
+    steps: [
+      ...exportFromMenu,
+      (ui) => ui.press(ui.t("configuration.export.submit")),
+    ],
   },
   {
     id: "configuration-export-save-failed",
@@ -312,7 +322,10 @@ export const configurationScenarios: Scenario[] = [
     title: "Export, the file could not be written",
     state,
     configuration: { saveError: "Permission denied (os error 13)" },
-    steps: [...exportFromMenu, (ui) => ui.press(ui.t("configuration.export.submit"))],
+    steps: [
+      ...exportFromMenu,
+      (ui) => ui.press(ui.t("configuration.export.submit")),
+    ],
   },
   {
     id: "configuration-import-choose",
@@ -322,7 +335,10 @@ export const configurationScenarios: Scenario[] = [
       "Opened from the welcome screen, where a new computer starts. The picker has been opened and is never reported dismissed, as in a browser without the file input's cancel event: Choose file shows that it is waiting and ignores another press, while Cancel, the close button and Escape still work.",
     state: noConsoleState,
     configuration: { file: "pending" },
-    steps: [(ui) => ui.press(ui.t("welcome.importConfiguration")), chooseFile],
+    steps: [
+      (ui) => ui.press(ui.t("welcome.importConfiguration")),
+      chooseFile,
+    ],
   },
   {
     id: "configuration-import-read-failed",
@@ -330,7 +346,10 @@ export const configurationScenarios: Scenario[] = [
     title: "Import, the file could not be read",
     state,
     configuration: { readError: "Permission denied (os error 13)" },
-    steps: [...importFromSettings, chooseFile],
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+    ],
   },
   {
     id: "configuration-import-file-too-large",
@@ -338,7 +357,10 @@ export const configurationScenarios: Scenario[] = [
     title: "Import, a file too large to be a configuration",
     state,
     configuration: { readError: { kind: "too_large" } },
-    steps: [...importFromSettings, chooseFile],
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+    ],
   },
   {
     id: "configuration-import-file-not-text",
@@ -346,7 +368,10 @@ export const configurationScenarios: Scenario[] = [
     title: "Import, a file that is not text",
     state,
     configuration: { readError: { kind: "not_text" } },
-    steps: [...importFromSettings, chooseFile],
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+    ],
   },
   {
     id: "configuration-import-not-json",
@@ -354,7 +379,10 @@ export const configurationScenarios: Scenario[] = [
     title: "Import, a file that is not JSON",
     state,
     configuration: { file: { name: "photo.json", text: "not json at all" } },
-    steps: [...importFromSettings, chooseFile],
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+    ],
   },
   {
     id: "configuration-import-refused-format",
@@ -362,7 +390,10 @@ export const configurationScenarios: Scenario[] = [
     title: "Import, not a configuration file",
     state,
     configuration: refusal("notes.json", JSON.stringify({ hello: "world" }), failure("configuration_not_recognised", {}, "not a configuration document")),
-    steps: [...importFromSettings, chooseFile],
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+    ],
   },
   {
     id: "configuration-import-refused-version",
@@ -374,7 +405,10 @@ export const configurationScenarios: Scenario[] = [
       JSON.stringify({ format: "octoboard-configuration", version: 3, consoles: [] }),
       failure("configuration_version_unsupported", { version: "3", supported: "1" }, "version 3 is not supported"),
     ),
-    steps: [...importFromSettings, chooseFile],
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+    ],
   },
   {
     id: "configuration-import-refused-unreadable",
@@ -386,32 +420,20 @@ export const configurationScenarios: Scenario[] = [
       JSON.stringify({ format: "octoboard-configuration", version: 1, consoles: "none" }),
       failure("configuration_unreadable", { detail: "invalid type: string \"none\", expected a sequence" }, "unreadable"),
     ),
-    steps: [...importFromSettings, chooseFile],
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+    ],
   },
   {
     id: "configuration-import-review",
     group: GROUP,
     title: "Import, review",
     description:
-      "Projects found at their recorded path, under the default clone directory, to be cloned, and found nowhere are shown together, with account fallbacks and an empty console. Application settings are offered and left off. Press Use default clone directory to apply the choice to the projects that offer it; the other projects keep their choices. Another directory with an empty or relative path shows field errors when Import is pressed; a valid directory is accepted and Skip hides its landing line. Tick Application settings and Import for result rows with failures, fallbacks and applied settings; Phone folds the table, and Short then Tab focuses its scrolling body.",
+      "Projects found at recorded or default paths, clone candidates, missing paths, account fallbacks and an empty console appear together; settings start unchecked.",
     state,
     configuration: reviewing(),
     steps: [
-      ...importFromSettings,
-      chooseFile,
-      (ui) => ui.press(ui.t("configuration.import.project.choice", { project: "Notes" })),
-      (ui) => ui.press(ui.t("configuration.import.choice.directory")),
-      ...placeIn("Search API", "projects/search-api"),
-      ...placeIn("Website", "~/work/website"),
-      (ui) => ui.press(ui.t("configuration.import.project.choice", { project: "Dotfiles" })),
-      (ui) => ui.press(ui.t("configuration.import.choice.skip")),
-      importNow,
-      (ui) => ui.press(ui.t("common.cancel")),
-      ...importFromSettings,
-      chooseFile,
-      applySettings,
-      importNow,
-      (ui) => ui.press(ui.t("common.close")),
       ...importFromSettings,
       chooseFile,
     ],
@@ -421,15 +443,10 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     title: "Import, review of one console's document",
     description:
-      "No application settings, so there is no checkbox for them. The button for a choice no project offers is disabled, and the project found nowhere is left out. Choose Another directory for Releases, enter ~/work/releases, and Import for a result with nothing failed and each placement reported.",
+      "A single console document has no application-settings checkbox; unavailable placement choices are disabled.",
     state,
     configuration: { file: FILE, inspection: SINGLE, imported: CLEAN_RESULT },
     steps: [
-      ...importFromSettings,
-      chooseFile,
-      ...placeIn("Releases", "~/work/releases"),
-      importNow,
-      (ui) => ui.press(ui.t("common.close")),
       ...importFromSettings,
       chooseFile,
     ],
@@ -441,7 +458,11 @@ export const configurationScenarios: Scenario[] = [
     description: "The checkbox is ticked, and its note says applying turns the setting off.",
     state: syncing,
     configuration: { file: FILE, inspection: WITH_SETTING_OFF },
-    steps: [...importFromSettings, chooseFile, applySettings],
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+      applySettings,
+    ],
   },
   {
     id: "configuration-import-importing",
@@ -450,7 +471,11 @@ export const configurationScenarios: Scenario[] = [
     description: "The reply comes after the last clone; the dialog cannot be dismissed meanwhile.",
     state,
     configuration: reviewing({ imported: "pending" }),
-    steps: [...importFromSettings, chooseFile, importNow],
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+      importNow,
+    ],
   },
   {
     id: "configuration-import-refused-apply",
@@ -459,7 +484,11 @@ export const configurationScenarios: Scenario[] = [
     description: "The daemon's reason stands in the footer beside the buttons, over the review, which stays as it was.",
     state,
     configuration: reviewing({ imported: failure("icon_too_large", { limit_kib: "256" }, "the console avatar is larger than 256 KiB") }),
-    steps: [...importFromSettings, chooseFile, importNow],
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+      importNow,
+    ],
   },
   {
     id: "configuration-import-result-settings-failed",
@@ -468,6 +497,55 @@ export const configurationScenarios: Scenario[] = [
     description: "The settings failure is a line of its own above the table, beside a project that was left out.",
     state: syncing,
     configuration: { file: FILE, inspection: WITH_SETTING_OFF, imported: SETTINGS_FAILED_RESULT },
-    steps: [...importFromSettings, chooseFile, applySettings, importNow],
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+      applySettings,
+      importNow,
+    ],
+  },
+  {
+    id:"configuration-import-review-directory",
+    group:GROUP,
+    title:"Import placement validation",
+    state:state,
+    configuration:reviewing(),
+    description:"Empty and relative directories show errors together; the valid directory is accepted.",
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+      (ui) => ui.press(ui.t("configuration.import.project.choice", { project: "Notes" })),
+      (ui) => ui.press(ui.t("configuration.import.choice.directory")),
+      ...placeIn("Search API", "projects/search-api"),
+      ...placeIn("Website", "~/work/website"),
+      importNow,
+    ],
+  },
+  {
+    id:"configuration-import-result",
+    group:GROUP,
+    title:"Import result with failures and fallbacks",
+    state:state,
+    configuration:reviewing(),
+    description:"Placement outcomes, failed projects and consoles, fallback accounts and applied settings share the result. Short height exposes scrolling; Phone folds rows.",
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+      applySettings,
+      importNow,
+    ],
+  },
+  {
+    id:"configuration-import-result-clean",
+    group:GROUP,
+    title:"Successful import result",
+    state:state,
+    configuration:{file:FILE,inspection:SINGLE,imported:CLEAN_RESULT},
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+      ...placeIn("Releases", "~/work/releases"),
+      importNow,
+    ],
   },
 ];

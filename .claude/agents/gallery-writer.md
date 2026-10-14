@@ -19,11 +19,12 @@ shape of the answer.
 
 ## Criteria
 
-- **Every UI state the project cares about can be reached.** Coverage includes the states reached through a scenario's controls and interactions, not only the state its last step leaves on screen.
-- **UI areas organize confirmation; mock data determines splits within an area.** Keep distinct areas easy to inspect while reusing their mock data; within one area, states reachable with one reusable setup share a scenario, and different initial screens or routes do not earn separate entries.
-- **Shape mock data for the UI states that need confirmation.** Combine compatible cases in one setup and supply the data each needs; within an area, split only when one setup cannot reproduce the required data, capabilities or starting conditions.
-- **No scenario earns nothing.** Within the same UI area, delete a scenario whose purpose an existing one reaches through the page's controls (width, height, theme, language) or reversible interactions such as focus, hover, filtering, layout, folding and switches; describe the route where it would be hard to discover.
-- **Capture needs do not decide page count.** Mutually exclusive visual states need separate captures during verification, not separate navigation entries; preserve the steps or assertions needed to verify them on the retained scenario.
+- **One scenario presents one identifiable, settled view for confirmation.** After initialization, it stays on that view until the user interacts; autonomous behavior intrinsic to the view is part of its subject, not a setup tour through other views.
+- **Mock reuse does not determine page count.** Share mock data across scenarios; combine compatible cases visible together, and split confirmation targets that require replacing the view or displacing one another. A reversible route between targets does not make them one view.
+- **Initialize the target rather than demonstrating a journey.** Prefer declarative initial state; where unsupported, use only the shortest setup needed to reach the target. Do not visit unrelated views, return through earlier views or perform regression checks during initialization.
+- **Presentation and verification are separate.** Preserve necessary behavioral assertions in tests or verification runs outside display initialization; several assertions or captures do not themselves earn new scenarios.
+- **Avoid duplicate confirmation targets.** Page-level viewing controls can vary the same target without another entry; split only where the purpose is a different view rather than the same view under another viewing condition.
+- **Shape mock data for the target.** Supply the fields and conditions needed to present the intended UI, combining compatible cases without obscuring what the user is confirming.
 - A scenario's description says what to look at, not how the fixture is built; a scenario with nothing to point out
   needs none.
 - Prefer changing a scenario over adding one, and deleting over keeping.
@@ -34,5 +35,5 @@ shape of the answer.
 - Verify the affected gallery states against the component's current data requirements and branches; successful rendering alone does not establish that a mock shows the current UI. Use browser inspection where appearance or interaction needs confirmation.
 - For batch runtime checks, sweep only affected scenarios, languages and themes; include all affected consumers of a shared change. Run a full sweep only for a broad change whose affected scope cannot be established.
 - Do not repeat a sweep where direct browser verification already covered the same runtime checks and assertions; inspecting only the final picture does not cover untested steps or assertions.
-- Report which states are now covered, what you deleted and where each purpose is reached, and what you could not reach; for a retained split, state why an existing scenario cannot reproduce it.
+- Report the views now presented, any setup that still requires interactions, and what could not be shown; explain additions or deletions by their confirmation targets rather than their data sets or test steps.
 - When unsure, report back rather than guessing.

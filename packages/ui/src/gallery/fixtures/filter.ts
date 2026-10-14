@@ -40,17 +40,58 @@ export const filterScenarios: Scenario[] = [
   {
     id: "filter-popover",
     group: GROUP,
-    title: "Project filtering and folding",
-    description: "Normal tags has a picker whose entries fit. Open it and pick customer-facing and frontend for selected checks and wrapping chips. Type site and press Escape to see matching projects and wrapping chips; reopen and replace it with no-such-project for the empty match. Clear the filter to return to all projects. Filter frontend, close the popover and Collapse all; clearing the filter leaves only those matching projects collapsed, while the hidden projects remain expanded. Switch the rail to Crowded tags for a scrolling picker with edge fades; No tags shows the empty picker.",
+    title: "Project filter",
+    description: "Selected tags have checkmarks; the normal vocabulary fits without scrolling.",
     state,
     preferences: { sidebarConsole: console_.id },
     steps: [
       openFilter,
+      (ui) => ui.press("customer-facing"),
       (ui) => ui.press("frontend"),
+    ],
+  },
+  {
+    id:"filter-in-force",
+    group:GROUP,
+    title:"Matching projects",
+    state:state,
+    preferences:{sidebarConsole:console_.id},
+    steps: [
+      openFilter,
+      (ui) => ui.type("site"),
       (ui) => ui.key("Escape"),
-      (ui) => ui.press(ui.t("sidebar.collapseAll")),
-      (ui) => ui.press(ui.t("sidebar.filter.clear")),
-      (ui) => ui.wait(500),
+    ],
+  },
+  {
+    id:"filter-no-match",
+    group:GROUP,
+    title:"No matching projects",
+    state:state,
+    preferences:{sidebarConsole:console_.id},
+    steps: [
+      openFilter,
+      (ui) => ui.type("no-such-project"),
+      (ui) => ui.key("Escape"),
+    ],
+  },
+  {
+    id:"filter-many-tags",
+    group:GROUP,
+    title:"Scrollable tag picker",
+    state:state,
+    preferences:{sidebarConsole:crowdedConsole.id},
+    steps: [
+      openFilter,
+    ],
+  },
+  {
+    id:"filter-no-tags",
+    group:GROUP,
+    title:"Empty tag picker",
+    state:state,
+    preferences:{sidebarConsole:plainConsole.id},
+    steps: [
+      openFilter,
     ],
   },
 ];

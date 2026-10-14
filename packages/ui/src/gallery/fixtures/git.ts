@@ -85,9 +85,6 @@ const squeezeStatuses = [squeezeStatus, cjkStatus, countsStatus];
 
 const openProjectMenu = (name: string) => (ui: Ui) => ui.press(ui.t("sidebar.project.actions", { name }));
 
-/** Enter a project's focus header from the same sidebar setup. */
-const focusProject = (name: string) => [openProjectMenu(name), (ui: Ui) => ui.press((name) => name.startsWith(ui.t("sidebar.focus.enter"))), (ui: Ui) => ui.wait(300)];
-
 const openGitSubmenu = (name: string) => [
   openProjectMenu(name),
   (ui: Ui) => ui.press(ui.t("sidebar.project.git")),
@@ -105,19 +102,33 @@ export const gitScenarios: Scenario[] = [
     id: "git-badges",
     group: GROUP,
     title: "Branch badges",
-    description:
-      "Branches include remote counts, checking and fast-forward in flight, failed fetches, detached HEAD, no repository, an empty repository, unreadable branches and the first check. Hover badges for the full branch, counts and error. Open each project's menu for repository-only Git actions; enter project focus mode for the header badge and its tooltip. Long Latin, CJK and large-count branches share the same list; the sidebar starts at 200, so drag wider to see the text and counts scroll together. Even with upstream → Git → Push current branch raises its acceptance notice.",
     state: badgesState,
     preferences: { sidebarWidth: 200 },
+    description: "Remote counts, in-flight work, failures, detached and missing branches, with long Latin and CJK labels. Hover badges for their full details; drag the sidebar wider to inspect clipping.",
+  },
+  {
+    id: "git-badge-focus",
+    group: GROUP,
+    title: "Unreadable branch in project focus",
+    state: badgesState,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${unreadableProject.id}` },
+    description: "The focus header has only a warning glyph; hover it for the unreadable-branch reason.",
+  },
+  {
+    id: "git-badge-focus-long",
+    group: GROUP,
+    title: "Long branch in project focus",
+    state: badgesState,
+    preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
+    description: "The long branch and counts share the header fade; hover its text or glyph for full details.",
+  },
+  {
+    id: "git-push-accepted",
+    group: GROUP,
+    title: "Push accepted",
+    state: badgesState,
+    description: "The acceptance notice appears after pushing the current branch.",
     steps: [
-      (ui) => ui.hoverGitBadge(errorStatus, "line", (name) => name.startsWith(errorProject.name)),
-      ...focusProject(unreadableProject.name),
-      (ui) => ui.hoverGitBadge(unreadableStatus, "glyph"),
-      (ui) => ui.press(ui.t("sidebar.focus.exit")),
-      (ui) => ui.hoverGitBadge(squeezeStatus, "glyph", (name) => name.startsWith(squeezeProject.name)),
-      ...focusProject(squeezeProject.name),
-      (ui) => ui.hoverGitBadge(squeezeStatus, "line"),
-      (ui) => ui.press(ui.t("sidebar.focus.exit")),
       ...openGitSubmenu(evenProject.name),
       (ui) => ui.press(ui.t("sidebar.project.pushBranch")),
       (ui) => ui.wait(300),

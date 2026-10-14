@@ -59,21 +59,22 @@ A frame URL with `chrome=1` gives the page the desktop window's `windowChrome` c
 what only the desktop app offers, such as the window shortcuts, can be driven in a browser. Neither gallery page is part
 of the bundle `pnpm build` writes, but `src/gallery/` is still type-checked by it, so a broken fixture fails the build.
 
-UI areas keep confirmation easy to inspect; mock data determines the splits within each area. Build compatible cases
-into one reusable setup, supplying the data each UI state needs: different consoles, projects, sessions or viewer
-subjects can carry different cases together. Coverage includes states reached through its controls and interactions.
-Width, height, theme, language, focus, hover, filtering, layout, folding and switches do not earn separate navigation
-entries. Split only where one setup cannot reproduce required data, platform capabilities or starting conditions;
-different initial screens, routes or extra steps alone do not earn a page. Name a hard-to-discover route in the
-retained scenario's description. Mutually exclusive visual states need separate captures during verification, not
-separate pages: preserve the interactions and assertions on the retained setup, since an automatic capture shows only
-the state left by its last step.
+Each scenario presents one identifiable, settled view for confirmation. After initialization it stays there until
+user interaction; autonomous behavior intrinsic to the view remains part of its subject. Share mock data across
+scenarios and combine compatible cases visible together, but give distinct confirmation targets their own entries
+when presenting one replaces the other. A reversible route between targets does not make them the same view.
+
+Initialize the target with declarative state where supported; otherwise use the shortest setup that reaches it.
+Setup does not tour unrelated views, return through earlier views or run regression checks. Keep behavioral
+assertions in tests or separate verification runs. Additional assertions or captures do not by themselves justify
+entries, and page-level viewing controls can vary the same target without duplicating it. Mock data supplies the
+fields and conditions required by the target; compatible examples should not obscure what is being confirmed.
 
 To add a scenario, add an entry to the file for its area in `src/gallery/fixtures/` (or a new file, listed in
 `index.ts`); its `group` is one of the titles in `GROUPS` (`groups.ts`), where a new group gets the icon its heading
 carries. Its `state` is built with `snapshotState` from the helpers in `builders.ts`, so a protocol change breaks it at
 typecheck. State that lives in a component rather than the store (a dialog, the archive view, which session is selected)
-is reached with `steps`, which press controls by name as a user would (`ui.press(ui.t("rail.settings"))`; a dialog's
+is reached with the shortest `steps` needed, which press controls by name as a user would (`ui.press(ui.t("rail.settings"))`; a dialog's
 confirming button, named as a control behind it, is pressed with `ui.confirm()`). `preferences` sets what the app
 persists (pane visibility and widths, the sidebar's console and focus target), `toasts` raises daemon errors and
 notices, `terminal: "refuse"` makes a session's terminal unreachable, `clipboard: "unavailable"` takes the clipboard
@@ -97,7 +98,8 @@ only by its width earns nothing. The same goes for a `height`: it is written onl
 short for a dialog's body, which then scrolls (`ui.tabToRegion`, which focuses that scrolling body as Tab would, finds
 none in a window tall enough to hold the dialog), and a scenario that merely wants to be seen in a short window is
 seen with the Short height control instead. A height needed by a step determines how that step can run; it does
-not justify another page for a focus or scrolling state reachable from an existing setup.
+not justify a duplicate target solely for its viewing condition. A distinct confirmation view may share the same
+mock data and require its own minimal initialization.
 
 A step names a control in the language the window is in, so copy is never written out: a control is named through
 `ui.t` (`ui.press(ui.t("rail.settings"))`), a session row through `ui.session` and a change row through `ui.changeRow`.

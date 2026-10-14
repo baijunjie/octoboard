@@ -49,16 +49,40 @@ export const reportScenarios: Scenario[] = [
   {
     id: "report-two-console-sessions",
     group: GROUP,
-    title: "Reports across console sessions",
-    description:
-      "Previous on Hub reaches its first read-only page (1 / 2). Hub 2 shows only its own pages, " +
-      "on its newest (3 / 3, a form that can be submitted; the fixture accepts it). Selecting Hub again shows its newest page, not where it was left. No reports has no pages; Old report has one page a day old. Previous pages are read-only, while the latest form can be submitted.",
+    title: "Latest interactive report",
     state: twoSessions,
+    description: "The latest report is an interactive form; pagination belongs to the selected console session.",
+    steps: [
+      (ui) => ui.press(ui.session("Hub 2")),
+    ],
+  },
+  {
+    id: "report-history",
+    group: GROUP,
+    title: "Historical report",
+    state: twoSessions,
+    description: "The first page is read-only and its controls are disabled.",
     steps: [
       (ui) => ui.press(ui.session("Hub")),
       (ui) => ui.press(ui.t("report.previous")),
-      (ui) => ui.press(ui.session("Hub 2")),
-      (ui) => ui.wait(500),
+    ],
+  },
+  {
+    id: "report-no-pages",
+    group: GROUP,
+    title: "No reports",
+    state: twoSessions,
+    steps: [
+      (ui) => ui.press(ui.session("No reports")),
+    ],
+  },
+  {
+    id: "report-one-old-page",
+    group: GROUP,
+    title: "One old report",
+    state: twoSessions,
+    steps: [
+      (ui) => ui.press(ui.session("Old report")),
     ],
   },
 ];

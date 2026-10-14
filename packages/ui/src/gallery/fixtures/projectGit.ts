@@ -3,7 +3,6 @@
 // sections, a diff of each kind opened from it, and the states a source or a list can end in. Every
 // change here is built by the factory for its kind (`changeFixtures.ts`).
 import type { BranchInfo, ContentSource, FileContent, WorktreeInfo } from "../../protocol";
-import type { StatusKey } from "../../viewer/statusMarks";
 import { describing, type Matcher, type Ui } from "../interact";
 import type { Scenario } from "../scenario";
 import type { FixtureChange, FixtureGit, Versions } from "./changeFixtures";
@@ -309,15 +308,9 @@ const openGit = [
   (ui: Ui) => ui.press(ui.t("browser.mode.git")),
   (ui: Ui) => ui.wait(400),
 ];
-/** Puts the pointer on the status letter of the row of `file`, which is `status`. */
-const hoverStatus = (file: string, status: StatusKey) => (ui: Ui) => ui.hoverChangeStatus(ui.changeRow(file, status), status);
-
 /** Matches a branch's option in a selector: its name followed by the 7 characters of its short
  * commit id. */
 const branchOption = (name: string): Matcher => describing(`branchOption(${name})`, (n) => n.startsWith(name) && n.length === name.length + 7);
-
-/** Puts the pointer on the creator ring of branch `name` in an open selector. */
-const ringOf = (name: string) => (ui: Ui) => ui.hoverIndicator(branchOption(name));
 
 /** Opens the Compare view with `main` as From and the To selector open. */
 const openToSelector = [
@@ -351,23 +344,9 @@ export const projectGitScenarios: Scenario[] = [
     group: GROUP,
     title: "A worktree's uncommitted changes",
     description:
-      "Uncommitted and Compare share one repository. Compare main to feature/ranking-experiments for changed files, main to release/2.4 for the same commit, and release/2.4 to feature/ranking-experiments for changes outside the project. In the branch selectors hover rings for the selected, another and removed sessions; choose the long-named branch at Narrow for clipping. Conflicted, staged, unstaged and untracked changes share the Uncommitted view. Switch between list and tree, fold sections and folders, hover status letters, or open row actions. Open the filter: server matches both stages, notes leaves its folder chain in the tree, and no-such-file matches nothing. Select the worktree above the list to inspect its options. Press a change to open the viewer; Left and Right visit the visible changes. index.ts is renamed from outside the project, leaf.ts and nest2 are nested renames, same.ts has identical sides, and new-name.ts cannot be read. pipeline.ts and stages.ts have long and short collapsed gaps; huge.ts exceeds the render budget, limits.ts cannot be expanded, moved.ts has moved, and flaky.ts fails reads. wide.ts has very wide lines: narrow the window to 460 and switch unified/split layouts to inspect separator clipping. logo.png is an image, fixtures.bin exceeds the patch limit, and the untracked rows include text, a symlink and a repository. At Narrow, open the project pane drawer: Escape clears a typed filter before a second Escape closes the drawer.",
+      "Conflicted, staged, unstaged and untracked changes share the list. Open a file to inspect its viewer, or use the controls to explore filters, folders and status tooltips. The repository includes rename, expansion, budget and read-failure cases.",
     state,
-    steps: [
-      ...openGit,
-      hoverStatus("current", "typeChanged"),
-      (ui) => ui.pressChangeStatus(ui.changeRow("current", "typeChanged")),
-      (ui) => ui.wait(800),
-      (ui) => ui.key("Escape"),
-      ...openToSelector,
-      ringOf(LONG_BRANCH),
-      ringOf("chore/update-dependencies"),
-      ringOf("feature/ranking-experiments"),
-      (ui) => ui.press(branchOption("feature/ranking-experiments")),
-      (ui) => ui.wait(600),
-      (ui) => ui.press(ui.t("git.view.worktree")),
-      (ui) => ui.wait(400),
-    ],
+    steps: openGit,
   },
   {
     id: "git-worktree-gone",
@@ -387,12 +366,18 @@ export const projectGitScenarios: Scenario[] = [
     id: "git-clean",
     group: GROUP,
     title: "A worktree with no uncommitted changes",
-   
     state,
     git: { ...SAMPLE_GIT, changes: { ...SAMPLE_GIT.changes, "wt-main": [] } },
     steps: openGit,
   },
-  { id: "git-not-a-repository", group: GROUP, title: "A project in no repository", state, git: null, steps: openGit },
+  {
+    id: "git-not-a-repository",
+    group: GROUP,
+    title: "A project in no repository",
+    state,
+    git: null,
+    steps: openGit,
+  },
   {
     id: "git-unreadable",
     group: GROUP,
@@ -418,7 +403,11 @@ export const projectGitScenarios: Scenario[] = [
     description: "A repository with no commit yet has no branch to choose, so the Compare view says so instead of asking for two.",
     state,
     git: FRESH_GIT,
-    steps: [...openGit, (ui: Ui) => ui.press(ui.t("git.view.compare")), (ui: Ui) => ui.wait(400)],
+    steps: [
+      ...openGit,
+      (ui: Ui) => ui.press(ui.t("git.view.compare")),
+      (ui: Ui) => ui.wait(400),
+    ],
   },
   {
     id: "git-compare-moved",
@@ -427,7 +416,10 @@ export const projectGitScenarios: Scenario[] = [
     description: "The branch list read after the comparison says feature/ranking-experiments is at another commit now; the comparison stays on the commits it was made at until Refresh.",
     state,
     git: { ...SAMPLE_GIT, moved: { "feature/ranking-experiments": "1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e" } },
-    steps: [...compare("main", "feature/ranking-experiments"), (ui) => ui.wait(10_500)],
+    steps: [
+      ...compare("main", "feature/ranking-experiments"),
+      (ui) => ui.wait(10_500),
+    ],
   },
   {
     id: "git-compare-gone",
@@ -436,5 +428,86 @@ export const projectGitScenarios: Scenario[] = [
     state,
     git: { ...SAMPLE_GIT, missing: ["release/2.4"] },
     steps: compare("main", "release/2.4"),
+  },
+  {
+    id:"git-compare",
+    group:GROUP,
+    title:"Branch comparison",
+    state:state,
+    steps: [
+      ...compare("main", "feature/ranking-experiments"),
+    ],
+  },
+  {
+    id:"git-compare-origins",
+    group:GROUP,
+    title:"Branch creator indicators",
+    state:state,
+    description:"The selected, other and removed session origins are visible together; hover their rings for details.",
+    steps: [
+      ...openToSelector,
+    ],
+  },
+  {
+    id:"git-changes-tree",
+    group:GROUP,
+    title:"Changes grouped by folder",
+    state:state,
+    preferences:{changeLayout:"tree"},
+    steps: [
+      ...openGit,
+    ],
+  },
+  {
+    id:"git-change-viewer",
+    group:GROUP,
+    title:"Change viewer with collapsed lines",
+    state:state,
+    description:"The staged tag and long expansion gaps accompany the diff; other change subjects remain available through navigation.",
+    steps: [
+      ...openGit,
+      (ui) => ui.press(ui.changeRow("pipeline.ts", "modified")),
+      (ui) => ui.wait(800),
+    ],
+  },
+  {
+    id:"git-compare-same",
+    group:GROUP,
+    title:"Branches at the same commit",
+    state:state,
+    steps: [
+      ...compare("main", "release/2.4"),
+    ],
+  },
+  {
+    id:"git-compare-empty",
+    group:GROUP,
+    title:"No changes inside the project",
+    state:state,
+    steps: [
+      ...compare("release/2.4", "feature/ranking-experiments"),
+    ],
+  },
+  {
+    id:"git-changes-filter",
+    group:GROUP,
+    title:"Filtered changes",
+    state:state,
+    steps: [
+      ...openGit,
+      (ui) => ui.press(ui.t("git.filter.show")),
+      (ui) => ui.type("server"),
+    ],
+  },
+  {
+    id:"git-changes-filter-empty",
+    group:GROUP,
+    title:"No matching changes",
+    state:state,
+    steps: [
+      ...openGit,
+      (ui) => ui.press(ui.t("git.filter.show")),
+      (ui) => ui.type("no-such-file"),
+    ],
   },
 ];
