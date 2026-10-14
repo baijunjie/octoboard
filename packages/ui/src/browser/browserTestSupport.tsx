@@ -72,7 +72,7 @@ export function mountRows(children: React.ReactNode, { clipboard, toasts = { not
   const daemon: Daemon = {
     store: createStateStore(state),
     request: () => Promise.reject(new Error("no daemon")),
-    toastError: toasts.error,
+    toastError: (message) => toasts.error(typeof message === "string" ? message : message.message),
     toastNotice: toasts.notice,
     onToast: () => () => {},
     dismissTrustPrompt: () => {},

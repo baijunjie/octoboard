@@ -1,4 +1,5 @@
 import { Button, Chip } from "@heroui/react";
+import { errorPresentation } from "../errorPresentation";
 import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -75,7 +76,7 @@ export function ReportPanel({
     // possibly back to) landing a now-stale error after the fact.
     let stale = false;
     request({ type: "list_pages", console_session: consoleSessionId }).catch((err) => {
-      if (!stale) toastError((err as Error).message);
+      if (!stale) toastError(errorPresentation(err as Error));
     });
     return () => {
       stale = true;
@@ -94,7 +95,7 @@ export function ReportPanel({
       // "This session is waiting for you."): naming it keeps the user from reading the message as being
       // about whatever session they are looking at.
       request({ type: "submit_page", page: page.id, data }).catch((err) => {
-        toastError((err as Error).message, consoleSessionId);
+        toastError(errorPresentation(err as Error), consoleSessionId);
       });
     },
     [request, toastError, consoleSessionId],

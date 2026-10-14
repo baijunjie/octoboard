@@ -2,6 +2,7 @@ import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
 import { SAMPLE, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
 import { IMAGES } from "./viewerImages";
+import { SHELL_TIMEOUT } from "./shellTimeout";
 
 const GROUP = "Dialogs";
 
@@ -227,6 +228,20 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
+    id: "dialog-new-session-shell-timeout",
+    group: GROUP,
+    title: "Session launch, shell environment timed out",
+    description: "The danger alert presents the failed shell command, cause, launch consequence and recovery as separate readable parts. Short shows the recovery at the bottom of the scrolling body.",
+    sessionOpenError: SHELL_TIMEOUT,
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.project.openSession")),
+      (ui) => ui.focus(ui.t("dialog.session.titleField")),
+      (ui) => ui.confirm(),
+      async () => { document.querySelector<HTMLElement>('[role="dialog"] [role="alert"]')?.scrollIntoView({ block: "end" }); },
+    ],
+  },
+  {
+    ...dialogFixture,
     id: "dialog-new-session-owner",
     group: GROUP,
     title: "New session owner choices",
@@ -345,11 +360,27 @@ export const dialogScenarios: Scenario[] = [
     id: "dialog-add-project-parent",
     group: GROUP,
     title: "Parent directory source",
+    description: "Detect from files explains the recognized instruction files and directories as code; the agent picker is a single field.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
       (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.local"))),
       (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.parent"))),
+    ],
+  },
+  {
+    ...dialogFixture,
+    id: "dialog-add-project-parent-account",
+    group: GROUP,
+    title: "Parent directory with a chosen agent and account",
+    description: "The instruction-file hint remains below the joined agent and account fields when Detect from files is replaced by a chosen agent.",
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.addProject")),
+      (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.local"))),
+      (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.parent"))),
+      (ui) => ui.press((name) => name.includes(ui.t("dialog.project.agentDetect"))),
+      (ui) => ui.press("Claude Code"),
     ],
   },
   {

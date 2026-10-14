@@ -3,9 +3,11 @@ import { Folder } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { AnchoredTooltip } from "../components/AnchoredTooltip";
+import { InlineCode } from "../components/InlineCode";
+import { errorPresentation } from "../errorPresentation";
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
 import { useTrimmedField } from "../dialogs/useTrimmedField";
-import { useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import { isImeKey } from "../imeKey";
 import { abbreviateHome } from "../pathDisplay";
 import { useDaemon, useDaemonStore } from "../store";
@@ -46,13 +48,16 @@ export function CloneDirSetting(): React.ReactElement {
       return;
     }
     void request({ type: "update_settings", default_clone_dir: typed })
-      .catch((err) => toastError((err as Error).message))
+      .catch((err) => toastError(errorPresentation(err as Error)))
       .finally(() => setDraft(latest.current));
   };
 
   return (
     <>
-      <SettingRow label={t("settings.cloneDir.label")} description={t("settings.cloneDir.description")}>
+      <SettingRow
+        label={t("settings.cloneDir.label")}
+        description={<Message id="settings.cloneDir.description" params={{ defaultDir: <InlineCode>~/Projects</InlineCode> }} />}
+      >
         <div className="flex w-80 items-center gap-2">
           <TextField
             aria-label={t("settings.cloneDir.label")}

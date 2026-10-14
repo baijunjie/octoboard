@@ -3,6 +3,8 @@ import { FileCheck, FolderTree, FunnelX, GitBranch, GitFork, List, ListFilter, T
 import React, { useRef } from "react";
 
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
+import { ErrorAlert } from "../components/ErrorAlert";
+import { CodeBlock } from "../components/InlineCode";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { IconToggle } from "../components/IconToggle";
 import { PathText } from "../components/PathText";
@@ -114,13 +116,11 @@ function GitContent({
   const git = source.source.git;
   if (!git) {
     return source.source.git_error !== null ? (
-      // Git's own message is the line under the heading, and keeps its own direction there: it is
-      // rendered as children, so `<bdi>` rather than `isolate`.
-      <CenteredEmptyPanel
-        icon={TriangleAlert}
-        message={t("git.unavailable")}
-        description={<bdi dir="auto">{source.source.git_error}</bdi>}
-      />
+      <div className="flex min-w-0 flex-1 items-center justify-center p-4">
+        <ErrorAlert title={t("git.unavailable")} className="w-full max-w-lg">
+          <CodeBlock>{source.source.git_error}</CodeBlock>
+        </ErrorAlert>
+      </div>
     ) : (
       <CenteredEmptyPanel icon={GitFork} message={t("git.notARepository")} />
     );

@@ -109,9 +109,11 @@ function Crash({ stack }: { stack?: string }): never {
 const daemon = scenario && !scenario.startup ? createFixtureDaemon(scenario) : undefined;
 const { ViewerGallery } = scenario?.viewer ? await import("./viewerGallery") : { ViewerGallery: undefined };
 const viewerSubjects = scenario?.viewer ? await scenario.viewer.subjects(language) : undefined;
+const { CodeGallery } = scenario?.codePalette ? await import("./codeGallery") : { CodeGallery: undefined };
 
 function screen(): React.ReactElement {
   if (!scenario) return <p className="p-4">Unknown scenario “{params.get("scenario")}”.</p>;
+  if (CodeGallery) return <CodeGallery />;
   switch (scenario.startup?.kind) {
     case "noAddress":
       return <StartupScreen message={<NoAddressMessage />} />;

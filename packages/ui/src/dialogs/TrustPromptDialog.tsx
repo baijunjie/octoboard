@@ -1,7 +1,10 @@
-import { Alert, Checkbox, Code, Description, Label } from "@heroui/react";
+import { Alert, Checkbox, Description, Label } from "@heroui/react";
+import { errorPresentation } from "../errorPresentation";
 import React, { useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
+import { CodeBlock, InlineCode } from "../components/InlineCode";
+import { TintedAlert } from "../components/TintedAlert";
 import { DaemonRequestError } from "../daemon-client";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
@@ -14,11 +17,7 @@ import type { ConfirmDialogProps } from "./ConfirmDialog";
  * character, so it wraps to the dialog's width rather than splitting at a hyphen; an inline one
  * breaks only where it would otherwise overflow, since a folder's name has no length limit. */
 function Path({ children, block }: { children: string; block?: boolean }): React.ReactElement {
-  return (
-    <Code dir="ltr" className={block ? "block w-full break-all select-text" : "[overflow-wrap:anywhere] select-text"}>
-      {children}
-    </Code>
-  );
+  return block ? <CodeBlock dir="ltr" className="break-all">{children}</CodeBlock> : <InlineCode>{children}</InlineCode>;
 }
 
 /** What trusting lets the asking agent do with the project's own configuration: true for that agent
@@ -65,7 +64,7 @@ function TrustPromptMessage({
       {prompt.agent === "codex" && <p>{t("dialog.trust.codexRoot", { agent })}</p>}
       {/* HeroUI's own warning tint rather than its default surface, which is the dialog's own fill and
           leaves the callout unmarked. */}
-      <Alert status="warning" className="bg-warning-soft shadow-none">
+      <TintedAlert status="warning" className="shadow-none">
         <Alert.Indicator />
         <Alert.Content>
           <Alert.Description className="text-foreground">
@@ -74,7 +73,7 @@ function TrustPromptMessage({
             <Caution agent={prompt.agent} />
           </Alert.Description>
         </Alert.Content>
-      </Alert>
+      </TintedAlert>
     </>
   );
 }
@@ -165,7 +164,7 @@ export function useTrustPromptDialogProps(
           toastError(t("dialog.trust.alreadyAnswered"), prompt.session);
         }
       } else {
-        toastError((err as Error).message, prompt.session);
+        toastError(errorPresentation(err as Error), prompt.session);
       }
     }
     setTrustDirFor(undefined);

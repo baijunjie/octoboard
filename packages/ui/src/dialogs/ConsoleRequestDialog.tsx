@@ -1,5 +1,6 @@
 import React from "react";
 
+import { errorPresentation } from "../errorPresentation";
 import { DaemonRequestError } from "../daemon-client";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
@@ -45,7 +46,7 @@ export function useConsoleRequestDialogProps(
       if (err instanceof DaemonRequestError && err.code === CONSOLE_REQUEST_ANSWERED) return;
       // Nothing was going to start for a refusal, so the session no longer waiting is no news.
       if (!approve && err instanceof DaemonRequestError && err.code === CONSOLE_REQUEST_NOT_WAITING) return;
-      toastError((err as Error).message, request.session);
+      toastError(errorPresentation(err as Error), request.session);
     }
   };
 

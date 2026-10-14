@@ -22,7 +22,7 @@ export function AgentAccountField<T extends string>({
   onChange: (value: T) => void;
   account?: { label: string; options: Option<string>[]; value: string; onChange: (value: string) => void };
   isDisabled?: boolean;
-  description?: string;
+  description?: React.ReactNode;
 }): React.ReactElement {
   if (!account) {
     return (

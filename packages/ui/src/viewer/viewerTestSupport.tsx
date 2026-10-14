@@ -26,7 +26,7 @@ export function ViewerHost({
     () => ({
       store: createStateStore(),
       request: request ?? (() => Promise.reject(new Error("no daemon"))),
-      toastError: toasts.error,
+      toastError: (message) => toasts.error(typeof message === "string" ? message : message.message),
       toastNotice: toasts.notice,
       onToast: () => () => {},
       dismissTrustPrompt: () => {},

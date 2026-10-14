@@ -7,7 +7,9 @@ import { Equal, FileQuestion, FolderGit2, Link, Unplug } from "lucide-react";
 import React from "react";
 
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
+import { ErrorAlert } from "../components/ErrorAlert";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
+import { TintedAlert } from "../components/TintedAlert";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { textDirection } from "../i18n/languages";
 import { useCurrentLanguage, useT } from "../i18n/react";
@@ -40,14 +42,14 @@ export type NoticeTone = "explained" | "warned" | "failed";
 /** Each tone is a HeroUI alert status, which draws the glyph that goes with it — the circled `i`,
  * the warning triangle, the circled `!` — so the three differ in shape and not only in fill
  * (`docs/ui-accessibility.md`, "Not by colour alone"). The status draws no fill of its own: HeroUI's
- * alert takes the plain surface, which equals a dialog's own, so each tone names the soft fill to go
- * with it. `--default-soft` reads as a block only because a dialog carries `.control-fills`, which
+ * alert takes the plain surface, which equals a dialog's own, so each tone uses its matching soft
+ * fill. `--default-soft` reads as a block only because a dialog carries `.control-fills`, which
  * makes it the opaque control fill; on HeroUI's own half-tint it would be about 1.1:1 and no block
  * at all. */
-const TONES: Record<NoticeTone, { status: "default" | "warning" | "danger"; fill: string }> = {
-  explained: { status: "default", fill: "bg-default-soft" },
-  warned: { status: "warning", fill: "bg-warning-soft" },
-  failed: { status: "danger", fill: "bg-danger-soft" },
+const TONES: Record<NoticeTone, "default" | "warning" | "danger"> = {
+  explained: "default",
+  warned: "warning",
+  failed: "danger",
 };
 
 /**
@@ -75,24 +77,24 @@ export function Notice({
   announced?: boolean;
   children?: React.ReactNode;
 }): React.ReactElement {
-  const { status, fill } = TONES[tone];
+  const status = TONES[tone];
   const direction = textDirection(useCurrentLanguage());
   const inDocument = appearance === "document";
   const hidden = speak !== undefined || announced === true;
   return (
     <>
       {/* The document variant removes the indicator's extra inset and centres it on the first text line. */}
-      <Alert
+      <TintedAlert
         aria-hidden={hidden || undefined}
         dir={inDocument ? direction : undefined}
         status={status}
-        className={`shrink-0 px-3 py-2 shadow-none ${fill} ${inDocument ? "gap-2 rounded-xl" : "gap-3"}`}
+        className={`shrink-0 px-3 py-2 shadow-none ${inDocument ? "gap-2 rounded-xl" : "gap-3"}`}
       >
         <Alert.Indicator className={inDocument ? "mt-1 shrink-0 p-0" : undefined} />
         <Alert.Content>
           <Alert.Description className={inDocument ? "break-words text-foreground leading-6" : "text-foreground"}>{children}</Alert.Description>
         </Alert.Content>
-      </Alert>
+      </TintedAlert>
       {speak !== undefined && <StatusAnnouncer text={speak} firstWriteDelayMs={FIRST_ANNOUNCEMENT_DELAY_MS} />}
     </>
   );
@@ -197,26 +199,14 @@ export function Disconnected({ what }: { what: "file" | "change" }): React.React
 
 /**
  * Why the subject cannot be shown at all: the heaviest of the four, and the only one that replaces
- * the content with an error rather than standing in for it. It takes the danger fill the failure
- * notice takes, so the two read as one severity and neither is louder than the other.
+ * the content with an error rather than standing in for it. The shared alert keeps it consistent
+ * with failures in the other panes and dialogs.
  */
 export function Failure({ message, title }: { message: string; title: string }): React.ReactElement {
   return (
-    <Alert status="danger" className="shrink-0 bg-danger-soft shadow-none">
-      <Alert.Indicator />
-      <Alert.Content>
-        {/* HeroUI's alert carries no role, so a failure that arrives after the user moved on
-            would never be announced. The alert below carries the title too, for screen readers,
-            so the visible title is hidden from them and the title is read once. */}
-        <Alert.Title aria-hidden="true">{title}</Alert.Title>
-        <Alert.Description>
-          <span role="alert">
-            <span className="sr-only">{title} </span>
-            {message}
-          </span>
-        </Alert.Description>
-      </Alert.Content>
-    </Alert>
+    <ErrorAlert title={title} className="min-w-0 shrink-0">
+      {message}
+    </ErrorAlert>
   );
 }
 

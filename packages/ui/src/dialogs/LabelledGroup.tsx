@@ -16,7 +16,7 @@ export function LabelledGroup({
   children,
 }: {
   label: string;
-  description?: string;
+  description?: React.ReactNode;
   isDisabled?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {

@@ -44,9 +44,13 @@ export const en = {
   "activity.working": "A session is working",
   "activity.running": "A session is running",
 
-  "startup.daemonFailed": "The daemon failed to start: {error}",
-  "startup.noAddress":
-    "No daemon address is known. The Tauri shell passes a port via {port}; for {dev} against a daemon started by hand, open the page with {port}, set {portVar}, or start the dev server with {proxyVar} to proxy to it.",
+  "startup.daemonFailed.title": "The daemon failed to start",
+  "startup.noAddress.title": "No daemon address",
+  "startup.noAddress.shell": "The Tauri shell passes the daemon port via {port}.",
+  "startup.noAddress.dev": "To connect {dev} to a daemon started by hand, use one of these methods:",
+  "startup.noAddress.query": "Open the page with {port} followed by the daemon port.",
+  "startup.noAddress.env": "Set {portVar} to the daemon port.",
+  "startup.noAddress.proxy": "Start the dev server with {proxyVar} set to the daemon port to proxy to it.",
   "startup.message": "Message",
   "error.crashed": "{appName} hit an error it could not recover from.",
   "error.tryAgain": "Try again",
@@ -202,6 +206,12 @@ export const en = {
   "daemon.binary_not_found": "“{binary}” was not found on PATH in the snapshotted shell environment.",
   "daemon.shell_environment_timeout":
     "“{shell} -l -i -c '{command}'” did not finish within {timeout}. A shell startup file is probably blocked on something other than stdin, or it left a background process holding the shell's output open. {appName} will not launch while the environment is unknown, because it will not guess at one. Fix or skip the slow step in the shell's rc files.",
+  "daemon.shell_environment_timeout.title": "Shell environment timed out",
+  "daemon.shell_environment_timeout.command": "{command} did not finish within {timeout}.",
+  "daemon.shell_environment_timeout.cause":
+    "A shell startup file is probably blocked on something other than stdin, or it left a background process holding the shell's output open.",
+  "daemon.shell_environment_timeout.consequence": "{appName} will not launch while the shell environment is unknown, because it will not guess at one.",
+  "daemon.shell_environment_timeout.recovery": "Fix or skip the slow step in the shell's rc files.",
   "daemon.agent_not_available":
     "{agent} is not available on this machine: its binary does not resolve on your login shell's PATH. {appName} supports Claude Code, Codex and Grok Build; make sure one of them is on your PATH to open a session.",
   "daemon.claude_workspace_untrusted":
@@ -689,7 +699,7 @@ export const en = {
   "dialog.project.accountInherit": "{account} (from the console)",
   "dialog.project.agentDetect": "Detect from files",
   "dialog.project.agentDetectHint":
-    "“Detect from files” looks for CLAUDE.md, AGENTS.md and agent folders such as .claude or .codex in each repository; one it cannot decide on inherits from the console. An agent chosen here applies to every repository.",
+    "“Detect from files” looks for {claudeFile}, {agentsFile} and agent folders such as {claudeDir} or {codexDir} in each repository; one it cannot decide on inherits from the console. An agent chosen here applies to every repository.",
   "dialog.project.launchSettingsNote": "Used by sessions, from the next one opened or resumed.",
   "dialog.project.directoryRequired": "A directory is required.",
   "dialog.project.pathChecking": "Checking the directory…",
@@ -920,7 +930,7 @@ export const en = {
     "The language of {appName}'s interface. It is picked from the system's languages the first time {appName} opens.",
   "settings.cloneDir.label": "Default clone directory",
   "settings.cloneDir.description":
-    "Where a repository is cloned when adding a project from a git URL, unless another directory is chosen. Leave it empty to use ~/Projects.",
+    "Where a repository is cloned when adding a project from a git URL, unless another directory is chosen. Leave it empty to use {defaultDir}.",
   "settings.cloneDir.placeholder": "~/Projects",
   "settings.background.label": "Keep running in the background when the window is closed",
   "settings.background.description.off":
@@ -939,7 +949,7 @@ export const en = {
     "Stop trusting this folder. Projects' own permissions, running sessions and the trust each agent has already recorded are kept.",
   "settings.trusted.removeLabel": "Stop trusting {path}",
   "settings.accounts.description":
-    "An account is a named config directory of an agent: the directory it keeps its login and conversation history in. An agent has to be on your PATH for its accounts to be usable.",
+    "An account is a named config directory of an agent: the directory it keeps its login and conversation history in. An agent has to be on your {pathVar} for its accounts to be usable.",
   "settings.accounts.add": "Add account",
   "settings.accounts.defaultName": "Default",
   "settings.accounts.defaultDescription": "The setup a session runs under when no account is pinned. It cannot be changed or removed.",

@@ -4,10 +4,11 @@ import React, { useState } from "react";
 import { accountsByAgent, AGENT_LABEL } from "../agents";
 import { AgentIcon } from "../components/AgentIcon";
 import { FadeOverflow } from "../components/FadeOverflow";
+import { InlineCode } from "../components/InlineCode";
 import { MarkedPath } from "../components/MarkedPath";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { isolate } from "../i18n/isolate";
-import { useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import type { Account } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { AccountDialog } from "./AccountDialog";
@@ -34,7 +35,9 @@ export function AgentAccountsSection(): React.ReactElement {
 
   return (
     <>
-      <p className="pb-2 text-sm text-muted">{t("settings.accounts.description")}</p>
+      <p className="pb-2 text-sm text-muted">
+        <Message id="settings.accounts.description" params={{ pathVar: <InlineCode>PATH</InlineCode> }} />
+      </p>
       <Button size="sm" variant="outline" preventFocusOnPress onPress={() => setEditing(null)}>
         {t("settings.accounts.add")}
       </Button>

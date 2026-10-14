@@ -1,7 +1,7 @@
 import { Button } from "@heroui/react";
-import { TriangleAlert } from "lucide-react";
 import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 
+import { ErrorAlert } from "../components/ErrorAlert";
 import { useT } from "../i18n/react";
 import { AsidePane, type AsideLayout } from "../layout/AsidePane";
 import type { ProjectBrowser as ProjectBrowserType } from "./ProjectBrowser";
@@ -75,9 +75,8 @@ function LoadFailed({ layout, onRetry }: { layout: AsideLayout; onRetry: (holdsF
     if (document.activeElement === document.body) retry.current?.focus();
   }, []);
   return (
-    <AsidePane layout={layout} className="control-fills items-center justify-center gap-3 px-4 text-center text-sm">
-      <TriangleAlert aria-hidden="true" className="size-6 text-danger" />
-      <p role="alert">{t("browser.loadFailed")}</p>
+    <AsidePane layout={layout} className="control-fills min-w-0 items-center justify-center gap-3 p-4 text-sm">
+      <ErrorAlert className="w-full max-w-lg">{t("browser.loadFailed")}</ErrorAlert>
       <Button
         ref={retry}
         size="sm"

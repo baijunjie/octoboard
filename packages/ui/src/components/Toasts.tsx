@@ -2,6 +2,8 @@ import { Toast, toast, type ToastContentValue } from "@heroui/react";
 import React, { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import type { QueuedToast } from "react-aria-components";
 
+import { hasShellTimeoutDetails } from "../errorPresentation";
+import { DaemonErrorMessage, DaemonErrorTitle } from "./DaemonErrorMessage";
 import { t } from "../i18n/language";
 import { useT } from "../i18n/react";
 import { sessionLocation } from "../sessionLabel";
@@ -186,14 +188,15 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
   );
 }
 
-function showToast({ kind, message, session }: ToastRequest, location: string | undefined): void {
+function showToast({ kind, message, session, daemonError }: ToastRequest, location: string | undefined): void {
   const signature = JSON.stringify([kind, message, session]);
+  const structured = daemonError && hasShellTimeoutDetails(daemonError) ? daemonError : undefined;
   const options = {
     variant: kind === "error" ? ("danger" as const) : ("accent" as const),
-    description: location ? message : undefined,
+    description: structured ? <DaemonErrorMessage error={structured} showTitle={!!location} /> : location ? message : undefined,
     timeout: kind === "error" ? ERROR_DURATION_MS : NOTICE_DURATION_MS,
   };
-  const title = location ?? message;
+  const title = location ?? (structured ? <DaemonErrorTitle /> : message);
 
   const existing = shownToasts.get(signature);
   if (existing) toast.close(existing);
@@ -211,7 +214,7 @@ function renderToast({ toast: queued }: { toast: QueuedToast<ToastContentValue> 
       <Toast.Indicator variant={variant} />
       <Toast.Content>
         {!!title && <Toast.Title>{title}</Toast.Title>}
-        {!!description && <Toast.Description>{description}</Toast.Description>}
+        {!!description && <Toast.Description elementType="div">{description}</Toast.Description>}
       </Toast.Content>
       <ToastClose />
     </Toast>

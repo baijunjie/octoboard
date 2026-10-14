@@ -280,6 +280,42 @@ the surface around it does not forbid selection. It is accepted there because th
 - The selected row of a hand-built list or tree carries `aria-current` (as the sidebar rows do).
 - HeroUI's `Tabs` and `ListBox` mark their selection themselves with `aria-selected` and get no `aria-current` on top.
 
+### Standalone errors use the shared Alert
+
+An error that stands on its own in a page, pane or dialog uses `ErrorAlert`, the shared HeroUI `Alert` with danger
+status, its indicator, the danger-soft background and foreground body text. Neutral absence, loading and unsupported
+content keep their state presentations. A field's validation stays in its
+`FieldError`; a failure attached to a row, table cell or rendered document stays in that content's own presentation.
+Toast errors use the Toast's danger variant and indicator, without nesting an Alert or a second live region inside it.
+Warnings use warning status, rather than the error wrapper.
+
+Keep the summary, explanation and recovery readable as separate parts when a failure needs them. A short error that
+already says what failed needs no generic title repeating it. An optional title is a heading at the level of its
+surrounding content: a startup page's is `h1`, and a subsection under a dialog or pane's `h2` is `h3`. Paragraphs,
+lists and diagnostic blocks belong directly in the callout's content; HeroUI's span description cannot contain them.
+
+Technical literals in prose use `InlineCode`, with left-to-right isolation, selectable text and wrapping. Raw
+diagnostics use `CodeBlock` or the existing source renderer, preserving their text, direction and indentation; long
+content remains scrollable and reachable from the keyboard. Keep structured error metadata separate from the plain
+error message, so notifications and unknown-error fallbacks retain usable text.
+
+Application code uses the shared v3 Typography wrappers. Outside an Alert, code defaults to neutral styling and may
+choose `primary`, `secondary`, `success`, `warning` or `danger`. Colored Alert roots use `TintedAlert` (including the
+root inside `ErrorAlert`), which sets both the fill and the code tone: default stays neutral, accent maps to primary,
+and success, warning and danger use their matching colors. Code inside an Alert must follow that tone; the enclosing
+Alert takes precedence over an explicit code color, and nested Alerts supply their own tone. Do not use the bare
+HeroUI Alert root for application callouts or hand-color individual code literals inside one. HeroUI's Alert parts
+remain the content, title and indicator primitives.
+
+Colored code adds a stronger tint of the Alert's hue over its fill and uses a readable foreground of that hue; it
+must remain distinguishable from the callout while meeting 4.5:1 text contrast in both appearances. Rendered Markdown,
+syntax-highlighted source and foreign renderer markup keep their own code palettes.
+
+An error appearing after the surface is open has one `role="alert"` owner, supplied by `ErrorAlert`; do not put a
+second alert role on its parent or descendants. An initial startup explanation passes `announce={false}` and is
+ordinary page content. Follow "Announcing a change" for other live announcements, and keep retry and exit actions
+reachable when the error appears.
+
 ### A visual heading is a heading element
 
 Text drawn to read as a heading is `<h1>`-`<h6>`, never a `<p>` carrying a heavier weight: the structure a screen
@@ -528,9 +564,9 @@ cannot be that Alert: an Alert is a `div`, and a `div` inside a `p` is not valid
 the contrast above, and the same three glyphs tell the tones apart. When that notice appears after the first paint,
 it is announced by `StatusAnnouncer` rendered as a `span`, with the viewer's own first-write delay; the visible
 sentence is `aria-hidden` so it is not read twice. The error block for a subject that cannot be
-opened at all takes the danger fill and glyph of a filled failure notice, so an error is never quieter than a notice about one part of it;
-its muted reason line on that fill is the tightest text in the family, at 4.80:1 light and 5.60:1 dark. A viewer with
-nothing to draw takes neither: it fills the body with a centred glyph and sentence (`NothingToShow`).
+opened at all uses the shared error Alert with the same danger fill and glyph, so an error is never quieter than a
+notice about one part of it. Its reason uses foreground text on that fill, measured at 13.43:1 light and 13.28:1 dark.
+A viewer with nothing to draw takes neither: it fills the body with a centred glyph and sentence (`NothingToShow`).
 
 **One kept shortfall is left, and it is a single control**: the settings dialog's three-way appearance choice, which
 is a toggle group where the selected button differs by fill colour only. Which button is selected is also carried by

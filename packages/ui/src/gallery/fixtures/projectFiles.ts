@@ -137,6 +137,7 @@ export const projectFilesScenarios: Scenario[] = [
     id: "files-root-error",
     group: GROUP,
     title: "A project folder that cannot be read",
+    description: "The failure has a danger alert with a heading and a separate Try again control. Narrow shows the same failure after opening the project pane drawer.",
     state,
     files: {
       "": {

@@ -1,4 +1,5 @@
 import { Switch } from "@heroui/react";
+import { errorPresentation } from "../errorPresentation";
 import React from "react";
 
 import { useT } from "../i18n/react";
@@ -14,7 +15,7 @@ export function GitSection(): React.ReactElement {
   const autoSync = useDaemonStore((s) => s.settings.auto_sync_repositories);
 
   const setAutoSync = (value: boolean) =>
-    void request({ type: "update_settings", auto_sync_repositories: value }).catch((err) => toastError((err as Error).message));
+    void request({ type: "update_settings", auto_sync_repositories: value }).catch((err) => toastError(errorPresentation(err as Error)));
 
   return (
     <SettingRow label={t("settings.git.autoSync.label")} description={t("settings.git.autoSync.description")}>

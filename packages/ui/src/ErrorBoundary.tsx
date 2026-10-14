@@ -1,5 +1,7 @@
 import React from "react";
 
+import { ErrorAlert } from "./components/ErrorAlert";
+import { CodeBlock } from "./components/InlineCode";
 import { FadedScroller, useFadeRegion } from "./components/scrollFade";
 import { useT } from "./i18n/react";
 import { StartupScreen } from "./StartupScreen";
@@ -46,22 +48,21 @@ function ErrorScreen({ error, onRetry }: { error: Error; onRetry: () => void }):
   return (
     <StartupScreen
       message={
-        <>
-          {t("error.crashed")}
+        <ErrorAlert title={t("error.crashed")} headingLevel={1}>
           {/* The stack is taller than the screen more often than not, so it fades at the edge it
               hides the rest behind. The ring goes on this wrapper, which draws it outside its own box, so
               it needs no room of its own. `overflow-auto` beside the fade's own `overflow-y`: a long
               frame scrolls sideways too, and only the vertical edge fades. */}
           <div className={`mt-4 max-w-[70ch] rounded-lg ${region.focused ? "ring-2 ring-focus" : ""}`}>
-            <FadedScroller region={region} className="max-h-[40vh] overflow-auto rounded-lg bg-surface p-3">
+            <FadedScroller region={region} dir="ltr" className="max-h-[40vh] overflow-auto rounded-lg">
               {/* A stack trace is program text: its indentation and its frames read left to right in
                   any interface language. */}
-              <pre dir="ltr" className="text-left text-xs">
+              <CodeBlock dir="ltr" wrap={false} className="text-xs">
                 {error.stack ?? error.message}
-              </pre>
+              </CodeBlock>
             </FadedScroller>
           </div>
-        </>
+        </ErrorAlert>
       }
       action={{ label: t("error.tryAgain"), onSelect: onRetry }}
     />

@@ -2,6 +2,8 @@ import { Button } from "@heroui/react";
 import React, { useState } from "react";
 
 import { ContentPanel } from "./components/ContentPanel";
+import { ErrorAlert } from "./components/ErrorAlert";
+import { CodeBlock, InlineCode } from "./components/InlineCode";
 import { BareTitleBar } from "./components/TitleBar";
 import { FadedScroller, useFadeRegion } from "./components/scrollFade";
 import { Message, useT } from "./i18n/react";
@@ -42,15 +44,15 @@ export function StartupScreen({ message, action }: StartupScreenProps): React.Re
             window. */}
         <div className={`flex min-h-0 flex-1 flex-col ${region.focused ? "ring-2 ring-focus ring-inset" : ""}`}>
           <FadedScroller region={region} className="flex min-h-0 flex-1 flex-col">
-            <div className="m-auto flex flex-col items-center gap-4 p-8 text-center">
-              <div className="max-w-xl">{message}</div>
+            <div className="m-auto flex w-full min-w-0 flex-col items-center gap-4 p-8 text-center">
+              <div className="w-full min-w-0 max-w-xl">{message}</div>
               <div className="flex gap-2">
                 {action && <Button onPress={action.onSelect}>{action.label}</Button>}
                 {canQuit && <Button onPress={() => void requestQuit()}>{t("common.quit")}</Button>}
               </div>
               {/* Quitting is the only action this screen has, so a quit that fails silently would
                   leave the user with nothing at all. */}
-              {quitError && <p className="text-danger">{quitError}</p>}
+              {quitError && <ErrorAlert>{quitError}</ErrorAlert>}
             </div>
           </FadedScroller>
         </div>
@@ -61,22 +63,37 @@ export function StartupScreen({ message, action }: StartupScreenProps): React.Re
 
 /** What the screen says when the shell passed the daemon's startup failure along as `?error=`. */
 export function DaemonFailedMessage({ error }: { error: string }): React.ReactElement {
-  return <Message id="startup.daemonFailed" params={{ error: <bdi dir="auto">{error}</bdi> }} />;
+  const t = useT();
+  return (
+    <ErrorAlert title={t("startup.daemonFailed.title")} headingLevel={1} announce={false}>
+      <CodeBlock>{error}</CodeBlock>
+    </ErrorAlert>
+  );
 }
 
 /** What the screen says when there is no daemon address to connect to, and how to give it one. */
 export function NoAddressMessage(): React.ReactElement {
+  const t = useT();
+  const code = (text: string) => <InlineCode>{text}</InlineCode>;
   return (
-    <Message
-      id="startup.noAddress"
-      // Each is a literal to type, so it reads left to right even in a right-to-left interface,
-      // where `?port=` would otherwise come out as `=port?`.
-      params={{
-        port: <code dir="ltr">?port=</code>,
-        dev: <code dir="ltr">vite dev</code>,
-        portVar: <code dir="ltr">VITE_DAEMON_PORT</code>,
-        proxyVar: <code dir="ltr">OCTOBOARD_DAEMON_PORT</code>,
-      }}
-    />
+    <ErrorAlert title={t("startup.noAddress.title")} headingLevel={1} announce={false}>
+      <p>
+        <Message id="startup.noAddress.shell" params={{ port: code("?port=") }} />
+      </p>
+      <p>
+        <Message id="startup.noAddress.dev" params={{ dev: code("vite dev") }} />
+      </p>
+      <ul className="list-disc space-y-3 ps-5">
+        <li>
+          <Message id="startup.noAddress.query" params={{ port: code("?port=") }} />
+        </li>
+        <li>
+          <Message id="startup.noAddress.env" params={{ portVar: code("VITE_DAEMON_PORT") }} />
+        </li>
+        <li>
+          <Message id="startup.noAddress.proxy" params={{ proxyVar: code("OCTOBOARD_DAEMON_PORT") }} />
+        </li>
+      </ul>
+    </ErrorAlert>
   );
 }

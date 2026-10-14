@@ -197,8 +197,8 @@ it("announces a read failure once, with its title", () => {
   show(failed);
   const alert = document.querySelector("[role=alert]");
   expect(alert?.textContent).toBe("Could not open this file src/a.ts is gone.");
-  const title = [...(dialog()?.querySelectorAll("*") ?? [])].find((element) => element.textContent === "Could not open this file");
-  expect(title?.getAttribute("aria-hidden")).toBe("true");
+  expect(document.querySelectorAll("[role=alert]")).toHaveLength(1);
+  expect(alert?.querySelector("h3")?.textContent).toBe("Could not open this file");
 });
 
 it("moves to the previous and next subject with Left and Right, as its buttons do", () => {

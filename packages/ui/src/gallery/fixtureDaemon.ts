@@ -1,5 +1,6 @@
 import { DaemonRequestError } from "../daemon-client";
 import { daemonMessage } from "../daemonMessage";
+import { errorPresentation } from "../errorPresentation";
 import { currentLanguage } from "../i18n/language";
 import type { BrowseEntry, DirEntry, Event, Session } from "../protocol";
 import { createStateStore, type Daemon, type ToastRequest } from "../store";
@@ -67,6 +68,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
     for (const { code, params, message, ...toast } of scenario.toasts ?? []) {
       emitToast({
         ...toast,
+        ...(code && toast.kind === "error" && { daemonError: new DaemonRequestError(message, code, params ?? {}) }),
         message: code ? daemonMessage(currentLanguage(), code, params ?? {}, message, store.getState()) : message,
       });
     }
@@ -101,6 +103,9 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
       const fromConfiguration = configurationReply(body);
       if (fromConfiguration !== undefined) return fromConfiguration;
       switch (body.type) {
+        case "open_session":
+          if (scenario.sessionOpenError) return fail(scenario.sessionOpenError);
+          return { type: "ack" };
         case "update_settings": {
           const current = store.getState();
           let cloneDir = current.settings.default_clone_dir;
@@ -236,7 +241,11 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           return { type: "ack" };
       }
     },
-    toastError: (message, session) => emitToast({ kind: "error", message, session }),
+    toastError: (message, session) => {
+      const presentation = typeof message === "string" ? message : errorPresentation(message);
+      emitToast({ kind: "error", message: typeof message === "string" ? message : message.message, session,
+        ...(typeof presentation !== "string" && { daemonError: presentation }) });
+    },
     toastNotice: (message) => emitToast({ kind: "notice", message }),
     onToast: (listener) => {
       toastListeners.add(listener);

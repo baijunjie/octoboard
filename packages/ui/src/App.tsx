@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { errorPresentation } from "./errorPresentation";
 import { flushSync } from "react-dom";
 
 import { ArchiveView } from "./archive/ArchiveView";
@@ -239,7 +240,7 @@ export function App(): React.ReactElement {
       // `suppressAlreadyRunning` decides per call whether that race is worth showing.
       const isAlreadyRunning = err instanceof DaemonRequestError && ALREADY_RUNNING_CODES.includes(err.code);
       if (!isAlreadyRunning || !suppressAlreadyRunning) {
-        toastError((err as Error).message);
+        toastError(errorPresentation(err as Error));
         return false;
       }
       return true;
@@ -276,7 +277,7 @@ export function App(): React.ReactElement {
     } catch (err) {
       // The confirmation shows a failure in place and cannot be dismissed while the switch runs;
       // were it gone anyway, the reason must not be lost with it.
-      if (dialogRequestRef.current?.kind !== "switch-account") toastError((err as Error).message);
+      if (dialogRequestRef.current?.kind !== "switch-account") toastError(errorPresentation(err as Error));
       throw err;
     } finally {
       setResumingIds((ids) => {
@@ -364,17 +365,17 @@ export function App(): React.ReactElement {
   };
 
   const syncProjectGit = (project: Project) => {
-    request({ type: "sync_project_git", project: project.id }).catch((err: unknown) => toastError((err as Error).message));
+    request({ type: "sync_project_git", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
   };
 
   const openProjectTerminal = (project: Project) => {
-    request({ type: "open_project_terminal", project: project.id }).catch((err: unknown) => toastError((err as Error).message));
+    request({ type: "open_project_terminal", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
   };
 
   const pushProjectBranch = (project: Project) => {
     request({ type: "push_project_branch", project: project.id })
       .then(() => toastNotice(t("sidebar.project.pushed")))
-      .catch((err: unknown) => toastError((err as Error).message));
+      .catch((err: unknown) => toastError(errorPresentation(err as Error)));
   };
 
   const openArchive = (scope: ArchiveScope) => {
@@ -479,7 +480,7 @@ export function App(): React.ReactElement {
       "project" in target
         ? ({ type: "update_project", project: target.project.id, pinned } as const)
         : ({ type: "set_session_pinned", session: target.session.id, pinned } as const);
-    request(body).catch((err: unknown) => toastError((err as Error).message));
+    request(body).catch((err: unknown) => toastError(errorPresentation(err as Error)));
   };
 
   const waitingSessions = useMemo(

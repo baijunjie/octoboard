@@ -344,6 +344,7 @@ export const configurationScenarios: Scenario[] = [
     id: "configuration-import-read-failed",
     group: GROUP,
     title: "Import, the file could not be read",
+    description: "The plain file-read error appears in a danger alert without a heading.",
     state,
     configuration: { readError: "Permission denied (os error 13)" },
     steps: [

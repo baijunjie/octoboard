@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { toast } from "@heroui/react";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { DaemonRequestError } from "../daemon-client";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { Toasts } from "./Toasts";
 
@@ -79,5 +80,33 @@ it("puts the toasts at the top in a window narrower than 640px and at the bottom
       expect(vi.getTimerCount()).toBe(0);
       expect(toast.getQueue().visibleToasts).toHaveLength(0);
     }
+  }
+});
+
+it("renders a coded shell timeout with a separate title and command while plain messages stay plain", () => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  stubWidth(1280);
+  let deliver!: (request: import("../store").ToastRequest) => void;
+  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  try {
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /></DaemonProvider>));
+    const error = new DaemonRequestError("plain fallback", "shell_environment_timeout", { shell: "/bin/zsh", command: "env -0", timeout: "10s" });
+    act(() => deliver({ kind: "error", message: error.message, daemonError: error }));
+    const title = document.querySelector('[data-slot="toast-title"]');
+    const description = document.querySelector('[data-slot="toast-description"]');
+    expect(title?.textContent).toBe("Shell environment timed out");
+    expect(title?.querySelector("code")).toBeNull();
+    expect(description?.querySelector("code")?.textContent).toBe("/bin/zsh -l -i -c 'env -0'");
+    expect(description?.textContent).toContain("10s");
+    expect(description?.textContent).not.toContain("plain fallback");
+    act(() => deliver({ kind: "error", message: "a plain failure" }));
+    expect([...document.querySelectorAll('[data-slot="toast-title"]')].some((element) => element.textContent === "a plain failure")).toBe(true);
+  } finally {
+    act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
+    act(() => root.unmount());
+    container.remove();
   }
 });

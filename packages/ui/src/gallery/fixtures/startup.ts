@@ -34,13 +34,20 @@ const DAEMON_FAILED: Startup = {
 };
 
 export const startupScenarios: Scenario[] = [
-  { id: "startup-no-address", group: GROUP, title: "No daemon address", startup: { kind: "noAddress" } },
+  {
+    id: "startup-no-address",
+    group: GROUP,
+    title: "No daemon address",
+    description:
+      "A danger alert explains the shell's port handoff and three ways to connect a development server, with selectable code tokens. Use Narrow and Short to check wrapping and scrolling; Arabic shows the code inside right-to-left copy.",
+    startup: { kind: "noAddress" },
+  },
   {
     id: "startup-daemon-failed",
     group: GROUP,
     title: "The daemon failed to start",
     description:
-      "The daemon's own report. Use Short to reveal the bottom fade, then Tab into the scrolling column for its focus ring and keyboard scrolling; Fit shows the whole report without a fade.",
+      "A danger alert's heading precedes the daemon's own report, shown as selectable wrapping code. Use Short to reveal the bottom fade, then Tab into the scrolling column for its focus ring and keyboard scrolling; Fit shows the whole report without a fade.",
     startup: DAEMON_FAILED,
   },
   {
@@ -48,7 +55,7 @@ export const startupScenarios: Scenario[] = [
     group: GROUP,
     title: "The UI crashed",
     description:
-      "The error boundary's fallback, with Try again. The stack is a block of its own, so a stack taller than the window scrolls inside it: use Short to see its bottom fade, then Tab onto the stack for its frame-shaped focus ring and keyboard scrolling; Fit shows it whole without a fade.",
+      "The error boundary's danger alert, with Try again. The stack is a block of its own, so a stack taller than the window scrolls inside it: use Short to see its bottom fade, then Tab onto the stack for its frame-shaped focus ring and keyboard scrolling; Fit shows it whole without a fade.",
     startup: { kind: "crash", stack: stackOf(12) },
   },
 ];

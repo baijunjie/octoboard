@@ -32,9 +32,13 @@ export const zhHans: Translation<"other"> = {
   "activity.working": "有会话正在工作",
   "activity.running": "有会话在运行",
 
-  "startup.daemonFailed": "守护进程启动失败：{error}",
-  "startup.noAddress":
-    "没有已知的守护进程地址。Tauri 外壳通过 {port} 传入端口；若要让 {dev} 连接手动启动的守护进程，请用 {port} 打开页面，设置 {portVar}，或在启动开发服务器时用 {proxyVar} 代理到该进程。",
+  "startup.daemonFailed.title": "守护进程启动失败",
+  "startup.noAddress.title": "未指定守护进程地址",
+  "startup.noAddress.shell": "Tauri 外壳通过 {port} 传入守护进程端口。",
+  "startup.noAddress.dev": "若要让 {dev} 连接手动启动的守护进程，可选择以下方式：",
+  "startup.noAddress.query": "在页面地址中添加 {port}，后接守护进程端口。",
+  "startup.noAddress.env": "将 {portVar} 设为守护进程端口。",
+  "startup.noAddress.proxy": "启动开发服务器时，将 {proxyVar} 设为守护进程端口，通过代理连接。",
   "startup.message": "说明",
   "error.crashed": "{appName} 遇到了无法恢复的错误。",
   "error.tryAgain": "重试",
@@ -171,6 +175,12 @@ export const zhHans: Translation<"other"> = {
   "daemon.binary_not_found": "在已快照的 shell 环境的 PATH 中找不到“{binary}”。",
   "daemon.shell_environment_timeout":
     "“{shell} -l -i -c '{command}'”未在 {timeout} 内完成。某个 shell 启动文件可能卡在了 stdin 以外的地方，或留下了占住 shell 输出的后台进程。{appName} 不会在环境未知时凭猜测启动。请修复 shell 的 rc 文件中缓慢的步骤，或跳过它。",
+  "daemon.shell_environment_timeout.title": "Shell 环境读取超时",
+  "daemon.shell_environment_timeout.command": "{command} 未在 {timeout} 内完成。",
+  "daemon.shell_environment_timeout.cause":
+    "某个 shell 启动文件可能卡在了 stdin 以外的地方，或留下了占住 shell 输出的后台进程。",
+  "daemon.shell_environment_timeout.consequence": "{appName} 不会在 shell 环境未知时凭猜测启动。",
+  "daemon.shell_environment_timeout.recovery": "请修复 shell 的 rc 文件中缓慢的步骤，或跳过它。",
   "daemon.agent_not_available":
     "{agent} 在此设备上不可用：其程序未能在登录 shell 的 PATH 中找到。{appName} 支持 Claude Code、Codex 和 Grok Build；请确保其中一个已配置到 PATH 中，才能打开会话。",
   "daemon.claude_workspace_untrusted":
@@ -621,7 +631,7 @@ export const zhHans: Translation<"other"> = {
   "dialog.project.accountInherit": "{account}（继承自控制台）",
   "dialog.project.agentDetect": "根据文件检测",
   "dialog.project.agentDetectHint":
-    "“根据文件检测”会在每个仓库中查找 CLAUDE.md、AGENTS.md 以及 .claude、.codex 等智能体目录；无法判定的仓库将继承控制台的默认值。在此选择的智能体将应用到所有仓库。",
+    "“根据文件检测”会在每个仓库中查找 {claudeFile}、{agentsFile} 以及 {claudeDir}、{codexDir} 等智能体目录；无法判定的仓库将继承控制台的默认值。在此选择的智能体将应用到所有仓库。",
   "dialog.project.launchSettingsNote": "对之后打开或恢复的会话生效。",
   "dialog.project.directoryRequired": "必须提供目录。",
   "dialog.project.pathChecking": "正在检查目录…",
@@ -822,7 +832,7 @@ export const zhHans: Translation<"other"> = {
   "settings.language.label": "语言",
   "settings.language.description": "{appName} 界面的语言。首次打开时按系统语言选定。",
   "settings.cloneDir.label": "默认克隆目录",
-  "settings.cloneDir.description": "通过 git 仓库网址添加项目时，仓库默认克隆到的目录，除非另行选择目录。留空则使用 ~/Projects。",
+  "settings.cloneDir.description": "通过 git 仓库网址添加项目时，仓库默认克隆到的目录，除非另行选择目录。留空则使用 {defaultDir}。",
   "settings.cloneDir.placeholder": "~/Projects",
   "settings.background.label": "关闭窗口后在后台继续运行",
   "settings.background.description.off":
@@ -839,7 +849,7 @@ export const zhHans: Translation<"other"> = {
   "settings.trusted.removeTooltip": "停止信任此文件夹。各项目自身的授权、运行中的会话以及各智能体已记录的信任都会保留。",
   "settings.trusted.removeLabel": "停止信任 {path}",
   "settings.accounts.description":
-    "账户是智能体的一个命名配置目录，即它保存登录信息和对话记录的目录。智能体必须已配置到 PATH 中，其账户才能使用。",
+    "账户是智能体的一个命名配置目录，即它保存登录信息和对话记录的目录。智能体必须已配置到 {pathVar} 中，其账户才能使用。",
   "settings.accounts.add": "添加账户",
   "settings.accounts.defaultName": "默认",
   "settings.accounts.defaultDescription": "未指定账户时，会话所使用的配置。无法修改或移除。",

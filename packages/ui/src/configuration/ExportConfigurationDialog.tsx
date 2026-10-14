@@ -2,6 +2,7 @@ import { Alert, Description, Label, Radio, RadioGroup } from "@heroui/react";
 import React, { useState } from "react";
 
 import { appConfig } from "../appConfig";
+import { TintedAlert } from "../components/TintedAlert";
 import { Dialog, DialogError, useDialogAction } from "../dialogs/Dialog";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
@@ -96,13 +97,13 @@ export function ExportConfigurationDialog({
       )}
       {/* HeroUI's own warning tint rather than its default surface, which is the dialog's own fill and
           leaves the callout unmarked. */}
-      <Alert status="warning" className="bg-warning-soft shadow-none">
+      <TintedAlert status="warning" className="shadow-none">
         <Alert.Indicator />
         <Alert.Content className="min-w-0">
           <Alert.Title>{t("configuration.export.paths.title")}</Alert.Title>
           <Alert.Description>{t("configuration.export.paths.description")}</Alert.Description>
         </Alert.Content>
-      </Alert>
+      </TintedAlert>
       <DialogError message={error} />
     </Dialog>
   );

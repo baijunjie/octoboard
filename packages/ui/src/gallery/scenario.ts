@@ -103,6 +103,8 @@ export interface Scenario {
   height?: number;
   /** Shown in place of the app; without it the real `App` is rendered over `state`. */
   startup?: Startup;
+  /** Shows the real code wrappers against the alert tones instead of the application. */
+  codePalette?: boolean;
   state?: Partial<State>;
   preferences?: Preferences;
   toasts?: ToastFixture[];
@@ -123,6 +125,8 @@ export interface Scenario {
    * request that is never answered. An agent not listed gets `SAMPLE_CLAUDE_MODELS` for Claude Code
    * and an empty list for the others. */
   agentModels?: Partial<Record<Agent, { models: AgentModel[]; unavailable?: ModelsUnavailable } | "pending">>;
+  /** A refused session launch, such as a shell environment that could not be read. */
+  sessionOpenError?: FixtureError;
   /** The files every project's browser shows (`list_project_dir`, `read_project_file`); without it,
    * `SAMPLE_FILES`. */
   files?: FixtureFiles;

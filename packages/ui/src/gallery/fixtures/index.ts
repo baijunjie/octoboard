@@ -44,4 +44,11 @@ export const SCENARIOS: Scenario[] = [
   ...configurationScenarios,
   ...viewerScenarios,
   ...layoutScenarios,
+  {
+    id: "code-colors",
+    group: "Component colors",
+    title: "Code colors and alert tones",
+    description: "Six code colors outside alerts, all requested colors inside each alert tone, wrapping blocks, nested tone priority and a code token after the alerts. Scroll to compare the complete palette; theme and language controls show the same view in dark and right-to-left layouts.",
+    codePalette: true,
+  },
 ];

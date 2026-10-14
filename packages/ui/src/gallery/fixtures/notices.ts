@@ -1,5 +1,6 @@
 import type { Scenario } from "../scenario";
 import { SAMPLE, projectOf, sessionOf, snapshotState } from "./builders";
+import { SHELL_TIMEOUT } from "./shellTimeout";
 
 const TRUST = "Trust prompts and toasts";
 
@@ -18,7 +19,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     title: "Queued trust prompts for all agents",
     description:
-      "Claude Code and Codex offer their projects' parent folders; the Grok Build project is the home directory itself, whose parent is too broad to offer. Each agent has its own caution and Codex names its repository-root trust. Not now advances through the three queued prompts.",
+      "Claude Code and Codex offer their projects' parent folders; the Grok Build project is the home directory itself, whose parent is too broad to offer. The warning's configuration-file token takes its tone while the project path stays neutral. Each agent has its own caution and Codex names its repository-root trust. Not now advances through the three queued prompts.",
     state: snapshotState({
       consoles: [console_],
       projects: [web, api, grokProject],
@@ -71,6 +72,14 @@ export const noticeScenarios: Scenario[] = [
       { kind: "error", code: "console_request_not_waiting", params: { session: "s-web-1" }, message: "", session: "s-web-1" },
       { kind: "error", code: "a_code_from_a_newer_daemon", params: {}, message: "The daemon's own English text, shown as is." },
     ],
+  },
+  {
+    id: "toast-shell-timeout",
+    group: TRUST,
+    title: "Shell environment timeout toast",
+    description: "One error toast presents the shell command as selectable code, then the cause, launch consequence and recovery.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [{ kind: "error", ...SHELL_TIMEOUT }],
   },
   {
     id: "toast-notice",

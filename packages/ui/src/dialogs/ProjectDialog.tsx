@@ -11,8 +11,9 @@ import {
   AGENT_PROJECT_MODEL_FIELD,
 } from "../agents";
 import { AGENT_ICON_OPTIONS, AgentIcon } from "../components/AgentIcon";
+import { InlineCode } from "../components/InlineCode";
 import type { PlainMessageKey } from "../i18n/catalog";
-import { useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import { tagVocabulary } from "../projectFiltering";
 import type { Agent, Project, ProjectAccount, ProjectSource } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
@@ -265,7 +266,19 @@ export function ProjectDialog({
           options={defaultAgentOptions}
           value={defaultAgent}
           onChange={setDefaultAgent}
-          description={!editing && source === "parent" ? t("dialog.project.agentDetectHint") : undefined}
+          description={
+            !editing && source === "parent" ? (
+              <Message
+                id="dialog.project.agentDetectHint"
+                params={{
+                  claudeFile: <InlineCode>CLAUDE.md</InlineCode>,
+                  agentsFile: <InlineCode>AGENTS.md</InlineCode>,
+                  claudeDir: <InlineCode>.claude</InlineCode>,
+                  codexDir: <InlineCode>.codex</InlineCode>,
+                }}
+              />
+            ) : undefined
+          }
           isDisabled={locked}
           account={
             agent && accountField && ownAccounts.length > 0

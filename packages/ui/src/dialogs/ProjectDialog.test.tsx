@@ -386,13 +386,34 @@ it("locks the launch settings and dims the group's label with the rest of the fo
   expect(group("Default agent").hasAttribute("data-disabled")).toBe(false);
 });
 
+it("keeps the dynamic rich detection hint attached to the single agent picker", async () => {
+  render();
+  await chooseSource("A parent directory");
+  const picker = pickerNamed("Default agent");
+  const described = picker.getAttribute("aria-describedby")?.split(" ").map((id) => document.getElementById(id));
+  const hint = described?.find((el) => el?.textContent?.includes("applies to every repository"));
+  expect(hint).toBeDefined();
+  expect(Array.from(hint!.querySelectorAll("code")).map((el) => el.textContent)).toEqual([
+    "CLAUDE.md", "AGENTS.md", ".claude", ".codex",
+  ]);
+  await click(buttons().find((b) => b.textContent?.includes("A parent directory")));
+  await choose("A single directory");
+  expect(pickerNamed("Default agent")).toBe(picker);
+  expect(picker.hasAttribute("aria-describedby")).toBe(false);
+  expect(document.getElementById(hint!.id)).toBeNull();
+});
+
 it("describes the joined agent and account group by the parent-directory hint", async () => {
   render(undefined, [work, personal]);
   await chooseSource("A parent directory");
   await click(buttons().find((b) => b.textContent?.includes("Detect from files")));
   await choose("Claude Code");
   const described = group("Default agent").getAttribute("aria-describedby");
-  expect(document.getElementById(described ?? "")?.textContent).toContain("applies to every repository");
+  const hint = document.getElementById(described ?? "");
+  expect(hint?.textContent).toContain("applies to every repository");
+  expect(Array.from(hint!.querySelectorAll("code")).map((el) => el.textContent)).toEqual([
+    "CLAUDE.md", "AGENTS.md", ".claude", ".codex",
+  ]);
 });
 
 it("asks for the models only once Advanced is opened, under the account the project resolves to", async () => {

@@ -1,6 +1,9 @@
 import { AlertDialog, Button, Modal } from "@heroui/react";
 import React, { useEffect, useId, useRef, useState } from "react";
 
+import { DaemonErrorMessage, DaemonErrorTitle } from "../components/DaemonErrorMessage";
+import { ErrorAlert } from "../components/ErrorAlert";
+import { errorPresentation, hasShellTimeoutDetails, type ErrorPresentation } from "../errorPresentation";
 import { takeMenuFocusToRestore } from "../components/ActionMenu";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
 import { TitledControl } from "../components/TitledControl";
@@ -18,12 +21,12 @@ import { useToastClearance } from "./useToastClearance";
  * busy state are cleared, and an action still running for the previous subject no longer reports
  * into them. */
 export function useDialogAction(resetKey?: string): {
-  error: string | undefined;
+  error: ErrorPresentation | undefined;
   setError: (message: string | undefined) => void;
   busy: boolean;
   run: (action: () => Promise<void>) => Promise<void>;
 } {
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<ErrorPresentation>();
   const [busy, setBusy] = useState(false);
   const [seenKey, setSeenKey] = useState(resetKey);
   const currentKey = useRef(resetKey);
@@ -42,7 +45,7 @@ export function useDialogAction(resetKey?: string): {
     try {
       await action();
     } catch (err) {
-      if (!stale()) setError((err as Error).message);
+      if (!stale()) setError(errorPresentation(err as Error));
     } finally {
       if (!stale()) setBusy(false);
     }
@@ -81,11 +84,11 @@ export function useSubmitValidation(): {
 
 /** A dialog's inline failure line, for the failure of the request itself; a field's own validation
  * belongs under that field. */
-export function DialogError({ message }: { message: string | undefined }): React.ReactElement | null {
+export function DialogError({ message }: { message: ErrorPresentation | undefined }): React.ReactElement | null {
   return message ? (
-    <p role="alert" className="text-sm text-danger">
-      {message}
-    </p>
+    <ErrorAlert title={typeof message !== "string" && hasShellTimeoutDetails(message) ? <DaemonErrorTitle /> : undefined}>
+      <DaemonErrorMessage error={message} showTitle={false} />
+    </ErrorAlert>
   ) : null;
 }
 

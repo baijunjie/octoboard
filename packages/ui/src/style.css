@@ -777,3 +777,20 @@ html.pane-resizing * {
 .session-branch[data-ancestor]::before {
   display: none;
 }
+
+/* Application literals only: Markdown, highlighted source and foreign code keep their renderer's
+   own palette. Colored literals add a stronger tint over their alert's matching soft fill. */
+.app-code[data-color="primary"] { --app-code-tone: var(--accent); }
+.app-code[data-color="secondary"] { --app-code-tone: var(--color-purple-500); }
+.app-code[data-color="success"] { --app-code-tone: var(--success); }
+.app-code[data-color="warning"] { --app-code-tone: var(--warning); }
+.app-code[data-color="danger"] { --app-code-tone: var(--danger); }
+.app-code[data-color]:not([data-color="default"]) {
+  background-color: color-mix(in oklab, var(--app-code-tone) 18%, transparent);
+  color: color-mix(in oklab, var(--app-code-tone) 40%, var(--foreground));
+}
+.app-code-block > .app-code {
+  font-size: inherit;
+  white-space: inherit;
+  overflow-wrap: inherit;
+}

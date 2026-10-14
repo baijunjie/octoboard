@@ -4,6 +4,7 @@ import React from "react";
 import { AgentIcon } from "../components/AgentIcon";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { StatusIcon } from "../components/StatusIcon";
+import { TintedAlert } from "../components/TintedAlert";
 import { ExportConfigurationDialog } from "../configuration/ExportConfigurationDialog";
 import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
 import { isolate } from "../i18n/isolate";
@@ -27,7 +28,7 @@ function SessionCallout({ title, sessions }: { title: string; sessions?: Session
   const t = useT();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   return (
-    <Alert status="warning" className="bg-warning-soft shadow-none">
+    <TintedAlert status="warning" className="shadow-none">
       <Alert.Indicator />
       <Alert.Content className="min-w-0">
         <Alert.Title>{title}</Alert.Title>
@@ -49,7 +50,7 @@ function SessionCallout({ title, sessions }: { title: string; sessions?: Session
           </ul>
         )}
       </Alert.Content>
-    </Alert>
+    </TintedAlert>
   );
 }
 

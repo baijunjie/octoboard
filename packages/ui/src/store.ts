@@ -4,6 +4,7 @@ import { useStore } from "zustand/react";
 
 import { DaemonClient, DaemonRequestError, type ConnectionState } from "./daemon-client";
 import { daemonMessage } from "./daemonMessage";
+import { errorPresentation } from "./errorPresentation";
 import { currentLanguage } from "./i18n/language";
 import { daemonWsUrl, type DaemonOrigin } from "./daemon";
 import {
@@ -30,6 +31,7 @@ import {
 export interface ToastRequest {
   kind: "error" | "notice";
   message: string;
+  daemonError?: DaemonRequestError;
   /** The session the toast is about, so the stack can say where it is. A daemon `notice` always
    * has one; a notice the UI raises itself (`toastNotice`) has none. An `error` has one only where
    * the call site knows which session the daemon's message is about — the daemon says "this
@@ -365,7 +367,7 @@ export interface Daemon {
   request: (body: RequestBody) => Promise<Event>;
   /** `session` is passed by a caller that knows which session the message is about, so the toast
    * can name it; see `ToastRequest.session`. */
-  toastError: (message: string, session?: string) => void;
+  toastError: (message: string | Error, session?: string) => void;
   /** Confirms something the user just did, which has no inline place to say so (a path copied);
    * about no session, so the toast is the message alone. */
   toastNotice: (message: string) => void;
@@ -407,6 +409,7 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
       // rejected promise instead — only a genuine daemon broadcast (no id) is a toast.
       emitToast({
         kind: "error",
+        daemonError: new DaemonRequestError(event.message, event.code, event.params),
         message: daemonMessage(currentLanguage(), event.code, event.params, event.message, store.getState()),
       });
     }
@@ -423,7 +426,11 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
         const message = daemonMessage(currentLanguage(), err.code, err.params, err.message, store.getState());
         throw new DaemonRequestError(message, err.code, err.params);
       }),
-    toastError: (message, session) => emitToast({ kind: "error", message, session }),
+    toastError: (message, session) => {
+      const presentation = typeof message === "string" ? message : errorPresentation(message);
+      emitToast({ kind: "error", message: typeof message === "string" ? message : message.message, session,
+        ...(typeof presentation !== "string" && { daemonError: presentation }) });
+    },
     toastNotice: (message) => emitToast({ kind: "notice", message }),
     onToast: (listener) => {
       toastListeners.add(listener);

@@ -42,6 +42,7 @@ export const GROUPS = [
   { title: "Configuration", icon: FileCog },
   { title: "Settings", icon: Settings },
   { title: "Window layout", icon: PanelsTopLeft },
+  { title: "Component colors", icon: FileText },
 ] as const satisfies readonly { title: string; icon: LucideIcon }[];
 
 /** What a scenario's `group` names. */

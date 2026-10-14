@@ -41,7 +41,7 @@ export const settingsScenarios: Scenario[] = [
     id: "settings-general",
     group: GROUP,
     title: "Browser General settings",
-    description: "Browser General settings. Other sections share the same mock data and can be explored manually.",
+    description: "The clone-directory explanation displays ~/Projects as selectable code. Other sections share the same mock data and can be explored manually.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -51,7 +51,7 @@ export const settingsScenarios: Scenario[] = [
     id: "settings-general-background-run",
     group: GROUP,
     title: "General, run in the background offered (desktop app)",
-    description: "The desktop app's extra row starts off. Switch it on and off to read both descriptions.",
+    description: "The clone-directory explanation displays ~/Projects as selectable code; the desktop app's extra background row starts off. Switch it on and off to read both descriptions.",
     state,
     backgroundRun: true,
     steps: [
@@ -108,6 +108,7 @@ export const settingsScenarios: Scenario[] = [
     id:"settings-accounts",
     group:GROUP,
     title:"Settings: accounts",
+    description: "The introduction displays PATH as code above the configured accounts and unavailable agents.",
     state:browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

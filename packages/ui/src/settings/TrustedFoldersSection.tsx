@@ -1,4 +1,5 @@
 import { Button } from "@heroui/react";
+import { errorPresentation } from "../errorPresentation";
 import { FolderOpen } from "lucide-react";
 import React from "react";
 
@@ -21,7 +22,7 @@ export function TrustedFoldersSection(): React.ReactElement {
   const directories = useDaemonStore((s) => s.trustedDirectories);
   useSectionRefocus([directories]);
   const remove = (path: string) =>
-    void request({ type: "remove_trusted_directory", path }).catch((err) => toastError((err as Error).message));
+    void request({ type: "remove_trusted_directory", path }).catch((err) => toastError(errorPresentation(err as Error)));
   return (
     <>
       <p className="pb-2 text-sm text-muted">

@@ -1,5 +1,5 @@
 import { Description, Label, ListBox, Select } from "@heroui/react";
-import React from "react";
+import React, { useId } from "react";
 
 /** One choice of an `OptionSelect`. */
 export type Option<T extends string> = {
@@ -52,11 +52,12 @@ export function OptionSelect<T extends string>({
   hideLabel?: boolean;
   isDisabled?: boolean;
   /** Extra explanation shown under the field. */
-  description?: string;
+  description?: React.ReactNode;
 } & (
   | { value: T; onChange: (value: T) => void; placeholder?: undefined }
   | { value: T | null; onChange: (value: T | null) => void; placeholder: string }
 )): React.ReactElement {
+  const descriptionId = useId();
   return (
     // HeroUI's variant for a field on a surface: every one of these sits in a dialog.
     <Select
@@ -67,6 +68,9 @@ export function OptionSelect<T extends string>({
       // is on the flex item, the root, which a trigger's own `z-index` would not be.
       className={inline ? "w-48" : joined ? "min-w-0 flex-1 has-[[data-focus-visible=true]]:z-10" : undefined}
       aria-label={inline || joined || hideLabel ? label : undefined}
+      // react-aria drops the slot's id when no note exists on mount and does not restore it when
+      // children alone change. Keep the association stable for notes that appear dynamically.
+      aria-describedby={description ? descriptionId : undefined}
       isDisabled={isDisabled}
       value={value}
       placeholder={placeholder}
@@ -122,7 +126,7 @@ export function OptionSelect<T extends string>({
           ))}
         </ListBox>
       </Select.Popover>
-      {description && <Description>{description}</Description>}
+      {description && <Description id={descriptionId}>{description}</Description>}
     </Select>
   );
 }

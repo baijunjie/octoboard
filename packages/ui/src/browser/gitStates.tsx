@@ -1,7 +1,7 @@
 import { Button, Spinner } from "@heroui/react";
-import { TriangleAlert } from "lucide-react";
 import React, { useRef } from "react";
 
+import { ErrorAlert } from "../components/ErrorAlert";
 import { useT } from "../i18n/react";
 
 /** The Git mode's loading line: what is being read. Seen only; a `StatusAnnouncer` mounted beside
@@ -29,12 +29,10 @@ export function GitFailure({
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   return (
-    <div ref={ref} className="flex flex-1 flex-col items-center justify-center gap-3 px-4 text-center text-sm">
-      <TriangleAlert aria-hidden="true" className="size-6 text-danger" />
-      <div role="alert" className="flex flex-col gap-1">
-        <p className="font-medium">{title}</p>
-        <p className="text-muted">{message}</p>
-      </div>
+    <div ref={ref} className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-sm">
+      <ErrorAlert title={title} className="w-full max-w-lg">
+        {message}
+      </ErrorAlert>
       <Button size="sm" variant="secondary" preventFocusOnPress onPress={() => onRetry(ref.current)}>
         {t("error.tryAgain")}
       </Button>

@@ -1,9 +1,10 @@
 import { Button, Spinner, Tabs } from "@heroui/react";
-import { FolderOpen, FolderX, RefreshCw, TriangleAlert } from "lucide-react";
+import { FolderOpen, FolderX, RefreshCw } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Key } from "react-aria-components";
 
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
+import { ErrorAlert } from "../components/ErrorAlert";
 import { handFocusOff } from "../components/handFocusOff";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { FADE_SIZE } from "../components/scrollFade";
@@ -271,12 +272,10 @@ function RootError({ message, onRetry }: { message: string; onRetry: (from: Elem
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   return (
-    <div ref={ref} className="flex flex-1 flex-col items-center justify-center gap-3 px-4 text-center text-sm">
-      <TriangleAlert aria-hidden="true" className="size-6 text-danger" />
-      <div role="alert" className="flex flex-col gap-1">
-        <p className="font-medium">{t("browser.error.root")}</p>
-        <p className="text-muted">{message}</p>
-      </div>
+    <div ref={ref} className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-sm">
+      <ErrorAlert title={t("browser.error.root")} className="w-full max-w-lg">
+        {message}
+      </ErrorAlert>
       <Button size="sm" variant="secondary" preventFocusOnPress onPress={() => onRetry(ref.current)}>
         {t("error.tryAgain")}
       </Button>
