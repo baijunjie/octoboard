@@ -35,7 +35,7 @@ it("stuckExit reports nothing for an exit that ends within the wait", async () =
 });
 
 it("tabToRegion sends Tab before it focuses the region its dialog's title names", async () => {
-  document.body.innerHTML = `<h2 id="title">Import configuration</h2><div role="region" tabindex="0" aria-labelledby="title"></div>`;
+  document.body.innerHTML = "<h2 id=\"title\">Import configuration</h2><div role=\"region\" tabindex=\"0\" aria-labelledby=\"title\"></div>";
   const region = document.querySelector<HTMLElement>("[role=region]")!;
   const seen: string[] = [];
   document.addEventListener("keydown", (event) => seen.push(`${event.key}:${document.activeElement === region}`), { once: true });
@@ -47,14 +47,14 @@ it("tabToRegion sends Tab before it focuses the region its dialog's title names"
 });
 
 it("tabToRegion fails where no region has the name, as in a window tall enough for the dialog", async () => {
-  document.body.innerHTML = `<h2 id="title">Import configuration</h2><div tabindex="-1" aria-labelledby="title"></div>`;
+  document.body.innerHTML = "<h2 id=\"title\">Import configuration</h2><div tabindex=\"-1\" aria-labelledby=\"title\"></div>";
   const done = expect(createUi(document, "en").tabToRegion("Import configuration")).rejects.toThrow(/No scroll region/);
   await vi.advanceTimersByTimeAsync(6000);
   await done;
 });
 
 it("press takes the control inside a band of the same name, not the band", async () => {
-  document.body.innerHTML = `<div role="row" id="band"><button id="fold">Staged15</button></div>`;
+  document.body.innerHTML = "<div role=\"row\" id=\"band\"><button id=\"fold\">Staged15</button></div>";
   const pressed: string[] = [];
   document.addEventListener("click", (event) => pressed.push((event.target as Element).id));
   const done = createUi(document, "en").press("Staged15");

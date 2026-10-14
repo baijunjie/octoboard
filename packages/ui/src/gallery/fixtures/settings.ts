@@ -14,27 +14,27 @@ const state = snapshotState({
 });
 
 const browserState: Scenario["state"] = {
-      ...state,
-      settings: {
-        auto_sync_repositories: false,
-        default_clone_dir: "/Users/dev/Projects",
-        accounts: [
-          { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
-          {
-            id: "a-long",
-            agent: "claude",
-            name: "Client",
-            config_dir: "/Users/dev/work/clients/acme-corporation/internal-platform/.claude-config",
-          },
-          { id: "a-codex", agent: "codex", name: "Personal", config_dir: "/Users/dev/.codex-personal" },
-        ],
+  ...state,
+  settings: {
+    auto_sync_repositories: false,
+    default_clone_dir: "/Users/dev/Projects",
+    accounts: [
+      { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
+      {
+        id: "a-long",
+        agent: "claude",
+        name: "Client",
+        config_dir: "/Users/dev/work/clients/acme-corporation/internal-platform/.claude-config",
       },
-      agentAvailability: new Map<Agent, AgentAvailability>([
-        ["claude", { agent: "claude", availability: "available", default_account_dir: "/Users/dev/.claude" }],
-        ["codex", { agent: "codex", availability: "unavailable", default_account_dir: "/Users/dev/.codex" }],
-        ["grok", { agent: "grok", availability: "not_determined" }],
-      ]),
-    };
+      { id: "a-codex", agent: "codex", name: "Personal", config_dir: "/Users/dev/.codex-personal" },
+    ],
+  },
+  agentAvailability: new Map<Agent, AgentAvailability>([
+    ["claude", { agent: "claude", availability: "available", default_account_dir: "/Users/dev/.claude" }],
+    ["codex", { agent: "codex", availability: "unavailable", default_account_dir: "/Users/dev/.codex" }],
+    ["grok", { agent: "grok", availability: "not_determined" }],
+  ]),
+};
 
 export const settingsScenarios: Scenario[] = [
   {
@@ -95,51 +95,51 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
-    id:"settings-git",
-    group:GROUP,
-    title:"Settings: git",
-    state:browserState,
+    id: "settings-git",
+    group: GROUP,
+    title: "Settings: git",
+    state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.git")),
     ],
   },
   {
-    id:"settings-accounts",
-    group:GROUP,
-    title:"Settings: accounts",
+    id: "settings-accounts",
+    group: GROUP,
+    title: "Settings: accounts",
     description: "The introduction displays PATH as code above the configured accounts and unavailable agents.",
-    state:browserState,
+    state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
     ],
   },
   {
-    id:"settings-trustedFolders",
-    group:GROUP,
-    title:"Settings: trustedFolders",
-    state:browserState,
+    id: "settings-trustedFolders",
+    group: GROUP,
+    title: "Settings: trustedFolders",
+    state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.trustedFolders")),
     ],
   },
   {
-    id:"settings-notifications",
-    group:GROUP,
-    title:"Settings: notifications",
-    state:browserState,
+    id: "settings-notifications",
+    group: GROUP,
+    title: "Settings: notifications",
+    state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.notifications")),
     ],
   },
   {
-    id:"settings-configuration",
-    group:GROUP,
-    title:"Settings: configuration",
-    state:browserState,
+    id: "settings-configuration",
+    group: GROUP,
+    title: "Settings: configuration",
+    state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.configuration")),

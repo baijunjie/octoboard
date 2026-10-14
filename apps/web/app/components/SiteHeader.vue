@@ -119,13 +119,13 @@ onBeforeUnmount(() => {
           :to="`${localePath('/')}#${section.id}`"
           :aria-current="activeSection === section.id ? 'location' : undefined"
           :class="{ active: activeSection === section.id }"
-          >{{ t(section.key) }}</NuxtLink
+        >{{ t(section.key) }}</NuxtLink
         >
       </nav>
       <div class="nav-actions">
         <LanguageSelect />
         <a :href="releasesUrl" class="button nav-cta"
-          ><SiteIcon name="download-simple" />{{ t("heroCta") }}</a
+        ><SiteIcon name="download-simple" />{{ t("heroCta") }}</a
         >
         <Teleport to="body" :disabled="!open">
           <div
@@ -160,11 +160,11 @@ onBeforeUnmount(() => {
                     :to="localePath('/')"
                     class="brand"
                     @click="closeMenu(false)"
-                    ><img
-                      :src="`${config.app.baseURL}wordmark.png`"
-                      :alt="config.public.appName"
-                      width="136"
-                      height="23" /></NuxtLink
+                  ><img
+                    :src="`${config.app.baseURL}wordmark.png`"
+                    :alt="config.public.appName"
+                    width="136"
+                    height="23" /></NuxtLink
                   ><span class="menu-close-space" aria-hidden="true" />
                 </div>
                 <nav class="overlay-links" :aria-label="t('navMenu')">
@@ -177,11 +177,11 @@ onBeforeUnmount(() => {
                       activeSection === section.id ? 'location' : undefined
                     "
                     @click="closeMenu(false)"
-                    ><span class="menu-number">0{{ index + 1 }}</span
-                    >{{ t(section.key)
-                    }}<SiteIcon
-                      name="arrow-right"
-                      class="menu-section-arrow" /></NuxtLink
+                  ><span class="menu-number">0{{ index + 1 }}</span
+                  >{{ t(section.key)
+                  }}<SiteIcon
+                    name="arrow-right"
+                    class="menu-section-arrow" /></NuxtLink
                   ><a
                     :href="config.public.repositoryUrl"
                     :style="{ '--link-order': 4 }"
@@ -189,11 +189,11 @@ onBeforeUnmount(() => {
                     <span class="menu-number">05</span>GitHub<span
                       class="link-arrow"
                       aria-hidden="true"
-                  /></a>
+                    /></a>
                 </nav>
                 <div class="menu-bottom">
                   <LanguageSelect /><a :href="releasesUrl" class="button"
-                    ><SiteIcon name="download-simple" />{{ t("heroCta") }}</a
+                  ><SiteIcon name="download-simple" />{{ t("heroCta") }}</a
                   >
                 </div>
               </div>

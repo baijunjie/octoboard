@@ -146,14 +146,14 @@ export function ConsoleDialog({
         account={
           accountEntries.length > 1
             ? {
-                label: accountLabel,
-                options: accountEntries.map((entry) => ({ value: entry.key, label: entry.name })),
-                value: choiceKey({ agent: defaultAgent, account: pickedAccount }),
-                onChange: (key) => {
-                  const entry = findEntry(groups, key);
-                  if (entry) setFields({ ...fields, [accountField]: entry.account });
-                },
-              }
+              label: accountLabel,
+              options: accountEntries.map((entry) => ({ value: entry.key, label: entry.name })),
+              value: choiceKey({ agent: defaultAgent, account: pickedAccount }),
+              onChange: (key) => {
+                const entry = findEntry(groups, key);
+                if (entry) setFields({ ...fields, [accountField]: entry.account });
+              },
+            }
             : undefined
         }
       />

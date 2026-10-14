@@ -119,11 +119,11 @@ export function createPreviewDaemon(scenario: Scenario): Daemon {
               : from.kind === "index"
                 ? { kind: "index", worktree, blob: repository.blob(text) }
                 : {
-                    kind: "commit",
-                    commit: repository.head,
-                    branch: from.kind === "branch" ? from.branch : null,
-                    blob: repository.blob(text),
-                  },
+                  kind: "commit",
+                  commit: repository.head,
+                  branch: from.kind === "branch" ? from.branch : null,
+                  blob: repository.blob(text),
+                },
           file: {
             ...reply.file,
             text,

@@ -242,7 +242,9 @@ async function launchBrowser(chromium, executablePath, ownPlaywright) {
     let expected = "unknown";
     try {
       expected = chromium.executablePath();
-    } catch {}
+    } catch {
+      // The diagnostic is optional when Playwright cannot locate its browser.
+    }
     console.error(`Playwright's own Chromium is not downloaded (it expects ${expected}); using the newest headless shell in its cache, ${cached}`);
     return launchAt(chromium, cached);
   }

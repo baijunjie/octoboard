@@ -61,7 +61,7 @@
       "sizes",
       "nonce",
     ],
-    ALLOWED_URI_REGEXP: /^(?:(?![\/\\]{2})[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+    ALLOWED_URI_REGEXP: /^(?:(?![/\\]{2})[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))/i,
   });
   var leftover = clean.querySelector(NETWORK_TAGS.concat(INERT_TAGS).join(", "));
   if (leftover) {

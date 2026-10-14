@@ -11,12 +11,12 @@ const localePath = useLocalePath();
         :to="localePath('/')"
         class="brand footer-brand"
         :aria-label="config.public.appName"
-        ><img
-          :src="`${config.app.baseURL}wordmark.png`"
-          alt=""
-          width="151"
-          height="25"
-          loading="lazy"
+      ><img
+        :src="`${config.app.baseURL}wordmark.png`"
+        alt=""
+        width="151"
+        height="25"
+        loading="lazy"
       /></NuxtLink>
       <p>{{ t("footerTagline") }}</p>
     </div>
@@ -27,7 +27,7 @@ const localePath = useLocalePath();
           class="github-link"
           aria-label="GitHub"
           title="GitHub"
-          ><SiteIcon name="github-logo" /></a
+        ><SiteIcon name="github-logo" /></a
         ><NuxtLink :to="localePath('/privacy/')">{{
           t("footerPrivacy")
         }}</NuxtLink

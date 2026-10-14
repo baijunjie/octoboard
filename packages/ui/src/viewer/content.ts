@@ -20,13 +20,13 @@ export function isMarkdownName(name: string): boolean {
 export type ViewerBody =
   | { kind: "text"; text: string; size: number }
   | {
-      kind: "image";
-      mediaType: string;
-      url: string;
-      size: number;
-      /** An SVG's own text, shown as code when the image cannot be decoded. */
-      text?: string;
-    }
+    kind: "image";
+    mediaType: string;
+    url: string;
+    size: number;
+    /** An SVG's own text, shown as code when the image cannot be decoded. */
+    text?: string;
+  }
   | { kind: "binary"; size: number };
 
 /** One side of a change, mirroring the daemon's `ChangeSide` (see "Changes and comparisons" in

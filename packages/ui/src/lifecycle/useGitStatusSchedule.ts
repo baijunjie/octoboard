@@ -35,8 +35,8 @@ export function useGitStatusSchedule(consoleId: string | undefined): void {
     useShallow((s) =>
       consoleId
         ? Array.from(s.projects.values())
-            .filter((p) => p.console_id === consoleId)
-            .map((p) => p.id)
+          .filter((p) => p.console_id === consoleId)
+          .map((p) => p.id)
         : [],
     ),
   );

@@ -8,7 +8,7 @@ const command = IS_MAC ? { metaKey: true, ctrlKey: false } : { metaKey: false, c
 const other = IS_MAC ? { metaKey: false, ctrlKey: true } : { metaKey: true, ctrlKey: false };
 
 beforeEach(() => {
-  document.body.innerHTML = `<h2>name.ts</h2><div id="frame"></div><p>4 kB</p>`;
+  document.body.innerHTML = "<h2>name.ts</h2><div id=\"frame\"></div><p>4 kB</p>";
   document.getSelection()!.removeAllRanges();
 });
 
@@ -33,7 +33,7 @@ it("selects the code of a plain-text frame and nothing around it", () => {
 
 it("reports a selection the browser ignored across the shadow root", () => {
   const root = frame().appendChild(document.createElement("div")).attachShadow({ mode: "open" });
-  root.innerHTML = `<div data-gutter>1\n2</div><div data-content>one\n</div><div data-content>two</div>`;
+  root.innerHTML = "<div data-gutter>1\n2</div><div data-content>one\n</div><div data-content>two</div>";
   // jsdom, like a browser that keeps a document selection out of shadow trees, leaves it empty.
   expect(selectCode(frame())).toBe(false);
   expect(document.getSelection()!.toString()).toBe("");

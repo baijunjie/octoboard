@@ -48,7 +48,7 @@ describe("the fold button over a console", () => {
   it("stays on expand after a collapse until every project is opened by hand", () => {
     expect(projectFoldControl(false, ids, collapsed("a", "b", "c"))).toBe("collapse");
 
-    let pin = pinAfterFoldAction("collapse");
+    const pin = pinAfterFoldAction("collapse");
     let state = step(pin, []);
     expect(state).toEqual({ pin: true, control: "expand" });
 
@@ -66,7 +66,7 @@ describe("the fold button over a console", () => {
   });
 
   it("flips on a press that a filter kept from reaching every project, then waits for the rest", () => {
-    let pin = pinAfterFoldAction("collapse");
+    const pin = pinAfterFoldAction("collapse");
     // The press collapsed a and b. c stayed expanded because the filter hid it.
     let state = step(pin, ["c"]);
     expect(state).toEqual({ pin: true, control: "expand" });

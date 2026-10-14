@@ -153,17 +153,17 @@ const dialogState = {
 };
 
 const dialogFixture = { state: dialogState, directories: { "/Users/dev": HOME_LISTING }, detections: { ...{ "~/code/slow": "pending" },
-      ...{ "~/code/site": { agent: "codex" } },
-      ...{
-      "~/code/missing": { code: "path_not_found", params: { path: "/Users/me/code/missing" }, message: "`/Users/me/code/missing` does not exist" },
+  ...{ "~/code/site": { agent: "codex" } },
+  ...{
+    "~/code/missing": { code: "path_not_found", params: { path: "/Users/me/code/missing" }, message: "`/Users/me/code/missing` does not exist" },
+  },
+  ...{
+    "git@example.com:o/private.git": {
+      code: "git_remote_unreachable",
+      params: { detail: "Permission denied (publickey)." },
+      message: "the repository could not be read: Permission denied (publickey).",
     },
-      ...{
-      "git@example.com:o/private.git": {
-        code: "git_remote_unreachable",
-        params: { detail: "Permission denied (publickey)." },
-        message: "the repository could not be read: Permission denied (publickey).",
-      },
-    } } } satisfies Partial<Scenario>;
+  } } } satisfies Partial<Scenario>;
 
 // Session settings initially reflect the selected agent's project defaults. Both agents have
 // usable stored values so changing the agent lets the same view show either model list.

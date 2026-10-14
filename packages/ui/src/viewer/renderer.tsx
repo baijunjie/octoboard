@@ -335,17 +335,17 @@ export const RenderedDiff = memo(function RenderedDiff({
     () =>
       fileDiff
         ? new Expansion({
-            load: () => latest.current.loadBodies!(),
-            labels: () => latest.current.labels,
-            trailing: () => {
-              const lines = latest.current.trailing;
-              return lines === undefined ? undefined : { gap: fileDiff.hunks.length, lines };
-            },
-            report: (status) => latest.current.onExpansion?.(status),
-            showAll: () => setEnded({ diff: fileDiff, how: "all" }),
-            stop: () => setEnded({ diff: fileDiff, how: "stopped" }),
-            onLabels,
-          })
+          load: () => latest.current.loadBodies!(),
+          labels: () => latest.current.labels,
+          trailing: () => {
+            const lines = latest.current.trailing;
+            return lines === undefined ? undefined : { gap: fileDiff.hunks.length, lines };
+          },
+          report: (status) => latest.current.onExpansion?.(status),
+          showAll: () => setEnded({ diff: fileDiff, how: "all" }),
+          stop: () => setEnded({ diff: fileDiff, how: "stopped" }),
+          onLabels,
+        })
         : undefined,
     [fileDiff],
   );

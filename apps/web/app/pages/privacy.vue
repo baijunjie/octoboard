@@ -15,7 +15,7 @@ useSeoMeta({
 <template>
   <main id="main-content" class="privacy-page wrap">
     <NuxtLink class="text-link privacy-back" :to="localePath('/')"
-      ><span aria-hidden="true">←</span> {{ t("privacyBack") }}</NuxtLink
+    ><span aria-hidden="true">←</span> {{ t("privacyBack") }}</NuxtLink
     >
     <header class="privacy-heading">
       <p class="eyebrow">{{ t("privacyEyebrow") }}</p>
@@ -37,12 +37,12 @@ useSeoMeta({
             v-if="section === 'Website'"
             class="text-link"
             :href="githubPrivacyUrl"
-            >{{ t("privacyGithubLink") }} ↗</a
+          >{{ t("privacyGithubLink") }} ↗</a
           ><a
             v-if="section === 'Contact'"
             class="text-link"
             :href="`mailto:${config.public.contactEmail}`"
-            >{{ config.public.contactEmail }} ↗</a
+          >{{ config.public.contactEmail }} ↗</a
           >
         </div>
       </section>

@@ -476,7 +476,7 @@ const SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" vie
 </svg>
 `;
 
-const BROKEN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"`;
+const BROKEN_SVG = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\"><rect width=\"10\" height=\"10\"";
 
 const MIXED_DIRECTION = `// مرحبا — a comment in Arabic, and one in Japanese: こんにちは、世界
 export const greeting = { ar: "مرحبا بالعالم", ja: "こんにちは", en: "Hello" };
@@ -510,7 +510,7 @@ function generated(lines: number, line: (index: number) => string): string {
 }
 // Most entries are short; every hundredth carries the request that was served as one unbroken line,
 // so the plain text scrolls sideways as well as down.
-const LOG_REQUEST = `GET /api/v1/projects/octoboard/sessions?filter[status]=waiting&filter[agent]=claude&include=console,branch,changes&sort=-lastActivity&page[size]=200 {"user":"anonymous","agent":"octoboard-ui/1.4.2","trace":"3fa85f64-5717-4562-b3fc-2c963f66afa6"}`;
+const LOG_REQUEST = "GET /api/v1/projects/octoboard/sessions?filter[status]=waiting&filter[agent]=claude&include=console,branch,changes&sort=-lastActivity&page[size]=200 {\"user\":\"anonymous\",\"agent\":\"octoboard-ui/1.4.2\",\"trace\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\"}";
 const largeLog = () =>
   generated(40_000, (i) => {
     const entry = `2026-10-08T12:${String(i % 60).padStart(2, "0")}:00Z INFO request ${i} served in ${i % 97} ms`;

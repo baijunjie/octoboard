@@ -14,7 +14,7 @@ defineProps<{
         number
       }}</span>
       <span class="eyebrow"
-        ><span class="red-square" aria-hidden="true" />{{ label }}</span
+      ><span class="red-square" aria-hidden="true" />{{ label }}</span
       >
       <span class="section-rule" aria-hidden="true" />
     </div>

@@ -242,7 +242,7 @@ describe("a scroll container in the UI package", () => {
 });
 
 describe("the scan", () => {
-  const bare = `const A = () => <div className="max-h-40 overflow-y-auto p-1">x</div>;`;
+  const bare = "const A = () => <div className=\"max-h-40 overflow-y-auto p-1\">x</div>;";
 
   it("reports a scroll container with no fade, with its line", () => {
     expect(findUnfadedScrollers(`const a = 1;\n${bare}`)).toEqual([{ line: 2, text: "overflow-y-auto" }]);
@@ -254,19 +254,19 @@ describe("the scan", () => {
   });
 
   it("reports the other spellings of a scroll container", () => {
-    expect(findUnfadedScrollers(`<div className="overflow-scroll" />`)).toHaveLength(1);
-    expect(findUnfadedScrollers(`<div className="docked:overflow-x-auto" />`)).toHaveLength(1);
-    expect(findUnfadedScrollers(`<div style={{ overflowY: "auto" }} />`)).toHaveLength(1);
-    expect(findUnfadedScrollers(`<div className="[overflow:auto]" />`)).toHaveLength(1);
+    expect(findUnfadedScrollers("<div className=\"overflow-scroll\" />")).toHaveLength(1);
+    expect(findUnfadedScrollers("<div className=\"docked:overflow-x-auto\" />")).toHaveLength(1);
+    expect(findUnfadedScrollers("<div style={{ overflowY: \"auto\" }} />")).toHaveLength(1);
+    expect(findUnfadedScrollers("<div className=\"[overflow:auto]\" />")).toHaveLength(1);
   });
 
   it("passes the same container faded through FadedScroller", () => {
-    const source = `const A = () => <FadedScroller region={region} className="max-h-40 overflow-y-auto p-1">x</FadedScroller>;`;
+    const source = "const A = () => <FadedScroller region={region} className=\"max-h-40 overflow-y-auto p-1\">x</FadedScroller>;";
     expect(findUnfadedScrollers(source)).toEqual([]);
   });
 
   it("passes the same container faded through useScrollFade, including a template literal", () => {
-    expect(findUnfadedScrollers(`const fade = useScrollFade({ className: "max-h-40 overflow-y-auto p-1" });`)).toEqual([]);
+    expect(findUnfadedScrollers("const fade = useScrollFade({ className: \"max-h-40 overflow-y-auto p-1\" });")).toEqual([]);
     const source = "const fade = useScrollFade<HTMLPreElement>({\n  ref,\n  className: `min-h-0 overflow-auto ${wrap ? \"a\" : \"b\"}`,\n});";
     expect(findUnfadedScrollers(source)).toEqual([]);
   });
@@ -277,17 +277,17 @@ describe("the scan", () => {
   });
 
   it("ignores comments and a scroll utility named only in prose", () => {
-    const source = `// overflow-auto here\n/* and overflow-y-auto\n   here */\nconst a = 1;`;
+    const source = "// overflow-auto here\n/* and overflow-y-auto\n   here */\nconst a = 1;";
     expect(findUnfadedScrollers(source)).toEqual([]);
   });
 
   it("does not take a // inside a string for a comment", () => {
-    const source = `const url = "http://x"; const b = <div className="overflow-auto" />;`;
+    const source = "const url = \"http://x\"; const b = <div className=\"overflow-auto\" />;";
     expect(findUnfadedScrollers(source)).toHaveLength(1);
   });
 
   it("does not treat clipping as scrolling", () => {
-    expect(findUnfadedScrollers(`<div className="overflow-hidden overflow-visible overflow-clip" />`)).toEqual([]);
+    expect(findUnfadedScrollers("<div className=\"overflow-hidden overflow-visible overflow-clip\" />")).toEqual([]);
   });
 
   it("reports a scroll container declared in a stylesheet", () => {
@@ -301,16 +301,16 @@ describe("the scan", () => {
   });
 
   it("reports ScrollShadow named outside a comment, and only there", () => {
-    expect(findScrollShadowUse(`import { ScrollShadow } from "@heroui/react";`)).toHaveLength(1);
-    expect(findScrollShadowUse(`import * as H from "@heroui/react";\nconst S = H.ScrollShadow;`)).toHaveLength(1);
-    expect(findScrollShadowUse(`// a bare ScrollShadow\nimport { useScrollShadow } from "x";`)).toEqual([]);
+    expect(findScrollShadowUse("import { ScrollShadow } from \"@heroui/react\";")).toHaveLength(1);
+    expect(findScrollShadowUse("import * as H from \"@heroui/react\";\nconst S = H.ScrollShadow;")).toHaveLength(1);
+    expect(findScrollShadowUse("// a bare ScrollShadow\nimport { useScrollShadow } from \"x\";")).toEqual([]);
   });
 
   it("lets an exemption cover only the occurrences it declares", () => {
     const exempt: Exemption[] = [
       { surface: "main", reason: "r", seen: true, site: { file: "App.tsx", text: "overflow-x-auto" } },
     ];
-    const source = `<main className="overflow-x-auto" />\n<div className="overflow-x-auto" />`;
+    const source = "<main className=\"overflow-x-auto\" />\n<div className=\"overflow-x-auto\" />";
     const problems = unfadedProblems("App.tsx", source, exempt);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain("App.tsx:2");

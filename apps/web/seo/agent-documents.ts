@@ -173,13 +173,13 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
       text(`feature${feature.key}Description`),
       ...(feature.key === "Three"
         ? [
-            collaborationScenarios
-              .map(
-                (scenario) =>
-                  `- **${text(`featureThree${scenario}Title`)}** — ${text(`featureThree${scenario}Description`)}`,
-              )
-              .join("\n"),
-          ]
+          collaborationScenarios
+            .map(
+              (scenario) =>
+                `- **${text(`featureThree${scenario}Title`)}** — ${text(`featureThree${scenario}Description`)}`,
+            )
+            .join("\n"),
+        ]
         : []),
     ]),
     heading(2, text("localTitle")),

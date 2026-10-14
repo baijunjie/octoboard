@@ -282,20 +282,20 @@ export function ProjectDialog({
           account={
             agent && accountField && ownAccounts.length > 0
               ? {
-                  label: t("dialog.agentSettings.account", { agent: AGENT_LABEL[agent] }),
-                  options: [
-                    {
-                      value: accountValue(INHERIT),
-                      label: t("dialog.project.accountInherit", {
-                        account: ownAccounts.find((account) => account.id === consoleAccountId)?.name ?? t("settings.accounts.defaultName"),
-                      }),
-                    },
-                    { value: accountValue({ kind: "default" }), label: t("settings.accounts.defaultName") },
-                    ...ownAccounts.map((account) => ({ value: accountValue({ kind: "account", id: account.id }), label: account.name })),
-                  ],
-                  value: accountValue(picked),
-                  onChange: (value) => setAccountFields({ ...accountFields, [accountField]: accountOfValue(value) }),
-                }
+                label: t("dialog.agentSettings.account", { agent: AGENT_LABEL[agent] }),
+                options: [
+                  {
+                    value: accountValue(INHERIT),
+                    label: t("dialog.project.accountInherit", {
+                      account: ownAccounts.find((account) => account.id === consoleAccountId)?.name ?? t("settings.accounts.defaultName"),
+                    }),
+                  },
+                  { value: accountValue({ kind: "default" }), label: t("settings.accounts.defaultName") },
+                  ...ownAccounts.map((account) => ({ value: accountValue({ kind: "account", id: account.id }), label: account.name })),
+                ],
+                value: accountValue(picked),
+                onChange: (value) => setAccountFields({ ...accountFields, [accountField]: accountOfValue(value) }),
+              }
               : undefined
           }
         />

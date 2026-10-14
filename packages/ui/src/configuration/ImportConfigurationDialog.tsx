@@ -159,12 +159,12 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       : stage.kind === "review"
         ? { footer: reviewFooter, onSubmit: apply }
         : {
-            footer: (
-              <Button type="button" onPress={onClose}>
-                {t("common.close")}
-              </Button>
-            ),
-          };
+          footer: (
+            <Button type="button" onPress={onClose}>
+              {t("common.close")}
+            </Button>
+          ),
+        };
 
   return (
     <Dialog

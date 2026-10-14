@@ -116,12 +116,12 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
       : git?.comparisons?.[`${body.left.branch}..${body.right.branch}`];
     const found = Array.isArray(changes)
       ? changes.find(
-          ({ entry }) =>
-            entry.group !== "conflicted" &&
+        ({ entry }) =>
+          entry.group !== "conflicted" &&
             (!asked || entry.group === body.change.group) &&
             sameSide(entry.old, body.change.old) &&
             sameSide(entry.new, body.change.new),
-        )
+      )
       : undefined;
     if (!found || found.entry.group === "conflicted") return noBodies();
     // The two refusals the daemon makes from the request alone, before it resolves the change at
@@ -241,9 +241,9 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
         const changes = git?.changes[worktree];
         const found = Array.isArray(changes)
           ? changes.find(
-              ({ entry }) =>
-                entry.group === body.change.group && sameSide(entry.old, body.change.old) && sameSide(entry.new, body.change.new),
-            )
+            ({ entry }) =>
+              entry.group === body.change.group && sameSide(entry.old, body.change.old) && sameSide(entry.new, body.change.new),
+          )
           : undefined;
         if (!found || found.entry.group === "conflicted" || found.entry.group === "committed") {
           return fail({ code: "file_not_found", params: { path: "" }, message: "no such change" });

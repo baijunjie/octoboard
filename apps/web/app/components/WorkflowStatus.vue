@@ -27,7 +27,7 @@ const messagePaths = [
   >
     <span class="status-glyph" aria-hidden="true">
       <span v-if="status === 'working'" class="working-dot"
-        ><span class="working-ping"
+      ><span class="working-ping"
       /></span>
       <svg
         v-else

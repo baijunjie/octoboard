@@ -96,13 +96,13 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
     const own: Line[] =
       console.status === "failed"
         ? [
-            {
-              console: console.name,
-              project: undefined,
-              status: "failed",
-              detail: console.error ? failureText(console.error) : "",
-            },
-          ]
+          {
+            console: console.name,
+            project: undefined,
+            status: "failed",
+            detail: console.error ? failureText(console.error) : "",
+          },
+        ]
         : console.projects.length === 0
           ? [{ console: console.name, project: undefined, status: "created", detail: "" }]
           : [];
@@ -242,16 +242,16 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
                 <li key={index} className="[overflow-wrap:anywhere]" dir="auto">
                   {fallback.project === undefined
                     ? t("configuration.import.result.fallback.console", {
-                        agent,
-                        name: fallback.name,
-                        console: fallback.console,
-                      })
+                      agent,
+                      name: fallback.name,
+                      console: fallback.console,
+                    })
                     : t("configuration.import.result.fallback.project", {
-                        agent,
-                        name: fallback.name,
-                        project: fallback.project,
-                        console: fallback.console,
-                      })}
+                      agent,
+                      name: fallback.name,
+                      project: fallback.project,
+                      console: fallback.console,
+                    })}
                 </li>
               );
             })}

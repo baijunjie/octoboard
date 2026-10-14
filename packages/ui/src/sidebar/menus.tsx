@@ -86,15 +86,15 @@ export function projectMenu(
     { label: t("sidebar.project.openTerminal"), icon: Terminal, onClick: () => handlers.onOpenProjectTerminal(project) },
     ...(gitRepository
       ? [
-          {
-            label: t("sidebar.project.git"),
-            icon: GitBranch,
-            items: [
-              { label: t("sidebar.project.syncGit"), icon: RefreshCw, onClick: () => handlers.onSyncProjectGit(project) },
-              { label: t("sidebar.project.pushBranch"), icon: Upload, onClick: () => handlers.onPushProjectBranch(project) },
-            ],
-          },
-        ]
+        {
+          label: t("sidebar.project.git"),
+          icon: GitBranch,
+          items: [
+            { label: t("sidebar.project.syncGit"), icon: RefreshCw, onClick: () => handlers.onSyncProjectGit(project) },
+            { label: t("sidebar.project.pushBranch"), icon: Upload, onClick: () => handlers.onPushProjectBranch(project) },
+          ],
+        },
+      ]
       : []),
     "separator",
     ...(placement === "focused" ? [] : [pinItem(t, project.pinned, () => handlers.onSetPinned({ project }, !project.pinned))]),

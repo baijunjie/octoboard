@@ -36,32 +36,32 @@ export function useSiteSeo() {
     const contentPage = kind.value === "home" || kind.value === "privacy";
     const graph = contentPage
       ? JSON.stringify(
-          buildJsonLd({
-            page: kind.value === "privacy" ? "privacy" : "home",
-            canonical: canonical.value,
-            websiteUrl: languageHomeUrl(siteUrl, code.value),
-            language: locale.value.language,
-            title: title.value,
-            description: description.value,
-            siteName: config.public.appName,
-            siteDescription: siteDescription.value,
-            origin: config.public.siteOrigin,
-            siteUrl,
-            operatorName: config.public.operatorName,
-            contactEmail: config.public.contactEmail,
-            repositoryUrl: config.public.repositoryUrl,
-            logoUrl: `${siteUrl}logo.png`,
-            licenseUrl: `${config.public.repositoryUrl}/blob/main/LICENSE`,
-            languages: locales.map((item) => item.language),
-            featureTitles: homeFeatures.map((feature) =>
-              t(`feature${feature.key}Title`),
-            ),
-            questions: homeQuestions.map((question) => ({
-              question: t(`faq${question}Question`),
-              answer: t(`faq${question}Answer`),
-            })),
-          }),
-        ).replaceAll("<", "\\u003c")
+        buildJsonLd({
+          page: kind.value === "privacy" ? "privacy" : "home",
+          canonical: canonical.value,
+          websiteUrl: languageHomeUrl(siteUrl, code.value),
+          language: locale.value.language,
+          title: title.value,
+          description: description.value,
+          siteName: config.public.appName,
+          siteDescription: siteDescription.value,
+          origin: config.public.siteOrigin,
+          siteUrl,
+          operatorName: config.public.operatorName,
+          contactEmail: config.public.contactEmail,
+          repositoryUrl: config.public.repositoryUrl,
+          logoUrl: `${siteUrl}logo.png`,
+          licenseUrl: `${config.public.repositoryUrl}/blob/main/LICENSE`,
+          languages: locales.map((item) => item.language),
+          featureTitles: homeFeatures.map((feature) =>
+            t(`feature${feature.key}Title`),
+          ),
+          questions: homeQuestions.map((question) => ({
+            question: t(`faq${question}Question`),
+            answer: t(`faq${question}Answer`),
+          })),
+        }),
+      ).replaceAll("<", "\\u003c")
       : "";
     return {
       meta: [
@@ -73,22 +73,22 @@ export function useSiteSeo() {
       ],
       link: contentPage
         ? [
-            {
-              rel: "alternate",
-              type: "text/markdown",
-              href: markdownUrl(siteUrl, route.path),
-            },
-            defineLink({ rel: "describedby", href: `${siteUrl}llms.txt` }),
-          ]
+          {
+            rel: "alternate",
+            type: "text/markdown",
+            href: markdownUrl(siteUrl, route.path),
+          },
+          defineLink({ rel: "describedby", href: `${siteUrl}llms.txt` }),
+        ]
         : [],
       script: contentPage
         ? [
-            {
-              key: "site-schema",
-              type: "application/ld+json",
-              innerHTML: graph,
-            },
-          ]
+          {
+            key: "site-schema",
+            type: "application/ld+json",
+            innerHTML: graph,
+          },
+        ]
         : [],
     };
   });

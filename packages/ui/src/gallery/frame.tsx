@@ -83,19 +83,19 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
     configurationFile: configuration?.unavailable
       ? undefined
       : {
-          save: async (suggestedName) => {
-            if (configuration?.saveError !== undefined) throw new Error(configuration.saveError);
-            return configuration?.downloads ? { kind: "handedOver" } : { kind: "saved", name: suggestedName };
-          },
-          open: async () => {
-            const readError = configuration?.readError;
-            if (typeof readError === "string") throw new ConfigurationFileError("io", readError);
-            if (readError !== undefined) throw new ConfigurationFileError(readError.kind);
-            if (configuration?.file === "pending") return new Promise<never>(() => {});
-            const file = configuration?.file ?? { name: "octoboard-configuration.json", text: EMPTY_DOCUMENT };
-            return file === "dismissed" ? undefined : file;
-          },
+        save: async (suggestedName) => {
+          if (configuration?.saveError !== undefined) throw new Error(configuration.saveError);
+          return configuration?.downloads ? { kind: "handedOver" } : { kind: "saved", name: suggestedName };
         },
+        open: async () => {
+          const readError = configuration?.readError;
+          if (typeof readError === "string") throw new ConfigurationFileError("io", readError);
+          if (readError !== undefined) throw new ConfigurationFileError(readError.kind);
+          if (configuration?.file === "pending") return new Promise<never>(() => {});
+          const file = configuration?.file ?? { name: "octoboard-configuration.json", text: EMPTY_DOCUMENT };
+          return file === "dismissed" ? undefined : file;
+        },
+      },
   };
 }
 

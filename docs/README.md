@@ -215,8 +215,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Catching a branch up with its target](memory/catching-a-branch-up-with-its-target.md) — which branches the revert
   gate guards, why a guarded branch that has been pushed cannot be rebased onto a target branch that has moved, and
   merging as the way through.
-- [Line wrapping](memory/line-wrapping.md) — the widths committed text is wrapped at, why nothing in the toolchain
-  catches an over-long line (and so why an edit re-wraps the whole paragraph it touched), and why a width is counted
+- [Line wrapping](memory/line-wrapping.md) — the widths committed text is wrapped at, why format checks do not enforce
+  prose width (and so why an edit re-wraps the whole paragraph it touched), and why a width is counted
   in characters rather than bytes.
 - [Probing agent CLIs](memory/probing-agent-clis.md) — how to establish what the three agent CLIs actually do, and how
   to probe a live Octoboard session that launches them: which session markers to strip and why enumerating them beats

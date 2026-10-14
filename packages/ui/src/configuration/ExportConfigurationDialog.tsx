@@ -16,6 +16,7 @@ type Scope = "console" | "all";
  * what a file name cannot hold taken out. */
 export function exportFileName(console?: Pick<Console, "name">): string {
   const base = appConfig.name.toLowerCase();
+  // eslint-disable-next-line no-control-regex -- File names cannot contain control characters.
   const safe = console?.name.replace(/[\u0000-\u001f\u007f/\\:*?"<>|]/g, " ").replace(/\s+/g, " ").trim();
   return safe ? `${base}-${safe}.json` : `${base}-configuration.json`;
 }
@@ -54,7 +55,7 @@ export function ExportConfigurationDialog({
       try {
         saved = await configurationFile.save(exportFileName(exported), `${JSON.stringify(reply.document, null, 2)}\n`);
       } catch (err) {
-        throw new Error(fileFailureText(t, err, "configuration.export.failed"));
+        throw new Error(fileFailureText(t, err, "configuration.export.failed"), { cause: err });
       }
       if (saved === undefined) return;
       toastNotice(saved.kind === "saved" ? t("configuration.export.saved", { name: saved.name }) : t("configuration.export.downloaded"));

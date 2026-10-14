@@ -46,18 +46,18 @@ useSeoMeta({
           <p class="hero-description">{{ t("heroDescription") }}</p>
           <div class="hero-actions">
             <a :href="releasesUrl" class="button"
-              ><SiteIcon name="download-simple" />{{ t("heroCta") }}</a
+            ><SiteIcon name="download-simple" />{{ t("heroCta") }}</a
             >
             <a
               :href="config.public.repositoryUrl"
               class="github-link"
               :aria-label="t('heroSecondary')"
               :title="t('heroSecondary')"
-              ><SiteIcon name="github-logo"
+            ><SiteIcon name="github-logo"
             /></a>
             <a href="#product-preview" class="text-link"
-              >{{ t("previewEyebrow")
-              }}<span class="link-arrow" aria-hidden="true"
+            >{{ t("previewEyebrow")
+            }}<span class="link-arrow" aria-hidden="true"
             /></a>
           </div>
           <p class="hero-note">{{ t("heroNote") }}</p>
@@ -83,19 +83,19 @@ useSeoMeta({
           <span class="eyebrow">{{ t("heroAgentLabel") }}</span>
           <div>
             <span v-for="agent in heroAgents" :key="agent.icon"
-              ><img
-                :src="`${config.app.baseURL}agents/${agent.icon}.svg`"
-                alt=""
-                width="24"
-                height="24"
-              />{{ agent.name }}</span
+            ><img
+              :src="`${config.app.baseURL}agents/${agent.icon}.svg`"
+              alt=""
+              width="24"
+              height="24"
+            />{{ agent.name }}</span
             >
           </div>
         </div>
         <div class="hero-end">
           <span class="hero-status">{{ t("heroStatus") }}</span
           ><a href="#benefits" class="explore-link"
-            >{{ t("heroScroll") }}<span class="down-arrow" aria-hidden="true"
+          >{{ t("heroScroll") }}<span class="down-arrow" aria-hidden="true"
           /></a>
         </div>
       </div>
@@ -177,7 +177,7 @@ useSeoMeta({
           <article v-for="(feature, index) in homeFeatures" :key="feature.key">
             <div class="principle-top">
               <SiteIcon :name="feature.icon" /><span aria-hidden="true"
-                >0{{ index + 1 }}</span
+              >0{{ index + 1 }}</span
               >
             </div>
             <h3>{{ t(`feature${feature.key}Title`) }}</h3>
@@ -213,12 +213,12 @@ useSeoMeta({
                 class="github-link"
                 :aria-label="t('proofRepository')"
                 :title="t('proofRepository')"
-                ><SiteIcon name="github-logo" /></a
+              ><SiteIcon name="github-logo" /></a
               ><a
                 :href="`${config.public.repositoryUrl}/blob/main/LICENSE`"
                 class="text-link"
-                >{{ t("proofLicense")
-                }}<span class="link-arrow" aria-hidden="true"
+              >{{ t("proofLicense")
+              }}<span class="link-arrow" aria-hidden="true"
               /></a>
             </div>
           </div>
@@ -228,7 +228,7 @@ useSeoMeta({
           <h3>{{ t("remoteTitle") }}</h3>
           <p>{{ t("remoteDescription") }}</p>
           <NuxtLink :to="localePath('/privacy/')" class="text-link"
-            >{{ t("localLink") }}<span class="link-arrow" aria-hidden="true"
+          >{{ t("localLink") }}<span class="link-arrow" aria-hidden="true"
           /></NuxtLink>
         </article>
       </div>
@@ -269,7 +269,7 @@ useSeoMeta({
         >
           <summary>
             <span class="question-number" aria-hidden="true"
-              >0{{ index + 1 }}</span
+            >0{{ index + 1 }}</span
             >
             <h3>{{ t(`faq${question}Question`) }}</h3>
             <span class="faq-toggle" aria-hidden="true" />
@@ -307,7 +307,7 @@ useSeoMeta({
         <h2 class="preserve-lines">{{ t("ctaTitle") }}</h2>
         <p class="cta-description">{{ t("ctaDescription") }}</p>
         <a :href="releasesUrl" class="button"
-          ><SiteIcon name="download-simple" />{{ t("heroCta") }}</a
+        ><SiteIcon name="download-simple" />{{ t("heroCta") }}</a
         >
         <p class="cta-note">{{ t("ctaNote") }}</p>
       </div>

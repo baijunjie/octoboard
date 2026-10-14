@@ -50,7 +50,7 @@ const hasAppleApiKeyAuth =
 // template's `KEY=` cannot become an empty credential. The two rules answer different questions and
 // must not be unified.
 const appleIdVariables = ["APPLE_ID", "APPLE_PASSWORD"].filter((name) =>
-  Object.hasOwn(process.env, name)
+  Object.hasOwn(process.env, name),
 );
 if (appleIdVariables.length > 0) {
   throw new Error(
@@ -58,7 +58,7 @@ if (appleIdVariables.length > 0) {
       "through the App Store Connect API key only (APPLE_API_KEY + APPLE_API_ISSUER + " +
       "APPLE_API_KEY_PATH), and a second credential set could notarize the .app and the .dmg " +
       "under different identities. Unset APPLE_ID and APPLE_PASSWORD, or remove them from " +
-      ".env.secret, for `pnpm release`. See apps/desktop/README.md."
+      ".env.secret, for `pnpm release`. See apps/desktop/README.md.",
   );
 }
 
@@ -68,7 +68,7 @@ if (!signingIdentity) {
   console.log(
     "APPLE_SIGNING_IDENTITY is not set — building unsigned. Gatekeeper will block this on " +
       "another machine; see the \"Release builds\" section of apps/desktop/README.md for what to " +
-      "set to produce a signed, notarized build, and .env.secret.example for the credentials."
+      "set to produce a signed, notarized build, and .env.secret.example for the credentials.",
   );
 } else if (!hasAppleApiKeyAuth) {
   // The Tauri CLI itself also accepts `APPLE_API_KEY` + `APPLE_API_ISSUER` without
@@ -80,7 +80,7 @@ if (!signingIdentity) {
       "APPLE_API_KEY + APPLE_API_ISSUER + APPLE_API_KEY_PATH (this script's own notarization step " +
       "needs the key's path, not just its id) — a signed-but-not-notarized build still fails " +
       "Gatekeeper on a downloaded copy, so this script refuses to produce one. See " +
-      "apps/desktop/README.md."
+      "apps/desktop/README.md.",
   );
 } else {
   mode = "notarized";
@@ -124,7 +124,7 @@ function verify() {
   execFileSync(
     "spctl",
     ["-a", "-vvv", "-t", "open", "--context", "context:primary-signature", dmg],
-    { stdio: "inherit" }
+    { stdio: "inherit" },
   );
 }
 

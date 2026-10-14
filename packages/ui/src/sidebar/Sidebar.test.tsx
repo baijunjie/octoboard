@@ -146,7 +146,7 @@ function focusAfterMove(first: FocusTarget, pick: (nav: HTMLElement) => HTMLElem
 it("hands lost focus to the new current chip when one console session's focus mode gives way to another's", () => {
   const { active, pickedConnected } = focusAfterMove(
     { consoleSession: hub1 },
-    (nav) => nav.querySelector<HTMLElement>('[role=group] button:not([data-switch-current])'),
+    (nav) => nav.querySelector<HTMLElement>("[role=group] button:not([data-switch-current])"),
     { consoleSession: hub2 },
   );
   expect(active?.getAttribute("aria-label")).toBe("Hub 2");

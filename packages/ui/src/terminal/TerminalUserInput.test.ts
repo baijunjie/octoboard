@@ -26,6 +26,7 @@ describe("xterm's user-input mark", () => {
     const { term, events } = observe();
     await new Promise<void>((resolve) => term.write("\x1b[c", resolve));
     expect(events).toHaveLength(1);
+    // eslint-disable-next-line no-control-regex -- Verify the terminal response includes its escape prefix.
     expect(events[0]).toMatch(/^\x1b\[\?/);
   });
 });

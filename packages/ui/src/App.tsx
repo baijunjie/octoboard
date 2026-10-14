@@ -638,12 +638,12 @@ export function App(): React.ReactElement {
                     noAgents={emptyState?.kind === "no-agents"}
                     newSession={emptyState && currentConsole && (emptyState.kind === "new-session" || emptyState.kind === "new-console-session")
                       ? {
-                          message: t(emptyState.kind === "new-session" ? "sidebar.project.openSession" : "sidebar.consoleSessions.empty"),
-                          label: t(emptyState.kind === "new-session" ? "sidebar.project.openSession" : "sidebar.consoleSessions.new"),
-                          onPress: () => emptyState.kind === "new-session"
-                            ? openDialog({ kind: "new-session", console: currentConsole, project: emptyState.project, binding: emptyState.binding })
-                            : openConsoleSession(currentConsole),
-                        }
+                        message: t(emptyState.kind === "new-session" ? "sidebar.project.openSession" : "sidebar.consoleSessions.empty"),
+                        label: t(emptyState.kind === "new-session" ? "sidebar.project.openSession" : "sidebar.consoleSessions.new"),
+                        onPress: () => emptyState.kind === "new-session"
+                          ? openDialog({ kind: "new-session", console: currentConsole, project: emptyState.project, binding: emptyState.binding })
+                          : openConsoleSession(currentConsole),
+                      }
                       : undefined}
                   />
                 </div>

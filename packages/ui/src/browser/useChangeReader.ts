@@ -354,25 +354,25 @@ export function useChangeReader(project: string): ChangeReader {
   const source =
     origin.kind === "comparison"
       ? createElement(Message<"git.compare.source">, {
-          id: "git.compare.source",
-          params: {
-            from: createElement("bdi", { dir: "auto" }, displayWirePath(origin.left.branch)),
-            fromCommit: createElement("bdi", { dir: "auto" }, shortCommit(origin.left.commit)),
-            to: createElement("bdi", { dir: "auto" }, displayWirePath(origin.right.branch)),
-            toCommit: createElement("bdi", { dir: "auto" }, shortCommit(origin.right.commit)),
-          },
-        })
+        id: "git.compare.source",
+        params: {
+          from: createElement("bdi", { dir: "auto" }, displayWirePath(origin.left.branch)),
+          fromCommit: createElement("bdi", { dir: "auto" }, shortCommit(origin.left.commit)),
+          to: createElement("bdi", { dir: "auto" }, displayWirePath(origin.right.branch)),
+          toCommit: createElement("bdi", { dir: "auto" }, shortCommit(origin.right.commit)),
+        },
+      })
       : undefined;
   // The same wording as `source`, as plain text for its tooltip, each branch name
   // and commit isolated by U+2068/U+2069 the way the `<bdi>`s isolate them in `source`.
   const sourceText =
     origin.kind === "comparison"
       ? t("git.compare.source", {
-          from: isolatedWirePath(origin.left.branch),
-          fromCommit: isolate(shortCommit(origin.left.commit)),
-          to: isolatedWirePath(origin.right.branch),
-          toCommit: isolate(shortCommit(origin.right.commit)),
-        })
+        from: isolatedWirePath(origin.left.branch),
+        fromCommit: isolate(shortCommit(origin.left.commit)),
+        to: isolatedWirePath(origin.right.branch),
+        toCommit: isolate(shortCommit(origin.right.commit)),
+      })
       : undefined;
   return {
     subject: { key, path: opened.item.path, source, sourceText, stage, status: opened.item.status, content },

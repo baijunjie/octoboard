@@ -95,11 +95,11 @@ export function useFadeRegion(
     focused: active && Boolean(focus["data-focus-visible"]),
     props: active
       ? {
-          ...focus,
-          tabIndex: 0,
-          role: "region",
-          ...("label" in name ? { "aria-label": name.label } : { "aria-labelledby": name.labelledBy }),
-        }
+        ...focus,
+        tabIndex: 0,
+        role: "region",
+        ...("label" in name ? { "aria-label": name.label } : { "aria-labelledby": name.labelledBy }),
+      }
       : {},
     className: active ? "outline-none" : "",
     // A region that is always there has no overflow to watch, so it asks the scroller for nothing.

@@ -602,98 +602,98 @@ export type SideRead =
  */
 export type RequestBody =
   | {
-      type: "create_console";
-      name: string;
-      default_agent: Agent;
-      /** Each agent's account, by id; absent means that agent's default account. */
-      claude_account_id?: string;
-      codex_account_id?: string;
-      grok_account_id?: string;
-      /** Each agent's model and reasoning effort for the console's console sessions; absent or
+    type: "create_console";
+    name: string;
+    default_agent: Agent;
+    /** Each agent's account, by id; absent means that agent's default account. */
+    claude_account_id?: string;
+    codex_account_id?: string;
+    grok_account_id?: string;
+    /** Each agent's model and reasoning effort for the console's console sessions; absent or
        * blank means the agent's own default. */
-      claude_console_session_model?: string;
-      claude_console_session_effort?: string;
-      codex_console_session_model?: string;
-      codex_console_session_effort?: string;
-      grok_console_session_model?: string;
-      grok_console_session_effort?: string;
-      icon?: string;
-    }
+    claude_console_session_model?: string;
+    claude_console_session_effort?: string;
+    codex_console_session_model?: string;
+    codex_console_session_effort?: string;
+    grok_console_session_model?: string;
+    grok_console_session_effort?: string;
+    icon?: string;
+  }
   | {
-      type: "update_console";
-      console: string;
-      name?: string;
-      default_agent?: Agent;
-      /** Each agent's account: absent leaves it alone; an explicit `null` clears it back to that
+    type: "update_console";
+    console: string;
+    name?: string;
+    default_agent?: Agent;
+    /** Each agent's account: absent leaves it alone; an explicit `null` clears it back to that
        * agent's default account. */
-      claude_account_id?: string | null;
-      codex_account_id?: string | null;
-      grok_account_id?: string | null;
-      /** Each agent's console session model and effort: absent leaves it alone; an explicit `null`
+    claude_account_id?: string | null;
+    codex_account_id?: string | null;
+    grok_account_id?: string | null;
+    /** Each agent's console session model and effort: absent leaves it alone; an explicit `null`
        * (or a blank string) clears it back to the agent's own default. */
-      claude_console_session_model?: string | null;
-      claude_console_session_effort?: string | null;
-      codex_console_session_model?: string | null;
-      codex_console_session_effort?: string | null;
-      grok_console_session_model?: string | null;
-      grok_console_session_effort?: string | null;
-      /** Absent leaves the avatar alone; an explicit `null` clears it back to the default glyph. */
-      icon?: string | null;
-    }
+    claude_console_session_model?: string | null;
+    claude_console_session_effort?: string | null;
+    codex_console_session_model?: string | null;
+    codex_console_session_effort?: string | null;
+    grok_console_session_model?: string | null;
+    grok_console_session_effort?: string | null;
+    /** Absent leaves the avatar alone; an explicit `null` clears it back to the default glyph. */
+    icon?: string | null;
+  }
   | { type: "delete_console"; console: string }
   | {
-      type: "add_project";
-      console_id: string;
-      source: ProjectSource;
-      /** Required for `local` and `parent`; for `git`, absent clones into the default clone directory. */
-      path?: string;
-      remote_url?: string;
-      name?: string;
-      default_agent?: Agent;
-      /** Each agent's account; absent or `null` means inheriting the console's reference. */
-      claude_account_id?: ProjectAccount | null;
-      codex_account_id?: ProjectAccount | null;
-      grok_account_id?: ProjectAccount | null;
-      /** Each agent's model and reasoning effort for the project's sessions; absent or blank means
+    type: "add_project";
+    console_id: string;
+    source: ProjectSource;
+    /** Required for `local` and `parent`; for `git`, absent clones into the default clone directory. */
+    path?: string;
+    remote_url?: string;
+    name?: string;
+    default_agent?: Agent;
+    /** Each agent's account; absent or `null` means inheriting the console's reference. */
+    claude_account_id?: ProjectAccount | null;
+    codex_account_id?: ProjectAccount | null;
+    grok_account_id?: ProjectAccount | null;
+    /** Each agent's model and reasoning effort for the project's sessions; absent or blank means
        * the agent's own default. */
-      claude_session_model?: string;
-      claude_session_effort?: string;
-      codex_session_model?: string;
-      codex_session_effort?: string;
-      grok_session_model?: string;
-      grok_session_effort?: string;
-      /** Whether an absent `default_agent` is detected from each directory's marker files; absent
+    claude_session_model?: string;
+    claude_session_effort?: string;
+    codex_session_model?: string;
+    codex_session_effort?: string;
+    grok_session_model?: string;
+    grok_session_effort?: string;
+    /** Whether an absent `default_agent` is detected from each directory's marker files; absent
        * means true. Sent false by a client that has already shown the detection to the user. */
-      detect_default_agent?: boolean;
-      /** Absent means no tags. */
-      tags?: string[];
-    }
+    detect_default_agent?: boolean;
+    /** Absent means no tags. */
+    tags?: string[];
+  }
   | {
-      type: "update_project";
-      project: string;
-      name?: string;
-      /** Absent leaves the project's default agent alone; an explicit `null` clears it, which is
+    type: "update_project";
+    project: string;
+    name?: string;
+    /** Absent leaves the project's default agent alone; an explicit `null` clears it, which is
        * how the project goes back to inheriting the console's default — the two must stay
        * distinguishable, so this field is never sent as `undefined` when the user means "clear". */
-      default_agent?: Agent | null;
-      /** Each agent's account: absent leaves it alone; an explicit `null` puts it back to
+    default_agent?: Agent | null;
+    /** Each agent's account: absent leaves it alone; an explicit `null` puts it back to
        * inheriting the console's reference. */
-      claude_account_id?: ProjectAccount | null;
-      codex_account_id?: ProjectAccount | null;
-      grok_account_id?: ProjectAccount | null;
-      /** Each agent's model and effort for the project's sessions: absent leaves it alone; an
+    claude_account_id?: ProjectAccount | null;
+    codex_account_id?: ProjectAccount | null;
+    grok_account_id?: ProjectAccount | null;
+    /** Each agent's model and effort for the project's sessions: absent leaves it alone; an
        * explicit `null` (or a blank string) clears it back to the agent's own default. */
-      claude_session_model?: string | null;
-      claude_session_effort?: string | null;
-      codex_session_model?: string | null;
-      codex_session_effort?: string | null;
-      grok_session_model?: string | null;
-      grok_session_effort?: string | null;
-      /** Absent leaves the project's pin alone. */
-      pinned?: boolean;
-      /** Absent leaves the project's tags alone; a present array replaces them wholesale. */
-      tags?: string[];
-    }
+    claude_session_model?: string | null;
+    claude_session_effort?: string | null;
+    codex_session_model?: string | null;
+    codex_session_effort?: string | null;
+    grok_session_model?: string | null;
+    grok_session_effort?: string | null;
+    /** Absent leaves the project's pin alone. */
+    pinned?: boolean;
+    /** Absent leaves the project's tags alone; a present array replaces them wholesale. */
+    tags?: string[];
+  }
   /** `stop_sessions` ends the project's running sessions first (as `archive_session` does) instead
    * of being refused with `project_has_running_sessions`; default false. */
   | { type: "delete_project"; project: string; stop_sessions?: boolean }
@@ -723,25 +723,25 @@ export type RequestBody =
    * Refused with `unknown_console` when the console does not exist. */
   | { type: "preview_console_session_title"; console: string }
   | {
-      type: "open_session";
-      console_id: string;
-      project_id?: string;
-      agent?: Agent;
-      /** The account this session's agent reads, by id. Absent leaves it to the console's account
+    type: "open_session";
+    console_id: string;
+    project_id?: string;
+    agent?: Agent;
+    /** The account this session's agent reads, by id. Absent leaves it to the console's account
        * for that agent, else the default; an explicit `null` chooses the default account outright,
        * whatever the console refers to. */
-      account?: string | null;
-      task?: string;
-      title?: string;
-      /** Absent inherits the project's or console's setting; null uses the agent's own default.
+    account?: string | null;
+    task?: string;
+    title?: string;
+    /** Absent inherits the project's or console's setting; null uses the agent's own default.
        * Values are saved on this session and reused when it resumes. */
-      model?: string | null;
-      effort?: string | null;
-      /** The console session this (project) session should report to. Absent means none: a
+    model?: string | null;
+    effort?: string | null;
+    /** The console session this (project) session should report to. Absent means none: a
        * session the user opens by hand stays outside the orchestration unless they choose one.
        * Ignored for the console session itself, which is never bound. */
-      bound_to?: string;
-    }
+    bound_to?: string;
+  }
   | { type: "resume_session"; session: string }
   | { type: "archive_session"; session: string }
   /** Moves the session to another account of its own agent: its process ends, its conversation is
@@ -820,54 +820,54 @@ export type RequestBody =
   | { type: "get_project_source"; project: string; slot?: string }
   | { type: "list_project_dir"; project: string; path: string; worktree?: string; slot?: string }
   | {
-      type: "read_project_file";
-      project: string;
-      path: string;
-      worktree?: string;
-      from?: ReadFrom;
-      slot?: string;
-    }
+    type: "read_project_file";
+    project: string;
+    path: string;
+    worktree?: string;
+    from?: ReadFrom;
+    slot?: string;
+  }
   | { type: "list_project_changes"; project: string; worktree?: string; slot?: string }
   | {
-      type: "read_project_change";
-      project: string;
-      worktree?: string;
-      change: { group: ChangeGroup; old: SideRef; new: SideRef };
-      slot?: string;
-    }
+    type: "read_project_change";
+    project: string;
+    worktree?: string;
+    change: { group: ChangeGroup; old: SideRef; new: SideRef };
+    slot?: string;
+  }
   | { type: "list_project_branches"; project: string; slot?: string }
   /** `left` is the old side and `right` the new side, each a branch name as a wire path. */
   | { type: "compare_project_branches"; project: string; left: string; right: string; slot?: string }
   | {
-      type: "read_project_comparison_change";
-      project: string;
-      left: ComparisonEndpoint;
-      right: ComparisonEndpoint;
-      change: { old: SideRef; new: SideRef };
-      slot?: string;
-    }
+    type: "read_project_comparison_change";
+    project: string;
+    left: ComparisonEndpoint;
+    right: ComparisonEndpoint;
+    change: { old: SideRef; new: SideRef };
+    slot?: string;
+  }
   /** The whole bodies of a change `read_project_change` made a patch of, for expanding the lines
    * the patch collapses; `old` and `new` are the versions that reply reported for its sides. */
   | {
-      type: "read_project_change_bodies";
-      project: string;
-      worktree?: string;
-      change: { group: ChangeGroup; old: SideRef; new: SideRef };
-      old: SideVersion;
-      new: SideVersion;
-      slot?: string;
-    }
+    type: "read_project_change_bodies";
+    project: string;
+    worktree?: string;
+    change: { group: ChangeGroup; old: SideRef; new: SideRef };
+    old: SideVersion;
+    new: SideVersion;
+    slot?: string;
+  }
   /** As `read_project_change_bodies`, for a change of a comparison. */
   | {
-      type: "read_project_comparison_change_bodies";
-      project: string;
-      left: ComparisonEndpoint;
-      right: ComparisonEndpoint;
-      change: { old: SideRef; new: SideRef };
-      old: SideVersion;
-      new: SideVersion;
-      slot?: string;
-    }
+    type: "read_project_comparison_change_bodies";
+    project: string;
+    left: ComparisonEndpoint;
+    right: ComparisonEndpoint;
+    change: { old: SideRef; new: SideRef };
+    old: SideVersion;
+    new: SideVersion;
+    slot?: string;
+  }
   | { type: "shutdown" };
 
 /** A client request as sent on the wire: the body's fields plus an optional correlation id. */
@@ -875,25 +875,25 @@ export type Request = RequestBody & { id?: string };
 
 export type Event =
   | {
-      type: "snapshot";
-      hosts: Host[];
-      consoles: Console[];
-      projects: Project[];
-      sessions: Session[];
-      /** Directories whose projects Octoboard presses every agent's trust confirmation for. */
-      trusted_directories: string[];
-      settings: Settings;
-      /** Every status the daemon currently holds; empty on a fresh start. Keeps a reconnecting
+    type: "snapshot";
+    hosts: Host[];
+    consoles: Console[];
+    projects: Project[];
+    sessions: Session[];
+    /** Directories whose projects Octoboard presses every agent's trust confirmation for. */
+    trusted_directories: string[];
+    settings: Settings;
+    /** Every status the daemon currently holds; empty on a fresh start. Keeps a reconnecting
        * client from having to re-ask. */
-      git_statuses: GitStatus[];
-      /** Always three entries, one per agent, each `not_determined` until the daemon's one-time
+    git_statuses: GitStatus[];
+    /** Always three entries, one per agent, each `not_determined` until the daemon's one-time
        * determination for this run lands. */
-      agent_availability: AgentAvailability[];
-      /** The daemon host's home directory — not the browser's, the two may be on different
+    agent_availability: AgentAvailability[];
+    /** The daemon host's home directory — not the browser's, the two may be on different
        * machines — so a path under it can be shown as `~/...`. Null when the daemon cannot
        * determine one. */
-      home_dir: string | null;
-    }
+    home_dir: string | null;
+  }
   /** Availability or a default account's resolved directory changed for one or more agents — the
    * whole three-entry list. Broadcast once, when the daemon's one-time determination lands; never
    * again afterwards. */
@@ -928,39 +928,39 @@ export type Event =
    * `snapshot` (connect or lag recovery) for every one still waiting, so a client that missed it is
    * still asked; a repeat is ignored. */
   | {
-      type: "trust_prompt";
-      session: string;
-      agent: Agent;
-      project: string;
-      path: string;
-      /** The directory `trust_parent_dir` would trust, or null when there is none to offer (too broad
+    type: "trust_prompt";
+    session: string;
+    agent: Agent;
+    project: string;
+    path: string;
+    /** The directory `trust_parent_dir` would trust, or null when there is none to offer (too broad
        * to trust, the home directory cannot be determined, or `path` is not absolute): the choice
        * is offered only when it is not null. */
-      trust_dir: string | null;
-    }
+    trust_dir: string | null;
+  }
   /** An unbound project session asked for a console session (`request_console_session`) and its
    * call is waiting for the user's answer. Broadcast once, and sent again right after each
    * `snapshot`, oldest first, for every request still waiting; a repeat is ignored. `request`,
    * `summary` and `open_items` are the session's own words. */
   | {
-      type: "console_session_request";
-      request_id: string;
-      session: string;
-      console: string;
-      project: string | null;
-      request: string;
-      summary: string;
-      open_items: string[];
-      /** Milliseconds since the epoch; several requests are shown oldest first. */
-      requested_at: number;
-    }
+    type: "console_session_request";
+    request_id: string;
+    session: string;
+    console: string;
+    project: string | null;
+    request: string;
+    summary: string;
+    open_items: string[];
+    /** Milliseconds since the epoch; several requests are shown oldest first. */
+    requested_at: number;
+  }
   /** A `console_session_request` stopped waiting — answered, timed out or withdrawn — and every
    * client closes its dialog. */
   | {
-      type: "console_session_request_closed";
-      request_id: string;
-      reason: "approved" | "refused" | "timed_out" | "withdrawn";
-    }
+    type: "console_session_request_closed";
+    request_id: string;
+    reason: "approved" | "refused" | "timed_out" | "withdrawn";
+  }
   | { type: "dir_listing"; id?: string; path: string; entries: DirEntry[] }
   /** The reply to `detect_directory_agent` and `probe_git_remote`: the one agent the project is set
    * up for, or null for none, several, or one known not to be installed. */
@@ -969,13 +969,13 @@ export type Event =
    * exactly when `unavailable` says why, and a form then falls back to the agent's own default
    * rather than failing. */
   | {
-      type: "agent_models";
-      id?: string;
-      agent: Agent;
-      account: string | null;
-      models: AgentModel[];
-      unavailable: ModelsUnavailable | null;
-    }
+    type: "agent_models";
+    id?: string;
+    agent: Agent;
+    account: string | null;
+    models: AgentModel[];
+    unavailable: ModelsUnavailable | null;
+  }
   /** The reply to `export_configuration`: the document to save as a file. */
   | { type: "configuration_exported"; id?: string; document: ConfigurationDocument }
   /** The reply to `inspect_configuration`: one entry per console of the document, in its order,
@@ -984,12 +984,12 @@ export type Event =
   /** The reply to `import_configuration`: one entry per console of the document, in its order.
    * A console or project that went wrong is reported in it rather than failing the request. */
   | {
-      type: "configuration_imported";
-      id?: string;
-      settings_applied?: DocumentSettings | null;
-      settings_error?: ImportFailure | null;
-      consoles: ImportedConsole[];
-    }
+    type: "configuration_imported";
+    id?: string;
+    settings_applied?: DocumentSettings | null;
+    settings_error?: ImportFailure | null;
+    consoles: ImportedConsole[];
+  }
   /** The reply to `list_pages`, oldest first. Pages are not in `snapshot` — a page carries a whole
    * HTML document — so the panel asks for them, and asks again after every `snapshot`: a client
    * that falls too far behind the daemon's broadcasts is sent a fresh snapshot in place of the
@@ -1001,93 +1001,93 @@ export type Event =
   /** `project`, `worktree` and `path` echo the request; `complete` is false when the listing was
    * cut at a budget or an entry could not be read. */
   | {
-      type: "project_dir";
-      id?: string;
-      project: string;
-      worktree: string | null;
-      path: string;
-      root_id: string;
-      entries: BrowseEntry[];
-      complete: boolean;
-    }
+    type: "project_dir";
+    id?: string;
+    project: string;
+    worktree: string | null;
+    path: string;
+    root_id: string;
+    entries: BrowseEntry[];
+    complete: boolean;
+  }
   | {
-      type: "project_file";
-      id?: string;
-      project: string;
-      worktree: string | null;
-      path: string;
-      source: ContentSource;
-      file: FileContent;
-    }
+    type: "project_file";
+    id?: string;
+    project: string;
+    worktree: string | null;
+    path: string;
+    source: ContentSource;
+    file: FileContent;
+  }
   /** `head` is the commit the staged changes are against, null before the first commit;
    * `complete` is false when the list was cut at a budget. */
   | {
-      type: "project_changes";
-      id?: string;
-      project: string;
-      worktree: string | null;
-      head: string | null;
-      changes: ChangeEntry[];
-      complete: boolean;
-    }
+    type: "project_changes";
+    id?: string;
+    project: string;
+    worktree: string | null;
+    head: string | null;
+    changes: ChangeEntry[];
+    complete: boolean;
+  }
   /** `head` is the commit a staged change was read against (null before the first commit, and for
    * the other groups); `patch` is the change's unified patch as `git` writes it, null when none is
    * made (an untracked file, a side outside the project). */
   | {
-      type: "project_change";
-      id?: string;
-      project: string;
-      worktree: string | null;
-      group: ChangeGroup;
-      head: string | null;
-      old: SideRead;
-      new: SideRead;
-      patch: FileContent | null;
-    }
+    type: "project_change";
+    id?: string;
+    project: string;
+    worktree: string | null;
+    group: ChangeGroup;
+    head: string | null;
+    old: SideRead;
+    new: SideRead;
+    patch: FileContent | null;
+  }
   /** In byte order of the names; `complete` is false when the list was cut at a budget. */
   | { type: "project_branches"; id?: string; project: string; branches: BranchInfo[]; complete: boolean }
   /** `left` and `right` are the branches as asked for and the commits they were resolved to; every
    * change in `changes` (all `committed`) is between exactly those two commits. */
   | {
-      type: "project_comparison";
-      id?: string;
-      project: string;
-      left: ComparisonEndpoint;
-      right: ComparisonEndpoint;
-      changes: ChangeEntry[];
-      complete: boolean;
-    }
+    type: "project_comparison";
+    id?: string;
+    project: string;
+    left: ComparisonEndpoint;
+    right: ComparisonEndpoint;
+    changes: ChangeEntry[];
+    complete: boolean;
+  }
   /** `left` and `right` echo the request: both sides and the patch were read from those commits. */
   | {
-      type: "project_comparison_change";
-      id?: string;
-      project: string;
-      left: ComparisonEndpoint;
-      right: ComparisonEndpoint;
-      old: SideRead;
-      new: SideRead;
-      patch: FileContent | null;
-    }
+    type: "project_comparison_change";
+    id?: string;
+    project: string;
+    left: ComparisonEndpoint;
+    right: ComparisonEndpoint;
+    old: SideRead;
+    new: SideRead;
+    patch: FileContent | null;
+  }
   /** Both sides of the change with their whole bodies in `file`, each present or absent. */
   | {
-      type: "project_change_bodies";
-      id?: string;
-      project: string;
-      worktree: string | null;
-      group: ChangeGroup;
-      old: SideRead;
-      new: SideRead;
-    }
+    type: "project_change_bodies";
+    id?: string;
+    project: string;
+    worktree: string | null;
+    group: ChangeGroup;
+    old: SideRead;
+    new: SideRead;
+  }
   /** `left` and `right` echo the request. */
   | {
-      type: "project_comparison_change_bodies";
-      id?: string;
-      project: string;
-      left: ComparisonEndpoint;
-      right: ComparisonEndpoint;
-      old: SideRead;
-      new: SideRead;
-    }
+    type: "project_comparison_change_bodies";
+    id?: string;
+    project: string;
+    left: ComparisonEndpoint;
+    right: ComparisonEndpoint;
+    old: SideRead;
+    new: SideRead;
+  }
   | { type: "ack"; id?: string }
   /** A failure, worded from `code` and `params` (see `daemonMessage.ts`); `message` is the English
    * text, shown for a code the client does not know. A client also branches on some codes — see

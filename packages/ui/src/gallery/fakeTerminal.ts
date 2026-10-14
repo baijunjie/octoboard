@@ -27,6 +27,7 @@ const BOX_INNER = 46;
  * only: it strips SGR colour codes and no other escape, and counts BMP CJK alone (a wide ideograph
  * from U+20000 up counts as one), with no combining marks or emoji. */
 function cells(text: string): number {
+  // eslint-disable-next-line no-control-regex -- ANSI SGR sequences begin with the escape control character.
   return [...text.replace(/\x1b\[[0-9;]*m/g, "")].reduce(
     (sum, ch) => sum + (/[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]/.test(ch) ? 2 : 1),
     0,

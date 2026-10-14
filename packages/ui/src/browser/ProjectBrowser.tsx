@@ -194,38 +194,38 @@ export function ProjectBrowser({
           </TitledControl>
         </div>
         <Tabs.Panel id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
-      <StatusAnnouncer text={rootLoading ? t("browser.loading") : undefined} />
-      {rootLoading ? (
-        <div aria-hidden="true" className="flex flex-1 items-center justify-center gap-2 text-sm text-app-muted">
-          <Spinner size="sm" aria-hidden="true" />
-          {t("browser.loading")}
-        </div>
-      ) : root.state === "error" ? (
-        <RootError
-          message={root.message}
-          onRetry={(from) => {
-            // The error and its button go as the listing starts again; focus on it moves to the
-            // header's Refresh, which stays.
-            handFocusOff(from, headerRef.current, true);
-            dirs.refresh([""]);
-          }}
-        />
-      ) : tree.nodes.length === 0 && root.complete ? (
-        <CenteredEmptyPanel icon={FolderX} message={t("browser.empty")} />
-      ) : (
-        <>
-          <FileTree
-            nodes={tree.nodes}
-            expanded={expandedKeys}
-            label={t("browser.tree.label")}
-            onExpandedChange={onExpandedChange}
-            onOpenFile={openFile}
-            onRetry={(dir) => dirs.refresh([dir])}
-            treeRef={treeRef}
-          />
-          {!root.complete && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-app-muted">{t("browser.partial")}</p>}
-        </>
-      )}
+          <StatusAnnouncer text={rootLoading ? t("browser.loading") : undefined} />
+          {rootLoading ? (
+            <div aria-hidden="true" className="flex flex-1 items-center justify-center gap-2 text-sm text-app-muted">
+              <Spinner size="sm" aria-hidden="true" />
+              {t("browser.loading")}
+            </div>
+          ) : root.state === "error" ? (
+            <RootError
+              message={root.message}
+              onRetry={(from) => {
+                // The error and its button go as the listing starts again; focus on it moves to the
+                // header's Refresh, which stays.
+                handFocusOff(from, headerRef.current, true);
+                dirs.refresh([""]);
+              }}
+            />
+          ) : tree.nodes.length === 0 && root.complete ? (
+            <CenteredEmptyPanel icon={FolderX} message={t("browser.empty")} />
+          ) : (
+            <>
+              <FileTree
+                nodes={tree.nodes}
+                expanded={expandedKeys}
+                label={t("browser.tree.label")}
+                onExpandedChange={onExpandedChange}
+                onOpenFile={openFile}
+                onRetry={(dir) => dirs.refresh([dir])}
+                treeRef={treeRef}
+              />
+              {!root.complete && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-app-muted">{t("browser.partial")}</p>}
+            </>
+          )}
         </Tabs.Panel>
         <Tabs.Panel id="git" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
           <GitView

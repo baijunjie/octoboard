@@ -149,13 +149,13 @@ export function Dialog({
   resetKey?: string;
 } & (
   | {
-      /** `null` for a dialog without a footer. */
-      footer: BodyChildren | null;
-      submitLabel?: never;
-      busy?: never;
-      submitDisabled?: never;
-      onSubmit?: () => void;
-    }
+    /** `null` for a dialog without a footer. */
+    footer: BodyChildren | null;
+    submitLabel?: never;
+    busy?: never;
+    submitDisabled?: never;
+    onSubmit?: () => void;
+  }
   | { footer?: never; submitLabel: string; busy?: boolean; submitDisabled?: boolean; onSubmit: () => void }
 )): React.ReactElement {
   const t = useT();

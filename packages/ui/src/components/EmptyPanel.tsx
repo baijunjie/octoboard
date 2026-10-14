@@ -38,12 +38,12 @@ export function EmptyPanel({
   compact?: boolean;
 } & (
   | {
-      /** `icon` shows only on the full panel's button; a compact row already leads with its glyph. */
-      action?: { label: string; icon?: LucideIcon; variant?: "primary" | "secondary"; onPress: () => void };
-      /** A second way out beside the action, quieter than it, for a full panel only. */
-      secondaryAction?: { label: string; icon?: LucideIcon; onPress: () => void };
-      silent?: never;
-    }
+    /** `icon` shows only on the full panel's button; a compact row already leads with its glyph. */
+    action?: { label: string; icon?: LucideIcon; variant?: "primary" | "secondary"; onPress: () => void };
+    /** A second way out beside the action, quieter than it, for a full panel only. */
+    secondaryAction?: { label: string; icon?: LucideIcon; onPress: () => void };
+    silent?: never;
+  }
   | { action?: never; secondaryAction?: never; silent?: true }
 )): React.ReactElement {
   const messageId = useId();

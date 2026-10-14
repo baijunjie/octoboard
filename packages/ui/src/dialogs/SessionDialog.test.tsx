@@ -246,9 +246,9 @@ const pickerNamed = (name: string) => buttons().find((button) =>
 function answerSessionModels(daemon: Daemon) {
   vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "list_agent_models"
     ? { type: "agent_models", agent: body.agent, account: body.account ?? null, models: [
-        { id: "opus", name: "Opus", efforts: ["low", "high"] },
-        { id: "sonnet", name: "Sonnet", efforts: ["low", "high"] },
-      ], unavailable: null }
+      { id: "opus", name: "Opus", efforts: ["low", "high"] },
+      { id: "sonnet", name: "Sonnet", efforts: ["low", "high"] },
+    ], unavailable: null }
     : { type: "ack" });
 }
 

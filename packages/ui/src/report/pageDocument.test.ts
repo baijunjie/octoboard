@@ -62,7 +62,7 @@ describe("the report page's sanitizer", () => {
   });
 
   it("posts a submitted form's fields with the pressed button, and none from a history page", async () => {
-    const page = `<form><input name="who" value="Ada"><button name="choice" value="yes">Yes</button></form>`;
+    const page = "<form><input name=\"who\" value=\"Ada\"><button name=\"choice\" value=\"yes\">Yes</button></form>";
     const live = await render(page);
     live.document.querySelector("button")!.click();
     await new Promise((resolve) => setTimeout(resolve));
@@ -163,7 +163,7 @@ describe("the report page's key relay", () => {
 
 describe("the composed document", () => {
   it("nonces only Octoboard's own scripts, and keeps the page out of its markup", () => {
-    const doc = composePageDocument(`</script><script>evil()</script><p>x</p>`, false, NONCE);
+    const doc = composePageDocument("</script><script>evil()</script><p>x</p>", false, NONCE);
     expect(doc).toContain(`script-src 'nonce-${NONCE}'`);
     expect(doc).not.toContain("script-src 'unsafe-inline'");
     expect(doc.match(/<script/g)).toHaveLength(3);

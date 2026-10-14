@@ -20,11 +20,11 @@ useSeoMeta({
 <template>
   <main class="error-page">
     <a :href="homeHref" class="brand" :aria-label="config.public.appName"
-      ><img
-        :src="`${config.app.baseURL}wordmark.png`"
-        alt=""
-        width="151"
-        height="25"
+    ><img
+      :src="`${config.app.baseURL}wordmark.png`"
+      alt=""
+      width="151"
+      height="25"
     /></a>
     <div class="error-layout wrap">
       <div>
@@ -36,7 +36,7 @@ useSeoMeta({
           {{ t(notFound ? "errorNotFoundDescription" : "errorDescription") }}
         </p>
         <a :href="homeHref" class="button"
-          >{{ t("errorHome") }}<span class="link-arrow" aria-hidden="true"
+        >{{ t("errorHome") }}<span class="link-arrow" aria-hidden="true"
         /></a>
       </div>
       <img

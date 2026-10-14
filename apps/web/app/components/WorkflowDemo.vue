@@ -85,7 +85,7 @@ onBeforeUnmount(() => observer?.disconnect());
   >
     <div class="workflow-heading">
       <span class="workflow-caption"
-        ><SiteIcon name="tree-structure" />{{ t("demoWorkspace") }}</span
+      ><SiteIcon name="tree-structure" />{{ t("demoWorkspace") }}</span
       >
       <span>{{ t("demoIllustration") }}</span>
     </div>
@@ -154,13 +154,13 @@ onBeforeUnmount(() => observer?.disconnect());
         >
           <span class="node-port" aria-hidden="true" />
           <span class="node-brand"
-            ><img
-              :src="`${config.app.baseURL}agents/${node.project.icon}.svg`"
-              alt=""
-              width="20"
-              height="20"
-            /><strong>{{ node.project.agent }}</strong
-            ><span class="node-arrow" aria-hidden="true">↗</span></span
+          ><img
+            :src="`${config.app.baseURL}agents/${node.project.icon}.svg`"
+            alt=""
+            width="20"
+            height="20"
+          /><strong>{{ node.project.agent }}</strong
+          ><span class="node-arrow" aria-hidden="true">↗</span></span
           >
           <span class="node-project" dir="auto">{{
             t(`demo${node.project.key}`)
@@ -192,9 +192,9 @@ onBeforeUnmount(() => observer?.disconnect());
         </div>
         <div class="detail-report">
           <span class="detail-label"
-            ><SiteIcon name="chat-circle-dots" />{{
-              t("demoReportLabel")
-            }}</span
+          ><SiteIcon name="chat-circle-dots" />{{
+            t("demoReportLabel")
+          }}</span
           >
           <p>{{ t(`demo${project.key}Report`) }}</p>
         </div>
@@ -214,14 +214,14 @@ onBeforeUnmount(() => observer?.disconnect());
     </div>
     <div class="workflow-legend">
       <span
-        ><i class="dispatch-swatch" aria-hidden="true" />{{
-          t("demoDispatch")
-        }}</span
+      ><i class="dispatch-swatch" aria-hidden="true" />{{
+        t("demoDispatch")
+      }}</span
       >
       <span
-        ><i class="report-swatch" aria-hidden="true" />{{
-          t("demoReportLabel")
-        }}</span
+      ><i class="report-swatch" aria-hidden="true" />{{
+        t("demoReportLabel")
+      }}</span
       >
       <WorkflowStatus status="working" :animating="running && !paused" />
       <WorkflowStatus status="idle" :animating="false" />

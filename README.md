@@ -47,6 +47,33 @@ Build and run the desktop app from the
 [desktop development guide](apps/desktop/README.md#development): install the workspace, build the daemon sidecar,
 then start Tauri.
 
+### Code quality
+
+Run these commands from the repository root after installing the workspace:
+
+```sh
+pnpm format       # Apply ESLint layout fixes and format both Rust crates.
+pnpm lint         # Check JavaScript, TypeScript, TSX and Vue; warnings fail the check.
+pnpm format:check # Check ESLint rules and Rust formatting without changing files.
+pnpm typecheck
+```
+
+ESLint checks source code and scripts across the workspace. ESLint Stylistic uses two-space indentation,
+double quotes and semicolons; Vue template rules handle the website's single-file components. Rust formatting
+uses the root `rustfmt.toml`; CI runs rustfmt from Rust 1.86.0. Generated files, dependencies and build output
+are excluded. CSS, JSON, Markdown and other file types are outside the ESLint formatting scope.
+
+Use `pnpm lint:fix` separately to apply available lint fixes, then inspect the changes and run the relevant
+tests. For routine edits, format only the files or Rust packages involved in the task:
+
+```sh
+pnpm exec eslint path/to/file.tsx --fix --fix-type layout
+cargo fmt -p octoboardd
+```
+
+The Code quality workflow checks ESLint and Rust formatting on pushes to `main` and pull requests. Formatting
+does not replace type checking, tests or code review.
+
 The desktop shell is [Tauri 2](https://github.com/tauri-apps/tauri) around a
 [React](https://github.com/facebook/react) and [HeroUI](https://github.com/heroui-inc/heroui) interface. A
 [Rust](https://github.com/rust-lang/rust) daemon, `octoboardd`, owns agent processes and application data.

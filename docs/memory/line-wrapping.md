@@ -1,15 +1,15 @@
 # Line wrapping in committed text
 
-## Nothing checks line width, so re-wrap the whole paragraph you edited
+## Format checks do not enforce prose width, so re-wrap the whole paragraph you edited
 
-Rust wraps at 100 columns, comments included (`cargo fmt`'s default; the repository sets no `rustfmt.toml`).
+Wrap Rust code and comments at 100 columns; `rustfmt.toml` sets that width for code formatting.
 Committed Markdown prose wraps at 120, while a table row and anything inside a fenced block stay on one line
 however long they get.
 
-No check enforces either. `cargo fmt` reformats code but never re-wraps a comment, and it leaves a string
-literal alone as well (`format_strings` is off), so a long description inside an embedded JSON schema is
-invisible to it; `packages/ui` has no formatter at all. A clean `cargo fmt --check` and a clean typecheck
-therefore say nothing about width, and only a reader catches an over-long line.
+Format checks do not enforce these widths for prose. `cargo fmt` reformats code but never re-wraps a comment, and
+it leaves a string literal alone as well (`format_strings` is off), so a long description inside an embedded JSON
+schema is invisible to it; ESLint's formatting rules set no maximum line length. Clean format, lint and type checks
+therefore do not prove that prose meets its width, and only a reader catches an over-long line.
 
 An edit made in place is what produces them — a sentence added to a doc comment, a clause changed mid-paragraph
 in Markdown — because the line grows while the rest of the paragraph keeps the old wrapping. So after editing a

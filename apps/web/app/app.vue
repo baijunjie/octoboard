@@ -19,11 +19,11 @@ useHead(() => ({
     link.rel === "canonical"
       ? { rel: "canonical" as const, href: directoryUrl(link.href) }
       : {
-          rel: "alternate" as const,
-          type: "text/html",
-          href: directoryUrl(link.href),
-          hreflang: String(link.hreflang || ""),
-        },
+        rel: "alternate" as const,
+        type: "text/html",
+        href: directoryUrl(link.href),
+        hreflang: String(link.hreflang || ""),
+      },
   ),
   // i18n turns zh-Hans into og:locale zh_Hans. Open Graph only accepts
   // language_TERRITORY, so those tags are replaced in useSiteSeo.

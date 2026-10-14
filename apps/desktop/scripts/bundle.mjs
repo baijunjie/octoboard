@@ -24,7 +24,7 @@ export function findBundle(dir, extension) {
   if (matches.length > 1) {
     throw new Error(
       `found ${matches.length} "${extension}" files in ${dir} (${matches.join(", ")}) — clean ` +
-        "the workspace's target/release/bundle and rebuild so only the current version's is there."
+        "the workspace's target/release/bundle and rebuild so only the current version's is there.",
     );
   }
   return path.join(dir, matches[0]);

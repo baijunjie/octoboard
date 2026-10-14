@@ -23,16 +23,16 @@ import { appDir, bundleDir, findBundle, tauriBin } from "./bundle.mjs";
 // value elsewhere (`-fdefault`) is left alone rather than refused for the wrong reason.
 const args = process.argv.slice(2);
 const relocating = args.find(
-  (arg) => /^--(debug|target|out-dir|no-bundle)(=|$)/.test(arg) || /^-[vhV]*[dt]/.test(arg)
+  (arg) => /^--(debug|target|out-dir|no-bundle)(=|$)/.test(arg) || /^-[vhV]*[dt]/.test(arg),
 );
 if (relocating) {
   throw new Error(
-    `build:app only supports arguments that do not move target/release/bundle; got ${relocating}.`
+    `build:app only supports arguments that do not move target/release/bundle; got ${relocating}.`,
   );
 }
 
 const env = Object.fromEntries(
-  Object.entries(process.env).filter(([name]) => !name.startsWith("APPLE_"))
+  Object.entries(process.env).filter(([name]) => !name.startsWith("APPLE_")),
 );
 
 const startedAt = Date.now();
@@ -49,7 +49,7 @@ console.log(`${app} carries no Developer ID authority and is for local verificat
 function assertProducedSince(app, startedAt) {
   if (statSync(app).mtimeMs < startedAt) {
     throw new Error(
-      `${app} predates this build, so this build did not produce it; check the arguments given.`
+      `${app} predates this build, so this build did not produce it; check the arguments given.`,
     );
   }
 }

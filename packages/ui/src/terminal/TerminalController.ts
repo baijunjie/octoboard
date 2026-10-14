@@ -63,6 +63,7 @@ function watchUserInput(term: Terminal, onUserInput: () => void): void {
 
 /** Whether `data` is a mouse report that reaches `onData`: SGR and SGR-pixels (`CSI < b;x;y M|m`).
  * xterm's default encoding always goes through `onBinary`, and it has no urxvt encoding. */
+// eslint-disable-next-line no-control-regex -- Terminal mouse reports begin with the escape control character.
 const MOUSE_REPORT = /^\x1b\[<\d+;\d+;\d+[Mm]$/;
 
 /** Turns off the mouse tracking (X10 to any-motion, and the SGR encoding) and focus reporting an

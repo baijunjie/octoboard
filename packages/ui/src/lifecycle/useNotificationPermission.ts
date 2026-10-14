@@ -37,9 +37,9 @@ export function useNotificationPermission(): {
     status,
     request: prompt
       ? async () => {
-          await prompt.request();
-          for (const listener of askedListeners) listener();
-        }
+        await prompt.request();
+        for (const listener of askedListeners) listener();
+      }
       : undefined,
   };
 }
