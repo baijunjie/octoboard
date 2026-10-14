@@ -54,10 +54,11 @@ Once it holds more than it can show, each of these fades at its edge:
   "Uncommitted and Compare" in `docs/product/project-pane-git-mode.md`), and the row Settings' list of sections
   becomes in a narrow window (see "In a narrow window" in `docs/product/settings.md`). **A tab strip fades over 64 px,
   not 24**, and is the one surface where the fade can cover what the keyboard moved to: a tab reached with the arrow
-  keys is scrolled only as far as the strip's edge, which is where its fade sits. The size and the chevrons are the
-  component library's own, as drawn, and are not the application's. Settings' sections are such a strip only in the
-  narrow window: in the docked layout they stand as a column as tall as the sections it holds, however many there
-  are, which therefore never scrolls and carries no fade;
+  keys is scrolled only as far as the strip's edge, which is where its fade sits. The fade's size and the chevrons'
+  appearance remain the component library's own; the application supplies the chevrons' accessible names in the
+  current language. Settings' sections are such a strip only in the narrow window: in the docked layout they stand
+  as a column as tall as the sections it holds, however many there are, which therefore never scrolls and carries
+  no fade;
 - the **screens shown before there is anything to show** (see "The window chrome and the content panel" in
   `docs/product/window-layout.md`): the column of content of the screen for a daemon that could not start or for no
   daemon address being known (see "Starting up" in `docs/product/application-lifecycle.md`), and on the screen for a

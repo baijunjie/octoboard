@@ -9,6 +9,7 @@ import { FadeOverflow } from "../components/FadeOverflow";
 import { IconToggle } from "../components/IconToggle";
 import { PathText } from "../components/PathText";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
+import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
@@ -111,6 +112,7 @@ function GitContent({
   onRetry: (from: Element | null) => void;
 }): React.ReactElement {
   const t = useT();
+  const tabScrollLabels = useTabScrollLabels();
   if (source.state === "loading") return <GitLoading label={t("git.loading")} />;
   if (source.state === "error") return <GitFailure title={t("git.error.source")} message={source.message} onRetry={onRetry} />;
   const git = source.source.git;
@@ -140,7 +142,7 @@ function GitContent({
         className="flex shrink-0 items-center ps-3 pe-2"
         render={(props) => (
           <div {...props}>
-            {props.children}
+            {tabScrollLabels(props.children)}
             <ChangeViewToggles changeView={changeView} />
           </div>
         )}

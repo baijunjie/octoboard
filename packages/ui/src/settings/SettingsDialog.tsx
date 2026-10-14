@@ -4,6 +4,7 @@ import React, { useCallback, useRef, useState } from "react";
 
 import { TitledControl } from "../components/TitledControl";
 import { FadedScroller } from "../components/scrollFade";
+import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { dialogAround } from "../dialogs/dialogElement";
 import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen";
 import type { PlainMessageKey } from "../i18n/catalog";
@@ -66,6 +67,7 @@ export function SettingsDialog({
   onClose: () => void;
 }): React.ReactElement {
   const t = useT();
+  const tabScrollLabels = useTabScrollLabels();
   const isNarrow = useIsNarrow();
   const [sectionId, setSectionId] = useState<string>(initialSection);
   const selectedRef = useRef<HTMLDivElement | null>(null);
@@ -117,7 +119,10 @@ export function SettingsDialog({
                 instead, clear of the close button at its end and scrolling sideways on its own.
                 `self-start` keeps the column at its own height rather than the dialog's, which is
                 what bounds how many sections fit — see `SECTIONS`. */}
-            <Tabs.ListContainer className="ms-4 me-12 mt-3 min-w-0 shrink-0 docked:my-6 docked:me-0 docked:w-48 docked:self-start">
+            <Tabs.ListContainer
+              className="ms-4 me-12 mt-3 min-w-0 shrink-0 docked:my-6 docked:me-0 docked:w-48 docked:self-start"
+              render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}
+            >
               {/* HeroUI sizes a vertical list to its widest tab; it fills the column here, and its
                   tabs read from the start like any list of names rather than centred. */}
               <Tabs.List aria-label={t("settings.sections")} className="docked:w-full">
