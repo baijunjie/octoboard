@@ -421,6 +421,16 @@ confirmations with their mechanism, environment and observed result so later cal
 code and passing DOM tests establish the implementation, not a history of actual VoiceOver listening; do not report
 them as a listening result.
 
+The native VoiceOver caption window displaying an announcement is accepted as real-device confirmation of that
+announcement. Record it as caption verification, with the displayed text and the state that caused it.
+
+**Confirmed on 2026-10-14:** in the packaged application's WKWebView on macOS 26.2 (25C56), with Simplified Chinese
+and the dark appearance, the connection banner's persistent `StatusAnnouncer` and 100 ms delay per outage produced
+the reconnecting message in VoiceOver's native caption window after the connection dropped, then the disconnected
+message when automatic retries were spent. The connected window produced no connection announcement. This confirms
+the banner's announcement mechanism; cancellation before the delay and duplicate suppression are covered by the
+component tests and browser inspection.
+
 ## Contrast
 
 ### Thresholds

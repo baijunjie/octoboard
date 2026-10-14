@@ -1,16 +1,20 @@
 import { Button } from "@heroui/react";
 import { RefreshCw, Unplug } from "lucide-react";
-import React, { useLayoutEffect, useRef } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { ConnectionState } from "../daemon-client";
 import { useT } from "../i18n/react";
 import { focusOpenDialog } from "./regionFocus";
+import { StatusAnnouncer } from "./StatusAnnouncer";
 import { useFocusHandoff } from "./useFocusHandoff";
 
 /** The CSS custom property this banner publishes its own height to. `style.css` exposes it as
  * `--bottom-chrome-height`, the offset that everything overlaying the content area ends above, so
  * nothing hardcodes a height that follows the banner's text metrics. */
 const BANNER_HEIGHT_VAR = "--connection-banner-height";
+
+/** A recovered blip stays silent even after the window has been connected for a long time. */
+const ANNOUNCEMENT_DELAY_MS = 100;
 
 /** HeroUI's outline button retinted through the button's own color tokens to sit on the banner's
  * solid warning fill, whose stock tokens are neutral greys meant for a surface background: the
@@ -26,7 +30,7 @@ const RETRY_CLASS =
  * retrying on its own while the automatic attempts last, then offers a Retry once they are spent,
  * because nothing retries forever (see "Losing the daemon connection" in
  * `docs/product/application-lifecycle.md`). In any other state it draws nothing, leaving only the
- * empty element its top-layer marking has to stay on.
+ * element its top-layer marking and announcement region have to stay in, with no visible height.
  *
  * Retry keeps keyboard focus where it is on a mouse press, but a keyboard user reaches it with
  * F6, and then the banner going away from under focus would drop it to `<body>`, so focus is
@@ -66,6 +70,19 @@ export function ConnectionBanner({
   });
   const ref = useRef<HTMLDivElement>(null);
   const visible = state === "reconnecting" || state === "closed";
+  const [announcementReady, setAnnouncementReady] = useState(false);
+  const message = t(state === "closed" ? "connection.disconnected" : "connection.reconnecting");
+
+  // Wait once per outage, rather than once per mount: the window can be healthy for hours before
+  // a short drop. Once it has been announced, spending the retries changes the text immediately.
+  useEffect(() => {
+    if (!visible) {
+      setAnnouncementReady(false);
+      return;
+    }
+    const timer = setTimeout(() => setAnnouncementReady(true), ANNOUNCEMENT_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [visible]);
 
   // Keyed on `visible` rather than `ref.current`: a deps array is diffed during render, while
   // React only detaches a removed element's ref in the commit phase, after render — so on the
@@ -93,16 +110,16 @@ export function ConnectionBanner({
   }, [visible]);
 
   return (
-    // The marked element stays mounted whatever the state, and empty it is a flex item of no
-    // height. React Aria collects the top layers once, as the dialog opens, and the observer it
+    // The marked element stays mounted whatever the state, and without a strip it is a flex item
+    // of no height. React Aria collects the top layers once, as the dialog opens, and the observer it
     // watches later additions with ignores anything added inside a subtree it has already hidden —
     // so a strip that first appears while a dialog is open would inherit that subtree's `inert`,
     // and be drawn above the backdrop by the z-index while taking no press at all.
     <div data-react-aria-top-layer="true" className="relative z-(--z-index-banner) flex-none">
+      <StatusAnnouncer text={visible && announcementReady ? message : undefined} />
       {visible && (
         <div
           ref={ref}
-          role="status"
           data-region="banner"
           {...held}
           onFocus={(event) => {
@@ -116,7 +133,7 @@ export function ConnectionBanner({
           {state === "closed" ? (
             <>
               <Unplug aria-hidden="true" className="size-3.5 shrink-0" />
-              <span>{t("connection.disconnected")}</span>
+              <span aria-hidden="true">{message}</span>
               <Button
                 size="sm"
                 variant="outline"
@@ -130,7 +147,7 @@ export function ConnectionBanner({
           ) : (
             <>
               <RefreshCw aria-hidden="true" className="size-3.5 shrink-0 motion-safe:animate-spin-slow" />
-              <span>{t("connection.reconnecting")}</span>
+              <span aria-hidden="true">{message}</span>
             </>
           )}
         </div>

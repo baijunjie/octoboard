@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
+import type { ConnectionState } from "../daemon-client";
 import { Dialog } from "../dialogs/Dialog";
 import { useRegionCycle } from "../layout/useRegionCycle";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
@@ -78,6 +79,77 @@ it("keeps the banner's Retry out of what an open dialog hides from the rest of t
     expect(hidden(elsewhere)).not.toBe(null);
     expect(hidden(banner.querySelector("button"))).toBe(null);
   });
+});
+
+function announcementBanner(state: ConnectionState) {
+  vi.useFakeTimers();
+  vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+    try {
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  const render = (next: ConnectionState) => act(() => root.render(
+    <ConnectionBanner state={next} onRetry={() => {}} focusTerminal={() => {}} />,
+  ));
+  render(state);
+  const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms));
+  return { container, render, advance };
+}
+
+it.each(["reconnecting", "closed"] as const)("defers an initial %s status in an already-mounted region", (state) => {
+  const { container, advance } = announcementBanner(state);
+  const region = container.querySelector('[role="status"]');
+  expect(region).not.toBe(null);
+  expect(region!.textContent).toBe("");
+  advance(100);
+  expect(container.querySelector('[role="status"]')).toBe(region);
+  expect(region!.textContent).toBe(state === "closed"
+    ? "Disconnected from the daemon." : "Disconnected from the daemon. Reconnecting…");
+  const strip = container.querySelector('[data-region="banner"]')!;
+  expect(strip.hasAttribute("role")).toBe(false);
+  expect(strip.querySelector("span")!.getAttribute("aria-hidden")).toBe("true");
+  if (state === "closed") expect(hidden(strip.querySelector("button"))).toBe(null);
+});
+
+it("announces each outage in the same region and updates it when automatic retries are spent", () => {
+  const { container, render, advance } = announcementBanner("open");
+  const region = container.querySelector('[role="status"]');
+  expect(region).not.toBe(null);
+  advance(1000);
+  expect(region!.textContent).toBe("");
+  render("reconnecting");
+  expect(region!.textContent).toBe("");
+  advance(100);
+  expect(region!.textContent).toBe("Disconnected from the daemon. Reconnecting…");
+  render("closed");
+  expect(region!.textContent).toBe("Disconnected from the daemon.");
+  render("open");
+  expect(region!.textContent).toBe("");
+  render("closed");
+  advance(100);
+  expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
+  expect(container.querySelector('[role="status"]')).toBe(region);
+  expect(region!.textContent).toBe("Disconnected from the daemon.");
+});
+
+it("keeps a quickly recovered drop silent after a long healthy connection", () => {
+  const { container, render, advance } = announcementBanner("open");
+  advance(1000);
+  const region = container.querySelector('[role="status"]');
+  render("reconnecting");
+  expect(region).not.toBe(null);
+  expect(region!.textContent).toBe("");
+  advance(50);
+  render("open");
+  advance(1000);
+  expect(region!.textContent).toBe("");
 });
 
 function KeyboardHost({ state, menu = false }: { state: "open" | "closed" | "reconnecting"; menu?: boolean }) {
