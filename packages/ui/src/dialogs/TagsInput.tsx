@@ -13,7 +13,7 @@ import { TitledControl } from "../components/TitledControl";
 import { useT } from "../i18n/react";
 
 const GROUP_CLASS =
-  "relative flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-field border border-(--field-border) bg-default py-1 ps-2 pe-8 [border-width:var(--border-width-field)] transition-[background-color,border-color,box-shadow] has-[input:focus]:border-(--field-border-focus) has-[input:focus]:ring-2 has-[input:focus]:ring-focus not-has-[input:focus]:hover:bg-default-hover not-has-[input:focus]:hover:border-(--field-border-hover) motion-reduce:transition-none";
+  "relative flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-field border border-(--field-border) bg-default py-1 ps-2 pe-8 [border-width:var(--border-width-field)] transition-[background-color,border-color,box-shadow] has-[input:focus]:border-(--field-border-focus) has-[input:focus]:ring-2 has-[input:focus]:ring-app-focus not-has-[input:focus]:hover:bg-default-hover not-has-[input:focus]:hover:border-(--field-border-hover) motion-reduce:transition-none";
 
 /** A veil of the surface colour rather than `opacity`, which blanks the tags' GPU-layer buttons in WebKit. */
 const DISABLED_CLASS =

@@ -19,6 +19,12 @@ accessible names, focus handling and announcements remain required.
 The user has kept a few shortfalls on purpose, each marked by a comment at its code saying so. Leave one that is marked
 as it is, and do not add a new exception without the user's say.
 
+### Confirmed visual choices
+
+Tabs in Settings, the project's Files / Git switch and the Git view's Uncommitted / Compare switch keep their labels
+fully opaque on hover and use the foreground colour instead of dimming. Preserve this shared visual treatment as an
+explicit product choice, while retaining the component's layout, selection and keyboard behaviour.
+
 ## Keyboard
 
 Every interactive control is reachable from the keyboard and operable with Enter / Space, with one exception the
@@ -113,7 +119,8 @@ HeroUI controls draw their own focus ring.
 
 An element that removes the outline puts a ring back, never `outline-none` alone, and takes it from
 `useFocusVisibleProps` (`packages/ui/src/components/useFocusVisibleProps.ts`): spread its props on the element and
-style with `data-focus-visible:ring-2 data-focus-visible:ring-focus` (`group-data-focus-visible:` from a child).
+style with `data-focus-visible:ring-2 data-focus-visible:ring-app-focus` (`group-data-focus-visible:` from a child).
+The application's custom ring uses `--app-focus`; HeroUI controls retain their own default focus token.
 
 ### Never style focus with CSS `:focus-visible`
 
@@ -483,7 +490,7 @@ the surface in both appearances.
 
 A hand-built row or card that its content already identifies takes HeroUI's separator colour for its outline
 (`border-separator`, as the focus-mode session cards do), even though that is under 3:1. Its selected state still has to
-reach 3:1 (`border-accent`).
+reach 3:1 (`border-accent-glyph`).
 
 Focus-mode session cards use the opaque `--panel` surface over the sidebar's `--panel-sidebar`, with the existing
 hover and selected tints on top. Their titles use the shared single-line fading label, including its full-name

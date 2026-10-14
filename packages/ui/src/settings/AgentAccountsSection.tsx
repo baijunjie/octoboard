@@ -35,7 +35,7 @@ export function AgentAccountsSection(): React.ReactElement {
 
   return (
     <>
-      <p className="pb-2 text-sm text-muted">
+      <p className="pb-2 text-sm text-app-muted">
         <Message id="settings.accounts.description" params={{ pathVar: <InlineCode>PATH</InlineCode> }} />
       </p>
       <Button size="sm" variant="outline" preventFocusOnPress onPress={() => setEditing(null)}>

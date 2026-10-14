@@ -523,6 +523,17 @@ export const projectGitScenarios: Scenario[] = [
     ],
   },
   {
+    id: "git-changes-filter-placeholder",
+    group: GROUP,
+    title: "Changes with an empty filter field",
+    description: "The focused, empty filter shows its placeholder above the unchanged list. Files/Git and Uncommitted/Compare tabs remain visible. Moving focus away closes the empty field.",
+    state,
+    steps: [
+      ...openGit,
+      (ui) => ui.press(ui.t("git.filter.show")),
+    ],
+  },
+  {
     id:"git-changes-filter-empty",
     group:GROUP,
     title:"No matching changes",

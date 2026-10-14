@@ -120,7 +120,7 @@ export function ProjectFilterButton({
         aria-label={label}
         preventFocusOnPress
         aria-haspopup={clearAction ? false : undefined}
-        className="row-icon-control rounded-md text-muted hover:text-foreground"
+        className="row-icon-control rounded-md text-app-muted hover:text-foreground"
       >
         {filtering ? <FunnelX aria-hidden="true" className="size-4" /> : <Funnel aria-hidden="true" className="size-4" />}
       </Button>

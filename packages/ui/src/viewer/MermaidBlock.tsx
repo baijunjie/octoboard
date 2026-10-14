@@ -87,7 +87,7 @@ function DrawnDiagram({ svg, name, alternative }: { svg: string; name: string; a
     className: "max-w-full overflow-auto rounded-sm",
   });
   return (
-    <div className={`my-4 rounded-sm ${region.focused ? "ring-2 ring-focus" : ""}`}>
+    <div className={`my-4 rounded-sm ${region.focused ? "ring-2 ring-app-focus" : ""}`}>
       <div dir="ltr" {...fade} onClick={refuseDiagramLink} onAuxClick={refuseDiagramLink} onKeyDown={refuseDiagramLink}>
         <div role="img" aria-label={name} dangerouslySetInnerHTML={{ __html: svg }} />
         <p className="sr-only">{alternative}</p>

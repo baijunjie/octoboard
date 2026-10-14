@@ -75,7 +75,7 @@ function ItemIcon({
 }): React.ReactElement {
   if (React.isValidElement(icon)) return icon;
   const Icon = icon;
-  return <Icon aria-hidden="true" className={`size-4 shrink-0 ${destructive ? "text-danger" : "text-muted"}${className ? ` ${className}` : ""}`} />;
+  return <Icon aria-hidden="true" className={`size-4 shrink-0 ${destructive ? "text-app-danger" : "text-app-muted"}${className ? ` ${className}` : ""}`} />;
 }
 
 function isChoice(entry: ActionMenuEntry): entry is ActionMenuItem {
@@ -294,7 +294,7 @@ export function ActionMenu({
             preventFocusOnPress
             className={
               triggerClassName ??
-              "inline-flex row-icon-control items-center justify-center rounded-md p-0 text-muted hover:bg-default hover:text-foreground aria-expanded:bg-default aria-expanded:text-foreground"
+              "inline-flex row-icon-control items-center justify-center rounded-md p-0 text-app-muted hover:bg-default hover:text-foreground aria-expanded:bg-default aria-expanded:text-foreground"
             }
           >
             {trigger ?? <EllipsisVertical aria-hidden="true" className="size-4" />}

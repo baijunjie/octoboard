@@ -117,7 +117,7 @@ function diffCss(theme: "light" | "dark"): string {
     [data-separator="line-info-basic"] { height: calc(var(--diffs-line-height, 20px) * 1.4); }
     [data-separator="line-info-basic"]:has(> [data-separator-multi-button]) { height: calc(var(--diffs-line-height, 20px) * 2); }
     [data-expand-button][data-focus-visible],
-    [data-separator-content][data-focus-visible] { outline: 2px solid var(--focus); outline-offset: -2px; }
+    [data-separator-content][data-focus-visible] { outline: 2px solid var(--app-focus); outline-offset: -2px; }
     [data-line-type="change-addition"] [data-diff-span],
     [data-line-type="change-deletion"] [data-diff-span] {
       background-color: transparent;

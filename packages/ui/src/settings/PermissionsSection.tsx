@@ -50,7 +50,7 @@ export function PermissionsSection(): React.ReactElement {
   // marked pending rather than disabled.
   useSectionRefocus([status?.screenRecording, status?.accessibility, refused.screenRecording, refused.accessibility]);
 
-  const line = (message: PlainMessageKey) => <p className="text-sm text-muted">{t(message)}</p>;
+  const line = (message: PlainMessageKey) => <p className="text-sm text-app-muted">{t(message)}</p>;
   // The same line as the `!status` case below, and not redundant with it: with no capability there
   // is nothing to wait for, so saying it straight away spares a browser the blank frame the macOS
   // app spends waiting for its first read.
@@ -66,7 +66,7 @@ export function PermissionsSection(): React.ReactElement {
 
   return (
     <>
-      <p className="pb-2 text-sm text-muted">{t("settings.permissions.lead")}</p>
+      <p className="pb-2 text-sm text-app-muted">{t("settings.permissions.lead")}</p>
       {/* `SettingRow` rules between its rows but not above the first, and the lead
           paragraph above would otherwise run straight into a description in the same muted text —
           here several lines of it. The wrapper draws that rule, as `TrustedFoldersSection` and

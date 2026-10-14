@@ -38,9 +38,9 @@ function statusGlyph(status: SessionStatus, naming: Naming): React.ReactElement 
       // the bubble's shape tells idle apart from the working dot and the accessible name says it.
       return <MessageCircleMore {...naming} className={`${ICON_CLASS} text-success`} />;
     case "interrupted":
-      return <Pause {...naming} className={`${ICON_CLASS} text-muted`} />;
+      return <Pause {...naming} className={`${ICON_CLASS} text-app-muted`} />;
     case "archived":
-      return <Archive {...naming} className={`${ICON_CLASS} text-muted`} />;
+      return <Archive {...naming} className={`${ICON_CLASS} text-app-muted`} />;
   }
 }
 

@@ -126,7 +126,7 @@ export function PaneResizeHandle({
       {...focusVisible}
       // Centred on the pane's inner edge, 3px each side, anchored to the logical side the pane is on.
       style={{ [edge]: `calc(${width - 3}px + ${offset})` }}
-      className="group absolute top-(--top-chrome-height) bottom-(--bottom-chrome-height) z-10 hidden w-1.5 cursor-col-resize touch-none outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus docked:block"
+      className="group absolute top-(--top-chrome-height) bottom-(--bottom-chrome-height) z-10 hidden w-1.5 cursor-col-resize touch-none outline-none data-focus-visible:ring-2 data-focus-visible:ring-app-focus docked:block"
       onMouseDown={(event) => event.preventDefault()}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
@@ -147,7 +147,7 @@ export function PaneResizeHandle({
       onKeyDown={onKeyDown}
     >
       <div
-        className={`mx-auto h-full w-0.5 transition-colors group-hover:bg-accent group-data-focus-visible:w-full group-data-focus-visible:bg-accent ${dragging ? "bg-accent" : ""}`}
+        className={`mx-auto h-full w-0.5 transition-colors group-hover:bg-app-accent group-data-focus-visible:w-full group-data-focus-visible:bg-app-accent ${dragging ? "bg-app-accent" : ""}`}
       />
     </div>
   );

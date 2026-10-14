@@ -31,9 +31,9 @@ type Status = ImportedProject["status"];
  * shape, which differ between all four. */
 const STATUS: Record<Status, { label: PlainMessageKey; icon: LucideIcon; tone: string }> = {
   created: { label: "configuration.import.result.created", icon: CircleCheck, tone: "text-success-glyph" },
-  left_out: { label: "configuration.import.result.leftOut", icon: CircleMinus, tone: "text-muted" },
-  failed: { label: "configuration.import.result.failed", icon: CircleX, tone: "text-danger" },
-  not_attempted: { label: "configuration.import.result.status.notAttempted", icon: CircleSlash, tone: "text-muted" },
+  left_out: { label: "configuration.import.result.leftOut", icon: CircleMinus, tone: "text-app-muted" },
+  failed: { label: "configuration.import.result.failed", icon: CircleX, tone: "text-app-danger" },
+  not_attempted: { label: "configuration.import.result.status.notAttempted", icon: CircleSlash, tone: "text-app-muted" },
 };
 
 /** One line of the result: a console or one of its projects (none: the console itself), what came of
@@ -66,7 +66,7 @@ function Cell({
       role="cell"
       className={`items-baseline gap-2 py-0.5 ${empty ? "hidden" : "flex"} @xl:table-cell @xl:px-2 @xl:py-2 @xl:align-top`}
     >
-      <span aria-hidden="true" className="w-20 shrink-0 text-muted [overflow-wrap:anywhere] @xl:hidden">
+      <span aria-hidden="true" className="w-20 shrink-0 text-app-muted [overflow-wrap:anywhere] @xl:hidden">
         {label}
       </span>
       <span className="min-w-0 [overflow-wrap:anywhere]" dir="auto">
@@ -160,7 +160,7 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
         </p>
       )}
       {result.settings_error && (
-        <p className="flex items-start gap-2 text-danger">
+        <p className="flex items-start gap-2 text-app-danger">
           <CircleX aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
           <span className="min-w-0">
             {t("configuration.import.result.settings.failed", { reason: failureText(result.settings_error) })}
@@ -187,7 +187,7 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
                     key={key}
                     role="columnheader"
                     scope="col"
-                    className={`px-2 pb-2 text-start font-medium text-muted ${width}`}
+                    className={`px-2 pb-2 text-start font-medium text-app-muted ${width}`}
                   >
                     {t(key)}
                   </th>
@@ -207,7 +207,7 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
                       <span className="font-medium text-foreground">{line.console}</span>
                     </Cell>
                     <Cell label={t(COLUMNS[1].key)}>
-                      {line.project ?? <span className="text-muted">{t("configuration.import.result.wholeConsole")}</span>}
+                      {line.project ?? <span className="text-app-muted">{t("configuration.import.result.wholeConsole")}</span>}
                     </Cell>
                     <Cell label={t(COLUMNS[2].key)}>
                       <span className="inline-flex items-center gap-1.5 whitespace-nowrap">

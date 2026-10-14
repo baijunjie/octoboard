@@ -52,8 +52,8 @@ export function EmptyPanel({
     // A `span` rather than a `p`: inside a button only phrasing content is valid.
     const row = (
       <>
-        <Icon aria-hidden="true" className="size-4 shrink-0" />
-        <span id={messageId} className="min-w-0 flex-1 break-words">
+        <Icon aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
+        <span id={messageId} className="min-w-0 flex-1 break-words text-app-muted">
           {message}
         </span>
       </>
@@ -96,7 +96,7 @@ export function EmptyPanel({
   const SecondaryIcon = secondaryAction?.icon;
   return (
     <EmptyState aria-hidden={silent} className="flex flex-col items-center gap-3 px-4 py-10 text-center">
-      <span className="flex size-12 items-center justify-center rounded-full bg-default text-muted">
+      <span className="flex size-12 items-center justify-center rounded-full bg-default text-app-muted">
         <Icon aria-hidden="true" className="size-6" />
       </span>
       {/* The heading carries its own size and colour: HeroUI's `.empty-state` base sets `text-sm
@@ -104,7 +104,7 @@ export function EmptyPanel({
           explaining line's size and colour both, leaving the weight as the only thing telling the
           two apart — too little to read as a heading. */}
       <Heading className="text-base font-semibold text-foreground">{message}</Heading>
-      {description && <p className="max-w-sm text-sm break-words text-muted">{description}</p>}
+      {description && <p className="max-w-sm text-sm break-words text-app-muted">{description}</p>}
       {(action || secondaryAction) && (
         <div className="flex flex-wrap items-center justify-center gap-3">
           {action && (

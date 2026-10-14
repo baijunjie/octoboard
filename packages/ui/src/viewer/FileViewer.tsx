@@ -225,7 +225,7 @@ export function FileViewer({
           // Rendered only while there is a source, so a subject without one loses no height. The muted
           // colour is set here rather than inherited: the dialog's header carries none of its own, and
           // this line is the subject's metadata, not a second title.
-          <div data-viewer-subtitle="" className="col-span-full flex min-w-0 items-center text-xs text-muted">
+          <div data-viewer-subtitle="" className="col-span-full flex min-w-0 items-center text-xs text-app-muted">
             <FadeOverflow
               as="span"
               className="min-w-0"
@@ -341,7 +341,7 @@ function renamedFromPath(change: ViewerChange): string | undefined {
  * rather than by the space in the message. In a non-flex display the path, a block-level flex box,
  * would break the line. */
 function DetailItem({ children }: { children: React.ReactNode }): React.ReactElement {
-  return <span className="me-4 inline-flex h-8 max-w-full items-center gap-1.5 whitespace-nowrap align-top text-muted">{children}</span>;
+  return <span className="me-4 inline-flex h-8 max-w-full items-center gap-1.5 whitespace-nowrap align-top text-app-muted">{children}</span>;
 }
 
 function RenamedFrom({ path }: { path: string }): React.ReactElement {
@@ -684,7 +684,7 @@ function ImageSide({
 }): React.ReactElement {
   return (
     <section aria-label={label} className="flex min-h-0 min-w-0 flex-col gap-1">
-      <h3 className="text-xs font-medium text-muted">{label}</h3>
+      <h3 className="text-xs font-medium text-app-muted">{label}</h3>
       {side.state === "present" && side.body ? (
         <BodyView resetKey={resetKey} name={name} body={side.body} theme={theme} />
       ) : (

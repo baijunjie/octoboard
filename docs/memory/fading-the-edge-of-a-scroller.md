@@ -44,11 +44,11 @@ the "Folding a section" section of `docs/product/project-pane-git-mode.md`); oth
   inside the clip, never on an element around it.
 - Where the scroller is focusable (`useFadeRegion`, whose own conditions are the "A scroller nothing else on screen
   scrolls takes focus itself" section of `docs/ui-accessibility.md`), its ring is drawn on the element around it — the
-  project's usual `ring-2 ring-focus`, from the `focused` that hook hands back — because a ring on the scroller itself
-  is cut away and an inset one lands inside the fade band and is eaten by it. That ring paints outside the wrapping
-  element's border box, so the room it needs is clear space *around* that element, which whatever lays it out has to
-  leave; padding inside it gives the ring nothing. Add `ring-inset` where it reaches the window's own edge, there being
-  no space outside to paint into.
+  project's custom `ring-2 ring-app-focus`, from the `focused` that hook hands back — because a ring on the scroller
+  itself is cut away and an inset one lands inside the fade band and is eaten by it. That ring paints outside the
+  wrapping element's border box, so the room it needs is clear space *around* that element, which whatever lays it out
+  has to leave; padding inside it gives the ring nothing. Add `ring-inset` where it reaches the window's own edge,
+  there being no space outside to paint into.
 
 The fade is a hint, never the only cue: it covers an ordinary overflow container, so the wheel, the keyboard and
 a control focused out of view scroll as they would anyway. Keep it that way, and do not replace the container with one

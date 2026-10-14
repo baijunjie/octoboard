@@ -204,10 +204,10 @@ export function Dialog({
           ring needs inside the clip. */}
       {/* The ring of the focusable scroller is drawn on its parent: the fade is a mask on the scroller
             and clips by its border box, so a ring on the scroller itself, which sits outside that box, is
-            cut off. The ring is the project's usual one (2px `--focus`), from the scroller's own state. */}
+            cut off. The ring is the project's usual one (2px `--app-focus`), from the scroller's own state. */}
       <Frame.Body
         id={bodyId}
-        className={`flex flex-col overflow-y-visible rounded-lg ${region.focused ? "ring-2 ring-focus" : ""}`}
+        className={`flex flex-col overflow-y-visible rounded-lg ${region.focused ? "ring-2 ring-app-focus" : ""}`}
       >
         <FadedScroller region={region} className="flex min-h-0 flex-1 flex-col gap-4 p-1">
           {children}

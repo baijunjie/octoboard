@@ -216,7 +216,7 @@ export function Failure({ message, title }: { message: string; title: string }):
 export function Loading(): React.ReactElement {
   const t = useT();
   return (
-    <div aria-hidden="true" className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted">
+    <div aria-hidden="true" className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-app-muted">
       <Spinner size="sm" aria-hidden="true" />
       {t("viewer.loading")}
     </div>

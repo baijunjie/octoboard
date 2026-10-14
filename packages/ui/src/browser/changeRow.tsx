@@ -72,7 +72,7 @@ export function ChangeRowBody({ item, name, detail }: { item: ChangeItem; name: 
         {name}
       </FadeOverflow>
       {detail !== "" && (
-        <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1 text-xs text-muted" titleWhenClipped={detail}>
+        <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1 text-xs text-app-muted" titleWhenClipped={detail}>
           {detail}
         </FadeOverflow>
       )}

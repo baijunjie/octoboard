@@ -170,15 +170,14 @@ export function ProjectBrowser({
     <AsidePane layout={layout} label={t("browser.label", { project: isolate(project.name) })} className="control-fills">
       <Tabs selectedKey={mode} onSelectionChange={(key) => browser.setMode(key as BrowserMode)} className="flex min-h-0 flex-1 flex-col gap-0">
         <div ref={headerRef} className="flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator ps-3 pe-2 text-sm">
-          <FolderOpen aria-hidden="true" className="size-4 shrink-0 text-muted" />
+          <FolderOpen aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
           <h2 className="flex min-w-0 flex-1 font-medium">
             <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={project.name}>
               {project.name}
             </FadeOverflow>
           </h2>
           <Tabs.List aria-label={t("browser.modes")} className="w-auto min-w-0 shrink-0 p-0.5">
-            {/* HeroUI dims a hovered tab to 70%, which takes its muted label under WCAG AA's 4.5:1;
-                the hover darkens it instead. */}
+            {/* Keep hovered labels at full opacity and use the foreground colour for clear feedback. */}
             <Tabs.Tab id="files" className="h-7 px-3 whitespace-nowrap hover:text-foreground hover:opacity-100">
               {t("browser.mode.files")}
               <Tabs.Indicator />
@@ -197,7 +196,7 @@ export function ProjectBrowser({
         <Tabs.Panel id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
       <StatusAnnouncer text={rootLoading ? t("browser.loading") : undefined} />
       {rootLoading ? (
-        <div aria-hidden="true" className="flex flex-1 items-center justify-center gap-2 text-sm text-muted">
+        <div aria-hidden="true" className="flex flex-1 items-center justify-center gap-2 text-sm text-app-muted">
           <Spinner size="sm" aria-hidden="true" />
           {t("browser.loading")}
         </div>
@@ -224,7 +223,7 @@ export function ProjectBrowser({
             onRetry={(dir) => dirs.refresh([dir])}
             treeRef={treeRef}
           />
-          {!root.complete && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-muted">{t("browser.partial")}</p>}
+          {!root.complete && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-app-muted">{t("browser.partial")}</p>}
         </>
       )}
         </Tabs.Panel>

@@ -121,7 +121,7 @@ export function BranchComparisonView({
       </div>
       <ChangeFilterField changeView={changeView} />
       {branchesError !== undefined && !(comparison.state === "idle" && branches.state === "error") && (
-        <p role="alert" className="shrink-0 px-3 py-2 text-xs text-muted">
+        <p role="alert" className="shrink-0 px-3 py-2 text-xs text-app-muted">
           {t("git.compare.branchesError", { message: isolate(branchesError) })}
         </p>
       )}
@@ -173,11 +173,11 @@ function ComparisonContent({
   const notices = comparisonNotices(branches, comparison);
   return (
     <>
-      <p className="shrink-0 px-3 py-2 text-xs text-muted">
+      <p className="shrink-0 px-3 py-2 text-xs text-app-muted">
         {t("git.compare.commits", { from: isolate(shortCommit(left.commit)), to: isolate(shortCommit(right.commit)) })}
       </p>
       {/* Mounted for as long as the comparison is, so a notice appearing in it is announced. */}
-      <div role="status" className="flex shrink-0 flex-col gap-1 px-3 text-xs text-muted not-empty:pb-2">
+      <div role="status" className="flex shrink-0 flex-col gap-1 px-3 text-xs text-app-muted not-empty:pb-2">
         {notices.map((notice) => (
           <p key={notice.branch} className="flex items-start gap-1.5">
             <TriangleAlert aria-hidden="true" className="mt-px size-3.5 shrink-0" />
@@ -201,7 +201,7 @@ function ComparisonContent({
       ) : (
         <>
           <ChangeList items={items} selected={selectedChange} label={t("git.compare.list.label")} onOpen={onOpen} listRef={listRef} changeView={changeView} />
-          {!complete && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-muted">{t("git.partial")}</p>}
+          {!complete && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-app-muted">{t("git.partial")}</p>}
         </>
       )}
     </>
@@ -247,18 +247,16 @@ export function BranchSelect({
       onChange={(key) => key !== null && onChange(String(key))}
       className="col-span-2 grid grid-cols-subgrid items-center gap-x-3"
     >
-      <Label className="text-sm text-muted">{label}</Label>
+      <Label className="text-sm">{label}</Label>
       <Select.Trigger className="group min-w-0">
         <Select.Value className="flex min-w-0 items-center gap-2">
           {() => (
             <>
-              <GitBranch aria-hidden="true" className="size-4 shrink-0 text-muted" />
-              {/* The prompt is muted, which on the hovered fill is under 4.5:1, so hovering takes it to the
-                  foreground colour. */}
+              <GitBranch aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
               <FadeOverflow
                 as="span"
                 dir="auto"
-                className={`min-w-0 flex-1${name === undefined ? " text-muted group-hover:text-foreground group-data-[hovered=true]:text-foreground" : ""}`}
+                className="min-w-0 flex-1"
                 titleWhenClipped={title}
               >
                 {shown}
@@ -290,7 +288,7 @@ export function BranchSelect({
                     {branchName}
                   </FadeOverflow>
                   {branch.origin && <BranchOriginBadge origin={branch.origin} selectedSessionId={selectedSessionId} />}
-                  <span dir="ltr" className="shrink-0 font-mono text-xs text-muted">
+                  <span dir="ltr" className="shrink-0 font-mono text-xs text-app-muted">
                     {shortCommit(branch.commit)}
                   </span>
                   <ListBox.ItemIndicator />

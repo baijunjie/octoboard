@@ -181,9 +181,9 @@ export function FileTree({
         <TreeItemContent>
           <RowContent>
             <span className="size-4 shrink-0" />
-            <Icon aria-hidden="true" className="size-4 shrink-0 text-muted" />
-            <RowName name={name} className={missing ? "text-muted line-through" : undefined} />
-            {missing && <span className="shrink-0 text-xs text-muted">{missing}</span>}
+            <Icon aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
+            <RowName name={name} className={missing ? "text-app-muted line-through" : undefined} />
+            {missing && <span className="shrink-0 text-xs text-app-muted">{missing}</span>}
             <RowActions path={node.path} name={name} />
           </RowContent>
         </TreeItemContent>
@@ -230,14 +230,14 @@ function StatusItem({ node }: { node: Extract<TreeNode, { type: "status" }> }): 
           {node.status === "loading" ? (
             <Spinner size="sm" aria-hidden="true" className="size-4 shrink-0" />
           ) : node.status === "error" ? (
-            <TriangleAlert aria-hidden="true" className="size-4 shrink-0 text-danger" />
+            <TriangleAlert aria-hidden="true" className="size-4 shrink-0 text-app-danger" />
           ) : (
             <span className="size-4 shrink-0" />
           )}
-          <FadeOverflow as="span" className={`min-w-0 flex-1 ${node.status === "error" ? "text-danger" : "text-muted"} italic`} titleWhenClipped={text}>
+          <FadeOverflow as="span" className={`min-w-0 flex-1 ${node.status === "error" ? "text-app-danger" : "text-app-muted"} italic`} titleWhenClipped={text}>
             {text}
           </FadeOverflow>
-          {node.status === "error" && <RotateCw aria-hidden="true" className="size-3.5 shrink-0 text-muted" />}
+          {node.status === "error" && <RotateCw aria-hidden="true" className="size-3.5 shrink-0 text-app-muted" />}
         </RowContent>
       </TreeItemContent>
     </TreeItem>

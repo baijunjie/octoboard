@@ -125,7 +125,7 @@ export function ArchiveView({
           lives in the top bar's breadcrumb. */}
       <header className="flex h-(--pane-header-height) shrink-0 items-center gap-1 border-b border-separator px-2 ps-4">
         <div className="min-w-0 flex-1">
-          <FadeOverflow className="text-xs text-muted" titleWhenClipped={t("archive.count", { count: archived.length })}>{t("archive.count", { count: archived.length })}</FadeOverflow>
+          <FadeOverflow className="text-xs text-app-muted" titleWhenClipped={t("archive.count", { count: archived.length })}>{t("archive.count", { count: archived.length })}</FadeOverflow>
           <h2 className="min-w-0 text-sm font-semibold">
             <FadeOverflow titleWhenClipped={heading}>
               {t(project ? "archive.heading.project" : boundTo ? "archive.heading.boundSessions" : "archive.heading.consoleSessions")}
@@ -163,7 +163,7 @@ export function ArchiveView({
                     {sessionDisplayTitle(t, session)}
                   </FadeOverflow>
                   <FadeOverflow
-                    className="text-xs text-muted"
+                    className="text-xs text-app-muted"
                     titleWhenClipped={t("archive.meta", {
                       agent: sessionAgentLabel(t, session, accounts),
                       archived: formatRelativeTime(language, session.ended_at ?? session.started_at),
@@ -196,7 +196,7 @@ export function ArchiveView({
                       variant="ghost"
                       aria-label={t("archive.delete", { title: isolate(sessionDisplayTitle(t, session)) })}
                       onPress={() => onOpenDialog({ kind: "delete-session", session })}
-                      className="text-danger"
+                      className="text-app-danger"
                     >
                       <Trash2 aria-hidden="true" className="size-4" />
                     </Button>

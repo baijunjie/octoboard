@@ -126,9 +126,8 @@ export function SettingsDialog({
               {/* HeroUI sizes a vertical list to its widest tab; it fills the column here, and its
                   tabs read from the start like any list of names rather than centred. */}
               <Tabs.List aria-label={t("settings.sections")} className="docked:w-full">
+                {/* Keep hovered labels at full opacity and use the foreground colour for clear feedback. */}
                 {SECTIONS.map(({ id, label, Icon }) => (
-                  // HeroUI dims a hovered tab to 70%, which takes its muted label under WCAG AA's
-                  // 4.5:1; the hover darkens it instead.
                   <Tabs.Tab
                     key={id}
                     id={id}

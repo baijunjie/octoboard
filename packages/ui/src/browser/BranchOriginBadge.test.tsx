@@ -127,6 +127,6 @@ it("marks the selected session's branches in the accent colour and in words", ()
   expect(mark("made-by-session").className).toContain("border-accent-glyph");
   // The fill is what tells it from the plain ring without the colour.
   expect(mark("made-by-session").className).toContain("bg-accent-glyph");
-  expect(mark("made-by-archived").className).toContain("border-muted");
+  expect(mark("made-by-archived").className).toContain("border-app-muted");
   expect(mark("made-by-archived").className).not.toContain("bg-");
 });

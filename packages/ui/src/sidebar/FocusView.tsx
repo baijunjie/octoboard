@@ -84,7 +84,7 @@ function FocusHeader({
 function FocusTitle({ consoleName, title }: { consoleName: string; title: string }): React.ReactElement {
   return (
     <>
-      <FadeOverflow className="text-xs text-muted" dir="auto" titleWhenClipped={consoleName}>
+      <FadeOverflow className="text-xs text-app-muted" dir="auto" titleWhenClipped={consoleName}>
         {consoleName}
       </FadeOverflow>
       <h2 className="min-w-0">
@@ -453,7 +453,7 @@ function BoundElsewhere({
   const t = useT();
   return (
     <div className="px-2 pt-3 pb-2">
-      <p className="text-xs text-muted">
+      <p className="text-xs text-app-muted">
         {t("sidebar.focus.boundElsewhere", { count })}
       </p>
       <div className="mt-1 flex flex-wrap gap-1">
@@ -551,9 +551,9 @@ function ArchivedList({
         ))}
         {archived.length > preview.length && (
           <TreeRow ariaLabel={t("sidebar.archive.viewAll")} onActivate={onViewAll}>
-            <List aria-hidden="true" className="size-4 shrink-0 text-muted rtl:-scale-x-100" />
+            <List aria-hidden="true" className="size-4 shrink-0 text-app-muted rtl:-scale-x-100" />
             <RowLabel>
-              <span className="text-muted">{t("sidebar.archive.viewAll")}</span>
+              <span className="text-app-muted">{t("sidebar.archive.viewAll")}</span>
             </RowLabel>
           </TreeRow>
         )}
@@ -593,7 +593,7 @@ function SessionCard({
       className="min-h-8 flex-col gap-1 border border-separator p-[7px] data-selected:border-accent-glyph"
     >
       <RowIconLine icon={<StatusIcon status={session.status} decorative />}>
-        <span className="text-xs font-medium text-muted">{statusLabel(t, session.status)}</span>
+        <span className="text-xs font-medium text-app-muted">{statusLabel(t, session.status)}</span>
         <span className="flex-1" />
         <RowControls always fixed={session.pinned ? <PinButton name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} /> : undefined}>
           <ActionMenu label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, session)) })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
@@ -606,7 +606,7 @@ function SessionCard({
       </RowIconLine>
       <RowIconLine
         icon={<AgentIcon agent={session.agent} className="size-3.5" tooltip={sessionAccountTooltip(t, session, accounts)} />}
-        className="text-xs text-muted"
+        className="text-xs text-app-muted"
       >
         <FadeOverflow
           as="span"
@@ -644,9 +644,9 @@ function ArchivedRow({
     >
       <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
       <RowLabel title={sessionDisplayTitle(t, session)}>
-        <span className="text-muted">{sessionDisplayTitle(t, session)}</span>
+        <span className="text-app-muted">{sessionDisplayTitle(t, session)}</span>
       </RowLabel>
-      <span className="shrink-0 text-xs text-muted">
+      <span className="shrink-0 text-xs text-app-muted">
         {formatRelativeTime(language, session.ended_at ?? session.started_at)}
       </span>
       <RowControls>

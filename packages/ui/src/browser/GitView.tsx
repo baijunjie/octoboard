@@ -149,8 +149,7 @@ function GitContent({
         )}
       >
         <Tabs.List aria-label={t("git.views")} className="w-auto">
-          {/* HeroUI dims a hovered tab to 70%, which takes its muted label under WCAG AA's 4.5:1;
-              the hover darkens it instead. */}
+          {/* Keep hovered labels at full opacity and use the foreground colour for clear feedback. */}
           <Tabs.Tab id="worktree" className="h-10 px-3 whitespace-nowrap hover:text-foreground hover:opacity-100">
             {t("git.view.worktree")}
             <Tabs.Indicator />
@@ -208,7 +207,7 @@ function WorktreeChanges({
       />
       <ChangeFilterField changeView={changeView} />
       <div className="flex min-h-0 flex-1 flex-col" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
-        {shown && !gone && !shown.scope_present && <p className="shrink-0 px-3 py-2 text-xs text-muted">{t("git.worktree.scopeMissing")}</p>}
+        {shown && !gone && !shown.scope_present && <p className="shrink-0 px-3 py-2 text-xs text-app-muted">{t("git.worktree.scopeMissing")}</p>}
         {gone ? (
           <CenteredEmptyPanel icon={TriangleAlert} message={t("git.worktree.gone")} description={t("git.worktree.gone.description")} />
         ) : list.state === "loading" ? (
@@ -220,7 +219,7 @@ function WorktreeChanges({
         ) : (
           <>
             <ChangeList items={list.items} selected={selectedChange} label={t("git.list.label")} onOpen={onOpen} listRef={listRef} changeView={changeView} />
-            {!list.complete && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-muted">{t("git.partial")}</p>}
+            {!list.complete && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-app-muted">{t("git.partial")}</p>}
           </>
         )}
       </div>
@@ -288,7 +287,7 @@ function WorktreeSelect({
           <Select.Value className="flex min-w-0 items-center gap-2">
             {() => (
               <>
-                <GitBranch aria-hidden="true" className="size-4 shrink-0 text-muted" />
+                <GitBranch aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
                 <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={currentName}>
                   {currentName}
                 </FadeOverflow>
@@ -311,8 +310,8 @@ function WorktreeSelect({
                     <FadeOverflow as="span" dir="auto" titleWhenClipped={shownName}>
                       {shownName}
                     </FadeOverflow>
-                    <PathText as="span" path={path} className="text-xs text-muted" />
-                    {!worktree.scope_present && <span className="text-xs text-muted">{t("git.worktree.scopeMissing")}</span>}
+                    <PathText as="span" path={path} className="text-xs text-app-muted" />
+                    {!worktree.scope_present && <span className="text-xs text-app-muted">{t("git.worktree.scopeMissing")}</span>}
                   </span>
                   <ListBox.ItemIndicator />
                 </ListBox.Item>

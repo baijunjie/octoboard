@@ -134,13 +134,13 @@ export function DirectoryPicker({
         >
           {resolvedPath && resolvedPath !== "/" && (
             <ListBox.Item data-marquee-scope id={PARENT_KEY} textValue={t("directoryPicker.parent")} aria-label={t("directoryPicker.parent")}>
-              <CornerLeftUp aria-hidden="true" className="size-4 shrink-0 text-muted rtl:-scale-x-100" />
-              <FadeOverflow className="min-w-0 flex-1 text-muted" titleWhenClipped={t("directoryPicker.parent")}>{t("directoryPicker.parent")}</FadeOverflow>
+              <CornerLeftUp aria-hidden="true" className="size-4 shrink-0 text-app-muted rtl:-scale-x-100" />
+              <FadeOverflow className="min-w-0 flex-1 text-app-muted" titleWhenClipped={t("directoryPicker.parent")}>{t("directoryPicker.parent")}</FadeOverflow>
             </ListBox.Item>
           )}
           {entries.map((entry) => (
             <ListBox.Item data-marquee-scope key={entry.path} id={entry.path} textValue={entry.name}>
-              <Folder aria-hidden="true" className="size-4 shrink-0 text-muted" />
+              <Folder aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
               <FadeOverflow dir="auto" className="min-w-0 flex-1 text-foreground" titleWhenClipped={entry.name}>
                 {entry.name}
               </FadeOverflow>

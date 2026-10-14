@@ -498,7 +498,7 @@ export function App(): React.ReactElement {
         <BareTitleBar />
         <Toasts focusTerminal={focusTerminal} />
         <ContentPanel bare>
-          <div className="flex flex-1 items-center justify-center text-muted">
+          <div className="flex flex-1 items-center justify-center text-app-muted">
             {connectionState === "closed" ? t("app.daemonNotAnswering") : t("app.connecting")}
           </div>
         </ContentPanel>

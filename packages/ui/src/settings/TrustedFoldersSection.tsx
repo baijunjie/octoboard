@@ -25,7 +25,7 @@ export function TrustedFoldersSection(): React.ReactElement {
     void request({ type: "remove_trusted_directory", path }).catch((err) => toastError(errorPresentation(err as Error)));
   return (
     <>
-      <p className="pb-2 text-sm text-muted">
+      <p className="pb-2 text-sm text-app-muted">
         {t("settings.trusted.description")}
       </p>
       {directories.length === 0 ? (

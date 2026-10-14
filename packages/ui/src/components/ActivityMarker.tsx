@@ -75,7 +75,7 @@ export function ActivityBadge({ activity, className = "" }: { activity: Activity
       );
     case "working":
       return (
-        <span aria-hidden="true" className={`${disc} bg-accent`}>
+        <span aria-hidden="true" className={`${disc} bg-app-accent`}>
           <span className="relative flex size-1.5">
             <span className="absolute inline-flex size-full rounded-full bg-accent-foreground opacity-75 motion-safe:animate-ping" />
             <span className="relative inline-flex size-1.5 rounded-full bg-accent-foreground" />

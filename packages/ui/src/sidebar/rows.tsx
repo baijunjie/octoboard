@@ -80,7 +80,7 @@ export function TreeRow({
       aria-expanded={expanded}
       data-selected={selected || undefined}
       {...focusVisible}
-      className={`group flex cursor-pointer rounded-lg text-sm outline-none select-none transition-colors hover:bg-panel-hover data-focus-visible:ring-2 data-focus-visible:ring-focus data-selected:bg-panel-selected ${className}`}
+      className={`group flex cursor-pointer rounded-lg text-sm outline-none select-none transition-colors hover:bg-panel-hover data-focus-visible:ring-2 data-focus-visible:ring-app-focus data-selected:bg-panel-selected ${className}`}
       onMouseDown={keepFocus}
       onClick={onActivate}
       onKeyDown={rowKeyHandler(onActivate)}
@@ -179,7 +179,7 @@ export function PinButton({
           aria-label={t("sidebar.unpinItem", { name: isolate(name) })}
           preventFocusOnPress
           onPress={unpin}
-          className="group/pin row-icon-control rounded-md text-muted hover:text-foreground"
+          className="group/pin row-icon-control rounded-md text-app-muted hover:text-foreground"
         >
           <Pin aria-hidden="true" className="size-3 group-hover/pin:hidden group-data-[focus-visible=true]/pin:hidden" />
           <PinOff aria-hidden="true" className="hidden size-3 group-hover/pin:block group-data-[focus-visible=true]/pin:block" />
@@ -206,7 +206,7 @@ export function SectionHeading({
   return (
     <div className="mt-2 mb-0.5 px-2">
       <div className="flex items-center gap-2">
-        <h3 className="flex h-7 min-w-0 flex-1 items-center text-xs font-medium text-muted">{children}</h3>
+        <h3 className="flex h-7 min-w-0 flex-1 items-center text-xs font-medium text-app-muted">{children}</h3>
         {action && <RowIconGroup className="h-7">{action}</RowIconGroup>}
       </div>
       {below && (

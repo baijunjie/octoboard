@@ -6,15 +6,11 @@ import { useCurrentLanguage, useT } from "../i18n/react";
 import { FadeOverflow } from "./FadeOverflow";
 import { TitledControl } from "./TitledControl";
 
-/** The accent look: HeroUI's soft accent fill, the one it gives a selected `Tag`. That fill is a translucent tint, so
- * on its own it would take on whatever lies behind it — the tags field's grey, which also darkens on
- * hover, would pull its text under 4.5:1 in the light theme. It is laid as an image over an opaque
- * `--surface` colour instead, so the tag reads the same wherever it sits and its contrast is the one
- * measured on `--surface`. Hover swaps in HeroUI's hover tint. The 3rem minimum applies only while
- * the remove button is visible, keeping a short label's first characters clear of the button and its fade
- * while letting the tag fit its content at rest. */
+/** HeroUI has no accent variant for a removable tag, so this uses its selected tag's colour tokens
+ * without introducing selection behaviour. The 3rem minimum applies only while the remove button
+ * is visible, keeping a short label clear of the button and its fade while fitting the content at rest. */
 const ACCENT_TAG_CLASS =
-  "group/tag min-w-0 hover:min-w-12 data-focus-visible:min-w-12 max-w-full bg-surface bg-[linear-gradient(var(--accent-soft),var(--accent-soft))] text-accent-soft-foreground hover:bg-[linear-gradient(var(--accent-soft-hover),var(--accent-soft-hover))]";
+  "group/tag min-w-0 hover:min-w-12 data-focus-visible:min-w-12 max-w-full bg-accent-soft text-accent-soft-foreground hover:bg-accent-soft-hover";
 
 /** The neutral look: HeroUI's default tag fill, which in the sidebar is its own fill
  * (`.sidebar-fills`). The minimum width is the accent look's, for the same reason. */

@@ -384,7 +384,7 @@ export function TerminalPane({
         <div
           ref={coverRef}
           {...held}
-          className="absolute inset-0 flex flex-col items-center justify-center-safe text-sm text-muted"
+          className="absolute inset-0 flex flex-col items-center justify-center-safe text-sm text-app-muted"
           style={{ backgroundColor: XTERM_THEMES[colorTheme].background }}
         >
           {trouble === "disconnected" ? (
@@ -443,7 +443,7 @@ export function TerminalPane({
       <div role="status" className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
         {session && isDormant && !resuming && (
           <Surface className="pointer-events-auto flex items-center gap-3 rounded-lg border border-separator px-3 py-2 text-sm shadow-lg">
-            <span className="text-muted">
+            <span className="text-app-muted">
               {t(session.status === "archived" ? "terminal.archived" : "terminal.notRunning")}
             </span>
             <Button size="sm" variant="primary" preventFocusOnPress onPress={() => onResume(session.id)}>

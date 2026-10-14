@@ -15,10 +15,10 @@ const COLORS: Record<AlertStatus, CodeColor> = {
 
 const FILLS: Record<AlertStatus, string> = {
   default: "bg-default-soft",
-  accent: "bg-accent-soft",
+  accent: "bg-app-accent-soft",
   success: "bg-success-soft",
   warning: "bg-warning-soft",
-  danger: "bg-danger-soft",
+  danger: "bg-app-danger-soft",
 };
 
 /** HeroUI's alert frame, with a shared tone for every code literal inside it. */

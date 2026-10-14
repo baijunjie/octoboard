@@ -13,7 +13,7 @@ const STATUSES = ["default", "accent", "success", "warning", "danger"] as const;
 export function CodeGallery(): React.ReactElement {
   const region = useFadeRegion({ label: "Code colors and alert tones" });
   return (
-    <main className={`flex h-full min-h-0 flex-col ${region.focused ? "ring-2 ring-focus ring-inset" : ""}`}>
+    <main className={`flex h-full min-h-0 flex-col ${region.focused ? "ring-2 ring-app-focus ring-inset" : ""}`}>
       <FadedScroller region={region} className="min-h-0 flex-1 p-6">
       <div className="mx-auto flex max-w-5xl flex-col gap-6">
         <h1 className="text-lg font-semibold">Code colors and alert tones</h1>

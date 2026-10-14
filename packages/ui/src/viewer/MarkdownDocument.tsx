@@ -112,7 +112,7 @@ function DocumentLink({
       // It shows where the link goes before it is followed.
       title={title}
       {...focus}
-      className="rounded-sm break-words text-(--document-link) underline underline-offset-2 outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
+      className="rounded-sm break-words text-(--document-link) underline underline-offset-2 outline-none data-focus-visible:ring-2 data-focus-visible:ring-app-focus"
       onClick={(event) => {
         event.preventDefault();
         onActivate(event);

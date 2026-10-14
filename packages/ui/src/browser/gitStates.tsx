@@ -8,7 +8,7 @@ import { useT } from "../i18n/react";
  * it says it. */
 export function GitLoading({ label }: { label: string }): React.ReactElement {
   return (
-    <div aria-hidden="true" className="flex flex-1 items-center justify-center gap-2 text-sm text-muted">
+    <div aria-hidden="true" className="flex flex-1 items-center justify-center gap-2 text-sm text-app-muted">
       <Spinner size="sm" aria-hidden="true" />
       {label}
     </div>

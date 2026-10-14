@@ -115,7 +115,7 @@ export function SessionDialog({
       submitDisabled={blocked || fixedOwnerGone}
       onSubmit={submit}
     >
-      {blocked && <p className="text-sm text-danger">{t("agents.installPrompt")}</p>}
+      {blocked && <p className="text-sm text-app-danger">{t("agents.installPrompt")}</p>}
       <AccountSelect label={t("dialog.session.agentAccount")} groups={groups} value={choice} onChange={setPicked} />
       <TextInput
         label={t("dialog.session.titleField")}
@@ -132,7 +132,7 @@ export function SessionDialog({
           </FadeOverflow>
         </div>
       )}
-      {fixedOwner && fixedOwnerGone && <p className="text-sm text-danger">{t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}</p>}
+      {fixedOwner && fixedOwnerGone && <p className="text-sm text-app-danger">{t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}</p>}
       {binding.kind === "choose" && ownerOffered && (
         <OptionSelect
           label={t("dialog.session.owner")}

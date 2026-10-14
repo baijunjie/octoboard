@@ -60,7 +60,7 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
   );
 
   return (
-    <div className={`flex min-h-0 min-w-0 flex-1 ${scrollRegion.focused ? "ring-2 ring-inset ring-focus" : ""}`}>
+    <div className={`flex min-h-0 min-w-0 flex-1 ${scrollRegion.focused ? "ring-2 ring-inset ring-app-focus" : ""}`}>
       <main
         {...scrollProps}
         role="main"
@@ -77,7 +77,7 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
           }
         />
         <section aria-labelledby={toolsHeadingId} className="w-full max-w-sm shrink-0">
-          <h2 id={toolsHeadingId} className="mb-3 text-center text-sm font-medium text-muted">
+          <h2 id={toolsHeadingId} className="mb-3 text-center text-sm font-medium text-app-muted">
             {t("welcome.supportedTools")}
           </h2>
           <Card>
@@ -106,7 +106,7 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
               </ul>
             </Card.Content>
           </Card>
-          <p className="mt-3 text-center text-xs text-muted">{t("welcome.toolsHint")}</p>
+          <p className="mt-3 text-center text-xs text-app-muted">{t("welcome.toolsHint")}</p>
         </section>
       </main>
     </div>

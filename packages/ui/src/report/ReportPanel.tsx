@@ -133,7 +133,7 @@ export function ReportPanel({
     <AsidePane layout={layout} className="sidebar-fills">
       {/* A previous / next pager with "n / m", hand-assembled from buttons: HeroUI's `Pagination`
           is a list of numbered pages, which neither reads as nor behaves like this. */}
-      <div className="flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator px-3 text-xs text-muted">
+      <div className="flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator px-3 text-xs text-app-muted">
         <TitledControl title={t("report.previous")}>
           <Button
             isIconOnly

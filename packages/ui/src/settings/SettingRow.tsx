@@ -17,7 +17,7 @@ export function SettingRow({
     <div className="flex flex-col items-start gap-3 border-b border-separator py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
       <div className="min-w-0">
         <div className="text-sm font-medium">{label}</div>
-        <div className="text-sm text-muted">{description}</div>
+        <div className="text-sm text-app-muted">{description}</div>
       </div>
       {children && <div className="shrink-0">{children}</div>}
     </div>

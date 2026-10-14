@@ -36,7 +36,7 @@ export function BranchOriginBadge({ origin, selectedSessionId }: { origin: Branc
   });
   return (
     <IndicatorTooltip tooltip={label} label={label} className="inline-flex shrink-0">
-      <span aria-hidden="true" className={`inline-block size-2.5 rounded-full border-2 ${selected ? "border-accent-glyph bg-accent-glyph" : "border-muted"}`} />
+      <span aria-hidden="true" className={`inline-block size-2.5 rounded-full border-2 ${selected ? "border-accent-glyph bg-accent-glyph" : "border-app-muted"}`} />
     </IndicatorTooltip>
   );
 }

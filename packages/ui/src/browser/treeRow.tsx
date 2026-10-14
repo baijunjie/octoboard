@@ -24,11 +24,11 @@ export function DirectoryRow({ name, isExpanded, link = false, children }: { nam
           tooltip's word from the catalog; React Aria appends the row's name through
           aria-labelledby, which gives "Expand src". */}
       <TitledControl title={chevronTitle}>
-        <Button slot="chevron" aria-label={chevronTitle} className="flex size-4 shrink-0 items-center justify-center text-muted outline-none">
+        <Button slot="chevron" aria-label={chevronTitle} className="flex size-4 shrink-0 items-center justify-center text-app-muted outline-none">
           {isExpanded ? <ChevronDown aria-hidden="true" className="size-3.5" /> : <ChevronRight aria-hidden="true" className="size-3.5 rtl:-scale-x-100" />}
         </Button>
       </TitledControl>
-      <Icon aria-hidden="true" className="size-4 shrink-0 text-muted" />
+      <Icon aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
       <RowName name={name} />
       {children}
     </RowContent>
@@ -40,7 +40,7 @@ export function DirectoryRow({ name, isExpanded, link = false, children }: { nam
  * would hold an actions button that never appears. */
 export const ROW_CLASS = [
   "group mx-1 my-0.5 cursor-default rounded-md text-sm outline-none select-none hover:bg-panel-hover data-[current]:bg-panel-selected",
-  "data-[focus-visible]:ring-2 data-[focus-visible]:ring-focus data-[focus-visible]:ring-inset",
+  "data-[focus-visible]:ring-2 data-[focus-visible]:ring-app-focus data-[focus-visible]:ring-inset",
 ].join(" ");
 
 /** What a row lays out: indented by its level inside a `TreeItem`, or,

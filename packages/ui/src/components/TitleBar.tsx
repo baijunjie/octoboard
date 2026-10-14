@@ -81,7 +81,7 @@ function Breadcrumb({ session }: { session: Session }): React.ReactElement {
 
 /** A trail of names, the last one emphasised; it fades at its end edge when too long, and what
  * follows it (the status icon) always stays. It sits on the window chrome, so the names before the
- * last take `--chrome-muted`, not the panel's `--muted` (`style.css`). */
+ * last take `--chrome-muted`, not the panel's `--app-muted` (`style.css`). */
 function Trail({ names, children }: { names: string[]; children?: React.ReactNode }): React.ReactElement {
   return (
     <div className="flex min-w-0 items-center gap-1.5 text-sm">
