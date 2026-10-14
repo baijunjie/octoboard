@@ -169,10 +169,16 @@ state, shown whether or not the line is cut (see "The branch badge" in `docs/pro
 
 **While the pointer is over it, such a label runs as a marquee**, so all of it can be read:
 
-- For a sidebar or archive row, an action-menu item or submenu item, a select's option or directory-picker row,
-  the pointer only has to be over that row. A select's current choice or placeholder runs while the pointer is over
-  its trigger; the focus and archive headers run while it is over the header, and a picked tag while it is over the
-  tag. A diff's collapsed-line label runs over its text control. Elsewhere the pointer has to be over the label itself.
+- The pointer has to be over the label itself. In sidebar rows, focus headers and session cards, and archive headers
+  and rows, each text label runs independently: a project's name and branch-and-count line, a console name and focus
+  title, a session title and agent/account line, or an archive heading and count do not start one another's marquee.
+  Pointing at a status or agent icon, a branch glyph, a row or header button, or the surrounding space starts none of
+  those labels. The branch and its counts remain one line and run together; an archive view row's agent, account and
+  relative time also run together as one metadata line.
+- An action-menu item or submenu item, a select's option or directory-picker row runs its one label while the pointer
+  is anywhere over that item or row. A select's current choice or placeholder runs while the pointer is over its
+  trigger, and a picked tag while it is over the tag. A fixed session-owner label and a diff's collapsed-line label
+  run over their text controls.
 - After a short pause the text scrolls at reading speed, about 60 px a second, toward the edge it is cut at — a label
   cut at its end scrolls forward through its text, one cut at its start scrolls back toward its beginning — pauses
   there, scrolls quickly back to where it rests and goes round again for as long as the pointer stays. The pacing is

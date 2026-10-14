@@ -79,7 +79,6 @@ export function TreeRow({
       aria-current={selected ? "true" : undefined}
       aria-expanded={expanded}
       data-selected={selected || undefined}
-      data-marquee-scope
       {...focusVisible}
       className={`group flex cursor-pointer rounded-lg text-sm outline-none select-none transition-colors hover:bg-panel-hover data-focus-visible:ring-2 data-focus-visible:ring-focus data-selected:bg-panel-selected ${className}`}
       onMouseDown={keepFocus}

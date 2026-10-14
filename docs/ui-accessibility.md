@@ -245,6 +245,23 @@ for assistive technology at all. So whatever a tooltip says must reach a screen 
 label's full text is in the document whether it fits or not, a row carries its own accessible name, and an indicator
 that means something on its own is a named `role="img"`.
 
+### Hover marquees belong to one text label
+
+A clipped name, heading or detail scrolls only while the pointer is over its own text region. Independent labels
+within a row, card or header have independent hover regions; pointing at neighbouring text, an indicator, padding
+or an action button must not start their marquees. A branch and its upstream counts, or an agent and its account,
+may scroll together when they form one text line.
+
+An entire menu item, selector, fixed-owner indicator, picked tag or diff's collapsed-line text control may trigger
+its single text label as one interaction target. Such a scope must contain only that label; a picked tag's remove
+button may share the scope so its text can scroll clear of the button. A row or header containing independent labels
+or actions is not a shared marquee target.
+
+Use the shared fading label's own hover region by default. Add `data-marquee-scope` only for the single-target
+controls above, never to a general row, card or pane header. Verify long neighbouring labels with actual pointer
+input: hover each label separately, hover its neighbouring controls, and check that leaving restores the label's
+resting position. Verify reduced motion as well: clipped text stays still and its tooltip remains available.
+
 ### A tooltip on a mark that is not a control
 
 **A mark whose meaning nothing else on screen carries gets a tooltip**: without one the meaning reaches assistive

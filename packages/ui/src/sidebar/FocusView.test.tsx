@@ -3,6 +3,7 @@ import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { expectIndependentMarquees, stubMarquee } from "../components/marqueeTestSupport";
 import { isolate } from "../i18n/isolate";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
@@ -66,7 +67,7 @@ function mount(render: (handlers: SidebarHandlers) => React.ReactElement): { tex
 
 const inProject = (id: string) => sessions.filter((s) => s.project_id === id);
 const sessionLabels = (container: HTMLElement) =>
-  Array.from(container.querySelectorAll("[role=button][data-marquee-scope]")).map((row) => row.getAttribute("aria-label") ?? "");
+  Array.from(container.querySelectorAll("div[role=button]")).map((row) => row.getAttribute("aria-label") ?? "");
 
 it("a project's focus mode lists only its unbound sessions, its archived parent sessions, and one line for the rest", () => {
   const { container, text, handlers, unmount } = mount((h) => (
@@ -186,7 +187,7 @@ it("a project's focus mode nests an unbound session's own sessions under it and 
   const { container, text, unmount } = mount((h) => (
     <ProjectFocusView handlers={h} console={main} project={web} sessions={withTeams.filter((s) => s.project_id === web.id)} owners={owners} />
   ));
-  const cards = Array.from(container.querySelectorAll<HTMLElement>("[role=button][data-marquee-scope]")).filter((card) =>
+  const cards = Array.from(container.querySelectorAll<HTMLElement>("div[role=button]")).filter((card) =>
     card.className.includes("flex-col"),
   );
   expect(cards.map((card) => [card.getAttribute("aria-label")?.split(" session,")[0], card.parentElement!.className.includes("ms-[17px]")])).toEqual([
@@ -204,7 +205,7 @@ it("a console session's focus mode nests a lead session's own sessions under it"
   const { container, text, unmount } = mount((h) => (
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={withTeams} />
   ));
-  const cards = Array.from(container.querySelectorAll<HTMLElement>("[role=button][data-marquee-scope]")).filter((card) =>
+  const cards = Array.from(container.querySelectorAll<HTMLElement>("div[role=button]")).filter((card) =>
     card.className.includes("flex-col"),
   );
   expect(cards.map((card) => [card.getAttribute("aria-label")?.split(" session,")[0], card.parentElement!.className.includes("ms-[17px]")])).toEqual([
@@ -257,7 +258,7 @@ it("combining project sessions replaces the console summary with cards carrying 
   expect(localStorage.getItem(PREFERENCE_KEYS.projectFocusIncludeConsoleSessions)).toBe("true");
   expect(text()).not.toContain("sessions in this project are under console sessions");
   expect(text()).toContain("Sessions (6)");
-  const card = (title: string) => Array.from(container.querySelectorAll<HTMLElement>('[role="button"][data-marquee-scope]')).find((row) => row.getAttribute("aria-label")?.startsWith(isolate(title)))!;
+  const card = (title: string) => Array.from(container.querySelectorAll<HTMLElement>('div[role="button"]')).find((row) => row.getAttribute("aria-label")?.startsWith(isolate(title)))!;
   for (const session of [lead, underLead]) {
     expect(card(session.title).querySelector('[style*="--console-session-teal"]')).not.toBeNull();
     expect(card(session.title).getAttribute("aria-label")).toContain(isolate(hub1.title));
@@ -285,7 +286,7 @@ it.each(["project", "console"] as const)("%s focus previews five archived parent
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web]} sessions={context} />
   ));
   expect(text()).toContain("Archived (6)");
-  const rows = Array.from(container.querySelectorAll<HTMLElement>('[role="button"][data-marquee-scope]'))
+  const rows = Array.from(container.querySelectorAll<HTMLElement>('div[role="button"]'))
     .filter((row) => row.getAttribute("aria-label")?.includes("Archived parent"));
   expect(rows.map((row) => row.textContent?.match(/Archived parent \d/)?.[0])).toEqual(["Archived parent 4", "Archived parent 3", "Archived parent 2", "Archived parent 1", "Archived parent 0"]);
   expect(text()).not.toContain(child.title);
@@ -316,4 +317,17 @@ it.each([5, 6])("project focus offers View all for an archive of %s parents exac
     <ProjectFocusView handlers={h} console={main} project={web} sessions={archived} owners={owners} />
   ));
   expect(container.querySelector('[role="button"][aria-label="View all"]') !== null).toBe(count > 5);
+});
+
+it.each(["idle", "archived"] as const)("runs only the hovered text of an %s focus session, leaving its icons and menu still", (status) => {
+  stubMarquee();
+  const session = sessionOf("hover-session", main.id, web.id, "A long session title", status, { account_id: "work" });
+  const { container } = mount((h) => (
+    <ProjectFocusView handlers={h} console={main} project={web} sessions={[session]} owners={owners} />
+  ));
+  const row = Array.from(container.querySelectorAll<HTMLElement>('div[role="button"]'))
+    .find((element) => element.getAttribute("aria-label")?.startsWith(isolate(session.title)))!;
+  const labels = Array.from(row.querySelectorAll<HTMLElement>(".overflow-hidden.whitespace-nowrap"));
+  expect(labels).toHaveLength(status === "idle" ? 2 : 1);
+  expectIndependentMarquees(labels, [row, ...row.querySelectorAll("button, svg")]);
 });

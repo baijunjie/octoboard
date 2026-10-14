@@ -123,7 +123,7 @@ export function ArchiveView({
       {/* Built like the sidebar's focus-mode header (a small line over a title) and given the same
           height (`--pane-header-height`), so their bottom borders run on as one line. Where it is
           lives in the top bar's breadcrumb. */}
-      <header data-marquee-scope className="flex h-(--pane-header-height) shrink-0 items-center gap-1 border-b border-separator px-2 ps-4">
+      <header className="flex h-(--pane-header-height) shrink-0 items-center gap-1 border-b border-separator px-2 ps-4">
         <div className="min-w-0 flex-1">
           <FadeOverflow className="text-xs text-muted" titleWhenClipped={t("archive.count", { count: archived.length })}>{t("archive.count", { count: archived.length })}</FadeOverflow>
           <h2 className="min-w-0 text-sm font-semibold">
@@ -153,7 +153,6 @@ export function ArchiveView({
             {archived.slice(0, shown).map(({ session, under }) => (
               <li
                 key={session.id}
-                data-marquee-scope
                 className={`group flex min-h-12 items-center gap-3 rounded-lg px-2 transition-colors hover:bg-panel-hover${
                   under ? ` ${NESTED_ROW_CLASS}` : ""
                 }`}

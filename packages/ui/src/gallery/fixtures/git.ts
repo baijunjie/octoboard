@@ -104,7 +104,7 @@ export const gitScenarios: Scenario[] = [
     title: "Branch badges",
     state: badgesState,
     preferences: { sidebarWidth: 200 },
-    description: "Remote counts, in-flight work, failures, detached and missing branches, with long Latin and CJK labels. Hover badges for their full details; drag the sidebar wider to inspect clipping.",
+    description: "Remote counts, in-flight work, failures, detached and missing branches, with long Latin and CJK labels. Hover a clipped Latin or CJK project name or branch to scroll only that text; counts move with their branch. Hovering row controls or warning glyphs leaves both labels still. Hover badges for their full details; drag the sidebar wider to inspect clipping.",
   },
   {
     id: "git-badge-focus",
@@ -120,7 +120,7 @@ export const gitScenarios: Scenario[] = [
     title: "Long branch in project focus",
     state: badgesState,
     preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
-    description: "The long branch and counts share the header fade; hover its text or glyph for full details.",
+    description: "The long project name and branch fade separately. Hover either text to run only its marquee; hovering the console subtitle, warning glyph or header controls leaves both still. The branch and counts scroll together; hover the branch text or warning glyph for full details.",
   },
   {
     id: "git-push-accepted",

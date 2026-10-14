@@ -145,7 +145,7 @@ function archivePreviewState(count: 5 | 6) {
       previewHub,
       previewLead,
       ...Array.from({ length: count === 6 ? 2 : 0 }, (_, i) => sessionOf(`s-preview-child-${i}`, console_.id, emptyProject.id, `Session ${i + 1} of the archived lead`, "archived", { bound_to: previewLead.id, agent: i === 1 ? "codex" : "claude", ended_at: minutesAgo(2 + i * 3) })),
-      ...Array.from({ length: count - 1 }, (_, i) => sessionOf(`s-preview-${i}`, console_.id, emptyProject.id, `Bound archived session ${i + 1}`, "archived", { bound_to: previewHub.id, ended_at: minutesAgo(10 + i * 5) })),
+      ...Array.from({ length: count - 1 }, (_, i) => sessionOf(`s-preview-${i}`, console_.id, emptyProject.id, (i === 0 ? "A completed search investigation with a long archived preview title" : i === 1 ? "归档会话长名称用于确认悬停图标和操作按钮时文字不会滚动" : `Bound archived session ${i + 1}`), "archived", { bound_to: previewHub.id, ended_at: minutesAgo(10 + i * 5) })),
     ],
   });
 }
@@ -155,8 +155,13 @@ const archivePreviewSix = archivePreviewState(6);
 // Long bound titles exercise the single-line fade and full-title hover without displacing the owner badge.
 const combinedState = {
   ...scrollingFocusState,
+  settings: { ...settings, accounts: [...settings.accounts,
+    { id: "a-long", agent: "claude" as const, name: "Release coordination across every production environment", config_dir: "/Users/dev/.claude-release" },
+    { id: "a-cjk", agent: "claude" as const, name: "生产环境发布协调和回归检查专用账号", config_dir: "/Users/dev/.claude-cjk" },
+  ] },
   sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, {
     ...session,
+    account_id: id === "s-2" ? "a-long" : id === "s-lead-2" ? "a-cjk" : session.account_id,
     terminal_title: id === "s-2"
       ? "Fix the rounding of partial search results and preserve precision across every supported currency"
       : id === "s-lead-2"
@@ -168,7 +173,7 @@ const combinedState = {
 const hierarchyState = {
   ...state,
   projects: new Map([...state.projects!].map(([id, item]) => [id, id === project.id ? { ...item, pinned: true } : item])),
-  sessions: new Map([...state.sessions!].map(([id, session]) => [id, id === "s-3" ? { ...session, pinned: true } : session])),
+  sessions: new Map([...state.sessions!].map(([id, session]) => [id, id === "s-3" ? { ...session, pinned: true } : id === "s-2" ? { ...session, terminal_title: "检查搜索结果精度并确认普通会话行的长标题仅在文字上悬停时滚动" } : session])),
 };
 
 export const focusScenarios: Scenario[] = [
@@ -178,7 +183,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project session hierarchy",
     state: hierarchyState,
     preferences: { sidebarConsole: console_.id },
-    description: "Rounded branches connect each project session and its nested sessions; the final branch ends at the last child. Agent task titles and fallback session names appear together. Search API and its bound Add idempotency keys and unbound Write the migration are pinned. Binding dots and pins remain visible while action menus hide; hover or focus a row to compare the evenly spaced controls, then unpin either session to see the remaining controls close together.",
+    description: "Rounded branches connect each project session and its nested sessions; the final branch ends at the last child. Agent task titles and fallback session names appear together. Search API and its bound Add idempotency keys and unbound Write the migration are pinned. Binding dots and pins remain visible while action menus hide; hover or focus a row to compare the evenly spaced controls, then unpin either session to see the remaining controls close together. Long Latin and CJK session names scroll only while their text is hovered; hovering row icons or controls leaves them still.",
   },
   {
     id: "focus-project",
@@ -197,7 +202,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project focus including console sessions",
     state: combinedState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The switch beside Sessions is on; hover or focus it for its tooltip. Bound and unbound cards differ subtly; owner badges precede single-line Latin and CJK titles, which fade and reveal their full text on hover. Status, owner and agent marks share a column; text lines align even with empty owner slots. Pin/menu spacing matches the header controls. Nested cards inherit owner colors; hover badges for owner names. Pinned cards come first, then Waiting for you, Awaiting instructions, Working and Interrupted; children stay under parents. Scroll to confirm Sessions stays above the fade and Archived pushes it away at a 200px window height. Card and header actions buttons share muted resting glyphs and the shared subtle tint when hovered or open.",
+    description: "The switch beside Sessions is on; hover or focus it for its tooltip. Bound and unbound cards differ subtly; owner badges precede single-line Latin and CJK titles, which fade and scroll independently from their long Latin or CJK agent/account lines. Hover only the text to scroll it; owner, status and agent marks or menu controls leave both lines still. Status, owner and agent marks share a column; text lines align even with empty owner slots. Pin/menu spacing matches the header controls. Nested cards inherit owner colors; hover badges for owner names. Pinned cards come first, then Waiting for you, Awaiting instructions, Working and Interrupted; children stay under parents. Scroll to confirm Sessions stays above the fade and Archived pushes it away at a 200px window height. Card and header actions buttons share muted resting glyphs and the shared subtle tint when hovered or open.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Compare ranking strategies", name: "Rework the result ranking" }))),
     ],
@@ -219,7 +224,7 @@ export const focusScenarios: Scenario[] = [
     title: "Long console session and project names",
     state: state,
     preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `consoleSession:${longHub.id}` },
-    description: "Long English agent task titles with original session names in the header and cards, alongside long session names and project headings. The console subtitle fades when clipped and runs as a marquee on hover.",
+    description: "Long English agent task titles with original session names in the header and cards, alongside long session names and project headings. Hover the clipped console subtitle or session heading to run only that text's marquee; hovering header controls leaves both still.",
   },
   {
     id: "focus-project-no-sessions",
@@ -227,7 +232,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project archive preview, exactly five parents",
     state: archivePreviewFive,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The headings count zero live sessions and five archived parents. All five parents appear without View all. The Show all project sessions switch is absent even when its saved preference is on.",
+    description: "The headings count zero live sessions and five archived parents. All five parents appear without View all. Long Latin and CJK preview titles scroll only while the pointer is over their text; icons and row controls do not start them. The Show all project sessions switch is absent even when its saved preference is on.",
   },
   {
     id: "focus-project-archive-overflow",
@@ -235,7 +240,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project archive preview, six parents with children",
     state: archivePreviewSix,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}` },
-    description: "The heading counts eight archived sessions: six parents and two hidden children. Five parent rows precede View all; children of the archived lead appear only in the full archive.",
+    description: "The heading counts eight archived sessions: six parents and two hidden children. Long Latin and CJK preview titles scroll only on text hover. Five parent rows precede View all; children of the archived lead appear only in the full archive.",
   },
   {
     id: "focus-console-archive-five",
@@ -243,7 +248,7 @@ export const focusScenarios: Scenario[] = [
     title: "Console archive preview, exactly five parents",
     state: archivePreviewFive,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The headings count zero live sessions and five directly bound archived parents. All five appear without View all.",
+    description: "The headings count zero live sessions and five directly bound archived parents. All five appear without View all. Long Latin and CJK preview titles scroll only while their text is hovered; icons and controls leave them still.",
   },
   {
     id: "focus-console-archive-overflow",
@@ -251,7 +256,7 @@ export const focusScenarios: Scenario[] = [
     title: "Console archive preview, six parents with children",
     state: archivePreviewSix,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The heading counts eight bound archived sessions, including two hidden children. Only five of six parent rows appear before View all; the full archive keeps children under their archived lead.",
+    description: "The heading counts eight bound archived sessions, including two hidden children. Long Latin and CJK preview titles scroll only on text hover. Only five of six parent rows appear before View all; the full archive keeps children under their archived lead.",
   },
   {
     id: "focus-project-empty",

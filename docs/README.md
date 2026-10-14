@@ -197,8 +197,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   region that has to stay mounted, and the durable visible copy that carries its own instead, a visual heading being a
   heading element, and the one `main` the content panel always holds — contrast (thresholds, shared row action menu
   button states, preserving HeroUI's default colours, where a custom-style fix belongs, auditing a token or surface
-  change, a region with a surface of its own and a glyph on the window material), colour never the only carrier, motion,
-  and the shortfalls the user has kept on purpose.
+  change, a region with a surface of its own and a glyph on the window material), independent hover marquees and their
+  permitted single-label control scopes, colour never the only carrier, motion, and the shortfalls the user has kept
+  on purpose.
 
 ## Code
 

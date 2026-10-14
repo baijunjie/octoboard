@@ -92,10 +92,14 @@ const deleteState = snapshotState({
 const boundProject = projectOf("p-bound", console_.id, "Bound archive for release coordination across all production services");
 const archiveState = {
   ...state,
+  settings: { auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts: [
+    { id: "a-long", agent: "claude" as const, name: "Release coordination across every production environment, regional deployment pipeline and supported customer account for the next scheduled release", config_dir: "/Users/dev/.claude-release" },
+    { id: "a-cjk", agent: "claude" as const, name: "生产环境发布协调和回归检查专用账号用于确认所有地区的部署流水线以及支持客户账号的长说明仍然可以单独悬停阅读", config_dir: "/Users/dev/.claude-cjk" },
+  ] },
   projects: new Map([...state.projects!, [boundProject.id, boundProject]]),
   sessions: new Map([
     ...state.sessions!,
-    ...Array.from(deleteState.sessions!, ([id, session]) => [id, { ...session, project_id: session.project_id === undefined ? undefined : boundProject.id, title: session.id === otherOwnerArchived.id ? "Archived session bound elsewhere with a long title for the archive menu" : session.id === unboundArchived.id ? "Unbound archived session with a long title for the archive menu" : session.title }] as const),
+    ...Array.from(deleteState.sessions!, ([id, session]) => [id, { ...session, project_id: session.project_id === undefined ? undefined : boundProject.id, account_id: session.id === otherOwnerArchived.id ? "a-long" : session.id === unboundArchived.id ? "a-cjk" : session.account_id, title: session.id === otherOwnerArchived.id ? "Archived session bound elsewhere with a long title for the archive menu, covering release coordination across all production environments and regional deployment pipelines" : session.id === unboundArchived.id ? "归档会话长名称用于确认标题和账号时间说明分别独立滚动并且在各个地区的部署流水线以及支持客户账号的归档记录中仍然能够完整阅读" : session.title }] as const),
   ]),
 };
 
@@ -116,7 +120,7 @@ export const archiveScenarios: Scenario[] = [
     group: GROUP,
     title: "Project archive with live and archived owners",
     state: archiveState,
-    description: "The full project archive includes children omitted from the preview. Children of the archived lead nest under it; the archived child of the active lead appears as a standalone row. The long project heading and session metadata fade when clipped and reveal their text on hover.",
+    description: "The full project archive includes children omitted from the preview. Children of the archived lead nest under it; the archived child of the active lead appears as a standalone row. Long Latin and CJK session titles and account/time metadata fade separately; hover either text to scroll only that line. Archive count and heading also respond only to their own text hover. Hovering agent icons, Reopen, Delete or header controls leaves the text still.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),

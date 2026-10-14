@@ -333,8 +333,8 @@ has its own light and dark value (see "What follows the choice" in `docs/product
 ## Rows, names and keyboard focus
 
 - A name too long for its row fades out where it ends — the row's right edge, its left under a right-to-left language —
-  rather than ending in an ellipsis, the full name is then the row's tooltip, and pointing anywhere on the row runs the
-  name as a marquee (see "Names too long for their space" in `docs/product/labels-and-tooltips.md`). When the sidebar's
+  rather than ending in an ellipsis, the full name is then the label's tooltip, and pointing at the name runs it as a
+  marquee (see "Names too long for their space" in `docs/product/labels-and-tooltips.md`). When the sidebar's
   content is taller than the sidebar it scrolls, fading at the end that has more beyond it (see "The edge that hides
   content fades" in `docs/product/scrolling-surfaces.md`).
 - A row's **+** and action-menu buttons show while the row is hovered, holds keyboard focus, is the selected session,

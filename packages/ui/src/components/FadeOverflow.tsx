@@ -109,8 +109,7 @@ const MARQUEE_RETURN_SPEED = 160;
 const MARQUEE_PAUSE_REST = 700; // ms
 const MARQUEE_PAUSE_FAR = 1200;
 
-/** The element the pointer has to be over for a label's marquee to run: the nearest ancestor marked
- * `data-marquee-scope` (a whole row), or the label itself. */
+/** The label itself, unless a single-label control explicitly owns its hover region. */
 function marqueeScope(element: HTMLElement): HTMLElement {
   return element.closest<HTMLElement>("[data-marquee-scope]") ?? element;
 }
@@ -290,8 +289,9 @@ interface FadeOverflowProps {
  * horizontal scroll container with a scrollbar, fades only an end that can be scrolled to, and has
  * no way to pin a line to its end (a clipped start edge) or to offer a tooltip only while clipped.
  *
- * While clipped, the text runs as a marquee while the pointer is over it, or over the nearest
- * ancestor marked `data-marquee-scope` (a row), so all of it can be read without a tooltip.
+ * While clipped, the text runs as a marquee while the pointer is over it. A single-label control
+ * may use `data-marquee-scope` for its whole target; independent labels and actions must not share
+ * that scope. See docs/ui-accessibility.md's "Hover marquees belong to one text label" section.
  *
  * It sets `overflow` and `whitespace-nowrap` itself, so the caller supplies only the sizing
  * (`min-w-0 flex-1` inside a flex row). It has to lay out as a block or a flex item: rendered

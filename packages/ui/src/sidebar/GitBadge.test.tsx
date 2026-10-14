@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import React, { act } from "react";
+import React from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { expectIndependentMarquees, stubMarquee } from "../components/marqueeTestSupport";
 import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "../components/tooltipTestSupport";
 import { consoleOf, gitStatusOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
@@ -16,8 +17,7 @@ import type { SidebarHandlers } from "./types";
 
 // Reduced motion keeps the sidebar's slide animation, which jsdom has no `animate` for, from
 // playing; the marquee test turns it off for itself.
-let reducedMotion = true;
-window.matchMedia = ((query: string) => ({ matches: reducedMotion, media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+window.matchMedia = ((query: string) => ({ matches: true, media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
 
 const main = consoleOf("c-1", "Main");
 const web = projectOf("p-web", main.id, "Website");
@@ -76,7 +76,7 @@ const PLACEMENTS: Placement[] = [
     name: "a sidebar project row",
     mount: (status, glyph) =>
       badgeOf(mountOver(status, <Sidebar {...handlers()} projects={[web]} sessions={sessions} shownConsole={main} open sidebarWidth={sidebarWidth} />), glyph),
-    named: (container) => container.querySelector("[role=button][data-marquee-scope]"),
+    named: (container) => container.querySelector("div[role=button]"),
   },
   {
     name: "focus mode's header",
@@ -115,10 +115,8 @@ function hoverAndRead(element: Element): string | undefined {
   return text;
 }
 
-/** jsdom lays nothing out, so a label is cut at its end by stubbing the overflow it measures
- * itself by (200 px of text in a box 0 wide) and by backing its scroll position with a field of
- * its own, every write to which is kept. */
-function stubOverflow(): { positions: WeakMap<HTMLElement, number>; writes: (element: HTMLElement) => number[] } {
+/** Gives clipped labels measurable overflow under jsdom, which lays nothing out. */
+function stubOverflow(): void {
   for (const [name, value] of [
     ["scrollWidth", 200],
     ["clientWidth", 0],
@@ -127,21 +125,6 @@ function stubOverflow(): { positions: WeakMap<HTMLElement, number>; writes: (ele
     Object.defineProperty(Element.prototype, name, { configurable: true, get: () => value });
     onTestFinished(() => void Object.defineProperty(Element.prototype, name, own));
   }
-  const positions = new WeakMap<HTMLElement, number>();
-  const written = new WeakMap<HTMLElement, number[]>();
-  const ownScrollLeft = Object.getOwnPropertyDescriptor(Element.prototype, "scrollLeft")!;
-  Object.defineProperty(Element.prototype, "scrollLeft", {
-    configurable: true,
-    get(this: HTMLElement) {
-      return positions.get(this) ?? 0;
-    },
-    set(this: HTMLElement, value: number) {
-      positions.set(this, value);
-      written.set(this, [...(written.get(this) ?? []), value]);
-    },
-  });
-  onTestFinished(() => void Object.defineProperty(Element.prototype, "scrollLeft", ownScrollLeft));
-  return { positions, writes: (element) => written.get(element) ?? [] };
 }
 
 const STATES = ALL_STATES.filter(([name]) => name !== "failed");
@@ -212,29 +195,19 @@ it("leaves the badge on a sidebar row unnamed, the row carrying its sentence in 
   expect(row.named(document.body)?.getAttribute("aria-label")).toBe(`${isolate("Website")}, a session is running, Branch ${BRANCH}, 1 commit ahead`);
 });
 
-it("keeps the shared text line running as a marquee while the pointer is over the row", () => {
-  reducedMotion = false;
-  onTestFinished(() => void (reducedMotion = true));
-  const settle = withFakeTimers();
-  const { positions, writes } = stubOverflow();
-
-  const [row] = PLACEMENTS;
-  const badge = row.mount(gitStatusOf(web.id, { ahead: 1 }), "git-branch");
-  const treeRow = row.named(document.body)!;
-  const line = lineOf(badge);
-  // Cut at its end, the line rests at its start (0); it is the marquee that carries it past that.
-  const rested = writes(line).length;
-  expect(positions.get(line) ?? 0).toBe(0);
-  act(() => void treeRow.dispatchEvent(new MouseEvent("pointerenter")));
-  act(() => void vi.advanceTimersByTime(3000));
-  expect(Math.max(...writes(line).slice(rested))).toBeGreaterThan(0);
-
-  act(() => void treeRow.dispatchEvent(new MouseEvent("pointerleave")));
-  act(() => void vi.advanceTimersByTime(5000));
-  // The line measures itself a frame after the last scroll, and that measure can ask for one more
-  // while it settles a clipped edge; two runs leave nothing pending.
-  settle();
-  settle();
-  expect(positions.get(line)).toBe(0);
-  expect(vi.getTimerCount()).toBe(0);
+it.each(PLACEMENTS)("runs only the hovered project name or branch in $name, leaving buttons and glyphs still", (placement) => {
+  stubMarquee();
+  const badge = placement.mount(gitStatusOf(web.id, { ahead: 1 }), "git-branch");
+  const surface = placement.name === "a sidebar project row"
+    ? badge.closest<HTMLElement>('div[role="button"]')!
+    : badge.parentElement!;
+  const name = Array.from(surface.querySelectorAll<HTMLElement>(".overflow-hidden"))
+    .find((element) => element.textContent === web.name)!;
+  const branch = lineOf(badge);
+  expect(name).toBeDefined();
+  const labels = [name, branch];
+  const consoleName = Array.from(surface.querySelectorAll<HTMLElement>(".overflow-hidden"))
+    .find((element) => element.textContent === main.name);
+  if (consoleName) labels.unshift(consoleName);
+  expectIndependentMarquees(labels, [surface, badge.querySelector("svg")!, ...surface.querySelectorAll("button")]);
 });

@@ -13,6 +13,7 @@ import {
   unboundArchived,
   underArchivedLead,
 } from "../gallery/fixtures/archive";
+import { expectIndependentMarquees, stubMarquee } from "../components/marqueeTestSupport";
 import { isolate } from "../i18n/isolate";
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import type { Session } from "../protocol";
@@ -57,7 +58,7 @@ function renderArchiveView(
 
 it("lists a console session's own archived bound sessions, not its own archived row or an unrelated session", () => {
   const { container } = renderArchiveView();
-  const titles = Array.from(container.querySelectorAll("li[data-marquee-scope]")).map((li) => li.textContent ?? "");
+  const titles = Array.from(container.querySelectorAll("ul > li:has(button)")).map((li) => li.textContent ?? "");
   expect(titles).toHaveLength(boundArchived.length);
   for (const session of boundArchived) expect(titles.some((t) => t.includes(session.title))).toBe(true);
   for (const session of OTHER_SESSIONS) expect(titles.some((t) => t.includes(session.title))).toBe(false);
@@ -81,7 +82,7 @@ it("deletes all of a console session's archive by naming that console session", 
 
 it("lists the sessions archived under a lead session after it, inset, and names it for assistive technology", () => {
   const { container } = renderArchiveView(undefined, undefined, [boundConsoleSession, archivedLead, ...underArchivedLead, ...boundArchived]);
-  const rows = Array.from(container.querySelectorAll<HTMLElement>("li[data-marquee-scope]"));
+  const rows = Array.from(container.querySelectorAll<HTMLElement>("ul > li:has(button)"));
   // Newest first, except that the lead session's own sessions follow it rather than being ranked
   // against the console session's.
   expect(rows.map((row) => [row.querySelector(".text-sm")?.textContent, row.className.includes("ms-[17px]")])).toEqual([
@@ -122,4 +123,13 @@ it("closes on Escape with focus on its close button, whose tooltip is open there
 // And closes exactly once from the view itself, where there is no tooltip and its own handler runs.
 it("closes on Escape once from the view itself", () => {
   expect(escapeFrom((view) => view)).toEqual({ closes: 1, tooltip: false });
+});
+
+it.each(["header", "row"] as const)("runs only the hovered text in the archive %s, leaving buttons and glyphs still", (part) => {
+  stubMarquee();
+  const { container } = renderArchiveView();
+  const surface = container.querySelector<HTMLElement>(part === "header" ? "header" : "ul > li:has(button)")!;
+  const labels = Array.from(surface.querySelectorAll<HTMLElement>(".overflow-hidden.whitespace-nowrap"));
+  expect(labels).toHaveLength(2);
+  expectIndependentMarquees(labels, [surface, ...surface.querySelectorAll("button, svg")]);
 });
