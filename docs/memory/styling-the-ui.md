@@ -1,13 +1,13 @@
 # Styling the UI
 
-## Style a HeroUI component through its own variants, slots and the theme tokens
+## Keep a HeroUI component's default look through supported variants and slots
 
-A HeroUI component in `packages/ui` takes its look from its own variants, slots and the theme tokens, not from being
-overridden into something else. An override on a HeroUI component stays only for a colour fix accessibility needs or
-for layout and sizing (filling a column, truncating); one that only changes its look to taste goes. Even a colour fix
-never takes the form of a border, frame or outline HeroUI does not draw itself (the "Do not change how a HeroUI
-component looks" section of `docs/ui-accessibility.md`). So when asked to strip custom styling, sort each override by
-that reason rather than removing them wholesale: dropping a sizing override with the look ones broke the layout.
+A HeroUI component in `packages/ui` keeps its default look, configured through its supported variants and slots.
+Do not override its colours, placeholder colours, opacity, borders or shape merely to meet a WCAG contrast threshold;
+the priority is settled in the "Conformance level and exceptions" section of `docs/ui-accessibility.md`. Layout and
+sizing adaptations (filling a column, truncating) may stay when needed without redrawing the component. So when asked
+to strip custom styling, separate those adaptations from appearance overrides rather than removing them wholesale:
+dropping a sizing override with the look ones broke the layout.
 
 What the component imposes visually lives in a stylesheet of its own,
 `packages/ui/node_modules/@heroui/styles/dist/components/<name>.css` — the readable source of what ends up in
@@ -17,7 +17,8 @@ component's own file, when styling anything the project renders inside a HeroUI 
 such a child looks unlike its own classes suggest. A base rule there covers the whole component, so where it sets
 text size or colour (`.empty-state` is `@apply p-2 text-sm text-muted`) every child inherits both; HeroUI's own rules
 correct only the parts it styles by slot, never a child of the project's. Giving that child its own size or colour is
-a correction of what it inherited rather than a change of look, so it stands as an override.
+a correction of what it inherited on project-authored content rather than a change to the HeroUI component's look.
+That custom content follows the WCAG 2.2 AA requirements in `docs/ui-accessibility.md`, checked in both appearances.
 
 ## A Tailwind class name has to stand in the source as literal text
 

@@ -189,16 +189,16 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   to the server and to its own model when the limit passes, and whether its model takes turns while a call is
   outstanding — what the model is handed and how it reaches an MCP tool, the rules for writing into a running session,
   and where each keeps a session's conversation record and what moving it to another config directory takes.
-- [UI accessibility standard](ui-accessibility.md) — the WCAG 2.2 AA bar `packages/ui` is held to and how to check a
-  control or view against it, in both appearances: keyboard access (Tab, the exception for a react-aria collection that
-  manages its own focus, F6 as the way out of the terminal), visible focus and why it never uses CSS `:focus-visible` in
-  the app's WKWebView and which moves made by script have to set the modality themselves, accessible names, including
-  the one an icon-only control needs beside its tooltip, roles and states — the status region that has to stay mounted,
-  and the durable visible copy that carries its own instead, a visual heading being a heading element, and the one
-  `main` the content panel always holds — contrast (thresholds, shared row action menu button states,
-  measuring HeroUI's own colours, where a fix belongs, auditing a token or surface change, a region with a surface
-  of its own and a glyph on the window
-  material), colour never the only carrier, motion, and the shortfalls the user has kept on purpose.
+- [UI accessibility standard](ui-accessibility.md) — HeroUI default styles taking precedence, WCAG 2.2 AA for custom
+  styles in both appearances, and the application-level accessibility rules: keyboard access (Tab, the exception for a
+  react-aria collection that manages its own focus, F6 as the way out of the terminal), visible focus and why it never
+  uses CSS `:focus-visible` in the app's WKWebView and which moves made by script have to set the modality themselves,
+  accessible names, including the one an icon-only control needs beside its tooltip, roles and states — the status
+  region that has to stay mounted, and the durable visible copy that carries its own instead, a visual heading being a
+  heading element, and the one `main` the content panel always holds — contrast (thresholds, shared row action menu
+  button states, preserving HeroUI's default colours, where a custom-style fix belongs, auditing a token or surface
+  change, a region with a surface of its own and a glyph on the window material), colour never the only carrier, motion,
+  and the shortfalls the user has kept on purpose.
 
 ## Code
 
@@ -273,13 +273,13 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   which modals are a `Dialog` at all and which keep a frame of their own, and the dialog body being the one scroller,
   fading where more is hidden, with nothing reaching above it.
 - [Styling the UI](memory/styling-the-ui.md) — getting a style to land in `packages/ui`: styling a HeroUI component
-  through its own variants, slots and theme tokens, with the only two reasons an override stands and the
+  through its supported variants and slots, keeping its default appearance while adapting layout and sizing, and the
   per-component stylesheet under `@heroui/styles` as the readable source of what the component imposes; why a Tailwind
   class name has to stand in the source as literal text and how to confirm its utility was emitted, why a `docked:`
-  utility loses to an `sm:` or `rtl:` twin on the same property and what to write instead, dimming a region with a
-  veil rather than `opacity` in the app's WKWebView, and taking a style that follows a layout measurement in an effect
-  with no dependency array plus a `ResizeObserver`, since an observer alone misses a box whose content changes without
-  its size and an element React swaps underneath it.
+  utility loses to an `sm:` or `rtl:` twin on the same property and what to write instead, dimming a region with a veil
+  rather than `opacity` in the app's WKWebView, and taking a style that follows a layout measurement in an effect with
+  no dependency array plus a `ResizeObserver`, since an observer alone misses a box whose content changes without its
+  size and an element React swaps underneath it.
 - [Fading the edge of a scroller](memory/fading-the-edge-of-a-scroller.md) — every surface that hides content behind
   its own edge taking the fade from one module in one of its two shapes, the three reasons the scrolling element
   itself has to carry it, where padding and a focus ring go around a mask that clips by the border box, and the fade
@@ -292,10 +292,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [What goes on the window material](memory/what-goes-on-the-window-material.md) — what may sit on the translucent
   window material against what belongs on the opaque content panel, the two layouts the user rejected, and a glyph or
   tint there being measured against the material itself rather than only against `--chrome`.
-- [Meeting the accessibility bar](memory/meeting-the-accessibility-bar.md) — the WCAG 2.2 AA bar held in both
-  appearances, the shortfalls kept on purpose being left alone, and the three rules that decide how the code is
-  written: the focus ring from `useFocusVisibleProps`, a change announced through `StatusAnnouncer`, and a
-  colour-token change audited over every gallery scenario.
+- [Meeting the accessibility bar](memory/meeting-the-accessibility-bar.md) — HeroUI default styles taking precedence and
+  the WCAG 2.2 AA bar for custom styles in both appearances, the shortfalls kept on purpose being left alone, and the
+  three rules that decide how the code is written: the focus ring from `useFocusVisibleProps`, a change announced
+  through `StatusAnnouncer`, and a colour-token change audited over every gallery scenario.
 - [Focus and key handling in the UI](memory/focus-and-key-handling-in-the-ui.md) — where keyboard focus goes and who
   receives a key in `packages/ui`: why a HeroUI control pressed with the mouse takes focus off the terminal, when
   `preventFocusOnPress` is needed and why "⋯" menus are built on `ActionMenu`, the other ways focus falls to `<body>` (a

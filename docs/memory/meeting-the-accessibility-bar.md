@@ -1,11 +1,13 @@
 # Meeting the accessibility bar
 
-## Every control meets WCAG 2.2 AA, in both appearances
+## Custom styles meet WCAG 2.2 AA, in both appearances
 
-Every control and view in `packages/ui` is held to WCAG 2.2 level AA and checked in both the light and the dark
-appearance; passing in one of them is not passing. The rules to check one against, and the measured facts behind them,
-are `docs/ui-accessibility.md`. A few shortfalls are kept on purpose, each marked by a comment at its code saying so:
-leave a marked one as it is, and do not add a new exception without the user's say.
+Before treating a visual measurement as a bug in `packages/ui`, identify whether the style is HeroUI's default or
+project-authored. Apply the priority in the "Conformance level and exceptions" section of `docs/ui-accessibility.md`:
+custom styles are checked against WCAG 2.2 AA in both light and dark appearances; passing in one is not passing.
+HeroUI's default appearance is not an AA exception to repair. A few custom shortfalls are kept on purpose, each
+marked by a comment at its code saying so: leave a marked one as it is, and do not add a new exception without the
+user's say.
 
 Three of those rules settle how the code is written rather than what a later check finds, and the general practice each
 one displaces leaves no cue to go looking:
@@ -16,6 +18,6 @@ one displaces leaves no cue to go looking:
   `docs/ui-accessibility.md`).
 - A state that changes without the user acting is announced through `StatusAnnouncer`, never from a `role="status"`
   element rendered together with its text (the "Announcing a change" section of `docs/ui-accessibility.md`).
-- A change to a colour token or a surface is a change to every screen: it is audited over every gallery scenario in
-  both appearances, and no colour a HeroUI component draws by default is assumed to pass (the "Auditing a change to a
-  colour token or a surface" and "HeroUI's own text colours" sections of `docs/ui-accessibility.md`).
+- A change to a custom colour token or a custom surface is audited over every gallery scenario it reaches in both
+  appearances, including the controls placed on it (the "Auditing a change to a colour token or a surface" section of
+  `docs/ui-accessibility.md`). Keep HeroUI's default appearance when addressing a shortfall on that custom surface.

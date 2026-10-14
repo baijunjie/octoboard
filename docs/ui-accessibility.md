@@ -6,7 +6,15 @@ under.
 
 ## Conformance level and exceptions
 
-Every control and view in `packages/ui` meets WCAG 2.2 level AA, checked in both the light and the dark appearance.
+Style requirements follow this priority:
+
+1. HeroUI components use the library's default appearance through its supported variants and slots.
+2. Application-authored custom styles follow WCAG 2.2 level AA in both the light and the dark appearance.
+
+Do not override HeroUI's default colours, placeholder colours, opacity, borders or other visual treatments solely to
+meet an AA threshold. A library-default appearance below that threshold is not a project bug or an exception requiring
+approval. The visual thresholds below apply to application-authored custom styles; application-level keyboard access,
+accessible names, focus handling and announcements remain required.
 
 The user has kept a few shortfalls on purpose, each marked by a comment at its code saying so. Leave one that is marked
 as it is, and do not add a new exception without the user's say.
@@ -444,9 +452,9 @@ component tests and browser inspection.
 
 ### Do not change how a HeroUI component looks
 
-Contrast is not a reason to change how a HeroUI component looks. The user had the `style.css` overrides that gave every
-field and checkbox a `--muted` border removed, because HeroUI's own are borderless, so never add a border, frame or
-outline that HeroUI does not draw itself.
+Keep HeroUI's default appearance, including placeholder colours and hover opacity. A contrast measurement alone does
+not justify changing its colours, theme tokens, borders, frames or outlines. Use the component's own supported variants
+and slots; layout and sizing adaptations do not authorize replacing its visual treatment.
 
 ### Form controls on a surface
 
@@ -488,46 +496,36 @@ glyph separately from the button fill. The row's own hover tint is not the butto
 
 ### HeroUI's own text colours
 
-HeroUI's text colours do need checking.
-
-- Its stock light `--muted` (`text-muted`, its secondary text) reached 4.5:1 only on the white surfaces and fell short
-  on `--background` and `--default`, where its own components put it. `style.css` therefore darkens the light value
-  slightly at the token level.
-- Even so, the `Tabs` list dims a hovered tab to 70% opacity, which brings its muted label down to about 3:1, so every
-  `Tabs.Tab` in `packages/ui` overrides the hover to darken the label instead (`hover:text-foreground
-  hover:opacity-100`), with the reason in a comment at each of the three tab lists.
-
-So measure each text and indicator colour a HeroUI component draws by default against what it actually sits on, in both
-appearances, rather than assuming it passes.
+HeroUI's stock text and placeholder colours retain the library's default treatment, even where a measurement falls
+below the custom-style thresholds. Do not add colour or opacity overrides to make its default components pass those
+thresholds. Application-authored text on a custom surface is checked against its actual background in both appearances.
 
 ### Where to fix a shortfall
 
-- Fix a shortfall in that colour alone with a utility class on that part. Tailwind's utilities layer overrides HeroUI's
-  components layer without `!`.
-- Fix it at the token in `style.css` when the token itself falls short.
+- Fix a shortfall in application-authored styling at its custom part or shared application token.
+- When an application-authored surface causes a shortfall, adjust that surface rather than overriding the HeroUI
+  component's default appearance.
+- Do not treat an existing component override as permission to add another one.
 
 ### Finding every rule that draws a colour
 
-A fix at a token reaches only the rules that read that token, and HeroUI draws the same-looking text from more than one
-rule. So grep its compiled stylesheet (`packages/ui/node_modules/@heroui/styles/dist/heroui.min.css`) for the token and
-for the CSS property both, and look for the elements no rule of either kind matches.
-
-Those elements fall through to Tailwind's preflight, which derives the colour from the element's own `currentcolor` — a
-placeholder on anything but HeroUI's four input classes is half the foreground over the field's own fill. Such text
-moves with whatever fill the element sits on, and a change at the token never reaches it.
+A custom token reaches only the rules that read it. Inspect the rendered element and computed styles to find which
+rule supplies a colour before changing application-authored styling. HeroUI's compiled stylesheet
+(`packages/ui/node_modules/@heroui/styles/dist/heroui.min.css`) is the reference for its defaults, including where an
+input inherits a placeholder colour from preflight rather than a component-specific rule. That inheritance does not
+make the default placeholder an application-authored style.
 
 ### Surface-filled components in a dialog or popover
 
-HeroUI's `--surface` equals its `--overlay` in both appearances. A surface-filled component (`Alert`, `Card`) inside a
-dialog or popover is therefore set apart only by its shadow, which does not show in the dark appearance. Give it a fill
-of its own there: the soft fill of its status, `bg-warning-soft shadow-none` and its siblings. Notices embedded in
-Markdown documents retain that status fill and foreground text, with compact spacing for the icon and message.
+Choose the component's supported variant or status for a dialog or popover and keep that variant's default fill,
+foreground and shadow. Do not replace those defaults solely because their measured contrast or separation falls below
+a custom-style threshold. Any additional application-authored surface follows the custom-style requirements.
 
 ### Auditing a change to a colour token or a surface
 
-A change to a colour token or a surface touches every screen, so its audit covers every gallery scenario in both
-appearances (the user rejected a re-theme whose contrast had been spot-checked). It also measures what a pass over text
-and glyphs misses:
+A change to an application-authored colour token or surface can touch every screen, so its audit covers every gallery
+scenario it affects in both appearances. HeroUI's default visual treatment is not redefined by that audit. It also
+measures what a pass over text and glyphs misses:
 
 - Every fill — a chip, a tertiary button, a ghost button's hover — against the surface it sits on.
 - An animated state at its faintest frame. An `animate-pulse` glyph sank to about 2:1; animate such a glyph without
@@ -543,21 +541,11 @@ siblings where the tokens give 3.67:1 and 4.58:1. Take a recorded ratio from the
 
 ### A region with a surface colour of its own
 
-A region given a surface colour of its own needs HeroUI's `--default`-filled controls checked on it in particular: the
-dark sidebar landed on `--default`'s own lightness and every such control vanished.
-
-- Override the whole `--default` family on that subtree, as `.sidebar-fills` and `.control-fills` in
-  `packages/ui/src/style.css` do. `--default-hover` and `--default-soft` are computed on `<html>`, and `--default` alone
-  does not reach them.
-- Such an override moves the ground under the text HeroUI draws on those fills too, so its audit covers every control
-  the family reaches in that subtree, label and glyph, resting and hovered.
-- The label's colour is not necessarily the foreground, because an enclosing HeroUI component may have imposed one
-  already: `.modal__body` applies `text-muted`, which everything inside a dialog's body inherits, controls portalled in
-  from elsewhere included. So a label that needs 4.5:1 on the new fill is given `text-foreground` there explicitly
-  rather than assumed to have it.
-- Those texts also pin how far such a fill may go. Settle its lightness from them first — the darkest label and the
-  most muted one HeroUI puts on the family, in both appearances — rather than picking the fill for how it looks and
-  auditing afterwards, or each nudge for looks frees one label and leaves another under 4.5:1.
+An application-authored surface must be checked with the text and controls actually rendered on it. Prefer a surface
+that works with HeroUI's default controls, and use the component's supported variant for that context. If custom
+styling causes a shortfall, fix the custom surface or styling rather than changing the component's default colours or
+visual treatment. Application-authored labels, glyphs and state indicators are checked at rest and while hovered or
+selected, compositing translucent fills over their actual backgrounds.
 
 ### A glyph or tint on the window material
 
