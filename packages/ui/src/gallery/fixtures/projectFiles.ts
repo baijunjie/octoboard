@@ -87,9 +87,9 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     title: "A project session's files",
     description:
-      "Folders first, natural order, .git left out. src is expanded; press a file for the viewer and Left/Right to visit visible files. Hover or focus file and folder rows for their Copy path actions; select main.ts, close its viewer, and open src's actions to check the selected row. Select Hub, then Search API actions → Browse files to inspect a project without changing the selected console session. Narrow the window and open the project pane drawer to see the same tree over the terminal.",
+      "Folders first, natural order, .git left out. src is expanded and main.ts is selected: its rounded highlight has space on all four sides, matching Git rows. Compare its actions button with the selected sidebar session and the console header: resting glyphs stay muted, while hovering or opening each menu gives it the shared subtle tint. Press a file for the viewer and Left/Right to visit visible files. Hover or focus file and folder rows for their Copy path actions. Select Hub, then Search API actions → Browse files to inspect a project without changing the selected console session. Narrow the window and open the project pane drawer to see the same tree over the terminal.",
     state,
-    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.wait(300)],
+    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
   },
   {
     id: "files-row-no-clipboard",

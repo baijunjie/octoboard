@@ -8,8 +8,8 @@ import { useT } from "../i18n/react";
 
 /** Every row, of the Files tree and of the Git mode's change list and tree, is one line of this
  * height, which is what lets the tree be virtualized and a row be scrolled into view from its
- * position alone. `RowContent`'s `h-7` is this height, whichever shape of row it lays out. */
-export const ROW_HEIGHT = 28;
+ * position alone. It includes `RowContent`'s `h-7` and the row's `my-0.5` margins. */
+export const ROW_HEIGHT = 32;
 
 /** The content of a directory's row: a chevron, a folder icon, the name and optional actions. */
 export function DirectoryRow({ name, isExpanded, link = false, children }: { name: string; isExpanded: boolean; link?: boolean; children?: React.ReactNode }): React.ReactElement {
@@ -39,11 +39,11 @@ export function DirectoryRow({ name, isExpanded, link = false, children }: { nam
  * `group` its end-of-row controls key their visibility off, so a row laid out without this class
  * would hold an actions button that never appears. */
 export const ROW_CLASS = [
-  "group cursor-default rounded-md text-sm outline-none select-none hover:bg-panel-hover data-[current]:bg-panel-selected",
+  "group mx-1 my-0.5 cursor-default rounded-md text-sm outline-none select-none hover:bg-panel-hover data-[current]:bg-panel-selected",
   "data-[focus-visible]:ring-2 data-[focus-visible]:ring-focus data-[focus-visible]:ring-inset",
 ].join(" ");
 
-/** What a row lays out, in one line of `ROW_HEIGHT`: indented by its level inside a `TreeItem`, or,
+/** What a row lays out: indented by its level inside a `TreeItem`, or,
  * for a row of a flat list (`flat`), which has no level to read, inset by a fixed padding. A flat
  * row also sits a little looser, having no indent to carry part of the separation. */
 export function RowContent({ children, flat = false }: { children: React.ReactNode; flat?: boolean }): React.ReactElement {

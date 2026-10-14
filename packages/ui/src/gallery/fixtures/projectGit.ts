@@ -344,9 +344,9 @@ export const projectGitScenarios: Scenario[] = [
     group: GROUP,
     title: "A worktree's uncommitted changes",
     description:
-      "Conflicted, staged, unstaged and untracked changes share the list. Open a file to inspect its viewer, or use the controls to explore filters, folders and status tooltips. The repository includes rename, expansion, budget and read-failure cases.",
+      "Conflicted, staged, unstaged and untracked changes share the list. package.json is selected: its rounded highlight has space on all four sides, matching Files and folder-grouped Git rows. Its actions button has a muted resting glyph and the shared subtle tint when hovered or open, matching the selected sidebar session and console header. Open a file to inspect its viewer, or use the controls to explore filters, folders and status tooltips. The repository includes rename, expansion, budget and read-failure cases.",
     state,
-    steps: openGit,
+    steps: [...openGit, (ui) => ui.press(ui.changeRow("package.json", "conflicted")), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
   },
   {
     id: "git-worktree-gone",
@@ -454,10 +454,14 @@ export const projectGitScenarios: Scenario[] = [
     id:"git-changes-tree",
     group:GROUP,
     title:"Changes grouped by folder",
+    description:"Directories start expanded and config.ts is selected inside src. Its rounded highlight keeps the same space on all four sides as Files and the flat Git list, while file labels follow the folder indentation. Compare file actions buttons at rest, then hover or open their menus for the same subtle shared hover tint.",
     state:state,
     preferences:{changeLayout:"tree"},
     steps: [
       ...openGit,
+      (ui) => ui.press(ui.changeRow("config.ts", "renamed")),
+      (ui) => ui.wait(600),
+      (ui) => ui.key("Escape"),
     ],
   },
   {

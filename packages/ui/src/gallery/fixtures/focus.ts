@@ -186,7 +186,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project focus",
     state: scrollingFocusState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    description: "The switch beside the Sessions count starts off; hover or focus it for its Show all project sessions tooltip. Colored summary chips and gray count badges sit above archives. Scroll to confirm Sessions stays clear above the fade. At a 200px window height, Archived pushes it away at the top; the preview hides child sessions and retains View all.",
+    description: "The switch beside the Sessions count starts off; hover or focus it for its Show all project sessions tooltip. Colored summary chips and gray count badges sit above archives. Scroll to confirm Sessions stays clear above the fade. At a 200px window height, Archived pushes it away at the top; the preview hides child sessions and retains View all. Compare the selected session card and project header actions buttons at rest with muted glyphs, then hover or open each menu for the shared subtle tint.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Plan the database migration", name: "Write the migration" }))),
     ],
@@ -197,7 +197,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project focus including console sessions",
     state: combinedState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The switch beside Sessions is on; hover or focus it for its tooltip. Bound and unbound cards differ subtly; owner badges precede single-line Latin and CJK titles, which fade and reveal their full text on hover. Status, owner and agent marks share a column; text lines align even with empty owner slots. Pin/menu spacing matches the header controls. Nested cards inherit owner colors; hover badges for owner names. Pinned cards come first, then Waiting for you, Awaiting instructions, Working and Interrupted; children stay under parents. Scroll to confirm Sessions stays above the fade and Archived pushes it away at a 200px window height.",
+    description: "The switch beside Sessions is on; hover or focus it for its tooltip. Bound and unbound cards differ subtly; owner badges precede single-line Latin and CJK titles, which fade and reveal their full text on hover. Status, owner and agent marks share a column; text lines align even with empty owner slots. Pin/menu spacing matches the header controls. Nested cards inherit owner colors; hover badges for owner names. Pinned cards come first, then Waiting for you, Awaiting instructions, Working and Interrupted; children stay under parents. Scroll to confirm Sessions stays above the fade and Archived pushes it away at a 200px window height. Card and header actions buttons share muted resting glyphs and the shared subtle tint when hovered or open.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Compare ranking strategies", name: "Rework the result ranking" }))),
     ],
@@ -208,7 +208,7 @@ export const focusScenarios: Scenario[] = [
     title: "Console session focus",
     state: scrollingFocusState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    description: "Bound cards and archives stay under their owners. Scroll the long list to confirm Sessions stays clear above the fade and, at a 200px window height, Archived replaces it at the top. The switch strip includes waiting, working and inactive sessions; hover markers for details.",
+    description: "Bound cards and archives stay under their owners. Scroll the long list to confirm Sessions stays clear above the fade and, at a 200px window height, Archived replaces it at the top. The switch strip includes waiting, working and inactive sessions; hover markers for details. The header plus menu, header actions, nested project actions, session card actions and archived session actions use the same muted resting glyphs and the shared subtle tint when hovered or open.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Prevent duplicate API requests", name: "Add idempotency keys" }))),
     ],

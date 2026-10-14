@@ -129,7 +129,7 @@ function FlatChangeList({
   return (
     // No side padding on the scroll container: the virtualized layout makes each row as wide as the
     // list's inner width and places it inside that padding, so the list would overflow sideways. The
-    // rows (`mx-1`) and headings carry the inset themselves.
+    // shared row class and headings carry the inset themselves.
     // Not HeroUI's `ListBox`, which has no place for a control inside an option: a row's action
     // button has to be reached by keyboard, and a `GridList` row (like the tree's) hands focus to its
     // children with the arrow keys that run along the row, HeroUI having no equivalent.
@@ -195,7 +195,7 @@ function ChangeRow({ item, isSelected }: { item: ChangeItem; isSelected: boolean
   // Marked `data-current`, not `data-selected`: react-aria-components writes the row's
   // `data-selected` itself, from a selection the list does not have.
   return (
-    <GridListItem id={item.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={`${ROW_CLASS} mx-1`}>
+    <GridListItem id={item.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS}>
       <RowContent flat>
         <ChangeRowBody item={item} name={name} detail={detail} />
       </RowContent>

@@ -464,6 +464,28 @@ Focus-mode session cards use the opaque `--panel` surface over the sidebar's `--
 hover and selected tints on top. Their titles use the shared single-line fading label, including its full-name
 tooltip and hover marquee, rather than an ellipsis or a line clamp.
 
+### Row action menu buttons
+
+File, Git, project and session rows, focus cards and pane headers use `ActionMenu`'s shared trigger
+for their ellipsis menu. Keep its 24-by-24-pixel target, 16-pixel glyph, rounded corners and focus
+ring consistent. A caller changes the trigger's layout or content only when its placement needs it;
+it does not choose separate colours for the same ellipsis action.
+
+- At rest, the trigger is transparent with a muted glyph. A row's selection reveals its
+  actions without painting each button as active.
+- While hovered or while its menu is open, the trigger uses `bg-default` and a foreground glyph.
+  Its wrapper supplies the shared `sidebar-fills` family so Files, Git and sidebar menus use the
+  same translucent hover tint, independent of the surrounding pane's control fills. Keep this
+  subtle tint; do not replace it with a solid muted fill or an inverted glyph.
+- The glyph must reach 3:1 against its actual background in every state. The hover tint does not
+  need 3:1 against the row: the glyph identifies the control, rather than a filled boundary.
+- Keyboard focus keeps the existing focus ring. Revealing an action must not leave it dimmed once
+  its visibility transition finishes.
+
+Measure both appearances on the rendered resting, hovered and selected surfaces. Read the final
+computed colours after transitions settle, composite translucent ancestor fills, and check the
+glyph separately from the button fill. The row's own hover tint is not the button's hover feedback.
+
 ### HeroUI's own text colours
 
 HeroUI's text colours do need checking.

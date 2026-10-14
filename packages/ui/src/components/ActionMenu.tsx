@@ -275,7 +275,7 @@ export function ActionMenu({
     // inline it sits on the baseline of a line box taller than itself, a pixel above the centre of
     // its row.
     <div
-      className={`flex ${className}`}
+      className={`flex sidebar-fills ${className}`}
       onClick={(e) => e.stopPropagation()}
       onPointerDownCapture={pointerFocus.onPointerDownCapture}
     >

@@ -195,8 +195,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   the app's WKWebView and which moves made by script have to set the modality themselves, accessible names, including
   the one an icon-only control needs beside its tooltip, roles and states — the status region that has to stay mounted,
   and the durable visible copy that carries its own instead, a visual heading being a heading element, and the one
-  `main` the content panel always holds — contrast (thresholds, measuring HeroUI's own colours, where a
-  fix belongs, auditing a token or surface change, a region with a surface of its own and a glyph on the window
+  `main` the content panel always holds — contrast (thresholds, shared row action menu button states,
+  measuring HeroUI's own colours, where a fix belongs, auditing a token or surface change, a region with a surface
+  of its own and a glyph on the window
   material), colour never the only carrier, motion, and the shortfalls the user has kept on purpose.
 
 ## Code
