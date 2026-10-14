@@ -39,8 +39,8 @@ export function EmptyPanel({
 } & (
   | {
       /** `icon` shows only on the full panel's button; a compact row already leads with its glyph. */
-      action?: { label: string; icon?: LucideIcon; onPress: () => void };
-      /** A second way out under the action, quieter than it, for a full panel only. */
+      action?: { label: string; icon?: LucideIcon; variant?: "primary" | "secondary"; onPress: () => void };
+      /** A second way out beside the action, quieter than it, for a full panel only. */
       secondaryAction?: { label: string; icon?: LucideIcon; onPress: () => void };
       silent?: never;
     }
@@ -105,19 +105,23 @@ export function EmptyPanel({
           two apart — too little to read as a heading. */}
       <Heading className="text-base font-semibold text-foreground">{message}</Heading>
       {description && <p className="max-w-sm text-sm break-words text-muted">{description}</p>}
-      {action && (
-        // A press never takes focus: it would drop to `<body>` when the panel goes away, and
-        // whatever the action opens or starts places focus itself.
-        <Button size="sm" variant="secondary" preventFocusOnPress onPress={action.onPress}>
-          {ActionIcon && <ActionIcon aria-hidden="true" className="size-4" />}
-          {action.label}
-        </Button>
-      )}
-      {secondaryAction && (
-        <Button size="sm" variant="ghost" preventFocusOnPress onPress={secondaryAction.onPress}>
-          {SecondaryIcon && <SecondaryIcon aria-hidden="true" className="size-4" />}
-          {secondaryAction.label}
-        </Button>
+      {(action || secondaryAction) && (
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          {action && (
+            // A press never takes focus: it would drop to `<body>` when the panel goes away, and
+            // whatever the action opens or starts places focus itself.
+            <Button size="sm" variant={action.variant ?? "secondary"} preventFocusOnPress onPress={action.onPress}>
+              {ActionIcon && <ActionIcon aria-hidden="true" className="size-4" />}
+              {action.label}
+            </Button>
+          )}
+          {secondaryAction && (
+            <Button size="sm" variant="secondary" preventFocusOnPress onPress={secondaryAction.onPress}>
+              {SecondaryIcon && <SecondaryIcon aria-hidden="true" className="size-4" />}
+              {secondaryAction.label}
+            </Button>
+          )}
+        </div>
       )}
     </EmptyState>
   );

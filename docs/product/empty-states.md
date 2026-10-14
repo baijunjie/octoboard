@@ -23,11 +23,11 @@ The form an empty state takes wherever it fills an area of its own, centred in i
   itself, such as the size of a file that cannot be drawn, or the size before and after for a change between two of
   them, which is not a sentence at all. A state whose title says all there is to say carries no such line.
 - **a button**, where there is something to do about the state, named by that action and sometimes carrying a glyph of
-  its own.
-- **a quieter second action under the button**, where there is another way out of the state worth offering beside the
-  first. It stands below the button rather than beside it and is drawn without a fill of its own, so the panel still
-  leads with the first action and the second reads as the alternative: the welcome screen's Import configuration…
-  under New console (see "What the welcome screen shows" in `docs/product/welcome-screen.md`).
+  its own. It uses the secondary button style unless the view makes it the primary action.
+- **a second action**, where there is another way out of the state worth offering beside the first. It uses the
+  secondary button style. The actions sit beside each other in a centred row and wrap onto another line when there
+  is not enough width. The welcome screen's two actions are described in "What the welcome screen shows" in
+  `docs/product/welcome-screen.md`.
 
 The heading is a heading for assistive technology as well, so the panel shows in the outline of the view it fills, at
 the level of the heading naming whatever the panel stands in for: the two then read as one thing rather than the panel
@@ -62,7 +62,7 @@ second full panel merely because focus mode gives it more room.
 
 Where the region around an empty state already tells assistive technology what the state is, the panel itself is
 hidden from assistive technology, so the state is not read twice; it is then on screen for the eye alone. Such a state
-carries **neither action**, the button nor the quieter one under it: a button inside a subtree hidden from assistive
+carries **neither action**, the first button nor the second: a button inside a subtree hidden from assistive
 technology is still reachable by Tab, yet arrives there with no name and no role, so it would be a stop nothing
 accounts for. A state with something to do about it is therefore never one of these.
 

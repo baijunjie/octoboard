@@ -24,7 +24,7 @@ export const emptyScenarios: Scenario[] = [
     group: GROUP,
     title: "Fresh install, detected supported tools",
     description:
-      "The welcome screen keeps all three supported CLI tools visible with their brand icons: Claude Code and Grok Build are Installed, while Codex is Not detected. New console and Import configuration remain available. Narrow or shorten the window to inspect wrapping and scrolling. New console still opens its dialog; creating the first console replaces the welcome screen with the sidebar and terminal.",
+      "New console is the primary action, beside the secondary Import configuration button in a centered row that wraps on narrow windows. All three supported CLI tools remain visible with their brand icons: Claude Code and Grok Build are Installed, while Codex is Not detected. Narrow or shorten the window to inspect wrapping and scrolling. New console opens its dialog; creating the first console replaces the welcome screen with the sidebar and terminal.",
     state: { ...snapshotState({}), agentAvailability: DETECTED_AGENTS },
   },
   {

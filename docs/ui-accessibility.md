@@ -351,10 +351,10 @@ The sidebar's empty lists use compact rows instead, which add no heading to the 
 
 Every place that has nothing to show takes one shape, through `EmptyPanel`
 (`packages/ui/src/components/EmptyPanel.tsx`): a glyph, a heading naming what is missing, optionally a line under it,
-optionally the action that fills it and, under that action, optionally a quieter second way out of the state (the
-whole shape, and which state takes which part, is `docs/product/empty-states.md`). Nothing builds a second one out of
-centred text, and a state with no glyph is not one of these — HeroUI's bare `EmptyState` is reached only through this
-component.
+optionally the action that fills it and, beside that action, optionally a second way out of the state, in a centred row
+that wraps (the whole shape, and which state takes which part, is `docs/product/empty-states.md`). Nothing builds a
+second one out of centred text, and a state with no glyph is not one of these — HeroUI's bare `EmptyState` is reached
+only through this component.
 
 - The heading is a short phrase carrying **no punctuation at all**, a comma inside it included: a title that needs one
   is a sentence, and the part after the comma belongs in the line under it. "No sessions yet", not "No sessions yet,

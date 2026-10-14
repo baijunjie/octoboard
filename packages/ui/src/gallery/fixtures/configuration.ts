@@ -280,7 +280,7 @@ export const configurationScenarios: Scenario[] = [
     id: "configuration-welcome-unavailable",
     group: GROUP,
     title: "Welcome screen where files cannot be saved or opened",
-    description: "New console is the only action: there is no Import configuration under it.",
+    description: "The primary New console button is the only action: Import configuration is unavailable.",
     state: noConsoleState,
     configuration: { unavailable: true },
   },

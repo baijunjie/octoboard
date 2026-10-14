@@ -73,7 +73,7 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   inside a page, the window shortcuts (⌘[ / ⌘], ⌃Tab) a page passes on to the window, the light surface a page renders
   on whatever the window's appearance is, and right-clicking inside a page.
 - [Welcome screen](product/welcome-screen.md) — what the window shows with no console at all: the screen that fills the
-  content panel, its New console button and the quieter Import configuration… under it where the window can open a file,
+  content panel, its New console button and the quieter Import configuration… beside it where the window can open a file,
   the permanent supported-tool list with brand icons, detection statuses and a PATH hint, why New console stays enabled, what
   is not on screen in that state (the sidebar, the right pane, the terminal's empty state, the top bar's sidebar
   toggle), the pane visibility and widths that are kept rather than reset, and where keyboard focus goes as the first

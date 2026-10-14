@@ -11,13 +11,13 @@ has been detected on the machine.
 - A glyph and a heading saying there are no consoles yet, in the shape every empty state takes (see "The full panel" in
   `docs/product/empty-states.md`).
 - A line explaining what a console is: that it holds the projects the user works in and the sessions they run in them.
-- A button, **New console**, which opens the same new-console dialog the rail's New console opens (see "Consoles" in
-  `docs/product/consoles-and-projects.md`). A console created here becomes the current one as soon as it appears, as
-  one created from the rail does (see "The console switcher" in `docs/product/sidebar.md`).
-- Under it, quieter, **Import configuration…**, which opens the import dialog for a configuration document exported on
-  another machine (see "In the window" in `docs/product/configuration-export-and-import.md`) — the way a machine with
-  nothing on it is set up from one that has. It is there only where the window can open a file, which the macOS
-  application and a browser both can; where it cannot, New console stands alone.
+- A primary button, **New console**, which opens the same new-console dialog the rail's New console opens (see
+  "Consoles" in `docs/product/consoles-and-projects.md`). A console created here becomes the current one as soon as it
+  appears, as one created from the rail does (see "The console switcher" in `docs/product/sidebar.md`).
+- Beside it, a secondary button, **Import configuration…**, which opens the import dialog for a configuration document
+  exported on another machine (see "In the window" in `docs/product/configuration-export-and-import.md`) — the way a
+  machine with nothing on it is set up from one that has. It is there only where the window can open a file, which the
+  macOS application and a browser both can; where it cannot, New console stands alone.
 
 - Below the actions, a **supported CLI tools** heading and a card containing a list: **Claude Code**, **Codex**, then
   **Grok Build**. Each row carries its tool's brand mark, name and status badge. The list stays visible for the whole
@@ -33,7 +33,7 @@ it available on `PATH`. **New console stays enabled regardless of these statuses
 agent. Session availability rules are in "Opening a session" in `docs/product/sessions.md`.
 
 When the window is too short to fit the screen, its content scrolls vertically so the actions, list and hint remain
-reachable. On narrow windows, row contents wrap rather than being cut off.
+reachable. On narrow windows, the action row and tool row contents wrap rather than being cut off.
 
 ## What is not on screen with no console
 

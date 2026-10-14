@@ -71,7 +71,7 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
           icon={LayoutDashboard}
           message={t("welcome.heading")}
           description={t("welcome.description")}
-          action={{ label: t("welcome.newConsole"), icon: Plus, onPress: () => onOpenDialog({ kind: "new-console" }) }}
+          action={{ label: t("welcome.newConsole"), icon: Plus, variant: "primary", onPress: () => onOpenDialog({ kind: "new-console" }) }}
           secondaryAction={
             configurationFile && { label: t("welcome.importConfiguration"), icon: FileUp, onPress: () => onOpenDialog({ kind: "import-configuration" }) }
           }
