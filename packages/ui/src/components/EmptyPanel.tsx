@@ -13,8 +13,7 @@ import { TitledControl } from "./TitledControl";
  * `silent` is for a state another region already announces: it hides this copy from assistive
  * technology so the state is not read twice. It cannot be combined with an action, the primary one
  * or the secondary: a button inside an `aria-hidden` subtree stays reachable by Tab yet has no name
- * or role. A plain compact row accepts it too, for the API to be complete; only the full panel uses
- * it today. */
+ * or role. A plain compact row accepts it too. */
 export function EmptyPanel({
   icon: Icon,
   message,

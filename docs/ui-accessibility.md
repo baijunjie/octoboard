@@ -406,6 +406,21 @@ element, an error from `role="alert"`.
 - HeroUI's `Alert` renders no role at all, its name notwithstanding. An error that can appear in one after the user has
   moved on puts `role="alert"` on an element of your own inside it.
 
+### Reusing VoiceOver verification
+
+Confirm a new announcement mechanism once in the packaged macOS application with VoiceOver. Reusing an existing
+mechanism does not require another listening pass for each caller or message. Check each caller's wiring with
+automated tests and browser inspection instead: the region's lifetime and text changes, duplicate suppression, focus,
+and whether the region or an ancestor is hidden by `aria-hidden` or `inert` while the real overlay is open.
+
+A new mechanism, or a change to its live-region role, mounting or timing behavior that the existing implementation
+does not cover, needs one representative real-device confirmation. A new caller or location alone is not a new
+mechanism: reusing `StatusAnnouncer` with React Aria's existing live-announcer exemption from modal hiding remains
+reuse when the checks above establish the same accessible region and update behavior. Record actual real-device
+confirmations with their mechanism, environment and observed result so later callers can reuse that scope. Existing
+code and passing DOM tests establish the implementation, not a history of actual VoiceOver listening; do not report
+them as a listening result.
+
 ## Contrast
 
 ### Thresholds

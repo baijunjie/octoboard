@@ -77,6 +77,55 @@ function mountSidebar(initial: Partial<ComponentProps<typeof Sidebar>>, beside?:
   return { container, root, render };
 }
 
+it("announces a project filter's empty result once, clears it when matches return, and leaves focus in the field", async () => {
+  const { container, root, render } = mountSidebar({});
+  const mountedStatus = container.querySelector('[role="status"]');
+  expect(mountedStatus?.textContent).toBe("");
+  act(() => void container.querySelector<HTMLButtonElement>('button[aria-label="Filter projects"]')!.click());
+  const input = document.querySelector<HTMLInputElement>('input[aria-label="Project name contains"]')!;
+  expect(input).not.toBeNull();
+  act(() => input.focus());
+  const type = (value: string) => act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  act(() => void vi.advanceTimersByTime(100));
+  type("missing");
+  expect(container.textContent).toContain("No matching projects");
+  const status = container.querySelector('[role="status"]');
+  expect(status).not.toBeNull();
+  expect(status).toBe(mountedStatus);
+  expect(status!.closest('[aria-hidden="true"]')).toBeNull();
+  expect(status!.textContent).toBe("No matching projects");
+  expect(document.activeElement).toBe(input);
+  const visible = Array.from(container.querySelectorAll("span"))
+    .find((node) => node.textContent === "No matching projects")!;
+  expect(visible.parentElement!.getAttribute("aria-hidden")).toBe("true");
+
+  const updates: MutationRecord[] = [];
+  const observer = new MutationObserver((records) => updates.push(...records));
+  observer.observe(status!, { childList: true, characterData: true, subtree: true });
+  onTestFinished(() => observer.disconnect());
+  type("missing again");
+  render({});
+  await act(async () => {});
+  expect(container.querySelector('[role="status"]')).toBe(status);
+  expect(updates).toHaveLength(0);
+
+  type("Website");
+  expect(status!.textContent).toBe("");
+  type("missing");
+  expect(status!.textContent).toBe("No matching projects");
+  type("");
+  expect(status!.textContent).toBe("");
+  expect(document.activeElement).toBe(input);
+  render({ projects: [] });
+  expect(status!.textContent).toBe("");
+  act(() => root.unmount());
+  await act(async () => void await vi.runAllTimersAsync());
+  expect(vi.getTimerCount()).toBe(0);
+});
+
 /** Mounts the sidebar in `first`'s focus mode with focus on the control `pick` finds, then moves it
  * to `next`'s, as pressing that control does; returns what holds focus once the hand-off has run,
  * and whether the control that held it is still in the document. */

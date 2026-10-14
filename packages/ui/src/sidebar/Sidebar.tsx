@@ -20,6 +20,7 @@ import { EmptyPanel } from "../components/EmptyPanel";
 import { handFocusOff } from "../components/handFocusOff";
 import { RowControls, RowIconSlot } from "../components/RowControls";
 import { FadedScroller } from "../components/scrollFade";
+import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { StatusIcon } from "../components/StatusIcon";
 import { withGitBadge } from "../gitStatusLabel";
 import { isolate } from "../i18n/isolate";
@@ -405,6 +406,7 @@ function ConsoleBody({
     sessionsOf,
   );
   const orderedIds = ordered.map((p) => p.id);
+  const noMatch = projects.length > 0 && ordered.length === 0 ? t("sidebar.filter.noMatch") : undefined;
 
   // Collapsing takes away what a project row holds below it (`data-sessions`), and a keyboard user
   // may be standing in there: a mouse press leaves focus where it is (`preventFocusOnPress`), so
@@ -477,8 +479,13 @@ function ConsoleBody({
       >
         {t("sidebar.projects")}
       </SectionHeading>
-      {projects.length > 0 && ordered.length === 0 ? (
-        <EmptyPanel compact icon={SearchX} message={t("sidebar.filter.noMatch")} />
+      {/* The modal filter popover hides the surrounding sidebar from assistive technology;
+          React Aria keeps a mounted live announcer and its ancestors exposed. */}
+      <div data-live-announcer="true">
+        <StatusAnnouncer text={noMatch} />
+      </div>
+      {noMatch ? (
+        <EmptyPanel compact silent icon={SearchX} message={noMatch} />
       ) : ordered.length === 0 ? (
         // A row, as the console sessions section's own empty state is: the full panel with the same
         // offer now stands in the terminal's area (`TerminalPane`), but only while nothing at all
