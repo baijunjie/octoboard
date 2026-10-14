@@ -81,7 +81,7 @@ function frameDocument(fallback: Direction) {
       {
         type: "element",
         tagName: "div",
-        properties: { dir: firstStrongDirection(tree) ?? fallback, dataMarkdownDocument: "" },
+        properties: { dir: firstStrongDirection(tree) ?? fallback, dataMarkdownDocument: "", className: "markdown-prose prose prose-sm max-w-none" },
         children: tree.children,
       },
     ];
@@ -180,49 +180,37 @@ function styled(
     return React.createElement(tag, {
       dir: dir === "first-strong" ? (node && firstStrongDirection(node as DirectionNode)) : dir,
       ...props,
-      className: screenReaderOnly ? className : className ? `${base} ${className}` : base,
+      className: screenReaderOnly ? className : [base, className].filter(Boolean).join(" "),
     });
   };
 }
 
-const HEADING = "mt-6 mb-3 font-semibold break-words first:mt-0";
-
-// A list, a table or a quote is one block and takes one direction from the first strong letter of
-// its whole text, as the paragraphs and headings do each for themselves; so a list that starts in
-// English and goes on in Arabic is drawn left to right throughout. Giving its items a direction of
-// their own would put their markers outside the list's padding.
+// Direction follows each block's text; Typography owns the document's visual hierarchy.
 const BLOCKS = {
-  h1: styled("h1", `${HEADING} border-b border-current/25 pb-1 text-2xl`, "first-strong"),
-  h2: styled("h2", `${HEADING} border-b border-current/25 pb-1 text-xl`, "first-strong"),
-  h3: styled("h3", `${HEADING} text-lg`, "first-strong"),
-  h4: styled("h4", `${HEADING} text-base`, "first-strong"),
-  h5: styled("h5", `${HEADING} text-sm`, "first-strong"),
-  h6: styled("h6", `${HEADING} text-sm`, "first-strong"),
-  p: styled("p", "my-3 break-words first:mt-0 last:mb-0", "first-strong"),
-  ul: styled("ul", "my-3 list-disc ps-6", "first-strong"),
-  ol: styled("ol", "my-3 list-decimal ps-6", "first-strong"),
-  // A task list item shows its box in place of a bullet.
-  li: styled("li", "my-1 break-words [&.task-list-item]:list-none"),
-  blockquote: styled("blockquote", "my-3 break-words border-s-4 border-current/40 ps-4 italic", "first-strong"),
-  hr: styled("hr", "my-6 border-current/25"),
-  table: styled("table", "my-3 w-full border-collapse", "first-strong"),
-  // A column's alignment reaches the cell as an inline `text-align` (the library turns `align` into
-  // one), which wins over `text-start`; that is only the default, as a header cell would otherwise
-  // take the browser's own centring. The alignment stays the author's physical left and right, not
-  // start and end: GFM specifies it so and every other renderer shows it so, and only an unaligned
-  // column follows the table's own direction.
-  th: styled("th", "border border-current/25 px-3 py-1.5 text-start font-semibold break-words"),
-  td: styled("td", "border border-current/25 px-3 py-1.5 text-start break-words"),
-  // Reached for inline code only: a fenced block's `<pre>` is drawn whole.
+  h1: styled("h1", "", "first-strong"),
+  h2: styled("h2", "", "first-strong"),
+  h3: styled("h3", "", "first-strong"),
+  h4: styled("h4", "", "first-strong"),
+  h5: styled("h5", "", "first-strong"),
+  h6: styled("h6", "", "first-strong"),
+  p: styled("p", "break-words", "first-strong"),
+  ul: styled("ul", "", "first-strong"),
+  ol: styled("ol", "", "first-strong"),
+  li: styled("li", "break-words"),
+  blockquote: styled("blockquote", "break-words", "first-strong"),
+  hr: styled("hr", ""),
+  table: styled("table", "", "first-strong"),
+  // GFM's explicit physical column alignment wins over this directional default.
+  th: styled("th", "text-start"),
+  td: styled("td", "text-start"),
   code: styled("code", "rounded bg-current/10 px-1 py-0.5 font-mono text-[0.9em] break-words", "ltr"),
-  // The footnotes, where `remark-gfm` makes any.
   section: styled("section", "mt-6 border-t border-current/25 pt-3 text-xs"),
 } satisfies Components;
 
 // A task list's boxes are drawn as the checked or unchecked state they record, not as controls. The
 // library already marks them disabled; this keeps them inert whatever it does.
 function TaskBox({ node: _, className, ...props }: ExtraProps & React.InputHTMLAttributes<HTMLInputElement>): React.ReactElement {
-  return <input {...props} disabled className={className ? `me-2 align-middle ${className}` : "me-2 align-middle"} />;
+  return <input {...props} disabled className={className} />;
 }
 
 /** A Markdown text as a document, drawn again only when its text or callbacks change. Each block
@@ -268,12 +256,14 @@ export const MarkdownDocument = memo(function MarkdownDocument({
       code: ({ node, className, ...props }) => {
         if (classNamesOf(node).includes("math-inline")) {
           return (
-            <FormulaView
-              source={(node ? textOf(node) : "").replace(/\n$/, "")}
-              display={node?.properties.dataDisplay !== undefined}
-              inline
-              overBudget={overBudget(node)}
-            />
+            <span className="not-prose">
+              <FormulaView
+                source={(node ? textOf(node) : "").replace(/\n$/, "")}
+                display={node?.properties.dataDisplay !== undefined}
+                inline
+                overBudget={overBudget(node)}
+              />
+            </span>
           );
         }
         return <BLOCKS.code node={node} className={className} {...props} />;
@@ -281,12 +271,20 @@ export const MarkdownDocument = memo(function MarkdownDocument({
       pre: ({ node }) => {
         const code = node && codeChild(node);
         if (code && classNamesOf(code).includes("math-display")) {
-          return <FormulaView source={fenceOf(node).text} display inline={false} overBudget={overBudget(node) || overBudget(code)} />;
+          return (
+            <div className="not-prose">
+              <FormulaView source={fenceOf(node).text} display inline={false} overBudget={overBudget(node) || overBudget(code)} />
+            </div>
+          );
         }
         if (node && fenceOf(node).language === "mermaid") {
-          return <MermaidBlock source={fenceOf(node).text} overBudget={overBudget(code)} theme={theme} />;
+          return (
+            <div className="not-prose">
+              <MermaidBlock source={fenceOf(node).text} overBudget={overBudget(code)} theme={theme} />
+            </div>
+          );
         }
-        return <div className="my-3">{node ? renderCode(fenceOf(node)) : null}</div>;
+        return <div className="not-prose my-4">{node ? renderCode(fenceOf(node)) : null}</div>;
       },
       a: ({ node, href, children, ...rest }) => {
         // The links `remark-gfm` makes for a footnote and back from it. They stay in the document.

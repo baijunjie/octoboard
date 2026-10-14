@@ -227,10 +227,36 @@ A paragraph with **bold**, _italic_, \`inline code\`, a [web link](https://examp
 
 - [x] A finished task
 - [ ] An open task
+  - An ordinary nested item
+  - [ ] A nested task
+
+A loose list keeps its text aligned with the tight list above:
+
+- An ordinary item
+
+- [x] A finished task with a second paragraph
+
+  The second paragraph starts at the same text edge.
+
+- [ ] An open task
+
+  - [x] A nested finished task
+
+  - An ordinary nested item
 
 > A quoted remark that goes on for a while, so that the bar beside it spans more than one line of the document.
 
 ### A table
+
+#### Column details
+
+##### Small heading
+
+The fifth heading level remains distinct from its paragraph.
+
+###### Smallest heading
+
+The sixth heading level keeps the same document text edge.
 
 | Name | Kind | Notes |
 | :--- | :-: | ---: |
@@ -325,6 +351,26 @@ const ARABIC_GUIDE = `# دليل العارض
 
 * [x] مهمة منجزة
 * [ ] مهمة مفتوحة
+  - عنصر فرعي
+  - [ ] مهمة فرعية
+
+قائمة مهام مفتوحة مع فقرة ثانية وعنصر فرعي:
+
+- عنصر عادي
+
+- [x] مهمة منجزة
+
+  تبدأ هذه الفقرة من حافة النص نفسها.
+
+  This English continuation reads from the left while the task marker stays on the right.
+
+- [ ] مهمة مفتوحة
+
+  - [x] مهمة فرعية منجزة
+
+  - عنصر فرعي عادي
+
+- [ ] An English task within this Arabic-first loose list
 
 + Starts in English
 + ثم يتابع بالعربية
@@ -789,6 +835,12 @@ $$
 
 This formula is unfinished: $\\frac{1}{$.
 
+The same unfinished formula on its own line:
+
+$$
+\\frac{1}{
+$$
+
 \`\`\`math
 x = y
 \`\`\`
@@ -835,7 +887,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     title: "Files",
     description:
-      "Code in several languages (one file with lines wider than the viewer), Markdown that opens as a document (headings, lists, tables, fenced code, markup that must stay inert, and right-to-left text: in the guide, a list, quote and table that read from the right inside a left-to-right document; in the Arabic document, the same blocks in the other direction, with an English paragraph and an English-first list among them; the figures document has no letters, so with the ar language it reads from the right), every image format, an SVG and HTML whose scripts must not run, unsupported binary, a grammar that fails, files past the budgets, loading and failed reads. Previous / Next walks them in the same mounted viewer. On docs/guide.md or src/generated/table.ts, Tab into the reading surface for its focus ring and keyboard scrolling. In each header the path is followed by the size as a chip, and no subtitle row sits under the title. The copy button is the first of the controls at the end of the row, ahead of the Markdown view choice and the word wrap choice (a Markdown file switched to source shows all three), and it stays there when a long name pushes the size chip, or in a narrow window the path itself, down to a row of its own. Every reading surface (highlighted code, plain text, a rendered document) fades at the edge it hides more behind and not at an edge with nothing past it, and shows no fade at all when its content fits: compare docs/guide.md, src/generated/table.ts and logs/server.log (each taller than the viewer) with README.md, scripts/build.py and src/strange.brokengrammar (each in view). docs/releases.md (a rendered table wider than the viewer) and logs/server.log (plain text, a few lines wider than the viewer) scroll both ways, at the window's own minimum width as well as the default: look at their bottom edge, where the fade meets the horizontal scrollbar, with the system's scrollbars set to show always; the wrap choice, off until chosen, takes the sideways scroll from the log.",
+      "Code in several languages (one file with lines wider than the viewer), Markdown that opens as a document (headings, tight and loose lists with ordinary and task items sharing a text edge, nested tasks and continuation paragraphs, tables, fenced code, markup that must stay inert, and right-to-left text: in the guide, a list, quote and table that read from the right inside a left-to-right document; in the Arabic document, the same blocks in the other direction, with an English paragraph and an English-first list among them; the figures document has no letters, so with the ar language it reads from the right), every image format, an SVG and HTML whose scripts must not run, unsupported binary, a grammar that fails, files past the budgets, loading and failed reads. Previous / Next walks them in the same mounted viewer. On docs/guide.md or src/generated/table.ts, Tab into the reading surface for its focus ring and keyboard scrolling. In each header the path is followed by the size as a chip, and no subtitle row sits under the title. The copy button is the first of the controls at the end of the row, ahead of the Markdown view choice and the word wrap choice (a Markdown file switched to source shows all three), and it stays there when a long name pushes the size chip, or in a narrow window the path itself, down to a row of its own. Every reading surface (highlighted code, plain text, a rendered document) fades at the edge it hides more behind and not at an edge with nothing past it, and shows no fade at all when its content fits: compare docs/guide.md, src/generated/table.ts and logs/server.log (each taller than the viewer) with README.md, scripts/build.py and src/strange.brokengrammar (each in view). docs/releases.md (a rendered table wider than the viewer) and logs/server.log (plain text, a few lines wider than the viewer) scroll both ways, at the window's own minimum width as well as the default: look at their bottom edge, where the fade meets the horizontal scrollbar, with the system's scrollbars set to show always; the wrap choice, off until chosen, takes the sideways scroll from the log.",
     viewer: { subjects: files },
   },
   {
@@ -850,7 +902,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     title: "Rendered document",
     description:
-      "The note opens as a document. The first diagram runs left to right, from Client to Reply, and is named Request flow; the theme control above the window switches its background and text with highlighted code (white and #0e1116 in light, #0a0c10 and #f0f3f6 in dark). The next diagram has no title, so it is named Diagram, or 图表 when the language is Chinese. The one after that cannot be drawn: its source sits under the failure notice, and the sentence under it is still there. In the line about cost, $20 and $30 stay text, while $100/2$ and E=mc^2 are formulas, as is the formula on its own line. An unfinished formula shows its source, a math fence stays code, and the formula in the Arabic sentence stays left to right. The picture is shown and named by its description. The picture whose path leaves the project keeps only its description. The missing one keeps its description and says it could not be shown. Further down, a diagram is left as source under the notice that the document is large. The link to the other note opens that file on the heading Kept; Next opens the same file from the top. The link to the heading in this note scrolls to it.",
+      "The note opens as a document. The first diagram runs left to right, from Client to Reply, and is named Request flow; the theme control above the window switches its background and text with highlighted code (white and #0e1116 in light, #0a0c10 and #f0f3f6 in dark). The next diagram has no title, so it is named Diagram, or 图表 when the language is Chinese. The one after that cannot be drawn: its source sits under the failure notice, and the sentence under it is still there. Diagram and block formula notices retain their status background with compact corners; their icon and source share a horizontal inset, and their outer edges align with the document. In the line about cost, $20 and $30 stay text, while $100/2$ and E=mc^2 are formulas, as is the formula on its own line. Unfinished inline and block formulas show their source, a math fence stays code, and the formula in the Arabic sentence stays left to right. The picture is shown and named by its description. The picture whose path leaves the project keeps only its description. The missing one keeps its description and says it could not be shown. Further down, a diagram is left as source under the notice that the document is large. The link to the other note opens that file on the heading Kept; Next opens the same file from the top. The link to the heading in this note scrolls to it.",
     files: { "docs/picture.png": { image: IMAGES.before_png } },
     viewer: { subjects: documentSubjects },
   },

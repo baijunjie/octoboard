@@ -1,0 +1,55 @@
+@layer utilities {
+  .markdown-prose.prose {
+    color: inherit;
+    overflow-wrap: break-word;
+    --tw-prose-body: currentColor;
+    --tw-prose-headings: currentColor;
+    --tw-prose-bold: currentColor;
+    --tw-prose-quotes: currentColor;
+    --tw-prose-code: currentColor;
+    --tw-prose-links: var(--document-link);
+    --tw-prose-counters: currentColor;
+    --tw-prose-bullets: currentColor;
+    --tw-prose-quote-borders: color-mix(in srgb, currentColor 40%, transparent);
+    --tw-prose-hr: color-mix(in srgb, currentColor 25%, transparent);
+    --tw-prose-th-borders: color-mix(in srgb, currentColor 25%, transparent);
+    --tw-prose-td-borders: color-mix(in srgb, currentColor 25%, transparent);
+  }
+
+  .markdown-prose.prose :where(h5, h6):not(:where(.not-prose, .not-prose *)) {
+    margin-block-start: 2em;
+    margin-block-end: 1em;
+    font-size: 1em;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+
+  .markdown-prose.prose :where(code, blockquote p):not(:where(.not-prose, .not-prose *))::before,
+  .markdown-prose.prose :where(code, blockquote p):not(:where(.not-prose, .not-prose *))::after {
+    content: none;
+  }
+
+  /* A loose item's paragraph may read the other way; its box stays with the list's markers. */
+  .markdown-prose.prose :where(.task-list-item:dir(ltr) > input, .task-list-item:dir(ltr) > p > input) {
+    direction: ltr;
+  }
+
+  .markdown-prose.prose :where(.task-list-item:dir(rtl) > input, .task-list-item:dir(rtl) > p > input) {
+    direction: rtl;
+  }
+
+  /* Task boxes occupy the marker gutter, including in right-to-left and loose lists. */
+  .markdown-prose.prose :where(.task-list-item):not(:where(.not-prose, .not-prose *)) {
+    position: relative;
+    list-style-type: none;
+  }
+
+  .markdown-prose.prose :where(.task-list-item input[type="checkbox"]):not(:where(.not-prose, .not-prose *)) {
+    position: absolute;
+    inset-inline-start: -1.25em;
+    top: 0.4em;
+    width: 0.95em;
+    height: 0.95em;
+    margin: 0;
+  }
+}

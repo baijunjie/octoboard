@@ -413,8 +413,8 @@ moves with whatever fill the element sits on, and a change at the token never re
 
 HeroUI's `--surface` equals its `--overlay` in both appearances. A surface-filled component (`Alert`, `Card`) inside a
 dialog or popover is therefore set apart only by its shadow, which does not show in the dark appearance. Give it a fill
-of its own there: the soft fill of its status, `bg-warning-soft shadow-none` and its siblings, which is what every
-`Alert` in the application now takes.
+of its own there: the soft fill of its status, `bg-warning-soft shadow-none` and its siblings. Notices embedded in
+Markdown documents retain that status fill and foreground text, with compact spacing for the icon and message.
 
 ### Auditing a change to a colour token or a surface
 
@@ -517,16 +517,17 @@ hand-off's ring follows how the press came, as "Focus moved by a change the user
 content that is still shown — are one block in three tones (`Notice` in `packages/ui/src/viewer/viewerStates.tsx`):
 an explanation of how the content is drawn, a warning about the content itself, and a part of it the viewer could not
 show. Each is a HeroUI `Alert` of its own status, which draws the glyph that goes with it — the circled `i`, the
-warning triangle, the circled `!` — from a childless `Alert.Indicator`; the fill is named by the tone, as the section
-above requires. The glyph is what carries the tone: those fills sit at 1.1–1.5:1 against the dialog body and say
-nothing on their own. Measured on the fill each one actually sits on, in both appearances: the sentence is 11.9:1 or
-better in every tone and the glyph 5.1:1 or better, against 4.5:1 and 3:1. A notice that sits inside a paragraph
+warning triangle, the circled `!` — from `Alert.Indicator`. Notices above a reading surface take the fill named by
+the tone. The glyph is what carries the tone: those fills sit at 1.1–1.5:1 against the dialog body and say nothing on
+their own. Measured on those filled strips, in both appearances: the sentence is 11.9:1 or better in every tone and
+the glyph 5.1:1 or better, against 4.5:1 and 3:1. Block notices embedded in a Markdown document use the same filled
+Alert and status glyph, with compact spacing. A notice that sits inside a paragraph
 cannot be that Alert: an Alert is a `div`, and a `div` inside a `p` is not valid. `InlineNotice` in
 `packages/ui/src/viewer/inlineNotice.tsx` is a `span`. The sentence inherits the document colour, which already meets
 the contrast above, and the same three glyphs tell the tones apart. When that notice appears after the first paint,
 it is announced by `StatusAnnouncer` rendered as a `span`, with the viewer's own first-write delay; the visible
 sentence is `aria-hidden` so it is not read twice. The error block for a subject that cannot be
-opened at all takes the same danger fill and glyph, so an error is never quieter than a notice about one part of it;
+opened at all takes the danger fill and glyph of a filled failure notice, so an error is never quieter than a notice about one part of it;
 its muted reason line on that fill is the tightest text in the family, at 4.80:1 light and 5.60:1 dark. A viewer with
 nothing to draw takes neither: it fills the body with a centred glyph and sentence (`NothingToShow`).
 

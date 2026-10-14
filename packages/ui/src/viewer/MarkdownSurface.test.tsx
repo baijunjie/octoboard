@@ -222,13 +222,14 @@ it("shows a Markdown conflict body as source only", async () => {
   expect(region().textContent).toContain("<<<<<<< ours");
 });
 
-it("keeps its own styling on the elements the library gives classes of its own", async () => {
+it("preserves GFM task-list markers and inert checkboxes", async () => {
   await open(markdownFile("docs/tasks.md", "- [x] done\n- [ ] open\n\n- plain\n"));
   const lists = [...region().querySelectorAll("ul")];
   expect(lists[0].className).toContain("contains-task-list");
-  expect(lists[0].className).toContain("list-disc");
-  expect(lists[0].className).toContain("ps-6");
-  expect(region().querySelector("li.task-list-item")!.className).toContain("my-1");
+  const boxes = [...region().querySelectorAll<HTMLInputElement>("li.task-list-item input")];
+  expect(boxes).toHaveLength(2);
+  expect(boxes.every((box) => box.disabled)).toBe(true);
+  expect(boxes.map((box) => box.checked)).toEqual([true, false]);
 });
 
 it("words the footnotes in the app's language and follows them within the document", async () => {

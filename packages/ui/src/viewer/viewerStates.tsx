@@ -9,6 +9,7 @@ import React from "react";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import type { PlainMessageKey } from "../i18n/catalog";
+import { textDirection } from "../i18n/languages";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { formatFileSize, formatSideSize } from "./format";
 
@@ -51,8 +52,8 @@ const TONES: Record<NoticeTone, { status: "default" | "warning" | "danger"; fill
 
 /**
  * What is said above content the viewer is still showing: why it is shown this way, what to know
- * about it first, or what part of it could not be shown. Every one of them is this one block, so
- * they stack as one strip and none reads as a stray line crowding the view controls beside it.
+ * about it first, or what part of it could not be shown. Above a reading surface they stack as one
+ * filled strip; inside a Markdown document they remain filled alerts with compact icon spacing.
  *
  * A notice that can appear after the surface has been drawn would otherwise never reach a reader,
  * so it is spoken as well as shown: pass it as `speak`, which is the sentence and, unless
@@ -63,25 +64,33 @@ const TONES: Record<NoticeTone, { status: "default" | "warning" | "danger"; fill
  */
 export function Notice({
   tone = "explained",
+  appearance = "strip",
   speak,
   announced,
   children = speak,
 }: {
   tone?: NoticeTone;
+  appearance?: "strip" | "document";
   speak?: string;
   announced?: boolean;
   children?: React.ReactNode;
 }): React.ReactElement {
   const { status, fill } = TONES[tone];
+  const direction = textDirection(useCurrentLanguage());
+  const inDocument = appearance === "document";
   const hidden = speak !== undefined || announced === true;
   return (
     <>
-      {/* Tighter than HeroUI's own padding: a notice sits between the header and the code, and the
-          stock block takes a row of the code frame away from every change that carries one. */}
-      <Alert aria-hidden={hidden || undefined} status={status} className={`shrink-0 gap-3 px-3 py-2 shadow-none ${fill}`}>
-        <Alert.Indicator />
+      {/* The document variant removes the indicator's extra inset and centres it on the first text line. */}
+      <Alert
+        aria-hidden={hidden || undefined}
+        dir={inDocument ? direction : undefined}
+        status={status}
+        className={`shrink-0 px-3 py-2 shadow-none ${fill} ${inDocument ? "gap-2 rounded-xl" : "gap-3"}`}
+      >
+        <Alert.Indicator className={inDocument ? "mt-1 shrink-0 p-0" : undefined} />
         <Alert.Content>
-          <Alert.Description className="text-foreground">{children}</Alert.Description>
+          <Alert.Description className={inDocument ? "break-words text-foreground leading-6" : "text-foreground"}>{children}</Alert.Description>
         </Alert.Content>
       </Alert>
       {speak !== undefined && <StatusAnnouncer text={speak} firstWriteDelayMs={FIRST_ANNOUNCEMENT_DELAY_MS} />}

@@ -1,5 +1,8 @@
 @import "tailwindcss";
 @import "@heroui/styles";
+@import "./viewer/markdown.css";
+
+@plugin "@tailwindcss/typography";
 
 @theme {
   /* The one named breakpoint this app has: the width at which the left rail, the sidebar, the

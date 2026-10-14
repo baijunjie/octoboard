@@ -116,7 +116,7 @@ function FormulaFallback({
   }
   return (
     <div className="my-3">
-      {failed ? <Notice tone="failed" speak={notice} /> : <Notice>{notice}</Notice>}
+      {failed ? <Notice appearance="document" tone="failed" speak={notice} /> : <Notice appearance="document">{notice}</Notice>}
       {body}
     </div>
   );

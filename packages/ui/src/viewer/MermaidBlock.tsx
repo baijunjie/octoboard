@@ -53,21 +53,21 @@ export function MermaidBlock({
   );
   if (overBudget) {
     return (
-      <div className="my-3">
-        <Notice>{t("viewer.markdown.large")}</Notice>
+      <div className="my-4">
+        <Notice appearance="document">{t("viewer.markdown.large")}</Notice>
         {plain}
       </div>
     );
   }
   if (current?.failed) {
     return (
-      <div className="my-3">
-        <Notice tone="failed" speak={t("viewer.markdown.diagramFailed")} />
+      <div className="my-4">
+        <Notice appearance="document" tone="failed" speak={t("viewer.markdown.diagramFailed")} />
         {plain}
       </div>
     );
   }
-  if (!current?.svg) return <div className="my-3">{plain}</div>;
+  if (!current?.svg) return <div className="my-4">{plain}</div>;
 
   const reading = diagramReading(source);
   const name = reading.title ?? t("viewer.markdown.diagram");
@@ -87,7 +87,7 @@ function DrawnDiagram({ svg, name, alternative }: { svg: string; name: string; a
     className: "max-w-full overflow-auto rounded-sm",
   });
   return (
-    <div className={`my-3 rounded-sm ${region.focused ? "ring-2 ring-focus" : ""}`}>
+    <div className={`my-4 rounded-sm ${region.focused ? "ring-2 ring-focus" : ""}`}>
       <div dir="ltr" {...fade} onClick={refuseDiagramLink} onAuxClick={refuseDiagramLink} onKeyDown={refuseDiagramLink}>
         <div role="img" aria-label={name} dangerouslySetInnerHTML={{ __html: svg }} />
         <p className="sr-only">{alternative}</p>
