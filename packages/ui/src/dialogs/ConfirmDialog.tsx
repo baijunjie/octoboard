@@ -1,4 +1,4 @@
-import { Button, Input, Label, TextField } from "@heroui/react";
+import { Button, Chip, Input, Label, TextField } from "@heroui/react";
 import React, { useState } from "react";
 
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
@@ -83,7 +83,7 @@ export function ConfirmDialog({
           autoFocus
         >
           <Label>
-            <Message id="dialog.typeToConfirm.label" params={{ word: <strong className="font-semibold">{word}</strong> }} />
+            <Message id="dialog.typeToConfirm.label" params={{ word: <Chip size="sm" variant="soft"><Chip.Label className="text-sm italic">{word}</Chip.Label></Chip> }} />
           </Label>
           {/* Capitals by styling rather than by rewriting the value: rewriting a controlled value
               mid-composition breaks an input method's composition. */}
