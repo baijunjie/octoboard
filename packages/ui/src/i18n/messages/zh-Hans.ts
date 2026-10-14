@@ -288,9 +288,7 @@ export const zhHans: Translation<"other"> = {
   "sidebar.consoleSessions.empty": "还没有控制台会话",
   "sidebar.archive.consoleSessions": "已归档的控制台会话",
   "sidebar.archive.empty": "没有已归档的会话",
-  "sidebar.archive.viewAll": {
-    other: "查看全部（{count}）",
-  },
+  "sidebar.archive.viewAll": "查看全部",
   "sidebar.project.ariaLabelPinned": "{name}，已置顶",
   "sidebar.project.actions": "项目 {name} 的操作",
   "sidebar.project.openSession": "新建会话",

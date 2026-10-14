@@ -330,10 +330,7 @@ export const en = {
   "sidebar.consoleSessions.empty": "No console sessions yet",
   "sidebar.archive.consoleSessions": "Archived console sessions",
   "sidebar.archive.empty": "No archived sessions",
-  "sidebar.archive.viewAll": {
-    one: "View all ({count})",
-    other: "View all ({count})",
-  },
+  "sidebar.archive.viewAll": "View all",
   "sidebar.project.ariaLabelPinned": "{name}, pinned",
   "sidebar.project.actions": "Actions for project {name}",
   "sidebar.project.openSession": "New session",

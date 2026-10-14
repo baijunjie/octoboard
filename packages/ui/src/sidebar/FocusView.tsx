@@ -31,7 +31,7 @@ import type { SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
 
 /** How many archived sessions focus mode lists before "View all". */
-const ARCHIVE_PREVIEW = 10;
+const ARCHIVE_PREVIEW = 5;
 
 /** The top of either focus view: the back button that leaves focus mode, then whatever the view
  * puts after it. Both views are built from this header, the session cards and the archived list
@@ -496,9 +496,9 @@ function SessionCards({
   );
 }
 
-/** A focus mode's archive: its ten most recent rows, with "View all" to the archive view, an
+/** A focus mode's archive: its five most recent rows, with "View all" to the archive view, an
  * archived session bound to an archived project session inset under it. The rows are already flat
- * and in display order, so the ten are counted as rows: the preview can end between an owner and
+ * and in display order, so the five are counted as rows: the preview can end between an owner and
  * its team, but never shows an inset row without the row it is inset under. Not drawn while there
  * is none. */
 function ArchivedList({
@@ -523,11 +523,15 @@ function ArchivedList({
             <ArchivedRow handlers={handlers} session={session} under={under} selected={session.id === selectedSessionId} />
           </div>
         ))}
+        {archived.length > ARCHIVE_PREVIEW && (
+          <TreeRow ariaLabel={t("sidebar.archive.viewAll")} onActivate={onViewAll}>
+            <List aria-hidden="true" className="size-4 shrink-0 text-muted rtl:-scale-x-100" />
+            <RowLabel>
+              <span className="text-muted">{t("sidebar.archive.viewAll")}</span>
+            </RowLabel>
+          </TreeRow>
+        )}
       </div>
-      <Button size="sm" variant="ghost" fullWidth preventFocusOnPress onPress={onViewAll} className="mt-1 justify-start font-normal text-muted hover:text-foreground">
-        <List aria-hidden="true" className="size-4 rtl:-scale-x-100" />
-        {t("sidebar.archive.viewAll", { count: archived.length })}
-      </Button>
     </>
   );
 }

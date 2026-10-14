@@ -104,7 +104,7 @@ export const archiveScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
-      (ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: archived.length })),
+      (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
     ],
   },
   {
@@ -115,7 +115,7 @@ export const archiveScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("sidebar.consoleSessions.actions", { name: console_.name })),
       (ui) => ui.press(ui.t("sidebar.archive.consoleSessions")),
-      (ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: consoleSessions.length })),
+      (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
     ],
   },
   {
@@ -125,7 +125,7 @@ export const archiveScenarios: Scenario[] = [
     state: archiveState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
     steps: [
-      (ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: boundArchived.length + 1 + underArchivedLead.length })),
+      (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
     ],
   },
   {
@@ -136,7 +136,7 @@ export const archiveScenarios: Scenario[] = [
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
     description: "The confirmation includes both children; hover their agent and status marks for account and archive details.",
     steps: [
-      (ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: boundArchived.length + 1 + underArchivedLead.length })),
+      (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
       (ui) => ui.press(ui.t("archive.delete", { title: archivedLead.title })),
     ],
   },
@@ -148,7 +148,7 @@ export const archiveScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
-      (ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: archived.length })),
+      (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
       (ui) => ui.press(ui.t("archive.deleteAll")),
       (ui) => ui.confirm(),
       (ui) => ui.wait(400),

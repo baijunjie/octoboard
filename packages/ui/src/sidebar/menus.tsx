@@ -34,7 +34,7 @@ export function archiveSubmenu(
   return {
     label,
     icon: Archive,
-    items: [...items, ...(archived.length > 0 ? [{ label: t("sidebar.archive.viewAll", { count: archived.length }), icon: List, iconClassName: "rtl:-scale-x-100", onClick: onViewAll }] : [])],
+    items: [...items, ...(archived.length > 0 ? [{ label: t("sidebar.archive.viewAll"), icon: List, iconClassName: "rtl:-scale-x-100", onClick: onViewAll }] : [])],
   };
 }
 

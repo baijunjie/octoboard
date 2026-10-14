@@ -30,13 +30,16 @@ accessible name carries the nesting to assistive technology. In a project's comb
 console session above them (see "A project's focus mode" below and "The binding badge" in
 `docs/product/sidebar.md`).
 
-**Archived (n)**, in both, only while the view has archived sessions — with none, the section is not shown at all: the
-ten most recent rows of the view's archive, each showing its agent's icon, its title and how long ago it was
-archived. Clicking one selects it. Its action menu offers **Rename** and **Delete** (which asks for confirmation; see
-"Deleting archived sessions" in `docs/product/sessions.md`). Below them **View all (n)** opens the archive view. An
-archived session whose owner is a project session the list holds too is inset under it, with rounded connectors, as
-in the archive view (see "The archive view" in `docs/product/sidebar.md`); the ten are counted as rows, so the preview
-can end between an owner and the sessions under it but never shows an inset row without the row it is inset under.
+**Archived (n)**, in both, only while the view has archived sessions — with none, the section is not shown at all:
+the five most recent rows of the view's archive, each showing its agent's icon, its title and how long ago it
+was archived. Clicking one selects it. Its action menu offers **Rename** and **Delete** (which asks for
+confirmation; see "Deleting archived sessions" in `docs/product/sessions.md`). With more than five archived
+rows, **View all** follows them as a row with the same alignment, hover feedback and keyboard focus treatment
+as the session rows; it opens the archive view and carries no count. With five or fewer, there is no View all
+row. An archived session whose owner is a project session the list holds too is inset under it, with rounded
+connectors, as in the archive view (see "The archive view" in `docs/product/sidebar.md`); the five are counted
+as rows, so the preview can end between an owner and the sessions under it but never shows an inset row
+without the row it is inset under.
 
 Relative times ("5 minutes ago") are worded in the current language, and anything under a minute reads as now.
 

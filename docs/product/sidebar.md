@@ -239,8 +239,8 @@ while the project's status says the directory is a git repository, **Git**.
 - **Focus mode** — see `docs/product/focus-mode.md`.
 - **View archive** — a submenu of the project's newest five archived sessions (most recently archived first), each
   with its agent's icon and its title; choosing one selects it (see "Selecting a session" below). After them,
-  **View all (n)**, with the number of archived sessions, opens the archive view. A project with no archived session
-  shows only a disabled item saying so.
+  **View all**, without a count, opens the archive view whenever the project has an archived session, including
+  when all of them fit in the submenu. A project with no archived session shows only a disabled item saying so.
 - **Remove project** — see "Removing a project" in `docs/product/consoles-and-projects.md`; it asks for confirmation
   first.
 
@@ -440,12 +440,14 @@ mirrored under a right-to-left language, and nothing moves where the system asks
 
 ## The archive view
 
-**View all (n)** — in a project's "View archive" submenu, in a focus mode's archived list, or in the console sessions
+**View all** — in a project's "View archive" submenu, in a focus mode's archived list, or in the console sessions
 section's "Archived console sessions" submenu — opens the archive view: **every** archived session of that project,
 every archived session under that console session (bound to it, or bound to an archived lead session that is bound to
 it), or every archived console session of that console. A lead session's own archived sessions are in that console
 session's archive only while the lead session is archived too; while the lead session is still live they are in its
-project's archive alone.
+project's archive alone. The submenus offer View all whenever their archive is nonempty, so the archive's
+reopen and deletion controls remain reachable even when every session fits in the submenu. Focus mode's preview
+offers it only with more than five archived rows (see "What both views show" in `docs/product/focus-mode.md`).
 
 - It **covers the terminal's area only**: the sidebar and the right pane stay as they are.
   The terminal goes on running beneath it and is not resized.

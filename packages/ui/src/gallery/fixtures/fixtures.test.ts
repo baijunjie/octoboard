@@ -102,7 +102,7 @@ describe("gallery scenarios", () => {
     expect(isEnglishCopy("feature/login")).toBe(false);
     expect(isEnglishCopy(format("zh-Hans", "git.row", { name: "new-name.ts", status: format("zh-Hans", "git.status.renamed") }))).toBe(false);
     expect(isEnglishCopy("Show all 27 unmodified lines")).toBe(true);
-    expect(isEnglishCopy("View all (3)")).toBe(true);
+    expect(isEnglishCopy("View all")).toBe(true);
     // The limit: a name shaped like a message's frame is flagged, whatever it is. Name such a control
     // through a helper or a closure.
     expect(isEnglishCopy("notes, drafts.txt")).toBe(true);

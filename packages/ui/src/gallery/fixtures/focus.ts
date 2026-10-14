@@ -112,6 +112,25 @@ const state = snapshotState({
   settings,
 });
 
+// Archive-only views keep the preview boundary and heading counts visible together. The
+// archived lead contributes three display rows, including its two nested children.
+const previewHub = sessionOf("s-preview-hub", console_.id, undefined, "Hub", "idle", { colour: "teal" });
+const previewLead = sessionOf("s-preview-lead", console_.id, emptyProject.id, "Archived lead session", "archived", { bound_to: previewHub.id, ended_at: minutesAgo(8) });
+function archivePreviewState(count: 5 | 6) {
+  return snapshotState({
+    consoles: [console_],
+    projects: [emptyProject],
+    sessions: [
+      previewHub,
+      previewLead,
+      ...Array.from({ length: 2 }, (_, i) => sessionOf(`s-preview-child-${i}`, console_.id, emptyProject.id, `Session ${i + 1} of the archived lead`, "archived", { bound_to: previewLead.id, agent: i === 1 ? "codex" : "claude", ended_at: minutesAgo(2 + i * 3) })),
+      ...Array.from({ length: count - 3 }, (_, i) => sessionOf(`s-preview-${i}`, console_.id, emptyProject.id, `Bound archived session ${i + 1}`, "archived", { bound_to: previewHub.id, ended_at: minutesAgo(10 + i * 5) })),
+    ],
+  });
+}
+const archivePreviewFive = archivePreviewState(5);
+const archivePreviewSix = archivePreviewState(6);
+
 export const focusScenarios: Scenario[] = [
   {
     id: "sidebar-session-hierarchy",
@@ -165,10 +184,34 @@ export const focusScenarios: Scenario[] = [
   {
     id: "focus-project-no-sessions",
     group: GROUP,
-    title: "Project with archived sessions only",
-    state: state,
+    title: "Project archive preview, exactly five rows",
+    state: archivePreviewFive,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The Show all project sessions switch is absent with only archived console-bound sessions, even when its saved preference is on. A compact empty session row sits above the archive; the main area offers New session.",
+    description: "The headings show zero live sessions and five archived sessions in parentheses. The entire archive fits, so there is no View all row; archived children stay under their lead. The Show all project sessions switch is absent even when its saved preference is on.",
+  },
+  {
+    id: "focus-project-archive-overflow",
+    group: GROUP,
+    title: "Project archive preview, six rows",
+    state: archivePreviewSix,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}` },
+    description: "The archive heading counts all six sessions in parentheses. Five rows precede View all, which aligns with the session rows and repeats no count.",
+  },
+  {
+    id: "focus-console-archive-five",
+    group: GROUP,
+    title: "Console archive preview, exactly five rows",
+    state: archivePreviewFive,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
+    description: "The headings show zero live sessions and five archived sessions in parentheses. All five rows fit, including the lead's nested children, so View all is absent.",
+  },
+  {
+    id: "focus-console-archive-overflow",
+    group: GROUP,
+    title: "Console archive preview, six rows",
+    state: archivePreviewSix,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
+    description: "The archive heading counts all six bound sessions in parentheses. View all follows the five-row preview with the same row spacing and no repeated count.",
   },
   {
     id: "focus-project-empty",
