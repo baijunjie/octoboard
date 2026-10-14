@@ -298,19 +298,20 @@ technology. Its action menu offers:
 
 A project session **bound to a console session** — one carrying the id of the console session it reports to (see
 "Console sessions and project sessions" in `docs/product/sessions.md`) — carries a small dot in that console session's
-colour wherever the project session is listed: its sidebar row. A **lead session** carries it like any other session
-bound to a console session (see "Lead sessions" in `docs/product/hub-orchestration.md`). An unbound session carries no
-badge, and neither does a session bound to a project session, which is listed under its owner instead (see "Project
+colour on its sidebar row. A **lead session** carries it like any other session
+bound to a console session (see "Lead sessions" in `docs/product/hub-orchestration.md`). On sidebar rows an unbound
+session carries no badge, and neither does a session bound to a project session, which is listed under its owner
+instead (see "Project
 rows" above). The badge's tooltip names the owning console session; the badge is no tab stop, so the tooltip shows on
 pointer hover only. The row's own accessible name carries the same fact in words for assistive technology ("Bound
 to …"), in the same wording for a project session's owner as for a console session's, which is the only place the
 nesting is put into words. The badge itself still carries no information its tooltip does not, so colour alone never
 distinguishes two owners for a user who cannot tell the colours apart. A console session's own row shows the same
 colour, decoratively, since the row's own label already names it, as do its focus mode's header, its chip in a
-project's focus mode and its chip in the switch strip (see `docs/product/focus-mode.md`). The cards in a focus mode
-carry no badge: a project's focus mode lists only sessions with no console session above them, and a console session's
-only the sessions under it, so there is never a second console session to name; a card inset under another session
-names that owner in its accessible name, as a row does.
+project's focus mode and its chip in the switch strip. Cards in a project's combined focus view carry the dot for
+the console session above them, including cards inset under a lead session; the tooltip and accessible name identify
+that console session. The other focus views carry no binding badge on their cards. See "A project's focus mode" in
+`docs/product/focus-mode.md` for the switch and the card labels.
 
 **Where the colour comes from.** Octoboard gives each new console session a colour of its own from a fixed palette of
 six, taking the first the console's other console sessions that are not archived do not already have, and starting

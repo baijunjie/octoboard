@@ -1,4 +1,4 @@
-import { Button } from "@heroui/react";
+import { Badge, Button, Label, Switch } from "@heroui/react";
 import { ArrowLeft, FolderOpen, List, MessageSquarePlus, Plus } from "lucide-react";
 import React, { useLayoutEffect, useRef } from "react";
 
@@ -14,6 +14,7 @@ import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
 import { FadedScroller } from "../components/scrollFade";
 import { isolate } from "../i18n/isolate";
+import { joinPhrases } from "../i18n/joinPhrases";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
@@ -22,7 +23,8 @@ import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
 import { GitBadge } from "./GitBadge";
 import { projectMenu, sessionMenu } from "./menus";
-import { archivedSessionRows, archivedSessions, boundArchivedSessions, boundElsewhere, focusGroups, liveSessionRows, type NestedSession, notUnderConsoleSession, sortProjects, switchStrip, type SwitchStripEntry } from "./order";
+import { archivedSessionRows, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroups, liveSessionRows, type NestedSession, notUnderConsoleSession, sortProjects, switchStrip, type SwitchStripEntry } from "./order";
+import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
 import { NESTED_INSET_CLASS, NESTED_ROW_CLASS, PinButton, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
 import type { SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
@@ -86,11 +88,9 @@ function FocusTitle({ consoleName, title }: { consoleName: string; title: string
 }
 
 /** A project's focus mode: the sidebar given over to one project, its sessions not bound to a
- * console session as cards, each with the sessions bound to it under it, its recent archive below
- * them and, last, the console sessions that hold the rest ("A project's focus mode" in
- * docs/product/focus-mode.md). A lead session and its team are left out of the list, with the
- * sessions bound to a console session, and summed up by a sentence with a chip for each console
- * session, leading to its own focus mode; the archive, bound sessions included, is not filtered. */
+ * console session as cards, each with the sessions bound to it under it, then the console sessions
+ * that hold the rest and its recent archive. The optional combined view lists every live session
+ * with its console session colour instead of the summary chips; the archive is never filtered. */
 export function ProjectFocusView({
   handlers,
   console: parentConsole,
@@ -113,7 +113,10 @@ export function ProjectFocusView({
   // own entry, which keeps the same `GitStatus` reference until that entry itself changes, so no
   // `useShallow` is needed.
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
-  const live = liveSessionRows(notUnderConsoleSession(sessions, owners));
+  const includeConsoleSessions = projectFocusIncludeConsoleSessions.useValue();
+  const live = liveSessionRows(includeConsoleSessions ? sessions : notUnderConsoleSession(sessions, owners));
+  const byId = new Map(sessions.map((session) => [session.id, session]));
+  const consoleOwner = (session: Session) => consoleSessionAbove(session, (id) => byId.get(id) ?? owners.get(id));
   // The rows nest an archived session under its archived owner; the project menu's "View archive"
   // submenu lists the newest few flat, so it is given the plain list.
   const archived = archivedSessions(sessions);
@@ -141,6 +144,19 @@ export function ProjectFocusView({
           contextTargetRef={headerRef}
         />
       </FocusHeader>
+      <Switch
+        size="sm"
+        isSelected={includeConsoleSessions}
+        onChange={(value) => projectFocusIncludeConsoleSessions.set(value)}
+        className="mx-4 my-2 shrink-0"
+      >
+        <Switch.Content className="w-full justify-between">
+          <Label className="text-xs">{t("sidebar.focus.includeConsoleSessions")}</Label>
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+        </Switch.Content>
+      </Switch>
       <FadedScroller className="min-h-0 flex-1 px-2 pb-2">
         <SectionHeading>{t("sidebar.focus.sessions", { count: live.length })}</SectionHeading>
         {live.length === 0 ? (
@@ -151,10 +167,10 @@ export function ProjectFocusView({
             action={{ label: t("sidebar.project.openSession"), onPress: openSession }}
           />
         ) : (
-          <SessionCards handlers={handlers} sessions={live} selectedSessionId={selectedSessionId} />
+          <SessionCards handlers={handlers} sessions={live} selectedSessionId={selectedSessionId} consoleOwner={includeConsoleSessions ? consoleOwner : undefined} />
         )}
+        {!includeConsoleSessions && elsewhere && <BoundElsewhere handlers={handlers} count={elsewhere.count} owners={elsewhere.owners} />}
         <ArchivedList handlers={handlers} archived={archivedRows} selectedSessionId={selectedSessionId} onViewAll={viewAll} />
-        {elsewhere && <BoundElsewhere handlers={handlers} count={elsewhere.count} owners={elsewhere.owners} />}
       </FadedScroller>
     </>
   );
@@ -424,9 +440,18 @@ function BoundElsewhere({
             <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={owner.title}>
               {owner.title}
             </FadeOverflow>
-            <span aria-hidden="true" className="shrink-0 font-normal">
-              · {bound}
-            </span>
+            <Badge
+              size="sm"
+              className="static transform-none"
+              aria-hidden="true"
+              style={{
+                "--badge-bg": "color-mix(in oklab, var(--foreground) 22%, var(--panel-sidebar))",
+                "--badge-fg": "var(--foreground)",
+                "--badge-border": "transparent",
+              } as React.CSSProperties}
+            >
+              <Badge.Label>{bound}</Badge.Label>
+            </Badge>
           </Button>
         ))}
       </div>
@@ -439,22 +464,26 @@ function BoundElsewhere({
  * animation reads the list's direct children (`useFlip`), so a level of its own would leave a team
  * unanimated while its statuses change. Cards sit apart from one another, so the nesting is the
  * inset alone (`NESTED_INSET_CLASS`), without the line that would break at every gap between
- * them. */
+ * them. The moving wrapper supplies an opaque base beneath the card's translucent state fills,
+ * so overlapping cards cannot show each other's text during a reorder. The list's stacking context
+ * keeps the summary and archive from painting over cards moving beyond the list's new bounds. */
 function SessionCards({
   handlers,
   sessions,
   selectedSessionId,
+  consoleOwner,
 }: {
   handlers: SidebarHandlers;
   sessions: NestedSession[];
   selectedSessionId?: string;
+  consoleOwner?: (session: Session) => Session | undefined;
 }): React.ReactElement {
   const listRef = useFlip<HTMLDivElement>();
   return (
-    <div ref={listRef} className="relative flex flex-col gap-2">
+    <div ref={listRef} className="relative z-1 flex flex-col gap-2">
       {sessions.map(({ session, under }) => (
-        <div key={session.id} data-flip={session.id} className={under ? NESTED_INSET_CLASS : undefined}>
-          <SessionCard handlers={handlers} session={session} under={under} selected={session.id === selectedSessionId} />
+        <div key={session.id} data-flip={session.id} className={`rounded-lg bg-panel-sidebar ${under ? NESTED_INSET_CLASS : ""}`}>
+          <SessionCard handlers={handlers} session={session} under={under} selected={session.id === selectedSessionId} consoleOwner={consoleOwner?.(session)} />
         </div>
       ))}
     </div>
@@ -498,34 +527,37 @@ function ArchivedList({
 }
 
 /** A session in focus mode: its status put into words, its agent and account, its title over two
- * lines, and when it started. No binding badge: a focus mode lists either only the sessions no
- * console session is above or only those under the one console session it is for. `under`, the
- * project session this one is bound to and is inset below, goes into the card's accessible name,
+ * lines, and when it started. The combined project view also names and marks its console owner.
+ * `under`, the project session this one is bound to and is inset below, goes into its accessible name,
  * which is what carries that nesting to assistive technology. */
 function SessionCard({
   handlers,
   session,
   under,
   selected,
+  consoleOwner,
 }: {
   handlers: SidebarHandlers;
   session: Session;
   under?: Session;
   selected: boolean;
+  consoleOwner?: Session;
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const rowRef = useRef<HTMLDivElement>(null);
+  const label = sessionAriaLabel(t, language, session, accounts, under ?? consoleOwner);
   return (
     <TreeRow
       ref={rowRef}
-      ariaLabel={sessionAriaLabel(t, language, session, accounts, under)}
+      ariaLabel={under && consoleOwner ? joinPhrases(language, [label, t("sidebar.session.boundTo", { name: isolate(consoleOwner.title) })]) : label}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
       className="min-h-8 flex-col gap-1 border border-separator p-[7px] data-selected:border-accent-glyph"
     >
       <div className="flex items-center gap-2">
+        {consoleOwner && <BindingBadge owner={consoleOwner} />}
         <StatusIcon status={session.status} decorative />
         <span className="text-xs font-medium text-muted">{statusLabel(t, session.status)}</span>
         <span className="flex-1" />

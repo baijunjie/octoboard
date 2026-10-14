@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { isolate } from "../i18n/isolate";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { PREFERENCE_KEYS } from "../preferenceKeys";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
+import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
 import type { SidebarHandlers } from "./types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -54,7 +56,12 @@ function mount(render: (handlers: SidebarHandlers) => React.ReactElement): { tex
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() => root.render(<DaemonProvider value={daemon}>{render(handlers)}</DaemonProvider>));
-  return { text: () => container.textContent ?? "", container, handlers, unmount: () => (act(() => root.unmount()), container.remove()) };
+  const unmount = () => {
+    act(() => root.unmount());
+    container.remove();
+  };
+  onTestFinished(unmount);
+  return { text: () => container.textContent ?? "", container, handlers, unmount };
 }
 
 const inProject = (id: string) => sessions.filter((s) => s.project_id === id);
@@ -70,6 +77,8 @@ it("a project's focus mode lists only its unbound sessions, its archive in full,
   expect(labels.some((l) => l.includes("Fix the layout") || l.includes("Update the dependencies"))).toBe(false);
   expect(labels.some((l) => l.includes("An old bound spike"))).toBe(true);
   expect(text()).toContain("2 sessions in this project are under console sessions");
+  expect(text().indexOf("2 sessions in this project")).toBeLessThan(text().indexOf("Archived (1)"));
+  expect(Array.from(container.querySelectorAll(".badge__label")).map((badge) => badge.textContent)).toEqual(["1", "1"]);
 
   const hub2Link = container.querySelector<HTMLElement>(`button[aria-label="Enter focus mode for ${isolate("Hub 2")}, 1 session under it"]`);
   act(() => hub2Link?.click());
@@ -208,4 +217,36 @@ it.each([false, true])("console focus keeps its empty nested list compact (proje
     expect(handlers.onOpenDialog).toHaveBeenCalledWith({ kind: "new-project", console: main });
   }
   unmount();
+});
+
+it("combining project sessions replaces the console summary with cards carrying their root console colours", () => {
+  onTestFinished(() => projectFocusIncludeConsoleSessions.set(false));
+  const archivedChild = { ...underLead, id: "archived-child", title: "An archived child of the live lead", status: "archived" as const };
+  const { container, text, handlers } = mount((h) => (
+    <ProjectFocusView handlers={h} console={main} project={web} sessions={[...withTeams.filter((s) => s.project_id === web.id), archivedChild]} owners={owners} />
+  ));
+  const toggle = container.querySelector<HTMLInputElement>('input[role="switch"]')!;
+  expect(toggle.checked).toBe(false);
+  expect(text()).toContain(archivedChild.title);
+  act(() => toggle.click());
+  expect(toggle.checked).toBe(true);
+  expect(localStorage.getItem(PREFERENCE_KEYS.projectFocusIncludeConsoleSessions)).toBe("true");
+  expect(text()).not.toContain("sessions in this project are under console sessions");
+  expect(text()).toContain("Sessions (6)");
+  const card = (title: string) => Array.from(container.querySelectorAll<HTMLElement>('[role="button"][data-marquee-scope]')).find((row) => row.getAttribute("aria-label")?.startsWith(isolate(title)))!;
+  for (const session of [lead, underLead]) {
+    expect(card(session.title).querySelector('[style*="--console-session-teal"]')).not.toBeNull();
+    expect(card(session.title).getAttribute("aria-label")).toContain(isolate(hub1.title));
+  }
+  expect(card(underLead.title).getAttribute("aria-label")).toContain(isolate(lead.title));
+  expect(card(underLead.title).parentElement!.className).toContain("ms-[17px]");
+  expect(card("Tidy the changelog").querySelector('[style*="--console-session-"]')).toBeNull();
+  expect(text()).toContain("An old bound spike");
+  expect(text()).toContain(archivedChild.title);
+  act(() => card(underLead.title).click());
+  expect(handlers.onSelectSession).toHaveBeenCalledWith(underLead);
+  act(() => toggle.click());
+  expect(text()).toContain("4 sessions in this project are under console sessions");
+  expect(text()).toContain(archivedChild.title);
+  expect(localStorage.getItem(PREFERENCE_KEYS.projectFocusIncludeConsoleSessions)).toBe("false");
 });

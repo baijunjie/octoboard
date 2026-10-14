@@ -110,7 +110,7 @@ describe("isLive", () => {
     ["a deleted project's focus mode", { console: "c-1", focus: "project:p-gone" }, false],
     ["a console session's focus mode", { console: "c-1", focus: "consoleSession:s-hub" }, true],
     ["a focus mode with a session it lists", { console: "c-1", session: "s-bound", focus: "consoleSession:s-hub" }, true],
-    ["a focus mode with a session it does not list", { console: "c-1", session: "s-bound", focus: "project:p-1" }, false],
+    ["a project focus mode with a bound session its summary represents", { console: "c-1", session: "s-bound", focus: "project:p-1" }, true],
     ["a project's focus mode with a session bound to a project session", { console: "c-1", session: "s-started", focus: "project:p-1" }, true],
     ["a project's archive", { console: "c-1", archive: { console: "c-1", project: "p-1" } }, true],
     ["a deleted project's archive", { console: "c-1", archive: { console: "c-1", project: "p-gone" } }, false],

@@ -26,7 +26,8 @@ const settings = {
 // focus mode has something to leave out; `hub1`'s focus mode has two projects of its own, a bound
 // session of another owner and an unbound one to leave out, and archived sessions of its own. `lead`
 // is a session of `project` bound to `hub1` that has two sessions of its own, which the project's
-// focus mode leaves to `hub1`'s and `hub1`'s nests under it; `s-3`, unbound, has one of its own,
+// focus mode summarizes by default or shows with hub-colored dots when included; `hub1`'s nests
+// them under it. Its archived child stays in project archives in both modes. `s-3`, unbound, has one of its own,
 // which the project's focus mode nests under it. `s-console-old` is an archived console session, which the
 // switch strip leaves out. For the strip's three kinds of activity: `hub1` waits through `s-2`, `hub2` is
 // working itself and `hub3` works through `s-3d`, while `hub4` has nothing going on.
@@ -44,6 +45,7 @@ const sessions = [
   lead,
   sessionOf("s-lead-1", console_.id, project.id, "Chase the flaky test", "working", { bound_to: lead.id }),
   sessionOf("s-lead-2", console_.id, project.id, "Measure the first paint", "waiting_user", { bound_to: lead.id }),
+  sessionOf("s-lead-archived-child", console_.id, project.id, "Archived work of the active lead", "archived", { bound_to: lead.id, ended_at: minutesAgo(70) }),
   sessionOf("s-lead-archived", console_.id, project.id, "An archived lead session", "archived", { bound_to: hub1.id, ended_at: minutesAgo(90) }),
   sessionOf("s-lead-archived-1", console_.id, project.id, "A session of the archived lead session", "archived", { bound_to: "s-lead-archived", ended_at: minutesAgo(80) }),
   sessionOf("s-3b", console_.id, project.id, "Profile the slow query", "interrupted", { account_id: "a-work" }),
@@ -125,9 +127,20 @@ export const focusScenarios: Scenario[] = [
     title: "Project focus",
     state: state,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    description: "Unbound cards, nested sessions, archives and bound-owner chips; the chips include long Latin and CJK names.",
+    description: "Console-bound sessions stay in colored summary chips with contrasting gray count badges above archives. Archives include bound sessions and an archived child of an active lead; the switch starts off.",
     steps: [
       (ui) => ui.press(ui.session("Write the migration")),
+    ],
+  },
+  {
+    id: "focus-project-console-sessions",
+    group: GROUP,
+    title: "Project focus including console sessions",
+    state,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
+    description: "The switch is on: bound and unbound sessions share the card list, with the owner hub's color on bound cards and their nested sessions. Archives remain available below the cards.",
+    steps: [
+      (ui) => ui.press(ui.session("Rework the result ranking")),
     ],
   },
   {

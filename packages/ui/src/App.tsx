@@ -385,15 +385,11 @@ export function App(): React.ReactElement {
     if (panes.sidebarOpen) panes.closeSidebar();
   };
 
-  // The selected session can stop belonging to the focus mode without being selected again: an
-  // archived session of a project, reopened from the archive view, becomes live and bound to a
-  // console session, and is then not listed there. What it belongs to also follows the owner chain
-  // above it (`belongsToFocus`), which its own record does not show: the session that owns it
-  // becoming a lead session takes it out of its project's focus mode too. So the console session
-  // above it is a dependency of its own — and the whole session map is not, since this must fire
-  // on the selection changing and not on every session event: a chip in a project's focus mode
-  // enters a console session's with the selection left where it was, and a re-check on the next
-  // unrelated status change would drop straight back out of it.
+  // A selection can leave a console session's focus mode after a status or binding change. Its
+  // context follows the owner chain too (`belongsToFocus`), so the console session above it is a
+  // dependency of its own. The whole session map is not: entering focus mode through a summary
+  // chip deliberately keeps the selection, and an unrelated status event must not drop that view.
+  // Project context includes its hidden console-bound sessions, whatever the card visibility.
   const consoleSessionAboveSelection = selectedSession && consoleSessionAbove(selectedSession, (id) => sessions.get(id))?.id;
   useEffect(() => {
     if (sidebarView.focus && selectedSession && !belongsToFocus(sidebarView.focus, selectedSession, sessions)) {
@@ -449,7 +445,7 @@ export function App(): React.ReactElement {
     ready: hosts !== undefined,
     isLive: (target) => isLive(target, { consoles, projects, sessions }),
     // Sets the state straight, not through `selectSession`: going back to an interrupted session
-    // must not resume it. A focus mode that does not show the session is left, as selecting does.
+    // must not resume it. A focus mode outside the session's context is left, as selecting does.
     apply: (target) => {
       if (target.console) sidebarView.selectConsole(target.console);
       const session = target.session ? sessions.get(target.session) : undefined;

@@ -325,6 +325,7 @@ export const zhHans: Translation<"other"> = {
     other: "此项目中有 {count} 个会话归属于控制台会话",
   },
   "sidebar.focus.switchStrip": "切换控制台会话",
+  "sidebar.focus.includeConsoleSessions": "显示全部项目会话",
   "sidebar.focus.sessions": "会话（{count}）",
   "sidebar.focus.archived": "已归档（{count}）",
 

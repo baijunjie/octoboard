@@ -48,10 +48,10 @@ describe("belongsToFocus", () => {
   const archivedUnderArchivedLead = sessionOf("s-archived-under-lead", main.id, project.id, "Archived under the lead", "archived", { bound_to: archivedLead.id });
   it.each([
     ["a project", projectFocus, unbound, true],
-    ["a project", projectFocus, bound, false],
+    ["a project", projectFocus, bound, true],
     ["a project", projectFocus, archivedBound, true],
     ["a project", projectFocus, { ...bound, bound_to: unbound.id }, true],
-    ["a project", projectFocus, underLead, false],
+    ["a project", projectFocus, underLead, true],
     ["a project", projectFocus, { ...underLead, status: "archived" as const }, true],
     ["a project", projectFocus, hub, false],
     ["a console session", hubFocus, bound, true],
@@ -90,7 +90,7 @@ describe("shortcutOutcome", () => {
 describe("focusFor", () => {
   it.each([
     ["keeps a project's focus mode for a session it shows", projectFocus, unbound, projectFocus],
-    ["leaves a project's focus mode for a session bound to a console session", projectFocus, bound, undefined],
+    ["keeps a project's focus mode for a session bound to a console session", projectFocus, bound, projectFocus],
     ["keeps a project's focus mode for a session bound to one of its sessions", projectFocus, { ...bound, bound_to: unbound.id }, projectFocus],
     ["keeps a console session's focus mode for a session bound to it", hubFocus, bound, hubFocus],
     ["leaves a console session's focus mode for an unrelated session", hubFocus, unbound, undefined],
@@ -147,4 +147,14 @@ describe("followsStartedConsoleSession", () => {
   ])("%s", (_, focus, expected) => {
     expect(followsStartedConsoleSession(focus, project.id)).toBe(expected);
   });
+});
+
+it.each([bound, underLead])("project focus keeps its selected console-bound session ($id) through status and owner changes", (session) => {
+  expect(belongsToFocus(projectFocus, session, sessions)).toBe(true);
+  expect(focusAfterSelect(projectFocus, session, false, sessions)).toBe(projectFocus);
+  const updated = { ...session, status: "working" as const };
+  const updatedSessions = byId([...sessions.values(), { ...bound, bound_to: "s-archived-hub" }, updated]);
+  expect(focusFor(projectFocus, updated, updatedSessions)).toBe(projectFocus);
+  expect(belongsToFocus(projectFocus, { ...updated, project_id: "p-2" }, updatedSessions)).toBe(false);
+  expect(belongsToFocus(projectFocus, hub, updatedSessions)).toBe(false);
 });

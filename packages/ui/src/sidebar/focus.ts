@@ -39,16 +39,12 @@ export function resolveFocus(
   }
 }
 
-/** Whether `session` is something the focused thing shows: a project's sessions with no console
- * session above them (`sessions` is every session, so the owner chain can be walked) and, archived,
- * all of its sessions; a console session itself, the sessions under it, and the archived ones its
- * archive reaches. Selecting a session that is not leaves focus mode, so what is selected is always
- * on screen in the sidebar. */
+/** Whether `session` belongs to the focused context. Every session of a project belongs to its
+ * focus mode: a console-bound session hidden from the cards is still represented by the summary.
+ * A console session's focus mode contains itself, its live team and the archived sessions its
+ * archive reaches. `sessions` resolves the owner chain for that console context. */
 export function belongsToFocus(target: FocusTarget, session: Session, sessions: Map<string, Session>): boolean {
-  if ("project" in target) {
-    const above = consoleSessionAbove(session, (id) => sessions.get(id));
-    return session.project_id === target.project.id && (session.status === "archived" || above === undefined);
-  }
+  if ("project" in target) return session.project_id === target.project.id;
   if (session.id === target.consoleSession.id) return true;
   // A live session under it is a card of the view, a lead session's own sessions among them. Its
   // archive reaches less far than that chain does (`boundArchivedSessions`): an archived session of
@@ -62,9 +58,9 @@ export function belongsToFocus(target: FocusTarget, session: Session, sessions: 
   return owner?.status === "archived" && owner.bound_to === target.consoleSession.id;
 }
 
-/** The focus mode to be in while `session` is selected: `focus`, unless it does not show `session`
- * (`belongsToFocus`, which reads `sessions`), which leaves it. Every way of selecting a session
- * applies this rule. */
+/** The focus mode to be in while `session` is selected: `focus`, unless the session belongs to
+ * another context (`belongsToFocus`), which leaves it. Every way of selecting a session applies
+ * this rule. */
 export function focusFor(
   focus: FocusTarget | undefined,
   session: Session | undefined,

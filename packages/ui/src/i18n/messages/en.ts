@@ -372,6 +372,7 @@ export const en = {
     other: "{count} sessions in this project are under console sessions",
   },
   "sidebar.focus.switchStrip": "Switch console session",
+  "sidebar.focus.includeConsoleSessions": "Show all project sessions",
   "sidebar.focus.sessions": "Sessions ({count})",
   "sidebar.focus.archived": "Archived ({count})",
 

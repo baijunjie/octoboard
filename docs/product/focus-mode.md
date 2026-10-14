@@ -18,13 +18,15 @@ other row for.
 `docs/product/sidebar.md`), the session's action menu (always shown), its title over up to two lines, its agent's icon
 and name with its account, and how long ago it was started. The agent's icon has a tooltip, as on a session row (see
 "Session rows" in `docs/product/sidebar.md`). Clicking a card selects the session. They are in the order of "Order of
-projects and sessions" in `docs/product/sidebar.md`.
+projects and sessions" in `docs/product/sidebar.md`. While cards move, their backgrounds stay opaque, so text from
+other cards, the console-session summary or the archive does not show through them.
 
 A card for a session **bound to a project session the same view lists** is **inset under that session's card** and
 follows it, as a session row is under its owner's row (see "Project rows" in `docs/product/sidebar.md`); the cards sit
-apart from one another, so the nesting is the inset alone, with no line down it. No card carries a binding badge, so
-the owner's name in the card's accessible name is what carries the nesting to assistive technology (see "The binding
-badge" in `docs/product/sidebar.md`).
+apart from one another, so the nesting is the inset alone, with no line down it. The owner's name in the card's
+accessible name carries the nesting to assistive technology. In a project's combined view, cards also identify the
+console session above them (see "A project's focus mode" below and "The binding badge" in
+`docs/product/sidebar.md`).
 
 **Archived (n)**, in both, only while the view has archived sessions — with none, the section is not shown at all: the
 ten most recent rows of the view's archive, each showing its agent's icon, its title and how long ago it was
@@ -43,25 +45,34 @@ plain text. These lists do not carry a separate empty-state heading or button.
 
 ## A project's focus mode
 
-From the top:
+The switch below the header chooses whether all of the project's sessions are listed together. It is **off by
+default**: sessions under console sessions are shown separately as summary chips. Turning it on lists all of the
+project's live sessions as cards and hides the summary chips. The choice applies to every project's focus mode in
+this client and survives reloading; it is not a shared application setting and is not exported with configuration.
+If client storage is unavailable, the choice lasts for the current page load only.
 
-- **Sessions (n)**: the project's sessions that are not archived and have **no console session above them** (see "Lead
-  sessions" in `docs/product/hub-orchestration.md`) — the unbound ones, each with the sessions bound to it inset under
-  it. A **lead session and the sessions under it** are left out of the list together, as is any session bound to a
-  console session: they belong to that console session's focus mode, and are summed up below instead. The count is every
-  card listed, the inset ones included. With none, a compact row saying there are no sessions yet takes their place;
-  clicking the row opens a **New session**.
+From the top, below the switch:
+
+- **Sessions (n)**: with the switch off, the project's sessions that are not archived and have **no console session
+  above them** (see "Lead sessions" in `docs/product/hub-orchestration.md`) — the unbound ones, each with the sessions
+  bound to it inset under it. A **lead session and the sessions under it** are left out of the list together, as is
+  any session bound to a console session. With the switch on, every live session of the project is listed, with the
+  same order and nesting. Each card under a console session, directly or through a lead session, carries that console
+  session's colour dot and a tooltip naming it; its accessible name names that console session as well as its
+  immediate project-session owner, where it has one. The count is every card listed, the inset ones included. With
+  none, a compact row saying there are no sessions yet takes their place; clicking the row opens a **New session**.
+- **The sessions elsewhere**, between the live cards and the archive, present only with the switch off and while
+  the project has live sessions under a console session that is not archived: one sentence for the whole project
+  saying how many of its sessions are under console sessions, naming none of them, and below it a row of chips,
+  wrapping onto as many lines as it needs — one chip per console session they are under, in the order the console
+  sessions section lists them. A chip shows the console session's colour, its title (faded out when too long, the
+  full title then its tooltip) and an inline count badge with the same gray background and contrasting text
+  across all chips. Both the total and each chip's count include a lead session **and** the sessions under it, since
+  the lead session's team is listed with it in that console session's focus mode. Pressing a chip enters that console
+  session's focus mode; assistive technology hears it as entering that focus mode, with the count.
 - **Archived (n)** is the project's archived sessions with the bound ones included — those of a lead session that is
-  still live among them. The archive is not filtered by binding; only the list of live sessions is.
-- **The sessions elsewhere**, last, below the archive, present only while the project has sessions that are not
-  archived under a console session that is not archived: one sentence for the whole project saying how many of its
-  sessions are under console sessions, naming none of them, and below it a row of chips, wrapping onto as many
-  lines as it needs — one chip per console session they are under, in the order the console sessions section lists
-  them. A chip shows the console session's colour, its title (faded out when too long, the full title then its
-  tooltip) and how many of this project's sessions that are not archived are under it. Both counts count a lead
-  session **and** the sessions under it, since the lead session's team is listed with it in that console session's
-  focus mode. Pressing a chip enters that console session's focus mode; assistive technology hears it as entering that
-  focus mode, with the count.
+  still live among them. The archive is not filtered by binding, regardless of the switch; only the list of live
+  sessions changes.
 
 **New session** (the header's **+** and the empty row) opens the new-session dialog with no "Report to"
 choice: the session is always unbound.
@@ -146,18 +157,17 @@ deleted or, as it has no row any more, archived. An archived console session is 
 reopening it does not put the sidebar back into its focus mode. A remembered focus mode on something that is not in the
 console shown is ignored.
 
-**What belongs to what.** A session belongs to **a project's focus mode** when it is one of that project's sessions
-with no console session above it, or is one of that project's archived sessions. It belongs to **a console session's**
+**What belongs to what.** Every session of a project belongs to **that project's focus mode**, regardless of its
+status, binding or whether its card is shown. The combined-view switch changes only what the list shows: turning
+it off keeps project focus mode and the selected session's terminal, even when that session is represented only by
+the summary chips. Selecting another session of the same project, reopening a bound session, or its owner becoming
+a lead session also keeps project focus mode. Back and Forward use this same project membership rule, independently
+of the switch. A session belongs to **a console session's focus mode**
 when it is that console session itself, when it is live and under it — bound to it, or bound to a lead session bound to
 it (see "Lead sessions" in `docs/product/hub-orchestration.md`) — or when it is archived and that console session's
 archive reaches it: bound to it, or bound to a lead session that is archived too. For archived sessions the rule is the
 narrower one, so an archived session of a lead session that is **still live** belongs to its project's focus mode only,
 and selecting it from the console session's focus mode leaves that focus mode.
-
-The selected session can also stop belonging to what is in focus without being selected again, which leaves focus mode:
-reopening an archived session of a project that is bound to a console session makes it live and bound, so the project
-no longer lists it, and the session that owns the selected one becoming a lead session puts a console session above the
-selection, so its project no longer lists it either.
 
 ## The focus mode shortcut
 

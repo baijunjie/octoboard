@@ -84,8 +84,8 @@ export function go(
 
 /** Whether everything `location` names still exists, and can be shown together: a focus mode
  * counts by what `resolveFocus` finds, and so is gone with an archived console session, and one
- * that no longer lists the selected session cannot be shown with it (selecting a session leaves
- * such a focus mode). */
+ * whose context no longer contains the selected session cannot be shown with it (selecting a
+ * session leaves such a focus mode). Card visibility does not change project membership. */
 export function isLive(
   location: Location,
   data: { consoles: Map<string, Console>; projects: Map<string, Project>; sessions: Map<string, Session> },

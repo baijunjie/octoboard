@@ -23,6 +23,8 @@ export interface Preferences {
   /** The console the sidebar shows, and what is in focus mode. */
   sidebarConsole?: string;
   sidebarFocus?: `project:${string}` | `consoleSession:${string}`;
+  /** Include console-bound sessions as cards in project focus; off by default. */
+  projectFocusIncludeConsoleSessions?: boolean;
   /** How the Git mode's change lists show their changes. */
   changeLayout?: "flat" | "tree";
   /** Closing the window keeps the app running in the background; off by default. */

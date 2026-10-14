@@ -7,8 +7,8 @@ import type { Session } from "../protocol";
 
 /**
  * A bound project session's binding badge: a dot in its owner console session's colour, on the
- * project session's sidebar row. A focus mode's cards carry none: one lists only sessions not
- * bound to a console session, the other only sessions bound to the console session it is for.
+ * project session's sidebar row and on cards in the combined project focus view. The other focus
+ * views identify the console session through their header or their separate summary chips.
  * `owner` is that console session — its `colour` is what is drawn, and its `title` is what the
  * tooltip names (through `sidebar.session.boundTo`, the same message the row's own accessible name
  * folds the fact into), since the badge carries no information its tooltip does not: colour alone
