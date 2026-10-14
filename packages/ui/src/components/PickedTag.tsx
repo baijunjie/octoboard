@@ -10,18 +10,18 @@ import { TitledControl } from "./TitledControl";
  * on its own it would take on whatever lies behind it — the tags field's grey, which also darkens on
  * hover, would pull its text under 4.5:1 in the light theme. It is laid as an image over an opaque
  * `--surface` colour instead, so the tag reads the same wherever it sits and its contrast is the one
- * measured on `--surface`. Hover swaps in HeroUI's hover tint. The 3rem minimum keeps a short label's
- * first characters clear of the remove button and its fade, at rest as well as on hover, so a tag
- * never widens under the pointer and pushes its neighbours or wraps onto the next line. */
+ * measured on `--surface`. Hover swaps in HeroUI's hover tint. The 3rem minimum applies only while
+ * the remove button is visible, keeping a short label's first characters clear of the button and its fade
+ * while letting the tag fit its content at rest. */
 const ACCENT_TAG_CLASS =
-  "group/tag min-w-12 max-w-full bg-surface bg-[linear-gradient(var(--accent-soft),var(--accent-soft))] text-accent-soft-foreground hover:bg-[linear-gradient(var(--accent-soft-hover),var(--accent-soft-hover))]";
+  "group/tag min-w-0 hover:min-w-12 data-focus-visible:min-w-12 max-w-full bg-surface bg-[linear-gradient(var(--accent-soft),var(--accent-soft))] text-accent-soft-foreground hover:bg-[linear-gradient(var(--accent-soft-hover),var(--accent-soft-hover))]";
 
 /** The neutral look: HeroUI's default tag fill, which in the sidebar is its own fill
  * (`.sidebar-fills`). The minimum width is the accent look's, for the same reason. */
-const NEUTRAL_TAG_CLASS = "group/tag min-w-12 max-w-full";
+const NEUTRAL_TAG_CLASS = "group/tag min-w-0 hover:min-w-12 data-focus-visible:min-w-12 max-w-full";
 
-/** Laid over the tag's end rather than in the row, so the tag keeps one width whether the button
- * shows or not: 0.25rem from the end, inside the tag's 0.5rem end padding, so the 0.75rem glyph
+/** Laid over the tag's end rather than in the row, so it does not reserve space in the row:
+ * 0.25rem from the end, inside the tag's 0.5rem end padding, so the 0.75rem glyph
  * covers the label's last 0.5rem (`LABEL_CLASS`'s fade is measured from these). Shown while the tag
  * is hovered or has keyboard focus. `group-hover` rather than react-aria's `data-hovered`: react-aria
  * leaves hover tracking off on a tag that is only removable, so the tag never gets that attribute.
@@ -42,8 +42,8 @@ const NEUTRAL_REMOVE_CLASS = "text-foreground/80 hover:bg-foreground/10 hover:te
  * The direction is the tag's own (`tagDirection`), set on the tag, which the `rtl:` variant cannot
  * follow: it also matches anything under the right-to-left `<html>`. `flex-1` makes the box reach
  * the tag's end, where the button is, so the fade is measured from there and a short label in a
- * tag held wider by `min-w-12` stays clear of it. The mask is on an element around `FadeOverflow`,
- * whose own fade at a cut edge is a mask of its own. */
+ * tag held wider by the active minimum stays clear of it. The mask is on an element around
+ * `FadeOverflow`, whose own fade at a cut edge is a mask of its own. */
 const LABEL_CLASS =
   "flex min-w-0 flex-1 [--picked-tag-fade:linear-gradient(to_right,#000_calc(100%_-_1.25rem),transparent_calc(100%_-_0.5rem))] group-[[dir=rtl]]/tag:[--picked-tag-fade:linear-gradient(to_left,#000_calc(100%_-_1.25rem),transparent_calc(100%_-_0.5rem))] group-hover/tag:[mask-image:var(--picked-tag-fade)] group-data-focus-visible/tag:[mask-image:var(--picked-tag-fade)]";
 
@@ -68,7 +68,7 @@ function tagDirection(tag: string, ui: "ltr" | "rtl"): "ltr" | "rtl" {
  * tag, scrolls through its whole text. The remove button shows only while the pointer is over the
  * tag or the tag has keyboard focus (where Backspace and Delete also remove it), and then covers the
  * label's end (the end its text runs to, see `tagDirection`), which fades out ahead of it, so
- * showing it never changes the tag's width.
+ * short tags widen only while the button is visible.
  */
 export function PickedTag({
   tag,
@@ -111,8 +111,8 @@ export function PickedTag({
                 positioned so it adds to the scrollable width but not to the tag's, lets the marquee
                 carry the text's end out from under the button and its fade: a label whose end the
                 button covers is then cut, and scrolls until that end is clear; one that ends well
-                short of the button (in a tag held wider by `min-w-12`) does not move. The title is
-                for where the marquee does not run (reduced motion); being cut on hover, a label that
+                short of the button (in a tag held wider by the active minimum) does not move. The title
+                is for where the marquee does not run (reduced motion); being cut on hover, a label that
                 fits also gets it then. */}
             <FadeOverflow as="span" className="min-w-0 flex-1" titleWhenClipped={tag}>
               <span className="relative">

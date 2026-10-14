@@ -9,7 +9,7 @@ const { console: console_, web, api, sessions } = SAMPLE;
 
 // Two projects carrying tags, so the edited one has some of its own and the field suggests the rest.
 const tagged = [
-  projectOf("p-docs", console_.id, "Docs Site", { tags: ["frontend", "customer-facing"] }),
+  projectOf("p-docs", console_.id, "Docs Site", { tags: ["x", "frontend", "项目界面布局检查用的长标签名称"] }),
   projectOf("p-billing", console_.id, "Billing Service", { tags: ["backend", "payments"] }),
 ];
 const taggedState = snapshotState({ consoles: [console_], projects: tagged, sessions: [] });
@@ -262,6 +262,7 @@ export const dialogScenarios: Scenario[] = [
     id: "dialog-edit-project-tag-suggestions",
     group: GROUP,
     title: "Project tag suggestions",
+    description: "Short and long Chinese tags share the field with the input. The short tag fits its content until hover or keyboard focus makes room for its remove button; unused project tags appear below.",
     steps: [
       ...editTaggedProject,
       (ui) => ui.press(ui.t("dialog.project.tagsSuggestions")),

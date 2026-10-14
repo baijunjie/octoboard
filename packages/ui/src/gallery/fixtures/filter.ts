@@ -9,7 +9,7 @@ const projects = [
   projectOf("p-1", console_.id, "Website", { tags: ["frontend", "customer-facing"] }),
   projectOf("p-2", console_.id, "Search API", { tags: ["backend", "customer-facing"] }),
   projectOf("p-3", console_.id, "Billing Service", { tags: ["backend", "payments"] }),
-  projectOf("p-4", console_.id, "Docs Site", { tags: ["frontend", "customer-facing", "docs"] }),
+  projectOf("p-4", console_.id, "Docs Site", { tags: ["frontend", "customer-facing", "docs", "x", "项目界面布局检查用的长标签名称"] }),
   projectOf("p-5", console_.id, "Build Scripts"),
 ];
 const sessions = projects.map((p) => sessionOf(`s-${p.id}`, console_.id, p.id, `Work on ${p.name}`, "idle"));
@@ -54,11 +54,14 @@ export const filterScenarios: Scenario[] = [
     id:"filter-in-force",
     group:GROUP,
     title:"Matching projects",
+    description:"The keyword, short tag and long Chinese tag fit their content at rest. Hover a short tag to reveal its remove button and minimum width.",
     state:state,
     preferences:{sidebarConsole:console_.id},
     steps: [
       openFilter,
       (ui) => ui.type("site"),
+      (ui) => ui.press("x"),
+      (ui) => ui.press("项目界面布局检查用的长标签名称"),
       (ui) => ui.key("Escape"),
     ],
   },

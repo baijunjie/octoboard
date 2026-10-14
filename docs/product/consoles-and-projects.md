@@ -208,10 +208,11 @@ tint (same section).
   over the tag, runs as a marquee through its whole text (see "Names too long for their space" in
   `docs/product/labels-and-tooltips.md`); its full text is then also the tag's tooltip.
 - Its remove button is hidden at rest. It shows while the mouse pointer is over the tag or the tag has keyboard focus,
-  laid over the tag's end, the label fading out ahead of it. The tag's width never changes as the button shows or
-  hides. A label whose end the button then covers counts as cut, and its marquee scrolls until that end is clear of
-  the button; a label that ends well short of the button does not move.
-- Every picked tag is at least 3rem wide.
+  laid over the tag's end, the label fading out ahead of it. A label whose end the button then covers counts as cut,
+  and its marquee scrolls until that end is clear of the button; a label that ends well short of the button does not
+  move.
+- At rest, the tag fits its content with no minimum width. While the pointer is over it or it has keyboard focus,
+  it is at least 3rem wide so the remove button and its fade leave part of a short label visible.
 - The tag takes the direction of its own text, decided by its first letter, whatever the UI language: a tag whose
   first letter is Hebrew, Arabic, Syriac, Thaana or N'Ko runs right to left, any other left to right, and a tag with no
   letter follows the UI language's direction. The remove button and the fade sit at the end the text runs to, so a
