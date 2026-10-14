@@ -116,6 +116,7 @@ export function SessionDialog({
         label={t("dialog.session.titleField")}
         value={title}
         onChange={setTitle}
+        placeholder={project.name}
         description={t("dialog.session.titleHint")}
       />
       {fixedOwner && (

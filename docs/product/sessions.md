@@ -85,7 +85,8 @@ A session is opened under a project with:
   disabled — and the list opens on a selectable entry whenever there is one. Before that determination has landed
   every group is selectable and none is labelled as not installed. Until accounts have been
   added an agent's group holds its default account alone.
-- **Title** (optional) — defaults to the project's name. A console session's title defaults to "Hub" for ordinal 1
+- **Title** (optional) — the empty field shows the project's name as its placeholder; leaving it empty uses that
+  name as the session's title. A console session's title defaults to "Hub" for ordinal 1
   and "Hub `<ordinal>`" for any later one ("Hub 2", "Hub 3", …), where the ordinal is one past the highest ever used in
   its console, so a title is not reused after a console session is archived or deleted.
 - **Report to** (a choice, "No console session" by default) — one of the console's console sessions that are not
