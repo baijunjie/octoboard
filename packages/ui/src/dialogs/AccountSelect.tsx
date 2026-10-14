@@ -64,7 +64,7 @@ export function AccountSelect({
                 {group.selectable ? AGENT_LABEL[group.agent] : t("agents.notInstalled", { agent: AGENT_LABEL[group.agent] })}
               </Header>
               {group.entries.map((entry) => (
-                <ListBox.Item key={entry.key} id={entry.key} textValue={entry.name} isDisabled={!group.selectable}>
+                <ListBox.Item className="pe-7" key={entry.key} id={entry.key} textValue={entry.name} isDisabled={!group.selectable}>
                   <span dir="auto">{entry.name}</span>
                   <ListBox.ItemIndicator />
                 </ListBox.Item>

@@ -108,7 +108,7 @@ export function OptionSelect<T extends string>({
       <Select.Popover>
         <ListBox>
           {options.map((option) => (
-            <ListBox.Item key={option.value} id={option.value} textValue={option.label} isDisabled={option.isDisabled}>
+            <ListBox.Item className="pe-7" key={option.value} id={option.value} textValue={option.label} isDisabled={option.isDisabled}>
               {option.icon && (
                 <span aria-hidden="true" className="flex shrink-0">
                   {option.icon}

@@ -88,6 +88,39 @@ it("disables the submit button outright when the dialog has nothing to submit", 
   });
 });
 
+it.each([
+  ["modal", false, false],
+  ["modal form", false, true],
+  ["alert dialog", true, false],
+  ["alert dialog form", true, true],
+])("preserves HeroUI's header, body and footer spacing selectors in a %s", (_name, alert, form) => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  const submit = vi.fn();
+  try {
+    render(root, (
+      <Dialog title="Rename" alert={alert} onClose={() => {}} footer={<button type="submit">Save</button>}
+        onSubmit={form ? submit : undefined}>
+        <input aria-label="Name" />
+      </Dialog>
+    ));
+    const prefix = alert ? "alert-dialog" : "modal";
+    const body = document.querySelector(`.${prefix}__header + .${prefix}__body`);
+    expect(body).not.toBeNull();
+    expect(body?.nextElementSibling?.classList.contains(`${prefix}__footer`)).toBe(true);
+    if (form) {
+      const button = document.querySelector<HTMLButtonElement>("button[type=submit]");
+      expect(button?.form?.contains(body!)).toBe(true);
+      expect(button?.form?.querySelector("input")?.form).toBe(button?.form);
+      act(() => button?.click());
+      expect(submit).toHaveBeenCalledTimes(1);
+    }
+  } finally {
+    act(() => root.unmount());
+    container.remove();
+  }
+});
+
 const clearance = () => document.documentElement.style.getPropertyValue("--dialog-footer-clearance");
 
 const render = (root: Root, element: React.ReactElement) =>

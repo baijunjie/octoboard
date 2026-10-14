@@ -54,7 +54,7 @@ export function DirectoryPicker({
   const [error, setError] = useState<string>();
   const listRef = useRef<HTMLDivElement>(null);
   // The list scrolls on its own inside the dialog, which `Dialog`'s body fade does not reach.
-  const fade = useScrollFade({ ref: listRef, className: "max-h-72 overflow-y-auto rounded-lg border border-separator p-1" });
+  const fade = useScrollFade({ ref: listRef, className: "max-h-72 overflow-y-auto" });
 
   const load = async (targetPath: string, fallBackToAncestor = false) => {
     setError(undefined);

@@ -100,7 +100,7 @@ let openDialogs = 0;
 /**
  * The frame every dialog shares. Escape and a click outside both call `onClose` (for an `alert`
  * dialog too, which HeroUI's `AlertDialog` would otherwise make explicit-action only); the dialog is
- * mounted only while it is open, so `isOpen` is constant. With `onSubmit` the body and footer sit in
+ * mounted only while it is open, so `isOpen` is constant. With `onSubmit` the header, body and footer sit in
  * a `<form>`, so Enter in a text field submits it — the dialog decides what "submit" means. The
  * footer is Cancel plus a submit button labelled `submitLabel`, unless the dialog brings its own
  * `footer`. While `busy`, the submit button is marked pending rather than disabled: a disabled
@@ -224,6 +224,20 @@ export function Dialog({
     </>
   );
 
+  // Keep the modal parts together: HeroUI spaces them through adjacent-sibling selectors.
+  const content = (
+    <>
+      {/* HeroUI places the close button over the header's end without reserving room for it, so
+          the heading is padded clear of it; a long title (a session's name, say) has to wrap
+          anywhere, since a name with no place to break would run out of the dialog. */}
+      <Frame.Header className="pe-6">
+        <Frame.Heading className="[overflow-wrap:anywhere]">{title as BodyChildren}</Frame.Heading>
+        {subtitle}
+      </Frame.Header>
+      {body}
+    </>
+  );
+
   return (
     <Frame.Backdrop isOpen isDismissable isKeyboardDismissDisabled={false} onOpenChange={(open) => !open && onClose()}>
       {/* HeroUI pads the container 40px from `sm` up, which below the `docked` breakpoint leaves too
@@ -253,15 +267,6 @@ export function Dialog({
             {/* Named explicitly so it always matches the tooltip. */}
             <Frame.CloseTrigger aria-label={t("common.close")} />
           </TitledControl>
-          {/* HeroUI places the close button over the header's end without reserving room for it, so
-              the heading is padded clear of it; a long title (a session's name, say) has to wrap
-              anywhere, since a name with no place to break would run out of the dialog. The header's
-              own gap between its children is dropped, so a subtitle sits against the heading instead
-              of 12px below it; with the heading alone there is nothing for the gap to separate. */}
-          <Frame.Header className="gap-0 pe-6">
-            <Frame.Heading className="[overflow-wrap:anywhere]">{title as BodyChildren}</Frame.Heading>
-            {subtitle}
-          </Frame.Header>
           {onSubmit ? (
             <form
               className="contents"
@@ -270,10 +275,10 @@ export function Dialog({
                 onSubmit();
               }}
             >
-              {body}
+              {content}
             </form>
           ) : (
-            body
+            content
           )}
         </Frame.Dialog>
       </Frame.Container>
