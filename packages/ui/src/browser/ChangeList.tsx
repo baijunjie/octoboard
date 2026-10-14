@@ -1,26 +1,26 @@
 import { SearchX } from "lucide-react";
 import React, { useMemo } from "react";
-import { Collection, GridList, GridListHeader, GridListItem, GridListSection, ListLayout, Virtualizer, type Key } from "react-aria-components";
+import { Collection, GridList, GridListHeader, GridListItem, GridListSection, Virtualizer, type Key } from "react-aria-components";
 
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
-import { useScrollFade } from "../components/scrollFade";
+import { useStickyScrollFade } from "../components/scrollFade";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { ChangeLayout } from "./changeLayout";
 import type { ChangeViewState } from "./changeView";
 import { ChangeRowBody, changeRowText } from "./changeRow";
 import { changeGroups, filterChanges, sectionKey, sections, visibleNodes, type ChangeItem, type ChangeSection } from "./changes";
-import { ChangeSectionHeading, ChangeSectionHeadingStops, HEADING_CLASS, HEADING_HEIGHT } from "./changeSectionHeading";
+import { ChangeSectionHeading, ChangeSectionHeadingStops, ChangeListLayout, CHANGE_SCROLL_CLASS, HEADING_CLASS, HEADING_HEIGHT } from "./changeSectionHeading";
 import { ChangeTree } from "./ChangeTree";
 import { ROW_CLASS, ROW_HEIGHT, RowContent } from "./treeRow";
 
 /** How far below the top of the list's content the row of `key` is, or nothing when the list has
  * no such row on screen (a change in a folded-away section or under a collapsed directory has
- * none). Rows and headings are each one height and laid out one after another below the list's top
- * padding (`py-1`), so where a row is follows from what comes before it — a folded section
+ * none). Rows and headings are each one height and laid out one after another, so where a row is
+ * follows from what comes before it — a folded section
  * contributing its heading alone. */
 export function changeRowOffset(items: readonly ChangeItem[], key: string, layout: ChangeLayout, collapsed: ReadonlySet<string>): number | undefined {
-  let top = 4;
+  let top = 0;
   for (const group of changeGroups(items, layout)) {
     top += HEADING_HEIGHT;
     if (collapsed.has(sectionKey(group.section))) continue;
@@ -118,7 +118,7 @@ function FlatChangeList({
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
 }): React.ReactElement {
   const language = useCurrentLanguage();
-  const fade = useScrollFade({ ref: listRef, className: "min-h-0 flex-1 overflow-auto py-1 outline-none" });
+  const { props: fade, wrap } = useStickyScrollFade({ ref: listRef, className: "min-h-0 flex-1 overflow-auto pb-1 outline-none " + CHANGE_SCROLL_CLASS, stickyHeadingHeight: HEADING_HEIGHT });
   // A section's `id` is what the collection keys it by; a change's own `key` keys its row.
   const groups = useMemo(() => sections(items).map((group) => ({ id: group.section, ...group })), [items]);
   const byKey = useMemo(() => new Map(items.map((item) => [item.key, item])), [items]);
@@ -134,7 +134,7 @@ function FlatChangeList({
     // button has to be reached by keyboard, and a `GridList` row (like the tree's) hands focus to its
     // children with the arrow keys that run along the row, HeroUI having no equivalent.
     <ChangeSectionHeadingStops>
-      <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: ROW_HEIGHT, headingHeight: HEADING_HEIGHT }}>
+      {wrap(<Virtualizer layout={ChangeListLayout} layoutOptions={{ rowHeight: ROW_HEIGHT, headingHeight: HEADING_HEIGHT }}>
         <GridList
           {...fade}
           aria-label={label}
@@ -155,7 +155,7 @@ function FlatChangeList({
             />
           )}
         </GridList>
-      </Virtualizer>
+      </Virtualizer>)}
     </ChangeSectionHeadingStops>
   );
 }
@@ -178,7 +178,7 @@ function ChangeSectionView({
   // holds either way.
   const rows = collapsed.has(sectionKey(section)) ? [] : items;
   return (
-    <GridListSection id={section}>
+    <GridListSection className="h-full" id={section}>
       <GridListHeader className={HEADING_CLASS}>
         <ChangeSectionHeading section={section} count={items.length} collapsed={collapsed} onCollapsedChange={onCollapsedChange} />
       </GridListHeader>

@@ -95,6 +95,8 @@ export interface Ui {
    * named by the dialog's title, and the startup screen's message. A step cannot press Tab itself:
    * a script's key event moves nothing. */
   tabToRegion: (name: Matcher) => Promise<void>;
+  /** Scrolls a named grid or tree to a settled offset without moving keyboard focus. */
+  scrollCollection: (name: Matcher, top: number) => Promise<void>;
   /** Moves the pointer onto the indicator inside the first control named `host`, waiting for the
    * control to appear, and leaves it there, for the tooltip that shows only while the pointer is
    * on it. It returns once the app's tooltip delay has passed and the tooltip is up. The indicator
@@ -334,6 +336,14 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
         await wait(POLL_MS);
       }
       throw new Error(`No scroll region named ${String(matcher)}: check the name, and for a region that exists only while its content overflows (a dialog's body, the startup screen's message) that the window is short enough for that`);
+    },
+    async scrollCollection(matcher, top) {
+      const collection = await waitFor(
+        () => Array.from(doc.querySelectorAll<HTMLElement>('[role="grid"], [role="treegrid"], [role="tree"]')).find((element) => matches(matcher, nameOf(element))),
+        `No collection named ${String(matcher)} to scroll`,
+      );
+      collection.scrollTo({ top, behavior: "instant" });
+      await wait(300);
     },
     async type(text) {
       const field = await waitFor(

@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
+import { ROW_ICON_BUTTON_CLASS } from "../components/RowControls";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { AsidePane, type AsideLayout } from "../layout/AsidePane";
 import { usePlatform } from "../platform/react";
@@ -129,7 +130,7 @@ export function ReportPanel({
   };
 
   return (
-    <AsidePane layout={layout}>
+    <AsidePane layout={layout} className="sidebar-fills">
       {/* A previous / next pager with "n / m", hand-assembled from buttons: HeroUI's `Pagination`
           is a list of numbered pages, which neither reads as nor behaves like this. */}
       <div className="flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator px-3 text-xs text-muted">
@@ -138,6 +139,7 @@ export function ReportPanel({
             isIconOnly
             size="sm"
             variant="ghost"
+            className={ROW_ICON_BUTTON_CLASS}
             aria-label={t("report.previous")}
             preventFocusOnPress
             isDisabled={displayIndex === 0}
@@ -156,6 +158,7 @@ export function ReportPanel({
             isIconOnly
             size="sm"
             variant="ghost"
+            className={ROW_ICON_BUTTON_CLASS}
             aria-label={t("report.next")}
             preventFocusOnPress
             isDisabled={displayIndex === sessionPages.length - 1}

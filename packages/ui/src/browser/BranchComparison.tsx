@@ -6,6 +6,7 @@ import { ListLayout, Virtualizer } from "react-aria-components";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
+import { ROW_ICON_BUTTON_CLASS } from "../components/RowControls";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useScrollFade } from "../components/scrollFade";
 import { isolate } from "../i18n/isolate";
@@ -108,6 +109,7 @@ export function BranchComparisonView({
             isIconOnly
             size="sm"
             variant="ghost"
+            className={ROW_ICON_BUTTON_CLASS}
             aria-label={t("git.compare.swap")}
             isDisabled={left === undefined && right === undefined}
             preventFocusOnPress

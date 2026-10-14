@@ -477,8 +477,9 @@ another file (see "Moving between files" below).
 
 ### Moving between files
 
-**Previous file** and **Next file**, at the foot of the viewer, and the **Left** and **Right** arrow keys move to the
-file before and after the one shown, without closing the viewer. They move through the file rows the tree shows, top
+**Previous file** and **Next file**, beside the title at its leading side at the top of the viewer, and the **Left**
+and **Right** arrow keys move to the file before and after the one shown, without closing the viewer. They move through
+the file rows the tree shows, top
 to bottom: folders are skipped, and so is everything inside a collapsed folder. They stop at either end rather than
 going round, Previous file disabled on the first file and Next file on the last. A file shown as removed moves on to
 the files that were beside it.

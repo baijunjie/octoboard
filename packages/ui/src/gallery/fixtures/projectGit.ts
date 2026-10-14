@@ -349,6 +349,23 @@ export const projectGitScenarios: Scenario[] = [
     steps: [...openGit, (ui) => ui.press(ui.changeRow("package.json", "conflicted")), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
   },
   {
+    id: "git-changes-sticky",
+    group: GROUP,
+    title: "A section heading pinned above flat changes",
+    description: "The list starts partway through Staged: its heading stays against the worktree selector's bottom border while rows scroll beneath it. The top fade begins below the pinned band; scrolling farther lets the next section replace it.",
+    state,
+    steps: [...openGit, (ui) => ui.scrollCollection(ui.t("git.list.label"), 180)],
+  },
+  {
+    id: "git-changes-tree-sticky",
+    group: GROUP,
+    title: "A section heading pinned above grouped changes",
+    description: "The folder-grouped list starts partway through Staged: its heading stays against the worktree selector's bottom border while directories and files scroll beneath it. The top fade starts below the pinned band; scrolling farther lets the next section replace it.",
+    state,
+    preferences: { changeLayout: "tree" },
+    steps: [...openGit, (ui) => ui.scrollCollection(ui.t("git.list.label"), 180)],
+  },
+  {
     id: "git-worktree-gone",
     group: GROUP,
     title: "A worktree that has gone",

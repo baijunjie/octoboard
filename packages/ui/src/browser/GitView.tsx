@@ -1,5 +1,5 @@
 import { Label, ListBox, Select, Tabs } from "@heroui/react";
-import { FileCheck, FolderTree, FunnelX, GitBranch, GitFork, List, ListFilter, TriangleAlert } from "lucide-react";
+import { FileCheck, FolderTree, Funnel, FunnelX, GitBranch, GitFork, List, TriangleAlert } from "lucide-react";
 import React, { useRef } from "react";
 
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
@@ -7,6 +7,7 @@ import { ErrorAlert } from "../components/ErrorAlert";
 import { CodeBlock } from "../components/InlineCode";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { IconToggle } from "../components/IconToggle";
+import { RowIconGroup } from "../components/RowControls";
 import { PathText } from "../components/PathText";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
@@ -136,10 +137,10 @@ function GitContent({
     >
       {/* The filter and layout toggles are members of the tab row: the tabs' container draws only
           its list, and wrapping it would switch its variant's styles off, so they join it through
-          the container's `render`. The tabs are `h-10` because HeroUI's small icon-only button is
-          36px below 48rem and 32px above, and the row's height is the tabs'. */}
+          the container's `render`. The tabs set the row's height. The container uses the pane's
+          separator colour so its divider matches the header and selector dividers. */}
       <Tabs.ListContainer
-        className="flex shrink-0 items-center ps-3 pe-2"
+        className="flex shrink-0 items-center border-separator ps-3 pe-2"
         render={(props) => (
           <div {...props}>
             {tabScrollLabels(props.children)}
@@ -234,7 +235,7 @@ function WorktreeChanges({
 function ChangeViewToggles({ changeView }: { changeView: ChangeViewState }): React.ReactElement {
   const t = useT();
   return (
-    <div className="ms-auto flex shrink-0 items-center gap-1">
+    <RowIconGroup className="ms-auto">
       <IconToggle
         ref={changeView.filterToggleRef}
         label={t(changeView.filterOpen ? "git.filter.hide" : "git.filter.show")}
@@ -242,7 +243,7 @@ function ChangeViewToggles({ changeView }: { changeView: ChangeViewState }): Rea
         expanded={changeView.filterOpen}
         onChange={changeView.onFilterOpenChange}
       >
-        {changeView.filterOpen ? <FunnelX aria-hidden="true" className="size-4" /> : <ListFilter aria-hidden="true" className="size-4" />}
+        {changeView.filterOpen ? <FunnelX aria-hidden="true" className="size-4" /> : <Funnel aria-hidden="true" className="size-4" />}
       </IconToggle>
       <IconToggle
         label={t(changeView.layout === "tree" ? "git.layout.flat" : "git.layout.tree")}
@@ -253,7 +254,7 @@ function ChangeViewToggles({ changeView }: { changeView: ChangeViewState }): Rea
             as the sidebar's fold control does. */}
         {changeView.layout === "tree" ? <FolderTree aria-hidden="true" className="size-4 rtl:-scale-x-100" /> : <List aria-hidden="true" className="size-4 rtl:-scale-x-100" />}
       </IconToggle>
-    </div>
+    </RowIconGroup>
   );
 }
 

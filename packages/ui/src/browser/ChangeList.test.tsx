@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import React, { act, useState } from "react";
 import { expect, it, vi } from "vitest";
+import { LayoutInfo, ListLayout, Rect } from "react-aria-components";
 
 import { isolate } from "../i18n/isolate";
 import { ChangeList, changeRowOffset } from "./ChangeList";
@@ -8,7 +9,7 @@ import { change, changeViewFixture, mountRows } from "./browserTestSupport";
 import type { ChangeLayout } from "./changeLayout";
 import type { ChangeViewState } from "./changeView";
 import { changeItems, sectionKey } from "./changes";
-import { HEADING_HEIGHT } from "./changeSectionHeading";
+import { ChangeListLayout, HEADING_HEIGHT } from "./changeSectionHeading";
 import { ROW_HEIGHT } from "./treeRow";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -172,7 +173,25 @@ it("places a row by what comes before it, a folded section counting its heading 
   const folded = new Set([sectionKey("staged")]);
   const [firstStaged, , firstUnstaged] = items;
   expect(changeRowOffset(items, firstStaged.key, "flat", folded)).toBeUndefined();
-  // Below the two headings alone, the list's own top padding before them.
-  expect(changeRowOffset(items, firstUnstaged.key, "flat", folded)).toBe(4 + 2 * HEADING_HEIGHT);
-  expect(changeRowOffset(items, firstUnstaged.key, "flat", new Set())).toBe(4 + 2 * HEADING_HEIGHT + 2 * ROW_HEIGHT);
+  // Below the two headings alone, without an inset before them.
+  expect(changeRowOffset(items, firstUnstaged.key, "flat", folded)).toBe(2 * HEADING_HEIGHT);
+  expect(changeRowOffset(items, firstUnstaged.key, "flat", new Set())).toBe(2 * HEADING_HEIGHT + 2 * ROW_HEIGHT);
+});
+
+it("pins render copies within sections without changing the geometry used for row navigation", () => {
+  const section = new LayoutInfo("section", "staged", new Rect(0, 62, 300, 510));
+  const header = new LayoutInfo("header", "header-staged", new Rect(0, 62, 300, HEADING_HEIGHT));
+  const row = new LayoutInfo("item", "row", new Rect(0, 92, 300, ROW_HEIGHT));
+  const visible = vi.spyOn(ListLayout.prototype, "getVisibleLayoutInfos").mockReturnValue([section, header, row]);
+  try {
+    const rendered = new ChangeListLayout().getVisibleLayoutInfos(new Rect(0, 100, 300, 200));
+    expect(rendered[0].allowOverflow).toBe(true);
+    expect(rendered[1]).toMatchObject({ isSticky: true, zIndex: 3, rect: { y: 0 } });
+    expect(rendered[2]).toBe(row);
+    expect(header.rect.y).toBe(62);
+    expect(header.isSticky).toBe(false);
+    expect(section.allowOverflow).toBe(false);
+  } finally {
+    visible.mockRestore();
+  }
 });

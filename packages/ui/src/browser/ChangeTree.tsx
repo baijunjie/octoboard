@@ -1,11 +1,11 @@
 import React, { useMemo } from "react";
-import { Collection, ListLayout, Tree, TreeHeader, TreeItem, TreeItemContent, TreeSection, Virtualizer, type Key } from "react-aria-components";
+import { Collection, Tree, TreeHeader, TreeItem, TreeItemContent, TreeSection, Virtualizer, type Key } from "react-aria-components";
 
-import { useScrollFade } from "../components/scrollFade";
+import { useStickyScrollFade } from "../components/scrollFade";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { ChangeRowBody, changeRowText } from "./changeRow";
 import { changeGroups, sectionKey, type ChangeItem, type ChangeNode } from "./changes";
-import { ChangeSectionHeading, ChangeSectionHeadingStops, HEADING_CLASS, HEADING_HEIGHT } from "./changeSectionHeading";
+import { ChangeSectionHeading, ChangeSectionHeadingStops, ChangeListLayout, CHANGE_SCROLL_CLASS, HEADING_CLASS, HEADING_HEIGHT } from "./changeSectionHeading";
 import { DirectoryRow, ROW_CLASS, ROW_HEIGHT, RowContent } from "./treeRow";
 
 /** The directories of `nodes` and everything under them. */
@@ -45,7 +45,7 @@ export function ChangeTree({
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
 }): React.ReactElement {
   const language = useCurrentLanguage();
-  const fade = useScrollFade({ ref: listRef, className: "min-h-0 flex-1 overflow-auto py-1 outline-none" });
+  const { props: fade, wrap } = useStickyScrollFade({ ref: listRef, className: "min-h-0 flex-1 overflow-auto pb-1 outline-none " + CHANGE_SCROLL_CLASS, stickyHeadingHeight: HEADING_HEIGHT });
   const groups = useMemo(() => changeGroups(items, "tree").map((group) => ({ id: group.section, ...group })), [items]);
   // Only the directories of the sections on screen: a folded section renders none of its rows, so
   // whether a directory inside one is folded is not this list's to decide. react-aria hands an
@@ -94,7 +94,7 @@ export function ChangeTree({
 
   return (
     <ChangeSectionHeadingStops>
-      <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: ROW_HEIGHT, headingHeight: HEADING_HEIGHT }}>
+      {wrap(<Virtualizer layout={ChangeListLayout} layoutOptions={{ rowHeight: ROW_HEIGHT, headingHeight: HEADING_HEIGHT }}>
         <Tree
           {...fade}
           aria-label={label}
@@ -107,7 +107,7 @@ export function ChangeTree({
           dependencies={[language, selected, collapsed]}
         >
           {(group) => (
-            <TreeSection id={group.section}>
+            <TreeSection className="h-full" id={group.section}>
               <TreeHeader className={HEADING_CLASS}>
                 <ChangeSectionHeading section={group.section} count={group.items.length} collapsed={collapsed} onCollapsedChange={onCollapsedChange} />
               </TreeHeader>
@@ -118,7 +118,7 @@ export function ChangeTree({
             </TreeSection>
           )}
         </Tree>
-      </Virtualizer>
+      </Virtualizer>)}
     </ChangeSectionHeadingStops>
   );
 }

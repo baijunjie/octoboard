@@ -41,8 +41,8 @@ end of a row has to come first in the source, because a float only shortens the 
 leaves beside it then reads after it. That is only a reading-order cost while the row's other content is inert text,
 and it becomes a focus-order one — focus jumping back against the reading direction — the moment a control sits in
 that text. So a control belonging to such a row joins the floating group rather than standing among the text: the
-file viewer's header floats its view controls to the end of the detail row, and its Copy path button is the group's
-first control rather than a button beside the path it copies (`packages/ui/src/viewer/FileViewer.tsx`).
+file viewer's detail row floats Copy path and the view controls to its end, rather than placing a button beside
+the path it copies (`packages/ui/src/viewer/FileViewer.tsx`).
 
 A control inside a collection's **section header** is reached by neither of those: react-aria's keyboard delegate
 walks the collection's items alone, so the arrow keys never land on a header, Tab inside the collection jumps to the
@@ -560,8 +560,9 @@ dark material is a grey far lighter than dark `--chrome`.
 A control's pointer target is at least 24 by 24 CSS pixels (WCAG 2.2 AA 2.5.8). HeroUI's own sizes already clear it —
 its smallest icon-only button is 32 — so this only bites where a control is drawn smaller than HeroUI would draw it.
 
-Trailing icon buttons in sidebar rows, cards and headers share a 24-by-24-pixel target and a 4-pixel gap, defined by
-`--row-control-size` and `--row-control-gap` in `packages/ui/src/style.css`. Use the shared `RowIconGroup` for adjacent
+Icon buttons in sidebar rows, cards and headers, the right pane and the file viewer share a 24-by-24-pixel target
+and a 4-pixel gap, defined by `--row-control-size` and `--row-control-gap` in `packages/ui/src/style.css`.
+Use the shared `RowIconGroup` for adjacent
 icons and `RowIconSlot` for a marker's matching horizontal column; the marker keeps its own glyph size and does not
 increase the text line's height. Leading glyphs use the 16-pixel `--row-leading-icon-size` column through
 `RowIconSlot`'s leading placement. In a focus card, the binding dot precedes the title in reading order and shares

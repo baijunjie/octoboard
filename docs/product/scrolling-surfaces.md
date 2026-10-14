@@ -20,8 +20,9 @@ alone, are in "The surfaces that fade" below.
   cut away or made unreachable. It falls over **the content alone**: a scrollbar the surface draws is left out of the
   fade and reads at full strength, as it would with no fade at all — the one along the bottom of a surface that
   scrolls both ways included, which lies inside the fade's band for its whole length.
-- In focus mode's lists, the top fade begins below the section heading; see "What both views show" in
-  `docs/product/focus-mode.md` for the headings' scrolling behavior.
+- In focus mode's lists and the Git mode's change lists, the top fade begins below the section heading; see
+  "What both views show" in `docs/product/focus-mode.md` and "Folding a section" in
+  `docs/product/project-pane-git-mode.md` for the headings' scrolling behavior.
 - Only the **top and bottom** edges fade, apart from the strips that scroll sideways and fade at their sideways
   edges: focus mode's strip of console session chips (see "The switch strip" in `docs/product/focus-mode.md`) and a
   strip of tabs. The file viewer's long lines, read by scrolling sideways while wrapping is off, fade at neither side
@@ -96,6 +97,6 @@ covers. These are:
   not go. In Tab order it comes before Try again, and after the screen's column where that is a stop too.
 
 **Keyboard focus does not land under a fade**: a row, a control or a region scrolled into view stops 24 px short of
-the edge, clear of the fade, rather than arriving underneath. In focus mode's lists that space is measured below
-the section heading (see "What both views show" in `docs/product/focus-mode.md`). A strip of tabs is the exception,
-as above.
+the edge, clear of the fade, rather than arriving underneath. In focus mode's lists and the Git mode's change lists
+that space is measured below the section heading (see "What both views show" in `docs/product/focus-mode.md` and
+"Folding a section" in `docs/product/project-pane-git-mode.md`). A strip of tabs is the exception, as above.

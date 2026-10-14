@@ -148,6 +148,13 @@ unfolds it. That holds for every section of either view — Conflicted, Staged, 
 comparison's Changed files (see "What the view says" below) — and in both forms of the list, flat or grouped by
 folder.
 
+**The heading stays at the top of the scrolling change list while its rows move underneath.** As the next section's
+heading reaches the top, it pushes the current heading upward out of view and takes its place. Each heading is
+**30 px** high, with an opaque background, and the first begins at the list's top edge without a padding gap below
+the worktree or branch selectors. The edge fade begins below the heading, and a row scrolled into view for keyboard
+focus or as the viewer's selected change stays clear of both (see "The edge that hides content fades" and
+"Scrolling a surface from the keyboard" in `docs/product/scrolling-surfaces.md`).
+
 - **A folded section keeps its heading and its count** — of the changes it holds, those the filter leaves (see
   "Filtering by file name" below) — and shows none of its rows. Those changes have no row at all, so the viewer moves
   past them (see "Moving between changes" below), as it moves past the changes under a folded folder.

@@ -29,6 +29,11 @@ import { separatorLabels } from "./rendererDom";
 // reaches WCAG AA's 4.5:1 on the code background in both appearances.
 const THEMES = { light: CODE_THEMES.light.name, dark: CODE_THEMES.dark.name } as const;
 
+/** The renderer paints inside a shadow root, so its rows need the same fill as their full frame. */
+function readingCss(theme: "light" | "dark"): string {
+  return `:host { --diffs-bg: ${CODE_THEMES[theme].background}; }`;
+}
+
 /**
  * Diff colours that keep every token at 4.5:1 and mark a change by more than colour. The library
  * marks a changed word with a tint over the changed line's tint, and in the light appearance the
@@ -45,7 +50,8 @@ function diffCss(theme: "light" | "dark"): string {
       ? `[data-line][data-line-type="change-addition"] { background-color: #ebf7ed !important; }
          [data-line][data-line-type="change-deletion"] { background-color: #fdf0f0 !important; }`
       : "";
-  return `${lineTints}
+  return `${readingCss(theme)}
+    ${lineTints}
     /* In the code column (\`[data-content]\`), whose parent \`[data-code]\` is the scroll container when
        lines are not wrapped. Sticky, like the gutter the label and chevrons sit in, so it stays at the visible
        end of the bar and not at the end of the longest line. Because it is in normal flow, not
@@ -255,7 +261,7 @@ export const HighlightedFile = memo(function HighlightedFile({
   );
   const onPostRender = useDrawnCallback(onDrawn);
   const options = useMemo(
-    () => ({ ...BASE_OPTIONS, themeType: theme, overflow: overflowOption(wrap), disableLineNumbers: !lineNumbers, onPostRender }) as const,
+    () => ({ ...BASE_OPTIONS, themeType: theme, overflow: overflowOption(wrap), disableLineNumbers: !lineNumbers, unsafeCSS: readingCss(theme), onPostRender }) as const,
     [theme, wrap, lineNumbers, onPostRender],
   );
   return (

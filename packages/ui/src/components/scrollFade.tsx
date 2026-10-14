@@ -163,19 +163,62 @@ export function FadedScroller({ orientation = "vertical", region, style, classNa
     />
   );
   if (stickyHeadingHeight === undefined) return scroller;
+  return <StickyFadeFrame visibility={visibility} gutter={gutter} headingHeight={stickyHeadingHeight}>{scroller}</StickyFadeFrame>;
+}
+
+function StickyFadeFrame({ children, visibility, gutter, headingHeight, bottomGutter = 0 }: {
+  children: React.ReactNode;
+  visibility: ScrollShadowVisibility;
+  gutter: number;
+  headingHeight: number;
+  bottomGutter?: number;
+}): React.ReactElement {
   return (
     <div className="relative isolate flex min-h-0 flex-1 flex-col">
-      {scroller}
+      {children}
       {(visibility === "top" || visibility === "both") && (
         <div aria-hidden="true" className="pointer-events-none absolute start-0 z-2 bg-linear-to-b from-panel-sidebar to-transparent"
-          style={{ top: stickyHeadingHeight, height: FADE_SIZE, insetInlineEnd: gutter }} />
+          style={{ top: headingHeight, height: FADE_SIZE, insetInlineEnd: gutter }} />
       )}
       {(visibility === "bottom" || visibility === "both") && (
         <div aria-hidden="true" className="pointer-events-none absolute bottom-0 start-0 z-2 bg-linear-to-t from-panel-sidebar to-transparent"
-          style={{ height: FADE_SIZE, insetInlineEnd: gutter }} />
+          style={{ bottom: bottomGutter, height: FADE_SIZE, insetInlineEnd: gutter }} />
       )}
     </div>
   );
+}
+
+/** A virtualized scroller with sticky section headings: native scrolling and its collection role
+ * stay on the element, while fades paint in a shared stacking context below its headings. */
+export function useStickyScrollFade({ ref: forwarded, className, stickyHeadingHeight }: {
+  ref?: Ref<HTMLDivElement>;
+  className: string;
+  stickyHeadingHeight: number;
+}): {
+  props: { ref: RefObject<HTMLDivElement | null>; className: string; style: CSSProperties };
+  wrap: (children: React.ReactNode) => React.ReactElement;
+} {
+  const ref = useObjectRef(forwarded);
+  const [visibility, setVisibility] = useState<ScrollShadowVisibility>("none");
+  const [gutter, setGutter] = useState(0);
+  const [bottomGutter, setBottomGutter] = useState(0);
+  useScrollShadow({ containerRef: ref as RefObject<HTMLElement>, isEnabled: true, offset: 0, orientation: "vertical", visibility: "auto", onVisibilityChange: setVisibility });
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const measure = () => {
+      setGutter(element.offsetWidth - element.clientWidth);
+      setBottomGutter(element.offsetHeight - element.clientHeight);
+    };
+    const resize = new ResizeObserver(measure);
+    resize.observe(element);
+    measure();
+    return () => resize.disconnect();
+  });
+  return {
+    props: { ref, className, style: { ...scrollPadding("vertical"), scrollPaddingTop: stickyHeadingHeight + FADE_SIZE } },
+    wrap: (children) => <StickyFadeFrame visibility={visibility} gutter={gutter} headingHeight={stickyHeadingHeight} bottomGutter={bottomGutter}>{children}</StickyFadeFrame>,
+  };
 }
 
 /**

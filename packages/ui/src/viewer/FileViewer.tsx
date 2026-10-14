@@ -6,6 +6,7 @@ import { FadeOverflow } from "../components/FadeOverflow";
 import { PlainMarkedPath } from "../components/MarkedPath";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { TitledControl } from "../components/TitledControl";
+import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../components/RowControls";
 import { useCopyPath } from "../components/useCopyPath";
 import { Dialog, useRefocusIfLost } from "../dialogs/Dialog";
 import { isolate } from "../i18n/isolate";
@@ -50,7 +51,7 @@ import {
 } from "./viewerStates";
 import { useWrapClaims, WrapToggleHost } from "./wordWrap";
 
-/** Moving to the subject before or after this one, from the footer's buttons and from Left and Right;
+/** Moving to the subject before or after this one, from the header's buttons and from Left and Right;
  * a missing callback disables its button and its key. */
 export interface ViewerNavigation {
   onPrevious?: () => void;
@@ -144,8 +145,8 @@ export function FileViewer({
     },
   });
 
-  const footer = navigation ? (
-    <>
+  const navigationControls = navigation ? (
+    <RowIconGroup>
       <NavigationButton
         ref={previousRef}
         label={t("viewer.previous")}
@@ -154,10 +155,10 @@ export function FileViewer({
         {...track("previous")}
       />
       <NavigationButton ref={nextRef} label={t("viewer.next")} onPress={navigation.onNext} icon="next" {...track("next")} />
-    </>
+    </RowIconGroup>
   ) : null;
 
-  // The header is the title, the file's name with the tags of what the change is after it; under
+  // The header holds navigation beside the title, the file's name with the tags of its change; under
   // it, when the subject has one, the subtitle (where a compared change is from, which is a tag in
   // meaning but far too long to sit in the tag group); and under that, in the body, the details
   // (path, size, rename origin) beside the controls (Copy path, then the Markdown view, diff layout
@@ -190,6 +191,7 @@ export function FileViewer({
   return (
     <Dialog
       size="viewer"
+      headerLeading={navigationControls}
       title={
         <>
           {/* WebKit puts a space around every flex item when it computes an accessible name
@@ -223,7 +225,7 @@ export function FileViewer({
           // Rendered only while there is a source, so a subject without one loses no height. The muted
           // colour is set here rather than inherited: the dialog's header carries none of its own, and
           // this line is the subject's metadata, not a second title.
-          <div data-viewer-subtitle="" className="flex min-w-0 items-center text-xs text-muted">
+          <div data-viewer-subtitle="" className="col-span-full flex min-w-0 items-center text-xs text-muted">
             <FadeOverflow
               as="span"
               className="min-w-0"
@@ -235,12 +237,12 @@ export function FileViewer({
         ) : undefined
       }
       onClose={onClose}
-      footer={footer}
+      footer={null}
       resetKey={subject.key}
     >
       <div ref={headerRef} data-viewer-description="" className="flow-root min-h-8 min-w-0 shrink-0 text-xs leading-8">
-        {/* Copy path first, then fixed places for the Markdown view choice, the layout choice and the
-            wrap choice, so the Tab order is the order on screen whichever of the three mounts first.
+        {/* Copy path, then fixed places for the Markdown view choice, the layout choice and the
+            wrap choice, so Tab order matches the screen whichever mounts first.
             Copy path is here, not beside the path it copies, because the group sits at the row's end
             and a button at the row's start would be tabbed to after the three at its end, against the
             reading direction. The slots have no box of their own while empty, so they take none of
@@ -249,15 +251,13 @@ export function FileViewer({
             it). That puts the controls before the file's path for a screen reader, so Copy path is
             met before the path it copies. That cost was weighed and accepted: the details are
             independent, separately labelled facts, and Copy path and the other controls are labelled
-            on their own. The dialog's body text is muted, which the icons' strokes would inherit
-            (under 4.5:1 on a hovered `.control-fills` fill), so the controls take the foreground
-            colour and each detail item the muted one. */}
-        <div className="float-end flex h-8 items-center gap-2 text-foreground">
+            on their own. */}
+        <RowIconGroup className="float-end h-8">
           {copyPath && <CopyPathButton onPress={() => copyPath(subject.path)} />}
           <div ref={setMarkdownViewSlot} className="contents" />
           <div ref={setLayoutSlot} className="contents" />
           {wrapClaimed && <WrapToggleHost />}
-        </div>
+        </RowIconGroup>
         <DetailItem>
           <PlainMarkedPath path={displayWirePath(subject.path)} icon={File} />
         </DetailItem>
@@ -300,7 +300,9 @@ function NavigationButton({
       <Button
         ref={ref}
         isIconOnly
-        variant="secondary"
+        size="sm"
+        variant="ghost"
+        className={ROW_ICON_BUTTON_CLASS}
         aria-label={label}
         isDisabled={!onPress}
         onPress={onPress}
@@ -313,14 +315,14 @@ function NavigationButton({
   );
 }
 
-/** The header's Copy path: the first control of the group at the row's end, an icon button that
+/** Copy path leads the view controls at the detail row's end, an icon button that
  * takes no focus from a press, as the view controls do. */
 function CopyPathButton({ onPress }: { onPress: () => void }): React.ReactElement {
   const t = useT();
   const label = t("common.copyPath");
   return (
     <TitledControl title={label}>
-      <Button isIconOnly size="sm" variant="tertiary" aria-label={label} onPress={onPress} preventFocusOnPress>
+      <Button isIconOnly size="sm" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={label} onPress={onPress} preventFocusOnPress>
         <Copy aria-hidden="true" className="size-4" />
       </Button>
     </TitledControl>

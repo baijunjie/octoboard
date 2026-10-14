@@ -1,5 +1,8 @@
 import React from "react";
 
+/** Shared shape and tints for icon controls in either side pane and the file viewer. */
+export const ROW_ICON_BUTTON_CLASS = "sidebar-fills row-icon-control rounded-md bg-transparent text-muted hover:bg-default hover:text-foreground";
+
 /** Shared spacing for the icons at a row or header's end. */
 export function RowIconGroup({ children, className = "" }: { children: React.ReactNode; className?: string }): React.ReactElement {
   return <div className={`flex shrink-0 items-center gap-(--row-control-gap) ${className}`}>{children}</div>;

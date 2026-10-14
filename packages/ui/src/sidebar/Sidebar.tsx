@@ -37,7 +37,7 @@ import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
-import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterClear, ProjectFilterTag, ProjectFilterTags } from "./ProjectFilter";
+import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterTag, ProjectFilterTags } from "./ProjectFilter";
 import { archiveSubmenu, consoleMenu, projectMenu, sessionMenu } from "./menus";
 import { archivedSessions, consoleActivity, isInactiveProject, liveSessionRows, liveSessions, sortProjects } from "./order";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
@@ -427,11 +427,11 @@ function ConsoleBody({
       <ConsoleSessionsSection handlers={handlers} console={thisConsole} sessions={sessions} selectedSessionId={selectedSessionId} />
       <SectionHeading
         below={
-          // Only while the filter button is there (above): the keyword, tags and clear button hand focus
+          // Only while the filter button is there (above): the keyword and tags hand focus
           // to it when removed.
           projects.length > 0 &&
           isFiltering(filter) && (
-            <>
+            <div data-project-filter className="contents">
               {filter.keyword !== "" && (
                 <ProjectFilterTag
                   keyword={filter.keyword}
@@ -446,10 +446,9 @@ function ConsoleBody({
                   onRemove={(removed) => setFilter((f) => ({ ...f, tags: withoutTags(f.tags, removed) }))}
                 />
               )}
-            </>
+            </div>
           )
         }
-        belowAction={<ProjectFilterClear onChange={setFilter} returnFocusTo={filterButton} />}
         action={
           projects.length > 0 && (
             <>

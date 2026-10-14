@@ -1,6 +1,6 @@
 # Fading the edge of a scroller
 
-## Every faded scroller takes the fade from one module, in one of its two shapes
+## Every faded scroller takes the fade from one module
 
 A surface in `packages/ui` that hides content behind its own edge fades that edge, and no site works out how: the fade
 comes from `packages/ui/src/components/scrollFade.tsx`, which supplies the fade's size and the matching scroll padding
@@ -18,7 +18,7 @@ alone, so a scroller the check cannot see (one whose overflow comes from a libra
 DOM) is declared there as well, rather than passing unmentioned. Declaring it is the only way out: never slip past the
 check instead, by assembling the overflow class from pieces or moving the scroller out of this package's source.
 
-Which of the two shapes a site takes follows from its scroller:
+Which API a site takes follows from its scroller:
 
 - `FadedScroller` is an element wrapped around the content, and is the one to reach for wherever the scroller can be
   that wrapper.
@@ -30,10 +30,15 @@ Which of the two shapes a site takes follows from its scroller:
   has settled, and the fade's `animation-timeline: scroll()` animation never finishes, so a fade on a `Popover` or a
   `Tabs.Panel` leaves it on screen for good. `getAnimations()` does not look at the subtree, so that fade goes on the
   scrolling list or panel inside, never on the popover or the panel itself.
+- `useStickyScrollFade` is for a virtualized scroller whose section headings must remain above the fade. It leaves
+  the scroller on the collection element and supplies an overlay wrapper; a mask on that element would dim the
+  headings regardless of their z-index. A wrapper scroller with the same need uses `FadedScroller` with
+  `stickyHeadingHeight` instead. Both take the heading height; the module supplies the fade size and matching scroll
+  padding.
 
-Except for focus mode's sticky section headings (the "What both views show" section of
-`docs/product/focus-mode.md`), either shape applies the fade as a `mask-image` on the scroller. For a masked scroller,
-the mask clips by that element's border box, so:
+Sticky-heading surfaces use overlay fades (the "What both views show" section of `docs/product/focus-mode.md` and
+the "Folding a section" section of `docs/product/project-pane-git-mode.md`); other surfaces apply the fade as a
+`mask-image` on the scroller. For a masked scroller, the mask clips by that element's border box, so:
 
 - Padding that gives a control inside the scroller room — the room its focus ring needs — goes on the scroller itself,
   inside the clip, never on an element around it.

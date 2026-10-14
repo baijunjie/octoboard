@@ -3,7 +3,7 @@
 // control, which the collections the lists are built on do not reach themselves.
 import { ChevronDown, ChevronRight } from "lucide-react";
 import React, { useRef } from "react";
-import { Button } from "react-aria-components";
+import { Button, ListLayout } from "react-aria-components";
 
 import { handFocusOff } from "../components/handFocusOff";
 import { useCurrentLanguage, useT } from "../i18n/react";
@@ -12,11 +12,35 @@ import { SECTION_LABELS, sectionKey, type ChangeSection } from "./changes";
 /** Every section heading is one line of this height, which, with the rows' (`ROW_HEIGHT`), is what
  * lets the list be virtualized, flat or as a tree. */
 export const HEADING_HEIGHT = 30;
-/** A section's heading, in both layouts, a band of HeroUI's tertiary surface so a section reads as a
- * step off the panel: 1.15:1 from it in light and 1.10:1 in dark. `h-[30px]` is `HEADING_HEIGHT`.
+/** A section's heading, in both layouts, uses the pane's control fill so it stays a step off the
+ * panel: 1.15:1 from it in light and 1.23:1 in dark, with muted text above 4.5:1 on both fills.
+ * `h-[30px]` is `HEADING_HEIGHT`.
  * What the band holds is one control filling it (`ChangeSectionHeading`), so the line's own layout and
  * padding sit there rather than here. */
-export const HEADING_CLASS = "flex h-[30px] bg-surface-tertiary text-xs font-medium text-muted";
+export const HEADING_CLASS = "flex h-[30px] bg-default text-xs font-medium text-muted";
+
+/** The virtualizer's sticky wrapper must stay within its own section, whose overflow is visible.
+ * Render copies leave the layout's original positions intact for keyboard navigation and row offsets. */
+export class ChangeListLayout extends ListLayout<unknown> {
+  override getVisibleLayoutInfos(rect: Parameters<ListLayout<unknown>["getVisibleLayoutInfos"]>[0]): ReturnType<ListLayout<unknown>["getVisibleLayoutInfos"]> {
+    return super.getVisibleLayoutInfos(rect).map((info) => {
+      if (info.type !== "section" && info.type !== "header") return info;
+      const rendered = info.copy();
+      if (info.type === "section") rendered.allowOverflow = true;
+      else {
+        rendered.isSticky = true;
+        rendered.rect.y = 0;
+        rendered.zIndex = 3;
+      }
+      return rendered;
+    });
+  }
+}
+
+/** Virtualizer section wrappers otherwise establish a stacking context through inline layout
+ * containment, trapping their sticky headings below the scroller's overlay fades. Size and style
+ * containment remain; the explicit section rectangle still bounds the heading's sticky travel. */
+export const CHANGE_SCROLL_CLASS = "[&_[role=presentation]:has(>[role=rowgroup])]:[contain:size_style]! [&_[role=presentation]:has(>[role=rowgroup])]:z-auto!";
 
 /** What a section's heading says: the section's name and how many changes it holds. */
 function SectionHeadingText({ section, count }: { section: ChangeSection; count: number }): React.ReactElement {
@@ -66,7 +90,7 @@ function keepHeadingFocus(band: HTMLButtonElement | null): void {
  * chevron needs one for; which state it is in reaches assistive technology through `aria-expanded`
  * and the eye through the chevron. The band answers a hover with nothing, where every row of the
  * lists tints: the chevron is the affordance here, as it is on a folder of the Files tree, and a
- * fill over `surface-tertiary` is a contrast pair nobody has measured. Measure it before adding
+ * fill over the heading's control fill is a contrast pair nobody has measured. Measure it before adding
  * one.
  *
  * It is no tab stop of its own, as a control inside a collection's row is none: the list is one tab
@@ -162,7 +186,16 @@ function moveAcrossSectionHeadings(event: React.KeyboardEvent<HTMLElement>): voi
   const target = event.target as HTMLElement;
   const stop = target.closest<HTMLElement>("[role=row]");
   if (!stop) return;
-  const stops = [...event.currentTarget.querySelectorAll<HTMLElement>("[role=row]")];
+  // Virtualizer recycles wrappers in DOM order; their original inline layout offsets still give
+  // the collection order, including a sticky heading whose painted position follows scrolling.
+  const layoutTop = (row: HTMLElement) => {
+    let top = 0;
+    for (let element: HTMLElement | null = row; element && element !== event.currentTarget; element = element.parentElement) {
+      if (element.style.position === "absolute" || element.style.position === "sticky") top += parseFloat(element.style.top) || 0;
+    }
+    return top;
+  };
+  const stops = [...event.currentTarget.querySelectorAll<HTMLElement>("[role=row]")].sort((a, b) => layoutTop(a) - layoutTop(b));
   const from = stops.indexOf(stop);
   if (from === -1) return;
   const next = stops[from + (event.key === "ArrowDown" ? 1 : -1)];
@@ -171,8 +204,8 @@ function moveAcrossSectionHeadings(event: React.KeyboardEvent<HTMLElement>): voi
   event.preventDefault();
   event.stopPropagation();
   (heading ?? next).focus();
-  // The list's `scroll-padding` is the size of its fade (`useScrollFade`), so this lands clear of
-  // it. jsdom implements no `scrollIntoView`, hence the call through `?.`.
+  // The list's scroll padding includes the sticky heading and fade, so this lands clear of
+  // both. jsdom implements no `scrollIntoView`, hence the call through `?.`.
   next.scrollIntoView?.({ block: "nearest" });
 }
 

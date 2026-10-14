@@ -41,7 +41,7 @@ export const filterScenarios: Scenario[] = [
     id: "filter-popover",
     group: GROUP,
     title: "Project filter",
-    description: "Selected tags have checkmarks; the normal vocabulary fits without scrolling.",
+    description: "Selected tags have checkmarks; the normal vocabulary fits without scrolling. The popover stays open as conditions are picked. After closing it, the heading's Funnel X clears all conditions.",
     state,
     preferences: { sidebarConsole: console_.id },
     steps: [
@@ -54,7 +54,7 @@ export const filterScenarios: Scenario[] = [
     id:"filter-in-force",
     group:GROUP,
     title:"Matching projects",
-    description:"Projects (1) counts the single matching project. The keyword, short tag and long tag fit their content at rest. Hover a short tag to reveal its remove button and minimum width.",
+    description:"Projects (1) counts the single matching project. The heading's Funnel X clears the keyword and both tags together. The keyword, short tag and long tag fit their content at rest; each remains removable on its own. Hover a short tag to reveal its remove button and minimum width.",
     state:state,
     preferences:{sidebarConsole:console_.id},
     steps: [
@@ -69,7 +69,7 @@ export const filterScenarios: Scenario[] = [
     id:"filter-no-match",
     group:GROUP,
     title:"No matching projects",
-    description:"Projects (0) appears above the no-match row while the filter remains active.",
+    description:"Projects (0) appears above the no-match row while the filter remains active. The heading's Funnel X clears the keyword and restores every project.",
     state:state,
     preferences:{sidebarConsole:console_.id},
     steps: [

@@ -8,6 +8,7 @@ import type { ViewerNavigation } from "../viewer/FileViewer";
 import type { ProjectBrowserState } from "./browserState";
 import { changeLayout, type ChangeLayout } from "./changeLayout";
 import { changeRowOffset } from "./ChangeList";
+import { HEADING_HEIGHT } from "./changeSectionHeading";
 import { changeEvidence, changeNeighbours, filterChanges, rereadChange, visibleChanges, type ChangeEvidence, type ChangeItem } from "./changes";
 import { focusFirst, focusRow } from "./focusRow";
 import type { GitView } from "./GitView";
@@ -262,8 +263,8 @@ function scrollToChange(
   if (key === undefined || !list) return false;
   const top = changeRowOffset(items, key, layout, collapsed);
   if (top === undefined) return false;
-  // Clear of the list's fade at its edges, as `scroll-padding` keeps the rows react-aria scrolls.
-  if (top - FADE_SIZE < list.scrollTop) list.scrollTop = top - FADE_SIZE;
+  // Clear of the sticky heading and fade, as scroll padding keeps the rows react-aria scrolls.
+  if (top - HEADING_HEIGHT - FADE_SIZE < list.scrollTop) list.scrollTop = top - HEADING_HEIGHT - FADE_SIZE;
   else if (top + ROW_HEIGHT + FADE_SIZE > list.scrollTop + list.clientHeight) list.scrollTop = top + ROW_HEIGHT + FADE_SIZE - list.clientHeight;
   return true;
 }

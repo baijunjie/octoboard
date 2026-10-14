@@ -2,6 +2,7 @@ import { ToggleButton } from "@heroui/react";
 import React from "react";
 
 import { TitledControl } from "./TitledControl";
+import { ROW_ICON_BUTTON_CLASS } from "./RowControls";
 
 /**
  * A two-state view control drawn as one icon button. The icon shows the state the view is in and
@@ -34,7 +35,8 @@ export function IconToggle({
         ref={ref}
         isIconOnly
         size="sm"
-        className="icon-toggle"
+        variant="ghost"
+        className={`icon-toggle ${ROW_ICON_BUTTON_CLASS}`}
         aria-label={label}
         aria-expanded={expanded}
         isSelected={isSelected}

@@ -43,8 +43,10 @@ The **content panel** is always opaque, whatever is behind the window. Its top l
 right-to-left language), where the top bar meets the rail, is rounded, and a thin line runs along its top edge and
 along its edge beside the rail; it reaches the window's other side and its bottom (or the connection banner) with no
 gap. Inside it the panes are set apart by thin lines too. The terminal's area is the colour of the terminal's own
-background, and the sidebar a shade apart from it — a touch greyer in the light appearance, a touch lighter in the
-dark one.
+background. The sidebar and the right pane share the same background — a touch greyer than the terminal in the light
+appearance, a touch lighter in the dark one — whether docked, floating or shown as drawers. A report page keeps its
+own light surface inside the right pane (see "A report page stays on a light surface in both appearances" in
+`docs/product/appearance.md`).
 
 **Every pane's header inside the content panel is 56 px high** — the sidebar's console header and a focus mode's
 header (see `docs/product/sidebar.md` and `docs/product/focus-mode.md`), the archive view's header (see "The archive

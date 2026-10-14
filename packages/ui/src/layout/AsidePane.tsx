@@ -33,7 +33,7 @@ export interface AsideLayout {
  * docked pane hidden, `drawerClass` instead keeps it the overlay at every width, floating in while
  * `peek` is active at `--aside-width` (still capped at 92vw), as a rounded, bordered card like the
  * floating sidebar; `overflow-hidden` clips what it holds to the rounded edge. In every form the
- * pane is painted `--panel`, the content panel's own colour, so a drawer or a floating pane keeps
+ * pane is painted `--panel-sidebar`, the sidebar's colour, so a drawer or a floating pane keeps
  * an empty state from showing the terminal through.
  *
  * `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener closes a
@@ -72,7 +72,7 @@ export function AsidePane({
         style={{ "--aside-width": `${width}px` } as React.CSSProperties}
         onPointerEnter={peek?.keep}
         onPointerLeave={peek?.leave}
-        className={`flex min-h-0 flex-col border-s border-separator bg-panel w-[420px] max-w-[92vw] ${overlay} ${className}`}
+        className={`flex min-h-0 flex-col border-s border-separator bg-panel-sidebar w-[420px] max-w-[92vw] ${overlay} ${className}`}
       >
         {children}
       </div>

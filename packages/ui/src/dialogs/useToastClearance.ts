@@ -27,7 +27,7 @@ function overlapsToastCorner(footer: DOMRect): boolean {
  * Keeps the toasts clear of the footer of the dialog `inside` sits in, for as long as it is open and
  * only when the footer reaches the bottom end corner where the stack sits (in a window wide enough
  * for it to be there, see `Toasts`): a large dialog's footer
- * buttons (the file viewer's Previous and Next) would sit under a toast there, while a small centred
+ * action buttons would sit under a toast there, while a small centred
  * dialog's are clear of it. The clearance is the distance from the footer's top edge to the window's
  * bottom, measured again as the dialog settles from its entrance animation, resizes, or the window
  * does. A dialog without a footer sets none, and with dialogs nested the innermost one decides.

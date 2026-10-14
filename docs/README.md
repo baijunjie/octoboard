@@ -281,7 +281,7 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   no dependency array plus a `ResizeObserver`, since an observer alone misses a box whose content changes without its
   size and an element React swaps underneath it.
 - [Fading the edge of a scroller](memory/fading-the-edge-of-a-scroller.md) — every surface that hides content behind
-  its own edge taking the fade from one module in one of its two shapes, the three reasons the scrolling element
+  its own edge taking the fade from one module, including sticky-heading overlays, the three reasons the scrolling element
   itself has to carry it, where padding and a focus ring go around a mask that clips by the border box, and the fade
   being a hint over an ordinary overflow container.
 - [UI text and reading direction](memory/ui-text-and-reading-direction.md) — every string the user reads going through

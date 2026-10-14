@@ -10,6 +10,7 @@ import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { FADE_SIZE } from "../components/scrollFade";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
+import { ROW_ICON_BUTTON_CLASS } from "../components/RowControls";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { AsidePane, type AsideLayout } from "../layout/AsidePane";
@@ -188,7 +189,7 @@ export function ProjectBrowser({
             </Tabs.Tab>
           </Tabs.List>
           <TitledControl title={t("browser.refresh")}>
-            <Button isIconOnly size="sm" variant="ghost" aria-label={t("browser.refresh")} preventFocusOnPress onPress={pressRefresh}>
+            <Button isIconOnly size="sm" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("browser.refresh")} preventFocusOnPress onPress={pressRefresh}>
               <RefreshCw aria-hidden="true" className={spinning > 0 ? "size-4 motion-safe:animate-spin-slow" : "size-4"} />
             </Button>
           </TitledControl>

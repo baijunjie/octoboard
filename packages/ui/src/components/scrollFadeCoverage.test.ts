@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 // A scroll container in this package fades the edge it hides content behind, and the fade comes only
-// from `components/scrollFade.tsx`, in one of its two shapes. This is the check that holds that true.
+// from `components/scrollFade.tsx`, through its shared wrappers and hooks. This is the check that holds that true.
 //
 // The check reads this package's source, not the rendered page (jsdom has no layout, and Tailwind's
 // overflow arrives as a class, so nothing there reports a scroll container) and not the built styles
@@ -127,7 +127,7 @@ function endOfRegion(src: string, from: number, close: (char: string, depth: num
   return src.length;
 }
 
-/** Blanks every region that legitimately carries a scroll utility: the fade's two shapes. */
+/** Blanks every region that legitimately carries a scroll utility: the fade's shared wrappers and hooks. */
 function withoutFadedRegions(src: string): string {
   let out = src;
   const blankRegions = (opening: RegExp, close: (char: string, depth: number) => boolean) => {
@@ -137,8 +137,8 @@ function withoutFadedRegions(src: string): string {
       out = out.slice(0, start) + blank(out.slice(start, end)) + out.slice(end);
     }
   };
-  // `useScrollFade(...)`: up to the parenthesis that closes the call.
-  blankRegions(/\buseScrollFade\s*(?:<[^>(]*>)?\(/g, (char, depth) => char === ")" && depth === 0);
+  // `useScrollFade(...)` or `useStickyScrollFade(...)`: up to the parenthesis that closes the call.
+  blankRegions(/\buse(?:Sticky)?ScrollFade\s*(?:<[^>(]*>)?\(/g, (char, depth) => char === ")" && depth === 0);
   // `<FadedScroller ...>`: up to the `>` that closes the opening tag, not one inside a `{}` attribute.
   blankRegions(/<FadedScroller(?=[\s/>])/g, (char, depth) => char === ">" && depth === 0);
   return out;

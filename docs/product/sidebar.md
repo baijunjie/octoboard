@@ -123,16 +123,20 @@ The count follows the current project filter and shows zero when the console has
 
 ### Filtering the project list
 
-While the console has projects, a filter button, **Filter projects**, sits among the controls at the end of the Projects
-heading (see "Expanding and collapsing the listed projects" below for the order they run in). It opens a small popover
-with two controls. A search field filters the project list as it is typed: a project stays listed when its name contains
+While the console has projects, a filter button sits among the controls at the end of the Projects heading (see
+"Expanding and collapsing the listed projects" below for the order they run in). With no effective keyword or picked
+tag, it shows a funnel, is named **Filter projects**, and opens a small popover with two controls. With a filter in
+force and the popover closed, it shows a funnel with a cross, is named **Clear filter**, and clears all stored
+conditions — the keyword and every picked tag, including tags no project currently carries — rather than opening the
+popover. A search field filters the project list as it is typed: a project stays listed when its name contains
 the keyword, ignoring case and the keyword's surrounding spaces. Below it, the tags in use (see "Tags" in
 `docs/product/consoles-and-projects.md`) are shown as toggles, and picking one narrows the list to the projects carrying
 it; with several picked, a project must carry all of them, and it must match the keyword too. With no project carrying a
 tag yet, a full empty panel in place of the toggles says there are no tags yet, with a line saying tags are added in a
 project's settings (see "The full panel" in `docs/product/empty-states.md`). `Escape`, from anywhere in the popover, and
 Enter in the search field close it and keep the filter; on a tag, Enter or Space picks or drops that tag and the popover
-stays open. A picked tag also shows a check mark, so it is not told apart by colour alone. Opening and closing it with
+stays open. Typing or picking a tag does not close the popover when a filter comes into force. A picked tag also shows
+a check mark, so it is not told apart by colour alone. Opening and closing it with
 the mouse leaves keyboard focus where it was.
 
 - While a filter is in force, a row under the Projects heading, across the sidebar's whole width, shows it; with no
@@ -140,18 +144,17 @@ the mouse leaves keyboard focus where it was.
   looks and behaves as the tags in a project's Tags field (see "Picked tags" in
   `docs/product/consoles-and-projects.md`); removing it drops just the keyword and leaves the picked tags. The picked
   tags follow it, in the accent look of those tags, so they are told apart from the keyword, and the row wraps onto
-  further lines when they do not fit. Removing a picked tag drops just that tag from the filter. A **Clear filter**
-  button at the row's end, on its first line, clears the keyword and the picked tags together; the search field's own
-  clear button clears only the keyword.
+  further lines when they do not fit. Removing a picked tag drops just that tag from the filter. The row has no
+  separate clear-all button; the search field's own clear button clears only the keyword.
 - Clicking the keyword, a tag, either's remove button or Clear filter with the mouse leaves keyboard focus where it
-  was. Removing the keyword, or the last tag, with the keyboard (Backspace or Delete while it has focus), or pressing
-  Clear filter with the keyboard, moves focus to the filter button. In Tab order the row comes after the heading's
-  controls: the keyword, the picked tags, then Clear filter.
+  was. Removing the keyword, or the last tag, with the keyboard (Backspace or Delete while it has focus) moves focus
+  to the filter button; pressing Clear filter with the keyboard keeps focus there. In Tab order the row comes after
+  the heading's controls: the keyword, then the picked tags.
 - The tags offered are the distinct tags of the console's projects, in alphabetical order, so a tag that no project
   carries any more disappears from the choices, and from the filter if it was picked, without emptying the list. The
   pick is only hidden, not forgotten: if a project carries that tag again, it filters again.
 - The filtered list keeps the order and the dimming of "Order of projects and sessions" below.
-- With no project matching, a single empty row says so; the Clear filter button under the heading clears the filter.
+- With no project matching, a single empty row says so; the heading's filter button clears the filter.
 - Each console has its own filter: switching to another console shows that console's own, and switching back, or
   entering and leaving focus mode, keeps it. Filters are not stored, so reloading the window shows every list
   unfiltered.
@@ -159,7 +162,7 @@ the mouse leaves keyboard focus where it was.
 ### Expanding and collapsing the listed projects
 
 One icon-only button follows the filter button. Its name is whichever action it will take, **Collapse all projects**
-or **Expand all projects**. The Projects heading holds its label and project count and, at its end, Filter projects
+or **Expand all projects**. The Projects heading holds its label and project count and, at its end, the filter button
 followed by this button.
 
 - It shows while the console has projects **and** the list shows at least one of them. With a filter matching no

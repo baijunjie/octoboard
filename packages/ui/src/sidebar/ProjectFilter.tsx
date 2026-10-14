@@ -5,9 +5,9 @@ import {
   Tag,
   TagGroup,
 } from "@heroui/react";
-import { BrushCleaning, Check, ListFilter, Tags } from "lucide-react";
+import { Check, Funnel, FunnelX, Tags } from "lucide-react";
 import type { Key } from "react-aria";
-import React, { type RefObject, useRef, useState } from "react";
+import React, { type RefObject, useEffect, useRef, useState } from "react";
 
 import { EmptyPanel } from "../components/EmptyPanel";
 import { handFocusOff } from "../components/handFocusOff";
@@ -18,7 +18,7 @@ import { useScrollFade } from "../components/scrollFade";
 import { useTrimmedField } from "../dialogs/useTrimmedField";
 import { useT } from "../i18n/react";
 import { withoutTags, withTag } from "../projectFiltering";
-import { keepFocus, RowIconButton } from "./rows";
+import { keepFocus } from "./rows";
 
 /** A console's project filter: the keyword a project's name must contain and the tags it must all
  * carry. */
@@ -42,8 +42,9 @@ export function isFiltering(filter: ProjectFilter): boolean {
  * project must carry every one picked. Escape closes it and keeps the filter, and so does Enter in
  * the field (on a tag, Enter picks or drops it). `filter.tags` is already narrowed to the vocabulary,
  * so changes go up as updates to apply to the stored filter, which still holds the tags no project
- * carries. `holderRef` is the element around the filter button, for the keyword, the tags and the
- * Clear filter button under the heading to hand focus to. */
+ * carries. `holderRef` is the element around the filter button, for removable conditions under the
+ * heading to hand focus to. With a filter in force, the
+ * heading button clears it; while the popover is open, it stays mounted as its fields change. */
 export function ProjectFilterButton({
   filter,
   vocabulary,
@@ -57,13 +58,25 @@ export function ProjectFilterButton({
 }): React.ReactElement {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const filtering = isFiltering(filter);
+  const clearAction = filtering && !open;
+  const label = t(clearAction ? "sidebar.filter.clear" : "sidebar.filter.open");
   // The button never takes focus on a press, and react-aria hands focus back to it when the popover
   // closes, which would pull it off the terminal; the element the press came from gets it back.
   const pointerFocus = usePointerFocusReturn();
   const buttonHolder = holderRef;
+  const focusReturnListeners = useRef<AbortController | null>(null);
+  useEffect(() => () => focusReturnListeners.current?.abort(), []);
   const keywordField = useTrimmedField(filter.keyword, (keyword) => onChange((f) => ({ ...f, keyword })));
 
   const onOpenChange = (isOpen: boolean) => {
+    // A new gesture supersedes the previous close's delayed focus hand-off.
+    focusReturnListeners.current?.abort();
+    focusReturnListeners.current = null;
+    if (isOpen && clearAction) {
+      clear();
+      return;
+    }
     setOpen(isOpen);
     const restore = pointerFocus.opened(isOpen);
     if (isOpen || !restore) return;
@@ -81,12 +94,38 @@ export function ProjectFilterButton({
       return;
     }
     const listeners = new AbortController();
+    focusReturnListeners.current = listeners;
     holder.addEventListener("focusin", passOn, {
       once: true,
       signal: listeners.signal,
     });
-    setTimeout(() => listeners.abort(), 500);
+    setTimeout(() => {
+      listeners.abort();
+      if (focusReturnListeners.current === listeners) focusReturnListeners.current = null;
+    }, 500);
   };
+
+  const clear = () => {
+    handFocusOff(document.activeElement?.closest("[data-project-filter]"), buttonHolder.current, true);
+    onChange(() => NO_FILTER);
+  };
+  // Keep the trigger mounted when its action changes so clearing or closing preserves keyboard
+  // focus. A clear action has no popup; the controlled open callback handles that press instead.
+  const trigger = (
+    <TitledControl title={label}>
+      <Button
+        isIconOnly
+        size="sm"
+        variant="ghost"
+        aria-label={label}
+        preventFocusOnPress
+        aria-haspopup={clearAction ? false : undefined}
+        className="row-icon-control rounded-md text-muted hover:text-foreground"
+      >
+        {filtering ? <FunnelX aria-hidden="true" className="size-4" /> : <Funnel aria-hidden="true" className="size-4" />}
+      </Button>
+    </TitledControl>
+  );
 
   return (
     <div
@@ -95,18 +134,7 @@ export function ProjectFilterButton({
       onPointerDownCapture={pointerFocus.onPointerDownCapture}
     >
       <Popover isOpen={open} onOpenChange={onOpenChange}>
-        <TitledControl title={t("sidebar.filter.open")}>
-          <Button
-            isIconOnly
-            size="sm"
-            variant="ghost"
-            aria-label={t("sidebar.filter.open")}
-            preventFocusOnPress
-            className="row-icon-control rounded-md text-muted hover:text-foreground"
-          >
-            <ListFilter aria-hidden="true" className="size-4" />
-          </Button>
-        </TitledControl>
+        {trigger}
         <Popover.Content placement="bottom end" className="w-64">
           <Popover.Dialog aria-label={t("sidebar.filter.open")}>
             {/* The field clears itself on Escape; here Escape closes the popover and keeps the filter. */}
@@ -153,29 +181,6 @@ export function ProjectFilterButton({
         </Popover.Content>
       </Popover>
     </div>
-  );
-}
-
-/** The button that clears the keyword and the tags together, at the end of the row they sit on
- * under the Projects heading. It goes away with the filter, so it hands keyboard focus to
- * `returnFocusTo`, the element around the filter button, before it does. */
-export function ProjectFilterClear({
-  onChange,
-  returnFocusTo,
-}: {
-  onChange: (update: FilterUpdate) => void;
-  returnFocusTo: RefObject<HTMLElement | null>;
-}): React.ReactElement {
-  const t = useT();
-  const holder = useRef<HTMLSpanElement>(null);
-  const clear = () => {
-    handFocusOff(holder.current, returnFocusTo.current, true);
-    onChange(() => NO_FILTER);
-  };
-  return (
-    <span ref={holder} className="flex">
-      <RowIconButton icon={BrushCleaning} label={t("sidebar.filter.clear")} onPress={clear} />
-    </span>
   );
 }
 
@@ -235,7 +240,7 @@ function TagPicker({
 }
 
 /** The keyword in force, first on the row under the Projects heading, as a tag in the neutral look
- * that drops just the keyword (the Clear filter button at that row's end clears it with the tags). A group of
+ * that drops just the keyword. A group of
  * its own, so it has a name of its own and is one tab stop apart from the picked tags. It goes
  * away with the keyword, so a removal while it holds focus moves focus to `returnFocusTo`, the
  * element around the filter button, rather than let it drop to `<body>`. The ring there follows
@@ -282,8 +287,8 @@ export function ProjectFilterTag({
 
 /** The tags picked in the filter, on the row under the Projects heading right after the keyword,
  * wrapping onto further lines when they do not fit, each removable on its own. They are filled with
- * the soft accent colour, which sets them apart from the keyword's neutral tag. The Clear filter
- * button at that row's end clears them with the keyword. The group goes away with its last tag, so a removal that empties
+ * the soft accent colour, which sets them apart from the keyword's neutral tag. The group goes away
+ * with its last tag, so a removal that empties
  * it while it holds focus moves focus to `returnFocusTo`, the element around the filter button;
  * the tag unmounting would drop it to `<body>`, and the terminal would stop receiving keystrokes.
  * The filter button's focus ring follows react-aria's interaction modality, not the browser's

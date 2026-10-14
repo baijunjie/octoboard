@@ -181,7 +181,7 @@
    - The content panel is always opaque, since text-heavy UI must never sit on the material.
      `--panel` is the main area and has to equal the terminal's own background (`XTERM_THEMES` in
      `terminal/xtermThemes.ts`) so the terminal does not look like a box inside a box;
-     `--panel-sidebar` is the sidebar's, a touch greyer than `--panel` in light and a touch lighter
+     `--panel-sidebar` is both side panes', a touch greyer than `--panel` in light and a touch lighter
      in dark (1.06:1 and 1.09:1 against it: a step that shows without drawing a box).
      `--panel-hover` / `--panel-selected` are the tints a row takes on either of them, translucent
      so a control inside a hovered row (its "⋯" menu, which hovers with `--default`, see
@@ -230,7 +230,7 @@
   --accent-label: oklch(0.74 0.14 254);
 }
 
-/* The fills of HeroUI's `--default` family inside the sidebar. A ghost button's hover and pressed
+/* The fills of HeroUI's `--default` family inside the sidebar and report panel. A ghost button's hover and pressed
    fill, a tertiary button's fill and the filter keyword's tag all come from `--default`, which is the
    sidebar's own colour in dark (L 0.274 against 0.27) and a step from it in light (1.08:1), so a
    control would show no fill at all. The sidebar takes its own translucent tints, stronger than a
@@ -257,15 +257,15 @@
 }
 
 /* The fills of HeroUI's `--default` family on a surface of the app's own: a dialog, whose surface is
-   `--overlay`, and the project pane, whose surface is `--panel` (the pane's tabs, header and Git
-   mode; the report panel, also on `--panel`, does not take them). HeroUI tunes `--default` for the
-   page background (dark L 0.12), and these are lighter (dark L 0.21 and 0.25): a control drawn from
-   `--default` lands almost on its surface (1.19:1 and 1.14:1 in light, 1.19:1 and 1.11:1 in dark,
+   `--overlay`, and the project pane, whose surface is `--panel-sidebar` (the pane's tabs, header and
+   Git mode; the report panel on the same surface takes `.sidebar-fills`). HeroUI tunes `--default` for
+   the page background (dark L 0.12), and these are lighter (dark L 0.21 and 0.27): a control drawn
+   from `--default` lands almost on its surface (1.19:1 and 1.08:1 in light, 1.19:1 and 1.01:1 in dark,
    against a dialog and the panel), and a neutral soft chip, half of `--default` over it, no longer
    reads as a tag (1.10:1 in light, 1.08:1 in dark on a dialog). `--control-fill` and
    `--control-fill-hover` are opaque steps off the surface instead: 1.27:1 resting and 1.39:1
-   hovered against a light dialog, 1.21:1 and 1.33:1 against the light panel, 1.45:1 and 1.63:1
-   against a dark dialog and 1.35:1 and 1.52:1 against the dark panel. The family is overridden
+   hovered against a light dialog, 1.15:1 and 1.26:1 against the light panel, 1.45:1 and 1.63:1
+   against a dark dialog and 1.23:1 and 1.39:1 against the dark panel. The family is overridden
    whole, as `.sidebar-fills` does, since `--default-hover` and `--default-soft` are computed on
    `<html>`.
 
@@ -276,7 +276,7 @@
 
    Unlike `.sidebar-fills`, whose tints are translucent so that a control on a hovered or selected
    row stacks its own on top, these are opaque, because a dialog's and the pane's surfaces are flat
-   colours. So a control added later on anything but `--overlay` or `--panel` would get a wrong
+   colours. So a control added later on anything but `--overlay` or `--panel-sidebar` would get a wrong
    fill, and `--field-border` and `--field-focus`, which are still computed from the root's
    `--default`, would give a field edges that do not match its fill.
 

@@ -2,7 +2,7 @@ import { Button } from "@heroui/react";
 import { Pin, PinOff, type LucideIcon } from "lucide-react";
 import React, { type RefObject, useRef } from "react";
 
-import { RowIconGroup } from "../components/RowControls";
+import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../components/RowControls";
 import { handFocusOff } from "../components/handFocusOff";
 import { TitledControl } from "../components/TitledControl";
 import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
@@ -137,7 +137,7 @@ export function RowIconButton({
           preventFocusOnPress
           onPress={onPress}
           isDisabled={isDisabled}
-          className="row-icon-control rounded-md text-muted hover:text-foreground"
+          className={ROW_ICON_BUTTON_CLASS}
         >
           <Icon aria-hidden="true" className={iconClassName ? `size-4 ${iconClassName}` : "size-4"} />
         </Button>
@@ -192,19 +192,17 @@ export function PinButton({
 
 /** A heading over a group of rows: the label with `action` at the row's end, and under them, when
  * given, `below` (a filter in force) across the sidebar's whole width, wrapping onto further lines
- * when it does not fit, with `belowAction` at that row's end. Several controls in either action slot
+ * when it does not fit. Several controls in the action slot
  * are spaced by the heading, so a caller hands them over as a fragment rather than wrapping them
  * itself. */
 export function SectionHeading({
   children,
   action,
   below,
-  belowAction,
 }: {
   children: React.ReactNode;
   action?: React.ReactNode;
   below?: React.ReactNode;
-  belowAction?: React.ReactNode;
 }): React.ReactElement {
   return (
     <div className="mt-2 mb-0.5 px-2">
@@ -213,11 +211,7 @@ export function SectionHeading({
         {action && <RowIconGroup className="h-7">{action}</RowIconGroup>}
       </div>
       {below && (
-        // Top-aligned, the action a line high, so it stays on the first line when the row wraps.
-        <div className="flex items-start gap-2">
-          <div className="flex min-h-7 min-w-0 flex-1 flex-wrap items-center gap-1.5 py-1">{below}</div>
-          {belowAction && <RowIconGroup className="h-7">{belowAction}</RowIconGroup>}
-        </div>
+        <div className="flex min-h-7 min-w-0 flex-wrap items-center gap-1.5 py-1">{below}</div>
       )}
     </div>
   );

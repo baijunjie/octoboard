@@ -48,9 +48,9 @@ buttons and the pin buttons below. These are:
   for it also names what it belongs to ("Actions for session …", "Actions for file …" and the like), so that each ⋮
   can be told apart;
 - the sidebar's other icon buttons — a project's **+** (New session), wherever it appears, the Projects heading's
-  Filter projects and its Expand all projects or Collapse all projects button (see "Expanding and collapsing the
-  listed projects" in `docs/product/sidebar.md`), the Clear filter under that heading (see "Filtering the project
-  list" in the same doc), and focus mode's Leave focus mode;
+  Filter projects / Clear filter button (see "Filtering the project list" in `docs/product/sidebar.md`) and its
+  Expand all projects or Collapse all projects button (see "Expanding and collapsing the listed projects" in the
+  same doc), and focus mode's Leave focus mode;
 - the pin button of a pinned project or session, whose tooltip is a short "Unpin", while the name announced for it
   also names what it unpins (see "Pinning" in `docs/product/sidebar.md`);
 - the archive view's Close button and each of its rows' Delete button, whose tooltip names the session;
